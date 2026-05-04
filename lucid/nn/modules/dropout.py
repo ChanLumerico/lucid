@@ -50,3 +50,19 @@ class AlphaDropout(Module):
 
     def extra_repr(self) -> str:
         return f"p={self.p}"
+
+
+class Dropout3d(Module):
+    """Randomly zeros entire 3-D feature maps (channels) with probability p."""
+
+    def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        super().__init__()
+        self.p = p
+
+    def forward(self, x: "Tensor") -> "Tensor":
+        from lucid.nn.functional.dropout import dropout3d
+
+        return dropout3d(x, self.p, self.training)
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}"

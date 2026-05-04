@@ -23,9 +23,11 @@ if TYPE_CHECKING:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _cat_last(a: "Tensor", b: "Tensor") -> "Tensor":
     """Concatenate two tensors along the last dimension."""
     import lucid
+
     return lucid.cat([a, b], a.ndim - 1)
 
 
@@ -101,11 +103,15 @@ class LSTM(Module):
                 layer_input = input_size if layer == 0 else hidden_size * num_directions
                 self.register_parameter(
                     f"weight_ih_l{layer}{suffix}",
-                    Parameter(empty(gate_size, layer_input, dtype=dtype, device=device)),
+                    Parameter(
+                        empty(gate_size, layer_input, dtype=dtype, device=device)
+                    ),
                 )
                 self.register_parameter(
                     f"weight_hh_l{layer}{suffix}",
-                    Parameter(empty(gate_size, hidden_size, dtype=dtype, device=device)),
+                    Parameter(
+                        empty(gate_size, hidden_size, dtype=dtype, device=device)
+                    ),
                 )
                 if bias:
                     self.register_parameter(
@@ -141,8 +147,12 @@ class LSTM(Module):
                 weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
                 weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
                 if self.bias:
-                    weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
-                    weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+                    weights.append(
+                        _unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"])
+                    )
+                    weights.append(
+                        _unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"])
+                    )
                 else:
                     # Engine training path requires bias tensors; supply zeros
                     # so computation is equivalent to bias=False.
@@ -150,7 +160,8 @@ class LSTM(Module):
                     dt = _unwrap(x).dtype
                     zero_b = _C_engine.TensorImpl(
                         __import__("numpy").zeros(gate_size, dtype="float32"),
-                        dev, False
+                        dev,
+                        False,
                     )
                     weights.append(zero_b)
                     weights.append(zero_b)
@@ -168,7 +179,7 @@ class LSTM(Module):
             self.num_layers,
             False,
             self.bidirectional,
-            True,   # always True: we always supply bias tensors above
+            True,  # always True: we always supply bias tensors above
         )
 
         output = _wrap(output_impl)
@@ -261,11 +272,13 @@ class LSTMCell(Module):
         )
         self.bias_ih: Parameter | None = (
             Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
-            if bias else None
+            if bias
+            else None
         )
         self.bias_hh: Parameter | None = (
             Parameter(empty(4 * hidden_size, dtype=dtype, device=device))
-            if bias else None
+            if bias
+            else None
         )
         self._init_weights()
 
@@ -324,11 +337,13 @@ class GRUCell(Module):
         )
         self.bias_ih: Parameter | None = (
             Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
-            if bias else None
+            if bias
+            else None
         )
         self.bias_hh: Parameter | None = (
             Parameter(empty(3 * hidden_size, dtype=dtype, device=device))
-            if bias else None
+            if bias
+            else None
         )
         self._init_weights()
 
@@ -423,8 +438,11 @@ class GRU(Module):
 
         if hx is None:
             hx = zeros(
-                self.num_layers * num_dirs, B, self.hidden_size,
-                device=x.device, dtype=x.dtype,
+                self.num_layers * num_dirs,
+                B,
+                self.hidden_size,
+                device=x.device,
+                dtype=x.dtype,
             )
 
         h_n: list[Tensor] = []  # type: ignore[name-defined]
@@ -526,9 +544,12 @@ class RNN(Module):
                 self.add_module(
                     f"cell_l{layer}{suffix}",
                     RNNCell(
-                        in_sz, hidden_size, bias=bias,
+                        in_sz,
+                        hidden_size,
+                        bias=bias,
                         nonlinearity=nonlinearity,
-                        device=device, dtype=dtype,
+                        device=device,
+                        dtype=dtype,
                     ),
                 )
 
@@ -549,8 +570,11 @@ class RNN(Module):
 
         if hx is None:
             hx = zeros(
-                self.num_layers * num_dirs, B, self.hidden_size,
-                device=x.device, dtype=x.dtype,
+                self.num_layers * num_dirs,
+                B,
+                self.hidden_size,
+                device=x.device,
+                dtype=x.dtype,
             )
 
         h_n: list[Tensor] = []  # type: ignore[name-defined]

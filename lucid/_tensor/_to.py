@@ -4,13 +4,11 @@ Injected into Tensor by _inject_to() after class definition.
 """
 
 from typing import Any, TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype_cls, to_engine_dtype
 from lucid._dtype import float16, float32, float64, int32, int64, bool_
 from lucid._device import device as _device_cls
 from lucid._dispatch import _parse_device, _wrap
-from lucid._factories.converters import _engine_dtype_to_np
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -59,12 +57,20 @@ def _inject_to(cls: type) -> None:
         if same and not copy:
             return self
 
+        # Dtype cast via C++ astype op (CPU: static_cast loop, GPU: mlx::core::astype).
         impl = _C_engine.contiguous(self._impl)
-        arr = np.asarray(impl.data_as_python())
-        np_dtype = _engine_dtype_to_np(target_dtype)
-        arr = arr.astype(np_dtype, copy=False)
-        arr = np.ascontiguousarray(arr)
-        impl = _C_engine.TensorImpl(arr, target_device, self._impl.requires_grad)
+        if target_dtype != impl.dtype:
+            impl = _C_engine.astype(impl, target_dtype)
+        # Device transfer: contiguous already handles CPU tensors; re-wrap for target device.
+        if target_device != impl.device:
+            impl = impl.clone_with_grad(self._impl.requires_grad)
+            # Device transfer: create TensorImpl on new device by going through
+            # the from_cpu / to GPU path already exposed in the engine.
+            # For now delegate to data_as_python + re-upload (only cross-device).
+            raw = impl.data_as_python()
+            impl = _C_engine.TensorImpl(raw, target_device, self._impl.requires_grad)
+        else:
+            impl = impl.clone_with_grad(self._impl.requires_grad)
         return _wrap(impl)
 
     def metal(self: Tensor) -> Tensor:

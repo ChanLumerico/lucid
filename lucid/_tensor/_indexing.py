@@ -12,7 +12,6 @@ Supported index forms:
 """
 
 from typing import TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
 from lucid._dtype import bool_ as _bool_dtype
@@ -61,24 +60,23 @@ def _select_slice(
             return _C_engine.split_at(impl, [start], dim)[1]
         return _C_engine.split_at(impl, [start, stop], dim)[1]
     else:
-        # Strided: build index array and gather with broadcast
-        indices_1d = np.arange(start, stop, step, dtype=np.int32)
-        n = len(indices_1d)
-        if n == 0:
-            shape = list(impl.shape)
-            shape[dim] = 0
-            empty_arr = np.zeros(shape, dtype=np.float32)
-            return _C_engine.TensorImpl(empty_arr, impl.device, False)
-        # Broadcast 1D indices to the full output shape
+        # Strided: build index array with engine ops and gather
+        n = max(0, (stop - start + (1 if step > 0 else -1)) // step)
+        if n <= 0:
+            # Empty slice: return zero-size tensor along dim
+            out_shape = list(impl.shape)
+            out_shape[dim] = 0
+            return _C_engine.zeros(out_shape, impl.dtype, impl.device)
+        # arange(start, stop, step) → int32 indices on same device
+        idx_1d = _C_engine.arange(start, stop, step, _C_engine.I32, impl.device)
+        # Broadcast 1D indices to the full gather shape
         out_shape = list(impl.shape)
         out_shape[dim] = n
         bcast_shape = [1] * len(out_shape)
         bcast_shape[dim] = n
-        idx_nd = np.broadcast_to(indices_1d.reshape(bcast_shape), out_shape).copy()
-        idx_impl = _C_engine.TensorImpl(
-            np.ascontiguousarray(idx_nd), impl.device, False
-        )
-        return _C_engine.gather(impl, idx_impl, dim)
+        idx_rs = _C_engine.reshape(idx_1d, bcast_shape)
+        idx_bc = _C_engine.broadcast_to(idx_rs, out_shape)
+        return _C_engine.gather(impl, idx_bc, dim)
 
 
 def _getitem(t: Tensor, idx: _IndexType) -> Tensor:

@@ -118,4 +118,28 @@ LUCID_API TensorImplPtr full_like_op(const TensorImplPtr& a,
                                      double fill_value,
                                      bool requires_grad = false);
 
+// Create a 1-D tensor with num values spaced evenly on a log scale.
+// Values are: base^linspace(start, stop, num).
+LUCID_API TensorImplPtr logspace_op(double start,
+                                    double stop,
+                                    std::int64_t num,
+                                    double base,
+                                    Dtype dt,
+                                    Device device,
+                                    bool requires_grad = false);
+
+// User-facing scatter-add: out = base with src added at positions given by
+// indices along dim. Has full autograd support.
+// Gradients: d/d(base) = grad_out; d/d(src) = gather(grad_out, dim, index).
+LUCID_API TensorImplPtr scatter_add_op(const TensorImplPtr& base,
+                                       const TensorImplPtr& indices,
+                                       const TensorImplPtr& src,
+                                       int dim);
+
+// Sliding-window view along a single dimension.
+// Output shape: (*in_shape[:dim], L, *in_shape[dim+1:], size)
+// where L = (dim_size - size) / step + 1.
+// No gradient (view-like; backward passes through gather).
+LUCID_API TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step);
+
 }  // namespace lucid

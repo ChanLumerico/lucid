@@ -30,6 +30,7 @@ from lucid.nn.functional.activations import (
     glu,
     hardshrink,
     tanhshrink,
+    softshrink,
 )
 
 
@@ -325,3 +326,17 @@ class Tanhshrink(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return tanhshrink(x)
+
+
+class Softshrink(Module):
+    """Softshrink: x - lambd if x > lambd; x + lambd if x < -lambd; 0 otherwise."""
+
+    def __init__(self, lambd: float = 0.5) -> None:
+        super().__init__()
+        self.lambd = lambd
+
+    def forward(self, x: Tensor) -> Tensor:
+        return softshrink(x, self.lambd)
+
+    def extra_repr(self) -> str:
+        return f"lambd={self.lambd}"

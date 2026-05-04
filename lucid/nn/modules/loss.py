@@ -21,6 +21,8 @@ from lucid.nn.functional.loss import (
     poisson_nll_loss,
     gaussian_nll_loss,
     ctc_loss,
+    multi_margin_loss,
+    multilabel_margin_loss,
 )
 
 
@@ -116,7 +118,9 @@ class BCELoss(Module):
 class BCEWithLogitsLoss(Module):
     """BCE with logits (sigmoid + BCE combined)."""
 
-    def __init__(self, reduction: str = "mean", pos_weight: Tensor | None = None) -> None:
+    def __init__(
+        self, reduction: str = "mean", pos_weight: Tensor | None = None
+    ) -> None:
         super().__init__()
         self.reduction = reduction
         self.pos_weight = pos_weight
@@ -195,9 +199,14 @@ class TripletMarginLoss(Module):
 
     def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
         return triplet_margin_loss(
-            anchor, positive, negative,
-            margin=self.margin, p=self.p, eps=self.eps,
-            swap=self.swap, reduction=self.reduction,
+            anchor,
+            positive,
+            negative,
+            margin=self.margin,
+            p=self.p,
+            eps=self.eps,
+            swap=self.swap,
+            reduction=self.reduction,
         )
 
     def extra_repr(self) -> str:
@@ -213,7 +222,9 @@ class CosineEmbeddingLoss(Module):
         self.reduction = reduction
 
     def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
-        return cosine_embedding_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
+        return cosine_embedding_loss(
+            x1, x2, y, margin=self.margin, reduction=self.reduction
+        )
 
     def extra_repr(self) -> str:
         return f"margin={self.margin}, reduction={self.reduction!r}"
@@ -228,7 +239,9 @@ class MarginRankingLoss(Module):
         self.reduction = reduction
 
     def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
-        return margin_ranking_loss(x1, x2, y, margin=self.margin, reduction=self.reduction)
+        return margin_ranking_loss(
+            x1, x2, y, margin=self.margin, reduction=self.reduction
+        )
 
     def extra_repr(self) -> str:
         return f"margin={self.margin}, reduction={self.reduction!r}"
@@ -267,8 +280,12 @@ class PoissonNLLLoss(Module):
 
     def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return poisson_nll_loss(
-            x, target, log_input=self.log_input, full=self.full,
-            eps=self.eps, reduction=self.reduction,
+            x,
+            target,
+            log_input=self.log_input,
+            full=self.full,
+            eps=self.eps,
+            reduction=self.reduction,
         )
 
     def extra_repr(self) -> str:
@@ -312,12 +329,66 @@ class CTCLoss(Module):
         self.reduction = reduction
         self.zero_infinity = zero_infinity
 
-    def forward(self, log_probs: Tensor, targets: Tensor, input_lengths: Tensor, target_lengths: Tensor) -> Tensor:
+    def forward(
+        self,
+        log_probs: Tensor,
+        targets: Tensor,
+        input_lengths: Tensor,
+        target_lengths: Tensor,
+    ) -> Tensor:
         return ctc_loss(
-            log_probs, targets, input_lengths, target_lengths,
-            blank=self.blank, reduction=self.reduction,
+            log_probs,
+            targets,
+            input_lengths,
+            target_lengths,
+            blank=self.blank,
+            reduction=self.reduction,
             zero_infinity=self.zero_infinity,
         )
 
     def extra_repr(self) -> str:
         return f"blank={self.blank}, reduction={self.reduction!r}"
+
+
+class MultiMarginLoss(Module):
+    """Multi-class margin (SVM-style) loss."""
+
+    def __init__(
+        self,
+        p: int = 1,
+        margin: float = 1.0,
+        weight: "Tensor | None" = None,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        self.p = p
+        self.margin = margin
+        self.weight = weight
+        self.reduction = reduction
+
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+        return multi_margin_loss(
+            x,
+            target,
+            p=self.p,
+            margin=self.margin,
+            weight=self.weight,
+            reduction=self.reduction,
+        )
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}, margin={self.margin}, reduction={self.reduction!r}"
+
+
+class MultilabelMarginLoss(Module):
+    """Multi-label margin loss."""
+
+    def __init__(self, reduction: str = "mean") -> None:
+        super().__init__()
+        self.reduction = reduction
+
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+        return multilabel_margin_loss(x, target, reduction=self.reduction)
+
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"

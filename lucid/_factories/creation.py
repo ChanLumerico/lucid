@@ -230,3 +230,17 @@ def full_like(
         device if device is not None else t.device,
     )
     return _wrap(_C_engine.full_like(_unwrap(t), fill_value, _dt, _dev))
+
+
+def logspace(
+    start: float,
+    end: float,
+    steps: int,
+    base: float = 10.0,
+    *,
+    dtype: "DTypeLike" = None,
+    device: "DeviceLike" = None,
+) -> "Tensor":
+    """Return *steps* values spaced evenly on a log scale (base^start … base^end)."""
+    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
+    return _wrap(_C_engine.logspace(start, end, steps, base, _dt, _dev))

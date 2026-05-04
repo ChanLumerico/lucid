@@ -1,4 +1,5 @@
 from lucid._tensor.tensor import Tensor
+
 """
 lucid.einops: einops-style tensor operations.
 

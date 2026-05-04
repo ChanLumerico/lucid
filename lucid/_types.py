@@ -42,9 +42,17 @@ from lucid._device import device as _Device
 # Consumers that only need the Tensor-free aliases can import from _types_base;
 # everyone else can import from here and get the full set.
 from lucid._types_base import (  # noqa: F401
-    DT, DV, _T, _P,
-    Scalar, DeviceLike, DTypeLike, ShapeLike,
-    _Size1d, _Size2d, _Size3d,
+    DT,
+    DV,
+    _T,
+    _P,
+    Scalar,
+    DeviceLike,
+    DTypeLike,
+    ShapeLike,
+    _Size1d,
+    _Size2d,
+    _Size3d,
 )
 
 # ── Protocols ─────────────────────────────────────────────────────────────────
@@ -168,7 +176,9 @@ type StateDict = dict[str, Tensor]
 # Hook signatures for Module.register_forward_pre_hook / register_forward_hook.
 # Module is typed as object here to avoid a circular import (module.py → _types.py → module.py).
 type _ForwardPreHook = Callable[[object, tuple[Tensor, ...]], tuple[Tensor, ...] | None]
-type _ForwardHook = Callable[[object, tuple[Tensor, ...], _ModuleOutput], _ModuleOutput | None]
+type _ForwardHook = Callable[
+    [object, tuple[Tensor, ...], _ModuleOutput], _ModuleOutput | None
+]
 type _BackwardHook = Callable[..., None]
 
 # ── Optimizers ────────────────────────────────────────────────────────────────

@@ -2,7 +2,6 @@
 nn.Parameter: a Tensor that is automatically registered by Module.
 """
 
-import numpy as np
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._factories.converters import _to_impl
@@ -20,24 +19,25 @@ class Parameter(Tensor):
 
     def __new__(
         cls,
-        data: Tensor | np.ndarray | list[object] | None = None,
+        data: "Tensor | list[object] | None" = None,
         requires_grad: bool = True,
-    ) -> Parameter:
+    ) -> "Parameter":
         if data is None:
-            arr = np.array([], dtype="float32").reshape(0)
-            impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, requires_grad)
+            impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
+            impl = impl.clone_with_grad(requires_grad)
         elif isinstance(data, Tensor):
-            impl = data._impl
-            if impl.requires_grad != requires_grad:
-                arr = np.ascontiguousarray(np.asarray(impl.data_as_python()))
-                impl = _C_engine.TensorImpl(arr, impl.device, requires_grad)
+            impl = data._impl.clone_with_grad(requires_grad)
         else:
             impl = _to_impl(data, requires_grad=requires_grad)
         obj = object.__new__(cls)
         obj._impl = impl
         return obj
 
-    def __init__(self, data: Tensor | np.ndarray | list[object] | None = None, requires_grad: bool = True) -> None:
+    def __init__(
+        self,
+        data: "Tensor | list[object] | None" = None,
+        requires_grad: bool = True,
+    ) -> None:
         pass
 
     def __repr__(self) -> str:

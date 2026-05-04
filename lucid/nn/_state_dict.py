@@ -2,7 +2,6 @@
 state_dict save/load helpers for Module.
 """
 
-import numpy as np
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
@@ -81,20 +80,17 @@ def _load_from_state_dict(
             sub.set_extra_state(src)
             continue
 
-        src_arr = np.ascontiguousarray(np.asarray(src._impl.data_as_python()))
-
         if attr_name in sub._parameters:
             old_p = sub._parameters[attr_name]
             if old_p is not None:
-                new_impl = _C_engine.TensorImpl(
-                    src_arr, old_p._impl.device, old_p.requires_grad
+                # Clone src storage onto the parameter's device, preserving requires_grad.
+                new_impl = _C_engine.contiguous(src._impl).clone_with_grad(
+                    old_p.requires_grad
                 )
-                # Mutate _impl in-place to preserve Parameter object identity
                 old_p._impl = new_impl
         elif attr_name in sub._buffers:
             old_b = sub._buffers[attr_name]
-            device = old_b._impl.device if old_b is not None else _C_engine.Device.CPU
-            new_impl = _C_engine.TensorImpl(src_arr, device, False)
+            new_impl = _C_engine.contiguous(src._impl).clone_with_grad(False)
             sub._buffers[attr_name] = _wrap(new_impl)
 
     return missing_keys, unexpected_keys

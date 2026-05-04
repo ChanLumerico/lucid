@@ -1,4 +1,5 @@
 from lucid.utils.data.dataset import Dataset
+
 """
 Sampler classes for DataLoader.
 """

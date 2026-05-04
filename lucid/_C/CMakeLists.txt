@@ -205,8 +205,15 @@ lucid_object_library(
     ops/linalg/Pinv.cpp
     ops/linalg/Eig.cpp
     ops/linalg/Eigh.cpp
+    ops/ufunc/Astype.cpp
+    ops/utils/Flip.cpp
+    ops/utils/MaskedSelect.cpp
     ops/linalg/LUFactor.cpp
     ops/linalg/SolveTriangular.cpp
+    ops/linalg/Lstsq.cpp
+    ops/linalg/LUSolve.cpp
+    ops/linalg/HouseholderProduct.cpp
+    ops/linalg/LDLFactor.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp
@@ -222,6 +229,9 @@ lucid_object_library(
     nn/Attention.cpp
     nn/LSTM.cpp
     nn/Embedding.cpp
+    nn/CTCLoss.cpp
+    nn/EmbeddingBag.cpp
+    nn/Fold.cpp
     nn/Spatial.cpp
     nn/Interpolate.cpp
     nn/Vision.cpp)

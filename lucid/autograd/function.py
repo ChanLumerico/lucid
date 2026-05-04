@@ -54,7 +54,9 @@ class FunctionCtx:
 
 
 def _make_apply(cls: type) -> classmethod:
-    def apply(klass: type, *args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor, ...]:
+    def apply(
+        klass: type, *args: Tensor, **kwargs: object
+    ) -> Tensor | tuple[Tensor, ...]:
         ctx = FunctionCtx()
         ctx.needs_input_grad = tuple(
             isinstance(a, Tensor) and a.requires_grad for a in args
@@ -73,7 +75,9 @@ def _make_apply(cls: type) -> classmethod:
 
 
 class FunctionMeta(type):
-    def __init__(cls, name: str, bases: tuple[type, ...], dct: dict[str, object]) -> None:
+    def __init__(
+        cls, name: str, bases: tuple[type, ...], dct: dict[str, object]
+    ) -> None:
         super().__init__(name, bases, dct)
         if name != "Function":
             cls.apply = _make_apply(cls)
@@ -104,6 +108,8 @@ class Function(metaclass=FunctionMeta):
         raise NotImplementedError
 
     @staticmethod
-    def backward(ctx: FunctionCtx, *grad_outputs: Tensor) -> Tensor | tuple[Tensor, ...]:
+    def backward(
+        ctx: FunctionCtx, *grad_outputs: Tensor
+    ) -> Tensor | tuple[Tensor, ...]:
         """Compute the backward pass. Override in subclasses."""
         raise NotImplementedError

@@ -190,9 +190,7 @@ class AdaptiveAvgPool2d(Module):
 class AdaptiveMaxPool2d(Module):
     """Adaptive 2D max pooling."""
 
-    def __init__(
-        self, output_size: _Size2d, return_indices: bool = False
-    ) -> None:
+    def __init__(self, output_size: _Size2d, return_indices: bool = False) -> None:
         super().__init__()
         self.output_size = output_size
 
@@ -275,7 +273,9 @@ class AdaptiveAvgPool3d(Module):
 class AdaptiveMaxPool1d(Module):
     """Adaptive 1D max pooling."""
 
-    def __init__(self, output_size: int | tuple[int, ...], return_indices: bool = False) -> None:
+    def __init__(
+        self, output_size: int | tuple[int, ...], return_indices: bool = False
+    ) -> None:
         super().__init__()
         self.output_size = output_size
 
@@ -289,9 +289,7 @@ class AdaptiveMaxPool1d(Module):
 class AdaptiveMaxPool3d(Module):
     """Adaptive 3D max pooling."""
 
-    def __init__(
-        self, output_size: _Size3d, return_indices: bool = False
-    ) -> None:
+    def __init__(self, output_size: _Size3d, return_indices: bool = False) -> None:
         super().__init__()
         self.output_size = output_size
 
@@ -300,3 +298,92 @@ class AdaptiveMaxPool3d(Module):
 
     def extra_repr(self) -> str:
         return f"output_size={self.output_size}"
+
+
+class LPPool1d(Module):
+    """1-D power-average pooling: pool = (sum(|x|^p))^(1/p) per window.
+
+    Uses ``unfold_dim`` + abs + pow + sum + pow engine ops; GPU-compatible.
+    """
+
+    def __init__(
+        self,
+        norm_type: float,
+        kernel_size: int,
+        stride: int | None = None,
+        ceil_mode: bool = False,
+    ) -> None:
+        super().__init__()
+        self.norm_type = norm_type
+        self.kernel_size = kernel_size
+        self.stride = stride if stride is not None else kernel_size
+        self.ceil_mode = ceil_mode
+
+    def forward(self, x: Tensor) -> Tensor:
+        from lucid._C import engine as _C_engine
+        from lucid._dispatch import _unwrap, _wrap
+
+        xi = _unwrap(x)  # (N, C, L)
+        p = float(self.norm_type)
+        k = self.kernel_size
+        s = self.stride
+
+        # Unfold last dim → (N, C, L_out, k)
+        unfolded = _C_engine.unfold_dim(xi, 2, k, s)
+        absv = _C_engine.abs(unfolded)
+        powered = _C_engine.pow_scalar(absv, p)
+        summed = _C_engine.sum(powered, [3], False)  # (N, C, L_out)
+        return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
+
+    def extra_repr(self) -> str:
+        return f"norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}"
+
+
+class LPPool2d(Module):
+    """2-D power-average pooling: pool = (sum(|x|^p))^(1/p) per window.
+
+    Uses two sequential ``unfold_dim`` passes; GPU-compatible.
+    """
+
+    def __init__(
+        self,
+        norm_type: float,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int] | None = None,
+        ceil_mode: bool = False,
+    ) -> None:
+        super().__init__()
+        self.norm_type = norm_type
+        kh, kw = (
+            (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
+        )
+        self.kh, self.kw = kh, kw
+        if stride is None:
+            self.sh, self.sw = kh, kw
+        else:
+            self.sh, self.sw = (stride, stride) if isinstance(stride, int) else stride
+        self.ceil_mode = ceil_mode
+
+    def forward(self, x: Tensor) -> Tensor:
+        from lucid._C import engine as _C_engine
+        from lucid._dispatch import _unwrap, _wrap
+
+        xi = _unwrap(x)  # (N, C, H, W)
+        p = float(self.norm_type)
+
+        # Unfold H-dim (axis 2) → (N, C, H_out, W, kh)
+        uh = _C_engine.unfold_dim(xi, 2, self.kh, self.sh)
+        # uh shape: (N, C, H_out, W, kh) — now unfold W-dim (axis 3)
+        uw = _C_engine.unfold_dim(uh, 3, self.kw, self.sw)
+        # uw shape: (N, C, H_out, W_out, kh, kw)
+
+        absv = _C_engine.abs(uw)
+        powered = _C_engine.pow_scalar(absv, p)
+        summed = _C_engine.sum(powered, [4, 5], False)  # (N, C, H_out, W_out)
+        return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
+
+    def extra_repr(self) -> str:
+        return (
+            f"norm_type={self.norm_type}, kernel_size=({self.kh},{self.kw}), "
+            f"stride=({self.sh},{self.sw})"
+        )

@@ -1,16 +1,20 @@
 """
-Numerical gradient checker using finite differences.
+Numerical gradient checker — implemented entirely with the Lucid C++ engine.
+
+No numpy is used.  Finite differences are built by perturbing elements
+via scatter_add, computing forward passes through the engine, and comparing
+analytical gradients from backward() with the numerical Jacobian columns.
 """
 
 from typing import Callable, Sequence
-
-import numpy as np
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap, _unwrap
 from lucid._tensor.tensor import Tensor
 
 
 def gradcheck(
-    func: Callable[..., Tensor | tuple[Tensor, ...]],
-    inputs: Sequence[Tensor],
+    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
+    inputs: "Sequence[Tensor]",
     *,
     eps: float = 1e-6,
     atol: float = 1e-5,
@@ -19,104 +23,155 @@ def gradcheck(
 ) -> bool:
     """Compare analytical gradients from backward() against finite-difference Jacobians.
 
+    Implemented entirely with the Lucid C++ engine — no numpy.
+
     Parameters
     ----------
     func : callable
-        Function mapping Tensor inputs to a scalar Tensor output.
+        Scalar-valued function mapping Tensor inputs to a single-element Tensor.
     inputs : sequence of Tensor
-        Inputs to func that require grad. All must be float tensors.
+        Inputs to func that require grad (must be float tensors).
     eps : float
-        Finite-difference step size.
-    atol : float
-        Absolute tolerance for the comparison.
-    rtol : float
-        Relative tolerance for the comparison.
+        Finite-difference step size (default 1e-6).
+    atol, rtol : float
+        Tolerances for the gradient comparison.
     raise_exception : bool
-        If True (default), raise AssertionError on mismatch. Otherwise return False.
+        Raise AssertionError on mismatch (default True), else return False.
 
     Returns
     -------
-    bool
-        True if all analytical and numerical gradients agree within tolerance.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.autograd import gradcheck
-    >>> x = lucid.randn(3, requires_grad=True)
-    >>> gradcheck(lambda t: t.sum(), [x])
-    True
+    bool  True if all gradients agree within tolerance.
     """
-    from lucid._C import engine as _C_engine
 
-    def _to_numpy(t: Tensor) -> np.ndarray:  # type: ignore[type-arg]
-        if hasattr(t, "_impl"):
-            return np.array(t._impl.data_as_python(), dtype=np.float64)
-        return np.asarray(t, dtype=np.float64)
+    def _clone_leaf(t: Tensor) -> Tensor:
+        """Deep-copy t into a new leaf tensor with requires_grad=True."""
+        return _wrap(_C_engine.contiguous(_unwrap(t)).clone_with_grad(True))
 
-    def _clone_with_grad(t: Tensor) -> Tensor:
-        from lucid._factories.converters import tensor as _tensor_fn
-
-        arr = _to_numpy(t)
-        return _tensor_fn(arr.copy(), requires_grad=True)
-
-    # Clone inputs so we don't mutate originals
-    inputs_clone = [_clone_with_grad(t) for t in inputs]
+    def _detach_copy(t: Tensor) -> Tensor:
+        """Deep-copy t as a non-grad leaf (for building perturbed inputs)."""
+        return _wrap(_C_engine.contiguous(_unwrap(t)).clone_with_grad(False))
 
     # ── Analytical gradients ─────────────────────────────────────────────────
+    inputs_clone = [_clone_leaf(t) for t in inputs]
     out = func(*inputs_clone)
-    if out._impl.numel() != 1:
+    if _unwrap(out).numel() != 1:
         raise ValueError(
-            "gradcheck requires a scalar-valued function output "
-            f"(got shape {tuple(out._impl.shape)})"
+            f"gradcheck requires a scalar-valued function "
+            f"(got shape {tuple(_unwrap(out).shape)})"
         )
     out.backward()
-    analytical = [_to_numpy(t.grad) for t in inputs_clone]
+
+    analytical: list[Tensor] = []
+    for t in inputs_clone:
+        g = t.grad
+        if g is None:
+            raise RuntimeError("gradcheck: an input has no gradient after backward()")
+        # Cast to F64 for precise comparison.
+        g64 = _wrap(_C_engine.astype(_unwrap(g), _C_engine.F64))
+        analytical.append(g64)
 
     # ── Numerical gradients (central differences) ────────────────────────────
-    numerical = []
-    for inp in inputs:
-        arr = _to_numpy(inp)
-        grad_num = np.zeros_like(arr, dtype=np.float64)
-        it = np.nditer(arr, flags=["multi_index"])
-        while not it.finished:
-            idx = it.multi_index
-            orig = float(arr[idx])
+    numerical: list[Tensor] = []
+    inputs_base = [_detach_copy(t) for t in inputs]  # clean copies for each sweep
 
-            arr[idx] = orig + eps
-            from lucid._factories.converters import tensor as _tensor_fn
+    for inp_idx, inp in enumerate(inputs):
+        dev = _unwrap(inp).device
+        numel = _unwrap(inp).numel()
+        shape = list(_unwrap(inp).shape)
+        # Work in F64 for numerical stability.
+        flat64 = _C_engine.astype(
+            _C_engine.reshape(_unwrap(inp), [numel]),
+            _C_engine.F64,
+        )
 
-            inp_plus = _tensor_fn(arr.copy())
-            inp_list = []
-            for other in inputs:
-                if other is inp:
-                    inp_list.append(inp_plus)
-                else:
-                    inp_list.append(_tensor_fn(_to_numpy(other).copy()))
-            f_plus = float(_to_numpy(func(*inp_list)).flat[0])
+        grad_values: list[float] = []
 
-            arr[idx] = orig - eps
-            inp_minus = _tensor_fn(arr.copy())
-            inp_list2 = []
-            for other in inputs:
-                if other is inp:
-                    inp_list2.append(inp_minus)
-                else:
-                    inp_list2.append(_tensor_fn(_to_numpy(other).copy()))
-            f_minus = float(_to_numpy(func(*inp_list2)).flat[0])
+        for k in range(numel):
+            # Perturbation vector: eps at position k, 0 elsewhere.
+            e_k = _C_engine.zeros([numel], _C_engine.F64, dev)
+            k_idx = _C_engine.full([1], float(k), _C_engine.I32, dev)
+            eps_v = _C_engine.full([1], float(eps), _C_engine.F64, dev)
+            e_k = _C_engine.scatter_add(e_k, k_idx, eps_v, 0)
 
-            grad_num[idx] = (f_plus - f_minus) / (2 * eps)
-            arr[idx] = orig
-            it.iternext()
-        numerical.append(grad_num)
+            # Build perturbed inputs list.
+            # Keep all perturbed tensors in F64 so the denominator eps is exact.
+            # Casting back to the original dtype would round the perturbation,
+            # making the effective step ≠ eps and corrupting the gradient estimate.
+            def _make_inputs_f64(sign: float) -> list[Tensor]:
+                result = []
+                for j, base in enumerate(inputs_base):
+                    if j == inp_idx:
+                        flat_b = _C_engine.astype(
+                            _C_engine.reshape(_unwrap(base), [numel]),
+                            _C_engine.F64,
+                        )
+                        if sign > 0:
+                            perturbed_flat = _C_engine.add(flat_b, e_k)
+                        else:
+                            perturbed_flat = _C_engine.sub(flat_b, e_k)
+                        # Reshape to original shape; stay in F64 for accuracy.
+                        perturbed = _C_engine.reshape(perturbed_flat, shape)
+                        result.append(_wrap(perturbed))
+                    else:
+                        # Other inputs: cast to F64 for consistent dtype.
+                        other_f64 = _C_engine.astype(
+                            _C_engine.contiguous(_unwrap(inputs[j])),
+                            _C_engine.F64,
+                        )
+                        result.append(_wrap(other_f64))
+                return result
 
-    # ── Compare ───────────────────────────────────────────────────────────────
-    for i, (an, nu) in enumerate(zip(analytical, numerical)):
-        try:
-            np.testing.assert_allclose(an, nu, atol=atol, rtol=rtol)
-        except AssertionError as exc:
-            msg = f"Gradient check failed for input {i}:\n{exc}"
+            f_plus = float(func(*_make_inputs_f64(+1.0)).item())
+            f_minus = float(func(*_make_inputs_f64(-1.0)).item())
+            grad_values.append((f_plus - f_minus) / (2.0 * eps))
+
+        # Build numerical gradient tensor from Python list (interop boundary).
+        from lucid._factories.converters import tensor as _tensor_fn
+
+        num_t = _tensor_fn(grad_values)
+        num64 = _wrap(
+            _C_engine.astype(
+                _C_engine.reshape(_unwrap(num_t), shape),
+                _C_engine.F64,
+            )
+        )
+        numerical.append(num64)
+
+    # ── Compare analytical vs numerical ──────────────────────────────────────
+    for i, (an_t, nu_t) in enumerate(zip(analytical, numerical)):
+        an = _unwrap(an_t)
+        nu = _unwrap(nu_t)
+        diff = _C_engine.abs(_C_engine.sub(an, nu))
+        thresh = _C_engine.add(
+            _C_engine.full(list(diff.shape), atol, _C_engine.F64, diff.device),
+            _C_engine.mul(
+                _C_engine.full(list(diff.shape), rtol, _C_engine.F64, diff.device),
+                _C_engine.abs(nu),
+            ),
+        )
+        ok = bool(_wrap(_C_engine.all(_C_engine.less_equal(diff, thresh))).item())
+        if not ok:
+            max_diff = float(_wrap(_C_engine.max(diff, [], False)).item())
+            max_thresh = float(_wrap(_C_engine.max(thresh, [], False)).item())
+            diff_flat = _C_engine.reshape(diff, [diff.numel()])
+            worst_k = int(_wrap(_C_engine.argmax(diff_flat, 0, False)).item())
+            k_idx2 = _C_engine.full([1], float(worst_k), _C_engine.I32, diff.device)
+            an_flat = _C_engine.reshape(an, [an.numel()])
+            nu_flat = _C_engine.reshape(nu, [nu.numel()])
+            an_val = float(_wrap(_C_engine.gather(an_flat, k_idx2, 0)).item())
+            nu_val = float(_wrap(_C_engine.gather(nu_flat, k_idx2, 0)).item())
+
+            msg = (
+                f"Gradient check failed for input {i} "
+                f"(atol={atol}, rtol={rtol}):\n"
+                f"  Max |diff|    = {max_diff:.6g}\n"
+                f"  Max threshold = {max_thresh:.6g}\n"
+                f"  Worst element [flat {worst_k}]: "
+                f"analytical={an_val:.6g}, numerical={nu_val:.6g}, "
+                f"|diff|={abs(an_val - nu_val):.6g}"
+            )
             if raise_exception:
-                raise AssertionError(msg) from None
+                raise AssertionError(msg)
             return False
+
     return True

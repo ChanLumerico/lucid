@@ -3,7 +3,6 @@ autograd.backward() and autograd.grad() free functions.
 """
 
 from typing import TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -114,21 +113,13 @@ def grad(
                 )
             result.append(None)
         else:
-            arr = np.ascontiguousarray(np.asarray(g_raw))
-            impl = _C_engine.TensorImpl(arr, inp._impl.device, False)
+            impl = _C_engine.TensorImpl(g_raw, inp._impl.device, False)
             result.append(_wrap(impl))
 
-    # Restore original .grad values
+    # Restore original .grad values using set_grad (no numpy).
     for inp, saved in zip(inputs, saved_grads):
         inp._impl.zero_grad()
         if saved is not None:
-            # Re-run a zero-scale backward to install saved grad — not ideal,
-            # but the engine has no "set_grad" API. Use in-place write instead.
-            raw = inp._impl.grad_as_python()
-            if raw is None:
-                # grad buffer doesn't exist yet — can't restore it easily
-                pass
-            else:
-                raw[:] = saved.numpy()
+            inp._impl.set_grad(_unwrap(saved))
 
     return tuple(result)

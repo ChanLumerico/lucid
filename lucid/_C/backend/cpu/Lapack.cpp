@@ -662,4 +662,168 @@ void lapack_solve_triangular_f64(const double* A, double* B, int n, int nrhs,
     *info_out = 0;
 }
 
+// ── lstsq ────────────────────────────────────────────────────────────────────
+// Uses sgels_/dgels_ to solve min||AX-B||_2 (overdetermined or underdetermined).
+// A is m×n; B is m×nrhs on entry, solution X in first n rows on exit.
+// Both A and B are modified in-place.
+
+void lapack_lstsq_f32(const float* A, float* B, int m, int n, int nrhs, int* info_out) {
+    char trans = 'N';
+    std::vector<float> Ac(static_cast<std::size_t>(m) * n);
+    std::vector<float> Bc(static_cast<std::size_t>(std::max(m, n)) * nrhs, 0.0f);
+    rowmajor_to_colmajor_f32(A, Ac.data(), m, n);
+    rowmajor_to_colmajor_f32(B, Bc.data(), m, nrhs);
+
+    i32 M = m, N = n, NRHS = nrhs, lda = m, ldb = std::max(m, n), info = 0;
+    float wkopt = 0.0f;
+    i32 lwork = -1;
+    sgels_(&trans, &M, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<float> work(static_cast<std::size_t>(lwork));
+    sgels_(&trans, &M, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f32(Bc.data(), B, std::max(m, n), nrhs);
+}
+
+void lapack_lstsq_f64(const double* A, double* B, int m, int n, int nrhs, int* info_out) {
+    char trans = 'N';
+    std::vector<double> Ac(static_cast<std::size_t>(m) * n);
+    std::vector<double> Bc(static_cast<std::size_t>(std::max(m, n)) * nrhs, 0.0);
+    rowmajor_to_colmajor_f64(A, Ac.data(), m, n);
+    rowmajor_to_colmajor_f64(B, Bc.data(), m, nrhs);
+
+    i32 M = m, N = n, NRHS = nrhs, lda = m, ldb = std::max(m, n), info = 0;
+    double wkopt = 0.0;
+    i32 lwork = -1;
+    dgels_(&trans, &M, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<double> work(static_cast<std::size_t>(lwork));
+    dgels_(&trans, &M, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f64(Bc.data(), B, std::max(m, n), nrhs);
+}
+
+// ── lu_solve ──────────────────────────────────────────────────────────────────
+// Solve AX=B given LU packed matrix and 1-based pivot vector from lu_factor.
+// Uses sgetrs_/dgetrs_. B is overwritten with X.
+
+void lapack_lu_solve_f32(const float* LU, const int* ipiv,
+                         float* B, int n, int nrhs, int* info_out) {
+    char trans = 'N';
+    std::vector<float> LUc(static_cast<std::size_t>(n) * n);
+    std::vector<float> Bc(static_cast<std::size_t>(n) * nrhs);
+    rowmajor_to_colmajor_f32(LU, LUc.data(), n, n);
+    rowmajor_to_colmajor_f32(B,  Bc.data(),  n, nrhs);
+
+    // Convert 1-based int32 ipiv to LAPACK i32 (also 1-based)
+    std::vector<i32> piv(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
+
+    i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
+    sgetrs_(&trans, &N, &NRHS, LUc.data(), &lda, piv.data(), Bc.data(), &ldb, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f32(Bc.data(), B, n, nrhs);
+}
+
+void lapack_lu_solve_f64(const double* LU, const int* ipiv,
+                         double* B, int n, int nrhs, int* info_out) {
+    char trans = 'N';
+    std::vector<double> LUc(static_cast<std::size_t>(n) * n);
+    std::vector<double> Bc(static_cast<std::size_t>(n) * nrhs);
+    rowmajor_to_colmajor_f64(LU, LUc.data(), n, n);
+    rowmajor_to_colmajor_f64(B,  Bc.data(),  n, nrhs);
+
+    std::vector<i32> piv(static_cast<std::size_t>(n));
+    for (int i = 0; i < n; ++i) piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
+
+    i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
+    dgetrs_(&trans, &N, &NRHS, LUc.data(), &lda, piv.data(), Bc.data(), &ldb, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f64(Bc.data(), B, n, nrhs);
+}
+
+// ── householder_product ───────────────────────────────────────────────────────
+// Reconstruct Q (m×k) from Householder reflectors stored in H and tau.
+// H is m×n (geqrf output), tau is length k=min(m,n). Uses sorgqr_/dorgqr_.
+
+void lapack_householder_product_f32(const float* H, const float* tau,
+                                    float* Q_out, int m, int n, int k, int* info_out) {
+    std::vector<float> Hc(static_cast<std::size_t>(m) * n);
+    rowmajor_to_colmajor_f32(H, Hc.data(), m, n);
+
+    i32 M = m, N = k, K = k, lda = m, info = 0;
+    float wkopt = 0.0f;
+    i32 lwork = -1;
+    sorgqr_(&M, &N, &K, Hc.data(), &lda, const_cast<float*>(tau), &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<float> work(static_cast<std::size_t>(lwork));
+    sorgqr_(&M, &N, &K, Hc.data(), &lda, const_cast<float*>(tau), work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f32(Hc.data(), Q_out, m, k);
+}
+
+void lapack_householder_product_f64(const double* H, const double* tau,
+                                    double* Q_out, int m, int n, int k, int* info_out) {
+    std::vector<double> Hc(static_cast<std::size_t>(m) * n);
+    rowmajor_to_colmajor_f64(H, Hc.data(), m, n);
+
+    i32 M = m, N = k, K = k, lda = m, info = 0;
+    double wkopt = 0.0;
+    i32 lwork = -1;
+    dorgqr_(&M, &N, &K, Hc.data(), &lda, const_cast<double*>(tau), &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<double> work(static_cast<std::size_t>(lwork));
+    dorgqr_(&M, &N, &K, Hc.data(), &lda, const_cast<double*>(tau), work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0)
+        colmajor_to_rowmajor_f64(Hc.data(), Q_out, m, k);
+}
+
+// ── ldl_factor ────────────────────────────────────────────────────────────────
+// LDL^T factorization of symmetric n×n matrix A. Uses ssytrf_/dsytrf_.
+// A_out receives the packed LAPACK result; ipiv receives 1-based pivot indices.
+
+void lapack_ldl_factor_f32(const float* A, float* A_out, int* ipiv, int n, int* info_out) {
+    char uplo = 'L';
+    std::vector<float> Ac(static_cast<std::size_t>(n) * n);
+    rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
+
+    std::vector<i32> piv(static_cast<std::size_t>(n));
+    float wkopt = 0.0f;
+    i32 N = n, lda = n, info = 0, lwork = -1;
+    ssytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<float> work(static_cast<std::size_t>(lwork));
+    ssytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0) {
+        colmajor_to_rowmajor_f32(Ac.data(), A_out, n, n);
+        for (int i = 0; i < n; ++i) ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
+    }
+}
+
+void lapack_ldl_factor_f64(const double* A, double* A_out, int* ipiv, int n, int* info_out) {
+    char uplo = 'L';
+    std::vector<double> Ac(static_cast<std::size_t>(n) * n);
+    rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
+
+    std::vector<i32> piv(static_cast<std::size_t>(n));
+    double wkopt = 0.0;
+    i32 N = n, lda = n, info = 0, lwork = -1;
+    dsytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), &wkopt, &lwork, &info);
+    lwork = static_cast<i32>(wkopt);
+    std::vector<double> work(static_cast<std::size_t>(lwork));
+    dsytrf_(&uplo, &N, Ac.data(), &lda, piv.data(), work.data(), &lwork, &info);
+    *info_out = info;
+    if (info == 0) {
+        colmajor_to_rowmajor_f64(Ac.data(), A_out, n, n);
+        for (int i = 0; i < n; ++i) ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
+    }
+}
+
 }  // namespace lucid::backend::cpu

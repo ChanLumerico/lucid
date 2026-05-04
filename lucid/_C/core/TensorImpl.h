@@ -160,6 +160,13 @@ public:
     // Accumulate a graph-mode gradient: first call sets it; subsequent calls add via add_op.
     void accumulate_grad_impl(std::shared_ptr<TensorImpl> g);
 
+    // retain_grad: if true, Engine accumulates gradients into this tensor's grad
+    // storage even when it is not a leaf, matching torch.Tensor.retain_grad().
+    bool retains_grad() const noexcept {
+        return autograd_ ? autograd_->retain_grad : false;
+    }
+    void set_retain_grad(bool v) noexcept { ensure_autograd()->retain_grad = v; }
+
     // Increments the autograd version counter; called by every in-place op.
     // No-op when there is no AutogradMeta (i.e. the tensor has never
     // participated in the autograd graph).

@@ -145,7 +145,9 @@ def max_pool3d(
     kd, kh, kw = _int_or_tuple(kernel_size, 3)
     sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
     pd, ph, pw = _int_or_tuple(padding, 3)
-    return _wrap(_C_engine.nn.max_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw))
+    return _wrap(
+        _C_engine.nn.max_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw)
+    )
 
 
 def avg_pool3d(
@@ -161,4 +163,6 @@ def avg_pool3d(
     kd, kh, kw = _int_or_tuple(kernel_size, 3)
     sd, sh, sw = _int_or_tuple(kernel_size if stride is None else stride, 3)
     pd, ph, pw = _int_or_tuple(padding, 3)
-    return _wrap(_C_engine.nn.avg_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw))
+    return _wrap(
+        _C_engine.nn.avg_pool3d(_unwrap(x), kd, kh, kw, sd, sh, sw, pd, ph, pw)
+    )

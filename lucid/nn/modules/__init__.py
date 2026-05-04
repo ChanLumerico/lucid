@@ -1,4 +1,4 @@
-from lucid.nn.modules.linear import Linear, Identity, Bilinear
+from lucid.nn.modules.linear import Linear, Identity, Bilinear, LazyLinear
 from lucid.nn.modules.conv import (
     Conv1d,
     Conv2d,
@@ -32,6 +32,7 @@ from lucid.nn.modules.activation import (
     GLU,
     Hardshrink,
     Tanhshrink,
+    Softshrink,
 )
 from lucid.nn.modules.normalization import (
     LayerNorm,
@@ -43,6 +44,7 @@ from lucid.nn.modules.normalization import (
     InstanceNorm1d,
     InstanceNorm2d,
     InstanceNorm3d,
+    LocalResponseNorm,
 )
 from lucid.nn.modules.pooling import (
     MaxPool1d,
@@ -57,8 +59,10 @@ from lucid.nn.modules.pooling import (
     AdaptiveMaxPool2d,
     AdaptiveMaxPool1d,
     AdaptiveMaxPool3d,
+    LPPool1d,
+    LPPool2d,
 )
-from lucid.nn.modules.dropout import Dropout, Dropout2d, AlphaDropout
+from lucid.nn.modules.dropout import Dropout, Dropout2d, AlphaDropout, Dropout3d
 from lucid.nn.modules.sparse import Embedding, EmbeddingBag
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
@@ -79,6 +83,8 @@ from lucid.nn.modules.loss import (
     PoissonNLLLoss,
     GaussianNLLLoss,
     CTCLoss,
+    MultiMarginLoss,
+    MultilabelMarginLoss,
 )
 from lucid.nn.modules.container import (
     Sequential,
@@ -112,6 +118,7 @@ __all__ = [
     "Linear",
     "Identity",
     "Bilinear",
+    "LazyLinear",
     "Conv1d",
     "Conv2d",
     "Conv3d",
@@ -142,6 +149,7 @@ __all__ = [
     "GLU",
     "Hardshrink",
     "Tanhshrink",
+    "Softshrink",
     "LayerNorm",
     "RMSNorm",
     "GroupNorm",
@@ -151,6 +159,7 @@ __all__ = [
     "InstanceNorm1d",
     "InstanceNorm2d",
     "InstanceNorm3d",
+    "LocalResponseNorm",
     "MaxPool1d",
     "MaxPool2d",
     "MaxPool3d",
@@ -163,8 +172,11 @@ __all__ = [
     "AdaptiveMaxPool2d",
     "AdaptiveMaxPool1d",
     "AdaptiveMaxPool3d",
+    "LPPool1d",
+    "LPPool2d",
     "Dropout",
     "Dropout2d",
+    "Dropout3d",
     "AlphaDropout",
     "Embedding",
     "EmbeddingBag",
@@ -191,6 +203,8 @@ __all__ = [
     "PoissonNLLLoss",
     "GaussianNLLLoss",
     "CTCLoss",
+    "MultiMarginLoss",
+    "MultilabelMarginLoss",
     "Sequential",
     "ModuleList",
     "ModuleDict",

@@ -16,8 +16,12 @@
 #include "../ops/linalg/Det.h"
 #include "../ops/linalg/Eig.h"
 #include "../ops/linalg/Eigh.h"
+#include "../ops/linalg/HouseholderProduct.h"
 #include "../ops/linalg/Inv.h"
+#include "../ops/linalg/LDLFactor.h"
 #include "../ops/linalg/LUFactor.h"
+#include "../ops/linalg/LUSolve.h"
+#include "../ops/linalg/Lstsq.h"
 #include "../ops/linalg/MatrixPower.h"
 #include "../ops/linalg/Norm.h"
 #include "../ops/linalg/Pinv.h"
@@ -108,6 +112,43 @@ void register_linalg(py::module_& m) {
           "Triangular solve: compute X such that A X = B.\n"
           "upper=True  → A is upper triangular.\n"
           "unitriangular=True → A has implicit unit diagonal.");
+
+    // lstsq: minimum-norm least-squares solution min‖AX−B‖₂.
+    // Returns a 1-element list; unpack [0] to get the solution tensor.
+    m.def(
+        "lstsq",
+        [](const TensorImplPtr& a, const TensorImplPtr& b) {
+            auto r = lstsq_op(a, b);
+            return r[0];
+        },
+        py::arg("a"), py::arg("b"),
+        "Least-squares solution: min||AX - B||_2.\n"
+        "CPU: LAPACK sgels/dgels.  GPU: CPU fallback.\n"
+        "Returns the solution tensor X with shape (N, NRHS).");
+
+    // lu_solve: solve AX = B given the packed LU factorisation from lu_factor.
+    m.def("lu_solve", &lu_solve_op,
+          py::arg("LU"), py::arg("pivots"), py::arg("b"),
+          "Solve AX = B given packed LU (from lu_factor) and pivot vector.\n"
+          "CPU: LAPACK sgetrs/dgetrs.  GPU: CPU fallback.");
+
+    // householder_product: recover Q from the compact Householder reflectors.
+    m.def("householder_product", &householder_product_op,
+          py::arg("H"), py::arg("tau"),
+          "Reconstruct Q from Householder reflectors (H, tau) as returned by\n"
+          "LAPACK dgeqrf.  CPU: LAPACK sorgqr/dorgqr.  GPU: CPU fallback.");
+
+    // ldl_factor: LDL^T factorisation for symmetric matrices.
+    // Returns (LD_packed, pivots) as a Python tuple.
+    m.def(
+        "ldl_factor",
+        [](const TensorImplPtr& a) {
+            auto r = ldl_factor_op(a);
+            return py::make_tuple(r[0], r[1]);
+        },
+        py::arg("a"),
+        "LDL^T factorisation for symmetric matrices.\n"
+        "Returns (LD_packed, pivots).  CPU: LAPACK ssytrf/dsytrf.  GPU: CPU fallback.");
 }
 
 }  // namespace lucid::bindings

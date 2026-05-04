@@ -1,64 +1,91 @@
 """
 Numerical comparison utilities for testing Lucid tensor operations.
+
+Implemented entirely with the Lucid C++ engine — no numpy dependency.
 """
 
-import numpy as np
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap, _unwrap
 from lucid._tensor.tensor import Tensor
 
 
+def _to_tensor(x: "Tensor | list | int | float") -> Tensor:
+    """Convert any scalar / list / Tensor to a Lucid Tensor on CPU."""
+    if isinstance(x, Tensor):
+        return x
+    # Python scalar, list, or numpy array → Tensor via the interop boundary.
+    from lucid._factories.converters import tensor as _tensor_fn
+
+    return _tensor_fn(x)
+
+
 def assert_close(
-    actual: Tensor | np.ndarray | list[object] | int | float,
-    expected: Tensor | np.ndarray | list[object] | int | float,
+    actual: "Tensor | list | int | float",
+    expected: "Tensor | list | int | float",
     *,
     atol: float = 1e-8,
     rtol: float = 1e-5,
     msg: str | None = None,
 ) -> None:
-    """Assert that two tensors (or arrays) are element-wise close.
+    """Assert that two tensors are element-wise close.
 
-    Analogous to ``torch.testing.assert_close``. Passes when:
-    ``|actual - expected| <= atol + rtol * |expected|`` for all elements.
+    Passes when ``|actual - expected| <= atol + rtol * |expected|``
+    for every element.  Implemented entirely with the Lucid C++ engine.
 
     Parameters
     ----------
-    actual : Tensor or array_like
-        Computed value.
-    expected : Tensor or array_like
-        Reference value.
-    atol : float, optional
-        Absolute tolerance (default: 1e-8).
-    rtol : float, optional
-        Relative tolerance (default: 1e-5).
-    msg : str, optional
-        Custom failure message prepended to the diff report.
+    actual, expected : Tensor or array_like
+    atol : float   absolute tolerance (default 1e-8)
+    rtol : float   relative tolerance (default 1e-5)
+    msg  : str     optional prefix for the failure message
 
     Raises
     ------
-    AssertionError
-        When the tensors are not close within the given tolerances.
-
-    Examples
-    --------
-    >>> from lucid.testing import assert_close
-    >>> import lucid
-    >>> x = lucid.tensor([1.0, 2.0, 3.0])
-    >>> assert_close(x, x.clone())
+    AssertionError on mismatch.
     """
+    a_t = _to_tensor(actual)
+    e_t = _to_tensor(expected)
 
-    def _to_numpy(t: Tensor | np.ndarray | list[object] | int | float) -> np.ndarray:  # type: ignore[type-arg]
-        if hasattr(t, "numpy"):
-            return np.asarray(t.numpy())
-        if hasattr(t, "_impl"):
-            return np.asarray(t._impl.data_as_python())
-        return np.asarray(t)
+    a = _unwrap(a_t)
+    e = _unwrap(e_t)
 
-    a = _to_numpy(actual)
-    e = _to_numpy(expected)
+    # Cast both to F64 for precision (no-op if already F64).
+    a_f = _C_engine.astype(a, _C_engine.F64) if a.dtype != _C_engine.F64 else a
+    e_f = _C_engine.astype(e, _C_engine.F64) if e.dtype != _C_engine.F64 else e
+
+    diff = _C_engine.abs(_C_engine.sub(a_f, e_f))
+    thresh = _C_engine.add(
+        _C_engine.full(list(diff.shape), atol, _C_engine.F64, diff.device),
+        _C_engine.mul(
+            _C_engine.full(list(diff.shape), rtol, _C_engine.F64, diff.device),
+            _C_engine.abs(e_f),
+        ),
+    )
+
+    # all(diff <= thresh)
+    ok = bool(_wrap(_C_engine.all(_C_engine.less_equal(diff, thresh))).item())
+    if ok:
+        return
+
+    # ── Build a diagnostic message ──────────────────────────────────────────
+    max_diff = float(_wrap(_C_engine.max(diff, [], False)).item())
+    max_thresh = float(_wrap(_C_engine.max(thresh, [], False)).item())
+
+    # Worst element (flat index)
+    diff_flat = _C_engine.reshape(diff, [diff.numel()])
+    worst_k = int(_wrap(_C_engine.argmax(diff_flat, 0, False)).item())
+
+    a_flat = _C_engine.reshape(a_f, [a_f.numel()])
+    e_flat = _C_engine.reshape(e_f, [e_f.numel()])
+    idx_impl = _C_engine.full([1], float(worst_k), _C_engine.I32, a_flat.device)
+    a_val = float(_wrap(_C_engine.gather(a_flat, idx_impl, 0)).item())
+    e_val = float(_wrap(_C_engine.gather(e_flat, idx_impl, 0)).item())
 
     prefix = f"{msg}\n" if msg else ""
-    try:
-        np.testing.assert_allclose(a, e, atol=atol, rtol=rtol, err_msg=prefix)
-    except AssertionError as exc:
-        raise AssertionError(
-            f"{prefix}assert_close failed (atol={atol}, rtol={rtol}):\n{exc}"
-        ) from None
+    raise AssertionError(
+        f"{prefix}assert_close failed (atol={atol}, rtol={rtol}):\n"
+        f"  Max |diff|     = {max_diff:.6g}\n"
+        f"  Max threshold  = {max_thresh:.6g}\n"
+        f"  Worst element  [flat {worst_k}]: actual={a_val:.6g}, expected={e_val:.6g}, "
+        f"|diff|={abs(a_val - e_val):.6g}"
+    )

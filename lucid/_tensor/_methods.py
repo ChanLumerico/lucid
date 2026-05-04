@@ -5,7 +5,6 @@ Called once at module import time by tensor.py.
 """
 
 from typing import Any, TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import _REGISTRY, OpEntry
@@ -20,7 +19,9 @@ def _inject_methods(tensor_cls: type) -> None:
     def _make_method(e: OpEntry) -> object:
         if e.n_tensor_args == -1:
 
-            def method_list(self: Tensor, tensors: list[Tensor], *args: object) -> Tensor:
+            def method_list(
+                self: Tensor, tensors: list[Tensor], *args: object
+            ) -> Tensor:
                 all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
                 result = e.engine_fn(all_tensors, *args)
                 if e.returns_tensor:
@@ -94,15 +95,11 @@ def _inject_methods(tensor_cls: type) -> None:
 
     def any(self: Tensor) -> Tensor:
         """Return True if any element is non-zero."""
-        val = bool(np.asarray(self._impl.data_as_python()).any())
-        arr = np.array(val)
-        return _wrap(_C_engine.TensorImpl(arr, self._impl.device, False))
+        return _wrap(_C_engine.any(self._impl))
 
     def all(self: Tensor) -> Tensor:
         """Return True if all elements are non-zero."""
-        val = bool(np.asarray(self._impl.data_as_python()).all())
-        arr = np.array(val)
-        return _wrap(_C_engine.TensorImpl(arr, self._impl.device, False))
+        return _wrap(_C_engine.all(self._impl))
 
     for _name, _fn in [
         ("view", view),

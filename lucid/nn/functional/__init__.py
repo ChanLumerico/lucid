@@ -20,6 +20,7 @@ from lucid.nn.functional.activations import (
     prelu,
     hardshrink,
     tanhshrink,
+    softshrink,
     normalize,
     cosine_similarity,
     pairwise_distance,
@@ -54,7 +55,13 @@ from lucid.nn.functional.pooling import (
     adaptive_max_pool1d,
     adaptive_max_pool3d,
 )
-from lucid.nn.functional.dropout import dropout, dropout2d
+from lucid.nn.functional.dropout import (
+    dropout,
+    dropout2d,
+    dropout3d,
+    alpha_dropout,
+    feature_alpha_dropout,
+)
 from lucid.nn.functional.attention import scaled_dot_product_attention
 from lucid.nn.functional.loss import (
     mse_loss,
@@ -73,6 +80,8 @@ from lucid.nn.functional.loss import (
     poisson_nll_loss,
     gaussian_nll_loss,
     ctc_loss,
+    multi_margin_loss,
+    multilabel_margin_loss,
 )
 from lucid.nn.functional.sparse import embedding, one_hot
 from lucid.nn.functional.sampling import (
@@ -81,6 +90,8 @@ from lucid.nn.functional.sampling import (
     affine_grid,
     pad,
     unfold,
+    fold,
+    embedding_bag,
 )
 
 __all__ = [
@@ -106,6 +117,7 @@ __all__ = [
     "prelu",
     "hardshrink",
     "tanhshrink",
+    "softshrink",
     "normalize",
     "cosine_similarity",
     "pairwise_distance",
@@ -141,6 +153,9 @@ __all__ = [
     # dropout
     "dropout",
     "dropout2d",
+    "dropout3d",
+    "alpha_dropout",
+    "feature_alpha_dropout",
     # attention
     "scaled_dot_product_attention",
     # losses
@@ -160,6 +175,8 @@ __all__ = [
     "poisson_nll_loss",
     "gaussian_nll_loss",
     "ctc_loss",
+    "multi_margin_loss",
+    "multilabel_margin_loss",
     # sparse
     "embedding",
     "one_hot",
@@ -169,4 +186,6 @@ __all__ = [
     "affine_grid",
     "pad",
     "unfold",
+    "fold",
+    "embedding_bag",
 ]

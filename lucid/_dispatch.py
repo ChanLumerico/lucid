@@ -50,11 +50,9 @@ def normalize_factory_kwargs(
 def _impl_with_grad(
     impl: _C_engine.TensorImpl, requires_grad: bool
 ) -> _C_engine.TensorImpl:
-    """Return a new TensorImpl with the same data/device/dtype but different requires_grad."""
-    import numpy as np
-
-    arr = np.ascontiguousarray(np.asarray(impl.data_as_python()))
-    return _C_engine.TensorImpl(arr, impl.device, requires_grad)
+    """Return a new TensorImpl sharing the same storage but with a different requires_grad.
+    Uses clone_with_grad — no data copy, no numpy round-trip."""
+    return impl.clone_with_grad(requires_grad)
 
 
 def _parse_device(d: device | _C_engine.Device | str) -> _C_engine.Device:

@@ -47,6 +47,9 @@
 #include "../nn/GroupNorm.h"
 #include "../nn/Interpolate.h"
 #include "../nn/LSTM.h"
+#include "../nn/CTCLoss.h"
+#include "../nn/EmbeddingBag.h"
+#include "../nn/Fold.h"
 #include "../nn/LayerNorm.h"
 #include "../nn/Linear.h"
 #include "../nn/Loss.h"
@@ -351,6 +354,49 @@ void register_nn(py::module_& m) {
           py::arg("bias") = TensorImplPtr{},
           "Learned bilinear layer: y = x1 W x2 + b. "
           "x1: (..., D1), x2: (..., D2), W: (Dout, D1, D2), b: (Dout,).");
+
+    // fold (col2im): inverse of unfold/im2col.
+    // Input: (N, C*kH*kW, L) → Output: (N, C, outH, outW).
+    m.def(
+        "fold",
+        [](const TensorImplPtr& x, std::vector<int> output_size, std::vector<int> kernel_size,
+           std::vector<int> stride, std::vector<int> padding, std::vector<int> dilation) {
+            return fold_op(x, output_size, kernel_size, stride, padding, dilation);
+        },
+        py::arg("x"), py::arg("output_size"), py::arg("kernel_size"),
+        py::arg("stride") = std::vector<int>{1, 1},
+        py::arg("padding") = std::vector<int>{0, 0},
+        py::arg("dilation") = std::vector<int>{1, 1},
+        "col2im: inverse of unfold. (N, C*kH*kW, L) → (N, C, outH, outW).\n"
+        "CPU: scatter-add loop.  GPU: CPU fallback.");
+
+    // embedding_bag: pooled embedding lookup.
+    // mode: 0=sum, 1=mean, 2=max.
+    m.def(
+        "ctc_loss",
+        [](const TensorImplPtr& log_probs, const TensorImplPtr& targets,
+           const TensorImplPtr& input_lengths, const TensorImplPtr& target_lengths,
+           int blank, bool zero_infinity) {
+            return ctc_loss_op(log_probs, targets, input_lengths, target_lengths,
+                               blank, zero_infinity);
+        },
+        py::arg("log_probs"), py::arg("targets"),
+        py::arg("input_lengths"), py::arg("target_lengths"),
+        py::arg("blank") = 0, py::arg("zero_infinity") = false,
+        "CTC loss. log_probs:(T,N,C), targets:(N*S,) int32, lengths:(N,) int32.\n"
+        "Returns per-sample losses (N,). CPU: forward DP in log-domain. GPU: CPU fallback.");
+
+    m.def(
+        "embedding_bag",
+        [](const TensorImplPtr& weight, const TensorImplPtr& indices,
+           const TensorImplPtr& offsets, int mode, int padding_idx, bool include_last_offset) {
+            return embedding_bag_op(weight, indices, offsets, mode, padding_idx, include_last_offset);
+        },
+        py::arg("weight"), py::arg("indices"), py::arg("offsets"),
+        py::arg("mode") = 0, py::arg("padding_idx") = -1, py::arg("include_last_offset") = false,
+        "Pooled embedding lookup with offset-delimited bags.\n"
+        "mode: 0=sum, 1=mean, 2=max.\n"
+        "CPU: gather+reduce loop.  GPU: MLX gather+scatter_add/scatter_max.");
 
     // lstm_forward is implemented as a lambda rather than a direct C++ op
     // pointer because it needs to:

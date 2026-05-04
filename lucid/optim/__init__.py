@@ -11,6 +11,7 @@ from lucid.optim.others import (
     NAdam,
     ASGD,
     Rprop,
+    SparseAdam,
 )
 from lucid.optim.lr_scheduler import (
     StepLR,
@@ -45,6 +46,7 @@ __all__ = [
     "NAdam",
     "ASGD",
     "Rprop",
+    "SparseAdam",
     "StepLR",
     "ExponentialLR",
     "MultiStepLR",

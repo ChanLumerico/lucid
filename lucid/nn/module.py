@@ -9,6 +9,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.parameter import Parameter
 from lucid.nn.hooks import RemovableHandle
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
+
 # _state_dict is imported lazily inside state_dict()/load_state_dict() to
 # break the Module ↔ _state_dict circular dependency.
 
@@ -117,16 +118,38 @@ class Module:
             yield p
 
     def named_parameters(
-        self, prefix: str = "", recurse: bool = True
+        self,
+        prefix: str = "",
+        recurse: bool = True,
+        remove_duplicate: bool = True,
     ) -> Iterator[tuple[str, Parameter]]:
-        """Yield (name, Parameter) pairs."""
+        """Yield (name, Parameter) pairs.
+
+        Parameters
+        ----------
+        remove_duplicate:
+            If True (default), each unique Parameter object is yielded only
+            once, even if referenced by multiple attributes. Mirrors PyTorch.
+        """
+        seen: set[int] = set()
         for name, p in self._parameters.items():
             if p is not None:
+                if remove_duplicate:
+                    if id(p) in seen:
+                        continue
+                    seen.add(id(p))
                 yield (f"{prefix}.{name}" if prefix else name), p
         if recurse:
             for mname, m in self._modules.items():
                 subprefix = f"{prefix}.{mname}" if prefix else mname
-                yield from m.named_parameters(subprefix, recurse=True)
+                for full_name, p in m.named_parameters(
+                    subprefix, recurse=True, remove_duplicate=False
+                ):
+                    if remove_duplicate:
+                        if id(p) in seen:
+                            continue
+                        seen.add(id(p))
+                    yield full_name, p
 
     def buffers(self, recurse: bool = True) -> Iterator[Tensor]:
         """Yield all buffer tensors."""
@@ -307,6 +330,15 @@ class Module:
 
         return self.to(bfloat16)
 
+    def type(self, dst_type: object) -> Self:
+        """Cast all parameters and buffers to *dst_type*.
+
+        *dst_type* may be a :class:`lucid.dtype`, a Python type (``float``,
+        ``int``), or a string (``"float32"``, ``"float16"``, etc.).
+        Delegates to :meth:`to`, which handles the conversion.
+        """
+        return self.to(dst_type)  # type: ignore[arg-type]
+
     def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""
         for m in self.children():
@@ -357,6 +389,7 @@ class Module:
     ) -> dict[str, Tensor]:
         """Return a dict mapping parameter/buffer names to tensors."""
         from lucid.nn._state_dict import _save_to_state_dict
+
         return _save_to_state_dict(self, prefix=prefix, keep_vars=keep_vars)
 
     def load_state_dict(
@@ -364,6 +397,7 @@ class Module:
     ) -> tuple[list[str], list[str]]:
         """Load parameters from a state_dict. Returns (missing_keys, unexpected_keys)."""
         from lucid.nn._state_dict import _load_from_state_dict
+
         return _load_from_state_dict(self, state_dict, strict=strict)
 
     # ── hooks ─────────────────────────────────────────────────────────────
@@ -385,6 +419,10 @@ class Module:
         key = _next_hook_id()
         self._backward_hooks[key] = hook
         return RemovableHandle(self._backward_hooks, key)
+
+    def register_backward_hook(self, hook: _BackwardHook) -> RemovableHandle:
+        """Deprecated alias for register_full_backward_hook."""
+        return self.register_full_backward_hook(hook)
 
     # ── repr ──────────────────────────────────────────────────────────────
 

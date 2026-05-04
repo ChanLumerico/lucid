@@ -8,7 +8,6 @@ from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
 
 
-
 def _register(
     output: Tensor,
     fn_class: type,
@@ -24,7 +23,9 @@ def _register(
     # C++ FunctionCtx — used as a carrier; C++ engine needs it to be non-null
     cpp_ctx = _C_engine.FunctionCtx()
 
-    def backward_fn(_cpp_ctx: object, grad_impl: _C_engine.TensorImpl) -> list[_C_engine.TensorImpl]:
+    def backward_fn(
+        _cpp_ctx: object, grad_impl: _C_engine.TensorImpl
+    ) -> list[_C_engine.TensorImpl]:
         """Called by C++ engine: (cpp_ctx, grad_impl) → list[TensorImpl | None]"""
         grad_tensor = _wrap(grad_impl)
         grads = fn_class.backward(py_ctx, grad_tensor)

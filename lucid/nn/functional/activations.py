@@ -162,7 +162,9 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     xi = _unwrap(x)
     pos = _C_engine.relu(xi)
     exp_part = _C_engine.sub(
-        _C_engine.exp(_C_engine.div(xi, _C_engine.full(xi.shape, alpha, xi.dtype, xi.device))),
+        _C_engine.exp(
+            _C_engine.div(xi, _C_engine.full(xi.shape, alpha, xi.dtype, xi.device))
+        ),
         _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device),
     )
     neg = _C_engine.minimum(
@@ -181,7 +183,9 @@ def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
         _C_engine.greater(xi, lam),
         _C_engine.less(xi, neg_lam),
     )
-    return _wrap(_C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device)))
+    return _wrap(
+        _C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device))
+    )
 
 
 def tanhshrink(x: Tensor) -> Tensor:
@@ -263,3 +267,18 @@ def pairwise_distance(
     if keepdim:
         dist = _C_engine.unsqueeze(dist, last_dim)
     return _wrap(dist)
+
+
+def softshrink(x: "Tensor", lambd: float = 0.5) -> "Tensor":
+    """Soft-shrinkage: x-lambd if x>lambd, x+lambd if x<-lambd, else 0."""
+    xi = _unwrap(x)
+    lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
+    neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
+    zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
+    pos_mask = _C_engine.greater(xi, lam)
+    neg_mask = _C_engine.less(xi, neg_lam)
+    pos_val = _C_engine.sub(xi, lam)
+    neg_val = _C_engine.add(xi, lam)
+    out = _C_engine.where(pos_mask, pos_val, zeros)
+    out = _C_engine.where(neg_mask, neg_val, out)
+    return _wrap(out)

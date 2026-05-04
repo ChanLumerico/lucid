@@ -38,11 +38,16 @@
 #include <stdexcept>
 #include <variant>
 
+#include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
+#include "../../kernel/BinaryKernel.h"
+#include "../../ops/utils/Select.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
 #include "../../core/Helpers.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -292,6 +297,139 @@ TensorImplPtr empty_like_op(const TensorImplPtr& a, bool requires_grad) {
 TensorImplPtr full_like_op(const TensorImplPtr& a, double fill_value, bool requires_grad) {
     Validator::input(a, "full_like.a").non_null();
     return full_op(a->shape(), fill_value, a->dtype(), a->device(), requires_grad);
+}
+
+// ── logspace ──────────────────────────────────────────────────────────────────
+
+TensorImplPtr logspace_op(
+    double start, double stop, std::int64_t num, double base,
+    Dtype dt, Device device, bool requires_grad) {
+    if (num < 0)
+        ErrorBuilder("logspace").fail("num must be >= 0");
+    Shape shape{num};
+    OpScopeFull scope{"logspace", device, dt, shape};
+
+    const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;
+
+    auto compute_cpu = [&](auto* p) {
+        using T = std::remove_pointer_t<decltype(p)>;
+        for (std::int64_t i = 0; i < num; ++i) {
+            const double exp_v = (num == 1) ? start : start + static_cast<double>(i) * step;
+            p[i] = static_cast<T>(std::pow(base, exp_v));
+        }
+        if (num >= 2)
+            p[num - 1] = static_cast<T>(std::pow(base, stop));
+    };
+
+    auto cpu = allocate_cpu(shape, dt);
+    switch (dt) {
+    case Dtype::F32: compute_cpu(reinterpret_cast<float*>(cpu.ptr.get())); break;
+    case Dtype::F64: compute_cpu(reinterpret_cast<double*>(cpu.ptr.get())); break;
+    case Dtype::I32: compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get())); break;
+    case Dtype::I64: compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get())); break;
+    default: ErrorBuilder("logspace").not_implemented("dtype not supported");
+    }
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape),
+                    shape, dt, device, requires_grad);
+}
+
+// ── scatter_add ───────────────────────────────────────────────────────────────
+// Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
+
+TensorImplPtr scatter_add_op(const TensorImplPtr& base,
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base,    "scatter_add.base").non_null();
+    Validator::input(indices, "scatter_add.indices").non_null();
+    Validator::input(src,     "scatter_add.src").non_null();
+
+    const Dtype dt  = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+
+    OpScopeFull scope{"scatter_add", dv, dt, bs};
+
+    // Normalise dim
+    const int ndim = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s = be.scatter_add(base->storage(), indices->storage(), src->storage(),
+                                    bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    // Autograd wiring
+    const bool needs_grad = GradMode::is_enabled() &&
+                            (base->requires_grad() || src->requires_grad());
+    if (!needs_grad) return out;
+
+    // base_edge: gradient = grad_out  (identity)
+    // src_edge:  gradient = gather(grad_out, indices, dim)
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAddNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_add"; }
+        void release_saved() override { saved_indices_.reset(); }
+
+        std::vector<Storage> apply(Storage g) override {
+            Storage grad_base = g;  // d/d(base) = identity
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            // gather_op(a, indices, axis) — select along axis at index positions
+            auto grad_src_impl = gather_op(g_impl, saved_indices_, dim_);
+            Storage grad_src = grad_src_impl->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAddNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges({base_edge, src_edge});
+    bwd->set_saved_versions({base->version(), src->version()});
+
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── unfold_dim ─────────────────────────────────────────────────────────────────
+// No autograd (view-like: callers compose with existing autograd-tracked ops).
+
+TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step) {
+    Validator::input(a, "unfold_dim.a").non_null();
+    if (size <= 0 || step <= 0)
+        ErrorBuilder("unfold_dim").fail("size and step must be positive");
+
+    const Shape& in_shape = a->shape();
+    const int ndim = static_cast<int>(in_shape.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(d)]);
+    if (size > dim_size)
+        ErrorBuilder("unfold_dim").fail("size > dimension size");
+
+    const int L = (dim_size - size) / step + 1;
+    Shape out_shape;
+    for (int i = 0; i < d; ++i) out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    out_shape.push_back(static_cast<std::int64_t>(L));
+    for (int i = d + 1; i < ndim; ++i) out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    out_shape.push_back(static_cast<std::int64_t>(size));
+
+    OpScopeFull scope{"unfold_dim", a->device(), a->dtype(), out_shape};
+    auto& be = backend::Dispatcher::for_device(a->device());
+    Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
+    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(), false);
 }
 
 }  // namespace lucid

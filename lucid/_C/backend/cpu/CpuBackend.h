@@ -2739,6 +2739,124 @@ public:
         return Storage{CpuStorage{ptr, nbytes, dt}};
     }
 
+    // User-facing scatter-add: copies base then adds src at positions given by indices.
+    Storage scatter_add(const Storage& base,
+                        const Storage& indices,
+                        const Storage& src,
+                        const Shape& base_shape,
+                        const Shape& idx_shape,
+                        int dim,
+                        Dtype dt) override {
+        const auto& cb = std::get<CpuStorage>(base);
+        const auto& ci = std::get<CpuStorage>(indices);
+        const auto& cs = std::get<CpuStorage>(src);
+
+        const std::size_t base_n = shape_numel(base_shape);
+        const std::size_t nbytes = base_n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        // Start from a copy of base
+        std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
+
+        const int ndim = static_cast<int>(base_shape.size());
+        if (dim < 0) dim += ndim;
+
+        // outer = product of dims before dim
+        std::size_t outer = 1;
+        for (int d = 0; d < dim; ++d)
+            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
+        // inner = product of dims after dim
+        std::size_t inner = 1;
+        for (int d = dim + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
+        const std::size_t base_dim = static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dim)]);
+        const std::size_t idx_dim  = static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(dim)]);
+        const auto* ip = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
+
+        auto run = [&](auto* dst, const auto* sp) {
+            for (std::size_t o = 0; o < outer; ++o) {
+                for (std::size_t j = 0; j < inner; ++j) {
+                    for (std::size_t k = 0; k < idx_dim; ++k) {
+                        const std::size_t src_flat = (o * idx_dim + k) * inner + j;
+                        std::int32_t tgt = ip[src_flat];
+                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
+                        const std::size_t dst_flat =
+                            (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
+                        dst[dst_flat] += sp[src_flat];
+                    }
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::scatter_add").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
+    // Sliding-window view: out shape is (*in_shape[:dim], L, *in_shape[dim+1:], size)
+    Storage unfold_dim(const Storage& a,
+                       const Shape& in_shape,
+                       int dim,
+                       int size,
+                       int step,
+                       Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const int ndim = static_cast<int>(in_shape.size());
+        if (dim < 0) dim += ndim;
+
+        const std::size_t dim_size = static_cast<std::size_t>(in_shape[static_cast<std::size_t>(dim)]);
+        const std::size_t L = (dim_size - static_cast<std::size_t>(size)) /
+                               static_cast<std::size_t>(step) + 1;
+
+        // out_shape = in_shape[:dim] + [L] + in_shape[dim+1:] + [size]
+        Shape out_shape;
+        for (int d = 0; d < dim; ++d) out_shape.push_back(in_shape[static_cast<std::size_t>(d)]);
+        out_shape.push_back(static_cast<std::int64_t>(L));
+        for (int d = dim + 1; d < ndim; ++d) out_shape.push_back(in_shape[static_cast<std::size_t>(d)]);
+        out_shape.push_back(static_cast<std::int64_t>(size));
+
+        const std::size_t out_n = shape_numel(out_shape);
+        const std::size_t nbytes = out_n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+
+        // outer = product of dims before dim
+        std::size_t outer = 1;
+        for (int d = 0; d < dim; ++d)
+            outer *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(d)]);
+        // inner = product of dims after dim (in the original tensor)
+        std::size_t inner = 1;
+        for (int d = dim + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(d)]);
+
+        const std::size_t esz = dtype_size(dt);
+        const std::uint8_t* src_ptr = static_cast<const std::uint8_t*>(
+            static_cast<const void*>(ca.ptr.get()));
+        std::uint8_t* dst_ptr = static_cast<std::uint8_t*>(static_cast<void*>(ptr.get()));
+
+        for (std::size_t o = 0; o < outer; ++o) {
+            for (std::size_t l = 0; l < L; ++l) {
+                for (std::size_t j = 0; j < inner; ++j) {
+                    for (std::size_t s = 0; s < static_cast<std::size_t>(size); ++s) {
+                        // Source element: [o, l*step+s, j] in the input
+                        const std::size_t src_dim_pos = l * static_cast<std::size_t>(step) + s;
+                        const std::size_t src_flat =
+                            (o * dim_size + src_dim_pos) * inner + j;
+                        // Destination: [o, l, j, s] in the output
+                        const std::size_t dst_flat =
+                            ((o * L + l) * inner + j) * static_cast<std::size_t>(size) + s;
+                        std::memcpy(dst_ptr + dst_flat * esz, src_ptr + src_flat * esz, esz);
+                    }
+                }
+            }
+        }
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
         const auto& ca = std::get<CpuStorage>(a);
         const auto& cb = std::get<CpuStorage>(b);
@@ -3787,6 +3905,545 @@ public:
             }
         }
         return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
+    }
+
+    std::vector<Storage> linalg_lstsq(const Storage& a,
+                                       const Storage& b,
+                                       const Shape& a_shape,
+                                       const Shape& b_shape,
+                                       Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_lstsq").not_implemented("only F32/F64");
+        const auto& a_cpu = std::get<CpuStorage>(a);
+        const auto& b_cpu = std::get<CpuStorage>(b);
+        const int m = static_cast<int>(a_shape[a_shape.size() - 2]);
+        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
+        const int nrhs = (b_shape.size() > 1) ? static_cast<int>(b_shape[b_shape.size() - 1]) : 1;
+        const int ldb = std::max(m, n);
+
+        // A copy (sgels overwrites A)
+        std::size_t a_nb = static_cast<std::size_t>(m) * n * dtype_size(dt);
+        std::size_t b_nb = static_cast<std::size_t>(ldb) * nrhs * dtype_size(dt);
+        auto a_ptr = allocate_aligned_bytes(a_nb, Device::CPU);
+        auto b_ptr = allocate_aligned_bytes(b_nb, Device::CPU);
+        std::memset(b_ptr.get(), 0, b_nb);  // zero-pad to max(m,n)
+
+        int info = 0;
+        if (dt == Dtype::F32) {
+            std::memcpy(a_ptr.get(), a_cpu.ptr.get(), a_nb);
+            // Copy B into first m rows
+            auto* bp = reinterpret_cast<float*>(b_ptr.get());
+            const auto* bsrc = reinterpret_cast<const float*>(b_cpu.ptr.get());
+            for (int r = 0; r < m; ++r)
+                for (int c = 0; c < nrhs; ++c)
+                    bp[r * nrhs + c] = bsrc[r * nrhs + c];
+            cpu::lapack_lstsq_f32(reinterpret_cast<float*>(a_ptr.get()), bp, m, n, nrhs, &info);
+        } else {
+            std::memcpy(a_ptr.get(), a_cpu.ptr.get(), a_nb);
+            auto* bp = reinterpret_cast<double*>(b_ptr.get());
+            const auto* bsrc = reinterpret_cast<const double*>(b_cpu.ptr.get());
+            for (int r = 0; r < m; ++r)
+                for (int c = 0; c < nrhs; ++c)
+                    bp[r * nrhs + c] = bsrc[r * nrhs + c];
+            cpu::lapack_lstsq_f64(reinterpret_cast<double*>(a_ptr.get()), bp, m, n, nrhs, &info);
+        }
+        check_lapack_info(info, "lstsq");
+
+        // Solution shape: (n, nrhs) — first n rows of B
+        std::size_t sol_nb = static_cast<std::size_t>(n) * nrhs * dtype_size(dt);
+        auto sol_ptr = allocate_aligned_bytes(sol_nb, Device::CPU);
+        std::memcpy(sol_ptr.get(), b_ptr.get(), sol_nb);
+
+        return {Storage{CpuStorage{sol_ptr, sol_nb, dt}}};
+    }
+
+    Storage linalg_lu_solve(const Storage& LU,
+                             const Storage& pivots,
+                             const Storage& b,
+                             const Shape& lu_shape,
+                             const Shape& b_shape,
+                             Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_lu_solve").not_implemented("only F32/F64");
+        const auto& lu_cpu  = std::get<CpuStorage>(LU);
+        const auto& piv_cpu = std::get<CpuStorage>(pivots);
+        const auto& b_cpu   = std::get<CpuStorage>(b);
+        const int n    = static_cast<int>(lu_shape[lu_shape.size() - 1]);
+        const int nrhs = (b_shape.size() > 1) ? static_cast<int>(b_shape[b_shape.size() - 1]) : 1;
+        const std::int64_t batch = leading_matrix_batch_count(lu_shape, 2);
+
+        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
+        std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
+
+        const std::size_t lu_per = static_cast<std::size_t>(n) * n;
+        const std::size_t b_per  = static_cast<std::size_t>(n) * nrhs;
+        const auto* ipiv = reinterpret_cast<const int*>(piv_cpu.ptr.get());
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* lup = reinterpret_cast<const float*>(lu_cpu.ptr.get());
+            auto* xp = reinterpret_cast<float*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_lu_solve_f32(lup + bi * lu_per, ipiv + bi * n,
+                                          xp + bi * b_per, n, nrhs, &info);
+        } else {
+            const auto* lup = reinterpret_cast<const double*>(lu_cpu.ptr.get());
+            auto* xp = reinterpret_cast<double*>(out_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_lu_solve_f64(lup + bi * lu_per, ipiv + bi * n,
+                                          xp + bi * b_per, n, nrhs, &info);
+        }
+        check_lapack_info(info, "lu_solve");
+        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
+    }
+
+    Storage linalg_householder_product(const Storage& H,
+                                        const Storage& tau,
+                                        const Shape& h_shape,
+                                        Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_householder_product").not_implemented("only F32/F64");
+        const auto& h_cpu   = std::get<CpuStorage>(H);
+        const auto& tau_cpu = std::get<CpuStorage>(tau);
+        const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
+        const int n = static_cast<int>(h_shape[h_shape.size() - 1]);
+        const int k = std::min(m, n);
+
+        // Q shape: m × k
+        const std::size_t q_nb = static_cast<std::size_t>(m) * k * dtype_size(dt);
+        auto q_ptr = allocate_aligned_bytes(q_nb, Device::CPU);
+        int info = 0;
+        if (dt == Dtype::F32) {
+            cpu::lapack_householder_product_f32(
+                reinterpret_cast<const float*>(h_cpu.ptr.get()),
+                reinterpret_cast<const float*>(tau_cpu.ptr.get()),
+                reinterpret_cast<float*>(q_ptr.get()), m, n, k, &info);
+        } else {
+            cpu::lapack_householder_product_f64(
+                reinterpret_cast<const double*>(h_cpu.ptr.get()),
+                reinterpret_cast<const double*>(tau_cpu.ptr.get()),
+                reinterpret_cast<double*>(q_ptr.get()), m, n, k, &info);
+        }
+        check_lapack_info(info, "householder_product");
+        return Storage{CpuStorage{q_ptr, q_nb, dt}};
+    }
+
+    StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+        if (dt != Dtype::F32 && dt != Dtype::F64)
+            ErrorBuilder("cpu_backend::linalg_ldl_factor").not_implemented("only F32/F64");
+        const auto& cs = std::get<CpuStorage>(a);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
+
+        auto ld_ptr   = allocate_aligned_bytes(cs.nbytes, Device::CPU);
+        auto piv_nb   = static_cast<std::size_t>(batch) * n * sizeof(std::int32_t);
+        auto piv_ptr  = allocate_aligned_bytes(piv_nb, Device::CPU);
+        auto* piv_out = reinterpret_cast<int*>(piv_ptr.get());
+
+        int info = 0;
+        if (dt == Dtype::F32) {
+            const auto* src = reinterpret_cast<const float*>(cs.ptr.get());
+            auto* dst = reinterpret_cast<float*>(ld_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_ldl_factor_f32(src + bi * per_mat, dst + bi * per_mat,
+                                            piv_out + bi * n, n, &info);
+        } else {
+            const auto* src = reinterpret_cast<const double*>(cs.ptr.get());
+            auto* dst = reinterpret_cast<double*>(ld_ptr.get());
+            for (std::int64_t bi = 0; bi < batch; ++bi)
+                cpu::lapack_ldl_factor_f64(src + bi * per_mat, dst + bi * per_mat,
+                                            piv_out + bi * n, n, &info);
+        }
+        check_lapack_info(info, "ldl_factor");
+        return {Storage{CpuStorage{ld_ptr,  cs.nbytes, dt}},
+                Storage{CpuStorage{piv_ptr, piv_nb,    Dtype::I32}}};
+    }
+
+    // fold (col2im): scatter-add (N, C*kH*kW, L) → (N, C, outH, outW)
+    Storage nn_fold(const Storage& x,
+                     const Shape& x_shape,
+                     const Shape& out_shape,
+                     const std::vector<int>& kernel_size,
+                     const std::vector<int>& stride,
+                     const std::vector<int>& padding,
+                     const std::vector<int>& dilation,
+                     Dtype dt) override {
+        const auto& cx = std::get<CpuStorage>(x);
+        const int N    = static_cast<int>(x_shape[0]);
+        const int CKK  = static_cast<int>(x_shape[1]);
+        const int L    = static_cast<int>(x_shape[2]);
+        const int kH   = kernel_size[0], kW = kernel_size[1];
+        const int sH   = stride[0],      sW = stride[1];
+        const int pH   = padding[0],     pW = padding[1];
+        const int dH   = dilation[0],    dW = dilation[1];
+        const int C    = CKK / (kH * kW);
+        const int outH = static_cast<int>(out_shape[2]);
+        const int outW = static_cast<int>(out_shape[3]);
+
+        // Number of output positions
+        const int H_pad = outH + 2 * pH;
+        const int W_pad = outW + 2 * pW;
+        const std::size_t total_out = static_cast<std::size_t>(N) * C * outH * outW;
+        auto out_ptr = allocate_aligned_bytes(total_out * dtype_size(dt), Device::CPU);
+        std::memset(out_ptr.get(), 0, total_out * dtype_size(dt));
+
+        auto run = [&](auto* op, const auto* xp) {
+            int l_idx = 0;
+            for (int oh = 0; oh < (H_pad - kH) / sH + 1; ++oh) {
+                for (int ow = 0; ow < (W_pad - kW) / sW + 1; ++ow) {
+                    for (int n = 0; n < N; ++n) {
+                        for (int c = 0; c < C; ++c) {
+                            for (int ki = 0; ki < kH; ++ki) {
+                                for (int kj = 0; kj < kW; ++kj) {
+                                    const int ri = oh * sH + ki * dH - pH;
+                                    const int ci = ow * sW + kj * dW - pW;
+                                    if (ri < 0 || ri >= outH || ci < 0 || ci >= outW) continue;
+                                    const int src_c = c * kH * kW + ki * kW + kj;
+                                    const int src_flat = n * CKK * L + src_c * L + l_idx;
+                                    const int dst_flat = n * C * outH * outW + c * outH * outW
+                                                        + ri * outW + ci;
+                                    op[dst_flat] += xp[src_flat];
+                                }
+                            }
+                        }
+                    }
+                    ++l_idx;
+                }
+            }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(out_ptr.get()),
+                reinterpret_cast<const float*>(cx.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(out_ptr.get()),
+                reinterpret_cast<const double*>(cx.ptr.get()));
+        else ErrorBuilder("nn_fold").not_implemented("only F32/F64");
+        return Storage{CpuStorage{out_ptr, total_out * dtype_size(dt), dt}};
+    }
+
+    // EmbeddingBag: gather + reduce per bag
+    Storage embedding_bag_forward(const Storage& weight,
+                                   const Storage& indices,
+                                   const Storage& offsets,
+                                   const Shape& weight_shape,
+                                   const Shape& indices_shape,
+                                   int mode,
+                                   int padding_idx,
+                                   bool include_last_offset,
+                                   Dtype dt) override {
+        const auto& cw = std::get<CpuStorage>(weight);
+        const auto& ci = std::get<CpuStorage>(indices);
+        const auto& co = std::get<CpuStorage>(offsets);
+
+        const int num_emb = static_cast<int>(weight_shape[0]);
+        const int D       = static_cast<int>(weight_shape[1]);
+        const int n_idx   = static_cast<int>(shape_numel(indices_shape));
+        const auto* idx_p = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
+        const auto* off_p = reinterpret_cast<const std::int32_t*>(co.ptr.get());
+        const int B       = static_cast<int>(co.nbytes / sizeof(std::int32_t));
+
+        // Determine bag boundaries
+        std::vector<int> starts(static_cast<std::size_t>(B));
+        std::vector<int> ends(static_cast<std::size_t>(B));
+        for (int b = 0; b < B; ++b) {
+            starts[static_cast<std::size_t>(b)] = static_cast<int>(off_p[b]);
+            ends[static_cast<std::size_t>(b)] = (b + 1 < B && !include_last_offset)
+                                                  ? static_cast<int>(off_p[b + 1])
+                                                  : n_idx;
+        }
+        if (include_last_offset && B > 0)
+            ends[static_cast<std::size_t>(B - 1)] = static_cast<int>(off_p[B - 1]);
+
+        std::size_t out_nb = static_cast<std::size_t>(B) * D * dtype_size(dt);
+        auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
+        std::memset(out_ptr.get(), 0, out_nb);
+
+        const std::size_t esz = dtype_size(dt);
+        const std::uint8_t* wp = static_cast<const std::uint8_t*>(
+            static_cast<const void*>(cw.ptr.get()));
+
+        auto run = [&](auto* op) {
+            using T = std::remove_pointer_t<decltype(op)>;
+            for (int b = 0; b < B; ++b) {
+                int s = starts[static_cast<std::size_t>(b)];
+                int e = ends[static_cast<std::size_t>(b)];
+                T* row = op + b * D;
+                int count = 0;
+                for (int k = s; k < e; ++k) {
+                    int emb = static_cast<int>(idx_p[k]);
+                    if (emb == padding_idx) continue;
+                    if (emb < 0 || emb >= num_emb) continue;
+                    const T* src = reinterpret_cast<const T*>(wp + emb * D * esz);
+                    if (mode == 2) {  // max
+                        for (int d = 0; d < D; ++d)
+                            if (src[d] > row[d]) row[d] = src[d];
+                    } else {          // sum / mean
+                        for (int d = 0; d < D; ++d) row[d] += src[d];
+                    }
+                    ++count;
+                }
+                if (mode == 1 && count > 0) {  // mean
+                    for (int d = 0; d < D; ++d) row[d] /= static_cast<T>(count);
+                }
+            }
+        };
+
+        if (dt == Dtype::F32) run(reinterpret_cast<float*>(out_ptr.get()));
+        else if (dt == Dtype::F64) run(reinterpret_cast<double*>(out_ptr.get()));
+        else ErrorBuilder("embedding_bag").not_implemented("only F32/F64");
+        return Storage{CpuStorage{out_ptr, out_nb, dt}};
+    }
+
+    // ── astype ────────────────────────────────────────────────────────────────
+    Storage astype(const Storage& a, const Shape& shape,
+                   Dtype src_dt, Dtype dst_dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const std::size_t n   = shape_numel(shape);
+        const std::size_t dsz = dtype_size(dst_dt);
+        auto out_ptr = allocate_aligned_bytes(n * dsz, Device::CPU);
+
+        // Template cast: read as From, write as To.
+        auto run = [&]<typename From, typename To>() {
+            const From* src = reinterpret_cast<const From*>(ca.ptr.get());
+            To*         dst = reinterpret_cast<To*>(out_ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                dst[i] = static_cast<To>(src[i]);
+        };
+
+        // Dispatch on (src_dt, dst_dt) pair.
+#define CPU_CAST(F, T) run.template operator()<F, T>()
+        using I8 = std::int8_t; using I16 = std::int16_t;
+        using I32 = std::int32_t; using I64 = std::int64_t;
+        bool ok = true;
+        switch (src_dt) {
+            case Dtype::F32:
+                switch (dst_dt) {
+                    case Dtype::F64: CPU_CAST(float,double);  break;
+                    case Dtype::I8:  CPU_CAST(float,I8);      break;
+                    case Dtype::I16: CPU_CAST(float,I16);     break;
+                    case Dtype::I32: CPU_CAST(float,I32);     break;
+                    case Dtype::I64: CPU_CAST(float,I64);     break;
+                    case Dtype::Bool:CPU_CAST(float,bool);    break;
+                    default: ok=false;
+                } break;
+            case Dtype::F64:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(double,float);  break;
+                    case Dtype::I32: CPU_CAST(double,I32);    break;
+                    case Dtype::I64: CPU_CAST(double,I64);    break;
+                    default: ok=false;
+                } break;
+            case Dtype::I32:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(I32,float);     break;
+                    case Dtype::F64: CPU_CAST(I32,double);    break;
+                    case Dtype::I64: CPU_CAST(I32,I64);       break;
+                    case Dtype::I16: CPU_CAST(I32,I16);       break;
+                    case Dtype::I8:  CPU_CAST(I32,I8);        break;
+                    case Dtype::Bool:CPU_CAST(I32,bool);      break;
+                    default: ok=false;
+                } break;
+            case Dtype::I64:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(I64,float);     break;
+                    case Dtype::F64: CPU_CAST(I64,double);    break;
+                    case Dtype::I32: CPU_CAST(I64,I32);       break;
+                    case Dtype::I16: CPU_CAST(I64,I16);       break;
+                    default: ok=false;
+                } break;
+            case Dtype::I16:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(I16,float);     break;
+                    case Dtype::I32: CPU_CAST(I16,I32);       break;
+                    default: ok=false;
+                } break;
+            case Dtype::I8:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(I8,float);      break;
+                    case Dtype::I32: CPU_CAST(I8,I32);        break;
+                    default: ok=false;
+                } break;
+            case Dtype::Bool:
+                switch (dst_dt) {
+                    case Dtype::F32: CPU_CAST(bool,float);    break;
+                    case Dtype::I32: CPU_CAST(bool,I32);      break;
+                    default: ok=false;
+                } break;
+            default: ok=false;
+        }
+#undef CPU_CAST
+        if (!ok)
+            ErrorBuilder("astype").not_implemented(
+                std::string(dtype_name(src_dt)) + " -> " + std::string(dtype_name(dst_dt)));
+        return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
+    }
+
+    // ── flip ──────────────────────────────────────────────────────────────────
+    Storage flip(const Storage& a, const Shape& shape,
+                 const std::vector<int>& dims, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const std::size_t n     = shape_numel(shape);
+        const std::size_t esz   = dtype_size(dt);
+        const std::size_t nb    = n * esz;
+        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
+
+        // Compute strides (row-major).
+        const int ndim = static_cast<int>(shape.size());
+        std::vector<std::size_t> strides(ndim, 1);
+        for (int d = ndim - 2; d >= 0; --d)
+            strides[d] = strides[d + 1] * static_cast<std::size_t>(shape[d + 1]);
+
+        // Build a set of dims to flip.
+        std::vector<bool> flip_dim(ndim, false);
+        for (int d : dims) flip_dim[d] = true;
+
+        const std::uint8_t* src = static_cast<const std::uint8_t*>(
+            static_cast<const void*>(ca.ptr.get()));
+        std::uint8_t* dst = static_cast<std::uint8_t*>(
+            static_cast<void*>(out_ptr.get()));
+
+        // Iterate over all elements; for each, compute destination index after flipping.
+        for (std::size_t flat = 0; flat < n; ++flat) {
+            std::size_t rem = flat;
+            std::size_t src_idx = 0;
+            for (int d = 0; d < ndim; ++d) {
+                std::size_t coord = rem / strides[d];
+                rem %= strides[d];
+                std::size_t flipped = flip_dim[d]
+                    ? static_cast<std::size_t>(shape[d]) - 1 - coord
+                    : coord;
+                src_idx += flipped * strides[d];
+            }
+            std::memcpy(dst + flat * esz, src + src_idx * esz, esz);
+        }
+        return Storage{CpuStorage{out_ptr, nb, dt}};
+    }
+
+    // ── masked_select ─────────────────────────────────────────────────────────
+    Storage masked_select_count(const Storage& mask,
+                                const Shape& shape, Dtype /*dt*/) override {
+        const auto& cm = std::get<CpuStorage>(mask);
+        const std::size_t n = shape_numel(shape);
+        const bool* mp = reinterpret_cast<const bool*>(cm.ptr.get());
+        std::int64_t count = 0;
+        for (std::size_t i = 0; i < n; ++i) if (mp[i]) ++count;
+        auto out_ptr = allocate_aligned_bytes(sizeof(std::int64_t), Device::CPU);
+        std::memcpy(out_ptr.get(), &count, sizeof(std::int64_t));
+        return Storage{CpuStorage{out_ptr, sizeof(std::int64_t), Dtype::I64}};
+    }
+
+    Storage masked_select(const Storage& a, const Storage& mask,
+                           const Shape& a_shape, const Shape& /*mask_shape*/,
+                           std::int64_t n_true, Dtype dt) override {
+        const auto& ca = std::get<CpuStorage>(a);
+        const auto& cm = std::get<CpuStorage>(mask);
+        const std::size_t n   = shape_numel(a_shape);
+        const std::size_t esz = dtype_size(dt);
+        const std::size_t nb  = static_cast<std::size_t>(n_true) * esz;
+        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const std::uint8_t* src = static_cast<const std::uint8_t*>(
+            static_cast<const void*>(ca.ptr.get()));
+        const bool* mp = reinterpret_cast<const bool*>(cm.ptr.get());
+        std::uint8_t* dst = static_cast<std::uint8_t*>(
+            static_cast<void*>(out_ptr.get()));
+        std::size_t out_idx = 0;
+        for (std::size_t i = 0; i < n; ++i) {
+            if (mp[i]) {
+                std::memcpy(dst + out_idx * esz, src + i * esz, esz);
+                ++out_idx;
+            }
+        }
+        return Storage{CpuStorage{out_ptr, nb, dt}};
+    }
+
+    // ── ctc_loss ──────────────────────────────────────────────────────────────
+    Storage ctc_loss_forward(const Storage& log_probs,
+                              const Storage& targets,
+                              const Storage& input_lengths,
+                              const Storage& target_lengths,
+                              const Shape& lp_shape,
+                              int blank,
+                              bool zero_infinity,
+                              Dtype dt) override {
+        // lp_shape: [T, N, C]
+        const int N = static_cast<int>(lp_shape[1]);
+        const int C = static_cast<int>(lp_shape[2]);
+
+        const auto& clp  = std::get<CpuStorage>(log_probs);
+        const auto& ctgt = std::get<CpuStorage>(targets);
+        const auto& cil  = std::get<CpuStorage>(input_lengths);
+        const auto& ctl  = std::get<CpuStorage>(target_lengths);
+
+        // Input lengths and target lengths as int arrays.
+        auto get_i32 = [](const CpuStorage& s, int b) -> int {
+            return static_cast<int>(reinterpret_cast<const std::int32_t*>(s.ptr.get())[b]);
+        };
+
+        // log_probs layout: [T * N * C], row-major.
+        auto lp = [&](int t, int b, int c) -> double {
+            if (dt == Dtype::F32) {
+                return static_cast<double>(
+                    reinterpret_cast<const float*>(clp.ptr.get())[t * N * C + b * C + c]);
+            }
+            return reinterpret_cast<const double*>(clp.ptr.get())[t * N * C + b * C + c];
+        };
+        // targets layout: flat (sum_S,) as int32.
+        auto tgt_ptr = reinterpret_cast<const std::int32_t*>(ctgt.ptr.get());
+
+        constexpr double NEG_INF = -1e30;
+        auto logaddexp = [](double a, double b) -> double {
+            if (a <= NEG_INF / 2) return b;
+            if (b <= NEG_INF / 2) return a;
+            double hi = std::max(a, b);
+            return hi + std::log1p(std::exp(std::min(a, b) - hi));
+        };
+
+        const std::size_t out_nb = static_cast<std::size_t>(N) * dtype_size(dt);
+        auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
+
+        int tgt_offset = 0;
+        for (int b = 0; b < N; ++b) {
+            const int T_b = get_i32(cil, b);
+            const int S   = get_i32(ctl, b);
+            const int L   = 2 * S + 1;
+
+            // Extended target: blank, t[0], blank, t[1], ..., blank
+            std::vector<int> ext(L, blank);
+            for (int s = 0; s < S; ++s)
+                ext[2 * s + 1] = static_cast<int>(tgt_ptr[tgt_offset + s]);
+            tgt_offset += S;
+
+            // Forward variable alpha[T_b x L] in log-domain.
+            std::vector<double> alpha(T_b * L, NEG_INF);
+            auto at = [&](int t, int s) -> double& { return alpha[t * L + s]; };
+
+            at(0, 0) = lp(0, b, ext[0]);
+            if (L > 1) at(0, 1) = lp(0, b, ext[1]);
+
+            for (int t = 1; t < T_b; ++t) {
+                for (int s = 0; s < L; ++s) {
+                    double a = at(t - 1, s);
+                    if (s > 0)
+                        a = logaddexp(a, at(t - 1, s - 1));
+                    if (s > 1 && ext[s] != ext[s - 2])
+                        a = logaddexp(a, at(t - 1, s - 2));
+                    at(t, s) = a + lp(t, b, ext[s]);
+                }
+            }
+
+            double end = at(T_b - 1, L - 1);
+            if (L >= 2) end = logaddexp(end, at(T_b - 1, L - 2));
+            double v = -end;
+            if (zero_infinity && (!std::isfinite(v))) v = 0.0;
+
+            if (dt == Dtype::F32) {
+                reinterpret_cast<float*>(out_ptr.get())[b] = static_cast<float>(v);
+            } else {
+                reinterpret_cast<double*>(out_ptr.get())[b] = v;
+            }
+        }
+        return Storage{CpuStorage{out_ptr, out_nb, dt}};
     }
 
     Storage

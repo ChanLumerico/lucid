@@ -6,7 +6,6 @@ the Tensor class by _inject_dunders() at module import time.
 """
 
 from typing import TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor._indexing import _getitem, _setitem
@@ -31,7 +30,7 @@ def _unwrap_or_scalar(
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
-    # scalar → TensorImpl broadcast to ref_impl shape
+    # scalar → TensorImpl broadcast to ref_impl shape, via engine ops only
     if isinstance(x, (int, float, bool)):
         if ref_impl is not None:
             dtype = ref_impl.dtype
@@ -41,27 +40,9 @@ def _unwrap_or_scalar(
             dtype = _C_engine.Dtype.F32
             device = _C_engine.Device.CPU
             shape = []
-        np_dtype = _DTYPE_TO_NP.get(dtype, "float32")
-        if shape:
-            arr = np.full(shape, x, dtype=np_dtype)
-        else:
-            arr = np.array(x, dtype=np_dtype)
-        return _C_engine.TensorImpl(arr, device, False)
+        return _C_engine.full(shape, float(x), dtype, device)
 
     raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
-
-
-_DTYPE_TO_NP: dict[_C_engine.Dtype, str] = {
-    _C_engine.Dtype.F16: "float16",
-    _C_engine.Dtype.F32: "float32",
-    _C_engine.Dtype.F64: "float64",
-    _C_engine.Dtype.I8: "int8",
-    _C_engine.Dtype.I16: "int16",
-    _C_engine.Dtype.I32: "int32",
-    _C_engine.Dtype.I64: "int64",
-    _C_engine.Dtype.Bool: "bool",
-    _C_engine.Dtype.C64: "complex64",
-}
 
 
 def _inject_dunders(cls: type) -> None:

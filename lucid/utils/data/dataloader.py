@@ -30,7 +30,9 @@ _SHUTDOWN = None
 # ── collation ─────────────────────────────────────────────────────────────────
 
 
-def default_collate(batch: list[object]) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
+def default_collate(
+    batch: list[object],
+) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
     """Collate a list of samples into a batched tensor or nested structure."""
     elem = batch[0]
 
@@ -51,7 +53,9 @@ def default_collate(batch: list[object]) -> Tensor | list[object] | dict[str, ob
         return {key: default_collate([d[key] for d in batch]) for key in elem}
 
     if isinstance(elem, tuple) and hasattr(elem, "_fields"):
-        return type(elem)(*(default_collate([d[i] for d in batch]) for i in range(len(elem))))
+        return type(elem)(
+            *(default_collate([d[i] for d in batch]) for i in range(len(elem)))
+        )
 
     if isinstance(elem, (list, tuple)):
         collated = [default_collate([d[i] for d in batch]) for i in range(len(elem))]
@@ -62,6 +66,7 @@ def default_collate(batch: list[object]) -> Tensor | list[object] | dict[str, ob
 
 # ── worker process entry point ────────────────────────────────────────────────
 # Must be a top-level function so `spawn` can pickle it.
+
 
 def _worker_loop(
     worker_id: int,
@@ -78,12 +83,14 @@ def _worker_loop(
     np.random.seed(seed % (2**32))
 
     # Publish WorkerInfo so user code can call get_worker_info().
-    _set_worker_info(WorkerInfo(
-        id=worker_id,
-        num_workers=index_queue.maxsize if hasattr(index_queue, "maxsize") else 0,
-        seed=seed,
-        dataset=dataset,
-    ))
+    _set_worker_info(
+        WorkerInfo(
+            id=worker_id,
+            num_workers=index_queue.maxsize if hasattr(index_queue, "maxsize") else 0,
+            seed=seed,
+            dataset=dataset,
+        )
+    )
 
     if worker_init_fn is not None:
         worker_init_fn(worker_id)
@@ -154,8 +161,8 @@ class _MultiProcessDataLoaderIter:
         self._result_queue: object = ctx.Queue()
 
         # Sequence counters.
-        self._send_idx: int = 0    # next batch index to dispatch
-        self._rcvd_idx: int = 0    # next batch index to yield
+        self._send_idx: int = 0  # next batch index to dispatch
+        self._rcvd_idx: int = 0  # next batch index to yield
         self._reorder: dict[int, Tensor | tuple[Tensor, ...]] = {}
 
         # Materialise the full batch list once per epoch.
@@ -193,7 +200,9 @@ class _MultiProcessDataLoaderIter:
         if self._send_idx >= self._n_batches:
             return
         worker_id = self._send_idx % self._num_workers
-        self._index_queues[worker_id].put((self._send_idx, self._batches[self._send_idx]))
+        self._index_queues[worker_id].put(
+            (self._send_idx, self._batches[self._send_idx])
+        )
         self._send_idx += 1
 
     def _shutdown_workers(self) -> None:
@@ -234,7 +243,7 @@ class _MultiProcessDataLoaderIter:
 
         batch = self._reorder.pop(self._rcvd_idx)
         self._rcvd_idx += 1
-        self._dispatch_next()   # keep the pipeline full
+        self._dispatch_next()  # keep the pipeline full
         return batch
 
     def __del__(self) -> None:
@@ -366,7 +375,9 @@ class DataLoader:
                 it._send_idx = 0
                 it._rcvd_idx = 0
                 it._reorder.clear()
-                prefill = min(self.num_workers * (self.prefetch_factor or 2), it._n_batches)
+                prefill = min(
+                    self.num_workers * (self.prefetch_factor or 2), it._n_batches
+                )
                 for _ in range(prefill):
                     it._dispatch_next()
             yield from self._persistent_iter

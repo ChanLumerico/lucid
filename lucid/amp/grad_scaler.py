@@ -78,7 +78,8 @@ class GradScaler:
         """
         if not self._enabled:
             return
-        import numpy as np
+        from lucid._C import engine as _C_engine
+        from lucid._dispatch import _unwrap, _wrap
 
         inv_scale = 1.0 / self._scale
         self._found_inf = False
@@ -86,15 +87,25 @@ class GradScaler:
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                g = p._impl.grad_as_python()
-                if g is None:
-                    continue
-                if not np.all(np.isfinite(g)):
+                g_impl = _unwrap(p.grad)
+                # Check for non-finite values using engine isfinite.
+                fin = _C_engine.isfinite(g_impl)
+                # all(fin): cast bool tensor to float, sum, compare to numel.
+                one = _C_engine.full(list(fin.shape), 1.0, _C_engine.F32, g_impl.device)
+                zero = _C_engine.zeros(list(fin.shape), _C_engine.F32, g_impl.device)
+                fin_f = _C_engine.where(fin, one, zero)
+                n_fin = float(_wrap(_C_engine.sum(fin_f, [], False)).item())
+                if n_fin < g_impl.numel():
                     self._found_inf = True
                 else:
-                    g[:] *= inv_scale
+                    coef = _C_engine.full(
+                        list(g_impl.shape), inv_scale, g_impl.dtype, g_impl.device
+                    )
+                    p._impl.set_grad(_C_engine.mul(g_impl, coef))
 
-    def step(self, optimizer: Optimizer, *args: object, **kwargs: object) -> Tensor | None:
+    def step(
+        self, optimizer: Optimizer, *args: object, **kwargs: object
+    ) -> Tensor | None:
         """Unscale gradients and call optimizer.step() if no inf/nan detected.
 
         If inf/nan is detected in gradients, skip the optimizer step.

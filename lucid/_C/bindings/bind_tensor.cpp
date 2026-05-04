@@ -17,6 +17,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
@@ -106,6 +107,18 @@ void register_tensor_impl(py::module_& m) {
         .def_property_readonly("device", [](const TensorImpl& t) { return t.device(); })
         .def_property_readonly("requires_grad",
                                [](const TensorImpl& t) { return t.requires_grad(); })
+        .def_property_readonly("grad_fn",
+                               [](const TensorImpl& t) -> std::shared_ptr<Node> {
+                                   return t.grad_fn();
+                               },
+                               "The backward function that produced this tensor, or None "
+                               "for leaf tensors.")
+        .def_property_readonly("retains_grad",
+                               [](const TensorImpl& t) { return t.retains_grad(); })
+        .def("retain_grad_",
+             [](TensorImpl& t) { t.set_retain_grad(true); },
+             "Mark this tensor to retain its gradient during backward, even if "
+             "it is not a leaf tensor.")
         .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf(); })
         // version is a mutation counter; the autograd engine reads it to
         // detect in-place modifications to saved tensors.
@@ -126,7 +139,31 @@ void register_tensor_impl(py::module_& m) {
              "Return the gradient as a TensorImpl (set when backward was called with "
              "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
-        .def("zero_grad", &TensorImpl::zero_grad);
+        .def("zero_grad", &TensorImpl::zero_grad)
+        .def("clone_with_grad",
+             [](const TensorImpl& self, bool requires_grad) -> std::shared_ptr<TensorImpl> {
+                 // Creates a new TensorImpl that SHARES the same Storage with a
+                 // different requires_grad flag.  No data copy is made — only the
+                 // autograd metadata differs.  This is the canonical way to flip
+                 // requires_grad without going through a numpy round-trip.
+                 return std::make_shared<TensorImpl>(
+                     self.storage(), self.shape(), self.dtype(), self.device(), requires_grad);
+             },
+             py::arg("requires_grad"),
+             "Return a new TensorImpl sharing the same storage but with a different "
+             "requires_grad flag.  No data is copied.")
+        .def("set_grad",
+             [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
+                 // Copies g's Storage into self's gradient slot, replacing any
+                 // existing gradient.  Used by clip_grad and grad_scaler to write
+                 // back scaled gradients without going through numpy.
+                 Storage s = g->storage();          // copy the Storage variant
+                 self.set_grad_storage(std::move(s));
+             },
+             py::arg("grad"),
+             "Replace this tensor's gradient storage with a copy of grad's storage.\n"
+             "Used internally by clip_grad and GradScaler; prefer .grad = tensor for "
+             "normal use.");
 
     // to_shared_storage re-wraps the tensor's backing buffer as a Metal
     // MTLResourceStorageModeShared allocation.  The resulting tensor occupies

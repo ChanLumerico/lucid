@@ -76,41 +76,16 @@ class EmbeddingBag(Module):
         init.normal_(self.weight)
 
     def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
-        from lucid._C import engine as _C_engine
-        from lucid._dispatch import _unwrap, _wrap
-        from lucid._ops import stack
+        from lucid.nn.functional.sampling import embedding_bag as _eb
 
-        emb = embedding(x, self.weight, self.padding_idx)
-        emb_impl = _unwrap(emb)
-
-        if offsets is None:
-            # x shape (B, L) → emb shape (B, L, D); reduce over dim=1
-            if self.mode == "sum":
-                return _wrap(_C_engine.sum(emb_impl, [-2], False))
-            if self.mode == "max":
-                return _wrap(_C_engine.max(emb_impl, [-2], False))
-            return _wrap(_C_engine.mean(emb_impl, [-2], False))
-
-        # Flat index mode with offsets
-        import numpy as np
-        x_np = np.array(_unwrap(x).data_as_python(), dtype=np.int64).ravel()
-        offs_np = np.array(_unwrap(offsets).data_as_python(), dtype=np.int64).ravel()
-        B = len(offs_np)
-        results = []
-        for i in range(B):
-            start = int(offs_np[i])
-            end = int(offs_np[i + 1]) if i + 1 < B else len(x_np)
-            bag_idx = x_np[start:end].astype(np.int64)
-            idx_impl = _C_engine.TensorImpl(bag_idx, _C_engine.CPU, False)
-            bag_impl = _C_engine.gather(_unwrap(self.weight), 0, idx_impl)
-            if self.mode == "sum":
-                r = _C_engine.sum(bag_impl, [0], False)
-            elif self.mode == "max":
-                r = _C_engine.max(bag_impl, [0], False)
-            else:
-                r = _C_engine.mean(bag_impl, [0], False)
-            results.append(_wrap(r))
-        return stack(results, 0)
+        _mode_map = {"sum": "sum", "mean": "mean", "max": "max"}
+        return _eb(
+            x,
+            self.weight,
+            offsets=offsets,
+            mode=_mode_map.get(self.mode, "mean"),
+            padding_idx=self.padding_idx,
+        )
 
     def extra_repr(self) -> str:
         return (

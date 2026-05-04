@@ -27,9 +27,18 @@ def batch_norm(
     the batch statistics unconditionally).
     """
     from lucid._factories.creation import ones, zeros
+
     C = x.shape[1]
-    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
-    b = _unwrap(bias) if bias is not None else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    )
+    b = (
+        _unwrap(bias)
+        if bias is not None
+        else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    )
     return _wrap(_C_engine.nn.batch_norm(_unwrap(x), w, b, eps))
 
 
@@ -56,9 +65,18 @@ def group_norm(
 ) -> Tensor:
     """Group normalization.  Engine signature: (x, gamma, beta, num_groups, eps)."""
     from lucid._factories.creation import ones, zeros
+
     C = x.shape[1]
-    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
-    b = _unwrap(bias) if bias is not None else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    )
+    b = (
+        _unwrap(bias)
+        if bias is not None
+        else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+    )
     return _wrap(_C_engine.nn.group_norm(_unwrap(x), w, b, num_groups, eps))
 
 
@@ -70,8 +88,13 @@ def rms_norm(
 ) -> Tensor:
     """RMS normalization.  Engine signature: (x, gamma, eps)."""
     from lucid._factories.creation import ones
+
     C = x.shape[-1]
-    w = _unwrap(weight) if weight is not None else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+    )
     return _wrap(_C_engine.nn.rms_norm(_unwrap(x), w, eps))
 
 

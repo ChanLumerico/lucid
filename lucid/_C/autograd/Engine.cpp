@@ -222,6 +222,9 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         // Execute the backward formula for this node.
         const auto input_grads = node->apply(std::move(grad_in));
 
+        // Collect retain_grad inputs BEFORE release_saved() clears input_tensors_.
+        const auto retain_ins = node->retainable_inputs();
+
         // Free saved forward tensors immediately unless the caller needs the
         // graph intact for a second backward call.
         if (!retain_graph)
@@ -243,6 +246,17 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         // If a consumer already has a partial gradient from another path,
         // accumulate in-place; otherwise insert directly.
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
+            // retain_grad: accumulate into non-leaf tensors that requested it.
+            if (i < retain_ins.size()) {
+                if (auto t = retain_ins[i].lock()) {
+                    if (t->retains_grad() && !t->is_leaf()) {
+                        auto& g = t->mutable_grad_storage();
+                        if (!g.has_value()) g = input_grads[i];
+                        else accumulate_into(*g, input_grads[i]);
+                    }
+                }
+            }
+
             auto next = edges[i].node;
             if (!next)
                 continue;

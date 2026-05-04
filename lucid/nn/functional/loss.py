@@ -78,8 +78,17 @@ def binary_cross_entropy(
 ) -> Tensor:
     """Binary cross-entropy loss."""
     from lucid._factories.creation import ones
+
     red = _REDUCTION_MAP.get(reduction, 1)
-    w = _unwrap(weight) if weight is not None else _unwrap(ones(x.shape[0] if x.ndim == 1 else x.numel(), device=x.device, dtype=x.dtype))
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(
+            ones(
+                x.shape[0] if x.ndim == 1 else x.numel(), device=x.device, dtype=x.dtype
+            )
+        )
+    )
     return _wrap(_C_engine.nn.bce_loss(_unwrap(x), _unwrap(target), w, red))
 
 
@@ -92,10 +101,19 @@ def binary_cross_entropy_with_logits(
 ) -> Tensor:
     """BCE with logits loss (combines sigmoid + BCE for numerical stability)."""
     from lucid._factories.creation import ones
+
     red = _REDUCTION_MAP.get(reduction, 1)
     numel = x.shape[0] if x.ndim == 1 else x.numel()
-    w = _unwrap(weight) if weight is not None else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
-    pw = _unwrap(pos_weight) if pos_weight is not None else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
+    )
+    pw = (
+        _unwrap(pos_weight)
+        if pos_weight is not None
+        else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
+    )
     return _wrap(_C_engine.nn.bce_with_logits(_unwrap(x), _unwrap(target), w, pw, red))
 
 
@@ -149,9 +167,7 @@ def triplet_margin_loss(
         d_pn = _unwrap(pairwise_distance(positive, negative, p=p, eps=eps))
         d_an = _C_engine.minimum(d_an, d_pn)
     margin_t = _C_engine.full(d_ap.shape, margin, d_ap.dtype, d_ap.device)
-    loss = _C_engine.relu(
-        _C_engine.add(_C_engine.sub(d_ap, d_an), margin_t)
-    )
+    loss = _C_engine.relu(_C_engine.add(_C_engine.sub(d_ap, d_an), margin_t))
     return _apply_reduction(loss, reduction)
 
 
@@ -174,8 +190,8 @@ def cosine_embedding_loss(
     zeros = _C_engine.zeros(cos.shape, cos.dtype, cos.device)
     margin_t = _C_engine.full(cos.shape, margin, cos.dtype, cos.device)
     yi = _unwrap(y)
-    loss_pos = _C_engine.sub(ones, cos)                     # y=1
-    loss_neg = _C_engine.relu(_C_engine.sub(cos, margin_t)) # y=-1
+    loss_pos = _C_engine.sub(ones, cos)  # y=1
+    loss_neg = _C_engine.relu(_C_engine.sub(cos, margin_t))  # y=-1
     # select by sign of y: y==1 → loss_pos, else → loss_neg
     mask = _C_engine.greater(yi, zeros)
     loss = _C_engine.where(mask, loss_pos, loss_neg)
@@ -212,8 +228,8 @@ def hinge_embedding_loss(
     ones = _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
     zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
     margin_t = _C_engine.full(xi.shape, margin, xi.dtype, xi.device)
-    loss_pos = xi                                             # y=1
-    loss_neg = _C_engine.relu(_C_engine.sub(margin_t, xi))   # y=-1
+    loss_pos = xi  # y=1
+    loss_neg = _C_engine.relu(_C_engine.sub(margin_t, xi))  # y=-1
     mask = _C_engine.greater(yi, zeros)
     loss = _C_engine.where(mask, loss_pos, loss_neg)
     return _apply_reduction(loss, reduction)
@@ -258,7 +274,9 @@ def gaussian_nll_loss(
     ti = _unwrap(target)
     vi = _C_engine.maximum(
         _unwrap(var),
-        _C_engine.full(_unwrap(var).shape, eps, _unwrap(var).dtype, _unwrap(var).device),
+        _C_engine.full(
+            _unwrap(var).shape, eps, _unwrap(var).dtype, _unwrap(var).device
+        ),
     )
     diff2 = _C_engine.square(_C_engine.sub(xi, ti))
     half = _C_engine.full(diff2.shape, 0.5, diff2.dtype, diff2.device)
@@ -278,67 +296,176 @@ def ctc_loss(
     reduction: str = "mean",
     zero_infinity: bool = False,
 ) -> Tensor:
-    """Connectionist Temporal Classification loss (pure-Python reference).
-
-    This is a reference implementation using the standard CTC forward
-    algorithm.  It is not differentiable through the CTC computation itself.
+    """Connectionist Temporal Classification loss.
 
     Parameters
     ----------
     log_probs : Tensor
         Shape ``(T, N, C)`` — log-probabilities from the model.
     targets : Tensor
-        Shape ``(N, S)`` or ``(sum(target_lengths),)`` — target class indices.
+        Shape ``(N, S)`` or ``(sum(target_lengths),)`` int32 target indices.
     input_lengths : Tensor
-        Shape ``(N,)`` — valid lengths of each sequence in *log_probs*.
+        Shape ``(N,)`` int32 — valid sequence lengths.
     target_lengths : Tensor
-        Shape ``(N,)`` — lengths of each target sequence.
+        Shape ``(N,)`` int32 — target sequence lengths.
+    CPU: forward DP in log-domain (Accelerate arithmetic).  GPU: CPU fallback.
     """
-    import numpy as np
+    from lucid._dispatch import _unwrap
 
-    lp_np = np.array(log_probs._impl.data_as_python()).reshape(log_probs.shape)  # (T, N, C)
-    T, N, C = lp_np.shape
+    # Flatten targets to 1-D int32 if needed.
+    tgt_impl = _unwrap(targets)
+    if len(list(tgt_impl.shape)) > 1:
+        tgt_impl = _C_engine.reshape(tgt_impl, [-1])
 
-    tgt_flat = np.array(targets._impl.data_as_python(), dtype=np.int64).ravel()
-    il_np = np.array(input_lengths._impl.data_as_python(), dtype=np.int64).ravel()
-    tl_np = np.array(target_lengths._impl.data_as_python(), dtype=np.int64).ravel()
+    # Ensure integer dtype for lengths and targets.
+    def _to_i32(impl: object) -> object:
+        if getattr(impl, "dtype", None) != _C_engine.I32:
+            return _C_engine.cast(impl, _C_engine.I32)
+        return impl
 
-    losses = np.zeros(N, dtype=np.float32)
-    offset = 0
-    NEG_INF = -1e30
+    tgt_impl = _to_i32(tgt_impl)
+    il_impl = _to_i32(_unwrap(input_lengths))
+    tl_impl = _to_i32(_unwrap(target_lengths))
 
-    for b in range(N):
-        T_b = int(il_np[b])
-        S = int(tl_np[b])
-        t_seq = tgt_flat[offset: offset + S]
-        offset += S
-
-        # Extended label sequence: blank, t[0], blank, t[1], ..., blank
-        L = 2 * S + 1
-        ext = np.full(L, blank, dtype=np.int64)
-        ext[1::2] = t_seq
-
-        alpha = np.full((T_b, L), NEG_INF, dtype=np.float64)
-        alpha[0, 0] = lp_np[0, b, ext[0]]
-        if L > 1:
-            alpha[0, 1] = lp_np[0, b, ext[1]]
-
-        for t in range(1, T_b):
-            for s in range(L):
-                a = alpha[t - 1, s]
-                if s > 0:
-                    a = np.logaddexp(a, alpha[t - 1, s - 1])
-                if s > 1 and ext[s] != ext[s - 2]:
-                    a = np.logaddexp(a, alpha[t - 1, s - 2])
-                alpha[t, s] = a + lp_np[t, b, ext[s]]
-
-        end = alpha[T_b - 1, L - 1]
-        if L >= 2:
-            end = np.logaddexp(end, alpha[T_b - 1, L - 2])
-        v = -float(end)
-        if zero_infinity and (np.isinf(v) or np.isnan(v)):
-            v = 0.0
-        losses[b] = v
-
-    loss_t = _C_engine.TensorImpl(losses, _C_engine.CPU, False)
+    loss_t = _C_engine.nn.ctc_loss(
+        _unwrap(log_probs), tgt_impl, il_impl, tl_impl, blank, zero_infinity
+    )
     return _apply_reduction(loss_t, reduction)
+
+
+def multi_margin_loss(
+    x: Tensor,
+    target: Tensor,
+    p: int = 1,
+    margin: float = 1.0,
+    weight: Tensor | None = None,
+    reduction: str = "mean",
+) -> Tensor:
+    """Multi-class margin loss (SVM-style) via engine tensor ops.
+
+    loss(i) = sum_{j != y[i]} max(0, margin - x[i,y[i]] + x[i,j])^p / C
+    """
+    xi = _unwrap(x)
+    ti = _unwrap(target)
+    N = xi.shape[0]
+    C = xi.shape[1]
+
+    # Gather the score at the true class for each sample: (N, 1)
+    ti_2d = _C_engine.reshape(ti, [N, 1])
+    # gather along dim=1 → (N, 1) scores at true class
+    correct = _C_engine.gather(xi, ti_2d, 1)  # (N, 1)
+    correct_bc = _C_engine.broadcast_to(correct, [N, C])  # (N, C)
+
+    # margin + x[i,j] - x[i,y[i]]  for every j
+    margin_t = _C_engine.full([N, C], margin, xi.dtype, xi.device)
+    diff = _C_engine.add(_C_engine.sub(margin_t, correct_bc), xi)  # (N, C)
+
+    # Zero out the correct-class position: gather mask
+    loss_nc = _C_engine.relu(diff)  # max(0, ...)
+
+    if p > 1:
+        loss_nc = _C_engine.pow_scalar(loss_nc, float(p))
+
+    if weight is not None:
+        # weight[y[i]] per sample: gather from weight vector
+        wi = _unwrap(weight)
+        w_per_sample = _C_engine.gather(
+            _C_engine.reshape(wi, [1, C]), _C_engine.reshape(ti, [N, 1]), 1
+        )  # (N,1)
+        w_bc = _C_engine.broadcast_to(w_per_sample, [N, C])
+        loss_nc = _C_engine.mul(loss_nc, w_bc)
+
+    # Zero out the correct-class position using a scatter mask
+    # Build (N, 1) zero update, scatter into a ones mask along dim=1
+    ones_mask = _C_engine.ones([N, C], xi.dtype, xi.device)
+    zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
+    mask = _C_engine.scatter_add(ones_mask, ti_2d, zeros_nc, 1)
+    # After scatter_add the target column has 1+0=1, others are 1 — invert:
+    # We want to zero the target. Use: where(correct_class, 0, loss).
+    # Simpler: multiply by (1 - one_hot(target))
+    onehot_neg = _C_engine.scatter_add(
+        _C_engine.zeros([N, C], xi.dtype, xi.device),
+        ti_2d,
+        _C_engine.ones([N, 1], xi.dtype, xi.device),
+        1,
+    )  # one-hot for target class
+    keep_mask = _C_engine.sub(_C_engine.ones([N, C], xi.dtype, xi.device), onehot_neg)
+    loss_nc = _C_engine.mul(loss_nc, keep_mask)
+
+    # Sum over classes and divide by C
+    c_t = _C_engine.full([N], float(C), xi.dtype, xi.device)
+    loss_n = _C_engine.div(_C_engine.sum(loss_nc, [1], False), c_t)  # (N,)
+    return _apply_reduction(loss_n, reduction)
+
+
+def multilabel_margin_loss(
+    x: Tensor,
+    target: Tensor,
+    reduction: str = "mean",
+) -> Tensor:
+    """Multi-label margin loss using engine ops.
+
+    x: (N, C) or (C,) scores; target: same shape, -1 = padding.
+    loss = sum_{positive t} sum_{j not in target} max(0, 1 - x[t] + x[j]) / C
+    """
+    xi = _unwrap(x)
+    ti = _unwrap(target)
+
+    # Handle 1D inputs
+    if len(xi.shape) == 1:
+        xi = _C_engine.reshape(xi, [1, xi.shape[0]])
+        ti = _C_engine.reshape(ti, [1, ti.shape[0]])
+
+    N, C = int(xi.shape[0]), int(xi.shape[1])
+
+    # Build positive mask from target: pos_mask[i,j]=1 if target[i,k]==j for some k
+    # Use: for each k, scatter 1 at position target[i,k] if target[i,k]>=0
+    pos_mask = _C_engine.zeros([N, C], xi.dtype, xi.device)
+    zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
+    ones_nc = _C_engine.ones([N, 1], xi.dtype, xi.device)
+
+    # Iterate over the K columns of target (K = C at most)
+    for k in range(C):
+        # target column k: (N,) → (N, 1) indices; skip -1 entries
+        col_idx = _C_engine.gather(
+            ti, _C_engine.full([N, 1], k, _C_engine.I32, ti.device), 1
+        )  # (N,1)
+        # Clamp negatives to 0 so scatter doesn't fail, weight by (idx >= 0)
+        zero_i32 = _C_engine.zeros([N, 1], _C_engine.I32, ti.device)
+        valid = _C_engine.greater_equal(col_idx, zero_i32)  # bool (N,1)
+        safe_idx = _C_engine.where(valid, col_idx, zero_i32)  # clamp to 0
+        # Convert valid to float for weighting
+        val_f = _C_engine.where(
+            valid, _C_engine.ones([N, 1], xi.dtype, xi.device), zeros_nc
+        )
+        pos_mask = _C_engine.scatter_add(pos_mask, safe_idx, val_f, 1)
+
+    # Clamp to [0,1] to handle duplicates
+    pos_mask = _C_engine.clip(pos_mask, 0.0, 1.0)
+
+    # Negative mask = 1 - pos_mask
+    neg_mask = _C_engine.sub(_C_engine.ones([N, C], xi.dtype, xi.device), pos_mask)
+
+    # For each positive label t and each negative j: max(0, 1 - x[t] + x[j])
+    # Broadcast: x_pos[i, j, k] = x[i, pos_k]; x_neg[i, j, k] = x[i, j]
+    # Approximate via: sum_t pos_mask[i,t] * sum_j neg_mask[i,j] * max(0,1-x[i,t]+x[i,j])
+    #
+    # Use outer product via broadcasting:
+    # x: (N, C) → x_t: (N, C, 1), x_j: (N, 1, C)
+    x_t = _C_engine.reshape(xi, [N, C, 1])
+    x_j = _C_engine.reshape(xi, [N, 1, C])
+    pm_t = _C_engine.reshape(pos_mask, [N, C, 1])
+    nm_j = _C_engine.reshape(neg_mask, [N, 1, C])
+
+    margin_val = _C_engine.full([N, C, C], 1.0, xi.dtype, xi.device)
+    diff = _C_engine.add(_C_engine.sub(margin_val, x_t), x_j)  # (N, C, C)
+    hinge = _C_engine.relu(diff)  # max(0, ...)
+    pm_bc = _C_engine.broadcast_to(pm_t, [N, C, C])
+    nm_bc = _C_engine.broadcast_to(nm_j, [N, C, C])
+    loss_tck = _C_engine.mul(_C_engine.mul(hinge, pm_bc), nm_bc)  # (N, C, C)
+    # Sum over t and j, divide by C
+    loss_n = _C_engine.div(
+        _C_engine.sum(loss_tck, [1, 2], False),
+        _C_engine.full([N], float(C), xi.dtype, xi.device),
+    )  # (N,)
+    return _apply_reduction(loss_n, reduction)

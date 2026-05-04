@@ -121,6 +121,9 @@ def argmin(*args: Any, **kwargs: Any) -> TensorImpl:
 def argsort(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
+def astype(*args: Any, **kwargs: Any) -> TensorImpl:
+    ...
+
 def bernoulli(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
@@ -244,6 +247,9 @@ def eye(*args: Any, **kwargs: Any) -> TensorImpl:
 def flatten(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
+def flip(*args: Any, **kwargs: Any) -> TensorImpl:
+    ...
+
 def floor(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.KeepInput
     ...
 
@@ -337,10 +343,16 @@ def log_(*args: Any, **kwargs: Any) -> TensorImpl:
 def log_softmax(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.ForceFP32
     ...
 
+def logspace(*args: Any, **kwargs: Any) -> TensorImpl:
+    ...
+
 def mT(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
 def masked_fill(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.KeepInput
+    ...
+
+def masked_select(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
 def matmul(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.Promote
@@ -487,6 +499,9 @@ def rpow_scalar(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.ForceFP32
 def rsqrt(*args: Any, **kwargs: Any) -> TensorImpl:  # AmpPolicy.Promote
     ...
 
+def scatter_add(*args: Any, **kwargs: Any) -> TensorImpl:
+    ...
+
 def schema_hash(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
@@ -620,6 +635,9 @@ def triu(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
 def unbind(*args: Any, **kwargs: Any) -> TensorImpl:
+    ...
+
+def unfold_dim(*args: Any, **kwargs: Any) -> TensorImpl:
     ...
 
 def uniform(*args: Any, **kwargs: Any) -> TensorImpl:

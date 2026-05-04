@@ -135,6 +135,103 @@ def unfold(
     )
 
 
+def fold(
+    x: Tensor,
+    output_size: tuple[int, int],
+    kernel_size: int | tuple[int, int],
+    dilation: int | tuple[int, int] = 1,
+    padding: int | tuple[int, int] = 0,
+    stride: int | tuple[int, int] = 1,
+) -> Tensor:
+    """Combine an array of sliding local blocks into a large containing tensor.
+
+    This is the inverse operation of ``unfold``.  Given an input of shape
+    ``(N, C*kH*kW, L)``, returns a tensor of shape ``(N, C, outH, outW)``.
+    Overlapping blocks are summed.
+    CPU: scatter-add loop.  GPU: CPU fallback.
+    Parameters match ``torch.nn.functional.fold``.
+    """
+
+    def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
+        return (v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
+
+    kh, kw = _pair(kernel_size)
+    dh, dw = _pair(dilation)
+    ph, pw = _pair(padding)
+    sh, sw = _pair(stride)
+    out_h, out_w = output_size
+
+    impl = _C_engine.nn.fold(
+        _unwrap(x),
+        [out_h, out_w],
+        [kh, kw],
+        [sh, sw],
+        [ph, pw],
+        [dh, dw],
+    )
+    from lucid._dispatch import _wrap as _w
+
+    return _w(impl)
+
+
+def embedding_bag(
+    x: Tensor,
+    weight: Tensor,
+    offsets: Tensor | None = None,
+    max_norm: float | None = None,
+    norm_type: float = 2.0,
+    scale_grad_by_freq: bool = False,
+    mode: str = "mean",
+    sparse: bool = False,
+    per_sample_weights: Tensor | None = None,
+    include_last_offset: bool = False,
+    padding_idx: int | None = None,
+) -> Tensor:
+    """Computes sums, means, or maxima of embeddings in bags.
+
+    When ``x`` is 2-D the bags are the rows; when 1-D and ``offsets`` is given,
+    ``offsets`` marks the start of each bag (PyTorch convention).
+    CPU: gather + reduce loop.  GPU: MLX gather + scatter_add/scatter_max.
+    """
+    _mode_map = {"sum": 0, "mean": 1, "max": 2}
+    mode_int = _mode_map.get(mode, 1)
+    pad_idx = int(padding_idx) if padding_idx is not None else -1
+
+    x_impl = _unwrap(x)
+    w_impl = _unwrap(weight)
+    x_ndim = len(x_impl.shape)
+
+    if x_ndim == 2:
+        # 2-D: each row is a bag — build synthetic 1-D x and offsets
+        n_rows, seq_len = int(x_impl.shape[0]), int(x_impl.shape[1])
+        # Flatten indices to 1-D
+        flat_x = _C_engine.reshape(x_impl, [n_rows * seq_len])
+        # Offsets: [0, seq_len, 2*seq_len, ...]
+        off_vals = list(range(0, n_rows * seq_len, seq_len))
+        off_impl = _C_engine.full([n_rows], 0, _C_engine.I32, x_impl.device)
+        # Build offsets as arange * seq_len via engine
+        arange_impl = _C_engine.arange(
+            0, n_rows * seq_len, seq_len, _C_engine.I32, x_impl.device
+        )
+        off_impl = arange_impl
+        impl = _C_engine.nn.embedding_bag(
+            w_impl, flat_x, off_impl, mode_int, pad_idx, False
+        )
+    else:
+        # 1-D x with explicit offsets
+        if offsets is None:
+            raise ValueError("embedding_bag: offsets required for 1-D input")
+        # Cast offsets to I32 if needed
+        off_impl = _unwrap(offsets)
+        if off_impl.dtype != _C_engine.I32:
+            off_impl = _C_engine.cast(off_impl, _C_engine.I32)
+        impl = _C_engine.nn.embedding_bag(
+            w_impl, x_impl, off_impl, mode_int, pad_idx, include_last_offset
+        )
+
+    return _wrap(impl)
+
+
 def pad(
     x: Tensor,
     padding: tuple[int, ...],

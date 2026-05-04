@@ -59,6 +59,15 @@ public:
     // Human-readable name of the operation, taken from Derived::schema_v1.
     std::string_view name() const noexcept { return Derived::schema_v1.name; }
 
+    // Expose input weak_ptrs so Engine can handle retain_grad on non-leaf tensors.
+    std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const override {
+        std::vector<std::weak_ptr<TensorImpl>> result;
+        result.reserve(N_IN);
+        for (std::size_t i = 0; i < N_IN; ++i)
+            result.push_back(input_tensors_[i]);
+        return result;
+    }
+
     // Check that every input tensor's live version counter still matches the
     // version saved at forward time.  Throws VersionMismatch if any input has
     // been mutated in-place since the forward pass.

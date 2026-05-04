@@ -1005,6 +1005,77 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    Storage scatter_add(const Storage& base,
+                        const Storage& indices,
+                        const Storage& src,
+                        const Shape& base_shape,
+                        const Shape& idx_shape,
+                        int dim,
+                        Dtype dt) override {
+        const auto& gb = std::get<GpuStorage>(base);
+        const auto& gi = std::get<GpuStorage>(indices);
+        const auto& gs = std::get<GpuStorage>(src);
+        // MLX scatter_add: out = base.at[indices].add(src) along dim
+        // Build index list: one per axis, with a slice for non-scatter axes
+        const int ndim = static_cast<int>(base_shape.size());
+        if (dim < 0) const_cast<int&>(dim) += ndim;
+        std::vector<::mlx::core::array> index_list;
+        for (int d = 0; d < ndim; ++d) {
+            if (d == dim) {
+                index_list.push_back(*gi.arr);
+            } else {
+                auto sz = static_cast<int>(idx_shape[static_cast<std::size_t>(d)]);
+                index_list.push_back(::mlx::core::arange(0, sz, 1, ::mlx::core::int32));
+                // reshape to broadcast against the index tensor
+                std::vector<int> reshape_dims(ndim, 1);
+                reshape_dims[d] = sz;
+                index_list.back() = ::mlx::core::reshape(index_list.back(),
+                    ::mlx::core::Shape(reshape_dims.begin(), reshape_dims.end()));
+            }
+        }
+        auto out = ::mlx::core::scatter_add(*gb.arr, index_list, *gs.arr,
+                                             std::vector<int>{dim});
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
+    Storage unfold_dim(const Storage& a,
+                       const Shape& in_shape,
+                       int dim,
+                       int size,
+                       int step,
+                       Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const int ndim = static_cast<int>(in_shape.size());
+        if (dim < 0) const_cast<int&>(dim) += ndim;
+        const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(dim)]);
+        const int L = (dim_size - size) / step + 1;
+
+        // Build index array of shape (*in_shape[:dim], L, *in_shape[dim+1:], size)
+        // indices[..., l, ..., s] = l * step + s  (broadcast over other dims)
+        auto starts = ::mlx::core::arange(0, L, 1, ::mlx::core::int32);  // (L,)
+        starts = ::mlx::core::multiply(starts,
+            ::mlx::core::array(step, ::mlx::core::int32));
+        auto offsets = ::mlx::core::arange(0, size, 1, ::mlx::core::int32);  // (size,)
+        // starts: (L,1) + offsets: (1,size) → (L, size)
+        starts = ::mlx::core::reshape(starts, {L, 1});
+        offsets = ::mlx::core::reshape(offsets, {1, size});
+        auto idx_2d = ::mlx::core::add(starts, offsets);  // (L, size)
+
+        // Reshape to be broadcastable for gather: insert leading dims for outer
+        // and trailing dims for inner
+        std::vector<int> idx_shape_v;
+        for (int d = 0; d < dim; ++d) idx_shape_v.push_back(1);
+        idx_shape_v.push_back(L);
+        for (int d = dim + 1; d < ndim; ++d) idx_shape_v.push_back(1);
+        idx_shape_v.push_back(size);
+        auto idx = ::mlx::core::reshape(idx_2d,
+            ::mlx::core::Shape(idx_shape_v.begin(), idx_shape_v.end()));
+
+        // Gather along dim
+        auto out = ::mlx::core::take(*ga.arr, idx, dim);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gb = std::get<GpuStorage>(b);
@@ -1600,6 +1671,263 @@ public:
                                                  n, nrhs, upper, unitriangular, &info);
         }
         return Storage{CpuStorage{out_ptr, out_bytes, dt}};
+    }
+
+    // lstsq: fall back to CPU LAPACK (MLX has no lstsq)
+    std::vector<Storage> linalg_lstsq(const Storage& a, const Storage& b,
+                                       const Shape& a_shape, const Shape& b_shape,
+                                       Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const auto& gb = std::get<GpuStorage>(b);
+        auto ca_mlx = ::mlx::core::contiguous(*ga.arr); ca_mlx.eval();
+        auto cb_mlx = ::mlx::core::contiguous(*gb.arr); cb_mlx.eval();
+        const std::size_t a_nb = ca_mlx.nbytes(), b_nb = cb_mlx.nbytes();
+        auto a_cpu = allocate_aligned_bytes(a_nb, Device::CPU);
+        auto b_cpu = allocate_aligned_bytes(b_nb, Device::CPU);
+        std::memcpy(a_cpu.get(), ca_mlx.data<void>(), a_nb);
+        std::memcpy(b_cpu.get(), cb_mlx.data<void>(), b_nb);
+        CpuStorage a_cs{a_cpu, a_nb, dt}, b_cs{b_cpu, b_nb, dt};
+        return Dispatcher::for_device(Device::CPU).linalg_lstsq(
+            Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
+    }
+
+    // lu_solve: fall back to CPU LAPACK
+    Storage linalg_lu_solve(const Storage& LU, const Storage& pivots, const Storage& b,
+                             const Shape& lu_shape, const Shape& b_shape, Dtype dt) override {
+        // Download LU and B from GPU
+        const auto& glu = std::get<GpuStorage>(LU);
+        const auto& gpiv = std::get<GpuStorage>(pivots);
+        const auto& gb   = std::get<GpuStorage>(b);
+        auto clu = ::mlx::core::contiguous(*glu.arr);  clu.eval();
+        auto cpiv = ::mlx::core::contiguous(*gpiv.arr); cpiv.eval();
+        auto cb   = ::mlx::core::contiguous(*gb.arr);   cb.eval();
+        auto lu_cpu  = allocate_aligned_bytes(clu.nbytes(),  Device::CPU);
+        auto piv_cpu = allocate_aligned_bytes(cpiv.nbytes(), Device::CPU);
+        auto b_cpu   = allocate_aligned_bytes(cb.nbytes(),   Device::CPU);
+        std::memcpy(lu_cpu.get(),  clu.data<void>(),  clu.nbytes());
+        std::memcpy(piv_cpu.get(), cpiv.data<void>(), cpiv.nbytes());
+        std::memcpy(b_cpu.get(),   cb.data<void>(),   cb.nbytes());
+        CpuStorage lu_cs{lu_cpu,  clu.nbytes(),  dt};
+        CpuStorage piv_cs{piv_cpu, cpiv.nbytes(), Dtype::I32};
+        CpuStorage b_cs{b_cpu,   cb.nbytes(),   dt};
+        auto result = Dispatcher::for_device(Device::CPU).linalg_lu_solve(
+            Storage{lu_cs}, Storage{piv_cs}, Storage{b_cs}, lu_shape, b_shape, dt);
+        const auto& res_cpu = std::get<CpuStorage>(result);
+        return Storage{gpu::upload_cpu_to_gpu(res_cpu, b_shape)};
+    }
+
+    // householder_product: fall back to CPU LAPACK
+    Storage linalg_householder_product(const Storage& H, const Storage& tau,
+                                        const Shape& h_shape, Dtype dt) override {
+        const auto& gh = std::get<GpuStorage>(H);
+        const auto& gt = std::get<GpuStorage>(tau);
+        auto ch = ::mlx::core::contiguous(*gh.arr); ch.eval();
+        auto ct = ::mlx::core::contiguous(*gt.arr); ct.eval();
+        auto h_cpu = allocate_aligned_bytes(ch.nbytes(), Device::CPU);
+        auto t_cpu = allocate_aligned_bytes(ct.nbytes(), Device::CPU);
+        std::memcpy(h_cpu.get(), ch.data<void>(), ch.nbytes());
+        std::memcpy(t_cpu.get(), ct.data<void>(), ct.nbytes());
+        const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
+        const int n = static_cast<int>(h_shape[h_shape.size() - 1]);
+        const int k = std::min(m, n);
+        Shape tau_shape{static_cast<std::int64_t>(k)};
+        CpuStorage h_cs{h_cpu, ch.nbytes(), dt}, t_cs{t_cpu, ct.nbytes(), dt};
+        auto result = Dispatcher::for_device(Device::CPU).linalg_householder_product(
+            Storage{h_cs}, Storage{t_cs}, h_shape, dt);
+        Shape q_shape{static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
+        const auto& res_cpu = std::get<CpuStorage>(result);
+        return Storage{gpu::upload_cpu_to_gpu(res_cpu, q_shape)};
+    }
+
+    // ldl_factor: fall back to CPU LAPACK
+    StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto ca = ::mlx::core::contiguous(*ga.arr); ca.eval();
+        auto a_cpu = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
+        std::memcpy(a_cpu.get(), ca.data<void>(), ca.nbytes());
+        CpuStorage a_cs{a_cpu, ca.nbytes(), dt};
+        auto [ld_s, piv_s] = Dispatcher::for_device(Device::CPU).linalg_ldl_factor(
+            Storage{a_cs}, shape, dt);
+        // Re-upload both to GPU
+        const auto& ld_cpu  = std::get<CpuStorage>(ld_s);
+        const auto& piv_cpu = std::get<CpuStorage>(piv_s);
+        const int n = static_cast<int>(shape[shape.size() - 1]);
+        Shape piv_shape{static_cast<std::int64_t>(n)};
+        Storage ld_gpu  = Storage{gpu::upload_cpu_to_gpu(ld_cpu,  shape)};
+        Storage piv_gpu = Storage{gpu::upload_cpu_to_gpu(piv_cpu, piv_shape)};
+        return {std::move(ld_gpu), std::move(piv_gpu)};
+    }
+
+    // fold (col2im): use MLX scatter_add
+    Storage nn_fold(const Storage& x,
+                     const Shape& x_shape,
+                     const Shape& out_shape,
+                     const std::vector<int>& kernel_size,
+                     const std::vector<int>& stride,
+                     const std::vector<int>& padding,
+                     const std::vector<int>& dilation,
+                     Dtype dt) override {
+        // Download to CPU, use CPU implementation, re-upload
+        const auto& gx = std::get<GpuStorage>(x);
+        auto cx = ::mlx::core::contiguous(*gx.arr); cx.eval();
+        auto x_cpu = allocate_aligned_bytes(cx.nbytes(), Device::CPU);
+        std::memcpy(x_cpu.get(), cx.data<void>(), cx.nbytes());
+        CpuStorage x_cs{x_cpu, cx.nbytes(), dt};
+        auto result = Dispatcher::for_device(Device::CPU).nn_fold(
+            Storage{x_cs}, x_shape, out_shape, kernel_size, stride, padding, dilation, dt);
+        const auto& res_cpu = std::get<CpuStorage>(result);
+        return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
+    }
+
+    // embedding_bag: use MLX gather + reduce
+    Storage embedding_bag_forward(const Storage& weight,
+                                   const Storage& indices,
+                                   const Storage& offsets,
+                                   const Shape& weight_shape,
+                                   const Shape& indices_shape,
+                                   int mode,
+                                   int padding_idx,
+                                   bool include_last_offset,
+                                   Dtype dt) override {
+        const auto& gw = std::get<GpuStorage>(weight);
+        const auto& gi = std::get<GpuStorage>(indices);
+        const auto& go = std::get<GpuStorage>(offsets);
+
+        // Gather all embeddings: (n_idx, D)
+        auto emb = ::mlx::core::take(*gw.arr, *gi.arr, 0);  // (n_idx, D)
+
+        // Determine bag count from offsets
+        const int B = static_cast<int>(go.arr->shape(0));
+        const int D = static_cast<int>(weight_shape[1]);
+
+        // Compute a segment ID for each index based on offsets → then use scatter_reduce
+        // Build segment IDs from offsets using cumsum-style logic
+        auto off_i32 = ::mlx::core::astype(*go.arr, ::mlx::core::int32);
+        // Compute counts per bag
+        int n_idx = static_cast<int>(indices_shape[0]);
+        auto seg_ids = ::mlx::core::zeros({n_idx}, ::mlx::core::int32);
+        // Simple approach: scatter 1s at each offset position, then cumsum
+        auto ones_off = ::mlx::core::ones_like(off_i32);
+        auto marker = ::mlx::core::zeros({n_idx}, ::mlx::core::int32);
+        std::vector<::mlx::core::array> idx_list = {off_i32};
+        auto updates = ::mlx::core::ones({B}, ::mlx::core::int32);
+        marker = ::mlx::core::scatter_add(marker, idx_list, updates, std::vector<int>{0});
+        seg_ids = ::mlx::core::cumsum(marker, 0) - 1;
+
+        // scatter_reduce by segment_id
+        auto base = ::mlx::core::zeros({B, D}, gpu::to_mlx_dtype(dt));
+        if (mode == 2) {  // max: use large negative init
+            base = ::mlx::core::full({B, D}, -1e30f, gpu::to_mlx_dtype(dt));
+        }
+        // Reshape seg_ids to (n_idx, 1) for scatter
+        auto seg_2d = ::mlx::core::reshape(seg_ids, {n_idx, 1});
+        auto seg_bc = ::mlx::core::broadcast_to(seg_2d, {n_idx, D});
+        std::vector<::mlx::core::array> scatter_idx = {seg_bc};
+        auto out = (mode == 2)
+            ? ::mlx::core::scatter_max(base, scatter_idx, emb, std::vector<int>{0, 1})
+            : ::mlx::core::scatter_add(base, scatter_idx, emb, std::vector<int>{0, 1});
+        if (mode == 1) {  // mean: normalize by bag sizes
+            auto bag_sizes = ::mlx::core::zeros({B}, ::mlx::core::float32);
+            auto ones_idx  = ::mlx::core::ones({n_idx}, ::mlx::core::float32);
+            auto seg_1d    = ::mlx::core::reshape(seg_ids, {n_idx});
+            std::vector<::mlx::core::array> sz_idx = {seg_1d};
+            bag_sizes = ::mlx::core::scatter_add(bag_sizes, sz_idx, ones_idx, std::vector<int>{0});
+            auto bag_sizes_2d = ::mlx::core::reshape(bag_sizes, {B, 1});
+            auto bag_sizes_bc = ::mlx::core::broadcast_to(bag_sizes_2d, {B, D});
+            out = ::mlx::core::divide(out, ::mlx::core::maximum(bag_sizes_bc,
+                ::mlx::core::full({B, D}, 1.0f, ::mlx::core::float32)));
+        }
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
+    // ── astype ────────────────────────────────────────────────────────────────
+    Storage astype(const Storage& a, const Shape& shape,
+                   Dtype /*src_dt*/, Dtype dst_dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::astype(*ga.arr, gpu::to_mlx_dtype(dst_dt));
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
+    }
+
+    // ── flip ──────────────────────────────────────────────────────────────────
+    // MLX has no built-in flip; implement via take with reversed indices per dim.
+    Storage flip(const Storage& a, const Shape& shape,
+                 const std::vector<int>& dims, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        auto arr = ::mlx::core::contiguous(*ga.arr);
+        for (int d : dims) {
+            const int n = static_cast<int>(shape[d]);
+            // Build reversed-index array [n-1, n-2, ..., 0].
+            std::vector<int> idx_vec(n);
+            for (int i = 0; i < n; ++i) idx_vec[i] = n - 1 - i;
+            auto idx = ::mlx::core::array(idx_vec.data(), {n}, ::mlx::core::int32);
+            arr = ::mlx::core::take(arr, idx, d);
+        }
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(arr), dt)};
+    }
+
+    // ── masked_select ─────────────────────────────────────────────────────────
+    Storage masked_select_count(const Storage& mask,
+                                const Shape& shape, Dtype dt) override {
+        const auto& gm = std::get<GpuStorage>(mask);
+        auto cm = ::mlx::core::contiguous(*gm.arr); cm.eval();
+        auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
+        std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
+        CpuStorage m_cs{cpu_m, cm.nbytes(), dt};
+        return Dispatcher::for_device(Device::CPU).masked_select_count(
+            Storage{m_cs}, shape, dt);
+    }
+    Storage masked_select(const Storage& a, const Storage& mask,
+                           const Shape& a_shape, const Shape& mask_shape,
+                           std::int64_t n_true, Dtype dt) override {
+        const auto& ga = std::get<GpuStorage>(a);
+        const auto& gm = std::get<GpuStorage>(mask);
+        auto ca = ::mlx::core::contiguous(*ga.arr); ca.eval();
+        auto cm = ::mlx::core::contiguous(*gm.arr); cm.eval();
+        auto cpu_a = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
+        auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
+        std::memcpy(cpu_a.get(), ca.data<void>(), ca.nbytes());
+        std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
+        CpuStorage a_cs{cpu_a, ca.nbytes(), dt};
+        CpuStorage m_cs{cpu_m, cm.nbytes(), Dtype::Bool};
+        auto result = Dispatcher::for_device(Device::CPU).masked_select(
+            Storage{a_cs}, Storage{m_cs}, a_shape, mask_shape, n_true, dt);
+        const auto& res_cpu = std::get<CpuStorage>(result);
+        Shape out_shape{n_true};
+        return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
+    }
+
+    // ── ctc_loss ──────────────────────────────────────────────────────────────
+    Storage ctc_loss_forward(const Storage& log_probs,
+                              const Storage& targets,
+                              const Storage& input_lengths,
+                              const Storage& target_lengths,
+                              const Shape& lp_shape,
+                              int blank,
+                              bool zero_infinity,
+                              Dtype dt) override {
+        // Download all tensors to CPU for the DP algorithm.
+        auto dl = [](const Storage& s) -> CpuStorage {
+            const auto& g = std::get<GpuStorage>(s);
+            auto c = ::mlx::core::contiguous(*g.arr); c.eval();
+            auto p = allocate_aligned_bytes(c.nbytes(), Device::CPU);
+            std::memcpy(p.get(), c.data<void>(), c.nbytes());
+            return CpuStorage{p, c.nbytes(), Dtype::F32};  // dtype set by caller
+        };
+        auto lp_cpu  = dl(log_probs);
+        auto tgt_cpu = dl(targets);
+        auto il_cpu  = dl(input_lengths);
+        auto tl_cpu  = dl(target_lengths);
+        lp_cpu.dtype  = dt;
+        tgt_cpu.dtype = Dtype::I32;
+        il_cpu.dtype  = Dtype::I32;
+        tl_cpu.dtype  = Dtype::I32;
+        auto result = Dispatcher::for_device(Device::CPU).ctc_loss_forward(
+            Storage{lp_cpu}, Storage{tgt_cpu}, Storage{il_cpu}, Storage{tl_cpu},
+            lp_shape, blank, zero_infinity, dt);
+        const auto& res_cpu = std::get<CpuStorage>(result);
+        const int N = static_cast<int>(lp_shape[1]);
+        Shape out_shape{static_cast<std::int64_t>(N)};
+        return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
     }
 
     Storage

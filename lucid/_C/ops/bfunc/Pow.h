@@ -8,9 +8,11 @@
 #include <utility>
 
 #include "../../api.h"
+#include "../../autograd/Helpers.h"
 #include "../../core/AmpPolicy.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
+#include "../../core/TensorImpl.h"
 #include "../../core/fwd.h"
 #include "_BinaryOp.h"
 
@@ -40,6 +42,35 @@ public:
 
     // Compute the gradients for both inputs given the output gradient.
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
+
+    // Graph-mode gradient for create_graph=True.
+    // dA = b * a^(b-1) * g;   dB = log(a) * a^b * g
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
+        const TensorImplPtr& g,
+        const TensorImplPtr& a_ptr,
+        const TensorImplPtr& b_ptr) {
+        extern TensorImplPtr pow_op(const TensorImplPtr&, const TensorImplPtr&);
+        extern TensorImplPtr mul_op(const TensorImplPtr&, const TensorImplPtr&);
+        extern TensorImplPtr log_op(const TensorImplPtr&);
+        extern TensorImplPtr sub_op(const TensorImplPtr&, const TensorImplPtr&);
+
+        // Scalar 1 tensor
+        auto ones = std::make_shared<TensorImpl>(
+            make_ones_storage(a_ptr->shape(), a_ptr->dtype(), a_ptr->device()),
+            a_ptr->shape(), a_ptr->dtype(), a_ptr->device(), false);
+
+        // dA = b * a^(b-1) * g
+        TensorImplPtr bm1 = sub_op(b_ptr, ones);
+        TensorImplPtr a_pow_bm1 = pow_op(a_ptr, bm1);
+        TensorImplPtr dA = mul_op(mul_op(b_ptr, a_pow_bm1), g);
+
+        // dB = log(a) * a^b * g
+        TensorImplPtr log_a = log_op(a_ptr);
+        TensorImplPtr a_pow_b = pow_op(a_ptr, b_ptr);
+        TensorImplPtr dB = mul_op(mul_op(log_a, a_pow_b), g);
+
+        return {std::move(dA), std::move(dB)};
+    }
 };
 
 // Public entry point: compute a ^ b with full broadcasting and autograd support.

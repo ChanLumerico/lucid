@@ -300,3 +300,84 @@ class Rprop(Optimizer):
         for optim in self._engine_optims:
             optim.step()
         return loss
+
+
+class SparseAdam(Optimizer):
+    """Lazy version of Adam for sparse gradients.
+
+    Dense Adam implementation that is API-compatible with PyTorch SparseAdam.
+    All moment state is stored as TensorImpl and updated using engine ops,
+    so the optimizer works on both CPU and GPU.
+    """
+
+    def __init__(
+        self,
+        params: object,
+        lr: float = 1e-3,
+        betas: tuple[float, float] = (0.9, 0.999),
+        eps: float = 1e-8,
+    ) -> None:
+        defaults = dict(lr=lr, betas=betas, eps=eps)
+        super().__init__(params, defaults)
+        # Per-parameter moment state (TensorImpl, None before first step)
+        self._step: list[int] = [0] * self._n_params()
+        self._exp_avg: list = [None] * self._n_params()
+        self._exp_avg_sq: list = [None] * self._n_params()
+
+    def _n_params(self) -> int:
+        return sum(len(g["params"]) for g in self.param_groups)
+
+    def step(self, closure: "_OptimizerClosure" = None) -> "Tensor | None":
+        loss = closure() if closure is not None else None
+        flat_idx = 0
+        for group in self.param_groups:
+            lr = group["lr"]
+            b1, b2 = group["betas"]
+            eps = group["eps"]
+            for p in group["params"]:
+                if p.grad is None:
+                    flat_idx += 1
+                    continue
+
+                pi = p._impl
+                gi = p.grad._impl
+                dv = pi.device
+                dt = pi.dtype
+                sh = list(pi.shape)
+
+                # Initialise moment buffers
+                if self._exp_avg[flat_idx] is None:
+                    self._exp_avg[flat_idx] = _C_engine.zeros(sh, dt, dv)
+                    self._exp_avg_sq[flat_idx] = _C_engine.zeros(sh, dt, dv)
+
+                self._step[flat_idx] += 1
+                t = self._step[flat_idx]
+                m = self._exp_avg[flat_idx]
+                v = self._exp_avg_sq[flat_idx]
+
+                def _scale(tensor, scalar: float):
+                    return _C_engine.mul(tensor, _C_engine.full(sh, scalar, dt, dv))
+
+                # m = b1 * m + (1 - b1) * g
+                m = _C_engine.add(_scale(m, b1), _scale(gi, 1.0 - b1))
+                # v = b2 * v + (1 - b2) * g^2
+                g_sq = _C_engine.mul(gi, gi)
+                v = _C_engine.add(_scale(v, b2), _scale(g_sq, 1.0 - b2))
+
+                self._exp_avg[flat_idx] = m
+                self._exp_avg_sq[flat_idx] = v
+
+                # Bias correction
+                bc1 = 1.0 - b1**t
+                bc2 = 1.0 - b2**t
+                step_size = lr * (bc2**0.5) / bc1
+
+                # p = p - step_size * m / (sqrt(v) + eps)
+                denom = _C_engine.add(
+                    _C_engine.sqrt(v), _C_engine.full(sh, eps, dt, dv)
+                )
+                update = _scale(_C_engine.div(m, denom), step_size)
+                new_p = _C_engine.sub(pi, update)
+                pi.copy_from(new_p)
+                flat_idx += 1
+        return loss

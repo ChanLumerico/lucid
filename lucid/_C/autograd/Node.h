@@ -87,6 +87,13 @@ public:
     // Overridden by concrete nodes (via their schema_v1.name).
     virtual std::string node_name() const { return "unknown"; }
 
+    // Return weak_ptrs to each input TensorImpl so Engine can accumulate
+    // gradients into non-leaf tensors that have retain_grad=true.
+    // Default: empty (AccumulateGrad has no inputs to retain).
+    virtual std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const {
+        return {};
+    }
+
     // Assert that no saved input tensor has been modified in-place since the
     // forward pass.  The default is a no-op; AutogradNode overrides this to
     // check version counters.

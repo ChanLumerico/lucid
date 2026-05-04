@@ -8,6 +8,20 @@ to expose free functions.
 from dataclasses import dataclass, field
 from typing import Callable, Any
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap  # needed for mixed-arg adapters
+
+# ── Adapters for ops whose arg order differs from the engine signature ────────
+
+
+def _detach_adapter(impl):
+    """detach(x): deep-copy without gradient tracking."""
+    return _C_engine.contiguous(impl).clone_with_grad(False)
+
+
+def _scatter_add_adapter(x_impl, dim: int, index, src):
+    """scatter_add(x, dim, index, src) — Python order → engine order."""
+    # Engine: scatter_add(base, indices, src, dim)
+    return _C_engine.scatter_add(x_impl, _unwrap(index), _unwrap(src), dim)
 
 
 @dataclass
@@ -239,5 +253,20 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("isfinite",   _R.isfinite,  1, method_name="isfinite",  free_fn_name="isfinite"),
     OpEntry("nan_to_num", _R.nan_to_num,1, method_name="nan_to_num",free_fn_name="nan_to_num",
             extra_kwargs=["nan", "posinf", "neginf"]),
+
+    # ── tensor lifecycle ────────────────────────────────────────────────────
+    # detach: deep-copy without gradient tracking (uses contiguous + clone_with_grad).
+    OpEntry("detach",      _detach_adapter, 1, method_name="detach", free_fn_name="detach"),
+    # clone: deep-copy preserving autograd history (contiguous = storage copy).
+    OpEntry("clone",       _R.contiguous,   1, method_name="clone",  free_fn_name="clone"),
+    # clamp is an alias for clip (same signature, same engine op).
+    OpEntry("clamp",       _R.clip,         1, method_name="clamp",  free_fn_name="clamp",
+            extra_kwargs=["min", "max"]),
+    # scatter_add: arg order differs — adapter reorders before calling engine.
+    # Python:  scatter_add(x, dim, index, src)
+    # Engine:  scatter_add(base, indices, src, dim)
+    # n_tensor_args=1 auto-unwraps x; the adapter manually unwraps index/src.
+    OpEntry("scatter_add", _scatter_add_adapter, 1,
+            method_name="scatter_add", free_fn_name="scatter_add"),
 ]
 # fmt: on

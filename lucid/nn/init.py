@@ -6,51 +6,66 @@ All functions operate in-place and return the tensor.
 import math
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
+from lucid._dispatch import _unwrap, _wrap
+from lucid._tensor.tensor import _impl_with_grad as _iwg
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def _fill_impl(tensor: Tensor, arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
-    impl = _C_engine.TensorImpl(
-        np.ascontiguousarray(arr.reshape(tensor.shape)),
-        tensor._impl.device,
-        tensor._impl.requires_grad,
-    )
-    tensor._impl = impl
+def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
+    """Replace tensor's impl with src_impl, preserving requires_grad."""
+    rg = tensor._impl.requires_grad
+    impl = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[attr-defined]
+    tensor._impl = _iwg(impl, rg)
     return tensor
 
 
 def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
     """Fill tensor in-place with values from U(a, b)."""
-    arr = np.random.uniform(a, b, size=tensor.shape).astype("float32")
-    return _fill_impl(tensor, arr)
+    return _fill_from_impl(
+        tensor,
+        _C_engine.uniform(
+            list(tensor.shape), a, b, tensor._impl.dtype, tensor._impl.device
+        ),
+    )
 
 
 def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
     """Fill tensor in-place with values from N(mean, std²)."""
-    arr = np.random.normal(mean, std, size=tensor.shape).astype("float32")
-    return _fill_impl(tensor, arr)
+    return _fill_from_impl(
+        tensor,
+        _C_engine.normal(
+            list(tensor.shape), mean, std, tensor._impl.dtype, tensor._impl.device
+        ),
+    )
 
 
 def constant_(tensor: Tensor, val: float) -> Tensor:
     """Fill tensor in-place with a constant value."""
-    arr = np.full(tensor.shape, val, dtype="float32")
-    return _fill_impl(tensor, arr)
+    return _fill_from_impl(
+        tensor,
+        _C_engine.full(
+            list(tensor.shape), val, tensor._impl.dtype, tensor._impl.device
+        ),
+    )
 
 
 def ones_(tensor: Tensor) -> Tensor:
     """Fill tensor in-place with ones."""
-    return constant_(tensor, 1.0)
+    return _fill_from_impl(
+        tensor,
+        _C_engine.ones(list(tensor.shape), tensor._impl.dtype, tensor._impl.device),
+    )
 
 
 def zeros_(tensor: Tensor) -> Tensor:
     """Fill tensor in-place with zeros."""
-    return constant_(tensor, 0.0)
+    return _fill_from_impl(
+        tensor,
+        _C_engine.zeros(list(tensor.shape), tensor._impl.dtype, tensor._impl.device),
+    )
 
 
 def eye_(tensor: Tensor) -> Tensor:
@@ -58,8 +73,9 @@ def eye_(tensor: Tensor) -> Tensor:
     if tensor.ndim != 2:
         raise ValueError("eye_() requires a 2D tensor")
     n, m = tensor.shape
-    arr = np.eye(n, m, dtype="float32")
-    return _fill_impl(tensor, arr)
+    return _fill_from_impl(
+        tensor, _C_engine.eye(n, m, 0, tensor._impl.dtype, tensor._impl.device)
+    )
 
 
 def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
@@ -111,34 +127,59 @@ def trunc_normal_(
     a: float = -2.0,
     b: float = 2.0,
 ) -> Tensor:
-    """Fill tensor with truncated normal values (pure numpy, no scipy needed)."""
-    import numpy as np
+    """Fill tensor with truncated normal values via rejection sampling."""
+    shape = list(tensor.shape) if tensor.shape else [1]
+    total = 1
+    for s in shape:
+        total *= s
 
-    size = tuple(tensor.shape) if tensor.shape else (1,)
-    total = int(np.prod(size))
-    # Rejection sampling — resample until all values are in [a, b]
-    result = np.empty(total, dtype=np.float32)
-    filled = 0
-    while filled < total:
-        needed = (total - filled) * 4  # oversample 4× to reduce iterations
-        candidates = np.random.normal(mean, std, size=needed).astype(np.float32)
-        valid = candidates[(candidates >= a) & (candidates <= b)]
-        take = min(len(valid), total - filled)
-        result[filled : filled + take] = valid[:take]
-        filled += take
-    arr = result[:total].reshape(size)
-    return _fill_impl(tensor, arr)
+    dt = tensor._impl.dtype
+    dev = tensor._impl.device
+    filled_parts = []
+    remaining = total
+    while remaining > 0:
+        needed = max(remaining * 4, 16)
+        candidates = _C_engine.normal([needed], mean, std, dt, dev)
+        # Build mask: a <= x <= b
+        lo = _C_engine.full([needed], a, dt, dev)
+        hi = _C_engine.full([needed], b, dt, dev)
+        ge_a = _C_engine.greater_equal(candidates, lo)
+        le_b = _C_engine.less_equal(candidates, hi)
+        mask = _C_engine.bitwise_and(ge_a, le_b)
+        valid = _C_engine.masked_select(candidates, mask)
+        n_valid = int(list(valid.shape)[0])
+        take = min(n_valid, remaining)
+        if take > 0:
+            # Slice first `take` elements via gather + arange.
+            idx = _C_engine.arange(0, take, 1, _C_engine.I32, dev)
+            filled_parts.append(_C_engine.gather(valid, idx, 0))
+            remaining -= take
+
+    result = _C_engine.concatenate(filled_parts, 0)
+    return _fill_from_impl(tensor, result)
 
 
 def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
-    """Fill tensor with a (semi-)orthogonal matrix."""
+    """Fill tensor with a (semi-)orthogonal matrix via SVD."""
     rows = tensor.shape[0]
     cols = tensor.numel() // rows
-    flat = np.random.normal(0, 1, (rows, cols)).astype("float32")
-    u, _, v = np.linalg.svd(flat, full_matrices=False)
-    q = u if rows < cols else v
-    q = q[:rows, :cols].reshape(tensor.shape)
-    return _fill_impl(tensor, q * gain)
+    dt = tensor._impl.dtype
+    dev = tensor._impl.device
+    flat = _C_engine.normal([rows, cols], 0.0, 1.0, dt, dev)
+    # linalg.svd returns (U, S, Vt) as a Python tuple.
+    svd_result = _C_engine.linalg.svd(flat, True)
+    U = svd_result[0]  # (rows, min(rows,cols))
+    Vt = svd_result[2]  # (min(rows,cols), cols)
+    q = U if rows < cols else Vt
+    # Slice q to (rows, cols) via gather on both axes.
+    r_idx = _C_engine.arange(0, rows, 1, _C_engine.I32, dev)
+    c_idx = _C_engine.arange(0, cols, 1, _C_engine.I32, dev)
+    q = _C_engine.gather(q, r_idx, 0)
+    q = _C_engine.gather(q, c_idx, 1)
+    if gain != 1.0:
+        g = _C_engine.full([rows, cols], gain, dt, dev)
+        q = _C_engine.mul(q, g)
+    return _fill_from_impl(tensor, q)
 
 
 def calculate_gain(nonlinearity: str, param: float | None = None) -> float:

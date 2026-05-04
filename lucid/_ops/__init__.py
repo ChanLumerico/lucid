@@ -6,7 +6,6 @@ for missing engine ops (std, log_softmax, any, all) are also defined here.
 """
 
 from typing import TYPE_CHECKING
-import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import _REGISTRY
@@ -75,23 +74,4 @@ def _populate_free_fns() -> None:
 _populate_free_fns()
 
 
-def detach(x: Tensor) -> Tensor:
-    """Return a new tensor detached from the autograd graph."""
-    arr = np.ascontiguousarray(np.asarray(x._impl.data_as_python()))
-    impl = _C_engine.TensorImpl(arr, x._impl.device, False)
-    return _wrap(impl)
-
-
-def clone(x: Tensor) -> Tensor:
-    """Return a deep copy of x, preserving autograd history."""
-    return _wrap(_C_engine.contiguous(_unwrap(x)))
-
-
-def clamp(x: Tensor, min: float | None = None, max: float | None = None) -> Tensor:
-    """Clamp all elements to [min, max]. Alias for clip."""
-    lo = min if min is not None else float("-inf")
-    hi = max if max is not None else float("inf")
-    return _wrap(_C_engine.clip(_unwrap(x), lo, hi))
-
-
-__all__ = list(_FREE_FN_NAMES) + ["detach", "clone", "clamp"]
+__all__ = list(_FREE_FN_NAMES)

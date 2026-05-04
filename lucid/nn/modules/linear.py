@@ -128,3 +128,63 @@ class Bilinear(Module):
             f"in1_features={self.in1_features}, in2_features={self.in2_features}, "
             f"out_features={self.out_features}, bias={self.bias is not None}"
         )
+
+
+class LazyLinear(Module):
+    """Linear layer with lazy weight initialization.
+
+    The ``in_features`` dimension is inferred from the first forward call.
+    Until then, :attr:`weight` and :attr:`bias` are uninitialized placeholders.
+
+    Parameters
+    ----------
+    out_features : int
+        Size of each output sample.
+    bias : bool
+        If True (default), add a learnable bias.
+    """
+
+    def __init__(
+        self,
+        out_features: int,
+        bias: bool = True,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        super().__init__()
+        self.out_features = out_features
+        self.in_features: int | None = None
+        self._has_bias = bias
+        self._device = device
+        self._dtype = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_features: int) -> None:
+        self.in_features = in_features
+        self.weight = Parameter(
+            empty(
+                self.out_features, in_features, dtype=self._dtype, device=self._device
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_features, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        bound = 1.0 / math.sqrt(in_features)
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(x.shape[-1])
+        return linear(x, self.weight, self.bias)  # type: ignore[arg-type]
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            f"bias={self._has_bias}"
+        )

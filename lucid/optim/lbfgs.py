@@ -1,5 +1,6 @@
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
+
 """
 L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
