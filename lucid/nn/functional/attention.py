@@ -31,14 +31,18 @@ def scaled_dot_product_attention(
         is_causal: apply causal (triangular) mask
         scale:     optional softmax scale (default: 1/sqrt(E))
     """
+    import math
+
     mask = _unwrap(attn_mask) if attn_mask is not None else None
+    head_dim = query.shape[-1]
+    scale_val = scale if scale is not None else 1.0 / math.sqrt(head_dim)
     return _wrap(
         _C_engine.nn.scaled_dot_product_attention(
             _unwrap(query),
             _unwrap(key),
             _unwrap(value),
             mask,
-            dropout_p,
+            scale_val,
             is_causal,
         )
     )

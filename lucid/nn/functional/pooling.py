@@ -60,9 +60,7 @@ def avg_pool1d(
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
-    return _wrap(
-        _C_engine.nn.avg_pool1d(_unwrap(x), k, s, p, ceil_mode, count_include_pad)
-    )
+    return _wrap(_C_engine.nn.avg_pool1d(_unwrap(x), k, s, p))
 
 
 def avg_pool2d(

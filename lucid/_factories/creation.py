@@ -180,13 +180,17 @@ def zeros_like(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return a zeros tensor with the same shape/dtype/device as t."""
-    _dt, _dev, _ = normalize_factory_kwargs(
+    _dt, _dev, _rg = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
+        requires_grad,
     )
-    return _wrap(_C_engine.zeros_like(_unwrap(t), _dt, _dev))
+    impl = _unwrap(t)
+    out = _C_engine.zeros(list(impl.shape), _dt, _dev)
+    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
 
 
 def ones_like(
@@ -194,13 +198,17 @@ def ones_like(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return a ones tensor with the same shape/dtype/device as t."""
-    _dt, _dev, _ = normalize_factory_kwargs(
+    _dt, _dev, _rg = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
+        requires_grad,
     )
-    return _wrap(_C_engine.ones_like(_unwrap(t), _dt, _dev))
+    impl = _unwrap(t)
+    out = _C_engine.ones(list(impl.shape), _dt, _dev)
+    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
 
 
 def empty_like(
@@ -208,13 +216,17 @@ def empty_like(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
+    requires_grad: bool = False,
 ) -> Tensor:
     """Return an uninitialized tensor with the same shape/dtype/device as t."""
-    _dt, _dev, _ = normalize_factory_kwargs(
+    _dt, _dev, _rg = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
+        requires_grad,
     )
-    return _wrap(_C_engine.empty_like(_unwrap(t), _dt, _dev))
+    impl = _unwrap(t)
+    out = _C_engine.empty(list(impl.shape), _dt, _dev)
+    return _wrap(_impl_with_grad(out, _rg) if _rg else out)
 
 
 def full_like(

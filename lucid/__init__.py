@@ -102,7 +102,7 @@ __all__ = [
     "std", "var", "trace", "any", "all",
     # ── tensor manipulation ───────────────────────────────────────────────
     "reshape", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
-    "expand", "broadcast_to", "repeat", "tile",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
     "cat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "gather", "scatter_add", "where", "masked_fill", "pad", "roll",
@@ -127,7 +127,6 @@ __all__ = [
 ]
 
 # ── Name sets used by the dispatch table ─────────────────────────────────────
-# fmt: on
 _FACTORY_NAMES: frozenset[str] = frozenset(
     [
         "tensor",
@@ -238,6 +237,7 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "expand",
         "broadcast_to",
         "repeat",
+        "repeat_interleave",
         "tile",
         "cat",
         "stack",
@@ -327,6 +327,8 @@ _TYPE_ALIAS_NAMES: frozenset[str] = frozenset(
 #   1. Define its name frozenset above.
 #   2. Write a _load_<group>() function below.
 #   3. Register it via @_register(<frozenset>).
+#
+# fmt: on
 
 _GROUP_LOADERS: dict[str, Callable[[], dict[str, object]]] = {}
 
@@ -396,25 +398,25 @@ def _load_predicates() -> dict[str, object]:
         [_ce.F16, _ce.F32, _ce.F64, _ce.C64, _ce.I8, _ce.I16, _ce.I32, _ce.I64]
     )
 
-    def is_tensor(obj: object) -> bool:
+    def is_tensor(obj: object) -> bool:  # type: ignore
         """Return True if *obj* is a lucid Tensor."""
         from lucid._tensor.tensor import Tensor as _T
 
         return isinstance(obj, _T)
 
-    def is_floating_point(t: object) -> bool:
+    def is_floating_point(t: object) -> bool:  # type: ignore
         """Return True if *t* has a floating-point dtype."""
         from lucid._dispatch import _unwrap
 
         return _unwrap(t).dtype in _FLOAT_DTYPES  # type: ignore[arg-type]
 
-    def is_complex(t: object) -> bool:
+    def is_complex(t: object) -> bool:  # type: ignore
         """Return True if *t* has a complex dtype."""
         from lucid._dispatch import _unwrap
 
         return _unwrap(t).dtype in _COMPLEX_DTYPES  # type: ignore[arg-type]
 
-    def is_signed(t: object) -> bool:
+    def is_signed(t: object) -> bool:  # type: ignore
         """Return True if *t* has a signed numeric dtype."""
         from lucid._dispatch import _unwrap
 

@@ -91,11 +91,7 @@ def conv_transpose1d(
     op = _normalize_int_or_tuple(output_padding, 1)[0]
     d = _normalize_int_or_tuple(dilation, 1)[0]
     b = _unwrap(bias) if bias is not None else None
-    return _wrap(
-        _C_engine.nn.conv_transpose1d(
-            _unwrap(x), _unwrap(weight), b, s, p, op, groups, d
-        )
-    )
+    return _wrap(_C_engine.nn.conv_transpose1d(_unwrap(x), _unwrap(weight), b, s, p, op))
 
 
 def conv_transpose2d(

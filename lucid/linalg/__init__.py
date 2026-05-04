@@ -341,7 +341,7 @@ def vector_norm(
 def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     """Compute the cross product of two 3-element vectors along *dim*.
 
-    Uses existing gather/mul/sub ops; fully autograd-tracked.
+    Uses gather with properly-ranked index tensors; fully autograd-tracked.
     Both tensors must have size 3 in the specified dimension.
     """
     xi = _unwrap(x)
@@ -350,13 +350,12 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     d = dim if dim >= 0 else ndim + dim
 
     def _idx(t: "_C_engine.TensorImpl", i: int) -> "_C_engine.TensorImpl":
-        idx = _C_engine.TensorImpl(
-            __import__("numpy").array([i], dtype=__import__("numpy").int32),
-            t.device,
-            False,
-        )
+        # Build an index tensor with the same rank as t, size 1 along d,
+        # filled with i.  gather requires equal-rank index.
+        idx_shape = list(t.shape)
+        idx_shape[d] = 1
+        idx = _C_engine.full(idx_shape, float(i), _C_engine.I32, t.device)
         sliced = _C_engine.gather(t, idx, d)
-        # Remove the gather dimension by squeezing
         return _C_engine.squeeze(sliced, d)
 
     x0, x1, x2 = _idx(xi, 0), _idx(xi, 1), _idx(xi, 2)
@@ -366,11 +365,10 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     c1 = _C_engine.sub(_C_engine.mul(x2, y0), _C_engine.mul(x0, y2))
     c2 = _C_engine.sub(_C_engine.mul(x0, y1), _C_engine.mul(x1, y0))
 
-    # Stack along dim: unsqueeze each component then cat
     c0u = _C_engine.unsqueeze(c0, d)
     c1u = _C_engine.unsqueeze(c1, d)
     c2u = _C_engine.unsqueeze(c2, d)
-    return _wrap(_C_engine.cat([c0u, c1u, c2u], d))
+    return _wrap(_C_engine.concatenate([c0u, c1u, c2u], d))
 
 
 def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
