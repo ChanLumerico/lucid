@@ -24,7 +24,7 @@ from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _Backward
 # break the Module ↔ _state_dict circular dependency.
 
 
-_HOOK_ID = 0
+_HOOK_ID: int = 0
 
 
 def _next_hook_id() -> int:
@@ -210,10 +210,10 @@ class Module:
     ) -> tuple[tuple[Tensor, ...], _ModuleBackwardState]:
         state = _ModuleBackwardState(self, len(args))
         if hasattr(_C_engine, "_create_module_backward_hook_state"):
-            state.cpp_state = _C_engine._create_module_backward_hook_state(
+            state.C_engine_state = _C_engine._create_module_backward_hook_state(
                 len(args),
-                state.apply_backward_pre_hooks_from_cpp,
-                state.apply_full_backward_hooks_from_cpp,
+                state.apply_backward_pre_hooks_from_C_engine,
+                state.apply_full_backward_hooks_from_C_engine,
             )
             entries: list[tuple[int, _C_engine.TensorImpl]] = []
             for idx, arg in enumerate(args):
@@ -223,7 +223,7 @@ class Module:
             if not entries:
                 return args, state
             wrapped_impls = _C_engine._wrap_module_backward_inputs(
-                state.cpp_state, entries
+                state.C_engine_state, entries
             )
             wrapped_args = list(args)
             for (idx, _), impl in zip(entries, wrapped_impls, strict=True):
@@ -244,8 +244,8 @@ class Module:
         output: _ModuleOutput,
         state: _ModuleBackwardState,
     ) -> _ModuleOutput:
-        if state.cpp_state is not None:
-            return self._attach_cpp_output_backward_hooks(output, state)
+        if state.C_engine_state is not None:
+            return self._attach_C_engine_output_backward_hooks(output, state)
 
         if isinstance(output, tuple):
             state.n_outputs = sum(1 for item in output if isinstance(item, Tensor))
@@ -265,7 +265,7 @@ class Module:
         state.n_outputs = 1
         return _ModuleOutputBackwardHookFunction.apply(output, state, 0)
 
-    def _attach_cpp_output_backward_hooks(
+    def _attach_C_engine_output_backward_hooks(
         self,
         output: _ModuleOutput,
         state: _ModuleBackwardState,
@@ -285,7 +285,7 @@ class Module:
             if not entries:
                 return output
             wrapped_impls = _C_engine._wrap_module_backward_outputs(
-                state.cpp_state, entries, n_outputs
+                state.C_engine_state, entries, n_outputs
             )
             wrapped_output = list(output)
             for pos, impl in zip(positions, wrapped_impls, strict=True):
@@ -298,7 +298,7 @@ class Module:
         if not output.requires_grad:
             return output
         wrapped_impl = _C_engine._wrap_module_backward_outputs(
-            state.cpp_state, [(0, _unwrap(output))], 1
+            state.C_engine_state, [(0, _unwrap(output))], 1
         )[0]
         return _wrap(wrapped_impl)
 
@@ -926,7 +926,7 @@ class _ModuleBackwardState:
         self.grad_outputs: list[Tensor | None] = []
         self.pre_hooks_ran = False
         self.full_hooks_ran = False
-        self.cpp_state: object | None = None
+        self.C_engine_state: object | None = None
 
     def set_num_outputs(self, n_outputs: int) -> None:
         if not self.grad_outputs:
@@ -954,7 +954,7 @@ class _ModuleBackwardState:
         updated = grad_outputs[index] if index < len(grad_outputs) else None
         return updated if isinstance(updated, Tensor) else grad_output
 
-    def apply_backward_pre_hooks_from_cpp(
+    def apply_backward_pre_hooks_from_C_engine(
         self, grad_output_impls: tuple[_C_engine.TensorImpl | None, ...]
     ) -> tuple[_C_engine.TensorImpl | None, ...] | None:
         self.grad_outputs = [
@@ -1000,7 +1000,7 @@ class _ModuleBackwardState:
         updated = grad_inputs[index] if index < len(grad_inputs) else None
         return updated if isinstance(updated, Tensor) else grad_input
 
-    def apply_full_backward_hooks_from_cpp(
+    def apply_full_backward_hooks_from_C_engine(
         self,
         grad_input_impls: tuple[_C_engine.TensorImpl | None, ...],
         grad_output_impls: tuple[_C_engine.TensorImpl | None, ...],

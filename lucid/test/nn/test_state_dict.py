@@ -62,8 +62,16 @@ class TestLoadStateDictHooks:
         # Old checkpoint uses 'fc.weight'; new model expects 'linear.weight'.
         layer = nn.Linear(4, 8)
 
-        def rename_hook(module, state_dict, prefix, local_metadata, strict,
-                        missing, unexpected, error_msgs):
+        def rename_hook(
+            module,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing,
+            unexpected,
+            error_msgs,
+        ):
             old = f"{prefix}fc.weight"
             new = f"{prefix}weight"
             if old in state_dict and new not in state_dict:
@@ -103,8 +111,16 @@ class TestLoadStateDictHooks:
 
         seen: list[str] = []
 
-        def hook(module, state_dict, prefix, local_metadata, strict,
-                 missing, unexpected, error_msgs):
+        def hook(
+            module,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing,
+            unexpected,
+            error_msgs,
+        ):
             seen.append(type(module).__name__)
 
         handle = register_module_load_state_dict_pre_hook(hook)
@@ -217,9 +233,7 @@ class TestDiskRoundTrip:
             dst = nn.Sequential(nn.Linear(4, 8), nn.BatchNorm1d(8))
             dst.load_state_dict(loaded_sd)
         for k, original_arr in original.items():
-            np.testing.assert_allclose(
-                dst.state_dict()[k].numpy(), original_arr
-            )
+            np.testing.assert_allclose(dst.state_dict()[k].numpy(), original_arr)
 
     def test_load_v1_checkpoint_no_metadata(self):
         # Manually craft a v1-style container (no _state_dict_metadata).
