@@ -9,18 +9,32 @@ from lucid._dispatch import _unwrap, _wrap
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
-_REDUCTION_MAP = {"none": 0, "mean": 1, "sum": 2}
+_REDUCTION_MAP: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
+
+
+def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
+    valid: tuple[str, ...] = (
+        ("none", "mean", "sum", "batchmean")
+        if allow_batchmean
+        else ("none", "mean", "sum")
+    )
+    if reduction not in valid:
+        raise ValueError(
+            f"reduction must be one of {valid}, got {reduction!r}"
+        )
 
 
 def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Mean squared error loss."""
-    red = _REDUCTION_MAP.get(reduction, 1)
+    _validate_reduction(reduction)
+    red: int = _REDUCTION_MAP[reduction]
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
 def l1_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Mean absolute error loss."""
-    diff = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
+    _validate_reduction(reduction)
+    diff: object = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
     if reduction == "mean":
         return _wrap(_C_engine.mean(diff, [], False))
     if reduction == "sum":
@@ -39,7 +53,8 @@ def huber_loss(
     x: Tensor, target: Tensor, delta: float = 1.0, reduction: str = "mean"
 ) -> Tensor:
     """Huber loss."""
-    red = _REDUCTION_MAP.get(reduction, 1)
+    _validate_reduction(reduction)
+    red: int = _REDUCTION_MAP[reduction]
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
@@ -51,10 +66,89 @@ def cross_entropy(
     reduction: str = "mean",
     label_smoothing: float = 0.0,
 ) -> Tensor:
-    """Cross-entropy loss for multi-class classification."""
-    red = _REDUCTION_MAP.get(reduction, 1)
-    w = _unwrap(weight) if weight is not None else None
-    return _wrap(_C_engine.nn.cross_entropy_loss(_unwrap(x), _unwrap(target), w, red))
+    """Cross-entropy loss for multi-class classification.
+
+    Implements the full contract: per-class ``weight`` broadcasting,
+    ``ignore_index`` masking, and ``label_smoothing``.
+
+    Inputs
+    ------
+    x : (N, C) or (N, C, ...) logits
+    target : (N,) or (N, ...) integer class indices
+    weight : (C,) optional per-class weight
+    ignore_index : int — samples with this class are excluded
+    label_smoothing : α ∈ [0, 1) — interpolates between hard targets
+        and the uniform distribution
+    """
+    _validate_reduction(reduction)
+    import lucid as _lucid
+    from lucid.nn.functional.activations import log_softmax as _log_softmax
+
+    if label_smoothing < 0.0 or label_smoothing >= 1.0:
+        raise ValueError(
+            f"label_smoothing must be in [0, 1), got {label_smoothing!r}"
+        )
+
+    log_p: Tensor = _log_softmax(x, dim=1)
+    # Class dim is 1 for both (N, C) and (N, C, *) inputs.
+    num_classes: int = log_p.shape[1]
+
+    # Build a per-sample NLL by gathering along the class axis.
+    target_long: Tensor = target.to(dtype=_lucid.int32)
+    target_unsq: Tensor = target_long.unsqueeze(1)
+    gathered: Tensor = _lucid.gather(log_p, target_unsq, 1).squeeze(1)
+    nll: Tensor = -gathered  # (N, ...)
+
+    # ── weight (per-class) ──────────────────────────────────────────────
+    sample_weight: Tensor | None = None
+    if weight is not None:
+        sample_weight = _lucid.gather(weight, target_long, 0)
+        nll = nll * sample_weight
+
+    # ── ignore_index mask ───────────────────────────────────────────────
+    keep_mask_f: Tensor | None = None
+    if ignore_index is not None:
+        from lucid._factories.creation import full as _full
+
+        ig_t: Tensor = _full(
+            target_long.shape, int(ignore_index), dtype=_lucid.int32, device=x.device
+        )
+        keep_mask: Tensor = target_long != ig_t
+        keep_mask_f = keep_mask.to(dtype=x.dtype)
+        nll = nll * keep_mask_f
+
+    # ── label_smoothing ─────────────────────────────────────────────────
+    if label_smoothing > 0.0:
+        # Smoothing term — uniform distribution NLL = -mean over classes
+        # of log_softmax, which is -sum/C.  When weight is set, the uniform
+        # term is weighted by (mean class weight) following the reference
+        # framework's behaviour.
+        smooth_per_sample: Tensor = -log_p.mean(dim=1)  # (N, ...)
+        if weight is not None:
+            # Weighted-uniform: −Σ_c w_c · log_softmax / C
+            log_p_weighted: Tensor = log_p * weight.reshape(
+                [1, num_classes] + [1] * (log_p.ndim - 2)
+            )
+            smooth_per_sample = -log_p_weighted.sum(dim=1) / num_classes
+        if keep_mask_f is not None:
+            smooth_per_sample = smooth_per_sample * keep_mask_f
+        nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth_per_sample
+
+    # ── reduction ───────────────────────────────────────────────────────
+    if reduction == "none":
+        return nll
+    if reduction == "sum":
+        return nll.sum()
+    # mean — the divisor depends on weight + ignore_index.
+    if weight is None and keep_mask_f is None:
+        return nll.mean()
+    if weight is not None and keep_mask_f is not None:
+        denom: Tensor = (sample_weight * keep_mask_f).sum()
+    elif weight is not None:
+        denom = sample_weight.sum()
+    else:
+        denom = keep_mask_f.sum()
+    return nll.sum() / denom
 
 
 def nll_loss(
@@ -64,10 +158,44 @@ def nll_loss(
     ignore_index: int = -100,
     reduction: str = "mean",
 ) -> Tensor:
-    """Negative log-likelihood loss."""
-    red = _REDUCTION_MAP.get(reduction, 1)
-    w = _unwrap(weight) if weight is not None else None
-    return _wrap(_C_engine.nn.nll_loss(_unwrap(x), _unwrap(target), w, red))
+    """Negative log-likelihood loss.  Input ``x`` is already log-probabilities."""
+    _validate_reduction(reduction)
+    import lucid as _lucid
+
+    target_long: Tensor = target.to(dtype=_lucid.int32)
+    target_unsq: Tensor = target_long.unsqueeze(1)
+    gathered: Tensor = _lucid.gather(x, target_unsq, 1).squeeze(1)
+    nll: Tensor = -gathered
+
+    sample_weight: Tensor | None = None
+    if weight is not None:
+        sample_weight = _lucid.gather(weight, target_long, 0)
+        nll = nll * sample_weight
+
+    keep_mask_f: Tensor | None = None
+    if ignore_index is not None:
+        from lucid._factories.creation import full as _full
+
+        ig_t: Tensor = _full(
+            target_long.shape, int(ignore_index), dtype=_lucid.int32, device=x.device
+        )
+        keep_mask: Tensor = target_long != ig_t
+        keep_mask_f = keep_mask.to(dtype=x.dtype)
+        nll = nll * keep_mask_f
+
+    if reduction == "none":
+        return nll
+    if reduction == "sum":
+        return nll.sum()
+    if weight is None and keep_mask_f is None:
+        return nll.mean()
+    if weight is not None and keep_mask_f is not None:
+        denom: Tensor = (sample_weight * keep_mask_f).sum()
+    elif weight is not None:
+        denom = sample_weight.sum()
+    else:
+        denom = keep_mask_f.sum()
+    return nll.sum() / denom
 
 
 def binary_cross_entropy(
@@ -76,20 +204,24 @@ def binary_cross_entropy(
     weight: Tensor | None = None,
     reduction: str = "mean",
 ) -> Tensor:
-    """Binary cross-entropy loss."""
-    from lucid._factories.creation import ones
+    """Binary cross-entropy loss.  ``weight`` is broadcast element-wise."""
+    _validate_reduction(reduction)
+    import lucid as _lucid
 
-    red = _REDUCTION_MAP.get(reduction, 1)
-    w = (
-        _unwrap(weight)
-        if weight is not None
-        else _unwrap(
-            ones(
-                x.shape[0] if x.ndim == 1 else x.numel(), device=x.device, dtype=x.dtype
-            )
-        )
+    eps: float = 1e-12
+    one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
+    eps_t: Tensor = _lucid.tensor(eps, dtype=x.dtype, device=x.device)
+    x_clamped: Tensor = x.clamp(eps, 1.0 - eps)
+    bce: Tensor = -(
+        target * x_clamped.log() + (one - target) * (one - x_clamped).log()
     )
-    return _wrap(_C_engine.nn.bce_loss(_unwrap(x), _unwrap(target), w, red))
+    if weight is not None:
+        bce = bce * weight
+    if reduction == "none":
+        return bce
+    if reduction == "sum":
+        return bce.sum()
+    return bce.mean()
 
 
 def binary_cross_entropy_with_logits(
@@ -99,22 +231,43 @@ def binary_cross_entropy_with_logits(
     pos_weight: Tensor | None = None,
     reduction: str = "mean",
 ) -> Tensor:
-    """BCE with logits loss (combines sigmoid + BCE for numerical stability)."""
-    from lucid._factories.creation import ones
+    """BCE with logits — combines sigmoid + BCE for numerical stability.
 
-    red = _REDUCTION_MAP.get(reduction, 1)
-    numel = x.shape[0] if x.ndim == 1 else x.numel()
-    w = (
-        _unwrap(weight)
-        if weight is not None
-        else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
-    )
-    pw = (
-        _unwrap(pos_weight)
-        if pos_weight is not None
-        else _unwrap(ones(numel, device=x.device, dtype=x.dtype))
-    )
-    return _wrap(_C_engine.nn.bce_with_logits(_unwrap(x), _unwrap(target), w, pw, red))
+    The numerically stable form, equivalent to BCE(sigmoid(x), y) but
+    without intermediate underflow for large |x|::
+
+        max(x, 0) − x · y + log(1 + exp(−|x|))
+
+    With ``pos_weight`` (per-class weight on the positive term) the
+    formula becomes::
+
+        (1 + (pos_weight − 1) · y) · base + (pos_weight − 1) · y · clamp_neg(x)
+    """
+    _validate_reduction(reduction)
+    import lucid as _lucid
+
+    one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
+    abs_x: Tensor = x.abs()
+    # log(1 + exp(-|x|)) — softplus(-|x|).
+    log1pexp: Tensor = (one + (-abs_x).exp()).log()
+    inf: float = float("inf")
+    max_x: Tensor = x.clamp(0.0, inf)
+    if pos_weight is None:
+        loss: Tensor = max_x - x * target + log1pexp
+    else:
+        # Reference implementation:
+        #   loss = (1 - y) * x + (1 + (pw - 1) * y) * (log(1 + exp(-|x|)) + max(-x, 0))
+        max_neg: Tensor = (-x).clamp(0.0, inf)
+        loss = (one - target) * x + (
+            one + (pos_weight - one) * target
+        ) * (log1pexp + max_neg)
+    if weight is not None:
+        loss = loss * weight
+    if reduction == "none":
+        return loss
+    if reduction == "sum":
+        return loss.sum()
+    return loss.mean()
 
 
 def kl_div(
@@ -124,18 +277,35 @@ def kl_div(
     reduction: str = "mean",
     log_target: bool = False,
 ) -> Tensor:
-    """Kullback-Leibler divergence."""
+    """Kullback-Leibler divergence.
+
+    Reduction modes: ``none``, ``mean``, ``sum``, ``batchmean``.
+    ``batchmean`` divides the summed loss by the batch (leading) dimension —
+    this matches the mathematically correct KL divergence value when
+    averaging over a batch.
+    """
+    _validate_reduction(reduction, allow_batchmean=True)
+    # `x` is log_q (log of predicted probability) per the standard contract.
+    # When log_target=False, target is the raw probability p; when True it
+    # is log(p).  Loss elementwise = target * (log(target) - log_q).
+    xi: object = _unwrap(x)
+    ti: object = _unwrap(target)
     if log_target:
-        diff = _C_engine.sub(_unwrap(target), _unwrap(x))
-        kl = _C_engine.mul(_C_engine.exp(_unwrap(target)), diff)
+        # log_target=True → target itself is log(p); use exp(t) as the weight.
+        diff: object = _C_engine.sub(ti, xi)
+        kl: object = _C_engine.mul(_C_engine.exp(ti), diff)
     else:
-        log_x = _C_engine.log(_unwrap(x))
-        diff = _C_engine.sub(_C_engine.log(_unwrap(target)), log_x)
-        kl = _C_engine.mul(_unwrap(target), diff)
+        # Standard: target * (log(target) − x).
+        diff = _C_engine.sub(_C_engine.log(ti), xi)
+        kl = _C_engine.mul(ti, diff)
     if reduction == "mean":
         return _wrap(_C_engine.mean(kl, [], False))
     if reduction == "sum":
         return _wrap(_C_engine.sum(kl, [], False))
+    if reduction == "batchmean":
+        total: object = _C_engine.sum(kl, [], False)
+        batch_size: int = int(x.shape[0])
+        return _wrap(total) / batch_size
     return _wrap(kl)
 
 

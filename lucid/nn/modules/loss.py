@@ -88,46 +88,98 @@ class CrossEntropyLoss(Module):
 
 
 class NLLLoss(Module):
-    """Negative log-likelihood loss."""
+    """Negative log-likelihood loss.
 
-    def __init__(self, reduction: str = "mean") -> None:
+    Parameters
+    ----------
+    weight : (C,) optional per-class weight tensor.
+    ignore_index : samples with this class are excluded from the loss.
+    reduction : 'none' | 'mean' | 'sum'.
+    """
+
+    def __init__(
+        self,
+        weight: Tensor | None = None,
+        ignore_index: int = -100,
+        reduction: str = "mean",
+    ) -> None:
         super().__init__()
-        self.reduction = reduction
+        self.weight: Tensor | None = weight
+        self.ignore_index: int = ignore_index
+        self.reduction: str = reduction
 
     def forward(self, x: Tensor, target: Tensor) -> Tensor:
-        return nll_loss(x, target, reduction=self.reduction)
+        return nll_loss(
+            x,
+            target,
+            weight=self.weight,
+            ignore_index=self.ignore_index,
+            reduction=self.reduction,
+        )
 
     def extra_repr(self) -> str:
-        return f"reduction={self.reduction!r}"
+        s: str = f"reduction={self.reduction!r}"
+        if self.ignore_index != -100:
+            s += f", ignore_index={self.ignore_index}"
+        return s
 
 
 class BCELoss(Module):
-    """Binary cross-entropy loss."""
+    """Binary cross-entropy loss.
 
-    def __init__(self, reduction: str = "mean") -> None:
+    Parameters
+    ----------
+    weight : optional element-wise weight tensor (broadcast over input/target).
+    reduction : 'none' | 'mean' | 'sum'.
+    """
+
+    def __init__(
+        self,
+        weight: Tensor | None = None,
+        reduction: str = "mean",
+    ) -> None:
         super().__init__()
-        self.reduction = reduction
+        self.weight: Tensor | None = weight
+        self.reduction: str = reduction
 
     def forward(self, x: Tensor, target: Tensor) -> Tensor:
-        return binary_cross_entropy(x, target, reduction=self.reduction)
+        return binary_cross_entropy(
+            x, target, weight=self.weight, reduction=self.reduction
+        )
 
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
 
 
 class BCEWithLogitsLoss(Module):
-    """BCE with logits (sigmoid + BCE combined)."""
+    """BCE with logits — combined sigmoid + BCE for numerical stability.
+
+    Parameters
+    ----------
+    weight : optional element-wise weight (broadcast over input/target).
+    reduction : 'none' | 'mean' | 'sum'.
+    pos_weight : optional positive-class weight (broadcast over the
+        trailing dim) to up-weight the positive examples.
+    """
 
     def __init__(
-        self, reduction: str = "mean", pos_weight: Tensor | None = None
+        self,
+        weight: Tensor | None = None,
+        reduction: str = "mean",
+        pos_weight: Tensor | None = None,
     ) -> None:
         super().__init__()
-        self.reduction = reduction
-        self.pos_weight = pos_weight
+        self.weight: Tensor | None = weight
+        self.reduction: str = reduction
+        self.pos_weight: Tensor | None = pos_weight
 
     def forward(self, x: Tensor, target: Tensor) -> Tensor:
         return binary_cross_entropy_with_logits(
-            x, target, pos_weight=self.pos_weight, reduction=self.reduction
+            x,
+            target,
+            weight=self.weight,
+            pos_weight=self.pos_weight,
+            reduction=self.reduction,
         )
 
     def extra_repr(self) -> str:

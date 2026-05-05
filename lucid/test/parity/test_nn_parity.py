@@ -539,6 +539,199 @@ class TestLossParity:
             atol=2e-4,
         )
 
+    @pytest.mark.parametrize("ignore_index", [-1, 2])
+    def test_cross_entropy_ignore_index(self, ignore_index):
+        rng = np.random.default_rng(0)
+        logits = rng.standard_normal((8, 5)).astype(np.float32)
+        targets = rng.integers(0, 5, size=8).astype(np.int32)
+        # Inject ignore_index into a couple positions.
+        targets[0] = ignore_index
+        targets[3] = ignore_index
+        check_parity(
+            LF.cross_entropy(
+                lucid.tensor(logits.copy()),
+                lucid.tensor(targets.copy()),
+                ignore_index=ignore_index,
+            ),
+            TF.cross_entropy(
+                ref.tensor(logits.copy()),
+                ref.tensor(targets.astype(np.int64)),
+                ignore_index=ignore_index,
+            ),
+            atol=2e-4,
+        )
+
+    @pytest.mark.parametrize("smoothing", [0.0, 0.1, 0.3])
+    def test_cross_entropy_label_smoothing(self, smoothing):
+        rng = np.random.default_rng(1)
+        logits = rng.standard_normal((6, 4)).astype(np.float32)
+        targets = rng.integers(0, 4, size=6).astype(np.int32)
+        check_parity(
+            LF.cross_entropy(
+                lucid.tensor(logits.copy()),
+                lucid.tensor(targets.copy()),
+                label_smoothing=smoothing,
+            ),
+            TF.cross_entropy(
+                ref.tensor(logits.copy()),
+                ref.tensor(targets.astype(np.int64)),
+                label_smoothing=smoothing,
+            ),
+            atol=2e-4,
+        )
+
+    def test_cross_entropy_weight(self):
+        rng = np.random.default_rng(2)
+        logits = rng.standard_normal((6, 4)).astype(np.float32)
+        targets = rng.integers(0, 4, size=6).astype(np.int32)
+        weight = np.array([0.5, 1.0, 2.0, 1.5], dtype=np.float32)
+        check_parity(
+            LF.cross_entropy(
+                lucid.tensor(logits.copy()),
+                lucid.tensor(targets.copy()),
+                weight=lucid.tensor(weight.copy()),
+            ),
+            TF.cross_entropy(
+                ref.tensor(logits.copy()),
+                ref.tensor(targets.astype(np.int64)),
+                weight=ref.tensor(weight.copy()),
+            ),
+            atol=2e-4,
+        )
+
+    def test_cross_entropy_combined(self):
+        rng = np.random.default_rng(3)
+        logits = rng.standard_normal((8, 5)).astype(np.float32)
+        targets = rng.integers(0, 5, size=8).astype(np.int32)
+        targets[1] = -1
+        weight = np.array([0.5, 1.0, 2.0, 1.5, 0.8], dtype=np.float32)
+        check_parity(
+            LF.cross_entropy(
+                lucid.tensor(logits.copy()),
+                lucid.tensor(targets.copy()),
+                weight=lucid.tensor(weight.copy()),
+                ignore_index=-1,
+                label_smoothing=0.1,
+            ),
+            TF.cross_entropy(
+                ref.tensor(logits.copy()),
+                ref.tensor(targets.astype(np.int64)),
+                weight=ref.tensor(weight.copy()),
+                ignore_index=-1,
+                label_smoothing=0.1,
+            ),
+            atol=2e-4,
+        )
+
+    def test_nll_loss_ignore_index(self):
+        rng = np.random.default_rng(4)
+        log_q = rng.standard_normal((6, 4)).astype(np.float32)
+        log_q = log_q - np.log(np.exp(log_q).sum(axis=1, keepdims=True))
+        targets = np.array([0, -1, 2, -1, 1, 3], dtype=np.int32)
+        check_parity(
+            LF.nll_loss(
+                lucid.tensor(log_q.copy()),
+                lucid.tensor(targets.copy()),
+                ignore_index=-1,
+            ),
+            TF.nll_loss(
+                ref.tensor(log_q.copy()),
+                ref.tensor(targets.astype(np.int64)),
+                ignore_index=-1,
+            ),
+            atol=2e-4,
+        )
+
+    def test_bce_with_logits_pos_weight(self):
+        rng = np.random.default_rng(5)
+        x = rng.standard_normal((8, 4)).astype(np.float32)
+        t = rng.integers(0, 2, size=(8, 4)).astype(np.float32)
+        pw = np.array([1.5, 2.0, 0.5, 1.0], dtype=np.float32)
+        check_parity(
+            LF.binary_cross_entropy_with_logits(
+                lucid.tensor(x.copy()),
+                lucid.tensor(t.copy()),
+                pos_weight=lucid.tensor(pw.copy()),
+            ),
+            TF.binary_cross_entropy_with_logits(
+                ref.tensor(x.copy()),
+                ref.tensor(t.copy()),
+                pos_weight=ref.tensor(pw.copy()),
+            ),
+            atol=2e-4,
+        )
+
+    def test_bce_with_logits_full(self):
+        rng = np.random.default_rng(6)
+        x = rng.standard_normal((8, 4)).astype(np.float32)
+        t = rng.integers(0, 2, size=(8, 4)).astype(np.float32)
+        w = rng.uniform(0.5, 2.0, size=(8, 4)).astype(np.float32)
+        pw = np.array([1.5, 2.0, 0.5, 1.0], dtype=np.float32)
+        check_parity(
+            LF.binary_cross_entropy_with_logits(
+                lucid.tensor(x.copy()),
+                lucid.tensor(t.copy()),
+                weight=lucid.tensor(w.copy()),
+                pos_weight=lucid.tensor(pw.copy()),
+            ),
+            TF.binary_cross_entropy_with_logits(
+                ref.tensor(x.copy()),
+                ref.tensor(t.copy()),
+                weight=ref.tensor(w.copy()),
+                pos_weight=ref.tensor(pw.copy()),
+            ),
+            atol=2e-4,
+        )
+
+    def test_bce_with_weight(self):
+        rng = np.random.default_rng(7)
+        x = rng.uniform(0.05, 0.95, size=(8, 4)).astype(np.float32)
+        t = rng.integers(0, 2, size=(8, 4)).astype(np.float32)
+        w = rng.uniform(0.5, 2.0, size=(8, 4)).astype(np.float32)
+        check_parity(
+            LF.binary_cross_entropy(
+                lucid.tensor(x.copy()),
+                lucid.tensor(t.copy()),
+                weight=lucid.tensor(w.copy()),
+            ),
+            TF.binary_cross_entropy(
+                ref.tensor(x.copy()),
+                ref.tensor(t.copy()),
+                weight=ref.tensor(w.copy()),
+            ),
+            atol=2e-4,
+        )
+
+    def test_kl_div_batchmean(self):
+        rng = np.random.default_rng(8)
+        log_q = np.log(rng.dirichlet([1.0] * 4, size=4).astype(np.float32))
+        p = rng.dirichlet([1.0] * 4, size=4).astype(np.float32)
+        check_parity(
+            LF.kl_div(lucid.tensor(log_q.copy()), lucid.tensor(p.copy()), reduction="batchmean"),
+            TF.kl_div(ref.tensor(log_q.copy()), ref.tensor(p.copy()), reduction="batchmean"),
+            atol=2e-4,
+        )
+
+    def test_kl_div_log_target(self):
+        rng = np.random.default_rng(9)
+        log_q = np.log(rng.dirichlet([1.0] * 4, size=4).astype(np.float32))
+        log_p = np.log(rng.dirichlet([1.0] * 4, size=4).astype(np.float32))
+        check_parity(
+            LF.kl_div(
+                lucid.tensor(log_q.copy()),
+                lucid.tensor(log_p.copy()),
+                reduction="sum",
+                log_target=True,
+            ),
+            TF.kl_div(
+                ref.tensor(log_q.copy()),
+                ref.tensor(log_p.copy()),
+                reduction="sum",
+                log_target=True,
+            ),
+            atol=2e-4,
+        )
+
 
 class TestSDPAParity:
     def test_sdpa_basic(self):
