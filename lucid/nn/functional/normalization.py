@@ -22,13 +22,19 @@ def batch_norm(
 ) -> Tensor:
     """Batch normalization.
 
-    The engine implements ``(x, gamma, beta, eps)``.  running_mean / running_var
-    are tracked in Python but not forwarded to the engine (which normalises using
-    the batch statistics unconditionally).
+    Dispatches to the correct engine op by input dimensionality:
+      ndim=2  (N, C)         → batch_norm1d  [unsqueeze dim-2, squeeze after]
+      ndim=3  (N, C, L)      → batch_norm1d
+      ndim=4  (N, C, H, W)   → batch_norm
+      ndim=5  (N, C, D, H, W)→ batch_norm3d
+
+    Eval mode (training=False) uses running_mean/running_var when available.
     """
     from lucid._factories.creation import ones, zeros
 
     C = x.shape[1]
+    ndim = x.ndim
+    xi = _unwrap(x)
     w = (
         _unwrap(weight)
         if weight is not None
@@ -39,7 +45,30 @@ def batch_norm(
         if bias is not None
         else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
     )
-    return _wrap(_C_engine.nn.batch_norm(_unwrap(x), w, b, eps))
+
+    # ── Eval mode: use precomputed running statistics ─────────────────────────
+    if not training and running_mean is not None and running_var is not None:
+        rm = _unwrap(running_mean)
+        rv = _unwrap(running_var)
+        out_impl = _C_engine.nn.batch_norm_eval(xi, rm, rv, w, b, eps)
+        return _wrap(out_impl)
+
+    # ── Training mode: dispatch by dimensionality ─────────────────────────────
+    if ndim == 2:
+        # (N, C) → unsqueeze to (N, C, 1), batch_norm1d, squeeze back
+        xi_3d = _C_engine.unsqueeze(xi, 2)
+        out_3d = _C_engine.nn.batch_norm1d(xi_3d, w, b, eps)
+        return _wrap(_C_engine.squeeze(out_3d, 2))
+    elif ndim == 3:
+        return _wrap(_C_engine.nn.batch_norm1d(xi, w, b, eps))
+    elif ndim == 4:
+        return _wrap(_C_engine.nn.batch_norm(xi, w, b, eps))
+    elif ndim == 5:
+        return _wrap(_C_engine.nn.batch_norm3d(xi, w, b, eps))
+    else:
+        raise ValueError(
+            f"batch_norm: expected 2–5D input, got ndim={ndim}"
+        )
 
 
 def layer_norm(
