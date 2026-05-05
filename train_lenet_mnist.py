@@ -101,13 +101,10 @@ def run_epoch(epoch_idx):
         opt.zero_grad()
         out = model(xb)
         loss = crit(out, yb)
+        loss.eval()                        # flush forward graph before backward
         loss.backward()
         opt.step()
-
-        # Flush loss + all parameter updates in one call.
-        # lucid.eval() is a no-op on CPU; on Metal it issues a single
-        # mlx.core.eval() covering both the forward graph and optimizer updates.
-        lucid.eval(loss, *model.parameters())
+        lucid.eval(*model.parameters())    # flush param updates
 
         tot_loss += float(loss.item())
         n_batches += 1

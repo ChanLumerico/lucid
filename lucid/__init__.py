@@ -483,11 +483,17 @@ def eval(*tensors: object) -> None:  # type: ignore[override]
 
     On CPU this is a no-op.
 
-    Typical training-loop usage::
+    Recommended training-loop pattern on Metal::
 
+        loss.eval()                          # flush forward graph BEFORE backward
         loss.backward()
         optimizer.step()
-        lucid.eval(loss, *model.parameters())   # flush loss + param updates
+        lucid.eval(*model.parameters())      # flush param updates AFTER step
+
+    Flushing the forward graph before backward keeps each MLX evaluation
+    scope small.  Deferring both flushes into one call after the optimizer
+    step causes the forward + backward + optimizer graph to accumulate as a
+    single large graph, which is significantly slower to schedule.
     """
     from lucid._C import engine as _ce
     from lucid._tensor.tensor import Tensor as _T

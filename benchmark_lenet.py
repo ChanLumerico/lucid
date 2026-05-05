@@ -157,9 +157,12 @@ def train_lucid(model, optimizer, criterion, epoch_idx):
         yb  = lucid.tensor(Y_train_np[bi].astype(np.int32), dtype=lucid.int32, device=LUCID_DEV)
         optimizer.zero_grad()
         loss = criterion(model(xb), yb)
+        # Flush forward graph before backward so MLX evaluates a smaller
+        # graph at each stage rather than one giant fused graph.
+        loss.eval()
         loss.backward()
         optimizer.step()
-        lucid.eval(loss, *model.parameters())
+        lucid.eval(*model.parameters())   # flush param updates
         tot_loss += float(loss.item()); nb += 1
     return tot_loss / nb, time.time() - t0
 
