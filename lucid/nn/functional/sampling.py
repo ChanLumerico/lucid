@@ -232,6 +232,106 @@ def embedding_bag(
     return _wrap(impl)
 
 
+_PAD_MODES = frozenset({"constant", "reflect", "replicate", "circular"})
+
+
+def _flat_to_per_dim_pairs(
+    padding: tuple[int, ...], ndim: int
+) -> list[tuple[int, int]]:
+    """Convert flat (last→first) padding tuple to per-dim (first→last) pairs."""
+    n_pad_dims = len(padding) // 2
+    pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
+    for i in range(n_pad_dims):
+        dim_idx = ndim - 1 - i
+        pad_pairs[dim_idx] = (padding[2 * i], padding[2 * i + 1])
+    return pad_pairs
+
+
+def _gather_along(x: Tensor, dim: int, indices_1d) -> Tensor:
+    """Gather x along `dim` with a 1D index array, broadcasting to x.shape.
+
+    `indices_1d` is a numpy int32 array of length k.  Returns a tensor of the
+    same shape as x except dim has size k.  Uses `lucid.gather` so backward
+    accumulates gradients into the correct source positions — this is what
+    makes reflect/circular padding correctly differentiable.
+    """
+    import numpy as _np
+    import lucid as _lucid
+
+    k = len(indices_1d)
+    target_shape = [1] * x.ndim
+    target_shape[dim] = k
+    idx_np = _np.broadcast_to(
+        _np.asarray(indices_1d, dtype=_np.int32).reshape(target_shape),
+        tuple(k if i == dim else x.shape[i] for i in range(x.ndim)),
+    ).copy()
+    idx = _lucid.tensor(idx_np, dtype=_lucid.int32)
+    return _lucid.gather(x, idx, dim)
+
+
+def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
+    """Apply non-constant padding along a single dimension.
+
+    `mode` must be one of {"reflect", "replicate", "circular"}.  Constant
+    padding is handled separately by the engine pad op.
+
+    Implementation: build the lo-side and hi-side slabs via `gather` with
+    explicit index lists, then `cat` everything along the target dim.
+    Gather is differentiable via scatter-add, which gives the correct
+    gradient accumulation for reflect (where the same source element
+    contributes to both the centre and the reflected copy).
+    """
+    import numpy as _np
+    import lucid as _lucid
+
+    if lo == 0 and hi == 0:
+        return x
+    size = x.shape[dim]
+    parts: list[Tensor] = []
+    if lo > 0:
+        if mode == "replicate":
+            idx = _np.zeros(lo, dtype=_np.int32)
+        elif mode == "reflect":
+            if lo > size - 1:
+                raise ValueError(
+                    f"reflect padding {lo} exceeds input size-1 ({size - 1}) "
+                    f"on dim {dim}"
+                )
+            # PyTorch reflect: indices [lo, lo-1, ..., 1] (boundary excluded).
+            idx = _np.arange(lo, 0, -1, dtype=_np.int32)
+        elif mode == "circular":
+            if lo > size:
+                raise ValueError(
+                    f"circular padding {lo} exceeds input size ({size}) on dim {dim}"
+                )
+            idx = _np.arange(size - lo, size, dtype=_np.int32)
+        else:
+            raise ValueError(f"unsupported pad mode: {mode!r}")
+        parts.append(_gather_along(x, dim, idx))
+    parts.append(x)
+    if hi > 0:
+        if mode == "replicate":
+            idx = _np.full(hi, size - 1, dtype=_np.int32)
+        elif mode == "reflect":
+            if hi > size - 1:
+                raise ValueError(
+                    f"reflect padding {hi} exceeds input size-1 ({size - 1}) "
+                    f"on dim {dim}"
+                )
+            # PyTorch reflect: indices [size-2, size-3, ..., size-1-hi].
+            idx = _np.arange(size - 2, size - 2 - hi, -1, dtype=_np.int32)
+        elif mode == "circular":
+            if hi > size:
+                raise ValueError(
+                    f"circular padding {hi} exceeds input size ({size}) on dim {dim}"
+                )
+            idx = _np.arange(0, hi, dtype=_np.int32)
+        parts.append(_gather_along(x, dim, idx))
+    if len(parts) == 1:
+        return parts[0]
+    return _lucid.cat(parts, dim)
+
+
 def pad(
     x: Tensor,
     padding: tuple[int, ...],
@@ -242,16 +342,24 @@ def pad(
 
     padding follows reference convention: flat tuple starting from the LAST dimension.
     For example, (l, r) pads the last dim; (l, r, t, b) pads last two dims.
-    Internally converts to per-dimension pairs for the engine.
+
+    `mode` ∈ {"constant", "reflect", "replicate", "circular"}.
+    Non-constant modes are implemented in Python via slice + flip + cat;
+    autograd flows through the existing op backwards.
     """
+    if mode not in _PAD_MODES:
+        raise ValueError(
+            f"unknown pad mode {mode!r}; expected one of {sorted(_PAD_MODES)}"
+        )
     impl = _unwrap(x)
     ndim = len(impl.shape)
-    n_pad_dims = len(padding) // 2
-    # Convert reference framework flat (last→first) to engine per-dim pairs (first→last)
-    pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
-    for i in range(n_pad_dims):
-        dim_idx = ndim - 1 - i
-        left = padding[2 * i]
-        right = padding[2 * i + 1]
-        pad_pairs[dim_idx] = (left, right)
-    return _wrap(_C_engine.pad(impl, pad_pairs, value))
+    pad_pairs = _flat_to_per_dim_pairs(padding, ndim)
+    if mode == "constant":
+        return _wrap(_C_engine.pad(impl, pad_pairs, value))
+    # Non-constant: pad one dim at a time using existing ops.
+    result = x
+    for d, (lo, hi) in enumerate(pad_pairs):
+        if lo == 0 and hi == 0:
+            continue
+        result = _pad_one_dim(result, d, lo, hi, mode)
+    return result

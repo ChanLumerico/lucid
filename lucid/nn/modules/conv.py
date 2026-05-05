@@ -17,6 +17,18 @@ from lucid.nn.functional.conv import (
     conv_transpose2d,
     conv_transpose3d,
 )
+from lucid.nn.functional.sampling import pad as _F_pad
+
+
+_VALID_PADDING_MODES = frozenset({"zeros", "reflect", "replicate", "circular"})
+
+# Maps Conv padding_mode to F.pad mode.
+_PADDING_MODE_TO_FPAD = {
+    "zeros": "constant",
+    "reflect": "reflect",
+    "replicate": "replicate",
+    "circular": "circular",
+}
 
 
 def _pair(v: _Size2d) -> tuple[int, int]:
@@ -25,6 +37,95 @@ def _pair(v: _Size2d) -> tuple[int, int]:
 
 def _triple(v: _Size3d) -> tuple[int, int, int]:
     return (v, v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
+
+
+def _same_pad_pair(in_size: int, kernel: int, stride: int, dilation: int) -> tuple[int, int]:
+    """Compute (pad_lo, pad_hi) for `padding="same"` on one spatial dim.
+
+    PyTorch parity: pad_lo = pad_total // 2, pad_hi = pad_total - pad_lo.
+    For odd pad_total this is asymmetric (more padding on the high side).
+    """
+    out_size = (in_size + stride - 1) // stride
+    pad_total = max(0, (out_size - 1) * stride + (kernel - 1) * dilation + 1 - in_size)
+    pad_lo = pad_total // 2
+    return pad_lo, pad_total - pad_lo
+
+
+def _check_same_supported(stride_tuple: tuple[int, ...]) -> None:
+    if any(s != 1 for s in stride_tuple):
+        raise ValueError(
+            "padding='same' is not supported with stride > 1 "
+            f"(got stride={stride_tuple})"
+        )
+
+
+def _validate_padding_mode(mode: str) -> str:
+    if mode not in _VALID_PADDING_MODES:
+        raise ValueError(
+            f"padding_mode must be one of {sorted(_VALID_PADDING_MODES)}, got {mode!r}"
+        )
+    return mode
+
+
+def _validate_int_padding(padding: object, label: str) -> None:
+    """Reject string padding for ConvTranspose."""
+    if isinstance(padding, str):
+        raise ValueError(
+            f"{label}: string padding ({padding!r}) is not supported; "
+            "use an int or tuple of ints"
+        )
+
+
+def _conv_forward_with_mode(
+    x: Tensor,
+    weight: Parameter,
+    bias: Parameter | None,
+    stride: tuple[int, ...],
+    pad_lo: tuple[int, ...],
+    pad_hi: tuple[int, ...],
+    dilation: tuple[int, ...],
+    groups: int,
+    padding_mode: str,
+    conv_fn,
+) -> Tensor:
+    """Dispatch a forward conv with arbitrary padding_mode and asymmetric pad.
+
+    `pad_lo` / `pad_hi` are per-spatial-dim (first→last) padding amounts.
+    When `padding_mode == "zeros"` and pad is symmetric, the engine conv
+    handles the padding directly.  Otherwise we pre-pad via `F.pad` and
+    call conv with padding=0 along that axis.
+    """
+    n = len(stride)
+    symmetric = all(pad_lo[i] == pad_hi[i] for i in range(n))
+    if padding_mode == "zeros" and symmetric:
+        engine_pad = pad_lo[0] if n == 1 else tuple(pad_lo)
+        return _call_conv(conv_fn, x, weight, bias, stride, engine_pad, dilation, groups, n)
+    # Pre-pad path.  F.pad uses last-dim-first flat tuple.
+    # pad_lo[i], pad_hi[i] are spatial dim i (first→last); we need to reverse
+    # so that the LAST spatial dim comes first in F.pad's flat tuple.
+    pad_flat: list[int] = []
+    for i in reversed(range(n)):
+        pad_flat.extend([pad_lo[i], pad_hi[i]])
+    fpad_mode = _PADDING_MODE_TO_FPAD[padding_mode]
+    x_padded = _F_pad(x, tuple(pad_flat), mode=fpad_mode)
+    zero_pad = 0 if n == 1 else (0,) * n
+    return _call_conv(
+        conv_fn, x_padded, weight, bias, stride, zero_pad, dilation, groups, n
+    )
+
+
+def _call_conv(conv_fn, x, weight, bias, stride, padding, dilation, groups, n):
+    """Invoke conv_fn with the right argument arity.
+
+    conv1d/2d/3d in `nn.functional.conv` accept (x, weight, bias, stride, padding,
+    dilation, groups) but conv1d takes scalar ints while conv2d/3d take tuples.
+    """
+    if n == 1:
+        s = stride[0] if isinstance(stride, tuple) else stride
+        d = dilation[0] if isinstance(dilation, tuple) else dilation
+        p = padding[0] if isinstance(padding, tuple) else padding
+        return conv_fn(x, weight, bias, s, p, d, groups)
+    return conv_fn(x, weight, bias, stride, padding, dilation, groups)
 
 
 class Conv1d(Module):
@@ -51,8 +152,16 @@ class Conv1d(Module):
         self.stride = stride
         self.dilation = dilation
         self.groups = groups
+        self.padding_mode = _validate_padding_mode(padding_mode)
         if isinstance(padding, str):
-            self._padding_str: str | None = padding.lower()
+            mode = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported((stride,))
+            self._padding_str: str | None = mode
             self.padding: int = 0
         else:
             self._padding_str = None
@@ -78,28 +187,29 @@ class Conv1d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def _compute_padding(self, x: Tensor) -> int:
+    def _resolve_pad(self, x: Tensor) -> tuple[tuple[int], tuple[int]]:
         if self._padding_str == "valid":
-            return 0
-        in_len = x.shape[2]
-        stride = self.stride
-        dilation = self.dilation
-        ks = self.kernel_size
-        out_len = (in_len + stride - 1) // stride
-        pad_total = max(0, (out_len - 1) * stride + (ks - 1) * dilation + 1 - in_len)
-        return (pad_total + 1) // 2
+            return (0,), (0,)
+        if self._padding_str == "same":
+            lo, hi = _same_pad_pair(x.shape[2], self.kernel_size, self.stride, self.dilation)
+            return (lo,), (hi,)
+        return (self.padding,), (self.padding,)
 
     def forward(self, x: Tensor) -> Tensor:
-        padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv1d(
-            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        pad_lo, pad_hi = self._resolve_pad(x)
+        return _conv_forward_with_mode(
+            x, self.weight, self.bias, (self.stride,), pad_lo, pad_hi,
+            (self.dilation,), self.groups, self.padding_mode, conv1d,
         )
 
     def extra_repr(self) -> str:
-        return (
+        s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
         )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
 
 
 class Conv2d(Module):
@@ -127,8 +237,16 @@ class Conv2d(Module):
         self.stride = _pair(stride)
         self.dilation = _pair(dilation)
         self.groups = groups
+        self.padding_mode = _validate_padding_mode(padding_mode)
         if isinstance(padding, str):
-            self._padding_str: str | None = padding.lower()
+            mode = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported(self.stride)
+            self._padding_str: str | None = mode
             self.padding: tuple[int, int] = (0, 0)
         else:
             self._padding_str = None
@@ -150,30 +268,33 @@ class Conv2d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def _compute_padding(self, x: Tensor) -> tuple[int, int]:
+    def _resolve_pad(self, x: Tensor) -> tuple[tuple[int, int], tuple[int, int]]:
         if self._padding_str == "valid":
-            return (0, 0)
-        in_h, in_w = x.shape[2], x.shape[3]
-        sh, sw = self.stride
-        dh, dw = self.dilation
-        kh, kw = self.kernel_size
-        out_h = (in_h + sh - 1) // sh
-        out_w = (in_w + sw - 1) // sw
-        pad_h = max(0, (out_h - 1) * sh + (kh - 1) * dh + 1 - in_h)
-        pad_w = max(0, (out_w - 1) * sw + (kw - 1) * dw + 1 - in_w)
-        return ((pad_h + 1) // 2, (pad_w + 1) // 2)
+            return (0, 0), (0, 0)
+        if self._padding_str == "same":
+            kh, kw = self.kernel_size
+            sh, sw = self.stride
+            dh, dw = self.dilation
+            lo_h, hi_h = _same_pad_pair(x.shape[2], kh, sh, dh)
+            lo_w, hi_w = _same_pad_pair(x.shape[3], kw, sw, dw)
+            return (lo_h, lo_w), (hi_h, hi_w)
+        return self.padding, self.padding
 
     def forward(self, x: Tensor) -> Tensor:
-        padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv2d(
-            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        pad_lo, pad_hi = self._resolve_pad(x)
+        return _conv_forward_with_mode(
+            x, self.weight, self.bias, self.stride, pad_lo, pad_hi,
+            self.dilation, self.groups, self.padding_mode, conv2d,
         )
 
     def extra_repr(self) -> str:
-        return (
+        s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
         )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
 
 
 class Conv3d(Module):
@@ -189,6 +310,7 @@ class Conv3d(Module):
         dilation: _Size3d = 1,
         groups: int = 1,
         bias: bool = True,
+        padding_mode: str = "zeros",
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -200,8 +322,16 @@ class Conv3d(Module):
         self.stride = _triple(stride)
         self.dilation = _triple(dilation)
         self.groups = groups
+        self.padding_mode = _validate_padding_mode(padding_mode)
         if isinstance(padding, str):
-            self._padding_str: str | None = padding.lower()
+            mode = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported(self.stride)
+            self._padding_str: str | None = mode
             self.padding: tuple[int, int, int] = (0, 0, 0)
         else:
             self._padding_str = None
@@ -222,32 +352,36 @@ class Conv3d(Module):
         )
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
-    def _compute_padding(self, x: Tensor) -> tuple[int, int, int]:
+    def _resolve_pad(
+        self, x: Tensor
+    ) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
         if self._padding_str == "valid":
-            return (0, 0, 0)
-        in_d, in_h, in_w = x.shape[2], x.shape[3], x.shape[4]
-        sd, sh, sw = self.stride
-        dd, dh, dw = self.dilation
-        kd, kh, kw = self.kernel_size
-        out_d = (in_d + sd - 1) // sd
-        out_h = (in_h + sh - 1) // sh
-        out_w = (in_w + sw - 1) // sw
-        pad_d = max(0, (out_d - 1) * sd + (kd - 1) * dd + 1 - in_d)
-        pad_h = max(0, (out_h - 1) * sh + (kh - 1) * dh + 1 - in_h)
-        pad_w = max(0, (out_w - 1) * sw + (kw - 1) * dw + 1 - in_w)
-        return ((pad_d + 1) // 2, (pad_h + 1) // 2, (pad_w + 1) // 2)
+            return (0, 0, 0), (0, 0, 0)
+        if self._padding_str == "same":
+            kd, kh, kw = self.kernel_size
+            sd, sh, sw = self.stride
+            dd, dh, dw = self.dilation
+            lo_d, hi_d = _same_pad_pair(x.shape[2], kd, sd, dd)
+            lo_h, hi_h = _same_pad_pair(x.shape[3], kh, sh, dh)
+            lo_w, hi_w = _same_pad_pair(x.shape[4], kw, sw, dw)
+            return (lo_d, lo_h, lo_w), (hi_d, hi_h, hi_w)
+        return self.padding, self.padding
 
     def forward(self, x: Tensor) -> Tensor:
-        padding = self._compute_padding(x) if self._padding_str else self.padding
-        return conv3d(
-            x, self.weight, self.bias, self.stride, padding, self.dilation, self.groups
+        pad_lo, pad_hi = self._resolve_pad(x)
+        return _conv_forward_with_mode(
+            x, self.weight, self.bias, self.stride, pad_lo, pad_hi,
+            self.dilation, self.groups, self.padding_mode, conv3d,
         )
 
     def extra_repr(self) -> str:
-        return (
+        s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
         )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
 
 
 class ConvTranspose1d(Module):
@@ -268,6 +402,7 @@ class ConvTranspose1d(Module):
         dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
+        _validate_int_padding(padding, "ConvTranspose1d")
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -327,6 +462,7 @@ class ConvTranspose2d(Module):
         dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
+        _validate_int_padding(padding, "ConvTranspose2d")
         kh, kw = _pair(kernel_size)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -383,6 +519,7 @@ class ConvTranspose3d(Module):
         dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
+        _validate_int_padding(padding, "ConvTranspose3d")
         kd, kh, kw = _triple(kernel_size)
         self.in_channels = in_channels
         self.out_channels = out_channels

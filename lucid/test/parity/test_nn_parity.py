@@ -131,6 +131,255 @@ class TestConvParity:
         check_parity(l_out, t_out)
 
 
+class TestPadParity:
+    """Parity for F.pad across all four modes — backbone of Conv padding_mode."""
+
+    @pytest.mark.parametrize("mode", ["constant", "reflect", "replicate", "circular"])
+    def test_pad_2d_forward(self, mode):
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((2, 3, 6, 6)).astype(np.float32)
+        pad = (2, 1, 1, 2)  # (l, r, t, b) on last 2 dims
+        l_out = LF.pad(lucid.tensor(x_np.copy()), pad, mode=mode)
+        t_out = TF.pad(ref.tensor(x_np.copy()), pad, mode=mode)
+        check_parity(l_out, t_out)
+
+    @pytest.mark.parametrize("mode", ["constant", "reflect", "replicate", "circular"])
+    def test_pad_2d_backward(self, mode):
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((2, 3, 6, 6)).astype(np.float32)
+        pad = (2, 1, 1, 2)
+        xl = lucid.tensor(x_np.copy(), requires_grad=True)
+        LF.pad(xl, pad, mode=mode).sum().backward()
+        xt = ref.tensor(x_np.copy(), requires_grad=True)
+        TF.pad(xt, pad, mode=mode).sum().backward()
+        check_parity(xl.grad, xt.grad)
+
+    @pytest.mark.parametrize("mode", ["constant", "reflect", "replicate", "circular"])
+    def test_pad_1d(self, mode):
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((2, 3, 8)).astype(np.float32)
+        pad = (2, 3)
+        l_out = LF.pad(lucid.tensor(x_np.copy()), pad, mode=mode)
+        t_out = TF.pad(ref.tensor(x_np.copy()), pad, mode=mode)
+        check_parity(l_out, t_out)
+
+
+class TestConvPaddingModeParity:
+    """Conv*d × every padding_mode forward + backward parity."""
+
+    @staticmethod
+    def _make_pair(mod_cls, ref_cls, args, kwargs):
+        ref.manual_seed(0)
+        t_mod = ref_cls(*args, **kwargs)
+        td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
+        l_mod = mod_cls(*args, **kwargs)
+        # Mirror weights into lucid module — using internal _impl swap to dodge
+        # the read-only Parameter.data setter.
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        for name, lp in l_mod.named_parameters():
+            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        return l_mod, t_mod
+
+    @pytest.mark.parametrize("mode", ["zeros", "reflect", "replicate", "circular"])
+    @pytest.mark.parametrize("kernel", [3, 4])
+    def test_conv2d_padding_mode_forward(self, mode, kernel):
+        import lucid.nn as lnn
+
+        pad = kernel // 2
+        l_mod, t_mod = self._make_pair(
+            lnn.Conv2d,
+            ref.nn.Conv2d,
+            (3, 6, kernel),
+            {"padding": pad, "padding_mode": mode},
+        )
+        rng = np.random.default_rng(1)
+        x_np = rng.standard_normal((2, 3, 7, 7)).astype(np.float32)
+        check_parity(l_mod(lucid.tensor(x_np.copy())), t_mod(ref.tensor(x_np.copy())))
+
+    @pytest.mark.parametrize("mode", ["zeros", "reflect", "replicate", "circular"])
+    def test_conv2d_padding_mode_backward(self, mode):
+        import lucid.nn as lnn
+
+        l_mod, t_mod = self._make_pair(
+            lnn.Conv2d,
+            ref.nn.Conv2d,
+            (3, 6, 3),
+            {"padding": 1, "padding_mode": mode},
+        )
+        rng = np.random.default_rng(2)
+        x_np = rng.standard_normal((2, 3, 7, 7)).astype(np.float32)
+
+        xl = lucid.tensor(x_np.copy(), requires_grad=True)
+        l_mod(xl).sum().backward()
+        xt = ref.tensor(x_np.copy(), requires_grad=True)
+        t_mod(xt).sum().backward()
+
+        check_parity(xl.grad, xt.grad)
+        check_parity(l_mod.weight.grad, t_mod.weight.grad)
+        check_parity(l_mod.bias.grad, t_mod.bias.grad)
+
+    @pytest.mark.parametrize("mode", ["reflect", "replicate", "circular"])
+    def test_conv1d_padding_mode(self, mode):
+        import lucid.nn as lnn
+
+        l_mod, t_mod = self._make_pair(
+            lnn.Conv1d,
+            ref.nn.Conv1d,
+            (4, 6, 3),
+            {"padding": 1, "padding_mode": mode},
+        )
+        rng = np.random.default_rng(3)
+        x_np = rng.standard_normal((2, 4, 9)).astype(np.float32)
+        check_parity(l_mod(lucid.tensor(x_np.copy())), t_mod(ref.tensor(x_np.copy())))
+
+    @pytest.mark.parametrize("mode", ["reflect", "replicate", "circular"])
+    def test_conv3d_padding_mode(self, mode):
+        import lucid.nn as lnn
+
+        l_mod, t_mod = self._make_pair(
+            lnn.Conv3d,
+            ref.nn.Conv3d,
+            (2, 4, 3),
+            {"padding": 1, "padding_mode": mode},
+        )
+        rng = np.random.default_rng(4)
+        x_np = rng.standard_normal((1, 2, 5, 5, 5)).astype(np.float32)
+        check_parity(l_mod(lucid.tensor(x_np.copy())), t_mod(ref.tensor(x_np.copy())))
+
+
+class TestConvSamePaddingParity:
+    @staticmethod
+    def _make_pair(args, kwargs):
+        ref.manual_seed(0)
+        import lucid.nn as lnn
+        t_mod = ref.nn.Conv2d(*args, **kwargs)
+        td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
+        l_mod = lnn.Conv2d(*args, **kwargs)
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+        for name, lp in l_mod.named_parameters():
+            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        return l_mod, t_mod
+
+    @pytest.mark.parametrize("kernel", [3, 4, 5])
+    @pytest.mark.parametrize("dilation", [1, 2])
+    def test_same_padding_parity(self, kernel, dilation):
+        l_mod, t_mod = self._make_pair(
+            (3, 6, kernel),
+            {"padding": "same", "dilation": dilation},
+        )
+        rng = np.random.default_rng(5)
+        x_np = rng.standard_normal((2, 3, 9, 9)).astype(np.float32)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+    def test_valid_padding_parity(self):
+        l_mod, t_mod = self._make_pair((3, 6, 3), {"padding": "valid"})
+        rng = np.random.default_rng(6)
+        x_np = rng.standard_normal((2, 3, 9, 9)).astype(np.float32)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+
+class TestGroupedConvParity:
+    @staticmethod
+    def _make_pair(args, kwargs):
+        ref.manual_seed(0)
+        import lucid.nn as lnn
+        t_mod = ref.nn.Conv2d(*args, **kwargs)
+        td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
+        l_mod = lnn.Conv2d(*args, **kwargs)
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+        for name, lp in l_mod.named_parameters():
+            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        return l_mod, t_mod
+
+    @pytest.mark.parametrize("groups", [1, 2, 4, 8])
+    def test_grouped_conv2d_forward(self, groups):
+        Cin = 8
+        Cout = 16
+        l_mod, t_mod = self._make_pair(
+            (Cin, Cout, 3),
+            {"padding": 1, "groups": groups},
+        )
+        rng = np.random.default_rng(7)
+        x_np = rng.standard_normal((2, Cin, 7, 7)).astype(np.float32)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+    @pytest.mark.parametrize("groups", [1, 2, 4, 8])
+    def test_grouped_conv2d_backward(self, groups):
+        Cin = 8
+        Cout = 16
+        l_mod, t_mod = self._make_pair(
+            (Cin, Cout, 3),
+            {"padding": 1, "groups": groups},
+        )
+        rng = np.random.default_rng(8)
+        x_np = rng.standard_normal((2, Cin, 7, 7)).astype(np.float32)
+
+        xl = lucid.tensor(x_np.copy(), requires_grad=True)
+        l_mod(xl).sum().backward()
+        xt = ref.tensor(x_np.copy(), requires_grad=True)
+        t_mod(xt).sum().backward()
+        check_parity(xl.grad, xt.grad)
+        check_parity(l_mod.weight.grad, t_mod.weight.grad)
+
+
+class TestConvTransposeParity:
+    @staticmethod
+    def _make_pair(args, kwargs):
+        ref.manual_seed(0)
+        import lucid.nn as lnn
+        t_mod = ref.nn.ConvTranspose2d(*args, **kwargs)
+        td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
+        l_mod = lnn.ConvTranspose2d(*args, **kwargs)
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+        for name, lp in l_mod.named_parameters():
+            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        return l_mod, t_mod
+
+    @pytest.mark.parametrize(
+        "groups",
+        [
+            1,
+            pytest.param(
+                2,
+                marks=pytest.mark.xfail(
+                    reason="conv_transpose2d does not propagate `groups` to the "
+                    "engine; tracked separately, out of scope for Conv contract pack",
+                    strict=True,
+                ),
+            ),
+        ],
+    )
+    def test_conv_transpose2d_groups_forward(self, groups):
+        l_mod, t_mod = self._make_pair(
+            (4, 8, 3),
+            {"stride": 2, "padding": 1, "output_padding": 1, "groups": groups},
+        )
+        rng = np.random.default_rng(9)
+        x_np = rng.standard_normal((1, 4, 4, 4)).astype(np.float32)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+
 class TestPoolParity:
     def test_avg_pool2d(self):
         rng = np.random.default_rng(0)
