@@ -60,8 +60,17 @@ def _save_to_state_dict(
     prefix: str = "",
     keep_vars: bool = False,
 ) -> None:
-    """Recursive walker — let each module write its own state, then recurse."""
+    """Recursive walker — let each module write its own state, then recurse.
+
+    A module may set the class attribute ``_state_dict_skip_recursion = True``
+    to indicate that its ``_save_to_state_dict`` already serialised every
+    descendant it cares about (e.g. by flattening a child sub-tree into a
+    custom key namespace).  When set, the walker stops descending into
+    that module's children.
+    """
     module._save_to_state_dict(destination, prefix, keep_vars)
+    if getattr(module, "_state_dict_skip_recursion", False):
+        return
     for mname, child in module._modules.items():
         if child is None:
             continue
@@ -134,7 +143,16 @@ def _default_load_from_state_dict(
 
 
 def _enumerate_local_keys(module: Module, prefix: str) -> list[str]:
-    """Flat list of keys this module owns at ``prefix`` (params + persistent buffers)."""
+    """Flat list of keys this module owns at ``prefix`` (params + persistent buffers).
+
+    Modules that flatten a child sub-tree into a custom key namespace
+    can override the result by exposing a ``_local_state_dict_keys(prefix)``
+    method.  When present, that method's return value replaces the default
+    enumeration entirely.
+    """
+    custom = getattr(module, "_local_state_dict_keys", None)
+    if callable(custom):
+        return list(custom(prefix))
     keys: list[str] = []
     for name, p in module._parameters.items():
         if p is not None:
@@ -205,6 +223,9 @@ def _walk_load(
 
     if module._load_state_dict_post_hooks:
         post_hook_modules.append(module)
+
+    if getattr(module, "_state_dict_skip_recursion", False):
+        return
 
     for name, child in module._modules.items():
         if child is None:
@@ -310,6 +331,8 @@ def load_state_dict(
 
 def _collect_expected(module: Module, prefix: str, out: set[str]) -> None:
     out.update(_enumerate_local_keys(module, prefix))
+    if getattr(module, "_state_dict_skip_recursion", False):
+        return
     for name, child in module._modules.items():
         if child is None:
             continue

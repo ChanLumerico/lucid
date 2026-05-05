@@ -31,6 +31,140 @@ def _cat_last(a: "Tensor", b: "Tensor") -> "Tensor":
     return lucid.cat([a, b], a.ndim - 1)
 
 
+def _check_not_packed(x: object, cls_name: str) -> None:
+    """Reject ``PackedSequence`` inputs with a clear error.
+
+    ``lucid.nn.utils.rnn`` provides ``pack_padded_sequence`` /
+    ``pad_packed_sequence`` for manual use, but the recurrent modules
+    themselves do not yet integrate the packed path.  Surface this
+    explicitly instead of crashing on a missing attribute.
+    """
+    from lucid.nn.utils.rnn import PackedSequence
+
+    if isinstance(x, PackedSequence):
+        raise NotImplementedError(
+            f"{cls_name} does not yet support PackedSequence input. "
+            "Pad and unpack manually using "
+            "`lucid.nn.utils.rnn.pad_packed_sequence` / `pack_padded_sequence`."
+        )
+
+
+# Cell-internal parameter names (RNNCell/GRUCell/LSTMCell).  Used by the
+# state_dict naming hooks on GRU and RNN to translate between the lucid
+# cell layout (`cell_l0.weight_ih`) and the flat layout used by the
+# reference framework and many external checkpoints (`weight_ih_l0`).
+_CELL_PARAM_NAMES: tuple[str, ...] = ("weight_ih", "weight_hh", "bias_ih", "bias_hh")
+
+
+class _CellNamingMixin:
+    """state_dict v2 hooks that expose flat ``weight_ih_l{L}{_reverse}`` keys.
+
+    GRU / RNN currently store their per-layer weights inside child
+    cell submodules (e.g. ``cell_l0`` of type ``GRUCell``).  The natural
+    state_dict key for that layout is ``cell_l0.weight_ih`` — but most
+    external checkpoints (and the reference framework itself) flatten
+    these into ``weight_ih_l0``.  These overrides write/read the flat
+    keys directly, while still tolerating the old ``cell_l*`` layout
+    for backwards compatibility with checkpoints saved by earlier Lucid
+    versions.
+    """
+
+    # version = 2 ⇒ flat state_dict keys; missing/v1 metadata ⇒ accept
+    # both the flat and the old `cell_l*.weight_*` layout on load.
+    _version: int = 2
+    # The walker should not descend into the cell submodules — we have
+    # already serialised their parameters under flattened keys.
+    _state_dict_skip_recursion: bool = True
+
+    def _save_to_state_dict(
+        self,
+        destination: dict,
+        prefix: str,
+        keep_vars: bool,
+    ) -> None:
+        # Skip the default impl entirely — we don't want the cell submodules
+        # to recurse with their own keys; the top-level walker handles
+        # children, but these are meant to be flattened.  Mark the cell
+        # submodules so the recursive walker does not visit them.
+        for layer in range(self.num_layers):
+            for direction in range(2 if self.bidirectional else 1):
+                suffix: str = "_reverse" if direction == 1 else ""
+                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                for pname in _CELL_PARAM_NAMES:
+                    p = cell._parameters.get(pname)
+                    if p is None:
+                        continue
+                    key: str = f"{prefix}{pname}_l{layer}{suffix}"
+                    destination[key] = p if keep_vars else p.detach()
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict,
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        from lucid._C import engine as _C_engine
+        from lucid._dispatch import _wrap
+        from lucid._tensor.tensor import Tensor
+
+        for layer in range(self.num_layers):
+            for direction in range(2 if self.bidirectional else 1):
+                suffix: str = "_reverse" if direction == 1 else ""
+                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                for pname in _CELL_PARAM_NAMES:
+                    p = cell._parameters.get(pname)
+                    if p is None:
+                        continue
+                    flat_key: str = f"{prefix}{pname}_l{layer}{suffix}"
+                    legacy_key: str = f"{prefix}cell_l{layer}{suffix}.{pname}"
+                    src: Tensor | None = state_dict.get(flat_key)
+                    if src is None:
+                        src = state_dict.get(legacy_key)
+                    if src is None:
+                        missing_keys.append(flat_key)
+                        continue
+                    if tuple(src.shape) != tuple(p.shape):
+                        error_msgs.append(
+                            f"size mismatch for {flat_key}: "
+                            f"expected {tuple(p.shape)}, got {tuple(src.shape)}"
+                        )
+                        continue
+                    converted: Tensor = src.to(device=p.device, dtype=p.dtype)
+                    new_impl: object = _C_engine.contiguous(
+                        converted._impl
+                    ).clone_with_grad(p.requires_grad)
+                    p._impl = new_impl
+                    # Mark whichever key was actually consumed so the top
+                    # level walker doesn't list it as unexpected.
+                    # (`_collect_expected` knows our flat layout via
+                    # `_enumerate_local_keys` below.)
+
+    def _local_state_dict_keys(self, prefix: str) -> list[str]:
+        """Override: tell the top-level driver our flat key set.
+
+        Returns *both* the canonical flat keys (e.g.
+        ``weight_ih_l0_reverse``) and the legacy cell-submodule keys
+        (``cell_l0_reverse.weight_ih``).  Either form satisfies an
+        ``unexpected_keys`` check, so an external checkpoint using the
+        flat layout AND a legacy-Lucid checkpoint using the cell layout
+        both load cleanly.
+        """
+        keys: list[str] = []
+        for layer in range(self.num_layers):
+            for direction in range(2 if self.bidirectional else 1):
+                suffix: str = "_reverse" if direction == 1 else ""
+                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                for pname in _CELL_PARAM_NAMES:
+                    if cell._parameters.get(pname) is not None:
+                        keys.append(f"{prefix}{pname}_l{layer}{suffix}")
+                        keys.append(f"{prefix}cell_l{layer}{suffix}.{pname}")
+        return keys
+
+
 # ── LSTM ──────────────────────────────────────────────────────────────────────
 
 
@@ -86,21 +220,42 @@ class LSTM(Module):
         dtype: DTypeLike = None,
     ) -> None:
         super().__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bias = bias
-        self.batch_first = batch_first
-        self.dropout_val = dropout
-        self.bidirectional = bidirectional
+        if proj_size < 0:
+            raise ValueError(f"proj_size must be >= 0, got {proj_size}")
+        if proj_size >= hidden_size and proj_size > 0:
+            raise ValueError(
+                f"proj_size ({proj_size}) must be smaller than hidden_size "
+                f"({hidden_size})"
+            )
+        if proj_size > 0 and (num_layers != 1 or bidirectional):
+            raise NotImplementedError(
+                "proj_size > 0 currently requires num_layers=1 and "
+                "bidirectional=False; the engine does not yet support the "
+                "projected LSTM with stacked / bidirectional configurations."
+            )
+        self.input_size: int = input_size
+        self.hidden_size: int = hidden_size
+        self.num_layers: int = num_layers
+        self.bias: bool = bias
+        self.batch_first: bool = batch_first
+        self.dropout_val: float = dropout
+        self.bidirectional: bool = bidirectional
+        self.proj_size: int = proj_size
 
-        num_directions = 2 if bidirectional else 1
-        gate_size = 4 * hidden_size
+        num_directions: int = 2 if bidirectional else 1
+        gate_size: int = 4 * hidden_size
+        # Recurrent dim feeding the next time step.  When proj_size > 0 the
+        # projected output of each step is what re-enters the recurrence,
+        # so W_hh's input axis and the per-layer hidden carry shrink to
+        # proj_size.
+        rec_size: int = proj_size if proj_size > 0 else hidden_size
 
         for layer in range(num_layers):
             for direction in range(num_directions):
-                suffix = "_reverse" if direction == 1 else ""
-                layer_input = input_size if layer == 0 else hidden_size * num_directions
+                suffix: str = "_reverse" if direction == 1 else ""
+                layer_input: int = (
+                    input_size if layer == 0 else rec_size * num_directions
+                )
                 self.register_parameter(
                     f"weight_ih_l{layer}{suffix}",
                     Parameter(
@@ -110,7 +265,7 @@ class LSTM(Module):
                 self.register_parameter(
                     f"weight_hh_l{layer}{suffix}",
                     Parameter(
-                        empty(gate_size, hidden_size, dtype=dtype, device=device)
+                        empty(gate_size, rec_size, dtype=dtype, device=device)
                     ),
                 )
                 if bias:
@@ -122,6 +277,14 @@ class LSTM(Module):
                         f"bias_hh_l{layer}{suffix}",
                         Parameter(empty(gate_size, dtype=dtype, device=device)),
                     )
+                if proj_size > 0:
+                    # Projection W_hr: (proj_size × hidden_size).
+                    self.register_parameter(
+                        f"weight_hr_l{layer}{suffix}",
+                        Parameter(
+                            empty(proj_size, hidden_size, dtype=dtype, device=device)
+                        ),
+                    )
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -129,21 +292,31 @@ class LSTM(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
+    def flatten_parameters(self) -> None:
+        """No-op for API compatibility with reference recurrent modules.
+
+        Some external codepaths call ``flatten_parameters()`` to coalesce
+        weights for cuDNN; Lucid's BLAS / MLX path has no such concern,
+        so this is a placeholder that lets such code run unchanged.
+        """
+        return None
+
     def forward(
         self,
         x: "Tensor",
         hx: "tuple[Tensor, Tensor] | None" = None,
     ) -> "tuple[Tensor, tuple[Tensor, Tensor]]":
-        h0_impl = _unwrap(hx[0]) if hx is not None else None
-        c0_impl = _unwrap(hx[1]) if hx is not None else None
+        _check_not_packed(x, "LSTM")
+        h0_impl: object | None = _unwrap(hx[0]) if hx is not None else None
+        c0_impl: object | None = _unwrap(hx[1]) if hx is not None else None
 
-        num_dirs = 2 if self.bidirectional else 1
-        gate_size = 4 * self.hidden_size
+        num_dirs: int = 2 if self.bidirectional else 1
+        gate_size: int = 4 * self.hidden_size
 
-        weights = []
+        weights: list[object] = []
         for layer in range(self.num_layers):
             for direction in range(num_dirs):
-                suffix = "_reverse" if direction == 1 else ""
+                suffix: str = "_reverse" if direction == 1 else ""
                 weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
                 weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
                 if self.bias:
@@ -165,6 +338,10 @@ class LSTM(Module):
                     )
                     weights.append(zero_b)
                     weights.append(zero_b)
+                if self.proj_size > 0:
+                    weights.append(
+                        _unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"])
+                    )
 
         x_impl = _unwrap(x)
         if self.batch_first:
@@ -180,6 +357,7 @@ class LSTM(Module):
             False,
             self.bidirectional,
             True,  # always True: we always supply bias tensors above
+            self.proj_size,
         )
 
         output = _wrap(output_impl)
@@ -189,11 +367,14 @@ class LSTM(Module):
         return output, (_wrap(h_n_impl), _wrap(c_n_impl))
 
     def extra_repr(self) -> str:
-        return (
+        s: str = (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
             f"bias={self.bias}, batch_first={self.batch_first}, "
             f"dropout={self.dropout_val}, bidirectional={self.bidirectional}"
         )
+        if self.proj_size > 0:
+            s += f", proj_size={self.proj_size}"
+        return s
 
 
 # ── Pure-Python RNN cells ─────────────────────────────────────────────────────
@@ -371,7 +552,7 @@ class GRUCell(Module):
 # ── Multi-step GRU ────────────────────────────────────────────────────────────
 
 
-class GRU(Module):
+class GRU(_CellNamingMixin, Module):
     """Multi-layer GRU.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
@@ -422,19 +603,25 @@ class GRU(Module):
                 )
 
     def _cell(self, layer: int, reverse: bool = False) -> GRUCell:
-        suffix = "_reverse" if reverse else ""
+        suffix: str = "_reverse" if reverse else ""
         return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+
+    def flatten_parameters(self) -> None:
+        """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
+        return None
 
     def forward(
         self,
         x: "Tensor",
         hx: "Tensor | None" = None,
     ) -> "tuple[Tensor, Tensor]":
+        _check_not_packed(x, "GRU")
         if self.batch_first:
             x = x.permute([1, 0, 2])
 
-        T, B = x.shape[0], x.shape[1]
-        num_dirs = 2 if self.bidirectional else 1
+        T: int = x.shape[0]
+        B: int = x.shape[1]
+        num_dirs: int = 2 if self.bidirectional else 1
 
         if hx is None:
             hx = zeros(
@@ -450,7 +637,7 @@ class GRU(Module):
 
         for layer in range(self.num_layers):
             # ── forward direction ────────────────────────────────────────────
-            cell_fwd = self._cell(layer, reverse=False)
+            cell_fwd: GRUCell = self._cell(layer, reverse=False)
             h_fwd = hx[layer * num_dirs]  # (B, hidden)
             fwd_out: list[Tensor] = []  # type: ignore[name-defined]
             for t in range(T):
@@ -495,7 +682,7 @@ class GRU(Module):
 # ── Multi-step RNN ────────────────────────────────────────────────────────────
 
 
-class RNN(Module):
+class RNN(_CellNamingMixin, Module):
     """Multi-layer Elman RNN.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
@@ -554,19 +741,25 @@ class RNN(Module):
                 )
 
     def _cell(self, layer: int, reverse: bool = False) -> RNNCell:
-        suffix = "_reverse" if reverse else ""
+        suffix: str = "_reverse" if reverse else ""
         return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
+
+    def flatten_parameters(self) -> None:
+        """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
+        return None
 
     def forward(
         self,
         x: "Tensor",
         hx: "Tensor | None" = None,
     ) -> "tuple[Tensor, Tensor]":
+        _check_not_packed(x, "RNN")
         if self.batch_first:
             x = x.permute([1, 0, 2])
 
-        T, B = x.shape[0], x.shape[1]
-        num_dirs = 2 if self.bidirectional else 1
+        T: int = x.shape[0]
+        B: int = x.shape[1]
+        num_dirs: int = 2 if self.bidirectional else 1
 
         if hx is None:
             hx = zeros(

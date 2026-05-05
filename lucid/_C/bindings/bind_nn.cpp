@@ -408,7 +408,7 @@ void register_nn(py::module_& m) {
         "lstm_forward",
         [](const TensorImplPtr& input, py::object h0_obj, py::object c0_obj,
            const std::vector<TensorImplPtr>& weight_tensors, int hidden_size, int num_layers,
-           bool batch_first, bool bidirectional, bool has_bias) -> py::tuple {
+           bool batch_first, bool bidirectional, bool has_bias, int proj_size) -> py::tuple {
             if (!input)
                 throw std::invalid_argument("lstm_forward: null input");
 
@@ -428,17 +428,20 @@ void register_nn(py::module_& m) {
             const Device dev = input->device();
 
             // Allocate zeros for h0 / c0 when the caller passes None.
-            // Shape: (num_layers * num_dirs, batch, hidden_size).
-            auto make_zeros = [&](int rows) -> TensorImplPtr {
+            // h0 shape: (num_layers * num_dirs, batch, Hrec) where Hrec is
+            // the recurrent (possibly projected) hidden dim.  c0 always
+            // uses the cell-state dim (hidden_size).
+            const int Hrec = (proj_size > 0) ? proj_size : hidden_size;
+            auto make_zeros = [&](int rows, int last) -> TensorImplPtr {
                 Shape s{static_cast<std::int64_t>(rows), static_cast<std::int64_t>(batch),
-                        static_cast<std::int64_t>(hidden_size)};
+                        static_cast<std::int64_t>(last)};
                 auto st = backend::Dispatcher::for_device(dev).zeros(s, dt);
                 return std::make_shared<TensorImpl>(std::move(st), s, dt, dev, false);
             };
-            TensorImplPtr h0 =
-                h0_obj.is_none() ? make_zeros(num_layers * num_dirs) : h0_obj.cast<TensorImplPtr>();
-            TensorImplPtr c0 =
-                c0_obj.is_none() ? make_zeros(num_layers * num_dirs) : c0_obj.cast<TensorImplPtr>();
+            TensorImplPtr h0 = h0_obj.is_none() ? make_zeros(num_layers * num_dirs, Hrec)
+                                                : h0_obj.cast<TensorImplPtr>();
+            TensorImplPtr c0 = c0_obj.is_none() ? make_zeros(num_layers * num_dirs, hidden_size)
+                                                : c0_obj.cast<TensorImplPtr>();
 
             backend::IBackend::LstmOpts opts;
             opts.input_size = input_size;
@@ -449,19 +452,30 @@ void register_nn(py::module_& m) {
             opts.batch_first = batch_first;
             opts.bidirectional = bidirectional;
             opts.has_bias = has_bias;
+            opts.proj_size = proj_size;
 
-            // lstm_op returns {output, h_n, c_n}; unpack to a Python 3-tuple.
+            // Multi-layer / bidirectional + proj_size is not yet supported
+            // by the hand-rolled CPU kernel (which is single-layer
+            // unidirectional only).  Surface this explicitly so callers see
+            // a clean error rather than a downstream BLAS shape mismatch.
+            if (proj_size > 0 && (num_layers != 1 || bidirectional))
+                throw std::invalid_argument(
+                    "lstm_forward: proj_size > 0 is currently supported only "
+                    "for num_layers=1 and bidirectional=False.");
+
             auto results = lstm_op(input, h0, c0, weight_tensors, opts);
             return py::make_tuple(results[0], results[1], results[2]);
         },
         py::arg("input"), py::arg("h0") = py::none(), py::arg("c0") = py::none(),
         py::arg("weights"), py::arg("hidden_size"), py::arg("num_layers") = 1,
         py::arg("batch_first") = false, py::arg("bidirectional") = false,
-        py::arg("has_bias") = true,
+        py::arg("has_bias") = true, py::arg("proj_size") = 0,
         "LSTM forward with autograd support.\n"
-        "Inference (no requires_grad): uses BNNS fast path.\n"
+        "Inference (no requires_grad): uses BNNS fast path; falls back to BLAS "
+        "when proj_size > 0 (BNNS has no LSTMP support).\n"
         "Training  (requires_grad=True): uses BLAS path + saves gates/cells for BPTT.\n"
-        "Returns (output, h_n, c_n). weights = [wih(4H,I), whh(4H,H), bih(4H), bhh(4H)].");
+        "Returns (output, h_n, c_n).  weights = [wih, whh, bih, bhh] for the standard\n"
+        "LSTM, with one extra W_hr (proj_size, hidden_size) appended when proj_size > 0.");
 }
 
 }  // namespace lucid::bindings

@@ -733,6 +733,64 @@ class TestLossParity:
         )
 
 
+class TestLSTMProjSizeParity:
+    """LSTMP (projected LSTM) numerical parity with the reference framework."""
+
+    @staticmethod
+    def _mirror(lucid_param, ref_t):
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        new_impl = _ce.TensorImpl(
+            ref_t.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+        )
+        lucid_param._impl = _iwg(new_impl, lucid_param._impl.requires_grad)
+
+    def test_proj_size_forward(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        T, B, I, H, P = 5, 2, 4, 8, 3
+        t_mod = ref.nn.LSTM(I, H, num_layers=1, bidirectional=False, proj_size=P)
+        l_mod = lnn.LSTM(I, H, proj_size=P)
+        for pname in ("weight_ih_l0", "weight_hh_l0", "bias_ih_l0", "bias_hh_l0",
+                      "weight_hr_l0"):
+            self._mirror(getattr(l_mod, pname), getattr(t_mod, pname))
+
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((T, B, I)).astype(np.float32)
+        y_l, (hn_l, cn_l) = l_mod(lucid.tensor(x_np.copy()))
+        y_t, (hn_t, cn_t) = t_mod(ref.tensor(x_np.copy()))
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(hn_l, hn_t, atol=1e-5)
+        check_parity(cn_l, cn_t, atol=1e-5)
+
+    def test_proj_size_backward(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        T, B, I, H, P = 4, 2, 3, 6, 2
+        t_mod = ref.nn.LSTM(I, H, proj_size=P)
+        l_mod = lnn.LSTM(I, H, proj_size=P)
+        for pname in ("weight_ih_l0", "weight_hh_l0", "bias_ih_l0", "bias_hh_l0",
+                      "weight_hr_l0"):
+            self._mirror(getattr(l_mod, pname), getattr(t_mod, pname))
+
+        rng = np.random.default_rng(1)
+        x_np = rng.standard_normal((T, B, I)).astype(np.float32)
+        xt = ref.tensor(x_np.copy(), requires_grad=True)
+        yt, _ = t_mod(xt)
+        yt.sum().backward()
+        xl = lucid.tensor(x_np.copy(), requires_grad=True)
+        yl, _ = l_mod(xl)
+        yl.sum().backward()
+
+        check_parity(xl.grad, xt.grad, atol=1e-5)
+        check_parity(l_mod.weight_ih_l0.grad, t_mod.weight_ih_l0.grad, atol=1e-5)
+        check_parity(l_mod.weight_hh_l0.grad, t_mod.weight_hh_l0.grad, atol=1e-5)
+        check_parity(l_mod.weight_hr_l0.grad, t_mod.weight_hr_l0.grad, atol=1e-5)
+
+
 class TestSDPAParity:
     def test_sdpa_basic(self):
         rng = np.random.default_rng(0)

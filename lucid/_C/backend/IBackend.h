@@ -1411,7 +1411,13 @@ public:
     // Parameter bag for LSTM operations.
     //
     // weights is expected in the order [W_ih, W_hh, b_ih, b_hh] per layer;
-    // bidirectional layers double the weight count.
+    // bidirectional layers double the weight count.  When ``proj_size > 0``
+    // (the projected-LSTM / LSTMP variant) an additional weight tensor
+    // ``W_hr`` of shape ``(proj_size, hidden_size)`` is appended per layer
+    // so the order becomes [W_ih, W_hh, b_ih, b_hh, W_hr].  The recurrent
+    // weight ``W_hh`` then has its second axis sized ``proj_size`` instead
+    // of ``hidden_size`` because the projected hidden state feeds the
+    // next time step.  ``c_n`` keeps shape ``hidden_size`` regardless.
     struct LstmOpts {
         int input_size = 0;
         int hidden_size = 0;
@@ -1421,6 +1427,7 @@ public:
         bool batch_first = false;    // if true, input is (batch, seq, input_size)
         bool bidirectional = false;
         bool has_bias = true;
+        int proj_size = 0;           // 0 ⇒ standard LSTM; >0 ⇒ projected LSTM
     };
 
     // LSTM inference forward.  Returns [output, hn, cn].

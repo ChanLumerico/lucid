@@ -10517,12 +10517,17 @@ private:
                                             const std::vector<Storage>& weights,
                                             const LstmOpts& opts,
                                             Dtype dt) override {
-        if (dt != Dtype::F32 || weights.size() < 4)
+        const int P = opts.proj_size;
+        const int min_w = (P > 0) ? 5 : 4;
+        if (dt != Dtype::F32 || static_cast<int>(weights.size()) < min_w)
             return IBackend::lstm_forward_train(input, h0, c0, weights, opts, dt);
 
         const int T = opts.seq_len, B = opts.batch_size;
         const int I = opts.input_size, H = opts.hidden_size;
         const int fH = 4 * H;
+        // Effective recurrent dim: when proj_size>0 the previous-step
+        // hidden state and the second axis of W_hh are size proj_size.
+        const int Hrec = (P > 0) ? P : H;
 
         const auto& x_s = std::get<CpuStorage>(input);
         const auto& h0_s = std::get<CpuStorage>(h0);
@@ -10539,12 +10544,16 @@ private:
         const float* Whh = reinterpret_cast<const float*>(whh_s.ptr.get());
         const float* Bih = reinterpret_cast<const float*>(bih_s.ptr.get());
         const float* Bhh = reinterpret_cast<const float*>(bhh_s.ptr.get());
+        const float* Whr = (P > 0)
+            ? reinterpret_cast<const float*>(std::get<CpuStorage>(weights[4]).ptr.get())
+            : nullptr;
 
-        CpuStorage out_s = alloc_cpu(static_cast<std::size_t>(T) * B * H, dt);
-        CpuStorage hn_s = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        // Output / hn carry the *recurrent* dim (proj_size when P>0).
+        CpuStorage out_s = alloc_cpu(static_cast<std::size_t>(T) * B * Hrec, dt);
+        CpuStorage hn_s = alloc_cpu(static_cast<std::size_t>(B) * Hrec, dt);
+        // c_n always size H regardless of projection.
         CpuStorage cn_s = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
         CpuStorage gates_s = alloc_cpu(static_cast<std::size_t>(T) * B * fH, dt);
-
         CpuStorage cells_s = alloc_cpu(static_cast<std::size_t>(T + 1) * B * H, dt);
 
         float* Yp = reinterpret_cast<float*>(out_s.ptr.get());
@@ -10559,8 +10568,13 @@ private:
         for (int k = 0; k < fH; ++k)
             bias_fused[static_cast<std::size_t>(k)] = Bih[k] + Bhh[k];
 
-        std::vector<float> h_prev(static_cast<std::size_t>(B) * H);
-        std::memcpy(h_prev.data(), h0p, static_cast<std::size_t>(B) * H * sizeof(float));
+        // h_prev carries the (possibly projected) hidden state into the
+        // next step; size B × Hrec.
+        std::vector<float> h_prev(static_cast<std::size_t>(B) * Hrec);
+        std::memcpy(h_prev.data(), h0p, static_cast<std::size_t>(B) * Hrec * sizeof(float));
+
+        // Scratch for h_raw_t = o ⊙ tanh(c_t) before projection.
+        std::vector<float> h_raw_buf(static_cast<std::size_t>(B) * H);
 
         std::vector<float> raw(static_cast<std::size_t>(B) * fH);
 
@@ -10568,12 +10582,15 @@ private:
             const float* xt = Xp + t * B * I;
             float* gt = Gates + t * B * fH;
             float* ct = Cells + (t + 1) * B * H;
-            float* yt = Yp + t * B * H;
+            float* yt = Yp + t * B * Hrec;
             const float* ct_prev = Cells + t * B * H;
 
+            // raw = X @ W_ih^T  (B × fH)
             cpu::sgemm(false, true, B, fH, I, 1.0f, xt, I, Wih, I, 0.0f, raw.data(), fH);
 
-            cpu::sgemm(false, true, B, fH, H, 1.0f, h_prev.data(), H, Whh, H, 1.0f, raw.data(), fH);
+            // raw += h_prev @ W_hh^T  (B × Hrec) · (fH × Hrec)^T
+            cpu::sgemm(false, true, B, fH, Hrec, 1.0f, h_prev.data(), Hrec, Whh, Hrec, 1.0f,
+                       raw.data(), fH);
 
             for (int b = 0; b < B; ++b)
                 for (int k = 0; k < fH; ++k)
@@ -10595,19 +10612,28 @@ private:
 
                 const float* cp = ct_prev + b * H;
                 float* cnb = ct + b * H;
-                float* ynb = yt + b * H;
+                float* hraw_b = h_raw_buf.data() + b * H;
+
                 for (int k = 0; k < H; ++k)
                     cnb[k] = gb[H + k] * cp[k] + gb[k] * gb[2 * H + k];
 
                 for (int k = 0; k < H; ++k)
-                    ynb[k] = gb[3 * H + k] * std::tanh(cnb[k]);
-
-                std::memcpy(h_prev.data() + b * H, ynb,
-                            static_cast<std::size_t>(H) * sizeof(float));
+                    hraw_b[k] = gb[3 * H + k] * std::tanh(cnb[k]);
             }
+
+            if (P > 0) {
+                // y_t = h_raw @ W_hr^T  (B × P)
+                cpu::sgemm(false, true, B, P, H, 1.0f, h_raw_buf.data(), H, Whr, H, 0.0f, yt, P);
+            } else {
+                std::memcpy(yt, h_raw_buf.data(),
+                            static_cast<std::size_t>(B) * H * sizeof(float));
+            }
+            // Whatever ended up in yt is the next h_prev.
+            std::memcpy(h_prev.data(), yt,
+                        static_cast<std::size_t>(B) * Hrec * sizeof(float));
         }
 
-        std::memcpy(Hnp, h_prev.data(), static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(Hnp, h_prev.data(), static_cast<std::size_t>(B) * Hrec * sizeof(float));
         std::memcpy(Cnp, Cells + T * B * H, static_cast<std::size_t>(B) * H * sizeof(float));
 
         return {Storage{std::move(out_s)}, Storage{std::move(hn_s)}, Storage{std::move(cn_s)},
@@ -10624,13 +10650,16 @@ private:
                                        const Storage& cells_all,
                                        const LstmOpts& opts,
                                        Dtype dt) override {
-        if (dt != Dtype::F32 || weights.size() < 4)
+        const int P = opts.proj_size;
+        const int min_w = (P > 0) ? 5 : 4;
+        if (dt != Dtype::F32 || static_cast<int>(weights.size()) < min_w)
             return IBackend::lstm_backward(grad_output, grad_hn, grad_cn, input, h0, weights,
                                            gates_all, cells_all, opts, dt);
 
         const int T = opts.seq_len, B = opts.batch_size;
         const int I = opts.input_size, H = opts.hidden_size;
         const int fH = 4 * H;
+        const int Hrec = (P > 0) ? P : H;   // recurrent / output hidden dim
 
         const float* dY =
             reinterpret_cast<const float*>(std::get<CpuStorage>(grad_output).ptr.get());
@@ -10642,18 +10671,23 @@ private:
             reinterpret_cast<const float*>(std::get<CpuStorage>(weights[0]).ptr.get());
         const float* Whh =
             reinterpret_cast<const float*>(std::get<CpuStorage>(weights[1]).ptr.get());
+        const float* Whr = (P > 0)
+            ? reinterpret_cast<const float*>(std::get<CpuStorage>(weights[4]).ptr.get())
+            : nullptr;
         const float* Gates =
             reinterpret_cast<const float*>(std::get<CpuStorage>(gates_all).ptr.get());
         const float* Cells =
             reinterpret_cast<const float*>(std::get<CpuStorage>(cells_all).ptr.get());
 
         CpuStorage dX_s = alloc_cpu(static_cast<std::size_t>(T) * B * I, dt);
-        CpuStorage dH0_s = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
+        CpuStorage dH0_s = alloc_cpu(static_cast<std::size_t>(B) * Hrec, dt);
         CpuStorage dC0_s = alloc_cpu(static_cast<std::size_t>(B) * H, dt);
         CpuStorage dWih_s = alloc_cpu(static_cast<std::size_t>(fH) * I, dt);
-        CpuStorage dWhh_s = alloc_cpu(static_cast<std::size_t>(fH) * H, dt);
+        CpuStorage dWhh_s = alloc_cpu(static_cast<std::size_t>(fH) * Hrec, dt);
         CpuStorage dBih_s = alloc_cpu(static_cast<std::size_t>(fH), dt);
         CpuStorage dBhh_s = alloc_cpu(static_cast<std::size_t>(fH), dt);
+        CpuStorage dWhr_s =
+            (P > 0) ? alloc_cpu(static_cast<std::size_t>(P) * H, dt) : CpuStorage{};
 
         float* dXp = reinterpret_cast<float*>(dX_s.ptr.get());
         float* dH0p = reinterpret_cast<float*>(dH0_s.ptr.get());
@@ -10662,20 +10696,31 @@ private:
         float* dWhh = reinterpret_cast<float*>(dWhh_s.ptr.get());
         float* dBih = reinterpret_cast<float*>(dBih_s.ptr.get());
         float* dBhh = reinterpret_cast<float*>(dBhh_s.ptr.get());
+        float* dWhr = (P > 0) ? reinterpret_cast<float*>(dWhr_s.ptr.get()) : nullptr;
 
         std::memset(dXp, 0, static_cast<std::size_t>(T) * B * I * sizeof(float));
         std::memset(dWih, 0, static_cast<std::size_t>(fH) * I * sizeof(float));
-        std::memset(dWhh, 0, static_cast<std::size_t>(fH) * H * sizeof(float));
+        std::memset(dWhh, 0, static_cast<std::size_t>(fH) * Hrec * sizeof(float));
         std::memset(dBih, 0, static_cast<std::size_t>(fH) * sizeof(float));
         std::memset(dBhh, 0, static_cast<std::size_t>(fH) * sizeof(float));
+        if (P > 0)
+            std::memset(dWhr, 0, static_cast<std::size_t>(P) * H * sizeof(float));
 
-        std::vector<float> dh_next(static_cast<std::size_t>(B) * H);
+        // dh_next/dc_next carry the upstream gradient into the previous step.
+        // dh_next is in the *recurrent* dim (Hrec).
+        std::vector<float> dh_next(static_cast<std::size_t>(B) * Hrec);
         std::vector<float> dc_next(static_cast<std::size_t>(B) * H);
-        std::memcpy(dh_next.data(), dHn, static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(dh_next.data(), dHn, static_cast<std::size_t>(B) * Hrec * sizeof(float));
         std::memcpy(dc_next.data(), dCn, static_cast<std::size_t>(B) * H * sizeof(float));
 
         std::vector<float> d_gates(static_cast<std::size_t>(B) * fH);
-        std::vector<float> h_prev_local(static_cast<std::size_t>(B) * H);
+        // h_prev_local at step t holds the (possibly projected) hidden of step t-1.
+        std::vector<float> h_prev_local(static_cast<std::size_t>(B) * Hrec);
+        // Pre-projection hidden h_raw_t (size H) — needed for dW_hr accumulation
+        // and as the bridge from dh_proj to dh through the projection matrix.
+        std::vector<float> h_raw_buf(static_cast<std::size_t>(B) * H);
+        // dh in the un-projected (size-H) basis used by the gate chain rule.
+        std::vector<float> dh_raw(static_cast<std::size_t>(B) * H);
 
         for (int t = T - 1; t >= 0; --t) {
             const float* gt = Gates + t * B * fH;
@@ -10684,54 +10729,96 @@ private:
             const float* xt = Xp + t * B * I;
             float* dxt = dXp + t * B * I;
 
+            // Reconstruct h_raw_t = o_t ⊙ tanh(c_t).  Always size H.
+            for (int b = 0; b < B; ++b) {
+                const float* gb = gt + b * fH;
+                const float* ctb = ct + b * H;
+                float* hraw_b = h_raw_buf.data() + b * H;
+                for (int k = 0; k < H; ++k)
+                    hraw_b[k] = gb[3 * H + k] * std::tanh(ctb[k]);
+            }
+
+            // Combine upstream dh_next with this step's dY (size Hrec).
+            std::vector<float> dh_step(static_cast<std::size_t>(B) * Hrec);
+            for (int b = 0; b < B; ++b)
+                for (int k = 0; k < Hrec; ++k)
+                    dh_step[static_cast<std::size_t>(b * Hrec + k)] =
+                        dY[t * B * Hrec + b * Hrec + k] +
+                        dh_next[static_cast<std::size_t>(b * Hrec + k)];
+
+            if (P > 0) {
+                // dW_hr += h_raw^T @ dh_step  (P × H)
+                cpu::sgemm(true, false, P, H, B, 1.0f, dh_step.data(), P, h_raw_buf.data(), H,
+                           1.0f, dWhr, H);
+                // dh_raw = dh_step @ W_hr  (B × P) · (P × H) = (B × H)
+                cpu::sgemm(false, false, B, H, P, 1.0f, dh_step.data(), P, Whr, H, 0.0f,
+                           dh_raw.data(), H);
+            } else {
+                std::memcpy(dh_raw.data(), dh_step.data(),
+                            static_cast<std::size_t>(B) * H * sizeof(float));
+            }
+
+            // h_prev (the previous step's recurrent hidden, size Hrec).
             if (t == 0) {
                 std::memcpy(h_prev_local.data(), H0p,
-                            static_cast<std::size_t>(B) * H * sizeof(float));
+                            static_cast<std::size_t>(B) * Hrec * sizeof(float));
+            } else if (P > 0) {
+                // Re-project the previous h_raw through W_hr — h_prev was the
+                // projected output that fed step t.
+                std::vector<float> hraw_prev(static_cast<std::size_t>(B) * H);
+                const float* o_prev = Gates + (t - 1) * B * fH + 3 * H;
+                const float* c_t_prev = Cells + t * B * H;
+                for (int b = 0; b < B; ++b)
+                    for (int k = 0; k < H; ++k)
+                        hraw_prev[static_cast<std::size_t>(b * H + k)] =
+                            o_prev[b * fH + k] * std::tanh(c_t_prev[b * H + k]);
+                cpu::sgemm(false, true, B, P, H, 1.0f, hraw_prev.data(), H, Whr, H, 0.0f,
+                           h_prev_local.data(), P);
             } else {
                 const float* o_prev = Gates + (t - 1) * B * fH + 3 * H;
                 const float* c_t_prev = Cells + t * B * H;
-                for (int b = 0; b < B; ++b) {
-                    for (int k = 0; k < H; ++k) {
+                for (int b = 0; b < B; ++b)
+                    for (int k = 0; k < H; ++k)
                         h_prev_local[static_cast<std::size_t>(b * H + k)] =
                             o_prev[b * fH + k] * std::tanh(c_t_prev[b * H + k]);
-                    }
-                }
             }
 
+            // Gate gradients (chain rule through tanh / sigmoid).
             for (int b = 0; b < B; ++b) {
                 const float* gb = gt + b * fH;
                 const float* ctb = ct + b * H;
                 const float* cpb = ct_prev + b * H;
                 float* dg = d_gates.data() + b * fH;
+                const float* dhb = dh_raw.data() + b * H;
 
                 for (int k = 0; k < H; ++k) {
-                    float dh_k =
-                        dY[t * B * H + b * H + k] + dh_next[static_cast<std::size_t>(b * H + k)];
+                    float dh_k = dhb[k];
                     float tanh_c = std::tanh(ctb[k]);
                     float dc_k = dh_k * gb[3 * H + k] * (1.0f - tanh_c * tanh_c) +
                                  dc_next[static_cast<std::size_t>(b * H + k)];
 
                     dg[3 * H + k] = dh_k * tanh_c * gb[3 * H + k] * (1.0f - gb[3 * H + k]);
-
                     dg[H + k] = dc_k * cpb[k] * gb[H + k] * (1.0f - gb[H + k]);
-
                     dg[k] = dc_k * gb[2 * H + k] * gb[k] * (1.0f - gb[k]);
-
                     dg[2 * H + k] = dc_k * gb[k] * (1.0f - gb[2 * H + k] * gb[2 * H + k]);
 
                     dc_next[static_cast<std::size_t>(b * H + k)] = dc_k * gb[H + k];
                 }
             }
 
+            // dX  = d_gates @ W_ih  (B × fH) · (fH × I)
             cpu::sgemm(false, false, B, I, fH, 1.0f, d_gates.data(), fH, Wih, I, 0.0f, dxt, I);
 
-            cpu::sgemm(false, false, B, H, fH, 1.0f, d_gates.data(), fH, Whh, H, 0.0f,
-                       dh_next.data(), H);
+            // dh_next = d_gates @ W_hh  (B × Hrec)
+            cpu::sgemm(false, false, B, Hrec, fH, 1.0f, d_gates.data(), fH, Whh, Hrec, 0.0f,
+                       dh_next.data(), Hrec);
 
+            // dW_ih += d_gates^T @ X_t  (fH × I)
             cpu::sgemm(true, false, fH, I, B, 1.0f, d_gates.data(), fH, xt, I, 1.0f, dWih, I);
 
-            cpu::sgemm(true, false, fH, H, B, 1.0f, d_gates.data(), fH, h_prev_local.data(), H,
-                       1.0f, dWhh, H);
+            // dW_hh += d_gates^T @ h_prev_local  (fH × Hrec)
+            cpu::sgemm(true, false, fH, Hrec, B, 1.0f, d_gates.data(), fH, h_prev_local.data(),
+                       Hrec, 1.0f, dWhh, Hrec);
 
             for (int b = 0; b < B; ++b)
                 for (int k = 0; k < fH; ++k) {
@@ -10740,12 +10827,16 @@ private:
                 }
         }
 
-        std::memcpy(dH0p, dh_next.data(), static_cast<std::size_t>(B) * H * sizeof(float));
+        std::memcpy(dH0p, dh_next.data(), static_cast<std::size_t>(B) * Hrec * sizeof(float));
         std::memcpy(dC0p, dc_next.data(), static_cast<std::size_t>(B) * H * sizeof(float));
 
-        return {Storage{std::move(dX_s)},   Storage{std::move(dH0_s)},  Storage{std::move(dC0_s)},
-                Storage{std::move(dWih_s)}, Storage{std::move(dWhh_s)}, Storage{std::move(dBih_s)},
-                Storage{std::move(dBhh_s)}};
+        std::vector<Storage> result{
+            Storage{std::move(dX_s)},   Storage{std::move(dH0_s)},  Storage{std::move(dC0_s)},
+            Storage{std::move(dWih_s)}, Storage{std::move(dWhh_s)}, Storage{std::move(dBih_s)},
+            Storage{std::move(dBhh_s)}};
+        if (P > 0)
+            result.emplace_back(Storage{std::move(dWhr_s)});
+        return result;
     }
 
     Storage fused_linear_relu_forward(const Storage& x,

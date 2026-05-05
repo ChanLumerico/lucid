@@ -76,17 +76,34 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
          std::any_of(weights.begin(), weights.end(),
                      [](const TensorImplPtr& w) { return w && w->requires_grad(); }));
 
+    // With proj_size > 0, the output / hn dimensions shrink to proj_size,
+    // while c_n keeps the cell-state dim H.
+    const int Hout = (opts.proj_size > 0) ? opts.proj_size : H;
     Shape out_shape{static_cast<std::int64_t>(T), static_cast<std::int64_t>(B),
-                    static_cast<std::int64_t>(H)};
+                    static_cast<std::int64_t>(Hout)};
     Shape hn_shape{static_cast<std::int64_t>(opts.num_layers), static_cast<std::int64_t>(B),
+                   static_cast<std::int64_t>(Hout)};
+    Shape cn_shape{static_cast<std::int64_t>(opts.num_layers), static_cast<std::int64_t>(B),
                    static_cast<std::int64_t>(H)};
 
     if (!needs_grad) {
+        // BNNS inference path has no LSTMP support, so when projection is
+        // requested fall through to the hand-rolled training kernel and
+        // discard the saved gates/cells outputs.
+        if (opts.proj_size > 0) {
+            auto res_p = be.lstm_forward_train(input->storage(), h0->storage(), c0->storage(),
+                                               w_storages, opts, dt);
+            if (res_p.size() < 3)
+                ErrorBuilder("lstm").fail("lstm_forward_train returned < 3 outputs");
+            return {std::make_shared<TensorImpl>(std::move(res_p[0]), out_shape, dt, dev, false),
+                    std::make_shared<TensorImpl>(std::move(res_p[1]), hn_shape, dt, dev, false),
+                    std::make_shared<TensorImpl>(std::move(res_p[2]), cn_shape, dt, dev, false)};
+        }
         auto res = be.lstm_forward(input->storage(), h0->storage(), c0->storage(), w_storages, opts,
                                    out_shape, dt);
         return {std::make_shared<TensorImpl>(std::move(res[0]), out_shape, dt, dev, false),
                 std::make_shared<TensorImpl>(std::move(res[1]), hn_shape, dt, dev, false),
-                std::make_shared<TensorImpl>(std::move(res[2]), hn_shape, dt, dev, false)};
+                std::make_shared<TensorImpl>(std::move(res[2]), cn_shape, dt, dev, false)};
     }
 
     auto res =
@@ -96,7 +113,7 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
 
     auto out_t = std::make_shared<TensorImpl>(std::move(res[0]), out_shape, dt, dev, true);
     auto hn_t = std::make_shared<TensorImpl>(std::move(res[1]), hn_shape, dt, dev, false);
-    auto cn_t = std::make_shared<TensorImpl>(std::move(res[2]), hn_shape, dt, dev, false);
+    auto cn_t = std::make_shared<TensorImpl>(std::move(res[2]), cn_shape, dt, dev, false);
 
     auto bwd = std::make_shared<LstmBackward>();
     bwd->saved_input = input->storage();
