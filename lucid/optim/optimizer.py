@@ -8,6 +8,8 @@ from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid.nn.parameter import Parameter
 
+from lucid._C import engine as _C_engine
+
 
 class Optimizer:
     """
@@ -29,7 +31,7 @@ class Optimizer:
                 return result
 
             _step_with_eval.__name__ = "step"
-            _step_with_eval.__doc__  = _orig.__doc__
+            _step_with_eval.__doc__ = _orig.__doc__
             cls.step = _step_with_eval  # type: ignore[method-assign]
 
     def _metal_eval_params(self) -> None:
@@ -38,7 +40,7 @@ class Optimizer:
         Called automatically after every optimizer step.
         GPU tensors are flushed in one C++ call; CPU tensors are ignored.
         """
-        from lucid._C import engine as _ce
+
         impls = [
             p._impl
             for group in self.param_groups
@@ -46,7 +48,7 @@ class Optimizer:
             if isinstance(p, Parameter)
         ]
         if impls:
-            _ce.eval_tensors(impls)    # C++ handles GPU/CPU filtering
+            _C_engine.eval_tensors(impls)  # C++ handles GPU/CPU filtering
 
     def __init__(
         self,

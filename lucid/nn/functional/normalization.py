@@ -66,9 +66,7 @@ def batch_norm(
     elif ndim == 5:
         return _wrap(_C_engine.nn.batch_norm3d(xi, w, b, eps))
     else:
-        raise ValueError(
-            f"batch_norm: expected 2–5D input, got ndim={ndim}"
-        )
+        raise ValueError(f"batch_norm: expected 2–5D input, got ndim={ndim}")
 
 
 def layer_norm(

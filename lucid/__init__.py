@@ -500,7 +500,7 @@ def eval(*tensors: object) -> None:  # type: ignore[override]
 
     impls = [t._impl for t in tensors if isinstance(t, _T)]
     if impls:
-        _ce.eval_tensors(impls)    # C++ batch eval — no mlx import
+        _ce.eval_tensors(impls)  # C++ batch eval — no mlx import
 
 
 # ── Module __getattr__ ────────────────────────────────────────────────────────
