@@ -423,3 +423,169 @@ class LocalResponseNorm(Module):
 
     def extra_repr(self) -> str:
         return f"size={self.size}, alpha={self.alpha}, beta={self.beta}, k={self.k}"
+
+
+# ── Lazy normalization variants ───────────────────────────────────────────────
+#
+# LazyBatchNorm{1,2,3}d and LazyInstanceNorm{1,2,3}d defer the
+# ``num_features`` decision to the first forward call (which reads
+# ``x.shape[1]``) or to ``_load_from_state_dict`` (which reads the leading
+# axis of the saved ``weight`` / ``running_mean`` buffer).  All other
+# behaviour — ``track_running_stats`` updates, ``momentum=None`` cumulative
+# averaging, ``affine=False`` skipping the affine params — is inherited
+# from ``_BatchNormBase``.
+
+
+class _LazyBatchNormMixin(_BatchNormBase):
+    """Shared lazy-init logic for LazyBatchNorm{1,2,3}d & LazyInstanceNorm*."""
+
+    _lazy_label: str = "_LazyBatchNormBase"
+
+    def __init__(
+        self,
+        eps: float = 1e-5,
+        momentum: float | None = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        # Skip _BatchNormBase.__init__ — we don't have num_features yet.
+        Module.__init__(self)
+        self.num_features: int | None = None
+        self.eps: float = eps
+        self.momentum: float | None = momentum
+        self.affine: bool = affine
+        self.track_running_stats: bool = track_running_stats
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        # Placeholder slots — actual buffers / params installed lazily.
+        if affine:
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
+        else:
+            self.weight = None
+            self.bias = None
+        if track_running_stats:
+            self.register_buffer("running_mean", None)
+            self.register_buffer("running_var", None)
+            self.register_buffer("num_batches_tracked", None)
+        else:
+            self.register_buffer("running_mean", None)
+            self.register_buffer("running_var", None)
+            self.register_buffer("num_batches_tracked", None)
+
+    def _initialize(self, num_features: int) -> None:
+        import lucid as _lucid
+
+        self.num_features = num_features
+        if self.affine:
+            self.weight = Parameter(
+                ones(num_features, dtype=self._dtype, device=self._device)
+            )
+            self.bias = Parameter(
+                zeros(num_features, dtype=self._dtype, device=self._device)
+            )
+        if self.track_running_stats:
+            self._buffers["running_mean"] = zeros(
+                num_features, dtype=self._dtype, device=self._device
+            )
+            self._buffers["running_var"] = ones(
+                num_features, dtype=self._dtype, device=self._device
+            )
+            self._buffers["num_batches_tracked"] = _lucid.zeros(
+                (), dtype=_lucid.int64, device=self._device
+            )
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.num_features is None:
+            # Probe known persistent keys for the feature dim.
+            probe_keys: tuple[str, ...] = ("weight", "running_mean", "bias")
+            inferred: int | None = None
+            for k in probe_keys:
+                t: Tensor | None = state_dict.get(f"{prefix}{k}")
+                if t is not None and len(t.shape) >= 1:
+                    inferred = int(t.shape[0])
+                    break
+            if inferred is not None:
+                # Pick a tensor for dtype/device fallback; avoid boolean
+                # truthiness on a Tensor (ambiguous for multi-element).
+                first_seen: Tensor | None = None
+                w_t: Tensor | None = state_dict.get(f"{prefix}weight")
+                if w_t is not None:
+                    first_seen = w_t
+                else:
+                    rm_t: Tensor | None = state_dict.get(f"{prefix}running_mean")
+                    if rm_t is not None:
+                        first_seen = rm_t
+                if first_seen is not None:
+                    self._dtype = self._dtype or first_seen.dtype
+                    self._device = self._device or first_seen.device
+                self._initialize(inferred)
+        # Fall through to parent (handles version<2 num_batches_tracked migration).
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.num_features is None:
+            self._initialize(int(x.shape[1]))
+        return _BatchNormBase.forward(self, x)
+
+    def extra_repr(self) -> str:
+        return (
+            f"num_features={self.num_features}, eps={self.eps}, "
+            f"momentum={self.momentum}, affine={self.affine}, "
+            f"track_running_stats={self.track_running_stats}"
+        )
+
+
+class LazyBatchNorm1d(_LazyBatchNormMixin):
+    """BatchNorm1d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyBatchNorm1d"
+
+
+class LazyBatchNorm2d(_LazyBatchNormMixin):
+    """BatchNorm2d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyBatchNorm2d"
+
+
+class LazyBatchNorm3d(_LazyBatchNormMixin):
+    """BatchNorm3d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyBatchNorm3d"
+
+
+class LazyInstanceNorm1d(_LazyBatchNormMixin):
+    """InstanceNorm1d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyInstanceNorm1d"
+
+
+class LazyInstanceNorm2d(_LazyBatchNormMixin):
+    """InstanceNorm2d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyInstanceNorm2d"
+
+
+class LazyInstanceNorm3d(_LazyBatchNormMixin):
+    """InstanceNorm3d with lazy ``num_features`` inference."""
+
+    _lazy_label: str = "LazyInstanceNorm3d"

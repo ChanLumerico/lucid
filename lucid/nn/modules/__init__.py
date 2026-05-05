@@ -6,6 +6,12 @@ from lucid.nn.modules.conv import (
     ConvTranspose1d,
     ConvTranspose2d,
     ConvTranspose3d,
+    LazyConv1d,
+    LazyConv2d,
+    LazyConv3d,
+    LazyConvTranspose1d,
+    LazyConvTranspose2d,
+    LazyConvTranspose3d,
 )
 from lucid.nn.modules.activation import (
     ReLU,
@@ -45,6 +51,12 @@ from lucid.nn.modules.normalization import (
     InstanceNorm2d,
     InstanceNorm3d,
     LocalResponseNorm,
+    LazyBatchNorm1d,
+    LazyBatchNorm2d,
+    LazyBatchNorm3d,
+    LazyInstanceNorm1d,
+    LazyInstanceNorm2d,
+    LazyInstanceNorm3d,
 )
 from lucid.nn.modules.pooling import (
     MaxPool1d,

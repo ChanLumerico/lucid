@@ -606,3 +606,659 @@ class ConvTranspose3d(Module):
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self.padding}"
         )
+
+
+# ── Lazy convolutions ─────────────────────────────────────────────────────────
+#
+# Each lazy variant inherits from its eager counterpart so the forward path
+# (`_resolve_pad` + `_conv_forward_with_mode`) is reused unchanged.  Parent
+# `__init__` is intentionally skipped via `Module.__init__(self)` because it
+# requires `in_channels`, which is what we are deferring.  The first forward
+# call (or `_load_from_state_dict`) materialises the real `weight` / `bias`
+# Parameter objects.
+
+
+def _init_lazy_conv_weights(weight: Parameter, bias: Parameter | None) -> None:
+    """Shared kaiming-uniform initialiser for lazily-built conv weights."""
+    init.kaiming_uniform_(weight, a=math.sqrt(5))
+    if bias is not None:
+        fan_in, _ = init._calculate_fan_in_and_fan_out(weight)
+        bound: float = 1.0 / math.sqrt(fan_in)
+        init.uniform_(bias, -bound, bound)
+
+
+class LazyConv1d(Conv1d):
+    """Conv1d with lazy ``in_channels`` inference from the first input."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int | str = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: int = kernel_size
+        self.stride: int = stride
+        self.dilation: int = dilation
+        self.groups: int = groups
+        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self._padding_str: str | None
+        if isinstance(padding, str):
+            mode: str = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported((stride,))
+            self._padding_str = mode
+            self.padding: int = 0
+        else:
+            self._padding_str = None
+            self.padding = padding
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        self.weight = Parameter(
+            empty(
+                self.out_channels,
+                in_channels // self.groups,
+                self.kernel_size,
+                dtype=self._dtype,
+                device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 3:
+                    error_msgs.append(
+                        f"LazyConv1d expected 3-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[0]) != self.out_channels:
+                    error_msgs.append(
+                        f"LazyConv1d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels}, got {int(weight.shape[0])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[1]) * self.groups)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return Conv1d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        s: str = (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self._padding_str if self._padding_str else self.padding}"
+        )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
+
+
+class LazyConv2d(Conv2d):
+    """Conv2d with lazy ``in_channels`` inference from the first input."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: _Size2d,
+        stride: _Size2d = 1,
+        padding: _Size2d | str = 0,
+        dilation: _Size2d = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: tuple[int, int] = _pair(kernel_size)
+        self.stride: tuple[int, int] = _pair(stride)
+        self.dilation: tuple[int, int] = _pair(dilation)
+        self.groups: int = groups
+        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self._padding_str: str | None
+        if isinstance(padding, str):
+            mode: str = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported(self.stride)
+            self._padding_str = mode
+            self.padding: tuple[int, int] = (0, 0)
+        else:
+            self._padding_str = None
+            self.padding = _pair(padding)
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        kh, kw = self.kernel_size
+        self.weight = Parameter(
+            empty(
+                self.out_channels, in_channels // self.groups, kh, kw,
+                dtype=self._dtype, device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 4:
+                    error_msgs.append(
+                        f"LazyConv2d expected 4-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[0]) != self.out_channels:
+                    error_msgs.append(
+                        f"LazyConv2d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels}, got {int(weight.shape[0])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[1]) * self.groups)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return Conv2d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        s: str = (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self._padding_str if self._padding_str else self.padding}"
+        )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
+
+
+class LazyConv3d(Conv3d):
+    """Conv3d with lazy ``in_channels`` inference from the first input."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: _Size3d,
+        stride: _Size3d = 1,
+        padding: _Size3d | str = 0,
+        dilation: _Size3d = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
+        self.stride: tuple[int, int, int] = _triple(stride)
+        self.dilation: tuple[int, int, int] = _triple(dilation)
+        self.groups: int = groups
+        self.padding_mode: str = _validate_padding_mode(padding_mode)
+        self._padding_str: str | None
+        if isinstance(padding, str):
+            mode: str = padding.lower()
+            if mode not in {"same", "valid"}:
+                raise ValueError(
+                    f"string padding must be 'same' or 'valid', got {padding!r}"
+                )
+            if mode == "same":
+                _check_same_supported(self.stride)
+            self._padding_str = mode
+            self.padding: tuple[int, int, int] = (0, 0, 0)
+        else:
+            self._padding_str = None
+            self.padding = _triple(padding)
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        kd, kh, kw = self.kernel_size
+        self.weight = Parameter(
+            empty(
+                self.out_channels, in_channels // self.groups, kd, kh, kw,
+                dtype=self._dtype, device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 5:
+                    error_msgs.append(
+                        f"LazyConv3d expected 5-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[0]) != self.out_channels:
+                    error_msgs.append(
+                        f"LazyConv3d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels}, got {int(weight.shape[0])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[1]) * self.groups)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return Conv3d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        s: str = (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self._padding_str if self._padding_str else self.padding}"
+        )
+        if self.padding_mode != "zeros":
+            s += f", padding_mode={self.padding_mode!r}"
+        return s
+
+
+# ── Lazy ConvTranspose ────────────────────────────────────────────────────────
+# Weight layout is (in_channels, out_channels // groups, *K).  The lazy
+# dimension is ``in_channels`` — the leading axis of the saved weight — so
+# materialisation reads ``weight.shape[0]``.
+
+
+class LazyConvTranspose1d(ConvTranspose1d):
+    """ConvTranspose1d with lazy ``in_channels`` inference."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        output_padding: int = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: int = 1,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        _validate_int_padding(padding, "LazyConvTranspose1d")
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: int = kernel_size
+        self.stride: int = stride
+        self.padding: int = padding
+        self.output_padding: int = output_padding
+        self.groups: int = groups
+        self.dilation: int = dilation
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        self.weight = Parameter(
+            empty(
+                in_channels, self.out_channels // self.groups, self.kernel_size,
+                dtype=self._dtype, device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 3:
+                    error_msgs.append(
+                        f"LazyConvTranspose1d expected 3-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[1]) != self.out_channels // self.groups:
+                    error_msgs.append(
+                        f"LazyConvTranspose1d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels // self.groups}, "
+                        f"got {int(weight.shape[1])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[0]))
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return ConvTranspose1d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}"
+        )
+
+
+class LazyConvTranspose2d(ConvTranspose2d):
+    """ConvTranspose2d with lazy ``in_channels`` inference."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: _Size2d,
+        stride: _Size2d = 1,
+        padding: _Size2d = 0,
+        output_padding: _Size2d = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: _Size2d = 1,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        _validate_int_padding(padding, "LazyConvTranspose2d")
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: tuple[int, int] = _pair(kernel_size)
+        self.stride: tuple[int, int] = _pair(stride)
+        self.padding: tuple[int, int] = _pair(padding)
+        self.output_padding: tuple[int, int] = _pair(output_padding)
+        self.groups: int = groups
+        self.dilation: tuple[int, int] = _pair(dilation)
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        kh, kw = self.kernel_size
+        self.weight = Parameter(
+            empty(
+                in_channels, self.out_channels // self.groups, kh, kw,
+                dtype=self._dtype, device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 4:
+                    error_msgs.append(
+                        f"LazyConvTranspose2d expected 4-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[1]) != self.out_channels // self.groups:
+                    error_msgs.append(
+                        f"LazyConvTranspose2d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels // self.groups}, "
+                        f"got {int(weight.shape[1])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[0]))
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return ConvTranspose2d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}"
+        )
+
+
+class LazyConvTranspose3d(ConvTranspose3d):
+    """ConvTranspose3d with lazy ``in_channels`` inference."""
+
+    def __init__(
+        self,
+        out_channels: int,
+        kernel_size: _Size3d,
+        stride: _Size3d = 1,
+        padding: _Size3d = 0,
+        output_padding: _Size3d = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: _Size3d = 1,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        _validate_int_padding(padding, "LazyConvTranspose3d")
+        self.in_channels: int | None = None
+        self.out_channels: int = out_channels
+        self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
+        self.stride: tuple[int, int, int] = _triple(stride)
+        self.padding: tuple[int, int, int] = _triple(padding)
+        self.output_padding: tuple[int, int, int] = _triple(output_padding)
+        self.groups: int = groups
+        self.dilation: tuple[int, int, int] = _triple(dilation)
+        self._has_bias: bool = bias
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        self.register_parameter("weight", None)
+        self.register_parameter("bias", None)
+
+    def _initialize(self, in_channels: int) -> None:
+        self.in_channels = in_channels
+        kd, kh, kw = self.kernel_size
+        self.weight = Parameter(
+            empty(
+                in_channels, self.out_channels // self.groups, kd, kh, kw,
+                dtype=self._dtype, device=self._device,
+            )
+        )
+        if self._has_bias:
+            self.bias = Parameter(
+                empty(self.out_channels, dtype=self._dtype, device=self._device)
+            )
+        else:
+            self.bias = None
+        _init_lazy_conv_weights(self.weight, self.bias)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.weight is None:
+            weight: Tensor | None = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 5:
+                    error_msgs.append(
+                        f"LazyConvTranspose3d expected 5-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[1]) != self.out_channels // self.groups:
+                    error_msgs.append(
+                        f"LazyConvTranspose3d out_channels mismatch at '{prefix}weight': "
+                        f"expected {self.out_channels // self.groups}, "
+                        f"got {int(weight.shape[1])}"
+                    )
+                    return
+                self._dtype = self._dtype or weight.dtype
+                self._device = self._device or weight.device
+                self._initialize(int(weight.shape[0]))
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self, state_dict, prefix, local_metadata, strict,
+            missing_keys, unexpected_keys, error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.weight is None:
+            self._initialize(int(x.shape[1]))
+        return ConvTranspose3d.forward(self, x)
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}"
+        )
