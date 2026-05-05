@@ -3,6 +3,8 @@ Convolution and transposed convolution modules.
 """
 
 import math
+from typing import Callable
+
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d
 from lucid.nn.module import Module
@@ -43,7 +45,7 @@ def _same_pad_pair(
 ) -> tuple[int, int]:
     """Compute (pad_lo, pad_hi) for `padding="same"` on one spatial dim.
 
-    PyTorch parity: pad_lo = pad_total // 2, pad_hi = pad_total - pad_lo.
+    Reference parity: pad_lo = pad_total // 2, pad_hi = pad_total - pad_lo.
     For odd pad_total this is asymmetric (more padding on the high side).
     """
     out_size = (in_size + stride - 1) // stride
@@ -77,6 +79,9 @@ def _validate_int_padding(padding: object, label: str) -> None:
         )
 
 
+_ConvFn = Callable[..., Tensor]
+
+
 def _conv_forward_with_mode(
     x: Tensor,
     weight: Parameter,
@@ -87,7 +92,7 @@ def _conv_forward_with_mode(
     dilation: tuple[int, ...],
     groups: int,
     padding_mode: str,
-    conv_fn,
+    conv_fn: _ConvFn,
 ) -> Tensor:
     """Dispatch a forward conv with arbitrary padding_mode and asymmetric pad.
 
@@ -96,10 +101,10 @@ def _conv_forward_with_mode(
     handles the padding directly.  Otherwise we pre-pad via `F.pad` and
     call conv with padding=0 along that axis.
     """
-    n = len(stride)
-    symmetric = all(pad_lo[i] == pad_hi[i] for i in range(n))
+    n: int = len(stride)
+    symmetric: bool = all(pad_lo[i] == pad_hi[i] for i in range(n))
     if padding_mode == "zeros" and symmetric:
-        engine_pad = pad_lo[0] if n == 1 else tuple(pad_lo)
+        engine_pad: int | tuple[int, ...] = pad_lo[0] if n == 1 else tuple(pad_lo)
         return _call_conv(
             conv_fn, x, weight, bias, stride, engine_pad, dilation, groups, n
         )
@@ -109,24 +114,34 @@ def _conv_forward_with_mode(
     pad_flat: list[int] = []
     for i in reversed(range(n)):
         pad_flat.extend([pad_lo[i], pad_hi[i]])
-    fpad_mode = _PADDING_MODE_TO_FPAD[padding_mode]
-    x_padded = _F_pad(x, tuple(pad_flat), mode=fpad_mode)
-    zero_pad = 0 if n == 1 else (0,) * n
+    fpad_mode: str = _PADDING_MODE_TO_FPAD[padding_mode]
+    x_padded: Tensor = _F_pad(x, tuple(pad_flat), mode=fpad_mode)
+    zero_pad: int | tuple[int, ...] = 0 if n == 1 else (0,) * n
     return _call_conv(
         conv_fn, x_padded, weight, bias, stride, zero_pad, dilation, groups, n
     )
 
 
-def _call_conv(conv_fn, x, weight, bias, stride, padding, dilation, groups, n):
+def _call_conv(
+    conv_fn: _ConvFn,
+    x: Tensor,
+    weight: Parameter,
+    bias: Parameter | None,
+    stride: tuple[int, ...],
+    padding: int | tuple[int, ...],
+    dilation: tuple[int, ...],
+    groups: int,
+    n: int,
+) -> Tensor:
     """Invoke conv_fn with the right argument arity.
 
     conv1d/2d/3d in `nn.functional.conv` accept (x, weight, bias, stride, padding,
     dilation, groups) but conv1d takes scalar ints while conv2d/3d take tuples.
     """
     if n == 1:
-        s = stride[0] if isinstance(stride, tuple) else stride
-        d = dilation[0] if isinstance(dilation, tuple) else dilation
-        p = padding[0] if isinstance(padding, tuple) else padding
+        s: int = stride[0] if isinstance(stride, tuple) else stride
+        d: int = dilation[0] if isinstance(dilation, tuple) else dilation
+        p: int = padding[0] if isinstance(padding, tuple) else padding
         return conv_fn(x, weight, bias, s, p, d, groups)
     return conv_fn(x, weight, bias, stride, padding, dilation, groups)
 

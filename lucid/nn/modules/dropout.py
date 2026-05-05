@@ -11,9 +11,7 @@ from lucid.nn.functional.dropout import dropout, dropout2d
 
 def _check_dropout_prob(p: float) -> None:
     if p < 0.0 or p > 1.0:
-        raise ValueError(
-            f"dropout probability must be in [0, 1], got {p!r}"
-        )
+        raise ValueError(f"dropout probability must be in [0, 1], got {p!r}")
 
 
 class Dropout(Module):
@@ -35,7 +33,7 @@ class Dropout(Module):
         return dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:
-        s = f"p={self.p}"
+        s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
         return s
@@ -59,7 +57,7 @@ class Dropout2d(Module):
         return dropout2d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
-        s = f"p={self.p}"
+        s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
         return s
@@ -78,7 +76,7 @@ class AlphaDropout(Module):
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
 
     def extra_repr(self) -> str:
-        s = f"p={self.p}"
+        s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
         return s
@@ -99,7 +97,7 @@ class Dropout3d(Module):
         return dropout3d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
-        s = f"p={self.p}"
+        s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
         return s

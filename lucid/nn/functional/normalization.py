@@ -85,13 +85,13 @@ def layer_norm(
     """
     from lucid._factories.creation import ones, zeros
 
-    shape = tuple(normalized_shape)
-    w = (
+    shape: tuple[int, ...] = tuple(normalized_shape)
+    w: object = (
         _unwrap(weight)
         if weight is not None
         else _unwrap(ones(*shape, device=x.device, dtype=x.dtype))
     )
-    b = (
+    b: object = (
         _unwrap(bias)
         if bias is not None
         else _unwrap(zeros(*shape, device=x.device, dtype=x.dtype))

@@ -1,6 +1,6 @@
 """state_dict save/load infrastructure for Module.
 
-The protocol mirrors PyTorch:
+The protocol mirrors the reference framework:
 
 * ``Module._save_to_state_dict`` writes own params / buffers into the dest dict.
   The top-level ``state_dict()`` walker recurses into children.
@@ -43,8 +43,8 @@ class IncompatibleKeys(
 def _build_metadata(module: Module, prefix: str = "") -> dict[str, dict[str, object]]:
     """Walk the module tree and collect per-module ``_version`` tags."""
     metadata: dict[str, dict[str, object]] = {}
-    version = getattr(type(module), "_version", None)
-    key = prefix.rstrip(".") if prefix else ""
+    version: int | None = getattr(type(module), "_version", None)
+    key: str = prefix.rstrip(".") if prefix else ""
     if version is not None:
         metadata[key] = {"version": version}
     for name, child in module._modules.items():
@@ -86,22 +86,22 @@ def _default_load_from_state_dict(
     Subclasses should call this from their override (after any pre-processing)
     to share the standard copy / dtype-convert / shape-check logic.
     """
-    persistent_buffers = {
+    persistent_buffers: dict[str, Tensor] = {
         name: b
         for name, b in module._buffers.items()
         if b is not None and name not in module._non_persistent_buffers
     }
-    local_state = {
+    local_state: dict[str, Tensor] = {
         **{name: p for name, p in module._parameters.items() if p is not None},
         **persistent_buffers,
     }
 
     for name, attr in local_state.items():
-        key = f"{prefix}{name}"
+        key: str = f"{prefix}{name}"
         if key not in state_dict:
             missing_keys.append(key)
             continue
-        src = state_dict[key]
+        src: Tensor = state_dict[key]
         if not isinstance(src, Tensor):
             error_msgs.append(
                 f"While copying parameter '{key}', expected Tensor, "
@@ -115,8 +115,8 @@ def _default_load_from_state_dict(
             )
             continue
         # Copy with original dtype/device preserved.
-        converted = src.to(device=attr.device, dtype=attr.dtype)
-        new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
+        converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
+        new_impl: object = _C_engine.contiguous(converted._impl).clone_with_grad(
             getattr(attr, "requires_grad", False)
         )
         if name in module._parameters:
@@ -125,7 +125,7 @@ def _default_load_from_state_dict(
             module._buffers[name] = _wrap(new_impl)
 
     # extra_state (rare hook for opaque per-module state).
-    extra_key = f"{prefix}_extra_state"
+    extra_key: str = f"{prefix}_extra_state"
     if extra_key in state_dict:
         module.set_extra_state(state_dict[extra_key])
     elif module.get_extra_state() is not None:
@@ -156,7 +156,7 @@ def _walk_load(
     missing_keys: list[str],
     unexpected_keys: list[str],
     error_msgs: list[str],
-    post_hook_modules: list,
+    post_hook_modules: list[Module],
 ) -> None:
     """Pre-order walk: handle this module, then recurse into children.
 
@@ -165,7 +165,9 @@ def _walk_load(
     after the full walk completes, so each hook sees the final
     IncompatibleKeys rather than a per-module snapshot.
     """
-    local_meta = metadata.get(prefix.rstrip("."), {}) if metadata else {}
+    local_meta: dict[str, object] = (
+        metadata.get(prefix.rstrip("."), {}) if metadata else {}
+    )
 
     # Pre-hooks (global → instance).
     for hook in _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS.values():
@@ -235,7 +237,9 @@ def load_state_dict(
     such as ``{"version": N}``.  Each module's hook receives the relevant
     slice as ``local_metadata``.
     """
-    metadata = getattr(state_dict, "_metadata", None) or {}
+    metadata: dict[str, dict[str, object]] = (
+        getattr(state_dict, "_metadata", None) or {}
+    )
     # We must operate on a mutable copy so hooks may rename keys safely.
     state_dict = OrderedDict(state_dict)
     state_dict._metadata = metadata  # type: ignore[attr-defined]
@@ -243,7 +247,7 @@ def load_state_dict(
     missing_keys: list[str] = []
     unexpected_keys: list[str] = []
     error_msgs: list[str] = []
-    post_hook_modules: list = []
+    post_hook_modules: list[Module] = []
 
     _walk_load(
         module,
@@ -264,7 +268,7 @@ def load_state_dict(
     _collect_expected(module, "", expected_keys)
     unexpected_keys = [k for k in state_dict.keys() if k not in expected_keys]
 
-    incompatible = IncompatibleKeys(missing_keys, unexpected_keys)
+    incompatible: IncompatibleKeys = IncompatibleKeys(missing_keys, unexpected_keys)
 
     # Fire post-hooks (instance + global) with the final IncompatibleKeys.
     for m in post_hook_modules:
@@ -272,7 +276,7 @@ def load_state_dict(
             hook(m, incompatible)
     if _GLOBAL_LOAD_STATE_DICT_POST_HOOKS:
 
-        def _walk_post(mod):
+        def _walk_post(mod: Module) -> None:
             for hook in _GLOBAL_LOAD_STATE_DICT_POST_HOOKS.values():
                 hook(mod, incompatible)
             for child in mod._modules.values():

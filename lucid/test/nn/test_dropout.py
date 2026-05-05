@@ -63,14 +63,18 @@ class TestAlphaDropout:
 
 
 class TestDropoutValidation:
-    @pytest.mark.parametrize("cls", [nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout])
+    @pytest.mark.parametrize(
+        "cls", [nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout]
+    )
     def test_invalid_probability_rejected(self, cls):
         with pytest.raises(ValueError, match="probability"):
             cls(p=-0.1)
         with pytest.raises(ValueError, match="probability"):
             cls(p=1.5)
 
-    @pytest.mark.parametrize("cls", [nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout])
+    @pytest.mark.parametrize(
+        "cls", [nn.Dropout, nn.Dropout2d, nn.Dropout3d, nn.AlphaDropout]
+    )
     def test_inplace_in_repr(self, cls):
         layer = cls(p=0.3, inplace=True)
         assert "inplace=True" in repr(layer)

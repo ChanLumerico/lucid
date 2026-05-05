@@ -205,20 +205,22 @@ class _BatchNormBase(Module):
 
     def _load_from_state_dict(
         self,
-        state_dict: dict,
+        state_dict: dict[str, Tensor],
         prefix: str,
-        local_metadata: dict,
+        local_metadata: dict[str, object],
         strict: bool,
-        missing_keys: list,
-        unexpected_keys: list,
-        error_msgs: list,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
     ) -> None:
         # Version-1 checkpoints predate `num_batches_tracked`.  Drop the
         # missing-key entry for it so users loading old weights aren't
         # spuriously warned.
-        version = local_metadata.get("version") if local_metadata else None
+        version: int | None = (
+            local_metadata.get("version") if local_metadata else None  # type: ignore[assignment]
+        )
         if (version is None or version < 2) and self.track_running_stats:
-            key = f"{prefix}num_batches_tracked"
+            key: str = f"{prefix}num_batches_tracked"
             if key not in state_dict:
                 # Pre-populate with zero so the default loader can copy it.
                 import lucid as _lucid
@@ -247,9 +249,13 @@ class _BatchNormBase(Module):
         # Pick which stats path the functional uses:
         #   - eval + tracking → precomputed running stats
         #   - everything else (training, or no tracking)  → batch stats
-        use_running = (not self.training) and self.track_running_stats
-        running_mean = self._buffers.get("running_mean") if use_running else None
-        running_var = self._buffers.get("running_var") if use_running else None
+        use_running: bool = (not self.training) and self.track_running_stats
+        running_mean: Tensor | None = (
+            self._buffers.get("running_mean") if use_running else None
+        )
+        running_var: Tensor | None = (
+            self._buffers.get("running_var") if use_running else None
+        )
 
         return batch_norm(
             x,
@@ -274,19 +280,20 @@ class _BatchNormBase(Module):
         import lucid as _lucid
 
         # Reduce over batch + spatial dims, keeping the channel dim.
-        reduce_dims = [d for d in range(x.ndim) if d != 1]
-        n = 1
+        reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
+        n: int = 1
         for d in reduce_dims:
             n *= x.shape[d]
         with _lucid.no_grad():
-            batch_mean = x.mean(reduce_dims).detach()
-            batch_var = x.var(reduce_dims, correction=0).detach()
+            batch_mean: Tensor = x.mean(reduce_dims).detach()
+            batch_var: Tensor = x.var(reduce_dims, correction=0).detach()
 
             # Increment the count first (matches reference framework order).
             self._buffers["num_batches_tracked"] = (
                 self._buffers["num_batches_tracked"] + 1
             ).detach()
 
+            eff: float
             if self.momentum is None:
                 # Cumulative moving average: equal weight on every batch.
                 eff = 1.0 / float(self._buffers["num_batches_tracked"].item())
@@ -295,9 +302,11 @@ class _BatchNormBase(Module):
 
             # Unbiased correction n/(n-1) for the running variance, like the
             # reference framework — only meaningful when n > 1.
-            unbiased_factor = n / (n - 1) if n > 1 else 1.0
-            new_rm = (1.0 - eff) * self._buffers["running_mean"] + eff * batch_mean
-            new_rv = (1.0 - eff) * self._buffers["running_var"] + (
+            unbiased_factor: float = n / (n - 1) if n > 1 else 1.0
+            new_rm: Tensor = (
+                (1.0 - eff) * self._buffers["running_mean"] + eff * batch_mean
+            )
+            new_rv: Tensor = (1.0 - eff) * self._buffers["running_var"] + (
                 eff * unbiased_factor
             ) * batch_var
             self._buffers["running_mean"] = new_rm.detach()
