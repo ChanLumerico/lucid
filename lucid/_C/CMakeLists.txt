@@ -140,6 +140,7 @@ lucid_object_library(
     autograd/Helpers.cpp
     autograd/AccumulateGrad.cpp
     autograd/Engine.cpp
+    autograd/ModuleHookNode.cpp
     autograd/CustomFunction.cpp    # Phase 12: PythonBackwardNode
     autograd/FusionPass.cpp)       # Phase 19: Op Fusion pass
 

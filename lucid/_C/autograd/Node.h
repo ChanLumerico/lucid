@@ -69,6 +69,14 @@ public:
     // to that input.  Implementations may assume grad_out is non-null.
     virtual std::vector<Storage> apply(Storage grad_out) = 0;
 
+    virtual bool is_barrier() const noexcept { return false; }
+    virtual void accumulate_barrier_grad(std::uint32_t /*input_nr*/, Storage /*grad*/) {
+        throw std::runtime_error("barrier accumulation called on a regular autograd node");
+    }
+    virtual std::vector<Storage> apply_barrier() {
+        throw std::runtime_error("barrier apply called on a regular autograd node");
+    }
+
     // Graph-mode variant: compute input gradients using TensorImpl-based forward
     // ops so that the backward computation itself is recorded in the autograd
     // graph. Called by Engine when create_graph=true. The returned TensorImplPtrs

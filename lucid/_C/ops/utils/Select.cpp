@@ -277,7 +277,8 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     bwd->x_tensor_ = x;
     bwd->y_tensor_ = y;
     bwd->set_next_edges(
-        std::vector<Edge>{Edge(detail::ensure_grad_fn(x), 0), Edge(detail::ensure_grad_fn(y), 0)});
+        std::vector<Edge>{Edge(detail::ensure_grad_fn(x), x->grad_output_nr()),
+                          Edge(detail::ensure_grad_fn(y), y->grad_output_nr())});
     bwd->set_saved_versions({cond->version(), x->version(), y->version()});
 
     out->set_grad_fn(std::move(bwd));
@@ -302,7 +303,7 @@ attach_masked_fill_grad(const TensorImplPtr& a, const TensorImplPtr& mask, Tenso
     bwd->device_ = out->device();
     bwd->input_tensor_ = a;
     bwd->mask_tensor_ = mask;
-    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
+    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), a->grad_output_nr())});
     bwd->set_saved_versions({a->version(), mask->version()});
 
     out->set_grad_fn(std::move(bwd));
@@ -442,7 +443,8 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
         bwd->device_ = device;
         bwd->input_tensor_ = a;
         bwd->indices_tensor_ = indices;
-        bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(a), 0)});
+        bwd->set_next_edges(
+            std::vector<Edge>{Edge(detail::ensure_grad_fn(a), a->grad_output_nr())});
         bwd->set_saved_versions({a->version(), indices->version()});
         result->set_grad_fn(std::move(bwd));
         result->set_leaf(false);

@@ -206,7 +206,7 @@ void register_custom_function(py::module_& m) {
                     if (!inp->grad_fn())
                         inp->set_grad_fn(std::make_shared<AccumulateGrad>(inp));
                 }
-                edges.emplace_back(inp->grad_fn(), 0);
+                edges.emplace_back(inp->grad_fn(), inp->grad_output_nr());
                 versions.push_back(inp->version());
             }
 

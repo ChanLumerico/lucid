@@ -113,6 +113,9 @@ public:
         static const std::shared_ptr<Node> kNull;
         return autograd_ ? autograd_->grad_fn : kNull;
     }
+    std::uint32_t grad_output_nr() const noexcept {
+        return autograd_ ? autograd_->grad_output_nr : 0;
+    }
     const std::optional<Storage>& grad_storage() const noexcept {
         static const std::optional<Storage> kEmpty;
         return autograd_ ? autograd_->grad : kEmpty;
@@ -142,6 +145,9 @@ public:
     void set_leaf(bool v) noexcept { ensure_autograd()->is_leaf = v; }
     void set_grad_fn(std::shared_ptr<Node> fn) noexcept {
         ensure_autograd()->grad_fn = std::move(fn);
+    }
+    void set_grad_output_nr(std::uint32_t nr) noexcept {
+        ensure_autograd()->grad_output_nr = nr;
     }
     void clear_grad_fn() noexcept {
         if (autograd_)

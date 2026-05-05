@@ -54,9 +54,7 @@ class TestUnaryParity:
             t_out = getattr(ref, name)(t_pos)
         else:
             l_out = getattr(lucid, name)(l)
-            t_fn = getattr(ref, name, None) or getattr(
-                ref.nn.functional, name, None
-            )
+            t_fn = getattr(ref, name, None) or getattr(ref.nn.functional, name, None)
             if t_fn is None:
                 pytest.skip(f"reference op {name!r} not found")
             t_out = t_fn(t)
@@ -99,9 +97,7 @@ class TestReductionParity:
 
     def test_sum_dim1_keepdim(self):
         l, t = _pair(_SHAPE)
-        check_parity(
-            lucid.sum(l, dim=1, keepdim=True), ref.sum(t, dim=1, keepdim=True)
-        )
+        check_parity(lucid.sum(l, dim=1, keepdim=True), ref.sum(t, dim=1, keepdim=True))
 
     def test_mean_all(self):
         l, t = _pair(_SHAPE)

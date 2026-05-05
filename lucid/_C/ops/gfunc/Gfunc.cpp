@@ -395,7 +395,7 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     bwd->base_shape_ = bs;
     bwd->dtype_ = dt;
     bwd->device_ = dv;
-    bwd->set_next_edges({base_edge, src_edge});
+    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
 
     out->set_grad_fn(std::move(bwd));

@@ -404,8 +404,8 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     bwd->saved_impl_inputs_ = {a, b};
 
     std::vector<Edge> edges;
-    edges.emplace_back(a_edge, 0);
-    edges.emplace_back(b_edge, 0);
+    edges.emplace_back(a_edge, a->grad_output_nr());
+    edges.emplace_back(b_edge, b->grad_output_nr());
     bwd->set_next_edges(std::move(edges));
     // Both input versions are captured to detect in-place mutations.
     bwd->set_saved_versions({a->version(), b->version()});

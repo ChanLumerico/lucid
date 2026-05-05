@@ -179,7 +179,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
         bwd->full_input_shape_ = a->shape();
 
         std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
+        edges.emplace_back(a_edge, a->grad_output_nr());
         bwd->set_next_edges(std::move(edges));
         bwd->set_saved_versions({a->version()});
 

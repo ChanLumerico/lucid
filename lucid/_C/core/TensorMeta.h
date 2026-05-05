@@ -82,6 +82,7 @@ struct AutogradMeta {
     bool is_leaf = true;
     std::int64_t version = 0;
     std::shared_ptr<Node> grad_fn;
+    std::uint32_t grad_output_nr = 0;
     // Accumulated gradient Storage; set on leaves after normal backward().
     std::optional<Storage> grad;
     // Gradient as a full TensorImpl when backward was run with create_graph=true.

@@ -16,6 +16,7 @@
 #include "../autograd/CustomFunction.h"
 #include "../autograd/Engine.h"
 #include "../autograd/FusionPass.h"
+#include "../autograd/ModuleHookNode.h"
 #include "../autograd/Node.h"
 #include "../core/TensorImpl.h"
 
@@ -56,6 +57,7 @@ void register_autograd(py::module_& m) {
     // register_custom_function installs the Python-side CustomFunction class
     // and the _register_python_backward_node() hook used by lucid.autograd.Function.
     lucid::register_custom_function(m);
+    lucid::register_module_hook_nodes(m);
 
     // _run_fusion_pass is exposed for unit tests and profiling; in production
     // it is called automatically inside Engine::backward before the BFS

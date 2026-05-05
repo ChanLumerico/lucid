@@ -204,7 +204,12 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
     // so far.  Gradients from multiple edges pointing to the same node are
     // summed here before apply() is invoked.
     std::unordered_map<Node*, Storage> pending;
-    pending.emplace(root->grad_fn().get(), std::move(seed));
+    if (root->grad_fn()->is_barrier()) {
+        root->grad_fn()->accumulate_barrier_grad(root->grad_output_nr(), std::move(seed));
+        pending.emplace(root->grad_fn().get(), Storage{CpuStorage{}});
+    } else {
+        pending.emplace(root->grad_fn().get(), std::move(seed));
+    }
 
     for (const auto& node : order) {
         auto it = pending.find(node.get());
@@ -220,7 +225,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         node->validate_versions();
 
         // Execute the backward formula for this node.
-        const auto input_grads = node->apply(std::move(grad_in));
+        const auto input_grads =
+            node->is_barrier() ? node->apply_barrier() : node->apply(std::move(grad_in));
 
         // Collect retain_grad inputs BEFORE release_saved() clears input_tensors_.
         const auto retain_ins = node->retainable_inputs();
@@ -260,6 +266,11 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
             auto next = edges[i].node;
             if (!next)
                 continue;
+            if (next->is_barrier()) {
+                next->accumulate_barrier_grad(edges[i].input_nr, input_grads[i]);
+                pending.emplace(next.get(), Storage{CpuStorage{}});
+                continue;
+            }
             auto pit = pending.find(next.get());
             if (pit == pending.end()) {
                 pending.emplace(next.get(), input_grads[i]);

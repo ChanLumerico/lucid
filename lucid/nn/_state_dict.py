@@ -1,6 +1,6 @@
-"""
-state_dict save/load helpers for Module.
-"""
+"""state_dict save/load helpers for Module."""
+
+from collections import namedtuple
 
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
@@ -8,6 +8,14 @@ from lucid._dispatch import _wrap
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._types import StateDict
+
+
+class IncompatibleKeys(
+    namedtuple("IncompatibleKeys", ["missing_keys", "unexpected_keys"])
+):
+    """Return value for load_state_dict."""
+
+    __slots__ = ()
 
 
 def _save_to_state_dict(
@@ -30,6 +38,8 @@ def _save_to_state_dict(
             result[key] = b if keep_vars else b.detach()
 
     for mname, m in module._modules.items():
+        if m is None:
+            continue
         subprefix = f"{prefix}{mname}."
         result.update(_save_to_state_dict(m, prefix=subprefix, keep_vars=keep_vars))
 
@@ -45,11 +55,13 @@ def _load_from_state_dict(
     module: Module,
     state_dict: StateDict,
     strict: bool = True,
-) -> tuple[list[str], list[str]]:
-    """Load parameters from state_dict. Returns (missing_keys, unexpected_keys)."""
+) -> IncompatibleKeys:
+    """Load parameters from state_dict."""
+    _materialize_lazy_modules(module, state_dict)
     own_state = module.state_dict(keep_vars=True)
     missing_keys: list[str] = []
     unexpected_keys: list[str] = []
+    error_msgs: list[str] = []
 
     for key in own_state:
         if key not in state_dict:
@@ -60,9 +72,10 @@ def _load_from_state_dict(
             unexpected_keys.append(key)
 
     if strict and (missing_keys or unexpected_keys):
-        raise RuntimeError(
-            f"Missing keys: {missing_keys}; Unexpected keys: {unexpected_keys}"
-        )
+        if missing_keys:
+            error_msgs.append(f"Missing key(s): {missing_keys}")
+        if unexpected_keys:
+            error_msgs.append(f"Unexpected key(s): {unexpected_keys}")
 
     for key, src in state_dict.items():
         if key not in own_state:
@@ -80,17 +93,56 @@ def _load_from_state_dict(
             sub.set_extra_state(src)
             continue
 
+        if not isinstance(src, Tensor):
+            error_msgs.append(
+                f"While copying '{key}': expected Tensor, got {type(src).__name__}"
+            )
+            continue
+
         if attr_name in sub._parameters:
             old_p = sub._parameters[attr_name]
             if old_p is not None:
-                # Clone src storage onto the parameter's device, preserving requires_grad.
-                new_impl = _C_engine.contiguous(src._impl).clone_with_grad(
+                if tuple(src.shape) != tuple(old_p.shape):
+                    error_msgs.append(
+                        f"size mismatch for {key}: expected {old_p.shape}, got {src.shape}"
+                    )
+                    continue
+                converted = src.to(device=old_p.device, dtype=old_p.dtype)
+                new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
                     old_p.requires_grad
                 )
                 old_p._impl = new_impl
         elif attr_name in sub._buffers:
             old_b = sub._buffers[attr_name]
-            new_impl = _C_engine.contiguous(src._impl).clone_with_grad(False)
+            if old_b is not None and tuple(src.shape) != tuple(old_b.shape):
+                error_msgs.append(
+                    f"size mismatch for {key}: expected {old_b.shape}, got {src.shape}"
+                )
+                continue
+            converted = (
+                src if old_b is None else src.to(device=old_b.device, dtype=old_b.dtype)
+            )
+            new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(False)
             sub._buffers[attr_name] = _wrap(new_impl)
 
-    return missing_keys, unexpected_keys
+    if error_msgs:
+        raise RuntimeError(
+            "Error(s) in loading state_dict:\n\t" + "\n\t".join(error_msgs)
+        )
+
+    return IncompatibleKeys(missing_keys, unexpected_keys)
+
+
+def _materialize_lazy_modules(
+    module: Module,
+    state_dict: StateDict,
+    prefix: str = "",
+) -> None:
+    initializer = getattr(module, "_initialize_from_state_dict", None)
+    if initializer is not None:
+        initializer(state_dict, prefix)
+
+    for name, child in module._modules.items():
+        if child is None:
+            continue
+        _materialize_lazy_modules(child, state_dict, f"{prefix}{name}.")

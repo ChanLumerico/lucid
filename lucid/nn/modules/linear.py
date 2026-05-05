@@ -10,6 +10,7 @@ from lucid.nn.parameter import Parameter
 import lucid.nn.init as init
 from lucid._factories.creation import empty
 from lucid.nn.functional.linear import linear, bilinear
+from lucid._types import StateDict
 
 
 class Linear(Module):
@@ -177,6 +178,56 @@ class LazyLinear(Module):
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
+
+    def _initialize_from_state_dict(
+        self,
+        state_dict: StateDict,
+        prefix: str,
+    ) -> None:
+        if self.weight is not None:
+            return
+        weight = state_dict.get(f"{prefix}weight")
+        if weight is None:
+            return
+        if len(weight.shape) != 2:
+            raise RuntimeError(
+                f"LazyLinear expected 2-D weight in state_dict, got {weight.shape}"
+            )
+        if int(weight.shape[0]) != self.out_features:
+            raise RuntimeError(
+                "LazyLinear out_features mismatch: "
+                f"expected {self.out_features}, got {int(weight.shape[0])}"
+            )
+
+        self.in_features = int(weight.shape[1])
+        param_dtype = self._dtype or weight.dtype
+        param_device = self._device or weight.device
+        self.weight = Parameter(
+            empty(
+                self.out_features,
+                self.in_features,
+                dtype=param_dtype,
+                device=param_device,
+            )
+        )
+
+        bias = state_dict.get(f"{prefix}bias")
+        if self._has_bias:
+            if bias is not None and len(bias.shape) != 1:
+                raise RuntimeError(
+                    f"LazyLinear expected 1-D bias in state_dict, got {bias.shape}"
+                )
+            bias_dtype = self._dtype or (
+                bias.dtype if bias is not None else weight.dtype
+            )
+            bias_device = self._device or (
+                bias.device if bias is not None else weight.device
+            )
+            self.bias = Parameter(
+                empty(self.out_features, dtype=bias_dtype, device=bias_device)
+            )
+        else:
+            self.bias = None
 
     def forward(self, x: Tensor) -> Tensor:
         if self.weight is None:

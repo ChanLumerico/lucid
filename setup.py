@@ -162,7 +162,6 @@ setuptools.setup(
     extras_require={
         "test": [
             "pytest>=7.0",
-            "torch>=2.3,<2.7",
             "einops>=0.8",
             "tqdm",
         ],

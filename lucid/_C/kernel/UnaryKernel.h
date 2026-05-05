@@ -177,7 +177,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
             bwd->saved_impl_output_ = out;
 
         std::vector<Edge> edges;
-        edges.emplace_back(a_edge, 0);
+        edges.emplace_back(a_edge, a->grad_output_nr());
         bwd->set_next_edges(std::move(edges));
         // Version is captured so in-place modifications after this forward
         // call are detected as version mismatches during backward.

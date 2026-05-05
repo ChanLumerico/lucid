@@ -78,7 +78,7 @@ public:
                 bwd->saved_inputs_[i] = inp->storage();
             // Always save strong TensorImpl refs for graph-mode backward.
             bwd->saved_impl_inputs_[i] = inp;
-            edges.emplace_back(detail::ensure_grad_fn(inp), 0);
+            edges.emplace_back(detail::ensure_grad_fn(inp), inp ? inp->grad_output_nr() : 0);
             versions.push_back(inp ? inp->version() : 0);
         }
 

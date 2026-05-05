@@ -699,7 +699,7 @@ def gen_init_pyi() -> tuple[str, int]:
         lines.append(_free_fn_sig(entry))
         count += 1
 
-    # Also the PyTorch-compat overrides defined directly in _ops/__init__.py
+    # Also include reference-compatible overrides defined directly in _ops/__init__.py
     overrides = [
         "def sum(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
         "def mean(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
@@ -719,7 +719,7 @@ def gen_init_pyi() -> tuple[str, int]:
     ]
 
     content = _INIT_HEADER + "\n".join(lines) + "\n\n"
-    content += "# ── PyTorch-compat overrides (see _ops/__init__.py) ─────────────────\n"
+    content += "# ── Reference-compatible overrides (see _ops/__init__.py) ───────────\n"
     content += "\n".join(overrides) + "\n"
     return content, count
 

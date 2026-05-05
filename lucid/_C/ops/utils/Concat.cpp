@@ -251,7 +251,7 @@ attach_concat_grad(const std::vector<TensorImplPtr>& xs, TensorImplPtr out, int 
     for (const auto& t : xs) {
         bwd->input_shapes_.push_back(t->shape());
         bwd->input_tensors_.push_back(t);
-        edges.emplace_back(detail::ensure_grad_fn(t), 0);
+        edges.emplace_back(detail::ensure_grad_fn(t), t->grad_output_nr());
         versions.push_back(t->version());
     }
     bwd->set_next_edges(std::move(edges));
@@ -290,7 +290,7 @@ TensorImplPtr attach_stack_grad(const std::vector<TensorImplPtr>& xs, TensorImpl
     versions.reserve(xs.size());
     for (const auto& t : xs) {
         bwd->input_tensors_.push_back(t);
-        edges.emplace_back(detail::ensure_grad_fn(t), 0);
+        edges.emplace_back(detail::ensure_grad_fn(t), t->grad_output_nr());
         versions.push_back(t->version());
     }
     bwd->set_next_edges(std::move(edges));

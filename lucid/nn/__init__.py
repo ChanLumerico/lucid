@@ -1,6 +1,12 @@
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-from lucid.nn.hooks import RemovableHandle
+from lucid.nn.hooks import (
+    RemovableHandle,
+    register_module_full_backward_hook,
+    register_module_full_backward_pre_hook,
+    register_module_forward_hook,
+    register_module_forward_pre_hook,
+)
 from lucid.nn import functional
 from lucid.nn import init
 from lucid.nn import utils
@@ -127,6 +133,10 @@ __all__ = [
     "Module",
     "Parameter",
     "RemovableHandle",
+    "register_module_full_backward_hook",
+    "register_module_full_backward_pre_hook",
+    "register_module_forward_hook",
+    "register_module_forward_pre_hook",
     "functional",
     "init",
     "utils",

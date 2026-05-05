@@ -126,7 +126,7 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
         } else {
             if (t->is_leaf() && !t->grad_fn())
                 t->set_grad_fn(std::make_shared<AccumulateGrad>(t));
-            edges.emplace_back(t->grad_fn(), 0);
+            edges.emplace_back(t->grad_fn(), t->grad_output_nr());
             versions.push_back(t->version());
         }
     }

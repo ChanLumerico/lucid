@@ -116,7 +116,7 @@ public:
             bwd->input_tensors_v_.push_back(inp);
             if (save_ins && inp)
                 bwd->saved_inputs_v_.push_back(inp->storage());
-            edges.emplace_back(detail::ensure_grad_fn(inp), 0);
+            edges.emplace_back(detail::ensure_grad_fn(inp), inp ? inp->grad_output_nr() : 0);
             versions.push_back(inp ? inp->version() : 0);
         }
 
