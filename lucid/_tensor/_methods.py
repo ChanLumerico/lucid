@@ -281,6 +281,20 @@ def _inject_methods(tensor_cls: type) -> None:
             parts = _C_engine.split_at(self._impl, indices, int(dim))
         return [_wrap(p) for p in parts]
 
+    def eval(self: Tensor) -> Tensor:
+        """Force immediate evaluation of this tensor.
+
+        On Metal (MLX backend) this flushes the lazy computation graph so that
+        the graph does not grow unboundedly across training iterations.
+        On CPU this is a no-op.  Returns ``self`` for chaining::
+
+            loss.eval().backward()
+        """
+        if self._impl.device == _C_engine.Device.GPU:
+            import mlx.core as mx
+            mx.eval(self._impl)
+        return self
+
     def log_softmax(self: Tensor, axis: int = -1) -> Tensor:
         """Return log-softmax along the given axis."""
         sm = _C_engine.softmax(self._impl, axis)
@@ -297,6 +311,7 @@ def _inject_methods(tensor_cls: type) -> None:
     for _name, _fn in [
         ("view", view),
         ("t", t),
+        ("eval", eval),
         ("reshape", reshape),
         ("permute", permute),
         ("expand", expand),

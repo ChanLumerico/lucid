@@ -470,6 +470,36 @@ def _load_type_aliases() -> dict[str, object]:
     )
 
 
+# ── lucid.eval(*tensors) ──────────────────────────────────────────────────────
+
+
+def eval(*tensors: object) -> None:  # type: ignore[override]
+    """Force immediate evaluation of one or more tensors.
+
+    On Metal (MLX backend) this flushes the lazy computation graph for all
+    supplied tensors in a single ``mlx.core.eval()`` call — more efficient
+    than calling ``.eval()`` on each tensor individually because MLX can
+    schedule them together.
+
+    On CPU this is a no-op.
+
+    Typical training-loop usage::
+
+        loss.backward()
+        optimizer.step()
+        lucid.eval(loss, *model.parameters())   # flush loss + param updates
+    """
+    from lucid._C import engine as _ce
+    from lucid._tensor.tensor import Tensor as _T
+
+    gpu_impls = [
+        t._impl for t in tensors if isinstance(t, _T) and t._impl.device == _ce.Device.GPU
+    ]
+    if gpu_impls:
+        import mlx.core as mx
+        mx.eval(*gpu_impls)
+
+
 # ── Module __getattr__ ────────────────────────────────────────────────────────
 
 
