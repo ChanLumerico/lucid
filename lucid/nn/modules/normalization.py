@@ -120,6 +120,10 @@ class GroupNorm(Module):
 class _BatchNormBase(Module):
     """Common implementation for BatchNorm1d/2d/3d."""
 
+    # Version 2 introduces `num_batches_tracked`.  Checkpoints saved with
+    # version < 2 (or no metadata) are migrated by `_load_from_state_dict`.
+    _version: int = 2
+
     def __init__(
         self,
         num_features: int,
@@ -155,9 +159,53 @@ class _BatchNormBase(Module):
             self.register_buffer(
                 "running_var", ones(num_features, dtype=dtype, device=device)
             )
+            # `num_batches_tracked` is always int64 scalar regardless of the
+            # module's float dtype.  Used by momentum=None (cumulative average)
+            # in the next pack — registered here so checkpoints round-trip.
+            import lucid as _lucid
+
+            self.register_buffer(
+                "num_batches_tracked",
+                _lucid.zeros((), dtype=_lucid.int64, device=device),
+            )
         else:
             self.register_buffer("running_mean", None)
             self.register_buffer("running_var", None)
+            self.register_buffer("num_batches_tracked", None)
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict,
+        prefix: str,
+        local_metadata: dict,
+        strict: bool,
+        missing_keys: list,
+        unexpected_keys: list,
+        error_msgs: list,
+    ) -> None:
+        # Version-1 checkpoints predate `num_batches_tracked`.  Drop the
+        # missing-key entry for it so users loading old weights aren't
+        # spuriously warned.
+        version = local_metadata.get("version") if local_metadata else None
+        if (version is None or version < 2) and self.track_running_stats:
+            key = f"{prefix}num_batches_tracked"
+            if key not in state_dict:
+                # Pre-populate with zero so the default loader can copy it.
+                import lucid as _lucid
+
+                state_dict[key] = _lucid.zeros((), dtype=_lucid.int64)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         return batch_norm(

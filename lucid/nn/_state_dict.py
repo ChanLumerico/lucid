@@ -1,148 +1,312 @@
-"""state_dict save/load helpers for Module."""
+"""state_dict save/load infrastructure for Module.
 
-from collections import namedtuple
+The protocol mirrors PyTorch:
+
+* ``Module._save_to_state_dict`` writes own params / buffers into the dest dict.
+  The top-level ``state_dict()`` walker recurses into children.
+* ``Module._load_from_state_dict`` consumes its own keys from the supplied
+  state_dict, mutating ``missing_keys``, ``unexpected_keys`` and
+  ``error_msgs`` in place.  The top-level ``load_state_dict()`` driver
+  recurses, runs pre/post hooks, and raises a single ``RuntimeError`` at
+  the end when ``strict=True``.
+* ``state_dict()`` attaches an ``_metadata`` attribute to the returned
+  OrderedDict mapping ``module_path → {"version": <int>}`` for every module
+  that defines a ``_version`` class attribute.  This metadata is forwarded
+  to each child's ``_load_from_state_dict`` via the ``local_metadata`` arg
+  for migration hooks to inspect.
+"""
+
+from collections import OrderedDict, namedtuple
 
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
+from lucid.nn.hooks import (
+    _GLOBAL_LOAD_STATE_DICT_POST_HOOKS,
+    _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS,
+)
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter
 from lucid._types import StateDict
 
 
 class IncompatibleKeys(
     namedtuple("IncompatibleKeys", ["missing_keys", "unexpected_keys"])
 ):
-    """Return value for load_state_dict."""
+    """Return value of ``Module.load_state_dict``."""
 
     __slots__ = ()
 
 
+# ── state_dict (save side) ────────────────────────────────────────────────────
+
+
+def _build_metadata(module: Module, prefix: str = "") -> dict[str, dict[str, object]]:
+    """Walk the module tree and collect per-module ``_version`` tags."""
+    metadata: dict[str, dict[str, object]] = {}
+    version = getattr(type(module), "_version", None)
+    key = prefix.rstrip(".") if prefix else ""
+    if version is not None:
+        metadata[key] = {"version": version}
+    for name, child in module._modules.items():
+        if child is None:
+            continue
+        metadata.update(_build_metadata(child, f"{prefix}{name}."))
+    return metadata
+
+
 def _save_to_state_dict(
     module: Module,
+    destination: dict[str, Tensor],
     prefix: str = "",
     keep_vars: bool = False,
-) -> StateDict:
-    """Recursively collect parameters and persistent buffers into a flat dict."""
-    result: StateDict = {}
-    non_persistent: set[str] = getattr(module, "_non_persistent_buffers", set())
-
-    for name, p in module._parameters.items():
-        if p is not None:
-            key = f"{prefix}{name}"
-            result[key] = p if keep_vars else p.detach()
-
-    for name, b in module._buffers.items():
-        if b is not None and name not in non_persistent:
-            key = f"{prefix}{name}"
-            result[key] = b if keep_vars else b.detach()
-
-    for mname, m in module._modules.items():
-        if m is None:
+) -> None:
+    """Recursive walker — let each module write its own state, then recurse."""
+    module._save_to_state_dict(destination, prefix, keep_vars)
+    for mname, child in module._modules.items():
+        if child is None:
             continue
-        subprefix = f"{prefix}{mname}."
-        result.update(_save_to_state_dict(m, prefix=subprefix, keep_vars=keep_vars))
-
-    # Allow modules to include extra state
-    extra = module.get_extra_state()
-    if extra is not None:
-        result[f"{prefix}_extra_state"] = extra
-
-    return result
+        _save_to_state_dict(child, destination, f"{prefix}{mname}.", keep_vars)
 
 
-def _load_from_state_dict(
+# ── state_dict (load side) ────────────────────────────────────────────────────
+
+
+def _default_load_from_state_dict(
     module: Module,
     state_dict: StateDict,
-    strict: bool = True,
-) -> IncompatibleKeys:
-    """Load parameters from state_dict."""
-    _materialize_lazy_modules(module, state_dict)
-    own_state = module.state_dict(keep_vars=True)
-    missing_keys: list[str] = []
-    unexpected_keys: list[str] = []
-    error_msgs: list[str] = []
+    prefix: str,
+    local_metadata: dict[str, object],
+    strict: bool,
+    missing_keys: list[str],
+    unexpected_keys: list[str],
+    error_msgs: list[str],
+) -> None:
+    """Default ``_load_from_state_dict`` impl — params + persistent buffers.
 
-    for key in own_state:
+    Subclasses should call this from their override (after any pre-processing)
+    to share the standard copy / dtype-convert / shape-check logic.
+    """
+    persistent_buffers = {
+        name: b
+        for name, b in module._buffers.items()
+        if b is not None and name not in module._non_persistent_buffers
+    }
+    local_state = {
+        **{name: p for name, p in module._parameters.items() if p is not None},
+        **persistent_buffers,
+    }
+
+    for name, attr in local_state.items():
+        key = f"{prefix}{name}"
         if key not in state_dict:
             missing_keys.append(key)
-
-    for key in state_dict:
-        if key not in own_state:
-            unexpected_keys.append(key)
-
-    if strict and (missing_keys or unexpected_keys):
-        if missing_keys:
-            error_msgs.append(f"Missing key(s): {missing_keys}")
-        if unexpected_keys:
-            error_msgs.append(f"Unexpected key(s): {unexpected_keys}")
-
-    for key, src in state_dict.items():
-        if key not in own_state:
             continue
-        # Navigate to the right sub-module
-        parts = key.split(".")
-        sub: Module = module
-        for part in parts[:-1]:
-            if part == "_extra_state":
-                break
-            sub = sub._modules[part]
-        attr_name = parts[-1]
-
-        if attr_name == "_extra_state":
-            sub.set_extra_state(src)
-            continue
-
+        src = state_dict[key]
         if not isinstance(src, Tensor):
             error_msgs.append(
-                f"While copying '{key}': expected Tensor, got {type(src).__name__}"
+                f"While copying parameter '{key}', expected Tensor, "
+                f"got {type(src).__name__}"
             )
             continue
-
-        if attr_name in sub._parameters:
-            old_p = sub._parameters[attr_name]
-            if old_p is not None:
-                if tuple(src.shape) != tuple(old_p.shape):
-                    error_msgs.append(
-                        f"size mismatch for {key}: expected {old_p.shape}, got {src.shape}"
-                    )
-                    continue
-                converted = src.to(device=old_p.device, dtype=old_p.dtype)
-                new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
-                    old_p.requires_grad
-                )
-                old_p._impl = new_impl
-        elif attr_name in sub._buffers:
-            old_b = sub._buffers[attr_name]
-            if old_b is not None and tuple(src.shape) != tuple(old_b.shape):
-                error_msgs.append(
-                    f"size mismatch for {key}: expected {old_b.shape}, got {src.shape}"
-                )
-                continue
-            converted = (
-                src if old_b is None else src.to(device=old_b.device, dtype=old_b.dtype)
+        if tuple(src.shape) != tuple(attr.shape):
+            error_msgs.append(
+                f"size mismatch for {key}: "
+                f"expected {tuple(attr.shape)}, got {tuple(src.shape)}"
             )
-            new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(False)
-            sub._buffers[attr_name] = _wrap(new_impl)
-
-    if error_msgs:
-        raise RuntimeError(
-            "Error(s) in loading state_dict:\n\t" + "\n\t".join(error_msgs)
+            continue
+        # Copy with original dtype/device preserved.
+        converted = src.to(device=attr.device, dtype=attr.dtype)
+        new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
+            getattr(attr, "requires_grad", False)
         )
+        if name in module._parameters:
+            module._parameters[name]._impl = new_impl  # type: ignore[union-attr]
+        else:
+            module._buffers[name] = _wrap(new_impl)
 
-    return IncompatibleKeys(missing_keys, unexpected_keys)
+    # extra_state (rare hook for opaque per-module state).
+    extra_key = f"{prefix}_extra_state"
+    if extra_key in state_dict:
+        module.set_extra_state(state_dict[extra_key])
+    elif module.get_extra_state() is not None:
+        # Module advertises extra_state but checkpoint lacks it.
+        missing_keys.append(extra_key)
 
 
-def _materialize_lazy_modules(
+def _enumerate_local_keys(module: Module, prefix: str) -> list[str]:
+    """Flat list of keys this module owns at ``prefix`` (params + persistent buffers)."""
+    keys: list[str] = []
+    for name, p in module._parameters.items():
+        if p is not None:
+            keys.append(f"{prefix}{name}")
+    for name, b in module._buffers.items():
+        if b is not None and name not in module._non_persistent_buffers:
+            keys.append(f"{prefix}{name}")
+    if module.get_extra_state() is not None:
+        keys.append(f"{prefix}_extra_state")
+    return keys
+
+
+def _walk_load(
     module: Module,
     state_dict: StateDict,
-    prefix: str = "",
+    prefix: str,
+    metadata: dict[str, dict[str, object]],
+    strict: bool,
+    missing_keys: list[str],
+    unexpected_keys: list[str],
+    error_msgs: list[str],
+    post_hook_modules: list,
 ) -> None:
-    initializer = getattr(module, "_initialize_from_state_dict", None)
-    if initializer is not None:
-        initializer(state_dict, prefix)
+    """Pre-order walk: handle this module, then recurse into children.
+
+    Post-hooks are deferred — modules with registered post-hooks are
+    appended to `post_hook_modules` and fired by the top-level driver
+    after the full walk completes, so each hook sees the final
+    IncompatibleKeys rather than a per-module snapshot.
+    """
+    local_meta = metadata.get(prefix.rstrip("."), {}) if metadata else {}
+
+    # Pre-hooks (global → instance).
+    for hook in _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS.values():
+        hook(
+            module,
+            state_dict,
+            prefix,
+            local_meta,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+    for hook in module._load_state_dict_pre_hooks.values():
+        hook(
+            module,
+            state_dict,
+            prefix,
+            local_meta,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
+    module._load_from_state_dict(
+        state_dict,
+        prefix,
+        local_meta,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    )
+
+    if module._load_state_dict_post_hooks:
+        post_hook_modules.append(module)
 
     for name, child in module._modules.items():
         if child is None:
             continue
-        _materialize_lazy_modules(child, state_dict, f"{prefix}{name}.")
+        _walk_load(
+            child,
+            state_dict,
+            f"{prefix}{name}.",
+            metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+            post_hook_modules,
+        )
+
+
+def load_state_dict(
+    module: Module,
+    state_dict: StateDict,
+    strict: bool = True,
+) -> IncompatibleKeys:
+    """Driver for ``Module.load_state_dict``.
+
+    Pre-order recursion: at each module, run pre-hooks, then
+    ``_load_from_state_dict``, then post-hooks, then recurse into children.
+
+    ``state_dict`` may carry an ``_metadata`` attribute (set by
+    ``Module.state_dict()``) that maps module paths to per-module metadata
+    such as ``{"version": N}``.  Each module's hook receives the relevant
+    slice as ``local_metadata``.
+    """
+    metadata = getattr(state_dict, "_metadata", None) or {}
+    # We must operate on a mutable copy so hooks may rename keys safely.
+    state_dict = OrderedDict(state_dict)
+    state_dict._metadata = metadata  # type: ignore[attr-defined]
+
+    missing_keys: list[str] = []
+    unexpected_keys: list[str] = []
+    error_msgs: list[str] = []
+    post_hook_modules: list = []
+
+    _walk_load(
+        module,
+        state_dict,
+        "",
+        metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+        post_hook_modules,
+    )
+
+    # Compute final unexpected_keys based on the post-hook state_dict
+    # (pre-hooks may have renamed/added/removed keys).  Anything still
+    # present that no module claimed is "unexpected".
+    expected_keys: set[str] = set()
+    _collect_expected(module, "", expected_keys)
+    unexpected_keys = [k for k in state_dict.keys() if k not in expected_keys]
+
+    incompatible = IncompatibleKeys(missing_keys, unexpected_keys)
+
+    # Fire post-hooks (instance + global) with the final IncompatibleKeys.
+    for m in post_hook_modules:
+        for hook in m._load_state_dict_post_hooks.values():
+            hook(m, incompatible)
+    if _GLOBAL_LOAD_STATE_DICT_POST_HOOKS:
+
+        def _walk_post(mod):
+            for hook in _GLOBAL_LOAD_STATE_DICT_POST_HOOKS.values():
+                hook(mod, incompatible)
+            for child in mod._modules.values():
+                if child is not None:
+                    _walk_post(child)
+
+        _walk_post(module)
+
+    # Strict mode: turn missing/unexpected into errors.
+    if strict:
+        if missing_keys:
+            error_msgs.insert(
+                0,
+                f"Missing key(s) in state_dict: {', '.join(repr(k) for k in missing_keys)}.",
+            )
+        if unexpected_keys:
+            error_msgs.insert(
+                0,
+                f"Unexpected key(s) in state_dict: {', '.join(repr(k) for k in unexpected_keys)}.",
+            )
+
+    if error_msgs:
+        raise RuntimeError(
+            "Error(s) in loading state_dict for {}:\n\t{}".format(
+                type(module).__name__, "\n\t".join(error_msgs)
+            )
+        )
+
+    return incompatible
+
+
+def _collect_expected(module: Module, prefix: str, out: set[str]) -> None:
+    out.update(_enumerate_local_keys(module, prefix))
+    for name, child in module._modules.items():
+        if child is None:
+            continue
+        _collect_expected(child, f"{prefix}{name}.", out)

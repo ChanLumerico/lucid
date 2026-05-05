@@ -14,6 +14,8 @@ from lucid.nn.hooks import (
     _GLOBAL_BACKWARD_PRE_HOOKS,
     _GLOBAL_FORWARD_HOOKS,
     _GLOBAL_FORWARD_PRE_HOOKS,
+    _GLOBAL_LOAD_STATE_DICT_POST_HOOKS,
+    _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS,
     RemovableHandle,
 )
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
@@ -78,6 +80,8 @@ class Module:
         object.__setattr__(self, "_forward_hooks_always_called", set())
         object.__setattr__(self, "_backward_pre_hooks", OrderedDict())
         object.__setattr__(self, "_backward_hooks", OrderedDict())
+        object.__setattr__(self, "_load_state_dict_pre_hooks", OrderedDict())
+        object.__setattr__(self, "_load_state_dict_post_hooks", OrderedDict())
         object.__setattr__(self, "training", True)
 
     def forward(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
@@ -698,21 +702,125 @@ class Module:
 
     # ── state_dict ────────────────────────────────────────────────────────
 
-    def state_dict(
-        self, *, prefix: str = "", keep_vars: bool = False
-    ) -> dict[str, Tensor]:
-        """Return a dict mapping parameter/buffer names to tensors."""
-        from lucid.nn._state_dict import _save_to_state_dict
+    # Optional per-class version tag.  Subclasses may set `_version = N` to
+    # opt into versioned migrations; the default of None omits the entry
+    # from `_metadata`.
+    _version: ClassVar[int | None] = None
 
-        return _save_to_state_dict(self, prefix=prefix, keep_vars=keep_vars)
+    def state_dict(
+        self,
+        destination: dict[str, Tensor] | None = None,
+        prefix: str = "",
+        keep_vars: bool = False,
+    ) -> dict[str, Tensor]:
+        """Return a dict mapping parameter/buffer names to tensors.
+
+        The returned OrderedDict carries a `_metadata` attribute:
+        ``{module_path: {"version": <int>}}`` for every module that defines
+        a `_version` class attribute.  `lucid.save` preserves this attribute
+        across disk round-trips.
+        """
+        from lucid.nn._state_dict import _save_to_state_dict, _build_metadata
+
+        if destination is None:
+            destination = OrderedDict()
+            destination._metadata = _build_metadata(self, prefix)  # type: ignore[attr-defined]
+        _save_to_state_dict(self, destination, prefix=prefix, keep_vars=keep_vars)
+        return destination
+
+    def _save_to_state_dict(
+        self,
+        destination: dict[str, Tensor],
+        prefix: str,
+        keep_vars: bool,
+    ) -> None:
+        """Write this module's own params + persistent buffers into destination.
+
+        Default implementation iterates `_parameters` and persistent buffers.
+        Subclasses may override for custom save logic.  Recursion into
+        children is handled by the top-level walker, not by this method.
+        """
+        for name, p in self._parameters.items():
+            if p is not None:
+                destination[f"{prefix}{name}"] = p if keep_vars else p.detach()
+        for name, b in self._buffers.items():
+            if b is not None and name not in self._non_persistent_buffers:
+                destination[f"{prefix}{name}"] = b if keep_vars else b.detach()
+        extra = self.get_extra_state()
+        if extra is not None:
+            destination[f"{prefix}_extra_state"] = extra
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Default per-module loader.
+
+        Mutates state_dict / missing_keys / unexpected_keys / error_msgs
+        in place.  Override in subclasses for custom migration logic
+        (e.g. lazy materialization, buffer rename, version migration).
+        Recursion into children is handled by the top-level driver.
+        """
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def load_state_dict(
         self, state_dict: dict[str, Tensor], strict: bool = True
     ) -> object:
-        """Load parameters from a state_dict."""
-        from lucid.nn._state_dict import _load_from_state_dict
+        """Load parameters from a state_dict.
 
-        return _load_from_state_dict(self, state_dict, strict=strict)
+        Calls each module's `_load_from_state_dict` recursively.
+        Returns ``IncompatibleKeys(missing_keys, unexpected_keys)`` on success.
+        Raises ``RuntimeError`` if ``strict=True`` and any keys are missing
+        or unexpected, or if any error_msgs accumulated during loading.
+        """
+        from lucid.nn._state_dict import load_state_dict as _driver
+
+        return _driver(self, state_dict, strict=strict)
+
+    def register_load_state_dict_pre_hook(
+        self,
+        hook: Callable[..., object],
+    ) -> RemovableHandle:
+        """Register a pre-hook called when this module loads state_dict.
+
+        Hook signature:
+            hook(module, state_dict, prefix, local_metadata, strict,
+                 missing_keys, unexpected_keys, error_msgs) -> None
+
+        The hook may mutate state_dict/missing/unexpected/error_msgs.
+        """
+        key = _next_hook_id()
+        self._load_state_dict_pre_hooks[key] = hook
+        return RemovableHandle(self._load_state_dict_pre_hooks, key)
+
+    def register_load_state_dict_post_hook(
+        self,
+        hook: Callable[..., object],
+    ) -> RemovableHandle:
+        """Register a post-hook called after this module loads state_dict.
+
+        Hook signature: ``hook(module, incompatible_keys) -> None``.
+        """
+        key = _next_hook_id()
+        self._load_state_dict_post_hooks[key] = hook
+        return RemovableHandle(self._load_state_dict_post_hooks, key)
 
     # ── hooks ─────────────────────────────────────────────────────────────
 

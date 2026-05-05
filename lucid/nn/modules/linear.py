@@ -179,55 +179,69 @@ class LazyLinear(Module):
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
 
-    def _initialize_from_state_dict(
+    def _load_from_state_dict(
         self,
         state_dict: StateDict,
         prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
     ) -> None:
-        if self.weight is not None:
-            return
-        weight = state_dict.get(f"{prefix}weight")
-        if weight is None:
-            return
-        if len(weight.shape) != 2:
-            raise RuntimeError(
-                f"LazyLinear expected 2-D weight in state_dict, got {weight.shape}"
-            )
-        if int(weight.shape[0]) != self.out_features:
-            raise RuntimeError(
-                "LazyLinear out_features mismatch: "
-                f"expected {self.out_features}, got {int(weight.shape[0])}"
-            )
-
-        self.in_features = int(weight.shape[1])
-        param_dtype = self._dtype or weight.dtype
-        param_device = self._device or weight.device
-        self.weight = Parameter(
-            empty(
-                self.out_features,
-                self.in_features,
-                dtype=param_dtype,
-                device=param_device,
-            )
-        )
-
-        bias = state_dict.get(f"{prefix}bias")
-        if self._has_bias:
-            if bias is not None and len(bias.shape) != 1:
-                raise RuntimeError(
-                    f"LazyLinear expected 1-D bias in state_dict, got {bias.shape}"
+        # If still uninitialized, materialize from the checkpoint shape first.
+        if self.weight is None:
+            weight = state_dict.get(f"{prefix}weight")
+            if weight is not None:
+                if len(weight.shape) != 2:
+                    error_msgs.append(
+                        f"LazyLinear expected 2-D weight at '{prefix}weight', "
+                        f"got {tuple(weight.shape)}"
+                    )
+                    return
+                if int(weight.shape[0]) != self.out_features:
+                    error_msgs.append(
+                        f"LazyLinear out_features mismatch at '{prefix}weight': "
+                        f"expected {self.out_features}, got {int(weight.shape[0])}"
+                    )
+                    return
+                self.in_features = int(weight.shape[1])
+                param_dtype = self._dtype or weight.dtype
+                param_device = self._device or weight.device
+                self.weight = Parameter(
+                    empty(
+                        self.out_features,
+                        self.in_features,
+                        dtype=param_dtype,
+                        device=param_device,
+                    )
                 )
-            bias_dtype = self._dtype or (
-                bias.dtype if bias is not None else weight.dtype
-            )
-            bias_device = self._device or (
-                bias.device if bias is not None else weight.device
-            )
-            self.bias = Parameter(
-                empty(self.out_features, dtype=bias_dtype, device=bias_device)
-            )
-        else:
-            self.bias = None
+                if self._has_bias:
+                    bias = state_dict.get(f"{prefix}bias")
+                    bias_dtype = self._dtype or (
+                        bias.dtype if bias is not None else weight.dtype
+                    )
+                    bias_device = self._device or (
+                        bias.device if bias is not None else weight.device
+                    )
+                    self.bias = Parameter(
+                        empty(self.out_features, dtype=bias_dtype, device=bias_device)
+                    )
+                else:
+                    self.bias = None
+        # Delegate the actual copy / shape-check to the default loader.
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         if self.weight is None:

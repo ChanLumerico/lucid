@@ -255,11 +255,13 @@ class TestConvSamePaddingParity:
     def _make_pair(args, kwargs):
         ref.manual_seed(0)
         import lucid.nn as lnn
+
         t_mod = ref.nn.Conv2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.Conv2d(*args, **kwargs)
         from lucid._C import engine as _ce
         from lucid._tensor.tensor import _impl_with_grad as _iwg
+
         for name, lp in l_mod.named_parameters():
             new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
@@ -294,11 +296,13 @@ class TestGroupedConvParity:
     def _make_pair(args, kwargs):
         ref.manual_seed(0)
         import lucid.nn as lnn
+
         t_mod = ref.nn.Conv2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.Conv2d(*args, **kwargs)
         from lucid._C import engine as _ce
         from lucid._tensor.tensor import _impl_with_grad as _iwg
+
         for name, lp in l_mod.named_parameters():
             new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
@@ -343,11 +347,13 @@ class TestConvTransposeParity:
     def _make_pair(args, kwargs):
         ref.manual_seed(0)
         import lucid.nn as lnn
+
         t_mod = ref.nn.ConvTranspose2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.ConvTranspose2d(*args, **kwargs)
         from lucid._C import engine as _ce
         from lucid._tensor.tensor import _impl_with_grad as _iwg
+
         for name, lp in l_mod.named_parameters():
             new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)

@@ -19,7 +19,6 @@ from lucid.nn.functional.conv import (
 )
 from lucid.nn.functional.sampling import pad as _F_pad
 
-
 _VALID_PADDING_MODES = frozenset({"zeros", "reflect", "replicate", "circular"})
 
 # Maps Conv padding_mode to F.pad mode.
@@ -39,7 +38,9 @@ def _triple(v: _Size3d) -> tuple[int, int, int]:
     return (v, v, v) if isinstance(v, int) else tuple(v)  # type: ignore[return-value]
 
 
-def _same_pad_pair(in_size: int, kernel: int, stride: int, dilation: int) -> tuple[int, int]:
+def _same_pad_pair(
+    in_size: int, kernel: int, stride: int, dilation: int
+) -> tuple[int, int]:
     """Compute (pad_lo, pad_hi) for `padding="same"` on one spatial dim.
 
     PyTorch parity: pad_lo = pad_total // 2, pad_hi = pad_total - pad_lo.
@@ -99,7 +100,9 @@ def _conv_forward_with_mode(
     symmetric = all(pad_lo[i] == pad_hi[i] for i in range(n))
     if padding_mode == "zeros" and symmetric:
         engine_pad = pad_lo[0] if n == 1 else tuple(pad_lo)
-        return _call_conv(conv_fn, x, weight, bias, stride, engine_pad, dilation, groups, n)
+        return _call_conv(
+            conv_fn, x, weight, bias, stride, engine_pad, dilation, groups, n
+        )
     # Pre-pad path.  F.pad uses last-dim-first flat tuple.
     # pad_lo[i], pad_hi[i] are spatial dim i (first→last); we need to reverse
     # so that the LAST spatial dim comes first in F.pad's flat tuple.
@@ -191,15 +194,25 @@ class Conv1d(Module):
         if self._padding_str == "valid":
             return (0,), (0,)
         if self._padding_str == "same":
-            lo, hi = _same_pad_pair(x.shape[2], self.kernel_size, self.stride, self.dilation)
+            lo, hi = _same_pad_pair(
+                x.shape[2], self.kernel_size, self.stride, self.dilation
+            )
             return (lo,), (hi,)
         return (self.padding,), (self.padding,)
 
     def forward(self, x: Tensor) -> Tensor:
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
-            x, self.weight, self.bias, (self.stride,), pad_lo, pad_hi,
-            (self.dilation,), self.groups, self.padding_mode, conv1d,
+            x,
+            self.weight,
+            self.bias,
+            (self.stride,),
+            pad_lo,
+            pad_hi,
+            (self.dilation,),
+            self.groups,
+            self.padding_mode,
+            conv1d,
         )
 
     def extra_repr(self) -> str:
@@ -283,8 +296,16 @@ class Conv2d(Module):
     def forward(self, x: Tensor) -> Tensor:
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
-            x, self.weight, self.bias, self.stride, pad_lo, pad_hi,
-            self.dilation, self.groups, self.padding_mode, conv2d,
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            pad_lo,
+            pad_hi,
+            self.dilation,
+            self.groups,
+            self.padding_mode,
+            conv2d,
         )
 
     def extra_repr(self) -> str:
@@ -370,8 +391,16 @@ class Conv3d(Module):
     def forward(self, x: Tensor) -> Tensor:
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
-            x, self.weight, self.bias, self.stride, pad_lo, pad_hi,
-            self.dilation, self.groups, self.padding_mode, conv3d,
+            x,
+            self.weight,
+            self.bias,
+            self.stride,
+            pad_lo,
+            pad_hi,
+            self.dilation,
+            self.groups,
+            self.padding_mode,
+            conv3d,
         )
 
     def extra_repr(self) -> str:

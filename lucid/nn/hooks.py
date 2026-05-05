@@ -11,6 +11,17 @@ _GLOBAL_FORWARD_HOOKS: OrderedDict[int, tuple[Callable[..., object], bool, bool]
 )
 _GLOBAL_BACKWARD_PRE_HOOKS: OrderedDict[int, Callable[..., object]] = OrderedDict()
 _GLOBAL_BACKWARD_HOOKS: OrderedDict[int, Callable[..., object]] = OrderedDict()
+# load_state_dict pre-hook signature:
+#   hook(module, state_dict, prefix, local_metadata, strict, missing_keys,
+#        unexpected_keys, error_msgs) -> None
+_GLOBAL_LOAD_STATE_DICT_PRE_HOOKS: OrderedDict[int, Callable[..., object]] = (
+    OrderedDict()
+)
+# load_state_dict post-hook signature:
+#   hook(module, incompatible_keys) -> None
+_GLOBAL_LOAD_STATE_DICT_POST_HOOKS: OrderedDict[int, Callable[..., object]] = (
+    OrderedDict()
+)
 
 _HOOK_ID = 0
 
@@ -86,3 +97,33 @@ def register_module_full_backward_hook(
     key = _next_hook_id()
     _GLOBAL_BACKWARD_HOOKS[key] = hook
     return RemovableHandle(_GLOBAL_BACKWARD_HOOKS, key)
+
+
+def register_module_load_state_dict_pre_hook(
+    hook: Callable[..., object],
+) -> RemovableHandle:
+    """Register a global pre-hook called for each Module during load_state_dict.
+
+    Hook signature:
+        hook(module, state_dict, prefix, local_metadata, strict,
+             missing_keys, unexpected_keys, error_msgs) -> None
+
+    The hook may mutate `state_dict`, `missing_keys`, `unexpected_keys`,
+    and `error_msgs` in place to influence the load.
+    """
+    key = _next_hook_id()
+    _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS[key] = hook
+    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_PRE_HOOKS, key)
+
+
+def register_module_load_state_dict_post_hook(
+    hook: Callable[..., object],
+) -> RemovableHandle:
+    """Register a global post-hook called after each Module's load_state_dict.
+
+    Hook signature:
+        hook(module, incompatible_keys) -> None
+    """
+    key = _next_hook_id()
+    _GLOBAL_LOAD_STATE_DICT_POST_HOOKS[key] = hook
+    return RemovableHandle(_GLOBAL_LOAD_STATE_DICT_POST_HOOKS, key)

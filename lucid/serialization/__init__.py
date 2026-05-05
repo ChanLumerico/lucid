@@ -30,6 +30,7 @@ _SAFE_CLASSES = frozenset(
         "builtins.bool",
         "builtins.bytes",
         "builtins.NoneType",
+        "collections.OrderedDict",
         "numpy.ndarray",
         "numpy.dtype",
     }
@@ -92,10 +93,20 @@ class _LucidUnpickler(pickle.Unpickler):
 
 
 def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
-    """Save an object to a file or file-like object."""
+    """Save an object to a file or file-like object.
+
+    If ``obj`` is a ``dict`` (or subclass) carrying a ``_metadata`` attribute
+    set by ``Module.state_dict()``, the metadata is preserved across the
+    round-trip and re-attached on ``load()``.
+    """
+    sd_metadata: object | None = getattr(obj, "_metadata", None)
+    container: dict = {"_lucid_format": 2, "obj": obj}
+    if sd_metadata is not None:
+        container["_state_dict_metadata"] = sd_metadata
+
     buf = io.BytesIO()
     pickler = _LucidPickler(buf, protocol=pickle_protocol)
-    pickler.dump({"_lucid_format": 1, "obj": obj})
+    pickler.dump(container)
     data = buf.getvalue()
 
     if isinstance(f, (str, bytes)):
@@ -133,13 +144,31 @@ def load(
 
     container = unpickler.load()
 
-    if not isinstance(container, dict) or container.get("_lucid_format") != 1:
+    if not isinstance(container, dict) or container.get("_lucid_format") not in (1, 2):
         raise RuntimeError("File is not a valid Lucid checkpoint")
 
     obj = container["obj"]
 
+    # Restore the `_metadata` attribute on state_dicts saved with format v2.
+    sd_metadata = container.get("_state_dict_metadata")
+    if sd_metadata is not None and isinstance(obj, dict):
+        try:
+            obj._metadata = sd_metadata  # type: ignore[attr-defined]
+        except AttributeError:
+            # Plain dict can't hold attrs — re-wrap in OrderedDict.
+            from collections import OrderedDict as _OD
+
+            new_obj = _OD(obj)
+            new_obj._metadata = sd_metadata  # type: ignore[attr-defined]
+            obj = new_obj
+
     if map_location is not None:
         obj = _apply_map_location(obj, map_location)
+        if sd_metadata is not None and isinstance(obj, dict):
+            try:
+                obj._metadata = sd_metadata  # type: ignore[attr-defined]
+            except AttributeError:
+                pass
 
     return obj
 

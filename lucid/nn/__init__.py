@@ -6,6 +6,8 @@ from lucid.nn.hooks import (
     register_module_full_backward_pre_hook,
     register_module_forward_hook,
     register_module_forward_pre_hook,
+    register_module_load_state_dict_pre_hook,
+    register_module_load_state_dict_post_hook,
 )
 from lucid.nn import functional
 from lucid.nn import init
@@ -137,6 +139,8 @@ __all__ = [
     "register_module_full_backward_pre_hook",
     "register_module_forward_hook",
     "register_module_forward_pre_hook",
+    "register_module_load_state_dict_pre_hook",
+    "register_module_load_state_dict_post_hook",
     "functional",
     "init",
     "utils",
