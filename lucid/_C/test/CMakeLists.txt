@@ -11,6 +11,9 @@
 
 cmake_minimum_required(VERSION 3.24)
 
+# ── Python (required because TensorImpl.h pulls in pybind11 headers) ─────────
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
 # ── Fetch Google Test ─────────────────────────────────────────────────────────
 include(FetchContent)
 FetchContent_Declare(
@@ -46,22 +49,31 @@ add_executable(lucid_test ${LUCID_TEST_SRCS})
 target_link_libraries(lucid_test PRIVATE
     GTest::gtest_main
     GTest::gmock
+    lucid_compile_options          # inherits C++20 standard + all -W flags
     lucid_core
     lucid_backend_cpu
     lucid_backend_gpu
+    lucid_backend_init             # registers CPU+GPU backends at static-init
     lucid_ops
     lucid_autograd
+    lucid_random
+    Python3::Python                # pybind11 C API symbols (set_error etc.)
+    "${LUCID_MLX_LIBRARY}"         # MLX symbols used by GpuBackend
+    "-framework Accelerate"        # BLAS / BNNS / vDSP / vForce
+    "-framework Metal"             # Metal API (MetalAllocator, MetalKernelRunner)
+    "-framework Foundation"        # NSString etc. (required by Metal on macOS)
 )
 
-# Inherit the engine compile options (C++20, warnings, etc.)
-target_compile_options(lucid_test PRIVATE
-    $<TARGET_PROPERTY:lucid_compile_options,INTERFACE_COMPILE_OPTIONS>
-)
-
-# Include paths: helpers/, engine root, and project root
+# Include paths: helpers/, engine root, project root, and pybind11/Python headers
+# (needed because TensorImpl.h includes pybind11/numpy.h)
 target_include_directories(lucid_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/helpers
     ${CMAKE_CURRENT_SOURCE_DIR}/..        # lucid/_C — for #include "core/..."
+)
+target_include_directories(lucid_test SYSTEM PRIVATE
+    ${LUCID_PYBIND11_INCLUDE_DIR}
+    ${LUCID_PYTHON_INCLUDE_DIR}
+    ${LUCID_MLX_INCLUDE_DIR}
 )
 
 # ── Register with CTest ───────────────────────────────────────────────────────

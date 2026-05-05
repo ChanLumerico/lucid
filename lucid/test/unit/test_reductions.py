@@ -6,7 +6,6 @@ import lucid
 from lucid.test._comparison import assert_close
 from lucid.test.helpers.numerics import make_tensor
 
-
 _DATA = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
 
 

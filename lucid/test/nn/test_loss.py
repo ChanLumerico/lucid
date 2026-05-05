@@ -76,7 +76,7 @@ class TestHuberLoss:
         pred = lucid.tensor([0.5])
         target = lucid.tensor([0.0])
         loss = F.huber_loss(pred, target, delta=1.0)
-        expected = 0.5 * 0.5 ** 2  # quadratic for |error| < delta
+        expected = 0.5 * 0.5**2  # quadratic for |error| < delta
         assert abs(float(loss.item()) - expected) < 1e-4
 
     def test_linear_above_delta(self):

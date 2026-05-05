@@ -14,30 +14,87 @@
 #include <cmath>
 #include <sstream>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "../../core/fwd.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Dtype.h"
 #include "../../core/Shape.h"
+#include "../../core/Storage.h"
+#include "../../backend/Dispatcher.h"
 
 namespace lucid::test {
 
 // ── Extract CPU data as float vector ─────────────────────────────────────────
+//
+// For CPU tensors: directly reinterpret the CpuStorage byte buffer.
+// For GPU tensors: transfer to CPU first via IBackend::to_cpu(), then read.
 
 inline std::vector<float> to_float_vec(const TensorImplPtr& t) {
-    auto& b = Dispatcher::for_device(Device::CPU);
-    TensorImplPtr cpu_t = (t->device() == Device::CPU) ? t : b.from_gpu(t);
-    const auto* raw = static_cast<const float*>(cpu_t->data_ptr());
-    return std::vector<float>(raw, raw + cpu_t->numel());
+    std::size_t n = t->numel();
+
+    CpuStorage cpu_st;
+    if (t->device() == Device::CPU) {
+        cpu_st = std::get<CpuStorage>(t->storage());
+    } else {
+        auto& b = backend::Dispatcher::for_device(Device::CPU);
+        cpu_st = b.to_cpu(t->storage(), t->shape());
+    }
+
+    if (t->dtype() == Dtype::F64) {
+        const auto* raw = reinterpret_cast<const double*>(cpu_st.ptr.get());
+        std::vector<float> result(n);
+        for (std::size_t i = 0; i < n; ++i) result[i] = static_cast<float>(raw[i]);
+        return result;
+    }
+    const auto* raw = reinterpret_cast<const float*>(cpu_st.ptr.get());
+    return std::vector<float>(raw, raw + n);
+}
+
+// ── Gradient helpers ──────────────────────────────────────────────────────────
+//
+// Normal Engine::backward stores the gradient in grad_storage().
+// Access helpers that avoid manually reconstructing a TensorImpl.
+
+inline bool has_grad(const TensorImplPtr& t) {
+    return t->grad_storage().has_value();
+}
+
+/// Extract gradient data as float vector.  Works for F32 and F64.
+inline std::vector<float> grad_to_float_vec(const TensorImplPtr& t) {
+    const auto& g = t->grad_storage();
+    if (!g.has_value()) return {};
+    const auto& cpu_st = std::get<CpuStorage>(*g);
+    std::size_t n = cpu_st.nbytes / dtype_size(t->dtype());
+    if (t->dtype() == Dtype::F64) {
+        const auto* raw = reinterpret_cast<const double*>(cpu_st.ptr.get());
+        std::vector<float> result(n);
+        for (std::size_t i = 0; i < n; ++i) result[i] = static_cast<float>(raw[i]);
+        return result;
+    }
+    const auto* raw = reinterpret_cast<const float*>(cpu_st.ptr.get());
+    return std::vector<float>(raw, raw + n);
+}
+
+/// Number of elements in the gradient storage.
+inline std::size_t grad_numel(const TensorImplPtr& t) {
+    const auto& g = t->grad_storage();
+    if (!g.has_value()) return 0;
+    const auto& cpu_st = std::get<CpuStorage>(*g);
+    return cpu_st.nbytes / dtype_size(t->dtype());
 }
 
 // ── Shape assertion ───────────────────────────────────────────────────────────
+// NOTE: Store the TensorImplPtr in a local so its lifetime covers the
+//       shape() reference — avoids UB with temporaries like exp_op(x).
 
 #define EXPECT_TENSOR_SHAPE(tensor_impl_ptr, expected_shape)                   \
     do {                                                                        \
-        const auto& _s = (tensor_impl_ptr)->shape();                           \
+        auto _t = (tensor_impl_ptr);                                           \
+        const auto& _s = _t->shape();                                          \
         const Shape _e = (expected_shape);                                     \
         EXPECT_EQ(_s, _e) << "Tensor shape mismatch.";                         \
     } while (0)
@@ -72,12 +129,12 @@ inline std::vector<float> to_float_vec(const TensorImplPtr& t) {
         }                                                                       \
     } while (0)
 
-// ── Element-wise comparison of two tensors ───────────────────────────────────
+// ── Element-wise comparison of two tensors ────────────────────────────────────
 
-#define EXPECT_TENSORS_NEAR(a, b, tol)                                         \
+#define EXPECT_TENSORS_NEAR(lhs, rhs, tol)                                     \
     do {                                                                        \
-        auto _a = lucid::test::to_float_vec(a);                                \
-        auto _b = lucid::test::to_float_vec(b);                                \
+        auto _a = lucid::test::to_float_vec(lhs);                              \
+        auto _b = lucid::test::to_float_vec(rhs);                              \
         ASSERT_EQ(_a.size(), _b.size()) << "Tensor size mismatch.";            \
         float _tol = static_cast<float>(tol);                                  \
         for (std::size_t _i = 0; _i < _a.size(); ++_i) {                      \

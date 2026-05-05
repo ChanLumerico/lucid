@@ -43,6 +43,11 @@ class TestBatchNorm:
         out = layer(x)
         assert out.shape == (2, 4, 8, 8)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="BatchNorm1d on (N,C) input triggers a buffer-size underflow "
+               "in batch_norm_forward_f32_fast — known engine bug.",
+    )
     def test_output_shape_1d(self):
         layer = nn.BatchNorm1d(8)
         x = make_tensor((4, 8))

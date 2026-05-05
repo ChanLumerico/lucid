@@ -15,6 +15,7 @@ class SimpleMLP(nn.Module):
 
     def forward(self, x):
         import lucid.nn.functional as F
+
         return self.fc2(F.relu(self.fc1(x)))
 
 
@@ -60,8 +61,7 @@ class TestStateDict:
         # Weights should match
         for k in sd:
             np.testing.assert_array_almost_equal(
-                model2.state_dict()[k].numpy(),
-                sd[k].numpy()
+                model2.state_dict()[k].numpy(), sd[k].numpy()
             )
 
 

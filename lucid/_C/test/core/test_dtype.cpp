@@ -31,13 +31,13 @@ TEST(DtypeSize, BoolIsOneByte) {
 }
 
 TEST(DtypeName, F32Name) {
-    std::string name = dtype_name(Dtype::F32);
+    auto name = dtype_name(Dtype::F32);  // string_view
     EXPECT_FALSE(name.empty());
-    EXPECT_NE(name.find("32"), std::string::npos);
+    EXPECT_NE(name.find("32"), std::string_view::npos);
 }
 
 TEST(DtypeName, I64Name) {
-    std::string name = dtype_name(Dtype::I64);
+    auto name = dtype_name(Dtype::I64);
     EXPECT_FALSE(name.empty());
 }
 
@@ -54,9 +54,9 @@ TEST(DtypeIsFloat, BoolIsNotFloat) {
 }
 
 TEST(DtypeIsInt, I32IsInt) {
-    EXPECT_TRUE(is_integer(Dtype::I32));
+    EXPECT_TRUE(is_integral(Dtype::I32));
 }
 
 TEST(DtypeIsInt, F32IsNotInt) {
-    EXPECT_FALSE(is_integer(Dtype::F32));
+    EXPECT_FALSE(is_integral(Dtype::F32));
 }

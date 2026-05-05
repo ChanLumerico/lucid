@@ -59,7 +59,9 @@ class TestSGDTraining:
             if initial_loss is None:
                 initial_loss = float(loss.item())
         final_loss = float(loss.item())
-        assert final_loss < initial_loss, f"Adam did not converge: {initial_loss} → {final_loss}"
+        assert (
+            final_loss < initial_loss
+        ), f"Adam did not converge: {initial_loss} → {final_loss}"
 
 
 class TestGradientFlow:

@@ -8,8 +8,8 @@ import lucid
 from lucid.test._comparison import assert_close
 from lucid.test.helpers.numerics import make_tensor
 
-
 # ── Construction ───────────────────────────────────────────────────────────────
+
 
 class TestTensorConstruction:
     def test_from_list(self):
@@ -63,6 +63,7 @@ class TestTensorConstruction:
 
 # ── Shape and properties ───────────────────────────────────────────────────────
 
+
 class TestTensorProperties:
     def test_shape(self):
         t = make_tensor((2, 3, 4))
@@ -111,6 +112,7 @@ class TestTensorProperties:
 
 # ── item() ─────────────────────────────────────────────────────────────────────
 
+
 class TestTensorItem:
     def test_item_scalar(self):
         t = lucid.tensor(3.14)
@@ -128,6 +130,7 @@ class TestTensorItem:
 
 # ── numpy() ────────────────────────────────────────────────────────────────────
 
+
 class TestTensorNumpy:
     def test_numpy_roundtrip_f32(self):
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
@@ -142,6 +145,7 @@ class TestTensorNumpy:
 
 
 # ── Indexing ───────────────────────────────────────────────────────────────────
+
 
 class TestTensorIndexing:
     def test_integer_index(self):
@@ -168,6 +172,7 @@ class TestTensorIndexing:
 
 # ── grad properties ────────────────────────────────────────────────────────────
 
+
 class TestTensorGrad:
     def test_grad_initially_none(self):
         t = lucid.tensor([1.0], requires_grad=True)
@@ -189,6 +194,7 @@ class TestTensorGrad:
 
 
 # ── Arithmetic operators ────────────────────────────────────────────────────────
+
 
 class TestTensorOps:
     def test_add_scalar(self):

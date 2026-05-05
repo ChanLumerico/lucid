@@ -48,9 +48,7 @@ TEST(TensorImplProps, RequiresGradDefault) {
 }
 
 TEST(TensorImplProps, RequiresGradTrue) {
-    auto& b = Dispatcher::for_device(Device::CPU);
-    auto base = b.zeros({3}, Dtype::F32, Device::CPU);
-    auto t = base->clone_with_grad(true);
+    auto t = zeros_op({3}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
     EXPECT_TRUE(t->requires_grad());
 }
 
@@ -67,12 +65,14 @@ TEST(TensorImplProps, NdimCorrect) {
 // ── Version tracking ──────────────────────────────────────────────────────────
 
 TEST(TensorImplVersion, InitialVersionZero) {
-    auto t = cpu_zeros({4});
+    // Version counter tracks autograd mutations; requires_grad=true to activate.
+    auto t = zeros_op({4}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
     EXPECT_EQ(t->version(), 0u);
 }
 
 TEST(TensorImplVersion, BumpVersionIncrements) {
-    auto t = cpu_zeros({4});
+    // bump_version() is a no-op without AutogradMeta; requires_grad=true activates it.
+    auto t = zeros_op({4}, Dtype::F32, Device::CPU, /*requires_grad=*/true);
     t->bump_version();
     EXPECT_EQ(t->version(), 1u);
     t->bump_version();

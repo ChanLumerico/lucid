@@ -1,0 +1,747 @@
+{
+  "tests": 105,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "GradAdd",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "GradWrtBothInputs",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 27
+        }
+      ]
+    },
+    {
+      "name": "GradMul",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "GradWrtX",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 42
+        },
+        {
+          "name": "GradWrtY",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "name": "GradExp",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "GradWrtX",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 64
+        }
+      ]
+    },
+    {
+      "name": "GradShape",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "GradSameNumelAsInput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 74
+        }
+      ]
+    },
+    {
+      "name": "NoGrad",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "NoGradContextDisablesGrad",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/autograd\/test_gradients.cpp",
+          "line": 84
+        }
+      ]
+    },
+    {
+      "name": "CpuBackend",
+      "tests": 10,
+      "testsuite": [
+        {
+          "name": "ZerosAreZero",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 13
+        },
+        {
+          "name": "OnesAreOne",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 18
+        },
+        {
+          "name": "FullFillsValue",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 23
+        },
+        {
+          "name": "TwoSeparateAllocsAreIndependent",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 28
+        },
+        {
+          "name": "DeviceIsCPU",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 36
+        },
+        {
+          "name": "ShapeCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 41
+        },
+        {
+          "name": "NumelCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 46
+        },
+        {
+          "name": "FiniteValues",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 51
+        },
+        {
+          "name": "DtypeF32",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 56
+        },
+        {
+          "name": "DtypeF64",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
+          "line": 61
+        }
+      ]
+    },
+    {
+      "name": "DtypeSize",
+      "tests": 6,
+      "testsuite": [
+        {
+          "name": "Float32IsFourBytes",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 9
+        },
+        {
+          "name": "Float16IsTwoBytes",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 13
+        },
+        {
+          "name": "Float64IsEightBytes",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 17
+        },
+        {
+          "name": "Int32IsFourBytes",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 21
+        },
+        {
+          "name": "Int8IsOneByte",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 25
+        },
+        {
+          "name": "BoolIsOneByte",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 29
+        }
+      ]
+    },
+    {
+      "name": "DtypeName",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "F32Name",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 33
+        },
+        {
+          "name": "I64Name",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "name": "DtypeIsFloat",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "F32IsFloat",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 44
+        },
+        {
+          "name": "I32IsNotFloat",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 48
+        },
+        {
+          "name": "BoolIsNotFloat",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 52
+        }
+      ]
+    },
+    {
+      "name": "DtypeIsInt",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "I32IsInt",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 56
+        },
+        {
+          "name": "F32IsNotInt",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_dtype.cpp",
+          "line": 60
+        }
+      ]
+    },
+    {
+      "name": "ShapeNumel",
+      "tests": 4,
+      "testsuite": [
+        {
+          "name": "ScalarIsOne",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 9
+        },
+        {
+          "name": "VectorCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 13
+        },
+        {
+          "name": "MatrixCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 17
+        },
+        {
+          "name": "HigherDimCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "name": "ContiguousStride",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "ScalarEmpty",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 25
+        },
+        {
+          "name": "VectorStride",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 30
+        },
+        {
+          "name": "MatrixRowMajor",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 36
+        }
+      ]
+    },
+    {
+      "name": "ShapeEquality",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "SameShapeEqual",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 44
+        },
+        {
+          "name": "DifferentShapeNotEqual",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_shape.cpp",
+          "line": 50
+        }
+      ]
+    },
+    {
+      "name": "TensorImplConstruct",
+      "tests": 6,
+      "testsuite": [
+        {
+          "name": "ZerosShape",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 13
+        },
+        {
+          "name": "ZerosDtype",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 18
+        },
+        {
+          "name": "ZerosDevice",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 23
+        },
+        {
+          "name": "NumelCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 28
+        },
+        {
+          "name": "OnesValues",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 33
+        },
+        {
+          "name": "FullValues",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 38
+        }
+      ]
+    },
+    {
+      "name": "TensorImplProps",
+      "tests": 4,
+      "testsuite": [
+        {
+          "name": "RequiresGradDefault",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 45
+        },
+        {
+          "name": "RequiresGradTrue",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 50
+        },
+        {
+          "name": "IsContiguousForNewTensor",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 55
+        },
+        {
+          "name": "NdimCorrect",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 60
+        }
+      ]
+    },
+    {
+      "name": "TensorImplVersion",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "InitialVersionZero",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 67
+        },
+        {
+          "name": "BumpVersionIncrements",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 73
+        }
+      ]
+    },
+    {
+      "name": "TensorImplValues",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "ZerosAreZero",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 84
+        },
+        {
+          "name": "FiniteValues",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_tensor_impl.cpp",
+          "line": 89
+        }
+      ]
+    },
+    {
+      "name": "TrainingLoop",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "LossDecreases",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/integration\/test_training.cpp",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "name": "LinearOp",
+      "tests": 5,
+      "testsuite": [
+        {
+          "name": "OutputShape",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_linear.cpp",
+          "line": 12
+        },
+        {
+          "name": "ZeroWeightZeroOutput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_linear.cpp",
+          "line": 21
+        },
+        {
+          "name": "BiasAdded",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_linear.cpp",
+          "line": 29
+        },
+        {
+          "name": "IdentityWeightProducesInput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_linear.cpp",
+          "line": 37
+        },
+        {
+          "name": "FiniteOutput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_linear.cpp",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "name": "MSELoss",
+      "tests": 4,
+      "testsuite": [
+        {
+          "name": "PerfectPredictionZeroLoss",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_loss.cpp",
+          "line": 12
+        },
+        {
+          "name": "KnownValue",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_loss.cpp",
+          "line": 20
+        },
+        {
+          "name": "ScalarOutput",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_loss.cpp",
+          "line": 28
+        },
+        {
+          "name": "NonNegative",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/nn\/test_loss.cpp",
+          "line": 36
+        }
+      ]
+    },
+    {
+      "name": "Add",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "ShapePreserved",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 16
+        },
+        {
+          "name": "OnesAndOnes",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 23
+        },
+        {
+          "name": "ScalarBroadcast",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "name": "Sub",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "BasicSubtraction",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "name": "Mul",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "OnesIsIdentity",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 44
+        },
+        {
+          "name": "ZeroAnnihilates",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 51
+        }
+      ]
+    },
+    {
+      "name": "Div",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "DivBySelf",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 58
+        }
+      ]
+    },
+    {
+      "name": "Matmul",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "IdentityMatrix",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 64
+        },
+        {
+          "name": "OutputShape",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 71
+        },
+        {
+          "name": "CorrectValues",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_bfunc.cpp",
+          "line": 78
+        }
+      ]
+    },
+    {
+      "name": "Sum",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "AllDims",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 12
+        },
+        {
+          "name": "KeepDims",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 19
+        },
+        {
+          "name": "Axis1",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 26
+        }
+      ]
+    },
+    {
+      "name": "Mean",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "AllDims",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 34
+        }
+      ]
+    },
+    {
+      "name": "Max",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "AllDims",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "name": "Min",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "AllDims",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_reductions.cpp",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "name": "UnaryTest\/0",
+      "tests": 12,
+      "testsuite": [
+        {
+          "name": "NegShape",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 35
+        },
+        {
+          "name": "NegValues",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 41
+        },
+        {
+          "name": "NegNegIsIdentity",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 47
+        },
+        {
+          "name": "AbsPositive",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 55
+        },
+        {
+          "name": "AbsNegative",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 61
+        },
+        {
+          "name": "ExpAtZeroIsOne",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 69
+        },
+        {
+          "name": "ExpPreservesShape",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 75
+        },
+        {
+          "name": "ExpAndLogInverse",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 80
+        },
+        {
+          "name": "ReluZerosNegatives",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 88
+        },
+        {
+          "name": "ReluKeepsPositives",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 94
+        },
+        {
+          "name": "SigmoidAtZeroIsHalf",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 102
+        },
+        {
+          "name": "SqrtAtFour",
+          "type_param": "float",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 110
+        }
+      ]
+    },
+    {
+      "name": "UnaryTest\/1",
+      "tests": 12,
+      "testsuite": [
+        {
+          "name": "NegShape",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 35
+        },
+        {
+          "name": "NegValues",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 41
+        },
+        {
+          "name": "NegNegIsIdentity",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 47
+        },
+        {
+          "name": "AbsPositive",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 55
+        },
+        {
+          "name": "AbsNegative",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 61
+        },
+        {
+          "name": "ExpAtZeroIsOne",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 69
+        },
+        {
+          "name": "ExpPreservesShape",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 75
+        },
+        {
+          "name": "ExpAndLogInverse",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 80
+        },
+        {
+          "name": "ReluZerosNegatives",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 88
+        },
+        {
+          "name": "ReluKeepsPositives",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 94
+        },
+        {
+          "name": "SigmoidAtZeroIsHalf",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 102
+        },
+        {
+          "name": "SqrtAtFour",
+          "type_param": "double",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 110
+        }
+      ]
+    },
+    {
+      "name": "ReductionF32",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "SumAllElements",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 118
+        },
+        {
+          "name": "SumAlongAxis0",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 126
+        },
+        {
+          "name": "MeanAllElements",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/ops\/test_ufunc.cpp",
+          "line": 134
+        }
+      ]
+    }
+  ]
+}

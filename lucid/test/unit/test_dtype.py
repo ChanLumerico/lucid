@@ -38,6 +38,7 @@ class TestAstype:
 
     def test_astype_free_fn(self):
         from lucid._C import engine as e
+
         t = make_tensor((4,))
         impl = t._impl
         out = e.astype(impl, e.F64)

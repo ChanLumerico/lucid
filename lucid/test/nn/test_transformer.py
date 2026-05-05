@@ -33,8 +33,13 @@ class TestTransformerDecoder:
 
 class TestTransformer:
     def test_full_forward(self):
-        model = nn.Transformer(d_model=16, nhead=4, num_encoder_layers=2,
-                               num_decoder_layers=2, batch_first=True)
+        model = nn.Transformer(
+            d_model=16,
+            nhead=4,
+            num_encoder_layers=2,
+            num_decoder_layers=2,
+            batch_first=True,
+        )
         src = make_tensor((4, 8, 16))
         tgt = make_tensor((4, 6, 16))
         out = model(src, tgt)

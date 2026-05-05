@@ -65,9 +65,9 @@ def tol(dtype) -> tuple[float, float]:
     (atol, rtol) as floats
     """
     _MAP = {
-        lucid.float16:  (1e-2, 1e-2),
-        lucid.float32:  (1e-4, 1e-4),
-        lucid.float64:  (1e-7, 1e-7),
+        lucid.float16: (1e-2, 1e-2),
+        lucid.float32: (1e-4, 1e-4),
+        lucid.float64: (1e-7, 1e-7),
         lucid.bfloat16: (1e-2, 1e-2),
     }
     return _MAP.get(dtype, (1e-4, 1e-4))

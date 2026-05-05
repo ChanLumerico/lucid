@@ -25,9 +25,24 @@ _SHAPE = (4, 8)
 
 # ── Unary ops ──────────────────────────────────────────────────────────────────
 
+
 class TestUnaryParity:
-    @pytest.mark.parametrize("name", ["neg", "abs", "exp", "sqrt", "sin", "cos",
-                                       "tanh", "sigmoid", "relu", "floor", "ceil"])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "neg",
+            "abs",
+            "exp",
+            "sqrt",
+            "sin",
+            "cos",
+            "tanh",
+            "sigmoid",
+            "relu",
+            "floor",
+            "ceil",
+        ],
+    )
     def test_unary(self, name):
         l, t = _pair(_SHAPE)
         if name in ("sqrt", "log"):
@@ -38,7 +53,9 @@ class TestUnaryParity:
             t_out = getattr(torch, name)(t_pos)
         else:
             l_out = getattr(lucid, name)(l)
-            t_fn = getattr(torch, name, None) or getattr(torch.nn.functional, name, None)
+            t_fn = getattr(torch, name, None) or getattr(
+                torch.nn.functional, name, None
+            )
             if t_fn is None:
                 pytest.skip(f"torch.{name} not found")
             t_out = t_fn(t)
@@ -49,19 +66,26 @@ class TestUnaryParity:
         check_parity(lucid.exp(l), torch.exp(t))
 
     def test_log_positive(self):
-        data = np.abs(np.random.default_rng(1).standard_normal(_SHAPE).astype(np.float32)) + 0.1
+        data = (
+            np.abs(np.random.default_rng(1).standard_normal(_SHAPE).astype(np.float32))
+            + 0.1
+        )
         l = lucid.tensor(data.copy())
         t = torch.tensor(data.copy())
         check_parity(lucid.log(l), torch.log(t))
 
     def test_sqrt_positive(self):
-        data = np.abs(np.random.default_rng(2).standard_normal(_SHAPE).astype(np.float32)) + 0.1
+        data = (
+            np.abs(np.random.default_rng(2).standard_normal(_SHAPE).astype(np.float32))
+            + 0.1
+        )
         l = lucid.tensor(data.copy())
         t = torch.tensor(data.copy())
         check_parity(lucid.sqrt(l), torch.sqrt(t))
 
 
 # ── Reduction ops ─────────────────────────────────────────────────────────────
+
 
 class TestReductionParity:
     def test_sum_all(self):
@@ -74,7 +98,9 @@ class TestReductionParity:
 
     def test_sum_dim1_keepdim(self):
         l, t = _pair(_SHAPE)
-        check_parity(lucid.sum(l, dim=1, keepdim=True), torch.sum(t, dim=1, keepdim=True))
+        check_parity(
+            lucid.sum(l, dim=1, keepdim=True), torch.sum(t, dim=1, keepdim=True)
+        )
 
     def test_mean_all(self):
         l, t = _pair(_SHAPE)
@@ -98,6 +124,7 @@ class TestReductionParity:
 
 
 # ── Shape ops ─────────────────────────────────────────────────────────────────
+
 
 class TestShapeParity:
     def test_reshape(self):
@@ -130,8 +157,9 @@ class TestShapeParity:
 
     def test_repeat_interleave(self):
         l, t = _pair((3, 4))
-        check_parity(lucid.repeat_interleave(l, 2, dim=0),
-                     torch.repeat_interleave(t, 2, dim=0))
+        check_parity(
+            lucid.repeat_interleave(l, 2, dim=0), torch.repeat_interleave(t, 2, dim=0)
+        )
 
     def test_flip(self):
         l, t = _pair(_SHAPE)
@@ -152,8 +180,10 @@ class TestShapeParity:
     def test_tensordot(self):
         l_a, t_a = _pair((3, 4))
         l_b, t_b = _pair((4, 5), seed=1)
-        check_parity(lucid.tensordot(l_a, l_b, dims=[[1], [0]]),
-                     torch.tensordot(t_a, t_b, dims=[[1], [0]]))
+        check_parity(
+            lucid.tensordot(l_a, l_b, dims=[[1], [0]]),
+            torch.tensordot(t_a, t_b, dims=[[1], [0]]),
+        )
 
     def test_meshgrid_ij(self):
         la = lucid.tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32))
@@ -167,6 +197,7 @@ class TestShapeParity:
 
 
 # ── Indexing / selection ops ──────────────────────────────────────────────────
+
 
 class TestIndexingParity:
     def test_where(self):

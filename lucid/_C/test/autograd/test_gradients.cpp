@@ -19,13 +19,7 @@ namespace {
 
 /// Create a leaf tensor that requires gradient.
 TensorImplPtr leaf(const Shape& shape, double val = 1.0, Dtype dtype = Dtype::F32) {
-    auto t = cpu_full(shape, val, dtype);
-    return t->clone_with_grad(true);
-}
-
-/// Run backward on a scalar output tensor.
-void backward(const TensorImplPtr& loss) {
-    Engine::backward(loss, false);
+    return full_op(shape, val, dtype, Device::CPU, /*requires_grad=*/true);
 }
 
 }  // namespace
@@ -35,52 +29,56 @@ TEST(GradAdd, GradWrtBothInputs) {
     auto x = leaf({4}, 2.0);
     auto y = leaf({4}, 3.0);
     auto z = sum_op(add_op(x, y), {}, false);
-    backward(z);
+    Engine::backward(z);
 
-    ASSERT_NE(x->grad(), nullptr);
-    ASSERT_NE(y->grad(), nullptr);
-    EXPECT_TENSOR_NEAR(x->grad(), 1.0f, 1e-6f);
-    EXPECT_TENSOR_NEAR(y->grad(), 1.0f, 1e-6f);
+    ASSERT_TRUE(has_grad(x));
+    ASSERT_TRUE(has_grad(y));
+    auto gx = grad_to_float_vec(x);
+    auto gy = grad_to_float_vec(y);
+    for (float v : gx) EXPECT_NEAR(v, 1.0f, 1e-6f);
+    for (float v : gy) EXPECT_NEAR(v, 1.0f, 1e-6f);
 }
 
 TEST(GradMul, GradWrtX) {
-    // z = x * y, dz/dx = y
+    // z = x * y, dz/dx = y = 3.0
     auto x = leaf({4}, 2.0);
     auto y = leaf({4}, 3.0);
     auto z = sum_op(mul_op(x, y), {}, false);
-    backward(z);
+    Engine::backward(z);
 
-    ASSERT_NE(x->grad(), nullptr);
-    EXPECT_TENSOR_NEAR(x->grad(), 3.0f, 1e-5f);  // grad = y = 3.0
+    ASSERT_TRUE(has_grad(x));
+    for (float v : grad_to_float_vec(x)) EXPECT_NEAR(v, 3.0f, 1e-5f);
 }
 
 TEST(GradMul, GradWrtY) {
+    // z = x * y, dz/dy = x = 2.0
     auto x = leaf({4}, 2.0);
     auto y = leaf({4}, 3.0);
     auto z = sum_op(mul_op(x, y), {}, false);
-    backward(z);
+    Engine::backward(z);
 
-    ASSERT_NE(y->grad(), nullptr);
-    EXPECT_TENSOR_NEAR(y->grad(), 2.0f, 1e-5f);  // grad = x = 2.0
+    ASSERT_TRUE(has_grad(y));
+    for (float v : grad_to_float_vec(y)) EXPECT_NEAR(v, 2.0f, 1e-5f);
 }
 
 TEST(GradExp, GradWrtX) {
-    // dexp(x)/dx = exp(x)
-    auto x = leaf({4}, 0.0);  // x = 0, exp(0) = 1
+    // dexp(x)/dx = exp(x); at x=0, exp(0)=1
+    auto x = leaf({4}, 0.0);
     auto y = sum_op(exp_op(x), {}, false);
-    backward(y);
+    Engine::backward(y);
 
-    ASSERT_NE(x->grad(), nullptr);
-    EXPECT_TENSOR_NEAR(x->grad(), 1.0f, 1e-5f);
+    ASSERT_TRUE(has_grad(x));
+    for (float v : grad_to_float_vec(x)) EXPECT_NEAR(v, 1.0f, 1e-5f);
 }
 
-TEST(GradShape, GradSameShapeAsInput) {
+TEST(GradShape, GradSameNumelAsInput) {
+    // Gradient of sum(x^2) wrt {3,4} tensor should have 12 elements.
     auto x = leaf({3, 4}, 1.0);
     auto y = sum_op(mul_op(x, x), {}, false);
-    backward(y);
+    Engine::backward(y);
 
-    ASSERT_NE(x->grad(), nullptr);
-    EXPECT_TENSOR_SHAPE(x->grad(), (Shape{3, 4}));
+    ASSERT_TRUE(has_grad(x));
+    EXPECT_EQ(grad_numel(x), x->numel());
 }
 
 TEST(NoGrad, NoGradContextDisablesGrad) {

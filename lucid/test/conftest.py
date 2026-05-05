@@ -16,13 +16,14 @@ import pytest
 import lucid
 from lucid.test._comparison import assert_close as _assert_close
 
-
 # ── Devices ────────────────────────────────────────────────────────────────────
+
 
 def _available_devices() -> list[str]:
     devices = ["cpu"]
     try:
         from lucid._C import engine as _e
+
         # GPU available if we can round-trip a small tensor
         t = _e.zeros([1], _e.F32, _e.GPU)
         devices.append("gpu")
@@ -48,6 +49,7 @@ def all_devices(request) -> str:
 
 # ── Dtypes ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(params=["float32", "float64"])
 def float_dtype(request) -> object:
     """Parametrize over common floating-point dtypes."""
@@ -62,6 +64,7 @@ def default_dtype(request) -> object:
 
 # ── Seeding ────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def seed():
     """Reset the RNG before every test for determinism."""
@@ -71,6 +74,7 @@ def seed():
 
 # ── Comparison shortcut ────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def assert_close():
     """Expose assert_close as a fixture for parametrized tolerance."""
@@ -78,6 +82,7 @@ def assert_close():
 
 
 # ── Auto-mark by path ──────────────────────────────────────────────────────────
+
 
 def pytest_collection_modifyitems(items):
     for item in items:

@@ -15,6 +15,7 @@ def parity_atol(dtype=None) -> float:
     float64          → 1e-6
     """
     from lucid.test.helpers.numerics import tol as _tol
+
     if dtype is None:
         dtype = lucid.float32
     return _tol(dtype)[0]

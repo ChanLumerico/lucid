@@ -18,7 +18,7 @@ class TestRNN:
         rnn = nn.RNN(8, 16, bidirectional=True, batch_first=True)
         x = make_tensor((4, 10, 8))
         out, h = rnn(x)
-        assert out.shape == (4, 10, 32)   # 2 * hidden_size
+        assert out.shape == (4, 10, 32)  # 2 * hidden_size
         assert h.shape == (2, 4, 16)
 
     def test_multi_layer_shape(self):

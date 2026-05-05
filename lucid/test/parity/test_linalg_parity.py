@@ -44,10 +44,7 @@ class TestQRParity:
         lQ, lR = LLA.qr(lucid.tensor(A.copy()))
         tQ, tR = TLA.qr(torch.tensor(A.copy()))
         # Q's columns may differ in sign — check QR product instead
-        check_parity(
-            lucid.matmul(lQ, lR),
-            torch.matmul(tQ, tR),
-            atol=2e-4)
+        check_parity(lucid.matmul(lQ, lR), torch.matmul(tQ, tR), atol=2e-4)
 
 
 class TestSVDParity:
@@ -83,8 +80,10 @@ class TestNormParity:
     def test_vector_norm(self):
         rng = np.random.default_rng(0)
         x = rng.standard_normal(8).astype(np.float32)
-        check_parity(LLA.vector_norm(lucid.tensor(x.copy())),
-                     TLA.vector_norm(torch.tensor(x.copy())))
+        check_parity(
+            LLA.vector_norm(lucid.tensor(x.copy())),
+            TLA.vector_norm(torch.tensor(x.copy())),
+        )
 
 
 class TestSolveParity:
@@ -92,6 +91,8 @@ class TestSolveParity:
         rng = np.random.default_rng(0)
         A = (rng.standard_normal((4, 4)) + np.eye(4) * 2).astype(np.float32)
         b = rng.standard_normal((4, 2)).astype(np.float32)
-        check_parity(LLA.solve(lucid.tensor(A.copy()), lucid.tensor(b.copy())),
-                     TLA.solve(torch.tensor(A.copy()), torch.tensor(b.copy())),
-                     atol=2e-4)
+        check_parity(
+            LLA.solve(lucid.tensor(A.copy()), lucid.tensor(b.copy())),
+            TLA.solve(torch.tensor(A.copy()), torch.tensor(b.copy())),
+            atol=2e-4,
+        )

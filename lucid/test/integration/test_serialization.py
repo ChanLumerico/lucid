@@ -38,8 +38,7 @@ class TestStateDictRoundtrip:
 
             for k in sd_before:
                 np.testing.assert_array_almost_equal(
-                    sd_before[k], sd_after[k],
-                    err_msg=f"Key {k} mismatch after load"
+                    sd_before[k], sd_after[k], err_msg=f"Key {k} mismatch after load"
                 )
         finally:
             if os.path.exists(path):
@@ -50,7 +49,11 @@ class TestStateDictRoundtrip:
         model = TinyNet()
         x = make_tensor((3, 4))
 
-        with model.eval_mode() if hasattr(model, 'eval_mode') else __import__('contextlib').nullcontext():
+        with (
+            model.eval_mode()
+            if hasattr(model, "eval_mode")
+            else __import__("contextlib").nullcontext()
+        ):
             out_before = model(x).numpy().copy()
 
         with tempfile.NamedTemporaryFile(suffix=".npz", delete=False) as f:

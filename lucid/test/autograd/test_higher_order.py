@@ -26,7 +26,7 @@ class TestHigherOrder:
     def test_jacobian_shape(self):
         x = make_tensor((3,), dtype=lucid.float32, requires_grad=True, seed=0)
         # Simple function: f(x) = [x0+x1, x1+x2, x0+x2]
-        y = lucid.stack([x[0]+x[1], x[1]+x[2], x[0]+x[2]])
+        y = lucid.stack([x[0] + x[1], x[1] + x[2], x[0] + x[2]])
         try:
             jac = lucid.autograd.functional.jacobian(lambda t: t * 2.0, x)
             assert jac.shape == (3, 3)
@@ -40,6 +40,7 @@ class TestHigherOrder:
         try:
             H = lucid.autograd.functional.hessian(lambda t: lucid.sum(t * t), x)
             import numpy as np
+
             # Diagonal entries should be ≈ 2.0
             np.testing.assert_allclose(np.diag(H.numpy()), 2.0, atol=1e-3)
         except (AttributeError, NotImplementedError):

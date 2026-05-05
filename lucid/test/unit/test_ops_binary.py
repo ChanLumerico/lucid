@@ -67,8 +67,8 @@ class TestBroadcasting:
         assert r.shape == (2, 3, 4)
 
     def test_broadcast_values_correct(self):
-        a = lucid.tensor([[1.0, 2.0, 3.0]])   # (1, 3)
-        b = lucid.tensor([[10.0], [20.0]])     # (2, 1)
+        a = lucid.tensor([[1.0, 2.0, 3.0]])  # (1, 3)
+        b = lucid.tensor([[10.0], [20.0]])  # (2, 1)
         r = a + b
         expected = lucid.tensor([[11.0, 12.0, 13.0], [21.0, 22.0, 23.0]])
         assert_close(r, expected)

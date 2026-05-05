@@ -44,4 +44,5 @@ class TestDeviceErrors:
         t = make_tensor((4,))
         arr = t.numpy()
         import numpy as np
+
         assert isinstance(arr, np.ndarray)
