@@ -26,6 +26,7 @@
 #include "../core/TensorImpl.h"
 #include "../core/Storage.h"
 #include <mlx/ops.h>
+#include <mlx/transforms.h>   // mlx::core::eval(std::vector<array>)
 
 namespace py = pybind11;
 
@@ -197,13 +198,20 @@ void register_tensor_impl(py::module_& m) {
     m.def(
         "eval_tensors",
         [](const std::vector<std::shared_ptr<TensorImpl>>& tensors) {
+            // Collect all GPU arrays, then evaluate in one batched MLX call.
+            // mlx::core::eval(vector<array>) schedules them together —
+            // significantly faster than calling arr->eval() individually.
+            std::vector<mlx::core::array> arrays;
+            arrays.reserve(tensors.size());
             for (const auto& t : tensors) {
                 if (!t || t->device() != Device::GPU)
                     continue;
                 const auto& gpu_st = std::get<GpuStorage>(t->storage());
                 if (gpu_st.arr)
-                    gpu_st.arr->eval();               // mlx::core::array::eval()
+                    arrays.push_back(*gpu_st.arr);
             }
+            if (!arrays.empty())
+                mlx::core::eval(arrays);
         },
         py::arg("tensors"),
         "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
