@@ -76,9 +76,26 @@ def layer_norm(
     bias: Tensor | None = None,
     eps: float = 1e-5,
 ) -> Tensor:
-    """Layer normalization."""
-    w = _unwrap(weight) if weight is not None else None
-    b = _unwrap(bias) if bias is not None else None
+    """Layer normalization.
+
+    The engine op requires non-null gamma/beta; we materialise identity
+    defaults (ones / zeros) when the user passes ``None`` so that
+    ``LayerNorm(elementwise_affine=False)`` and ``LayerNorm(bias=False)``
+    work transparently.
+    """
+    from lucid._factories.creation import ones, zeros
+
+    shape = tuple(normalized_shape)
+    w = (
+        _unwrap(weight)
+        if weight is not None
+        else _unwrap(ones(*shape, device=x.device, dtype=x.dtype))
+    )
+    b = (
+        _unwrap(bias)
+        if bias is not None
+        else _unwrap(zeros(*shape, device=x.device, dtype=x.dtype))
+    )
     # Engine API: layer_norm(x, gamma, beta, eps) — no normalized_shape arg
     return _wrap(_C_engine.nn.layer_norm(_unwrap(x), w, b, eps))
 

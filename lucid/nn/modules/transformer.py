@@ -4,13 +4,14 @@ TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
 import math
+
+from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
+
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter
-from lucid._factories.creation import empty
-import lucid.nn.init as init
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.normalization import LayerNorm
+
 from lucid.nn.modules.linear import Linear
 from lucid.nn.modules.dropout import Dropout
 from lucid.nn.functional.activations import gelu, relu

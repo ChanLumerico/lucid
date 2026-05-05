@@ -17,13 +17,28 @@ from lucid.nn.functional.normalization import (
 
 
 class LayerNorm(Module):
-    """Layer normalization."""
+    """Layer normalization.
+
+    Parameters
+    ----------
+    normalized_shape : int | tuple[int, ...]
+        Trailing dimensions to normalise over.
+    eps : float
+        Numerical stability term.
+    elementwise_affine : bool
+        If True, learn per-element gain (and bias when ``bias=True``).
+    bias : bool
+        Only honoured when ``elementwise_affine=True``.  When False, the
+        layer applies a learnable scale but no shift, matching the
+        reference framework's 1.12+ behaviour.
+    """
 
     def __init__(
         self,
         normalized_shape: int | list[int] | tuple[int, ...],
         eps: float = 1e-5,
         elementwise_affine: bool = True,
+        bias: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -37,9 +52,12 @@ class LayerNorm(Module):
             self.weight: Parameter | None = Parameter(
                 ones(*self.normalized_shape, dtype=dtype, device=device)
             )
-            self.bias: Parameter | None = Parameter(
-                zeros(*self.normalized_shape, dtype=dtype, device=device)
-            )
+            if bias:
+                self.bias: Parameter | None = Parameter(
+                    zeros(*self.normalized_shape, dtype=dtype, device=device)
+                )
+            else:
+                self.bias = None
         else:
             self.weight = None
             self.bias = None
@@ -118,7 +136,19 @@ class GroupNorm(Module):
 
 
 class _BatchNormBase(Module):
-    """Common implementation for BatchNorm1d/2d/3d."""
+    """Common implementation for BatchNorm1d/2d/3d.
+
+    Running statistics behaviour matches the reference framework:
+
+    * ``track_running_stats=True`` (default): in training mode, ``running_mean``
+      / ``running_var`` are updated via the momentum formula and
+      ``num_batches_tracked`` increments by 1.  In eval mode, the precomputed
+      running stats normalise the input.
+    * ``track_running_stats=False``: no running buffers; both train and eval
+      use batch statistics.
+    * ``momentum=None``: cumulative moving average — the effective momentum
+      becomes ``1 / num_batches_tracked``, so all batches contribute equally.
+    """
 
     # Version 2 introduces `num_batches_tracked`.  Checkpoints saved with
     # version < 2 (or no metadata) are migrated by `_load_from_state_dict`.
@@ -128,7 +158,7 @@ class _BatchNormBase(Module):
         self,
         num_features: int,
         eps: float = 1e-5,
-        momentum: float = 0.1,
+        momentum: float | None = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
         device: DeviceLike = None,
@@ -159,9 +189,9 @@ class _BatchNormBase(Module):
             self.register_buffer(
                 "running_var", ones(num_features, dtype=dtype, device=device)
             )
-            # `num_batches_tracked` is always int64 scalar regardless of the
-            # module's float dtype.  Used by momentum=None (cumulative average)
-            # in the next pack — registered here so checkpoints round-trip.
+            # `num_batches_tracked` is int64 scalar regardless of the module's
+            # float dtype.  When momentum is None this drives the cumulative
+            # moving average via 1/num_batches_tracked.
             import lucid as _lucid
 
             self.register_buffer(
@@ -208,16 +238,70 @@ class _BatchNormBase(Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
+        # Update running stats before the forward when training with
+        # tracking enabled.  Detach to avoid linking the buffer into the
+        # autograd graph; buffers are never differentiated through.
+        if self.training and self.track_running_stats:
+            self._update_running_stats(x)
+
+        # Pick which stats path the functional uses:
+        #   - eval + tracking → precomputed running stats
+        #   - everything else (training, or no tracking)  → batch stats
+        use_running = (not self.training) and self.track_running_stats
+        running_mean = self._buffers.get("running_mean") if use_running else None
+        running_var = self._buffers.get("running_var") if use_running else None
+
         return batch_norm(
             x,
-            self._buffers.get("running_mean"),
-            self._buffers.get("running_var"),
+            running_mean,
+            running_var,
             self.weight,
             self.bias,
-            training=self.training,
-            momentum=self.momentum,
+            training=not use_running,
+            momentum=self.momentum if self.momentum is not None else 0.0,
             eps=self.eps,
         )
+
+    def _update_running_stats(self, x: Tensor) -> None:
+        """Update ``running_mean`` / ``running_var`` from this batch.
+
+        Matches the reference framework:
+          running ← (1 − m) · running + m · batch
+        Variance for the running buffer uses the unbiased (Bessel-corrected)
+        estimator while the *normalisation* itself uses the biased one;
+        both follow the reference framework's behaviour.
+        """
+        import lucid as _lucid
+
+        # Reduce over batch + spatial dims, keeping the channel dim.
+        reduce_dims = [d for d in range(x.ndim) if d != 1]
+        n = 1
+        for d in reduce_dims:
+            n *= x.shape[d]
+        with _lucid.no_grad():
+            batch_mean = x.mean(reduce_dims).detach()
+            batch_var = x.var(reduce_dims, correction=0).detach()
+
+            # Increment the count first (matches reference framework order).
+            self._buffers["num_batches_tracked"] = (
+                self._buffers["num_batches_tracked"] + 1
+            ).detach()
+
+            if self.momentum is None:
+                # Cumulative moving average: equal weight on every batch.
+                eff = 1.0 / float(self._buffers["num_batches_tracked"].item())
+            else:
+                eff = float(self.momentum)
+
+            # Unbiased correction n/(n-1) for the running variance, like the
+            # reference framework — only meaningful when n > 1.
+            unbiased_factor = n / (n - 1) if n > 1 else 1.0
+            new_rm = (1.0 - eff) * self._buffers["running_mean"] + eff * batch_mean
+            new_rv = (1.0 - eff) * self._buffers["running_var"] + (
+                eff * unbiased_factor
+            ) * batch_var
+            self._buffers["running_mean"] = new_rm.detach()
+            self._buffers["running_var"] = new_rv.detach()
 
     def extra_repr(self) -> str:
         return (

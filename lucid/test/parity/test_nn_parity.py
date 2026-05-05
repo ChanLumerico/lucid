@@ -75,6 +75,119 @@ class TestNormParity:
         tb = ref.zeros(8)
         check_parity(LF.layer_norm(l, [8], lw, lb), TF.layer_norm(t, [8], tw, tb))
 
+    def test_layer_norm_bias_false(self):
+        import lucid.nn as lnn
+
+        rng = np.random.default_rng(1)
+        x_np = rng.standard_normal((4, 8)).astype(np.float32)
+        ref.manual_seed(0)
+        t_mod = ref.nn.LayerNorm(8, bias=False)
+        weight_np = t_mod.weight.detach().numpy().copy()
+        l_mod = lnn.LayerNorm(8, bias=False)
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        new_impl = _ce.TensorImpl(weight_np, _ce.Device.CPU, False)
+        l_mod.weight._impl = _iwg(new_impl, l_mod.weight._impl.requires_grad)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+    def test_layer_norm_elementwise_affine_false(self):
+        import lucid.nn as lnn
+
+        rng = np.random.default_rng(2)
+        x_np = rng.standard_normal((4, 8)).astype(np.float32)
+        l_mod = lnn.LayerNorm(8, elementwise_affine=False)
+        t_mod = ref.nn.LayerNorm(8, elementwise_affine=False)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
+    @pytest.mark.parametrize("affine", [True, False])
+    def test_batch_norm_train_running_stats(self, affine):
+        import lucid.nn as lnn
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.BatchNorm2d(4, affine=affine)
+        l_mod = lnn.BatchNorm2d(4, affine=affine)
+        if affine:
+            for n, lp in l_mod.named_parameters():
+                td_p = dict(t_mod.named_parameters())[n].detach().numpy().copy()
+                new_impl = _ce.TensorImpl(td_p, _ce.Device.CPU, False)
+                lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        # Run several batches in train mode → running stats accumulate.
+        rng = np.random.default_rng(3)
+        for _ in range(4):
+            x_np = rng.standard_normal((4, 4, 5, 5)).astype(np.float32) + 0.5
+            l_mod(lucid.tensor(x_np.copy()))
+            t_mod(ref.tensor(x_np.copy()))
+        # Compare running stats — must match modulo float rounding.
+        check_parity(l_mod.running_mean, t_mod.running_mean)
+        check_parity(l_mod.running_var, t_mod.running_var, atol=2e-4)
+
+    def test_batch_norm_eval_uses_running_stats(self):
+        import lucid.nn as lnn
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.BatchNorm2d(4)
+        l_mod = lnn.BatchNorm2d(4)
+        for n, lp in l_mod.named_parameters():
+            td_p = dict(t_mod.named_parameters())[n].detach().numpy().copy()
+            new_impl = _ce.TensorImpl(td_p, _ce.Device.CPU, False)
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+        rng = np.random.default_rng(4)
+        # Train a few steps to populate running stats.
+        for _ in range(3):
+            x_np = rng.standard_normal((4, 4, 5, 5)).astype(np.float32) + 0.5
+            l_mod(lucid.tensor(x_np.copy()))
+            t_mod(ref.tensor(x_np.copy()))
+        # Switch to eval and compare outputs on fresh input.
+        l_mod.eval()
+        t_mod.eval()
+        x_np = rng.standard_normal((2, 4, 5, 5)).astype(np.float32)
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+            atol=2e-4,
+        )
+
+    def test_batch_norm_momentum_none_cumulative(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.BatchNorm2d(4, momentum=None, affine=False)
+        l_mod = lnn.BatchNorm2d(4, momentum=None, affine=False)
+        rng = np.random.default_rng(5)
+        for _ in range(5):
+            x_np = rng.standard_normal((4, 4, 5, 5)).astype(np.float32)
+            l_mod(lucid.tensor(x_np.copy()))
+            t_mod(ref.tensor(x_np.copy()))
+        check_parity(l_mod.running_mean, t_mod.running_mean)
+        check_parity(l_mod.running_var, t_mod.running_var, atol=2e-4)
+
+    def test_batch_norm_track_running_stats_false(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.BatchNorm2d(4, affine=False, track_running_stats=False)
+        l_mod = lnn.BatchNorm2d(4, affine=False, track_running_stats=False)
+        rng = np.random.default_rng(6)
+        x_np = rng.standard_normal((4, 4, 6, 6)).astype(np.float32)
+        # Eval mode without running stats — both should fall back to batch stats.
+        l_mod.eval()
+        t_mod.eval()
+        check_parity(
+            l_mod(lucid.tensor(x_np.copy())),
+            t_mod(ref.tensor(x_np.copy())),
+        )
+
     def test_group_norm(self):
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((2, 8, 4, 4)).astype(np.float32)
