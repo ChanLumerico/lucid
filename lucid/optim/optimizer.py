@@ -17,6 +17,38 @@ class Optimizer:
       {"params": list[Parameter], "lr": float, ...}
     """
 
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """Wrap every concrete step() so it auto-flushes Metal params after update."""
+        super().__init_subclass__(**kwargs)
+        if "step" in cls.__dict__:
+            _orig = cls.__dict__["step"]
+
+            def _step_with_eval(self: "Optimizer", closure: "_OptimizerClosure" = None):
+                result = _orig(self, closure)
+                self._metal_eval_params()
+                return result
+
+            _step_with_eval.__name__ = "step"
+            _step_with_eval.__doc__  = _orig.__doc__
+            cls.step = _step_with_eval  # type: ignore[method-assign]
+
+    def _metal_eval_params(self) -> None:
+        """Flush all Metal (MLX) parameter tensors in one mx.eval() call.
+
+        Called automatically after every optimizer step when any parameter
+        lives on the GPU device.  No-op on CPU-only models.
+        """
+        from lucid._C import engine as _ce
+        gpu_impls = [
+            p._impl
+            for group in self.param_groups
+            for p in group["params"]
+            if isinstance(p, Parameter) and p._impl.device == _ce.Device.GPU
+        ]
+        if gpu_impls:
+            import mlx.core as mx
+            mx.eval(*gpu_impls)
+
     def __init__(
         self,
         params: Iterable[Parameter] | Iterable[dict[str, object]],

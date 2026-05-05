@@ -231,6 +231,13 @@ class Tensor[DT: dtype, DV: device]:
         >>> y.backward()
         >>> x.grad          # 2 * x
         """
+        # On Metal, flush the forward computation graph before backward so
+        # that MLX evaluates two small graphs (forward, then backward+step)
+        # instead of one large fused graph — roughly 2× faster in practice.
+        if self._impl.device == _C_engine.Device.GPU:
+            import mlx.core as mx
+            mx.eval(self._impl)
+
         if gradient is not None:
             if self._impl.shape != gradient._impl.shape:
                 raise RuntimeError(

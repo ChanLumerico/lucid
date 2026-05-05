@@ -101,10 +101,8 @@ def run_epoch(epoch_idx):
         opt.zero_grad()
         out = model(xb)
         loss = crit(out, yb)
-        loss.eval()                        # flush forward graph before backward
-        loss.backward()
-        opt.step()
-        lucid.eval(*model.parameters())    # flush param updates
+        loss.backward()   # auto-flushes forward graph on Metal before running
+        opt.step()        # auto-flushes param updates on Metal after running
 
         tot_loss += float(loss.item())
         n_batches += 1
