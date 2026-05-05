@@ -8,7 +8,7 @@
 //             the diagonal) is L with an implicit unit diagonal.
 //   pivots — int32 vector of 1-based pivot indices (length n per batch element).
 //
-// This matches the output of torch.linalg.lu_factor exactly.
+// This matches the output of the reference LU factor API exactly.
 //
 // No autograd is wired: the backward through LU factorisation (needed for
 // differentiable linear solvers) is not implemented.

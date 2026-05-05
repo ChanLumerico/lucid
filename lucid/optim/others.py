@@ -305,7 +305,7 @@ class Rprop(Optimizer):
 class SparseAdam(Optimizer):
     """Lazy version of Adam for sparse gradients.
 
-    Dense Adam implementation that is API-compatible with PyTorch SparseAdam.
+    Dense Adam implementation that is API-compatible with reference framework SparseAdam.
     All moment state is stored as TensorImpl and updated using engine ops,
     so the optimizer works on both CPU and GPU.
     """

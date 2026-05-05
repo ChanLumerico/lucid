@@ -167,7 +167,7 @@ void register_nn(py::module_& m) {
           "Backward returns (dx, dW, db).");
 
     // unfold (im2col) extracts sliding local blocks from the input; the output
-    // layout matches PyTorch's unfold so it can feed gemm-based conv2d.
+    // layout matches reference framework's unfold so it can feed gemm-based conv2d.
     m.def("unfold", &unfold_op, py::arg("x"), py::arg("kernel"), py::arg("stride"), py::arg("pad"),
           py::arg("dilation"), "im2col over an N-D input. Returns (B, C·prod(K), prod(O)).");
 

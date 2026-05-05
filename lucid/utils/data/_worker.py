@@ -38,7 +38,7 @@ class WorkerInfo:
 def get_worker_info() -> WorkerInfo | None:
     """Return a :class:`WorkerInfo` object in a worker process, else ``None``.
 
-    This mirrors ``torch.utils.data.get_worker_info()``.  Inside the
+    This mirrors ``the worker-info API``.  Inside the
     ``worker_init_fn`` or dataset ``__getitem__`` of a multi-process
     DataLoader, this function returns the WorkerInfo for the current worker.
     In the main process (or when ``num_workers=0``) it returns ``None``.

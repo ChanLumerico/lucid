@@ -8,7 +8,7 @@
 // graph is built, no inputs are saved, and no gradient metadata is propagated
 // to outputs.
 //
-// NoGradGuard is the RAII equivalent of Python's torch.no_grad() context
+// NoGradGuard is the RAII equivalent of Python's a no-grad context context
 // manager.  It saves the current mode on entry and restores it unconditionally
 // on exit, even if the guarded scope throws.
 //

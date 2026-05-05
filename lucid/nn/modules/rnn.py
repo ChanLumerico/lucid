@@ -61,7 +61,7 @@ class LSTM(Module):
     -----
     The output hidden state ``h_n`` has shape
     ``(D * num_layers, batch, hidden_size)`` where ``D = 2`` if bidirectional
-    else ``D = 1``.  This matches PyTorch convention.
+    else ``D = 1``.  This matches reference convention.
 
     Examples
     --------
@@ -375,12 +375,12 @@ class GRU(Module):
     """Multi-layer GRU.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
-    ``(D * num_layers, batch, hidden_size)`` — matching PyTorch convention.
+    ``(D * num_layers, batch, hidden_size)`` — matching reference convention.
 
     Parameters
     ----------
     input_size, hidden_size, num_layers, bias, batch_first, dropout,
-    bidirectional : same as ``torch.nn.GRU``.
+    bidirectional : standard bidirectional sequence semantics.
 
     Examples
     --------
@@ -499,12 +499,12 @@ class RNN(Module):
     """Multi-layer Elman RNN.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
-    ``(D * num_layers, batch, hidden_size)`` — matching PyTorch convention.
+    ``(D * num_layers, batch, hidden_size)`` — matching reference convention.
 
     Parameters
     ----------
     input_size, hidden_size, num_layers, nonlinearity, bias, batch_first,
-    dropout, bidirectional : same as ``torch.nn.RNN``.
+    dropout, bidirectional : standard recurrent layer semantics.
 
     Examples
     --------

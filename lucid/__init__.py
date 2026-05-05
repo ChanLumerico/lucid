@@ -40,12 +40,12 @@ from lucid._dtype import (
     double,
     short,
     long,
-    # New PyTorch-style module-level aliases
+    # New API-compatible module-level aliases
     # lucid.float / lucid.int / lucid.bool shadow Python builtins
     # only as module attributes — no impact on user code
-    float32 as float,   # lucid.float  == torch.float  == float32
-    int32   as int,     # lucid.int    == torch.int    == int32
-    bool_   as bool,    # lucid.bool   == torch.bool   == bool_
+    float32 as float,   # lucid.float  == float32  == float32
+    int32   as int,     # lucid.int    == int32    == int32
+    bool_   as bool,    # lucid.bool   == bool_   == bool_
 )
 from lucid._device import device
 from lucid._globals import (
@@ -56,7 +56,7 @@ from lucid._globals import (
 )
 
 # ── Public API ────────────────────────────────────────────────────────────────
-# Organised by category — mirrors PyTorch's torch.* surface.
+# Organised by category — mirrors the standard tensor framework surface.
 # Invariant: no Tier-2 symbols (Module, Parameter, Linear, Adam, ...) here.
 
 __all__ = [

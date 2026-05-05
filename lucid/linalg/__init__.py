@@ -148,7 +148,7 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     Returns ``(LU, pivots)`` where ``LU`` is the packed n×n matrix
     (LAPACK ``dgetrf_`` format: U on and above the diagonal, L below with
     implicit unit diagonal) and ``pivots`` is an int32 tensor of 1-based
-    pivot indices.  Matches ``torch.linalg.lu_factor``.
+    pivot indices.  Matches ``the reference LU factor API``.
     """
     lu, pivots = _la.lu_factor(A)  # type: ignore[arg-type]
     return lu, pivots  # type: ignore[return-value]
@@ -176,7 +176,7 @@ def matrix_rank(
     """Numerical matrix rank via SVD.
 
     Counts singular values strictly greater than *tol*.  When *tol* is
-    ``None`` uses ``max(m, n) * eps * max_sv`` (PyTorch default).
+    ``None`` uses ``max(m, n) * eps * max_sv`` (reference default).
     """
     _, S, _ = svd(A)
     m, n = int(A.shape[-2]), int(A.shape[-1])
@@ -440,7 +440,7 @@ def lstsq(
     Returns ``(solution, residuals, rank, singular_values)``.
     CPU: LAPACK sgels/dgels.  GPU: CPU fallback.
     Note: residuals, rank, and singular_values are empty placeholders
-    for PyTorch API compatibility; only ``solution`` is fully computed.
+    for API compatibility; only ``solution`` is fully computed.
     """
     sol = _wrap(_la.lstsq(_unwrap(A), _unwrap(B)))
     dev = _unwrap(A).device
@@ -462,7 +462,7 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
 def householder_product(H: Tensor, tau: Tensor) -> Tensor:
     """Compute the product of Householder reflectors.
 
-    ``H`` is the matrix from ``torch.linalg.geqrf`` (or equivalent) and
+    ``H`` is the matrix from ``the reference GEQRF API`` (or equivalent) and
     ``tau`` are the scalar factors.  Returns the orthogonal matrix Q.
     CPU: LAPACK sorgqr/dorgqr.  GPU: CPU fallback.
     """

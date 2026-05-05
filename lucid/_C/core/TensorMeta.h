@@ -89,7 +89,7 @@ struct AutogradMeta {
     // (second-order derivatives, MAML, Hessian-vector products, etc.).
     std::shared_ptr<class TensorImpl> grad_impl;
     // When true, Engine accumulates the incoming gradient into this tensor's
-    // grad storage even if it is not a leaf (mirrors torch.Tensor.retain_grad()).
+    // grad storage even if it is not a leaf (mirrors reference tensor.retain_grad()).
     bool retain_grad = false;
 };
 

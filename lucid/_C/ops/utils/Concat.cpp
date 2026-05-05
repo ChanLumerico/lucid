@@ -401,7 +401,7 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
 }
 
 // hstack: concatenate along axis 1 for >=2-D inputs (column-wise), or
-// along axis 0 for 1-D inputs (element-wise) to match NumPy/PyTorch semantics.
+// along axis 0 for 1-D inputs (element-wise) to match NumPy/reference semantics.
 TensorImplPtr hstack_op(const std::vector<TensorImplPtr>& xs) {
     if (xs.empty())
         ErrorBuilder("hstack").fail("empty input");
@@ -410,7 +410,7 @@ TensorImplPtr hstack_op(const std::vector<TensorImplPtr>& xs) {
 
 // vstack: concatenate along axis 0 for >=2-D inputs (row-wise), but for 1-D
 // inputs call stack_op(xs, 0) to produce a 2-D matrix where each input
-// becomes a row.  This mirrors the NumPy/PyTorch vstack convention.
+// becomes a row.  This mirrors the NumPy/reference framework vstack convention.
 TensorImplPtr vstack_op(const std::vector<TensorImplPtr>& xs) {
     if (xs.empty())
         ErrorBuilder("vstack").fail("empty input");

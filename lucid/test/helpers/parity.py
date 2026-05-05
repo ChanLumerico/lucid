@@ -1,6 +1,4 @@
-"""
-Parity helpers: compare Lucid output against PyTorch output element-wise.
-"""
+"""Parity helpers: compare Lucid output against reference output element-wise."""
 
 import numpy as np
 import lucid
@@ -23,19 +21,19 @@ def parity_atol(dtype=None) -> float:
 
 def check_parity(
     lucid_out,
-    torch_out,
+    reference_out,
     atol: float = 1e-4,
     rtol: float = 1e-4,
     msg: str = "",
 ) -> None:
-    """Assert that lucid_out and torch_out are element-wise close.
+    """Assert that lucid_out and reference_out are element-wise close.
 
-    Accepts Lucid Tensor + PyTorch Tensor or plain numpy arrays.
+    Accepts Lucid Tensor plus reference tensor or plain numpy arrays.
 
     Parameters
     ----------
     lucid_out  : lucid.Tensor or numpy.ndarray
-    torch_out  : torch.Tensor or numpy.ndarray
+    reference_out : reference tensor or numpy.ndarray
     atol, rtol : tolerances
     msg        : optional failure message prefix
     """
@@ -45,16 +43,16 @@ def check_parity(
     else:
         l_np = np.asarray(lucid_out)
 
-    # Convert torch output
+    # Convert reference output
     try:
-        t_np = torch_out.detach().numpy()
+        t_np = reference_out.detach().numpy()
     except AttributeError:
-        t_np = np.asarray(torch_out)
+        t_np = np.asarray(reference_out)
 
     np.testing.assert_allclose(
         l_np,
         t_np,
         atol=atol,
         rtol=rtol,
-        err_msg=f"{msg}\nLucid:\n{l_np}\nTorch:\n{t_np}" if msg else None,
+        err_msg=f"{msg}\nLucid:\n{l_np}\nReference:\n{t_np}" if msg else None,
     )

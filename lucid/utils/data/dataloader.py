@@ -330,7 +330,7 @@ class DataLoader:
         self.worker_init_fn = worker_init_fn
         self.multiprocessing_context = multiprocessing_context
         self.generator = generator
-        # Match PyTorch: prefetch_factor=None when num_workers=0, else default 2
+        # Match reference framework: prefetch_factor=None when num_workers=0, else default 2
         if prefetch_factor is None:
             self.prefetch_factor = 2 if num_workers > 0 else None
         else:

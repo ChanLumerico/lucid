@@ -129,7 +129,7 @@ class Module:
         ----------
         remove_duplicate:
             If True (default), each unique Parameter object is yielded only
-            once, even if referenced by multiple attributes. Mirrors PyTorch.
+            once, even if referenced by multiple attributes. Mirrors reference framework.
         """
         seen: set[int] = set()
         for name, p in self._parameters.items():

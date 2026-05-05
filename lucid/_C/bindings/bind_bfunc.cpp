@@ -11,7 +11,7 @@
 //      output is always Bool dtype.
 //   4. Bitwise ops (bitwise_and, bitwise_or, bitwise_xor) — integer tensors only.
 //   5. In-place variants (add_, sub_, ...) — mutate `a` in-place, returning it;
-//      the trailing underscore follows PyTorch convention.
+//      the trailing underscore follows reference convention.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>

@@ -109,7 +109,7 @@ def _inject_methods(tensor_cls: type) -> None:
         """Return the 2D transpose of this tensor."""
         return _wrap(_C_engine.T(self._impl))
 
-    # ── PyTorch-compatible reduction methods (override registry versions) ─────
+    # ── API-compatible reduction methods (override registry versions) ─────
 
     def sum(
         self: Tensor, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
@@ -157,7 +157,7 @@ def _inject_methods(tensor_cls: type) -> None:
         axes=None,
         keepdims=None,
     ) -> Tensor:
-        """Variance; correction=1 applies Bessel's correction (PyTorch default)."""
+        """Variance; correction=1 applies Bessel's correction (reference default)."""
         if unbiased is not None:
             correction = 1 if unbiased else 0
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
@@ -176,7 +176,7 @@ def _inject_methods(tensor_cls: type) -> None:
         axes=None,
         keepdims=None,
     ) -> Tensor:
-        """Std dev; correction=1 applies Bessel's correction (PyTorch default)."""
+        """Std dev; correction=1 applies Bessel's correction (reference default)."""
         if unbiased is not None:
             correction = 1 if unbiased else 0
         ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
@@ -228,7 +228,7 @@ def _inject_methods(tensor_cls: type) -> None:
         return _wrap(_C_engine.expand(self._impl, s))
 
     def squeeze(self: Tensor, dim=None) -> Tensor:
-        """Remove size-1 dims; non-unit dims silently ignored (PyTorch behaviour)."""
+        """Remove size-1 dims; non-unit dims silently ignored (reference behaviour)."""
         if dim is None:
             return _wrap(_C_engine.squeeze_all(self._impl))
         impl = self._impl
@@ -249,7 +249,7 @@ def _inject_methods(tensor_cls: type) -> None:
         return _wrap(_C_engine.squeeze(impl, nd))
 
     def repeat(self: Tensor, *sizes) -> Tensor:
-        """Tile copies (PyTorch Tensor.repeat semantics).
+        """Tile copies (reference framework Tensor.repeat semantics).
 
         Accepts repeat(2, 3) or repeat((2, 3)) — tiles the tensor sizes[i] times
         along each dimension (wraps short size tuples by prepending 1s).
@@ -261,12 +261,12 @@ def _inject_methods(tensor_cls: type) -> None:
         return _wrap(_C_engine.tile(self._impl, [int(r) for r in reps]))
 
     def repeat_interleave(self: Tensor, repeats: int, dim: int | None = None) -> Tensor:
-        """Repeat each element `repeats` times (torch.repeat_interleave semantics)."""
+        """Repeat each element `repeats` times (repeat_interleave semantics)."""
         axis = 0 if dim is None else int(dim)
         return _wrap(_C_engine.repeat(self._impl, int(repeats), axis))
 
     def split(self: Tensor, split_size_or_sections, dim: int = 0) -> list[Tensor]:
-        """Split into chunks of split_size along dim (PyTorch semantics)."""
+        """Split into chunks of split_size along dim (reference semantics)."""
         axis_size = int(self._impl.shape[dim])
         if isinstance(split_size_or_sections, int):
             chunk_size = split_size_or_sections

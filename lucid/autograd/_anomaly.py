@@ -1,5 +1,5 @@
 """
-detect_anomaly context manager — mirrors torch.autograd.detect_anomaly.
+detect_anomaly context manager for autograd debugging.
 
 When active, NaN/Inf values in backward gradients will raise a RuntimeError
 with a descriptive message.  This is primarily useful for debugging gradient

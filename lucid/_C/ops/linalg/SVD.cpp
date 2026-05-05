@@ -10,7 +10,7 @@
 //
 // Shape pre-computation: ush, ssh, and vsh are all derived before dispatch so
 // the backend receives exact target sizes.  The convention is "Vh" (V-hermitian
-// conjugate / transpose), not "V", to match NumPy and PyTorch naming.
+// conjugate / transpose), not "V", to match NumPy and reference framework naming.
 //
 // compute_uv flag: passing false to the backend skips materialising U and Vh,
 // which can be significantly faster when only the singular values are needed

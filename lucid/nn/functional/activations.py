@@ -101,7 +101,7 @@ def _erf_approx(xi):
 def gelu(x: Tensor, approximate: str = "none") -> Tensor:
     """Gaussian error linear unit.
 
-    approximate="none"  (default) → exact erf-based formula (matches PyTorch default).
+    approximate="none"  (default) → exact erf-based formula (matches reference default).
     approximate="tanh"            → tanh-approximation (faster, slightly less accurate).
     """
     xi = _unwrap(x)

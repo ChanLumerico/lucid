@@ -106,7 +106,7 @@ public:
 // Gradient rule: route the gradient only to positions where x == max(x).
 // Saves the *output* (the max value) to build the equality mask without
 // re-running the reduction.  Ties (multiple equal maxima) split the gradient
-// equally, matching NumPy/PyTorch behaviour.
+// equally, matching NumPy/reference behaviour.
 class LUCID_API MaxBackward : public ReduceOp<MaxBackward> {
 public:
     static constexpr bool kSavesOutput = true;

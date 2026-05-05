@@ -239,7 +239,7 @@ public:
 
     // Axis reductions.  opts.axes specifies which dimensions to collapse; the
     // output shape follows keepdims semantics.  variance() uses the biased
-    // (population) variance formula to match NumPy/PyTorch defaults.
+    // (population) variance formula to match NumPy/reference defaults.
     virtual Storage
     reduce_sum(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) = 0;
     virtual Storage

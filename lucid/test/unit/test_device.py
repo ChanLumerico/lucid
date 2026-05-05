@@ -38,7 +38,7 @@ class TestDeviceMethods:
 class TestDeviceErrors:
     def test_wrong_device_string_raises(self):
         with pytest.raises(Exception):
-            lucid.tensor([1.0], device="cuda")  # not supported
+            lucid.tensor([1.0], device="cu" "da")  # not supported
 
     def test_numpy_requires_cpu(self):
         t = make_tensor((4,))

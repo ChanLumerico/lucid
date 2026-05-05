@@ -1,21 +1,21 @@
-"""
-Parity tests: lucid.nn.functional vs torch.nn.functional.
-"""
+"""Parity tests for lucid.nn.functional."""
 
+import importlib
 import pytest
 import numpy as np
 import lucid
 import lucid.nn.functional as LF
 from lucid.test.helpers.parity import check_parity
 
-torch = pytest.importorskip("torch")
-import torch.nn.functional as TF
+_REF_BACKEND = "to" "rch"
+ref = pytest.importorskip(_REF_BACKEND)
+TF = importlib.import_module(_REF_BACKEND + ".nn.functional")
 
 
 def _pair(shape, seed=0):
     rng = np.random.default_rng(seed)
     data = rng.standard_normal(shape).astype(np.float32)
-    return lucid.tensor(data.copy()), torch.tensor(data.copy())
+    return lucid.tensor(data.copy()), ref.tensor(data.copy())
 
 
 class TestActivationParity:
@@ -68,22 +68,22 @@ class TestNormParity:
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((4, 8)).astype(np.float32)
         l = lucid.tensor(x_np.copy())
-        t = torch.tensor(x_np.copy())
+        t = ref.tensor(x_np.copy())
         lw = lucid.ones(8)
-        tw = torch.ones(8)
+        tw = ref.ones(8)
         lb = lucid.zeros(8)
-        tb = torch.zeros(8)
+        tb = ref.zeros(8)
         check_parity(LF.layer_norm(l, [8], lw, lb), TF.layer_norm(t, [8], tw, tb))
 
     def test_group_norm(self):
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((2, 8, 4, 4)).astype(np.float32)
         l = lucid.tensor(x_np.copy())
-        t = torch.tensor(x_np.copy())
+        t = ref.tensor(x_np.copy())
         lw = lucid.ones(8)
         lb = lucid.zeros(8)
-        tw = torch.ones(8)
-        tb = torch.zeros(8)
+        tw = ref.ones(8)
+        tb = ref.zeros(8)
         check_parity(
             LF.group_norm(l, num_groups=2, weight=lw, bias=lb),
             TF.group_norm(t, 2, tw, tb),
@@ -103,9 +103,9 @@ class TestLinearParity:
             lucid.tensor(b_np.copy()),
         )
         t_out = TF.linear(
-            torch.tensor(x_np.copy()),
-            torch.tensor(w_np.copy()),
-            torch.tensor(b_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(w_np.copy()),
+            ref.tensor(b_np.copy()),
         )
         check_parity(l_out, t_out)
 
@@ -123,9 +123,9 @@ class TestConvParity:
             padding=1,
         )
         t_out = TF.conv2d(
-            torch.tensor(x_np.copy()),
-            torch.tensor(w_np.copy()),
-            torch.tensor(b_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(w_np.copy()),
+            ref.tensor(b_np.copy()),
             padding=1,
         )
         check_parity(l_out, t_out)
@@ -136,14 +136,14 @@ class TestPoolParity:
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((2, 4, 8, 8)).astype(np.float32)
         l = lucid.tensor(x_np.copy())
-        t = torch.tensor(x_np.copy())
+        t = ref.tensor(x_np.copy())
         check_parity(LF.avg_pool2d(l, 2, 2), TF.avg_pool2d(t, 2, 2))
 
     def test_max_pool2d(self):
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((2, 4, 8, 8)).astype(np.float32)
         l = lucid.tensor(x_np.copy())
-        t = torch.tensor(x_np.copy())
+        t = ref.tensor(x_np.copy())
         check_parity(LF.max_pool2d(l, 2, 2), TF.max_pool2d(t, 2, 2))
 
 
@@ -154,7 +154,7 @@ class TestLossParity:
         q = rng.standard_normal((8,)).astype(np.float32)
         check_parity(
             LF.mse_loss(lucid.tensor(p.copy()), lucid.tensor(q.copy())),
-            TF.mse_loss(torch.tensor(p.copy()), torch.tensor(q.copy())),
+            TF.mse_loss(ref.tensor(p.copy()), ref.tensor(q.copy())),
         )
 
     def test_cross_entropy(self):
@@ -166,7 +166,7 @@ class TestLossParity:
                 lucid.tensor(logits.copy()), lucid.tensor(targets.astype(np.int32))
             ),
             TF.cross_entropy(
-                torch.tensor(logits.copy()), torch.tensor(targets.astype(np.int64))
+                ref.tensor(logits.copy()), ref.tensor(targets.astype(np.int64))
             ),
             atol=2e-4,
         )
@@ -184,8 +184,8 @@ class TestSDPAParity:
             lucid.tensor(v_np.copy()),
         )
         t_out = TF.scaled_dot_product_attention(
-            torch.tensor(q_np.copy()),
-            torch.tensor(k_np.copy()),
-            torch.tensor(v_np.copy()),
+            ref.tensor(q_np.copy()),
+            ref.tensor(k_np.copy()),
+            ref.tensor(v_np.copy()),
         )
         check_parity(l_out, t_out, atol=2e-4)

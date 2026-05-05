@@ -54,7 +54,7 @@ LUCID_API TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& i
 // original input shape.
 LUCID_API TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axis2);
 
-// Reverse tensor along the given axes.  Equivalent to numpy.flip / torch.flip.
+// Reverse tensor along the given axes.  Equivalent to numpy.flip / flip.
 // Like roll, but with no wrap-around.  Backward: flip with the same dims.
 LUCID_API TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims);
 

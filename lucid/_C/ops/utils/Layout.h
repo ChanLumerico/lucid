@@ -48,7 +48,7 @@ LUCID_API TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int e
 // already contiguous a copy is made before the broadcast.
 LUCID_API TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape);
 
-// Alias for broadcast_to_op.  Provided for API symmetry with PyTorch's
+// Alias for broadcast_to_op.  Provided for API symmetry with reference framework's
 // Tensor::expand.
 LUCID_API TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape);
 

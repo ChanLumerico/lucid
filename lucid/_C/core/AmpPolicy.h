@@ -13,7 +13,7 @@
 //   ForceFP32 — always execute at F32 for numerical stability (e.g. softmax,
 //               log, exponents).
 //
-// amp::AutocastGuard is the RAII equivalent of torch.autocast.  It saves and
+// amp::AutocastGuard is the RAII equivalent of an autocast context.  It saves and
 // restores the per-thread active dtype on construction / destruction.
 //
 // Thread safety: all state is thread_local; no locking is required.

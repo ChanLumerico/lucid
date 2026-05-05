@@ -4,7 +4,7 @@
 // Shape is a signed 64-bit dimension vector to accommodate negative sentinel
 // values (e.g. a dim of -1 representing an unknown / dynamic extent).
 // Stride stores byte offsets between successive elements along each axis,
-// following the same row-major convention as NumPy and PyTorch.
+// following the same row-major convention as NumPy and reference framework.
 
 #pragma once
 

@@ -3,7 +3,7 @@
 // Triangular solve: given a triangular matrix A and a right-hand-side B,
 // compute X such that A X = B.
 //
-// Parameters mirror torch.linalg.solve_triangular:
+// Parameters mirror solve_triangular:
 //   upper          — true if A is upper triangular, false if lower.
 //   unitriangular  — if true, the diagonal of A is treated as all-ones
 //                    (unit triangular; the actual values are ignored).

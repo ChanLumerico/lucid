@@ -192,7 +192,7 @@ std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
 // Compute the output shape of a reduction over input_shape along axes.
 // Reduced dimensions are removed unless keepdims is true, in which case
-// they become size 1 (matching NumPy / PyTorch semantics).
+// they become size 1 (matching NumPy / reference semantics).
 Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes, bool keepdims);
 
 // Verify that the live tensor referenced by live still has the same version

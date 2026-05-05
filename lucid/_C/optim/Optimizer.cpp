@@ -16,7 +16,7 @@ namespace lucid {
 // The state_initialized_ vector is grown lazily to match params_ on
 // the first step call (handles the case where params_ was extended
 // after construction). A parameter is silently skipped if its pointer
-// is null or if it has no gradient yet — this matches the PyTorch
+// is null or if it has no gradient yet — this matches the reference framework
 // convention where parameters without gradients are treated as
 // non-trainable for the current step.
 void Optimizer::step() {

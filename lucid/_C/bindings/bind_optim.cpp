@@ -1,7 +1,7 @@
 // lucid/_C/bindings/bind_optim.cpp
 //
 // Registers all optimizer classes and LR scheduler classes on the top-level
-// engine module.  The Python hierarchy mirrors PyTorch's torch.optim layout:
+// engine module.  The Python hierarchy mirrors reference framework's standard optimizer layout:
 //
 //   Optimizer (abstract base) — step(), zero_grad(), lr property
 //     SGD, ASGD

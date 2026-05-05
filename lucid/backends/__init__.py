@@ -1,7 +1,7 @@
 """
 lucid.backends: backend configuration flags.
 
-Mirrors ``torch.backends.{cudnn,cpu}`` semantics for Apple Silicon:
+Mirrors ``backend configuration`` semantics for Apple Silicon:
 
     lucid.backends.accelerate.deterministic = True   # CPU BLAS reproducibility
     lucid.backends.metal.deterministic = True        # GPU Metal reproducibility

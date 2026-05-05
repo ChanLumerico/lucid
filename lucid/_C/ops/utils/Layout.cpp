@@ -153,7 +153,7 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
 }
 
 // expand_op is a direct alias for broadcast_to_op, provided for API symmetry
-// with PyTorch's Tensor::expand.  Both functions behave identically.
+// with reference framework's Tensor::expand.  Both functions behave identically.
 TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
     return broadcast_to_op(a, shape);
 }

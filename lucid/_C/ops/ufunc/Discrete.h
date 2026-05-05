@@ -5,7 +5,7 @@
 // everywhere (the derivative is undefined at integer boundaries) so all four
 // set kHasGradient = false.  UnaryKernel::forward will skip autograd wiring
 // entirely; grad_formula is provided only for completeness and returns an
-// empty CpuStorage as a zero-gradient sentinel.  This matches PyTorch's
+// empty CpuStorage as a zero-gradient sentinel.  This matches reference framework's
 // behaviour for the same ops.
 
 #pragma once

@@ -161,7 +161,7 @@ public:
     void accumulate_grad_impl(std::shared_ptr<TensorImpl> g);
 
     // retain_grad: if true, Engine accumulates gradients into this tensor's grad
-    // storage even when it is not a leaf, matching torch.Tensor.retain_grad().
+    // storage even when it is not a leaf, matching reference tensor.retain_grad().
     bool retains_grad() const noexcept {
         return autograd_ ? autograd_->retain_grad : false;
     }

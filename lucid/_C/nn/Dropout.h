@@ -42,7 +42,7 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// Autograd node for channel-wise Dropout (DropoutNd in PyTorch parlance).
+// Autograd node for channel-wise Dropout (DropoutNd in reference parlance).
 //
 // A single Bernoulli value is drawn per (batch, channel) pair and broadcast
 // over all spatial dimensions, so entire feature-map channels are zeroed.

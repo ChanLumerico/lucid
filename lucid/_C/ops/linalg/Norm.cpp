@@ -96,7 +96,7 @@ std::vector<Storage> NormBackward::apply(Storage grad_out) {
     if (ord_ == 2.0) {
         // L2 gradient: dA = (A / clip(N, ε)) * expand(dN)
         // The clip prevents NaN when A = 0 (‖A‖ = 0 means the gradient of ‖A‖
-        // is technically undefined; we follow PyTorch in returning 0 there).
+        // is technically undefined; we follow reference framework in returning 0 there).
         auto N_exp = expand_back(clip_op(N, 1e-12, 1e30));
         auto dN_exp = expand_back(dN);
         dA = mul_op(div_op(A, N_exp), dN_exp);

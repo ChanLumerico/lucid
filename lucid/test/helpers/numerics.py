@@ -3,7 +3,7 @@ Numeric helpers for the lucid test suite.
 
 make_tensor     — Create a deterministic random Lucid tensor.
 tol             — Return (atol, rtol) appropriate for a dtype.
-rand_like_torch — Wrap a torch tensor's data as a Lucid tensor (for parity tests).
+rand_like_reference — Wrap reference tensor data as a Lucid tensor.
 """
 
 import numpy as np
@@ -73,18 +73,18 @@ def tol(dtype) -> tuple[float, float]:
     return _MAP.get(dtype, (1e-4, 1e-4))
 
 
-def rand_like_torch(torch_tensor) -> Tensor:
-    """Wrap a PyTorch tensor's numpy data as a Lucid Tensor.
+def rand_like_reference(reference_tensor) -> Tensor:
+    """Wrap reference tensor numpy data as a Lucid Tensor.
 
     Used in parity tests to ensure both sides use identical data.
 
     Parameters
     ----------
-    torch_tensor : torch.Tensor  (must be CPU, detached)
+    reference_tensor : array-like object with detach().numpy()
 
     Returns
     -------
     Lucid Tensor with same data
     """
-    data = torch_tensor.detach().numpy()
+    data = reference_tensor.detach().numpy()
     return lucid.tensor(data.copy())

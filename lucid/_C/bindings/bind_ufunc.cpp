@@ -134,7 +134,7 @@ void register_ufunc(py::module_& m) {
     m.def("cumprod", &cumprod_op, py::arg("a"), py::arg("axis") = -1);
 
     // In-place variants.  These mutate `a` directly, bump its version counter,
-    // and are not differentiable.  The underscore suffix follows PyTorch convention.
+    // and are not differentiable.  The underscore suffix follows reference convention.
     m.def("neg_", &neg_inplace_op, py::arg("a"));
     m.def("abs_", &abs_inplace_op, py::arg("a"));
     m.def("sign_", &sign_inplace_op, py::arg("a"));

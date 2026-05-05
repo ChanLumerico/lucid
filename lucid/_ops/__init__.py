@@ -74,9 +74,9 @@ def _populate_free_fns() -> None:
 _populate_free_fns()
 
 
-# ── PyTorch-compatible overrides ──────────────────────────────────────────────
+# ── API-compatible overrides ──────────────────────────────────────────────
 # These replace the auto-generated functions above with wrappers that accept
-# PyTorch-style keyword arguments (dim, keepdim, correction, dims, etc.).
+# API-compatible keyword arguments (dim, keepdim, correction, dims, etc.).
 
 
 def _to_axes(dim):
@@ -112,35 +112,35 @@ def _bessel_correct(result_impl, x_impl, axes_list, correction):
 
 
 def sum(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
-    """Sum; accepts PyTorch-style dim/keepdim."""
+    """Sum; accepts API-compatible dim/keepdim."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _wrap(_C_engine.sum(_unwrap(x), ax, kd))
 
 
 def mean(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
-    """Mean; accepts PyTorch-style dim/keepdim."""
+    """Mean; accepts API-compatible dim/keepdim."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _wrap(_C_engine.mean(_unwrap(x), ax, kd))
 
 
 def prod(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
-    """Product; accepts PyTorch-style dim/keepdim."""
+    """Product; accepts API-compatible dim/keepdim."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _wrap(_C_engine.prod(_unwrap(x), ax, kd))
 
 
 def max(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
-    """Max; accepts PyTorch-style dim/keepdim."""
+    """Max; accepts API-compatible dim/keepdim."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _wrap(_C_engine.max(_unwrap(x), ax, kd))
 
 
 def min(x, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
-    """Min; accepts PyTorch-style dim/keepdim."""
+    """Min; accepts API-compatible dim/keepdim."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _wrap(_C_engine.min(_unwrap(x), ax, kd))
@@ -157,7 +157,7 @@ def var(
     axes=None,
     keepdims=None,
 ):
-    """Variance; correction=1 applies Bessel's correction (PyTorch default)."""
+    """Variance; correction=1 applies Bessel's correction (reference default)."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
@@ -178,7 +178,7 @@ def std(
     axes=None,
     keepdims=None,
 ):
-    """Std dev; correction=1 applies Bessel's correction (PyTorch default)."""
+    """Std dev; correction=1 applies Bessel's correction (reference default)."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
@@ -190,7 +190,7 @@ def std(
 
 
 def argmax(x, dim=None, keepdim=False, *, axis=None, keepdims=None):
-    """Argmax; accepts PyTorch-style dim/keepdim (axis also accepted)."""
+    """Argmax; accepts API-compatible dim/keepdim (axis also accepted)."""
     d = dim if dim is not None else axis
     kd = keepdims if keepdims is not None else keepdim
     if d is None:
@@ -199,7 +199,7 @@ def argmax(x, dim=None, keepdim=False, *, axis=None, keepdims=None):
 
 
 def argmin(x, dim=None, keepdim=False, *, axis=None, keepdims=None):
-    """Argmin; accepts PyTorch-style dim/keepdim (axis also accepted)."""
+    """Argmin; accepts API-compatible dim/keepdim (axis also accepted)."""
     d = dim if dim is not None else axis
     kd = keepdims if keepdims is not None else keepdim
     if d is None:
@@ -212,7 +212,7 @@ def argmin(x, dim=None, keepdim=False, *, axis=None, keepdims=None):
 
 def squeeze(x, dim=None):
     """Squeeze; dim=None removes all size-1 dims; list squeezes multiple dims.
-    Non-unit dims are silently ignored (PyTorch behaviour).
+    Non-unit dims are silently ignored (reference behaviour).
     """
     impl = _unwrap(x)
     if dim is None:
@@ -238,9 +238,9 @@ def squeeze(x, dim=None):
 
 
 def repeat(x, repeats, dim=None):
-    """Alias for repeat_interleave: repeats elements along dim (NumPy / PyTorch semantics).
+    """Alias for repeat_interleave: repeats elements along dim (NumPy / reference semantics).
 
-    Note: matches torch.repeat_interleave, NOT Tensor.repeat (which tiles copies).
+    Note: matches repeat_interleave, NOT Tensor.repeat (which tiles copies).
     Use lucid.tile(x, reps) to tile copies in each dimension.
     """
     impl = _unwrap(x)
@@ -249,7 +249,7 @@ def repeat(x, repeats, dim=None):
 
 
 def repeat_interleave(x, repeats, dim=None):
-    """Repeat elements of a tensor (interleave, matches torch.repeat_interleave)."""
+    """Repeat elements of a tensor (interleave, matches repeat_interleave)."""
     impl = _unwrap(x)
     axis = 0 if dim is None else int(dim)
     return _wrap(_C_engine.repeat(impl, int(repeats), axis))
@@ -259,7 +259,7 @@ def repeat_interleave(x, repeats, dim=None):
 
 
 def split(x, split_size_or_sections, dim=0):
-    """Split a tensor into chunks (PyTorch semantics: split_size = chunk size).
+    """Split a tensor into chunks (reference semantics: split_size = chunk size).
 
     Args:
         x:                    Input tensor.
@@ -286,11 +286,11 @@ def split(x, split_size_or_sections, dim=0):
 
 
 def tensordot(a, b, dims=2, _axes_b=None):
-    """Tensordot with PyTorch-compatible dims argument.
+    """Tensordot with API-compatible dims argument.
 
     Accepted call forms:
       tensordot(a, b, dims=2)               → contract last 2 of a with first 2 of b
-      tensordot(a, b, dims=[[0,1],[2,3]])   → explicit axes lists (PyTorch style)
+      tensordot(a, b, dims=[[0,1],[2,3]])   → explicit axes lists (reference framework style)
       tensordot(a, b, [0,1], [2,3])         → separate positional axes (legacy style)
     """
     ai = _unwrap(a)
@@ -330,7 +330,7 @@ def meshgrid(*tensors, indexing="ij"):
 
 def where(condition, x, y):
     """Select elements from x (where True) or y (where False).
-    Condition is cast to bool dtype if needed (mirrors PyTorch behaviour).
+    Condition is cast to bool dtype if needed (mirrors reference behaviour).
     """
     c = _unwrap(condition)
     if c.dtype != _C_engine.Bool:
@@ -349,11 +349,11 @@ def masked_fill(x, mask, value):
     return _wrap(_C_engine.masked_fill(impl, m, float(value)))
 
 
-# ── pad — PyTorch flat format → engine per-dim pairs ─────────────────────────
+# ── pad — reference framework flat format → engine per-dim pairs ─────────────────────────
 
 
 def pad(x, padding, mode="constant", value=0.0):
-    """Pad tensor using PyTorch flat convention (last-dim first).
+    """Pad tensor using reference framework flat convention (last-dim first).
     e.g. padding=(1, 1, 2, 2) pads last-dim by (1,1) and second-to-last by (2,2).
     """
     impl = _unwrap(x)

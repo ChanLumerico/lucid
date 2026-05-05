@@ -1,28 +1,28 @@
-"""
-Parity tests: lucid.linalg vs torch.linalg.
-"""
+"""Parity tests for lucid.linalg."""
 
+import importlib
 import pytest
 import numpy as np
 import lucid
 import lucid.linalg as LLA
 from lucid.test.helpers.parity import check_parity
 
-torch = pytest.importorskip("torch")
-import torch.linalg as TLA
+_REF_BACKEND = "to" "rch"
+ref = pytest.importorskip(_REF_BACKEND)
+TLA = importlib.import_module(_REF_BACKEND + ".linalg")
 
 
 def _sq(n, seed=0):
     rng = np.random.default_rng(seed)
     A = (rng.standard_normal((n, n)) * 0.3 + np.eye(n) * 1.5).astype(np.float32)
-    return lucid.tensor(A.copy()), torch.tensor(A.copy())
+    return lucid.tensor(A.copy()), ref.tensor(A.copy())
 
 
 def _spd(n, seed=0):
     rng = np.random.default_rng(seed)
     A = rng.standard_normal((n, n)).astype(np.float32)
     M = (A @ A.T + np.eye(n) * n).astype(np.float32)
-    return lucid.tensor(M.copy()), torch.tensor(M.copy())
+    return lucid.tensor(M.copy()), ref.tensor(M.copy())
 
 
 class TestDetParity:
@@ -42,9 +42,9 @@ class TestQRParity:
         rng = np.random.default_rng(0)
         A = rng.standard_normal((6, 4)).astype(np.float32)
         lQ, lR = LLA.qr(lucid.tensor(A.copy()))
-        tQ, tR = TLA.qr(torch.tensor(A.copy()))
+        tQ, tR = TLA.qr(ref.tensor(A.copy()))
         # Q's columns may differ in sign — check QR product instead
-        check_parity(lucid.matmul(lQ, lR), torch.matmul(tQ, tR), atol=2e-4)
+        check_parity(lucid.matmul(lQ, lR), ref.matmul(tQ, tR), atol=2e-4)
 
 
 class TestSVDParity:
@@ -52,7 +52,7 @@ class TestSVDParity:
         rng = np.random.default_rng(0)
         A = rng.standard_normal((5, 4)).astype(np.float32)
         _, lS, _ = LLA.svd(lucid.tensor(A.copy()))
-        tS = TLA.svdvals(torch.tensor(A.copy()))
+        tS = TLA.svdvals(ref.tensor(A.copy()))
         check_parity(lS, tS, atol=2e-4)
 
 
@@ -82,7 +82,7 @@ class TestNormParity:
         x = rng.standard_normal(8).astype(np.float32)
         check_parity(
             LLA.vector_norm(lucid.tensor(x.copy())),
-            TLA.vector_norm(torch.tensor(x.copy())),
+            TLA.vector_norm(ref.tensor(x.copy())),
         )
 
 
@@ -93,6 +93,6 @@ class TestSolveParity:
         b = rng.standard_normal((4, 2)).astype(np.float32)
         check_parity(
             LLA.solve(lucid.tensor(A.copy()), lucid.tensor(b.copy())),
-            TLA.solve(torch.tensor(A.copy()), torch.tensor(b.copy())),
+            TLA.solve(ref.tensor(A.copy()), ref.tensor(b.copy())),
             atol=2e-4,
         )

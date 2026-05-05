@@ -31,7 +31,7 @@ LUCID_API TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int
 LUCID_API TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis);
 
 // Horizontal stack: concatenate along axis 1 for >=2-D inputs, or along
-// axis 0 for 1-D inputs (matches NumPy / PyTorch semantics).
+// axis 0 for 1-D inputs (matches NumPy / reference semantics).
 LUCID_API TensorImplPtr hstack_op(const std::vector<TensorImplPtr>& xs);
 
 // Vertical stack: concatenate along axis 0 for >=2-D inputs, or call

@@ -193,7 +193,7 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
 // The last element is explicitly pinned to stop to prevent floating-point
 // drift: computing start + (num-1) * step can accumulate error that causes
 // the last element to differ slightly from stop.  Pinning matches the
-// numpy.linspace and torch.linspace behaviour.
+// numpy.linspace and linspace behaviour.
 //
 // Special cases:
 //   num == 0: returns an empty tensor (shape {0}).

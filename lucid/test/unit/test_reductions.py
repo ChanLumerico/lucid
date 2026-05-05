@@ -64,7 +64,7 @@ class TestMean:
 
 class TestVarStd:
     def test_var_correction1(self):
-        # PyTorch default: correction=1 (Bessel)
+        # reference default: correction=1 (Bessel)
         t = lucid.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
         var = lucid.var(t)
         np_var = np.var([1, 2, 3, 4, 5], ddof=1)

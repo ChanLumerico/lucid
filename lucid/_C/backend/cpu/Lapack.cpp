@@ -584,7 +584,7 @@ void lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, 
 // unit-lower and upper triangular factors share a single matrix (LAPACK packed
 // format), plus the 1-based pivot index array.
 //
-// Out layout matches PyTorch's lu_factor / torch.linalg.lu_factor:
+// Out layout matches reference framework's lu_factor / the reference LU factor API:
 //   LU_out  : n×n row-major packed LU  (L below diagonal, U on/above diagonal,
 //             implicit unit diagonal of L)
 //   ipiv_out: n int32_t pivot indices (1-based, matching LAPACK convention)

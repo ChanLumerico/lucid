@@ -209,7 +209,7 @@ class LocalResponseNorm(Module):
     elements: x_i / (k + alpha * sum(x_j^2))^beta, where the sum is over
     *size* neighboring channels.
 
-    Parameters match ``torch.nn.LocalResponseNorm``.
+    Parameters match ``the reference LocalResponseNorm API``.
     """
 
     def __init__(
@@ -238,7 +238,7 @@ class LocalResponseNorm(Module):
         #
         # Implement via 1D average-pool across channels on the squared input.
         # Pad the channel axis (axis=1) by half on each side with zeros so the
-        # sliding sum matches the PyTorch convention.
+        # sliding sum matches the reference convention.
 
         ndim = len(xi.shape)
         C = int(xi.shape[1])

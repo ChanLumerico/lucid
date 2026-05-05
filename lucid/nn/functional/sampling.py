@@ -149,7 +149,7 @@ def fold(
     ``(N, C*kH*kW, L)``, returns a tensor of shape ``(N, C, outH, outW)``.
     Overlapping blocks are summed.
     CPU: scatter-add loop.  GPU: CPU fallback.
-    Parameters match ``torch.nn.functional.fold``.
+    Parameters match ``the reference fold API``.
     """
 
     def _pair(v: int | tuple[int, int]) -> tuple[int, int]:
@@ -190,7 +190,7 @@ def embedding_bag(
     """Computes sums, means, or maxima of embeddings in bags.
 
     When ``x`` is 2-D the bags are the rows; when 1-D and ``offsets`` is given,
-    ``offsets`` marks the start of each bag (PyTorch convention).
+    ``offsets`` marks the start of each bag (reference convention).
     CPU: gather + reduce loop.  GPU: MLX gather + scatter_add/scatter_max.
     """
     _mode_map = {"sum": 0, "mean": 1, "max": 2}
@@ -240,14 +240,14 @@ def pad(
 ) -> Tensor:
     """Pad a tensor.
 
-    padding follows PyTorch convention: flat tuple starting from the LAST dimension.
+    padding follows reference convention: flat tuple starting from the LAST dimension.
     For example, (l, r) pads the last dim; (l, r, t, b) pads last two dims.
     Internally converts to per-dimension pairs for the engine.
     """
     impl = _unwrap(x)
     ndim = len(impl.shape)
     n_pad_dims = len(padding) // 2
-    # Convert PyTorch flat (last→first) to engine per-dim pairs (first→last)
+    # Convert reference framework flat (last→first) to engine per-dim pairs (first→last)
     pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
     for i in range(n_pad_dims):
         dim_idx = ndim - 1 - i
