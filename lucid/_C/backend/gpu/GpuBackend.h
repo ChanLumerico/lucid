@@ -3158,15 +3158,24 @@ public:
             db_axes.push_back(2 + i);
         auto db = ::mlx::core::sum(*gG.arr, db_axes, false);
 
-        std::vector<int> opad(N);
-        for (int i = 0; i < N; ++i)
-            opad[i] = S[i] + (K[i] - 1) * dv[i] - 1 - (O[i] - 1) * sv[i] - pv[i];
+        // Correct symmetric padding for dx backward:
+        //   pad_lo[i] = dv[i]*(K[i]-1) - pv[i]
+        //   pad_hi[i] = S[i] - O[i]*sv[i] + sv[i] - 1 + pv[i]
+        //
+        // Using asymmetric padding (pad_lo=pv, pad_hi=opad) gives the correct
+        // OUTPUT SIZE but shifts the correlation window, producing wrong gradient
+        // VALUES whenever pv ≠ dv*(K[i]-1)/2 (e.g. conv with padding=0).
+        std::vector<int> pad_lo_dx(N), pad_hi_dx(N);
+        for (int i = 0; i < N; ++i) {
+            pad_lo_dx[i] = dv[i] * (K[i] - 1) - pv[i];
+            pad_hi_dx[i] = S[i] - O[i] * sv[i] + sv[i] - 1 + pv[i];
+        }
         auto grad_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));
         std::vector<int> W_t_perm = gpu_w_to_transpose_perm(N);
         auto W_t_nhwc = ::mlx::core::transpose(*gW.arr, W_t_perm);
         std::vector<int> ones_n(N, 1);
-        auto dx_nhwc = ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pv, opad, dv, sv,
-                                                 opts.groups, true);
+        auto dx_nhwc = ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx,
+                                                 dv, sv, opts.groups, true);
         auto dx =
             ::mlx::core::contiguous(::mlx::core::transpose(dx_nhwc, gpu_nhwc_to_nchw_perm(N)));
 
