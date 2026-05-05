@@ -24,6 +24,8 @@
 #include "../core/GradMode.h"
 #include "../core/MemoryStats.h"
 #include "../core/TensorImpl.h"
+#include "../core/Storage.h"
+#include <mlx/ops.h>
 
 namespace py = pybind11;
 
@@ -140,6 +142,10 @@ void register_tensor_impl(py::module_& m) {
              "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
         .def("zero_grad", &TensorImpl::zero_grad)
+        .def("eval", &TensorImpl::eval,
+             "Force evaluation of this tensor's lazy MLX graph.\n"
+             "GPU tensors: calls mlx::core::eval() on the underlying array.\n"
+             "CPU tensors: no-op.")
         .def("clone_with_grad",
              [](const TensorImpl& self, bool requires_grad) -> std::shared_ptr<TensorImpl> {
                  // Creates a new TensorImpl that SHARES the same Storage with a
@@ -183,6 +189,25 @@ void register_tensor_impl(py::module_& m) {
         "Convert a tensor's storage to MTLResourceStorageModeShared.\n"
         "The returned tensor shares physical DRAM with the GPU — "
         "pass it to _run_metal_kernel for zero-copy custom Metal kernels.");
+
+    // eval_tensors(list[TensorImpl]) — batch-evaluate multiple GPU tensors in
+    // one mlx::core::eval() call.  CPU tensors in the list are silently ignored.
+    // More efficient than calling .eval() individually because MLX schedules all
+    // arrays in a single pass.
+    m.def(
+        "eval_tensors",
+        [](const std::vector<std::shared_ptr<TensorImpl>>& tensors) {
+            for (const auto& t : tensors) {
+                if (!t || t->device() != Device::GPU)
+                    continue;
+                const auto& gpu_st = std::get<GpuStorage>(t->storage());
+                if (gpu_st.arr)
+                    gpu_st.arr->eval();               // mlx::core::array::eval()
+            }
+        },
+        py::arg("tensors"),
+        "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
+        "CPU tensors are silently ignored.  No-op when all tensors are on CPU.");
 }
 
 }  // namespace lucid::bindings

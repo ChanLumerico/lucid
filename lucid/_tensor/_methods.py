@@ -286,13 +286,10 @@ def _inject_methods(tensor_cls: type) -> None:
 
         On Metal (MLX backend) this flushes the lazy computation graph so that
         the graph does not grow unboundedly across training iterations.
-        On CPU this is a no-op.  Returns ``self`` for chaining::
-
-            loss.eval().backward()
+        On CPU this is a no-op.  Returns ``self`` for chaining.
+        Implemented entirely in C++ — no Python-level mlx import.
         """
-        if self._impl.device == _C_engine.Device.GPU:
-            import mlx.core as mx
-            mx.eval(self._impl)
+        self._impl.eval()
         return self
 
     def log_softmax(self: Tensor, axis: int = -1) -> Tensor:

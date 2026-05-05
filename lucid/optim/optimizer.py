@@ -33,21 +33,20 @@ class Optimizer:
             cls.step = _step_with_eval  # type: ignore[method-assign]
 
     def _metal_eval_params(self) -> None:
-        """Flush all Metal (MLX) parameter tensors in one mx.eval() call.
+        """Flush all parameter tensors via C++ eval_tensors() — no mlx import.
 
-        Called automatically after every optimizer step when any parameter
-        lives on the GPU device.  No-op on CPU-only models.
+        Called automatically after every optimizer step.
+        GPU tensors are flushed in one C++ call; CPU tensors are ignored.
         """
         from lucid._C import engine as _ce
-        gpu_impls = [
+        impls = [
             p._impl
             for group in self.param_groups
             for p in group["params"]
-            if isinstance(p, Parameter) and p._impl.device == _ce.Device.GPU
+            if isinstance(p, Parameter)
         ]
-        if gpu_impls:
-            import mlx.core as mx
-            mx.eval(*gpu_impls)
+        if impls:
+            _ce.eval_tensors(impls)    # C++ handles GPU/CPU filtering
 
     def __init__(
         self,

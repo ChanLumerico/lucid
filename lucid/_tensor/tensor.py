@@ -234,9 +234,8 @@ class Tensor[DT: dtype, DV: device]:
         # On Metal, flush the forward computation graph before backward so
         # that MLX evaluates two small graphs (forward, then backward+step)
         # instead of one large fused graph — roughly 2× faster in practice.
-        if self._impl.device == _C_engine.Device.GPU:
-            import mlx.core as mx
-            mx.eval(self._impl)
+        # Implemented in C++ (TensorImpl::eval) — no Python-level mlx import.
+        self._impl.eval()
 
         if gradient is not None:
             if self._impl.shape != gradient._impl.shape:

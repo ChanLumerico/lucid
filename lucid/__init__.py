@@ -498,12 +498,9 @@ def eval(*tensors: object) -> None:  # type: ignore[override]
     from lucid._C import engine as _ce
     from lucid._tensor.tensor import Tensor as _T
 
-    gpu_impls = [
-        t._impl for t in tensors if isinstance(t, _T) and t._impl.device == _ce.Device.GPU
-    ]
-    if gpu_impls:
-        import mlx.core as mx
-        mx.eval(*gpu_impls)
+    impls = [t._impl for t in tensors if isinstance(t, _T)]
+    if impls:
+        _ce.eval_tensors(impls)    # C++ batch eval — no mlx import
 
 
 # ── Module __getattr__ ────────────────────────────────────────────────────────

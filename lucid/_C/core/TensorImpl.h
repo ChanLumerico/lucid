@@ -217,6 +217,11 @@ public:
     // Clears the accumulated gradient (sets grad to std::nullopt).
     void zero_grad();
 
+    // Forces evaluation of this tensor's lazy MLX computation graph.
+    // GPU tensors: calls mlx::core::eval() on the underlying array.
+    // CPU tensors: no-op.
+    void eval() const;
+
 private:
     Storage storage_;
     // Byte offset of the first element from the start of storage_.

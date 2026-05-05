@@ -341,6 +341,14 @@ void TensorImpl::zero_grad() {
     }
 }
 
+void TensorImpl::eval() const {
+    if (meta_.device != Device::GPU)
+        return;                                         // CPU: no-op
+    const auto& gpu_st = std::get<GpuStorage>(storage_);
+    if (gpu_st.arr)
+        gpu_st.arr->eval();                            // mlx::core::array::eval()
+}
+
 bool TensorImpl::storage_is_shared() const noexcept {
     // Only CpuStorage can be aliased through views; GPU arrays are never
     // directly shared at this level.
