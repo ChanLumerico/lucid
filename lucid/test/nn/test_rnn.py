@@ -178,7 +178,9 @@ class TestRNNExtras:
         # Just confirm the method exists and returns None.
         assert m.flatten_parameters() is None
 
-    @pytest.mark.parametrize("cls,name", [(nn.LSTM, "LSTM"), (nn.GRU, "GRU"), (nn.RNN, "RNN")])
+    @pytest.mark.parametrize(
+        "cls,name", [(nn.LSTM, "LSTM"), (nn.GRU, "GRU"), (nn.RNN, "RNN")]
+    )
     def test_packed_sequence_input_rejected(self, cls, name):
         from lucid.nn.utils.rnn import PackedSequence
 

@@ -63,9 +63,7 @@ class TestLazyConv:
         assert result.missing_keys == []
         assert result.unexpected_keys == []
         assert dst.in_channels == 4
-        np.testing.assert_allclose(
-            dst.weight.numpy(), src.weight.numpy()
-        )
+        np.testing.assert_allclose(dst.weight.numpy(), src.weight.numpy())
 
     def test_lazy_conv1d_state_dict_shape_validation(self):
         # Wrong-dim weight should produce an error message, not a crash.

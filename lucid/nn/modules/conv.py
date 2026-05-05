@@ -721,8 +721,14 @@ class LazyConv1d(Conv1d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -790,8 +796,12 @@ class LazyConv2d(Conv2d):
         kh, kw = self.kernel_size
         self.weight = Parameter(
             empty(
-                self.out_channels, in_channels // self.groups, kh, kw,
-                dtype=self._dtype, device=self._device,
+                self.out_channels,
+                in_channels // self.groups,
+                kh,
+                kw,
+                dtype=self._dtype,
+                device=self._device,
             )
         )
         if self._has_bias:
@@ -833,8 +843,14 @@ class LazyConv2d(Conv2d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -902,8 +918,13 @@ class LazyConv3d(Conv3d):
         kd, kh, kw = self.kernel_size
         self.weight = Parameter(
             empty(
-                self.out_channels, in_channels // self.groups, kd, kh, kw,
-                dtype=self._dtype, device=self._device,
+                self.out_channels,
+                in_channels // self.groups,
+                kd,
+                kh,
+                kw,
+                dtype=self._dtype,
+                device=self._device,
             )
         )
         if self._has_bias:
@@ -945,8 +966,14 @@ class LazyConv3d(Conv3d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -1007,8 +1034,11 @@ class LazyConvTranspose1d(ConvTranspose1d):
         self.in_channels = in_channels
         self.weight = Parameter(
             empty(
-                in_channels, self.out_channels // self.groups, self.kernel_size,
-                dtype=self._dtype, device=self._device,
+                in_channels,
+                self.out_channels // self.groups,
+                self.kernel_size,
+                dtype=self._dtype,
+                device=self._device,
             )
         )
         if self._has_bias:
@@ -1051,8 +1081,14 @@ class LazyConvTranspose1d(ConvTranspose1d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -1105,8 +1141,12 @@ class LazyConvTranspose2d(ConvTranspose2d):
         kh, kw = self.kernel_size
         self.weight = Parameter(
             empty(
-                in_channels, self.out_channels // self.groups, kh, kw,
-                dtype=self._dtype, device=self._device,
+                in_channels,
+                self.out_channels // self.groups,
+                kh,
+                kw,
+                dtype=self._dtype,
+                device=self._device,
             )
         )
         if self._has_bias:
@@ -1149,8 +1189,14 @@ class LazyConvTranspose2d(ConvTranspose2d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -1203,8 +1249,13 @@ class LazyConvTranspose3d(ConvTranspose3d):
         kd, kh, kw = self.kernel_size
         self.weight = Parameter(
             empty(
-                in_channels, self.out_channels // self.groups, kd, kh, kw,
-                dtype=self._dtype, device=self._device,
+                in_channels,
+                self.out_channels // self.groups,
+                kd,
+                kh,
+                kw,
+                dtype=self._dtype,
+                device=self._device,
             )
         )
         if self._has_bias:
@@ -1247,8 +1298,14 @@ class LazyConvTranspose3d(ConvTranspose3d):
         from lucid.nn._state_dict import _default_load_from_state_dict
 
         _default_load_from_state_dict(
-            self, state_dict, prefix, local_metadata, strict,
-            missing_keys, unexpected_keys, error_msgs,
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
         )
 
     def forward(self, x: Tensor) -> Tensor:

@@ -707,8 +707,14 @@ class TestLossParity:
         log_q = np.log(rng.dirichlet([1.0] * 4, size=4).astype(np.float32))
         p = rng.dirichlet([1.0] * 4, size=4).astype(np.float32)
         check_parity(
-            LF.kl_div(lucid.tensor(log_q.copy()), lucid.tensor(p.copy()), reduction="batchmean"),
-            TF.kl_div(ref.tensor(log_q.copy()), ref.tensor(p.copy()), reduction="batchmean"),
+            LF.kl_div(
+                lucid.tensor(log_q.copy()),
+                lucid.tensor(p.copy()),
+                reduction="batchmean",
+            ),
+            TF.kl_div(
+                ref.tensor(log_q.copy()), ref.tensor(p.copy()), reduction="batchmean"
+            ),
             atol=2e-4,
         )
 
@@ -753,8 +759,13 @@ class TestLSTMProjSizeParity:
         T, B, I, H, P = 5, 2, 4, 8, 3
         t_mod = ref.nn.LSTM(I, H, num_layers=1, bidirectional=False, proj_size=P)
         l_mod = lnn.LSTM(I, H, proj_size=P)
-        for pname in ("weight_ih_l0", "weight_hh_l0", "bias_ih_l0", "bias_hh_l0",
-                      "weight_hr_l0"):
+        for pname in (
+            "weight_ih_l0",
+            "weight_hh_l0",
+            "bias_ih_l0",
+            "bias_hh_l0",
+            "weight_hr_l0",
+        ):
             self._mirror(getattr(l_mod, pname), getattr(t_mod, pname))
 
         rng = np.random.default_rng(0)
@@ -772,8 +783,13 @@ class TestLSTMProjSizeParity:
         T, B, I, H, P = 4, 2, 3, 6, 2
         t_mod = ref.nn.LSTM(I, H, proj_size=P)
         l_mod = lnn.LSTM(I, H, proj_size=P)
-        for pname in ("weight_ih_l0", "weight_hh_l0", "bias_ih_l0", "bias_hh_l0",
-                      "weight_hr_l0"):
+        for pname in (
+            "weight_ih_l0",
+            "weight_hh_l0",
+            "bias_ih_l0",
+            "bias_hh_l0",
+            "weight_hr_l0",
+        ):
             self._mirror(getattr(l_mod, pname), getattr(t_mod, pname))
 
         rng = np.random.default_rng(1)

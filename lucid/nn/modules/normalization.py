@@ -303,9 +303,9 @@ class _BatchNormBase(Module):
             # Unbiased correction n/(n-1) for the running variance, like the
             # reference framework — only meaningful when n > 1.
             unbiased_factor: float = n / (n - 1) if n > 1 else 1.0
-            new_rm: Tensor = (
-                (1.0 - eff) * self._buffers["running_mean"] + eff * batch_mean
-            )
+            new_rm: Tensor = (1.0 - eff) * self._buffers[
+                "running_mean"
+            ] + eff * batch_mean
             new_rv: Tensor = (1.0 - eff) * self._buffers["running_var"] + (
                 eff * unbiased_factor
             ) * batch_var

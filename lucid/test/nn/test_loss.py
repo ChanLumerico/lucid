@@ -127,13 +127,18 @@ class TestCrossEntropyContract:
         x = rng.standard_normal((6, 5)).astype(np.float32)
         target = np.array([0, 1, -1, 2, -1, 3], dtype=np.int32)
         full = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(target, dtype=lucid.int32),
-            ignore_index=-1, reduction="mean",
+            lucid.tensor(x),
+            lucid.tensor(target, dtype=lucid.int32),
+            ignore_index=-1,
+            reduction="mean",
         ).item()
         # Manual ref: take only valid rows, average their per-sample CE.
         valid_rows = [i for i, t in enumerate(target) if t != -1]
         per_sample = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(np.where(target == -1, 0, target).astype(np.int32), dtype=lucid.int32),
+            lucid.tensor(x),
+            lucid.tensor(
+                np.where(target == -1, 0, target).astype(np.int32), dtype=lucid.int32
+            ),
             reduction="none",
         ).numpy()
         manual = per_sample[valid_rows].mean()
@@ -146,11 +151,13 @@ class TestCrossEntropyContract:
         x = rng.standard_normal((4, 5)).astype(np.float32) * 5.0
         target = np.array([0, 1, 2, 3], dtype=np.int32)
         base = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(target, dtype=lucid.int32),
+            lucid.tensor(x),
+            lucid.tensor(target, dtype=lucid.int32),
             label_smoothing=0.0,
         ).item()
         smoothed = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(target, dtype=lucid.int32),
+            lucid.tensor(x),
+            lucid.tensor(target, dtype=lucid.int32),
             label_smoothing=0.1,
         ).item()
         assert smoothed > base
@@ -168,11 +175,13 @@ class TestCrossEntropyContract:
         x = rng.standard_normal((4, 5)).astype(np.float32)
         target = np.array([0, 1, 2, 3], dtype=np.int32)
         base = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(target, dtype=lucid.int32),
+            lucid.tensor(x),
+            lucid.tensor(target, dtype=lucid.int32),
         ).item()
         # Heavy weight on class 0 should change the value.
         weighted = F.cross_entropy(
-            lucid.tensor(x), lucid.tensor(target, dtype=lucid.int32),
+            lucid.tensor(x),
+            lucid.tensor(target, dtype=lucid.int32),
             weight=lucid.tensor(np.array([10.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)),
         ).item()
         assert abs(weighted - base) > 1e-3
@@ -185,13 +194,17 @@ class TestNLLLossContract:
         log_p = log_p - np.log(np.exp(log_p).sum(axis=1, keepdims=True))
         target = np.array([0, -1, 2, -1], dtype=np.int32)
         l = F.nll_loss(
-            lucid.tensor(log_p), lucid.tensor(target, dtype=lucid.int32),
-            ignore_index=-1, reduction="mean",
+            lucid.tensor(log_p),
+            lucid.tensor(target, dtype=lucid.int32),
+            ignore_index=-1,
+            reduction="mean",
         ).item()
         # Manual: average only valid rows.
         per = F.nll_loss(
             lucid.tensor(log_p),
-            lucid.tensor(np.where(target == -1, 0, target).astype(np.int32), dtype=lucid.int32),
+            lucid.tensor(
+                np.where(target == -1, 0, target).astype(np.int32), dtype=lucid.int32
+            ),
             reduction="none",
         ).numpy()
         manual = per[[0, 2]].mean()
@@ -223,10 +236,13 @@ class TestBCEContract:
         t = rng.integers(0, 2, (8, 4)).astype(np.float32)
         pw = np.array([2.0, 1.0, 0.5, 1.5], dtype=np.float32)
         with_pw = F.binary_cross_entropy_with_logits(
-            lucid.tensor(x), lucid.tensor(t), pos_weight=lucid.tensor(pw),
+            lucid.tensor(x),
+            lucid.tensor(t),
+            pos_weight=lucid.tensor(pw),
         ).item()
         without = F.binary_cross_entropy_with_logits(
-            lucid.tensor(x), lucid.tensor(t),
+            lucid.tensor(x),
+            lucid.tensor(t),
         ).item()
         # pos_weight ≠ 1 must change the loss value.
         assert abs(with_pw - without) > 1e-4
@@ -238,5 +254,7 @@ class TestKLDivContract:
         log_q = np.log(np.array([[0.1, 0.2, 0.7], [0.4, 0.4, 0.2]], dtype=np.float32))
         p = np.array([[0.2, 0.3, 0.5], [0.3, 0.4, 0.3]], dtype=np.float32)
         s = F.kl_div(lucid.tensor(log_q), lucid.tensor(p), reduction="sum").item()
-        bm = F.kl_div(lucid.tensor(log_q), lucid.tensor(p), reduction="batchmean").item()
+        bm = F.kl_div(
+            lucid.tensor(log_q), lucid.tensor(p), reduction="batchmean"
+        ).item()
         np.testing.assert_allclose(bm, s / 2.0, atol=1e-5)

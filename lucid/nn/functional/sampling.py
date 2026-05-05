@@ -232,9 +232,7 @@ def embedding_bag(
     return _wrap(impl)
 
 
-_PAD_MODES: frozenset[str] = frozenset(
-    {"constant", "reflect", "replicate", "circular"}
-)
+_PAD_MODES: frozenset[str] = frozenset({"constant", "reflect", "replicate", "circular"})
 
 
 def _flat_to_per_dim_pairs(

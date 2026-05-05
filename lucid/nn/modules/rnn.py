@@ -264,9 +264,7 @@ class LSTM(Module):
                 )
                 self.register_parameter(
                     f"weight_hh_l{layer}{suffix}",
-                    Parameter(
-                        empty(gate_size, rec_size, dtype=dtype, device=device)
-                    ),
+                    Parameter(empty(gate_size, rec_size, dtype=dtype, device=device)),
                 )
                 if bias:
                     self.register_parameter(

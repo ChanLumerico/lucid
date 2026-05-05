@@ -19,9 +19,7 @@ def _validate_reduction(reduction: str, allow_batchmean: bool = False) -> None:
         else ("none", "mean", "sum")
     )
     if reduction not in valid:
-        raise ValueError(
-            f"reduction must be one of {valid}, got {reduction!r}"
-        )
+        raise ValueError(f"reduction must be one of {valid}, got {reduction!r}")
 
 
 def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
@@ -85,9 +83,7 @@ def cross_entropy(
     from lucid.nn.functional.activations import log_softmax as _log_softmax
 
     if label_smoothing < 0.0 or label_smoothing >= 1.0:
-        raise ValueError(
-            f"label_smoothing must be in [0, 1), got {label_smoothing!r}"
-        )
+        raise ValueError(f"label_smoothing must be in [0, 1), got {label_smoothing!r}")
 
     log_p: Tensor = _log_softmax(x, dim=1)
     # Class dim is 1 for both (N, C) and (N, C, *) inputs.
@@ -212,9 +208,7 @@ def binary_cross_entropy(
     one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
     eps_t: Tensor = _lucid.tensor(eps, dtype=x.dtype, device=x.device)
     x_clamped: Tensor = x.clamp(eps, 1.0 - eps)
-    bce: Tensor = -(
-        target * x_clamped.log() + (one - target) * (one - x_clamped).log()
-    )
+    bce: Tensor = -(target * x_clamped.log() + (one - target) * (one - x_clamped).log())
     if weight is not None:
         bce = bce * weight
     if reduction == "none":
@@ -258,9 +252,9 @@ def binary_cross_entropy_with_logits(
         # Reference implementation:
         #   loss = (1 - y) * x + (1 + (pw - 1) * y) * (log(1 + exp(-|x|)) + max(-x, 0))
         max_neg: Tensor = (-x).clamp(0.0, inf)
-        loss = (one - target) * x + (
-            one + (pos_weight - one) * target
-        ) * (log1pexp + max_neg)
+        loss = (one - target) * x + (one + (pos_weight - one) * target) * (
+            log1pexp + max_neg
+        )
     if weight is not None:
         loss = loss * weight
     if reduction == "none":
