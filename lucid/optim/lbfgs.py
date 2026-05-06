@@ -69,6 +69,51 @@ class LBFGS(Optimizer):
     def _sync_hyperparams(self) -> None:
         pass
 
+    # ── state_dict round-trip ────────────────────────────────────────────────
+    #
+    # LBFGS owns all of its state in Python (`_lbfgs_state`), so unlike the
+    # engine-backed optimizers it can perform a full round-trip. Tensor entries
+    # are serialised as raw arrays (saving Tensors directly works too but raw
+    # arrays are smaller and avoid pickling autograd plumbing).
+
+    def _save_state(self) -> dict[int, dict[str, object]]:
+        import lucid
+
+        snapshot: dict[str, object] = {}
+        for k, v in self._lbfgs_state.items():
+            if isinstance(v, Tensor):
+                snapshot[k] = v.detach().numpy().copy()
+            elif isinstance(v, list):
+                snapshot[k] = [
+                    item.detach().numpy().copy() if isinstance(item, Tensor) else item
+                    for item in v
+                ]
+            else:
+                snapshot[k] = v
+        # Single virtual param-id 0 — LBFGS treats all params as one flat vector.
+        return {0: snapshot}
+
+    def _load_state(self, state: dict[int, dict[str, object]]) -> None:
+        import lucid
+        import numpy as np
+
+        if 0 not in state:
+            return
+        snapshot: dict[str, object] = state[0]  # type: ignore[assignment]
+        for k in self._lbfgs_state:
+            if k not in snapshot:
+                continue
+            v: object = snapshot[k]
+            if isinstance(v, np.ndarray):
+                self._lbfgs_state[k] = lucid.tensor(v)
+            elif isinstance(v, list):
+                self._lbfgs_state[k] = [
+                    lucid.tensor(item) if isinstance(item, np.ndarray) else item
+                    for item in v
+                ]
+            else:
+                self._lbfgs_state[k] = v
+
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _gather_flat_grad(self) -> Tensor:

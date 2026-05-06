@@ -41,7 +41,7 @@ class Optimizer:
         GPU tensors are flushed in one C++ call; CPU tensors are ignored.
         """
 
-        impls = [
+        impls: list[object] = [
             p._impl
             for group in self.param_groups
             for p in group["params"]
@@ -66,8 +66,8 @@ class Optimizer:
 
         self.param_groups: list[dict[str, object]] = []
         self._engine_optims: list[object] = []
-        self.state: dict[str, object] = {}
-        self.defaults = defaults
+        self.state: dict[int, dict[str, object]] = {}
+        self.defaults: dict[str, object] = defaults
 
         for group in param_groups:
             self.add_param_group(group)
@@ -128,13 +128,77 @@ class Optimizer:
             "Subclasses of Optimizer must override step()."
         )
 
+    # ── state_dict round-trip ─────────────────────────────────────────────────
+    #
+    # Format follows reference framework: ``param_groups`` mirrors the live
+    # groups but each ``params`` entry is replaced with a list of integer
+    # parameter ids; ``state`` is keyed by those same ids. Parameter tensors
+    # themselves live on the model — saving them inside the optimizer would
+    # double-checkpoint the weights and break partial restores.
+    #
+    # NOTE: engine-side moment buffers (Adam's m/v, SGD momentum, etc.) live
+    # inside the C++ optimizer and are not currently round-trippable. Restoring
+    # an Adam state_dict will preserve hyperparameters but the moment buffers
+    # restart from zero. Subclasses that own Python-side state (e.g. LBFGS)
+    # should override _save_state / _load_state to round-trip it.
+
+    def _save_state(self) -> dict[int, dict[str, object]]:
+        """Hook for subclasses to populate ``state``. Default: no Python-side state."""
+        return {}
+
+    def _load_state(self, state: dict[int, dict[str, object]]) -> None:
+        """Hook for subclasses to restore ``state``. Default: no-op."""
+        return
+
+    def _param_id_map(self) -> dict[int, int]:
+        """Map ``id(param)`` → flat integer index across all param groups."""
+        out: dict[int, int] = {}
+        idx: int = 0
+        for group in self.param_groups:
+            for p in group["params"]:
+                out[id(p)] = idx
+                idx += 1
+        return out
+
     def state_dict(self) -> dict[str, object]:
-        """Return the optimizer state as a dict."""
-        return {"state": self.state, "param_groups": self.param_groups}
+        """Return a checkpointable snapshot of the optimizer.
+
+        Mirrors reference framework's optimizer state_dict layout:
+
+        - ``state``: ``{param_index: {key: value, ...}}`` — Python-side per-
+          parameter state (e.g. LBFGS history). Engine-managed moments (Adam)
+          are not currently captured.
+        - ``param_groups``: list of group dicts; each group's ``params`` is a
+          list of integer indices into the flat parameter list.
+        """
+        id_map: dict[int, int] = self._param_id_map()
+        groups_out: list[dict[str, object]] = []
+        for group in self.param_groups:
+            g: dict[str, object] = {k: v for k, v in group.items() if k != "params"}
+            g["params"] = [id_map[id(p)] for p in group["params"]]
+            groups_out.append(g)
+        self.state = self._save_state()
+        return {"state": self.state, "param_groups": groups_out}
 
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Load optimizer state."""
-        self.state = state_dict["state"]
-        for g_new, g_old in zip(self.param_groups, state_dict["param_groups"]):
-            g_new.update({k: v for k, v in g_old.items() if k != "params"})
+        """Restore from a state_dict produced by :meth:`state_dict`.
+
+        Hyperparameters in ``param_groups`` are restored. Python-side state
+        (returned from :meth:`_save_state`) is restored via :meth:`_load_state`.
+        Engine-managed moment buffers are not restored — see class docstring.
+        """
+        loaded_groups: list[dict[str, object]] = state_dict["param_groups"]  # type: ignore[assignment]
+        if len(loaded_groups) != len(self.param_groups):
+            raise ValueError(
+                f"loaded state_dict has {len(loaded_groups)} param_groups but "
+                f"optimizer has {len(self.param_groups)}"
+            )
+        for g_new, g_old in zip(self.param_groups, loaded_groups):
+            for k, v in g_old.items():
+                if k == "params":
+                    continue
+                g_new[k] = v
+        loaded_state: dict[int, dict[str, object]] = state_dict.get("state", {})  # type: ignore[assignment]
+        self.state = loaded_state
+        self._load_state(loaded_state)
         self._sync_hyperparams()
