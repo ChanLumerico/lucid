@@ -8,10 +8,13 @@ from typing import Any
 
 import numpy as np
 
+# ``X as X`` is the PEP 484 explicit-re-export form — without the alias,
+# strict-mode type checkers (pyright, mypy ``--no-implicit-reexport``) treat
+# these as private imports and IDEs miss ``lucid.Tensor`` autocompletion.
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype
-from lucid._device import device
-from lucid._tensor.tensor import Tensor
+from lucid._dtype import dtype as dtype
+from lucid._device import device as device
+from lucid._tensor.tensor import Tensor as Tensor
 
 # ── Package metadata ──────────────────────────────────────────────────────────
 __version__: str

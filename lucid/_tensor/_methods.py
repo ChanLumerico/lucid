@@ -42,9 +42,7 @@ def _inject_methods(tensor_cls: type) -> None:
             return method_list
         else:
 
-            def method(
-                self: Tensor, *args: object, **kwargs: object
-            ) -> Tensor:
+            def method(self: Tensor, *args: object, **kwargs: object) -> Tensor:
                 # Unwrap any Tensor in extra tensor arg positions
                 proc_args: list[object] = []
                 for i, a in enumerate(args):
