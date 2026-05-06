@@ -7,7 +7,6 @@ Wraps the C++ engine's einops module. Supports patterns like
 'b h w -> b (h w)' for rearrange, 'b h w -> b w' for reduce, etc.
 """
 
-from typing import TYPE_CHECKING, TYPE_CHECKING
 from lucid._C.engine import einops as _C_einops
 from lucid._dispatch import _unwrap, _wrap
 

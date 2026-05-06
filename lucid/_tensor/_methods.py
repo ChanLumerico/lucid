@@ -1,44 +1,21 @@
 """
 Auto-inject Tensor methods from the ops registry.
 
-Called once at module import time by tensor.py.
+Every method is generated from an ``OpEntry`` in ``_registry.py``; signature
+translation (``dim=None|int|list``, ``keepdim``, ``correction`` ...) lives
+in ``_adapters.py``.  Only ``eval`` — which calls into the impl handle
+directly and isn't an engine op — is special-cased below.
+
+Called once at module import time by ``tensor.py``.
 """
 
 from typing import TYPE_CHECKING
-from lucid._C import engine as _C_engine
+
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import _REGISTRY, OpEntry
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-
-
-def _to_axes(dim):
-    """Convert dim/axis (None | int | list[int]) → list[int] for the engine."""
-    if dim is None:
-        return []
-    if isinstance(dim, (list, tuple)):
-        return [int(d) for d in dim]
-    return [int(dim)]
-
-
-def _bessel_correct(result_impl, x_impl, axes_list, correction):
-    if correction == 0:
-        return result_impl
-    n = 1
-    if axes_list:
-        for ax in axes_list:
-            n *= int(x_impl.shape[ax])
-    else:
-        for s in x_impl.shape:
-            n *= int(s)
-    if n <= correction:
-        return result_impl
-    scale = float(n) / float(n - correction)
-    scale_t = _C_engine.full(
-        list(result_impl.shape), scale, result_impl.dtype, result_impl.device
-    )
-    return _C_engine.mul(result_impl, scale_t)
 
 
 def _inject_methods(tensor_cls: type) -> None:
