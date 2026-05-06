@@ -16,6 +16,23 @@ from lucid._dtype import dtype as dtype
 from lucid._device import device as device
 from lucid._tensor.tensor import Tensor as Tensor
 
+# Public-facing type aliases (``lucid.Scalar``, ``lucid.TensorLike`` ...).
+# These are loaded lazily at runtime via ``__getattr__`` but the .pyi has to
+# advertise them up-front for pyright / mypy to accept ``lucid.X`` references.
+from lucid._types import (
+    Scalar as Scalar,
+    TensorLike as TensorLike,
+    DeviceLike as DeviceLike,
+    DTypeLike as DTypeLike,
+    ShapeLike as ShapeLike,
+    StateDict as StateDict,
+    TensorOrScalar as TensorOrScalar,
+    HasShape as HasShape,
+    SupportsNumpyConversion as SupportsNumpyConversion,
+    SupportsGrad as SupportsGrad,
+    TensorLikeProtocol as TensorLikeProtocol,
+)
+
 # ── Package metadata ──────────────────────────────────────────────────────────
 __version__: str
 
@@ -72,6 +89,29 @@ from lucid import einops as einops
 from lucid import metal as metal
 from lucid import backends as backends
 from lucid import test as test
+from lucid import dtypes as dtypes
+
+# ── Type predicates ───────────────────────────────────────────────────────────
+def is_tensor(obj: object) -> bool: ...
+def is_floating_point(t: Tensor) -> bool: ...
+def is_complex(t: Tensor) -> bool: ...
+def is_signed(t: Tensor) -> bool: ...
+
+# ── Tensor constructors (lucid.tensor / as_tensor / from_numpy) ──────────────
+def tensor(
+    data: object,
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+    requires_grad: bool = False,
+) -> Tensor: ...
+def as_tensor(
+    data: object,
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+) -> Tensor: ...
+def from_numpy(arr: np.ndarray) -> Tensor: ...
 
 # ── Tensor factories — deterministic (creation.py) ───────────────────────
 def zeros(

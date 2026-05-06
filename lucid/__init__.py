@@ -133,7 +133,7 @@ __all__ = [
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "linalg",
     "utils", "amp", "profiler", "einops",
-    "metal", "backends", "testing",
+    "metal", "backends", "test",
     # ── public type aliases ───────────────────────────────────────────────
     "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
     "StateDict", "TensorOrScalar",
@@ -373,7 +373,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset(
         "einops",
         "metal",
         "backends",
-        "testing",
+        "test",
     ]
 )
 
