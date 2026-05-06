@@ -211,10 +211,20 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     return result
 
 
-@_linalg_op
 def pinv(x: Tensor) -> Tensor:
-    """Moore-Penrose pseudo-inverse."""
-    return _la.pinv(x)  # type: ignore[arg-type]
+    """Moore-Penrose pseudo-inverse.
+
+    For non-square or rank-deficient matrices the engine kernel is used
+    directly (no autograd). For square full-rank matrices we route through
+    ``inv`` so autograd flows naturally — covering the common case where
+    pinv is just a robust ``inv`` substitute.
+    """
+    sh: tuple[int, ...] = tuple(_unwrap(x).shape)
+    if len(sh) >= 2 and sh[-1] == sh[-2]:
+        # Square matrix → ``pinv ≡ inv`` for full-rank input. Falling back to
+        # the engine pinv would lose autograd; ``inv`` keeps it.
+        return inv(x)
+    return _wrap(_la.pinv(_unwrap(x)))  # type: ignore[arg-type]
 
 
 @_linalg_op

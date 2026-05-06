@@ -223,6 +223,73 @@ class TestMatrixPowerBackward:
         np.testing.assert_allclose(ll.grad.numpy(), lt.grad.numpy(), atol=1e-3)
 
 
+class TestSquarePinvBackward:
+    """For a square full-rank matrix ``pinv ≡ inv``; the Python wrapper
+    routes through ``inv`` so autograd flows naturally."""
+
+    def test_pinv_square(self) -> None:
+        ll, lt = _sq(4)
+        ll.requires_grad = True
+        lt.requires_grad_(True)
+        LLA.pinv(ll).sum().backward()
+        TLA.pinv(lt).sum().backward()
+        np.testing.assert_allclose(ll.grad.numpy(), lt.grad.numpy(), atol=1e-3)
+
+
+class TestRemainingLinalgBackwardGaps:
+    """Locked-down record of linalg ops whose backwards are still
+    unimplemented. Once a backward lands, flip the matching xfail to a real
+    parity test (see TestCholeskyBackward / TestMatrixPowerBackward for the
+    pattern)."""
+
+    @pytest.mark.xfail(
+        reason="QR backward not wired (engine qr_op has no autograd; "
+        "Q/R formula needs sym_lower(A^{-T}(...))-style construction).",
+        strict=True,
+    )
+    def test_qr_backward(self) -> None:
+        ll, _ = _sq(4)
+        ll.requires_grad = True
+        Q, R = LLA.qr(ll)
+        (Q + R).sum().backward()
+        assert ll.grad is not None
+
+    @pytest.mark.xfail(
+        reason="SVD backward not wired (Townsend 2016 formula needs "
+        "explicit computation across U/S/Vh on top of inv/matmul).",
+        strict=True,
+    )
+    def test_svd_backward(self) -> None:
+        ll, _ = _sq(4)
+        ll.requires_grad = True
+        _, S, _ = LLA.svd(ll)
+        S.sum().backward()
+        assert ll.grad is not None
+
+    @pytest.mark.xfail(
+        reason="eigvalsh backward not wired — requires eigenvectors via "
+        "eigh, which itself needs differentiable spectral decomposition.",
+        strict=True,
+    )
+    def test_eigvalsh_backward(self) -> None:
+        ll, _ = _spd(4)
+        ll.requires_grad = True
+        LLA.eigvalsh(ll).sum().backward()
+        assert ll.grad is not None
+
+    @pytest.mark.xfail(
+        reason="Non-square pinv backward not wired — would require either "
+        "an autograd-capable SVD or the Golub-Pereyra adjoint formula.",
+        strict=True,
+    )
+    def test_pinv_nonsquare_backward(self) -> None:
+        rng: np.random.Generator = np.random.default_rng(0)
+        A_np: np.ndarray = rng.standard_normal((5, 3)).astype(np.float32)
+        A_l: lucid.Tensor = lucid.tensor(A_np.copy(), requires_grad=True)
+        LLA.pinv(A_l).sum().backward()
+        assert A_l.grad is not None
+
+
 class TestCholeskyBackward:
     """Cholesky autograd is wired in Python on top of solve_triangular and
     matmul (Murray 2016 formula); the engine cholesky_op itself has no
