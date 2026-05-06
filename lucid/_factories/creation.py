@@ -236,12 +236,19 @@ def full_like(
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor:
-    """Return a tensor filled with fill_value, shaped like t."""
-    _dt, _dev, _ = normalize_factory_kwargs(
-        dtype if dtype is not None else t.dtype,
-        device if device is not None else t.device,
-    )
-    return _wrap(_C_engine.full_like(_unwrap(t), fill_value, _dt, _dev))
+    """Return a tensor filled with fill_value, shaped like t.
+
+    The engine's ``full_like`` always inherits dtype/device from ``t``; the
+    ``dtype`` / ``device`` kwargs are accepted for source-level compatibility
+    with the reference framework, but a non-default value triggers a cast +
+    move via ``astype`` / ``to`` so the returned tensor matches.
+    """
+    out: Tensor = _wrap(_C_engine.full_like(_unwrap(t), fill_value, False))
+    if dtype is not None and dtype is not t.dtype:
+        out = out.astype(dtype)
+    if device is not None and str(device) != str(t.device):
+        out = out.to(device)
+    return out
 
 
 def logspace(

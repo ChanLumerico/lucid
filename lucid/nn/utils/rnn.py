@@ -155,22 +155,74 @@ def pad_sequence(
     batch_first: bool = False,
     padding_value: float = 0.0,
 ) -> Tensor:
-    """Pad a list of variable-length tensors."""
-    T_max = max(s.shape[0] for s in sequences)
-    B = len(sequences)
-    feat_shape = list(sequences[0].shape[1:])
+    """Pad a list of variable-length tensors.
 
-    # Allocate padded output with engine full.
-    out_shape = [T_max, B] + feat_shape
-    out_impl = _C_engine.full(
-        out_shape, padding_value, sequences[0]._impl.dtype, sequences[0]._impl.device
-    )
-    out_t = _Tensor.__new_from_impl__(out_impl)
+    Each sequence is padded along its leading dimension to the longest
+    length in ``sequences``, then stacked along a new batch axis.  The
+    older slice-and-copy implementation relied on view-based mutation
+    that didn't propagate through Lucid's autograd-aware Tensor — we now
+    build the padded outputs explicitly via ``cat`` over the time axis
+    and ``stack`` over the batch axis, which goes through proper
+    differentiable ops.
+    """
+    import lucid
 
-    for i, s in enumerate(sequences):
-        out_t[: s.shape[0], i].copy_(s)
+    if not sequences:
+        raise ValueError("pad_sequence: empty input list")
+    T_max: int = max(int(s.shape[0]) for s in sequences)
+    feat_shape: list[int] = list(sequences[0].shape[1:])
+    dtype = sequences[0].dtype
+    device = sequences[0]._impl.device
 
+    padded_each: list[Tensor] = []
+    for s in sequences:
+        T_i: int = int(s.shape[0])
+        if T_i == T_max:
+            padded_each.append(s)
+            continue
+        # Build a constant-fill tail and concat.
+        tail_shape: list[int] = [T_max - T_i] + feat_shape
+        tail_impl = _C_engine.full(tail_shape, padding_value, s._impl.dtype, device)
+        tail: Tensor = _Tensor.__new_from_impl__(tail_impl)
+        padded_each.append(lucid.cat([s, tail], 0))
+
+    # Stack along axis 1 (T_max, B, *feat) or axis 0 with batch_first.
     if batch_first:
-        out_t = out_t.permute(1, 0, *range(2, out_t.ndim))
+        return lucid.stack(padded_each, 0)
+    return lucid.stack(padded_each, 1)
 
-    return out_t
+
+def pack_sequence(
+    sequences: list[Tensor],
+    enforce_sorted: bool = True,
+) -> "PackedSequence":
+    """Pack a list of variable-length sequences into a ``PackedSequence``.
+
+    This is the convenience wrapper around ``pad_sequence`` +
+    ``pack_padded_sequence`` that the reference framework exposes — useful
+    when you already have a list of per-example tensors and don't want to
+    pad them yourself.  Each entry's ``shape[0]`` is treated as the time
+    dimension; remaining axes carry the feature dimensions.
+
+    When ``enforce_sorted=True`` (the default) the caller must pass the
+    sequences in non-increasing length order; otherwise ``ValueError`` is
+    raised.  We don't currently re-sort under the hood, so explicit ordering
+    is the only path for now.
+    """
+    if not sequences:
+        raise ValueError("pack_sequence: empty input list")
+    lengths: list[int] = [int(s.shape[0]) for s in sequences]
+    if enforce_sorted:
+        for i in range(1, len(lengths)):
+            if lengths[i] > lengths[i - 1]:
+                raise ValueError(
+                    "pack_sequence: lengths must be sorted in decreasing order "
+                    "when enforce_sorted=True"
+                )
+    elif sorted(lengths, reverse=True) != lengths:
+        raise NotImplementedError(
+            "pack_sequence: enforce_sorted=False not yet implemented; "
+            "sort sequences by descending length before calling"
+        )
+    padded: Tensor = pad_sequence(sequences, batch_first=False)
+    return pack_padded_sequence(padded, lengths, batch_first=False)

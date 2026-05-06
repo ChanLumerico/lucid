@@ -8,12 +8,17 @@ from lucid.nn.utils.convert_parameters import (
     vector_to_parameters,
 )
 from lucid.nn.utils.weight_norm import remove_weight_norm, weight_norm
+from lucid.nn.utils.spectral_norm import remove_spectral_norm, spectral_norm
 from lucid.nn.utils.rnn import (
     PackedSequence,
     pack_padded_sequence,
+    pack_sequence,
     pad_packed_sequence,
     pad_sequence,
 )
+from lucid.nn.utils import parametrize as parametrize
+from lucid.nn.utils import parametrizations as parametrizations
+from lucid.nn.utils import prune as prune
 
 __all__ = [
     "clip_grad_norm_",
@@ -22,8 +27,14 @@ __all__ = [
     "vector_to_parameters",
     "weight_norm",
     "remove_weight_norm",
+    "spectral_norm",
+    "remove_spectral_norm",
     "PackedSequence",
     "pack_padded_sequence",
+    "pack_sequence",
     "pad_packed_sequence",
     "pad_sequence",
+    "parametrize",
+    "parametrizations",
+    "prune",
 ]
