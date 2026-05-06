@@ -9370,6 +9370,11 @@ private:
     // min_axis primitive.  Mean divides by the reduce dimension after summing.
     Storage reduce_axes(
         const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, ReduceOp op) {
+        // 0-d (scalar) input is already its own reduction. Returning early
+        // avoids an infinite recursion in the empty-axes branch below, where
+        // expanding `axes` to all dims would yield another empty list.
+        if (in_shape.empty())
+            return a;
         if (opts.axes.empty()) {
             std::vector<int> all_axes;
             for (int i = 0; i < static_cast<int>(in_shape.size()); ++i)

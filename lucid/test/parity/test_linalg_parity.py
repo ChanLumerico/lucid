@@ -179,6 +179,19 @@ class TestLinalgBackwardParity:
         TLA.inv(ta).sum().backward()
         np.testing.assert_allclose(la.grad.numpy(), ta.grad.numpy(), atol=1e-4)
 
+    def test_det_backward_batched(self) -> None:
+        # Det.cpp's broadcast_to needed an explicit reshape — ``[B]`` cannot
+        # broadcast to ``[B, N, N]`` without first being reshaped to ``[B, 1, 1]``.
+        rng: np.random.Generator = np.random.default_rng(0)
+        A_np: np.ndarray = (
+            rng.standard_normal((2, 3, 3)) + np.eye(3) * 5
+        ).astype(np.float32)
+        A_l: lucid.Tensor = lucid.tensor(A_np.copy(), requires_grad=True)
+        A_t = ref.tensor(A_np.copy(), requires_grad=True)
+        LLA.det(A_l).sum().backward()
+        TLA.det(A_t).sum().backward()
+        np.testing.assert_allclose(A_l.grad.numpy(), A_t.grad.numpy(), atol=1e-4)
+
     def test_solve_backward(self) -> None:
         rng: np.random.Generator = np.random.default_rng(0)
         A_np: np.ndarray = (

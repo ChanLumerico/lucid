@@ -145,3 +145,35 @@ class TestScanOps:
     def test_trace_identity(self):
         t = lucid.eye(3)
         assert abs(float(lucid.trace(t).item()) - 3.0) < 1e-4
+
+
+class TestZeroDimReductions:
+    """0-d (shape ``()``) inputs are produced by ops like ``linalg.det``;
+    feeding one back into ``sum``/``mean``/``max`` previously infinite-recursed
+    in the CPU reduce dispatch (the empty-axes branch re-expanded into another
+    empty list) and segfaulted via stack overflow."""
+
+    def _scalar(self) -> lucid.Tensor:
+        # det() of a 3x3 identity scaled by 2 → 8.0 with shape ().
+        A: lucid.Tensor = lucid.tensor(np.eye(3, dtype=np.float32) * 2)
+        s: lucid.Tensor = lucid.linalg.det(A)
+        assert s.shape == ()
+        return s
+
+    def test_sum_on_scalar(self) -> None:
+        s: lucid.Tensor = self._scalar().sum()
+        assert s.shape == ()
+        assert abs(float(s.item()) - 8.0) < 1e-4
+
+    def test_mean_on_scalar(self) -> None:
+        s: lucid.Tensor = self._scalar().mean()
+        assert abs(float(s.item()) - 8.0) < 1e-4
+
+    def test_max_on_scalar(self) -> None:
+        s: lucid.Tensor = self._scalar().max()
+        assert abs(float(s.item()) - 8.0) < 1e-4
+
+    def test_sum_on_scalar_gpu(self) -> None:
+        cpu_s: lucid.Tensor = self._scalar()
+        gpu_s: lucid.Tensor = cpu_s.to("metal")
+        assert abs(float(gpu_s.sum().item()) - 8.0) < 1e-4

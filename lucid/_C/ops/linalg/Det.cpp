@@ -34,6 +34,7 @@
 #include "../../ops/bfunc/Mul.h"
 #include "../../ops/ufunc/Transpose.h"
 #include "../../ops/utils/Layout.h"
+#include "../../ops/utils/View.h"
 #include "Inv.h"
 #include "_Detail.h"
 
@@ -73,8 +74,14 @@ std::vector<Storage> DetBackward::apply(Storage grad_out) {
     auto inv_AT = mT_op(inv_A);
     // Scale the batch-shaped gradient by the batch-shaped determinant.
     auto scale = mul_op(det_v, ddet);
-    // broadcast_to_op inserts two trailing dimensions to match the matrix shape.
-    auto dA = mul_op(broadcast_to_op(scale, input_shapes_[0]), inv_AT);
+    // For batched input ([B..., N, N]) scale has shape [B...]; broadcast_to
+    // can only expand size-1 dims, not insert middle ones, so first reshape
+    // scale to [B..., 1, 1] before broadcasting up to the full matrix shape.
+    Shape scale_with_matrix_dims = scale->shape();
+    scale_with_matrix_dims.push_back(1);
+    scale_with_matrix_dims.push_back(1);
+    auto scale_kept = reshape_op(scale, scale_with_matrix_dims);
+    auto dA = mul_op(broadcast_to_op(scale_kept, input_shapes_[0]), inv_AT);
     return {dA->storage()};
 }
 
