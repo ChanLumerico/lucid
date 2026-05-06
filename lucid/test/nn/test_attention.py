@@ -115,8 +115,9 @@ class TestMHAContracts:
         m = nn.MultiheadAttention(8, 2, batch_first=True, bias=False)
         x = make_tensor((1, 4, 8))
         kpm = lucid.tensor([[False, True, True, True]], dtype=lucid.bool_)
-        out, w = m(x, x, x, key_padding_mask=kpm, need_weights=True,
-                   average_attn_weights=False)
+        out, w = m(
+            x, x, x, key_padding_mask=kpm, need_weights=True, average_attn_weights=False
+        )
         # All weight mass should sit on position 0.
         weights_np = w.numpy()
         np.testing.assert_allclose(weights_np[..., 0], 1.0, atol=1e-5)
@@ -134,8 +135,7 @@ class TestMHAContracts:
             ],
             dtype=lucid.bool_,
         )
-        out, w = m(x, x, x, attn_mask=am, need_weights=True,
-                   average_attn_weights=False)
+        out, w = m(x, x, x, attn_mask=am, need_weights=True, average_attn_weights=False)
         # Attention from query rows 2 and 3 should put zero weight on key 3.
         wn = w.numpy()
         np.testing.assert_allclose(wn[:, :, 2, 3], 0.0, atol=1e-5)

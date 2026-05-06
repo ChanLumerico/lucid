@@ -8,7 +8,6 @@ import pytest
 import lucid
 import lucid.nn.init as init
 
-
 # ── trunc_normal_ ────────────────────────────────────────────────────────────
 
 
@@ -55,9 +54,9 @@ class TestSparse:
         expected_zeros = int(math.floor(sparsity * rows))
         for c in range(cols):
             actual = int((arr[:, c] == 0.0).sum())
-            assert actual == expected_zeros, (
-                f"column {c}: {actual} zeros, expected {expected_zeros}"
-            )
+            assert (
+                actual == expected_zeros
+            ), f"column {c}: {actual} zeros, expected {expected_zeros}"
 
     def test_non_zero_entries_have_finite_std(self):
         t = lucid.zeros(100, 4)

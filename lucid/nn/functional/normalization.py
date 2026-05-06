@@ -190,5 +190,3 @@ def instance_norm(
     if bias is not None:
         y = y + bias.reshape(bcast_shape)
     return y
-
-

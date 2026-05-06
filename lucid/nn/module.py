@@ -619,7 +619,12 @@ class Module:
         every tensor.
         """
         from lucid._dtype import (
-            float16, bfloat16, float32, float64, complex64, dtype as _DT,
+            float16,
+            bfloat16,
+            float32,
+            float64,
+            complex64,
+            dtype as _DT,
         )
 
         # Detect "this call is a pure-float dtype change".  Mixed args
@@ -638,7 +643,11 @@ class Module:
 
         def _convert(t: Tensor) -> Tensor:
             if skip_int_buffers and t.dtype not in (
-                float16, bfloat16, float32, float64, complex64
+                float16,
+                bfloat16,
+                float32,
+                float64,
+                complex64,
             ):
                 # Integer / bool buffer — leave dtype alone.
                 return t

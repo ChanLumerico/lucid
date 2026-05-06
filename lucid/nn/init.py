@@ -229,9 +229,7 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
     the kernel centred).  Useful for residual / identity initialisation.
     """
     if tensor.ndim not in (3, 4, 5):
-        raise ValueError(
-            f"dirac_() expects a 3/4/5-D tensor; got ndim={tensor.ndim}"
-        )
+        raise ValueError(f"dirac_() expects a 3/4/5-D tensor; got ndim={tensor.ndim}")
     out_ch: int = int(tensor.shape[0])
     in_ch_per_group: int = int(tensor.shape[1])
     if out_ch % groups != 0:
@@ -244,13 +242,9 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
 
     out_per_group: int = out_ch // groups
     min_dim: int = min(in_ch_per_group, out_per_group)
-    arr: _np.ndarray = _np.zeros(
-        [int(s) for s in tensor.shape], dtype=_np.float32
-    )
+    arr: _np.ndarray = _np.zeros([int(s) for s in tensor.shape], dtype=_np.float32)
     # Centre indices for each spatial dim.
-    spatial_centres: tuple[int, ...] = tuple(
-        int(s) // 2 for s in tensor.shape[2:]
-    )
+    spatial_centres: tuple[int, ...] = tuple(int(s) // 2 for s in tensor.shape[2:])
     for g in range(groups):
         for d in range(min_dim):
             out_idx: int = g * out_per_group + d

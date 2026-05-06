@@ -112,9 +112,9 @@ class Embedding(Module):
             norms = (_np.abs(arr) ** self.norm_type).sum(axis=1) ** (
                 1.0 / self.norm_type
             )
-        scale: _np.ndarray = _np.minimum(
-            self.max_norm / (norms + 1e-7), 1.0
-        ).astype(arr.dtype)
+        scale: _np.ndarray = _np.minimum(self.max_norm / (norms + 1e-7), 1.0).astype(
+            arr.dtype
+        )
         arr = arr * scale[:, None]
         new_impl = _ce.TensorImpl(arr, _ce.Device.CPU, False)
         self.weight._impl = _iwg(new_impl, self.weight._impl.requires_grad)

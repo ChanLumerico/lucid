@@ -345,9 +345,7 @@ class LSTM(Module):
             weights.append(zero_b)
             weights.append(zero_b)
         if self.proj_size > 0:
-            weights.append(
-                _unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"])
-            )
+            weights.append(_unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"]))
 
         out_impl, h_impl, c_impl = _C_engine.nn.lstm_forward(
             _unwrap(layer_input),
@@ -355,9 +353,9 @@ class LSTM(Module):
             _unwrap(c0_layer),
             weights,
             self.hidden_size,
-            1,            # single-layer engine call
-            False,        # batch_first handled by us
-            False,        # bidirectional handled by us
+            1,  # single-layer engine call
+            False,  # batch_first handled by us
+            False,  # bidirectional handled by us
             True,
             self.proj_size,
         )
@@ -413,7 +411,9 @@ class LSTM(Module):
                 c0_slice: "Tensor" = c0_full[idx : idx + 1]
 
                 inp: "Tensor" = (
-                    self._reverse_along_time(layer_input) if direction == 1 else layer_input
+                    self._reverse_along_time(layer_input)
+                    if direction == 1
+                    else layer_input
                 )
                 out, h_n, c_n = self._run_single_layer_engine(
                     inp, h0_slice, c0_slice, layer, direction

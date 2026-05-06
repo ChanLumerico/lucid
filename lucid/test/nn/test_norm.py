@@ -126,7 +126,8 @@ class TestBatchNorm:
 
 class TestInstanceNorm:
     @pytest.mark.parametrize(
-        "cls,shape", [
+        "cls,shape",
+        [
             (nn.InstanceNorm1d, (2, 4, 8)),
             (nn.InstanceNorm2d, (2, 4, 6, 6)),
             (nn.InstanceNorm3d, (1, 4, 3, 3, 3)),

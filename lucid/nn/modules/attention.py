@@ -29,7 +29,9 @@ def _to_additive_mask(mask: "Tensor", float_dtype: object) -> "Tensor":
 
     if mask.dtype is _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
-        zero_t: "Tensor" = _lucid.zeros(mask.shape, dtype=float_dtype, device=mask.device)
+        zero_t: "Tensor" = _lucid.zeros(
+            mask.shape, dtype=float_dtype, device=mask.device
+        )
         ninf_t: "Tensor" = _lucid.full(
             mask.shape, _NEG_INF, dtype=float_dtype, device=mask.device
         )
@@ -266,9 +268,7 @@ class MultiheadAttention(Module):
             elif am.ndim == 4:
                 pass
             else:
-                raise ValueError(
-                    f"attn_mask must be 2-D, 3-D, or 4-D; got {am.ndim}-D"
-                )
+                raise ValueError(f"attn_mask must be 2-D, 3-D, or 4-D; got {am.ndim}-D")
             merged = am
 
         if key_padding_mask is not None:
@@ -399,10 +399,7 @@ class MultiheadAttention(Module):
             Tq: int = scores.shape[2]
             Tk: int = scores.shape[3]
             tri = _lucid.tensor(
-                [
-                    [_NEG_INF if j > i else 0.0 for j in range(Tk)]
-                    for i in range(Tq)
-                ],
+                [[_NEG_INF if j > i else 0.0 for j in range(Tk)] for i in range(Tq)],
                 dtype=scores.dtype,
                 device=scores.device,
             )

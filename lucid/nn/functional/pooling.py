@@ -79,13 +79,15 @@ def _adaptive_pool_python_avg(x: "Tensor", output_size: tuple[int, ...]) -> "Ten
                 sj, ej = ranges[1][j]
                 for k in range(output_size[2]):
                     sk, ek = ranges[2][k]
-                    out_arr[..., i, j, k] = x_np[
-                        ..., si:ei, sj:ej, sk:ek
-                    ].mean(axis=(-3, -2, -1))
+                    out_arr[..., i, j, k] = x_np[..., si:ei, sj:ej, sk:ek].mean(
+                        axis=(-3, -2, -1)
+                    )
     return _lucid.tensor(out_arr, dtype=x.dtype, device=x.device)
 
 
-def _adaptive_avg_call(x: "Tensor", output_size: tuple[int, ...], engine_fn) -> "Tensor":
+def _adaptive_avg_call(
+    x: "Tensor", output_size: tuple[int, ...], engine_fn
+) -> "Tensor":
     """Engine call with Python fallback when the input dims aren't divisible."""
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])

@@ -88,8 +88,15 @@ class TestPoolGuards:
     """Coverage for the new Pool contract guards and adaptive non-divisible."""
 
     @pytest.mark.parametrize(
-        "cls", [nn.MaxPool1d, nn.MaxPool2d, nn.MaxPool3d,
-                nn.AdaptiveMaxPool1d, nn.AdaptiveMaxPool2d, nn.AdaptiveMaxPool3d],
+        "cls",
+        [
+            nn.MaxPool1d,
+            nn.MaxPool2d,
+            nn.MaxPool3d,
+            nn.AdaptiveMaxPool1d,
+            nn.AdaptiveMaxPool2d,
+            nn.AdaptiveMaxPool3d,
+        ],
     )
     def test_return_indices_rejected(self, cls):
         with pytest.raises(NotImplementedError, match="return_indices"):

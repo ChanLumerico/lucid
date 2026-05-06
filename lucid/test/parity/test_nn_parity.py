@@ -806,8 +806,12 @@ class TestNicheLossParity:
         x = _np_abs(rng.standard_normal(8)).astype(np.float32)
         y = rng.integers(0, 5, 8).astype(np.float32)
         check_parity(
-            LF.poisson_nll_loss(lucid.tensor(x.copy()), lucid.tensor(y.copy()), log_input=False),
-            TF.poisson_nll_loss(ref.tensor(x.copy()), ref.tensor(y.copy()), log_input=False),
+            LF.poisson_nll_loss(
+                lucid.tensor(x.copy()), lucid.tensor(y.copy()), log_input=False
+            ),
+            TF.poisson_nll_loss(
+                ref.tensor(x.copy()), ref.tensor(y.copy()), log_input=False
+            ),
         )
 
     def test_gaussian_nll(self):
@@ -817,12 +821,12 @@ class TestNicheLossParity:
         var = (_np_abs(rng.standard_normal((8, 4))) + 0.1).astype(np.float32)
         check_parity(
             LF.gaussian_nll_loss(
-                lucid.tensor(mu.copy()), lucid.tensor(target.copy()),
-                lucid.tensor(var.copy())
+                lucid.tensor(mu.copy()),
+                lucid.tensor(target.copy()),
+                lucid.tensor(var.copy()),
             ),
             TF.gaussian_nll_loss(
-                ref.tensor(mu.copy()), ref.tensor(target.copy()),
-                ref.tensor(var.copy())
+                ref.tensor(mu.copy()), ref.tensor(target.copy()), ref.tensor(var.copy())
             ),
         )
 
@@ -831,7 +835,9 @@ class TestNicheLossParity:
         x = rng.standard_normal((4, 5)).astype(np.float32)
         y = np.array([0, 2, 1, 4], dtype=np.int32)
         check_parity(
-            LF.multi_margin_loss(lucid.tensor(x.copy()), lucid.tensor(y.copy(), dtype=lucid.int32)),
+            LF.multi_margin_loss(
+                lucid.tensor(x.copy()), lucid.tensor(y.copy(), dtype=lucid.int32)
+            ),
             TF.multi_margin_loss(ref.tensor(x.copy()), ref.tensor(y.astype(np.int64))),
         )
 
@@ -844,8 +850,12 @@ class TestNicheLossParity:
         rng = np.random.default_rng(6)
         x = rng.standard_normal((4, 5)).astype(np.float32)
         target = np.array(
-            [[3, 0, -1, -1, -1], [4, 0, -1, -1, -1],
-             [2, -1, -1, -1, -1], [1, 4, 0, -1, -1]],
+            [
+                [3, 0, -1, -1, -1],
+                [4, 0, -1, -1, -1],
+                [2, -1, -1, -1, -1],
+                [1, 4, 0, -1, -1],
+            ],
             dtype=np.int32,
         )
         LF.multilabel_margin_loss(
@@ -977,7 +987,9 @@ class TestMHAParity:
         l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
         rng = np.random.default_rng(3)
         x_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
-        kpm = np.array([[False, False, False, True, True], [False, True, True, True, True]])
+        kpm = np.array(
+            [[False, False, False, True, True], [False, True, True, True, True]]
+        )
         y_l, _ = l_mod(
             lucid.tensor(x_np.copy()),
             lucid.tensor(x_np.copy()),
