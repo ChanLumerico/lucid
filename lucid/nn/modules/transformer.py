@@ -66,15 +66,31 @@ class TransformerEncoderLayer(Module):
         src: Tensor,
         src_mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
+        is_causal: bool = False,
     ) -> Tensor:
         if self.norm_first:
+            normed: Tensor = self.norm1(src)
             src2, _ = self.self_attn(
-                self.norm1(src), self.norm1(src), self.norm1(src), attn_mask=src_mask
+                normed,
+                normed,
+                normed,
+                attn_mask=src_mask,
+                key_padding_mask=src_key_padding_mask,
+                need_weights=False,
+                is_causal=is_causal,
             )
             src = src + self.dropout1(src2)
             src = src + self.dropout3(self._ff(self.norm2(src)))
         else:
-            src2, _ = self.self_attn(src, src, src, attn_mask=src_mask)
+            src2, _ = self.self_attn(
+                src,
+                src,
+                src,
+                attn_mask=src_mask,
+                key_padding_mask=src_key_padding_mask,
+                need_weights=False,
+                is_causal=is_causal,
+            )
             src = self.norm1(src + self.dropout1(src2))
             src = self.norm2(src + self.dropout3(self._ff(src)))
         return src
@@ -196,21 +212,52 @@ class TransformerDecoderLayer(Module):
         memory_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
+        tgt_is_causal: bool = False,
+        memory_is_causal: bool = False,
     ) -> Tensor:
         if self.norm_first:
+            normed: Tensor = self.norm1(tgt)
             tgt2, _ = self.self_attn(
-                self.norm1(tgt), self.norm1(tgt), self.norm1(tgt), attn_mask=tgt_mask
+                normed,
+                normed,
+                normed,
+                attn_mask=tgt_mask,
+                key_padding_mask=tgt_key_padding_mask,
+                need_weights=False,
+                is_causal=tgt_is_causal,
             )
             tgt = tgt + self.dropout1(tgt2)
             tgt2, _ = self.multihead_attn(
-                self.norm2(tgt), memory, memory, attn_mask=memory_mask
+                self.norm2(tgt),
+                memory,
+                memory,
+                attn_mask=memory_mask,
+                key_padding_mask=memory_key_padding_mask,
+                need_weights=False,
+                is_causal=memory_is_causal,
             )
             tgt = tgt + self.dropout3(tgt2)
             tgt = tgt + self.dropout4(self._ff(self.norm3(tgt)))
         else:
-            tgt2, _ = self.self_attn(tgt, tgt, tgt, attn_mask=tgt_mask)
+            tgt2, _ = self.self_attn(
+                tgt,
+                tgt,
+                tgt,
+                attn_mask=tgt_mask,
+                key_padding_mask=tgt_key_padding_mask,
+                need_weights=False,
+                is_causal=tgt_is_causal,
+            )
             tgt = self.norm1(tgt + self.dropout1(tgt2))
-            tgt2, _ = self.multihead_attn(tgt, memory, memory, attn_mask=memory_mask)
+            tgt2, _ = self.multihead_attn(
+                tgt,
+                memory,
+                memory,
+                attn_mask=memory_mask,
+                key_padding_mask=memory_key_padding_mask,
+                need_weights=False,
+                is_causal=memory_is_causal,
+            )
             tgt = self.norm2(tgt + self.dropout3(tgt2))
             tgt = self.norm3(tgt + self.dropout4(self._ff(tgt)))
         return tgt

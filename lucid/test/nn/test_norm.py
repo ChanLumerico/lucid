@@ -124,6 +124,56 @@ class TestBatchNorm:
         assert "bias" not in sd
 
 
+class TestInstanceNorm:
+    @pytest.mark.parametrize(
+        "cls,shape", [
+            (nn.InstanceNorm1d, (2, 4, 8)),
+            (nn.InstanceNorm2d, (2, 4, 6, 6)),
+            (nn.InstanceNorm3d, (1, 4, 3, 3, 3)),
+        ],
+    )
+    def test_instance_norm_per_sample_stats(self, cls, shape):
+        # Each (n, c) slice should have ~zero mean and ~unit variance.
+        m = cls(shape[1])
+        x = make_tensor(shape) + 5.0
+        y = m(x).numpy()
+        n, c = shape[0], shape[1]
+        for ni in range(n):
+            for ci in range(c):
+                slab = y[ni, ci].reshape(-1)
+                assert abs(slab.mean()) < 1e-4
+                assert abs(slab.var() - 1.0) < 1e-2
+
+    def test_instance_norm_dim_validation(self):
+        with pytest.raises(ValueError, match="4-D"):
+            nn.InstanceNorm2d(4)(make_tensor((2, 4, 8)))
+
+    def test_instance_norm_affine(self):
+        m = nn.InstanceNorm2d(4, affine=True)
+        assert m.weight is not None
+        assert m.bias is not None
+        sd = m.state_dict()
+        assert "weight" in sd
+        assert "bias" in sd
+
+    def test_instance_norm_default_no_running_stats(self):
+        # Reference framework default for InstanceNorm.
+        m = nn.InstanceNorm2d(4)
+        assert m.track_running_stats is False
+        sd = m.state_dict()
+        assert "running_mean" not in sd
+
+    def test_lazy_instance_norm_uses_per_instance_path(self):
+        m = nn.LazyInstanceNorm2d()
+        x = make_tensor((2, 6, 5, 5)) + 3.0
+        y = m(x).numpy()
+        # Per-(n, c) slice must be standardised.
+        for n in range(2):
+            for c in range(6):
+                slab = y[n, c].reshape(-1)
+                assert abs(slab.mean()) < 1e-4
+
+
 class TestLayerNormBias:
     def test_bias_false_creates_only_weight(self):
         ln = nn.LayerNorm(8, bias=False)
@@ -147,6 +197,23 @@ class TestLayerNormBias:
         x = make_tensor((4, 8))
         out = ln(x)
         assert out.shape == (4, 8)
+
+
+class TestModuleDtypeCasts:
+    def test_float_preserves_int_buffer(self):
+        # ``.float()`` must leave ``num_batches_tracked`` (int64) alone —
+        # otherwise checkpoint round-trips would silently widen the counter.
+        bn = nn.BatchNorm2d(4)
+        assert bn.num_batches_tracked.dtype is lucid.int64
+        bn.float()
+        assert bn.num_batches_tracked.dtype is lucid.int64
+        assert bn.weight.dtype is lucid.float32
+
+    def test_double_preserves_int_buffer(self):
+        bn = nn.BatchNorm2d(4)
+        bn.double()
+        assert bn.num_batches_tracked.dtype is lucid.int64
+        assert bn.weight.dtype is lucid.float64
 
 
 class TestGroupNorm:

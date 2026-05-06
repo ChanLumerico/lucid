@@ -609,9 +609,39 @@ class Module:
         return self
 
     def to(self, *args: object, **kwargs: object) -> Self:
-        """Move/cast all parameters and buffers, preserving Parameter object identity."""
+        """Move/cast all parameters and buffers, preserving Parameter object identity.
+
+        Floating-point dtype casts (``.float()``, ``.double()``,
+        ``.half()``, ``.bfloat16()``) skip integer buffers — e.g.
+        ``BatchNorm.num_batches_tracked`` stays int64 — matching the
+        reference framework so checkpoint round-trips don't quietly
+        widen / narrow the counter type.  Device moves still apply to
+        every tensor.
+        """
+        from lucid._dtype import (
+            float16, bfloat16, float32, float64, complex64, dtype as _DT,
+        )
+
+        # Detect "this call is a pure-float dtype change".  Mixed args
+        # like ``.to(device, dtype)`` still apply normally.
+        target_dtype: object | None = kwargs.get("dtype")
+        for a in args:
+            if isinstance(a, _DT):
+                target_dtype = a
+                break
+        skip_int_buffers: bool = (
+            target_dtype is not None
+            and target_dtype in (float16, bfloat16, float32, float64, complex64)
+            and "device" not in kwargs
+            and not any(isinstance(a, str) for a in args)
+        )
 
         def _convert(t: Tensor) -> Tensor:
+            if skip_int_buffers and t.dtype not in (
+                float16, bfloat16, float32, float64, complex64
+            ):
+                # Integer / bool buffer — leave dtype alone.
+                return t
             return t.to(*args, **kwargs)
 
         return self._apply(_convert)
@@ -683,12 +713,32 @@ class Module:
         """No-op on Apple Silicon (unified memory is always shared)."""
         return self
 
-    def compile(self, *args: object, **kwargs: object) -> None:
-        """Not implemented: JIT compilation is out of scope for this release."""
-        raise NotImplementedError(
-            "compile() is not available in this release. "
-            "JIT compilation is planned for a future major version."
-        )
+    def compile(self, *args: object, **kwargs: object) -> Self:
+        """No-op compatibility stub.
+
+        External codepaths often call ``model.compile()`` to opt into JIT
+        acceleration; Lucid has no such layer, so this returns ``self``
+        unchanged rather than crashing the caller.  Any positional or
+        keyword arguments are accepted and ignored.
+        """
+        return self
+
+    def to_empty(
+        self,
+        *,
+        device: object = None,
+        recurse: bool = True,
+    ) -> Self:
+        """Move parameters and buffers to ``device`` without copying data.
+
+        The reference framework uses ``to_empty`` to materialise a model
+        constructed on the meta device.  Lucid has no meta device, but
+        falls back to the standard :meth:`to` when called for parity with
+        external code.  ``recurse`` is honoured by :meth:`to` already.
+        """
+        if device is None:
+            return self
+        return self.to(device)
 
     # ── extra state ───────────────────────────────────────────────────────
 

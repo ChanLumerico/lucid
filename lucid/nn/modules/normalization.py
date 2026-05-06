@@ -13,6 +13,7 @@ from lucid.nn.functional.normalization import (
     rms_norm,
     group_norm,
     batch_norm,
+    instance_norm,
 )
 
 
@@ -331,16 +332,128 @@ class BatchNorm3d(_BatchNormBase):
     """Batch normalization for 5D input (N, C, D, H, W)."""
 
 
-class InstanceNorm1d(_BatchNormBase):
-    """Instance normalization for 3D input."""
+class _InstanceNormBase(Module):
+    """Common implementation for InstanceNorm1d/2d/3d.
+
+    Per-instance normalisation: every ``(n, c)`` slice is standardised
+    against its own statistics computed over the spatial axes only.
+    Defaults follow the reference framework — ``affine=False`` and
+    ``track_running_stats=False`` — so the layer is parameter-free out
+    of the box.
+    """
+
+    _expected_dim: int = 0  # subclass overrides: 3 / 4 / 5
+
+    def __init__(
+        self,
+        num_features: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = False,
+        track_running_stats: bool = False,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        super().__init__()
+        self.num_features: int = num_features
+        self.eps: float = eps
+        self.momentum: float = momentum
+        self.affine: bool = affine
+        self.track_running_stats: bool = track_running_stats
+
+        if affine:
+            self.weight: Parameter | None = Parameter(
+                ones(num_features, dtype=dtype, device=device)
+            )
+            self.bias: Parameter | None = Parameter(
+                zeros(num_features, dtype=dtype, device=device)
+            )
+        else:
+            self.weight = None
+            self.bias = None
+
+        if track_running_stats:
+            self.register_buffer(
+                "running_mean", zeros(num_features, dtype=dtype, device=device)
+            )
+            self.register_buffer(
+                "running_var", ones(num_features, dtype=dtype, device=device)
+            )
+        else:
+            self.register_buffer("running_mean", None)
+            self.register_buffer("running_var", None)
+
+    def _check_input_dim(self, x: Tensor) -> None:
+        if self._expected_dim and x.ndim != self._expected_dim:
+            raise ValueError(
+                f"{type(self).__name__} expects a {self._expected_dim}-D input "
+                f"(N, C{', *spatial' if self._expected_dim > 2 else ''}); "
+                f"got ndim={x.ndim}"
+            )
+
+    def forward(self, x: Tensor) -> Tensor:
+        self._check_input_dim(x)
+        # eval mode + track_running_stats=True ⇒ use running stats path.
+        use_input_stats: bool = self.training or not self.track_running_stats
+        rm: Tensor | None = (
+            self._buffers.get("running_mean") if self.track_running_stats else None
+        )
+        rv: Tensor | None = (
+            self._buffers.get("running_var") if self.track_running_stats else None
+        )
+        # Update running stats during training (tracks per-channel stats
+        # averaged across the batch — matches the reference framework).
+        if self.training and self.track_running_stats:
+            self._update_running_stats(x)
+        return instance_norm(
+            x,
+            running_mean=rm,
+            running_var=rv,
+            weight=self.weight,
+            bias=self.bias,
+            use_input_stats=use_input_stats,
+            momentum=self.momentum,
+            eps=self.eps,
+        )
+
+    def _update_running_stats(self, x: Tensor) -> None:
+        """Update running stats from per-channel batch statistics."""
+        import lucid as _lucid
+
+        # Reduce over batch + spatial → (C,).  Matches BatchNorm's reduction.
+        reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
+        with _lucid.no_grad():
+            batch_mean: Tensor = x.mean(reduce_dims).detach()
+            batch_var: Tensor = x.var(reduce_dims, correction=0).detach()
+            m: float = float(self.momentum)
+            new_rm: Tensor = (1.0 - m) * self._buffers["running_mean"] + m * batch_mean
+            new_rv: Tensor = (1.0 - m) * self._buffers["running_var"] + m * batch_var
+            self._buffers["running_mean"] = new_rm.detach()
+            self._buffers["running_var"] = new_rv.detach()
+
+    def extra_repr(self) -> str:
+        return (
+            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
+            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
+        )
 
 
-class InstanceNorm2d(_BatchNormBase):
-    """Instance normalization for 4D input."""
+class InstanceNorm1d(_InstanceNormBase):
+    """Instance normalization for 3-D input ``(N, C, L)``."""
+
+    _expected_dim: int = 3
 
 
-class InstanceNorm3d(_BatchNormBase):
-    """Instance normalization for 5D input."""
+class InstanceNorm2d(_InstanceNormBase):
+    """Instance normalization for 4-D input ``(N, C, H, W)``."""
+
+    _expected_dim: int = 4
+
+
+class InstanceNorm3d(_InstanceNormBase):
+    """Instance normalization for 5-D input ``(N, C, D, H, W)``."""
+
+    _expected_dim: int = 5
 
 
 class LocalResponseNorm(Module):
@@ -573,19 +686,110 @@ class LazyBatchNorm3d(_LazyBatchNormMixin):
     _lazy_label: str = "LazyBatchNorm3d"
 
 
-class LazyInstanceNorm1d(_LazyBatchNormMixin):
+class _LazyInstanceNormMixin(_InstanceNormBase):
+    """Lazy ``num_features`` inference for InstanceNorm{1,2,3}d.
+
+    Mirrors the BatchNorm lazy mixin but defers to ``_InstanceNormBase``
+    so the forward path actually performs per-instance normalisation.
+    Defaults follow the eager InstanceNorm: ``affine=False``,
+    ``track_running_stats=False``.
+    """
+
+    def __init__(
+        self,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = False,
+        track_running_stats: bool = False,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        Module.__init__(self)
+        self.num_features: int | None = None
+        self.eps: float = eps
+        self.momentum: float = momentum
+        self.affine: bool = affine
+        self.track_running_stats: bool = track_running_stats
+        self._device: DeviceLike = device
+        self._dtype: DTypeLike = dtype
+        if affine:
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
+        else:
+            self.weight = None
+            self.bias = None
+        self.register_buffer("running_mean", None)
+        self.register_buffer("running_var", None)
+
+    def _initialize(self, num_features: int) -> None:
+        self.num_features = num_features
+        if self.affine:
+            self.weight = Parameter(
+                ones(num_features, dtype=self._dtype, device=self._device)
+            )
+            self.bias = Parameter(
+                zeros(num_features, dtype=self._dtype, device=self._device)
+            )
+        if self.track_running_stats:
+            self._buffers["running_mean"] = zeros(
+                num_features, dtype=self._dtype, device=self._device
+            )
+            self._buffers["running_var"] = ones(
+                num_features, dtype=self._dtype, device=self._device
+            )
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        if self.num_features is None:
+            for k in ("weight", "running_mean", "bias"):
+                t: Tensor | None = state_dict.get(f"{prefix}{k}")
+                if t is not None and len(t.shape) >= 1:
+                    if self._dtype is None:
+                        self._dtype = t.dtype
+                    if self._device is None:
+                        self._device = t.device
+                    self._initialize(int(t.shape[0]))
+                    break
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.num_features is None:
+            self._initialize(int(x.shape[1]))
+        return _InstanceNormBase.forward(self, x)
+
+
+class LazyInstanceNorm1d(_LazyInstanceNormMixin):
     """InstanceNorm1d with lazy ``num_features`` inference."""
 
-    _lazy_label: str = "LazyInstanceNorm1d"
+    _expected_dim: int = 3
 
 
-class LazyInstanceNorm2d(_LazyBatchNormMixin):
+class LazyInstanceNorm2d(_LazyInstanceNormMixin):
     """InstanceNorm2d with lazy ``num_features`` inference."""
 
-    _lazy_label: str = "LazyInstanceNorm2d"
+    _expected_dim: int = 4
 
 
-class LazyInstanceNorm3d(_LazyBatchNormMixin):
+class LazyInstanceNorm3d(_LazyInstanceNormMixin):
     """InstanceNorm3d with lazy ``num_features`` inference."""
 
-    _lazy_label: str = "LazyInstanceNorm3d"
+    _expected_dim: int = 5

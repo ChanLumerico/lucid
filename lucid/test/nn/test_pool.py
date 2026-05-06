@@ -82,3 +82,31 @@ class TestAdaptivePool:
         x = make_tensor((2, 4, 8, 8))
         out = layer(x)
         assert out.shape == (2, 4, 1, 1)
+
+
+class TestPoolGuards:
+    """Coverage for the new Pool contract guards and adaptive non-divisible."""
+
+    @pytest.mark.parametrize(
+        "cls", [nn.MaxPool1d, nn.MaxPool2d, nn.MaxPool3d,
+                nn.AdaptiveMaxPool1d, nn.AdaptiveMaxPool2d, nn.AdaptiveMaxPool3d],
+    )
+    def test_return_indices_rejected(self, cls):
+        with pytest.raises(NotImplementedError, match="return_indices"):
+            cls(2, return_indices=True)
+
+    def test_adaptive_avg_2d_non_divisible(self):
+        # 7×7 → 3×3 was previously rejected by the engine.
+        x = make_tensor((2, 4, 7, 7))
+        out = nn.AdaptiveAvgPool2d(3)(x)
+        assert out.shape == (2, 4, 3, 3)
+
+    def test_adaptive_avg_1d_non_divisible(self):
+        x = make_tensor((2, 4, 11))
+        out = nn.AdaptiveAvgPool1d(3)(x)
+        assert out.shape == (2, 4, 3)
+
+    def test_adaptive_avg_3d_non_divisible(self):
+        x = make_tensor((1, 2, 7, 7, 5))
+        out = nn.AdaptiveAvgPool3d((3, 3, 2))(x)
+        assert out.shape == (1, 2, 3, 3, 2)

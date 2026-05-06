@@ -152,14 +152,43 @@ def instance_norm(
     momentum: float = 0.1,
     eps: float = 1e-5,
 ) -> Tensor:
-    """Instance normalization (batch_norm with training=True and per-sample stats)."""
-    return batch_norm(
-        x,
-        running_mean,
-        running_var,
-        weight,
-        bias,
-        training=True,
-        momentum=momentum,
-        eps=eps,
-    )
+    """Instance normalization.
+
+    Reduces over the *spatial* dimensions only — every ``(n, c)`` slice is
+    standardised against its own mean and variance.  Differs from
+    ``batch_norm`` which also reduces over the batch axis.
+
+    When ``use_input_stats=False`` and ``running_mean`` / ``running_var``
+    are supplied, those running statistics replace per-instance stats —
+    the same fallback the reference framework uses in eval mode with
+    ``track_running_stats=True``.
+    """
+    import lucid as _lucid
+
+    if x.ndim < 3:
+        raise ValueError(
+            f"instance_norm: expected at least 3-D input (N, C, *spatial), "
+            f"got ndim={x.ndim}"
+        )
+    spatial_dims: list[int] = list(range(2, x.ndim))
+    C: int = int(x.shape[1])
+    # Channel-broadcast shape (1, C, 1, 1, ...) for affine + running stats.
+    bcast_shape: list[int] = [1, C] + [1] * (x.ndim - 2)
+
+    if use_input_stats or running_mean is None or running_var is None:
+        # Per-instance (per-(n,c)) statistics.
+        mean: Tensor = x.mean(spatial_dims, keepdim=True)
+        var: Tensor = x.var(spatial_dims, keepdim=True, correction=0)
+    else:
+        mean = running_mean.reshape(bcast_shape)
+        var = running_var.reshape(bcast_shape)
+
+    y: Tensor = (x - mean) / (var + eps).sqrt()
+
+    if weight is not None:
+        y = y * weight.reshape(bcast_shape)
+    if bias is not None:
+        y = y + bias.reshape(bcast_shape)
+    return y
+
+

@@ -739,6 +739,148 @@ class TestLossParity:
         )
 
 
+class TestNicheLossParity:
+    """Niche loss functions — most are already parity-correct, but were never
+    locked in by tests.  Each case asserts the value matches the reference
+    framework to ≤ 2e-4."""
+
+    def test_cosine_embedding(self):
+        rng = np.random.default_rng(0)
+        x1 = rng.standard_normal((4, 8)).astype(np.float32)
+        x2 = rng.standard_normal((4, 8)).astype(np.float32)
+        y = np.array([1, -1, 1, -1], dtype=np.float32)
+        check_parity(
+            LF.cosine_embedding_loss(
+                lucid.tensor(x1.copy()),
+                lucid.tensor(x2.copy()),
+                lucid.tensor(y.copy()),
+                margin=0.5,
+            ),
+            TF.cosine_embedding_loss(
+                ref.tensor(x1.copy()),
+                ref.tensor(x2.copy()),
+                ref.tensor(y.copy()),
+                margin=0.5,
+            ),
+        )
+
+    def test_margin_ranking(self):
+        rng = np.random.default_rng(1)
+        x1 = rng.standard_normal(8).astype(np.float32)
+        x2 = rng.standard_normal(8).astype(np.float32)
+        y = np.where(np.arange(8) < 4, 1, -1).astype(np.float32)
+        check_parity(
+            LF.margin_ranking_loss(
+                lucid.tensor(x1.copy()),
+                lucid.tensor(x2.copy()),
+                lucid.tensor(y.copy()),
+                margin=0.3,
+            ),
+            TF.margin_ranking_loss(
+                ref.tensor(x1.copy()),
+                ref.tensor(x2.copy()),
+                ref.tensor(y.copy()),
+                margin=0.3,
+            ),
+        )
+
+    def test_hinge_embedding(self):
+        rng = np.random.default_rng(2)
+        x = rng.standard_normal(8).astype(np.float32)
+        y = np.where(np.arange(8) < 4, 1, -1).astype(np.float32)
+        check_parity(
+            LF.hinge_embedding_loss(
+                lucid.tensor(x.copy()),
+                lucid.tensor(y.copy()),
+                margin=0.5,
+            ),
+            TF.hinge_embedding_loss(
+                ref.tensor(x.copy()),
+                ref.tensor(y.copy()),
+                margin=0.5,
+            ),
+        )
+
+    def test_poisson_nll(self):
+        rng = np.random.default_rng(3)
+        x = _np_abs(rng.standard_normal(8)).astype(np.float32)
+        y = rng.integers(0, 5, 8).astype(np.float32)
+        check_parity(
+            LF.poisson_nll_loss(lucid.tensor(x.copy()), lucid.tensor(y.copy()), log_input=False),
+            TF.poisson_nll_loss(ref.tensor(x.copy()), ref.tensor(y.copy()), log_input=False),
+        )
+
+    def test_gaussian_nll(self):
+        rng = np.random.default_rng(4)
+        mu = rng.standard_normal((8, 4)).astype(np.float32)
+        target = rng.standard_normal((8, 4)).astype(np.float32)
+        var = (_np_abs(rng.standard_normal((8, 4))) + 0.1).astype(np.float32)
+        check_parity(
+            LF.gaussian_nll_loss(
+                lucid.tensor(mu.copy()), lucid.tensor(target.copy()),
+                lucid.tensor(var.copy())
+            ),
+            TF.gaussian_nll_loss(
+                ref.tensor(mu.copy()), ref.tensor(target.copy()),
+                ref.tensor(var.copy())
+            ),
+        )
+
+    def test_multi_margin(self):
+        rng = np.random.default_rng(5)
+        x = rng.standard_normal((4, 5)).astype(np.float32)
+        y = np.array([0, 2, 1, 4], dtype=np.int32)
+        check_parity(
+            LF.multi_margin_loss(lucid.tensor(x.copy()), lucid.tensor(y.copy(), dtype=lucid.int32)),
+            TF.multi_margin_loss(ref.tensor(x.copy()), ref.tensor(y.astype(np.int64))),
+        )
+
+    @pytest.mark.xfail(
+        reason="multilabel_margin_loss hits an engine where_op dtype gap; "
+        "tracked separately — not part of the niche-loss parity scope.",
+        strict=True,
+    )
+    def test_multilabel_margin(self):
+        rng = np.random.default_rng(6)
+        x = rng.standard_normal((4, 5)).astype(np.float32)
+        target = np.array(
+            [[3, 0, -1, -1, -1], [4, 0, -1, -1, -1],
+             [2, -1, -1, -1, -1], [1, 4, 0, -1, -1]],
+            dtype=np.int32,
+        )
+        LF.multilabel_margin_loss(
+            lucid.tensor(x.copy()), lucid.tensor(target.copy(), dtype=lucid.int32)
+        )
+
+    def test_triplet_margin(self):
+        rng = np.random.default_rng(7)
+        a = rng.standard_normal((4, 8)).astype(np.float32)
+        p = rng.standard_normal((4, 8)).astype(np.float32)
+        n = rng.standard_normal((4, 8)).astype(np.float32)
+        check_parity(
+            LF.triplet_margin_loss(
+                lucid.tensor(a.copy()), lucid.tensor(p.copy()), lucid.tensor(n.copy())
+            ),
+            TF.triplet_margin_loss(
+                ref.tensor(a.copy()), ref.tensor(p.copy()), ref.tensor(n.copy())
+            ),
+        )
+
+    def test_smooth_l1(self):
+        rng = np.random.default_rng(8)
+        x = rng.standard_normal(8).astype(np.float32)
+        y = rng.standard_normal(8).astype(np.float32)
+        check_parity(
+            LF.smooth_l1_loss(lucid.tensor(x.copy()), lucid.tensor(y.copy())),
+            TF.smooth_l1_loss(ref.tensor(x.copy()), ref.tensor(y.copy())),
+        )
+
+
+def _np_abs(arr):
+    """Local alias to avoid shadowing the np module name above."""
+    return np.abs(arr)
+
+
 class TestMHAParity:
     """Multi-head attention parity vs the reference framework."""
 

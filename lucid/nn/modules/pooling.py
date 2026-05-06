@@ -34,6 +34,8 @@ class MaxPool1d(Module):
         ceil_mode: bool = False,
     ) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("MaxPool1d: return_indices=True is not supported yet.")
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -71,6 +73,8 @@ class MaxPool2d(Module):
         ceil_mode: bool = False,
     ) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("MaxPool2d: return_indices=True is not supported yet.")
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -192,6 +196,8 @@ class AdaptiveMaxPool2d(Module):
 
     def __init__(self, output_size: _Size2d, return_indices: bool = False) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("AdaptiveMaxPool2d: return_indices=True is not supported yet.")
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:
@@ -214,6 +220,8 @@ class MaxPool3d(Module):
         ceil_mode: bool = False,
     ) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("MaxPool3d: return_indices=True is not supported yet.")
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
@@ -277,6 +285,8 @@ class AdaptiveMaxPool1d(Module):
         self, output_size: int | tuple[int, ...], return_indices: bool = False
     ) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("AdaptiveMaxPool1d: return_indices=True is not supported yet.")
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:
@@ -291,6 +301,8 @@ class AdaptiveMaxPool3d(Module):
 
     def __init__(self, output_size: _Size3d, return_indices: bool = False) -> None:
         super().__init__()
+        if return_indices:
+            raise NotImplementedError("AdaptiveMaxPool3d: return_indices=True is not supported yet.")
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:
