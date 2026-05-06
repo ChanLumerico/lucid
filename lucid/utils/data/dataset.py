@@ -205,9 +205,7 @@ class StackDataset(Dataset):
                     f"saw {n} then {len(child)}"
                 )
         self.datasets: tuple[Dataset, ...] = children
-        self._keys: tuple[str, ...] | None = (
-            tuple(kwargs.keys()) if kwargs else None
-        )
+        self._keys: tuple[str, ...] | None = tuple(kwargs.keys()) if kwargs else None
         self._n: int = n
 
     def __len__(self) -> int:

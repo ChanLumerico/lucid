@@ -1,0 +1,86 @@
+// lucid/_C/ops/composite/Stats.cpp
+//
+// ``histc`` is a counts-only wrapper around ``histogram_op``.  When the
+// range is omitted (lo == hi) it auto-derives from the input via min/max
+// reductions, exactly the reference framework's ``torch.histc`` default.
+//
+// ``cartesian_prod`` builds the n-dim grid via ``meshgrid`` then flattens
+// each grid component and stacks them along a new last axis.  Inputs must
+// be 1-D — the reference framework rejects higher-rank inputs and so do we.
+
+#include "Stats.h"
+
+#include <cstring>
+#include <variant>
+
+#include "../../backend/Dispatcher.h"
+#include "../../core/ErrorBuilder.h"
+#include "../../core/TensorImpl.h"
+#include "../ufunc/Reductions.h"
+#include "../utils/Concat.h"
+#include "../utils/Histogram.h"
+#include "../utils/Meshgrid.h"
+#include "../utils/View.h"
+
+namespace lucid {
+
+namespace {
+
+// Materialise a 0-D reduction result as a host double.  The reduce kernel
+// always produces a CPU- or GPU-backed scalar; ``to_cpu`` brings it home.
+double scalar_to_double(const TensorImplPtr& s) {
+    auto host = backend::Dispatcher::for_device(s->device()).to_cpu(s->storage(), s->shape());
+    if (s->dtype() == Dtype::F32) {
+        float v = 0.0f;
+        std::memcpy(&v, host.ptr.get(), sizeof(float));
+        return static_cast<double>(v);
+    }
+    double v = 0.0;
+    std::memcpy(&v, host.ptr.get(), sizeof(double));
+    return v;
+}
+
+}  // namespace
+
+TensorImplPtr histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi) {
+    if (!a)
+        ErrorBuilder("histc").fail("null input");
+
+    double effective_lo = lo;
+    double effective_hi = hi;
+    if (effective_lo == effective_hi) {
+        // Auto-range: collapse all axes to scalars and read the bounds back.
+        // ``min == max`` is a degenerate range; bump ``hi`` so the bins are
+        // well-defined (matches the reference framework).
+        effective_lo = scalar_to_double(min_op(a, {}, false));
+        effective_hi = scalar_to_double(max_op(a, {}, false));
+        if (effective_lo == effective_hi)
+            effective_hi = effective_lo + 1.0;
+    }
+    auto pieces = histogram_op(a, bins, effective_lo, effective_hi, false);
+    return pieces.front();
+}
+
+TensorImplPtr cartesian_prod_op(const std::vector<TensorImplPtr>& tensors) {
+    if (tensors.empty())
+        ErrorBuilder("cartesian_prod").fail("requires at least one input");
+    for (const auto& t : tensors) {
+        if (!t)
+            ErrorBuilder("cartesian_prod").fail("null input");
+        if (t->shape().size() != 1)
+            ErrorBuilder("cartesian_prod").fail("inputs must be 1-D");
+    }
+
+    // ``meshgrid`` with ``ij`` indexing produces n-D grids whose flattened
+    // form gives every combination in a stable order.
+    auto grids = meshgrid_op(tensors, /*indexing_xy=*/false);
+    std::vector<TensorImplPtr> flat;
+    flat.reserve(grids.size());
+    const std::int64_t total = static_cast<std::int64_t>(grids.front()->numel());
+    for (auto& g : grids)
+        flat.push_back(reshape_op(g, Shape{total}));
+    // Stack the flattened components along a new trailing axis: shape (N, D).
+    return stack_op(flat, -1);
+}
+
+}  // namespace lucid

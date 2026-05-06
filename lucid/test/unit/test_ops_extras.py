@@ -11,7 +11,6 @@ import pytest
 
 import lucid
 
-
 _REF = pytest.importorskip("torch")
 
 
@@ -37,13 +36,20 @@ class TestShapeView:
         np.testing.assert_allclose(_np(lucid.narrow(t, 0, 1, 2)), [2.0, 3.0])
 
     def test_narrow_out_of_range_raises(self) -> None:
+        # Engine raises a LucidError-derived IndexError that doesn't inherit
+        # from Python's builtin ``IndexError`` — match against the engine's
+        # base class instead so the assertion is precise.
+        from lucid._C import engine as _engine
+
         t: lucid.Tensor = lucid.tensor([1.0, 2.0])
-        with pytest.raises(IndexError):
+        with pytest.raises(_engine.LucidError, match="out of bounds"):
             lucid.narrow(t, 0, 0, 10)
 
     def test_movedim_swaps_axes(self) -> None:
         t: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
-        np.testing.assert_allclose(_np(lucid.movedim(t, 0, 1)), [[1.0, 3.0], [2.0, 4.0]])
+        np.testing.assert_allclose(
+            _np(lucid.movedim(t, 0, 1)), [[1.0, 3.0], [2.0, 4.0]]
+        )
 
     def test_unflatten_inverse_of_flatten(self) -> None:
         t: lucid.Tensor = lucid.tensor([1.0, 2.0, 3.0, 4.0])
@@ -69,8 +75,10 @@ class TestIndexing:
         )
 
     def test_index_select_int_dtype_required(self) -> None:
+        from lucid._C import engine as _engine
+
         t: lucid.Tensor = lucid.tensor([[1.0]])
-        with pytest.raises(TypeError, match="int"):
+        with pytest.raises(_engine.LucidError, match="int"):
             lucid.index_select(t, 0, lucid.tensor([0.0]))
 
     def test_masked_select_returns_flat(self) -> None:
@@ -130,7 +138,9 @@ class TestComparison:
         b_np: np.ndarray = np.array([4.0, 3.0, 2.0, 1.0], dtype=np.float32)
         out_l = fn(lucid.tensor(a_np.copy()), lucid.tensor(b_np.copy()))  # type: ignore[operator]
         out_t = torch_fn(_REF.tensor(a_np.copy()), _REF.tensor(b_np.copy()))  # type: ignore[operator]
-        np.testing.assert_array_equal(_np(out_l).astype(bool), out_t.numpy().astype(bool))
+        np.testing.assert_array_equal(
+            _np(out_l).astype(bool), out_t.numpy().astype(bool)
+        )
 
     def test_isclose_within_tolerance(self) -> None:
         t: lucid.Tensor = lucid.tensor([1.0, 2.0])
@@ -227,7 +237,9 @@ class TestBinaryMath:
         out: np.ndarray = _np(lucid.atan2(y, x))
         np.testing.assert_allclose(
             out,
-            _REF.atan2(_REF.tensor([1.0, -1.0, -1.0, 1.0]), _REF.tensor([1.0, 1.0, -1.0, -1.0])).numpy(),
+            _REF.atan2(
+                _REF.tensor([1.0, -1.0, -1.0, 1.0]), _REF.tensor([1.0, 1.0, -1.0, -1.0])
+            ).numpy(),
             atol=1e-5,
         )
 
@@ -235,7 +247,8 @@ class TestBinaryMath:
         x: lucid.Tensor = lucid.tensor([-3.5, 3.5])
         y: lucid.Tensor = lucid.tensor([2.0, 2.0])
         np.testing.assert_allclose(
-            _np(lucid.fmod(x, y)), _REF.fmod(_REF.tensor([-3.5, 3.5]), _REF.tensor([2.0, 2.0])).numpy()
+            _np(lucid.fmod(x, y)),
+            _REF.fmod(_REF.tensor([-3.5, 3.5]), _REF.tensor([2.0, 2.0])).numpy(),
         )
 
     def test_remainder_keeps_divisor_sign(self) -> None:
@@ -284,7 +297,9 @@ class TestLinAlg:
         np.testing.assert_allclose(_np(lucid.mm(a, a)), [[7.0, 10.0], [15.0, 22.0]])
 
     def test_mm_rejects_non_2d(self) -> None:
-        with pytest.raises(ValueError, match="2-D"):
+        from lucid._C import engine as _engine
+
+        with pytest.raises(_engine.LucidError, match="2-D"):
             lucid.mm(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
 
     def test_bmm_batched(self) -> None:
@@ -315,7 +330,13 @@ class TestLinAlg:
 
     def test_kron_product(self) -> None:
         a: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
-        np.testing.assert_allclose(_np(lucid.kron(a, a)), _REF.kron(_REF.tensor([[1.0, 2.0], [3.0, 4.0]]), _REF.tensor([[1.0, 2.0], [3.0, 4.0]])).numpy())
+        np.testing.assert_allclose(
+            _np(lucid.kron(a, a)),
+            _REF.kron(
+                _REF.tensor([[1.0, 2.0], [3.0, 4.0]]),
+                _REF.tensor([[1.0, 2.0], [3.0, 4.0]]),
+            ).numpy(),
+        )
 
 
 # ── Stats / search ───────────────────────────────────────────────────────────
@@ -324,7 +345,9 @@ class TestLinAlg:
 class TestStats:
     def test_searchsorted(self) -> None:
         seq: lucid.Tensor = lucid.tensor([1.0, 3.0, 5.0, 7.0])
-        out: np.ndarray = _np(lucid.searchsorted(seq, lucid.tensor([0.0, 2.0, 4.0, 8.0])))
+        out: np.ndarray = _np(
+            lucid.searchsorted(seq, lucid.tensor([0.0, 2.0, 4.0, 8.0]))
+        )
         np.testing.assert_array_equal(out, [0, 1, 2, 4])
 
     def test_bucketize_alias(self) -> None:

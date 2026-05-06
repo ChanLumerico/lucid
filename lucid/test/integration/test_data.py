@@ -62,9 +62,7 @@ class TestStackDataset:
 
     def test_length_mismatch_raises(self) -> None:
         d1, _ = self._pair()
-        d3: TensorDataset = TensorDataset(
-            lucid.tensor([[1.0], [2.0], [3.0]])
-        )
+        d3: TensorDataset = TensorDataset(lucid.tensor([[1.0], [2.0], [3.0]]))
         with pytest.raises(ValueError, match="agree in length"):
             StackDataset(d1, d3)
 

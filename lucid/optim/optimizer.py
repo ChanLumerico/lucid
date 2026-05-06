@@ -176,7 +176,10 @@ class Optimizer:
                         # so the saved checkpoint is portable across processes
                         # (no shared C++ pointers across pickling).
                         import numpy as _np
-                        snapshot[name] = _np.asarray(tensors[slot].data_as_python()).copy()
+
+                        snapshot[name] = _np.asarray(
+                            tensors[slot].data_as_python()
+                        ).copy()
                 if step_count != 0:
                     snapshot["step"] = step_count
                 if snapshot:
@@ -206,9 +209,7 @@ class Optimizer:
                     by_name.setdefault(k, [None] * len(params))
                     # Wrap as TensorImpl on the param's device so the engine
                     # can copy it back into its buffer slot.
-                    by_name[k][slot] = _C_engine.TensorImpl(
-                        v, p._impl.device, False
-                    )
+                    by_name[k][slot] = _C_engine.TensorImpl(v, p._impl.device, False)
             if by_name:
                 eng.load_state_buffers([(k, v) for k, v in by_name.items()])
             if step_count and hasattr(eng, "step_count"):

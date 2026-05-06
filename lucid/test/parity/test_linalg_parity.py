@@ -121,18 +121,16 @@ class TestLinalgGPUForwardParity:
 
     def test_inv_2d(self) -> None:
         rng: np.random.Generator = np.random.default_rng(0)
-        A: np.ndarray = (
-            rng.standard_normal((4, 4)) + np.eye(4) * 5
-        ).astype(np.float32)
+        A: np.ndarray = (rng.standard_normal((4, 4)) + np.eye(4) * 5).astype(np.float32)
         self._both(LLA.inv, A)
 
     def test_det_batched(self) -> None:
         # Batched det was the GPU-only bug: prod() reduced all axes giving the
         # same scalar for every batch element.
         rng: np.random.Generator = np.random.default_rng(2)
-        A: np.ndarray = (
-            rng.standard_normal((3, 4, 4)) + np.eye(4) * 5
-        ).astype(np.float32)
+        A: np.ndarray = (rng.standard_normal((3, 4, 4)) + np.eye(4) * 5).astype(
+            np.float32
+        )
         self._both(LLA.det, A)
 
     def test_cholesky(self) -> None:
@@ -149,9 +147,7 @@ class TestLinalgGPUForwardParity:
         gpu_t: lucid.Tensor = cpu_t.to("metal")
         Q_c, R_c = LLA.qr(cpu_t)
         Q_g, R_g = LLA.qr(gpu_t)
-        np.testing.assert_allclose(
-            (Q_c @ R_c).numpy(), (Q_g @ R_g).numpy(), atol=1e-4
-        )
+        np.testing.assert_allclose((Q_c @ R_c).numpy(), (Q_g @ R_g).numpy(), atol=1e-4)
 
     def test_pinv(self) -> None:
         rng: np.random.Generator = np.random.default_rng(5)
@@ -183,9 +179,9 @@ class TestLinalgBackwardParity:
         # Det.cpp's broadcast_to needed an explicit reshape — ``[B]`` cannot
         # broadcast to ``[B, N, N]`` without first being reshaped to ``[B, 1, 1]``.
         rng: np.random.Generator = np.random.default_rng(0)
-        A_np: np.ndarray = (
-            rng.standard_normal((2, 3, 3)) + np.eye(3) * 5
-        ).astype(np.float32)
+        A_np: np.ndarray = (rng.standard_normal((2, 3, 3)) + np.eye(3) * 5).astype(
+            np.float32
+        )
         A_l: lucid.Tensor = lucid.tensor(A_np.copy(), requires_grad=True)
         A_t = ref.tensor(A_np.copy(), requires_grad=True)
         LLA.det(A_l).sum().backward()
@@ -194,9 +190,9 @@ class TestLinalgBackwardParity:
 
     def test_solve_backward(self) -> None:
         rng: np.random.Generator = np.random.default_rng(0)
-        A_np: np.ndarray = (
-            rng.standard_normal((4, 4)) + np.eye(4) * 2
-        ).astype(np.float32)
+        A_np: np.ndarray = (rng.standard_normal((4, 4)) + np.eye(4) * 2).astype(
+            np.float32
+        )
         b_np: np.ndarray = rng.standard_normal((4, 2)).astype(np.float32)
         A_l: lucid.Tensor = lucid.tensor(A_np.copy(), requires_grad=True)
         b_l: lucid.Tensor = lucid.tensor(b_np.copy(), requires_grad=True)

@@ -139,9 +139,7 @@ class TestFlip:
         np.testing.assert_allclose(t.grad.numpy(), np.array([40.0, 30.0, 20.0, 10.0]))
 
     def test_flip_backward_multi_axis(self):
-        t: lucid.Tensor = lucid.tensor(
-            [[1.0, 2.0], [3.0, 4.0]], requires_grad=True
-        )
+        t: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True)
         out: lucid.Tensor = t.flip([0, 1])
         out.sum().backward()
         np.testing.assert_allclose(t.grad.numpy(), np.ones((2, 2)))

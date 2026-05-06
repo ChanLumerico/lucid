@@ -191,6 +191,14 @@ lucid_object_library(
     ops/utils/Sort.cpp
     ops/utils/Meshgrid.cpp
     ops/utils/Histogram.cpp
+    ops/composite/Math.cpp
+    ops/composite/Reductions.cpp
+    ops/composite/Matrix.cpp
+    ops/composite/Logical.cpp
+    ops/composite/Indexing.cpp
+    ops/composite/Layout.cpp
+    ops/composite/Stats.cpp
+    ops/composite/Search.cpp
     ops/einops/Rearrange.cpp
     ops/einops/Reduce.cpp
     ops/einops/Repeat.cpp
@@ -258,6 +266,7 @@ lucid_object_library(
     bindings/bind_bfunc.cpp
     bindings/bind_ufunc.cpp
     bindings/bind_utils.cpp
+    bindings/bind_composite.cpp
     bindings/bind_linalg.cpp
     bindings/bind_einops.cpp
     bindings/bind.cpp)

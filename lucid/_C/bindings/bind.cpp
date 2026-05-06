@@ -41,6 +41,7 @@ void register_gfunc(py::module_& m);
 void register_bfunc(py::module_& m);
 void register_ufunc(py::module_& m);
 void register_utils(py::module_& m);
+void register_composite(py::module_& m);
 void register_linalg(py::module_& m);
 void register_einops(py::module_& m);
 }  // namespace lucid::bindings
@@ -78,6 +79,9 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_bfunc(m);
     lucid::bindings::register_ufunc(m);
     lucid::bindings::register_utils(m);
+    // Composite ops layered on top of the primitives — must come after
+    // the primitive registrations so its forwards/aliases see them.
+    lucid::bindings::register_composite(m);
     // linalg and einops each get their own sub-module so Python can import
     // them as lucid.linalg / lucid.einops without name collisions.
     auto linalg = m.def_submodule("linalg", "Linear-algebra ops.");

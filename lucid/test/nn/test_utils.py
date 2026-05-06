@@ -23,9 +23,9 @@ class TestClipGradNorm:
         m(x).sum().backward()
         # Save grad norms before clipping.
         nn.utils.clip_grad_norm_(m.parameters(), max_norm=0.1)
-        post: float = sum(
-            float((p.grad * p.grad).sum().item()) for p in m.parameters()
-        ) ** 0.5
+        post: float = (
+            sum(float((p.grad * p.grad).sum().item()) for p in m.parameters()) ** 0.5
+        )
         # Should be at most max_norm + a small epsilon.
         assert post <= 0.1 + 1e-3
 

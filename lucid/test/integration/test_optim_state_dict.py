@@ -66,7 +66,9 @@ class TestLBFGSRoundTrip:
 
     def _make(self, history_size: int = 3) -> tuple[nn.Linear, optim.LBFGS]:
         m: nn.Linear = nn.Linear(4, 2)
-        opt: optim.LBFGS = optim.LBFGS(m.parameters(), lr=1.0, history_size=history_size)
+        opt: optim.LBFGS = optim.LBFGS(
+            m.parameters(), lr=1.0, history_size=history_size
+        )
         return m, opt
 
     def test_lbfgs_history_roundtrip(self) -> None:
@@ -144,9 +146,7 @@ class TestEngineMomentRoundTrip:
         x_next: lucid.Tensor = lucid.randn(3, 4)
         _train_step(m1, opt1, x_next)
         _train_step(m2, opt2, x_next)
-        np.testing.assert_allclose(
-            m1.weight.numpy(), m2.weight.numpy(), atol=atol
-        )
+        np.testing.assert_allclose(m1.weight.numpy(), m2.weight.numpy(), atol=atol)
 
     def test_adam(self) -> None:
         self._check_match(lambda p: optim.Adam(p, lr=1e-3))
@@ -192,6 +192,4 @@ class TestEngineMomentRoundTripGPU:
         x_next: lucid.Tensor = lucid.randn(3, 4).to("metal")
         _train_step(m1, opt1, x_next)
         _train_step(m2, opt2, x_next)
-        np.testing.assert_allclose(
-            m1.weight.numpy(), m2.weight.numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(m1.weight.numpy(), m2.weight.numpy(), atol=1e-5)
