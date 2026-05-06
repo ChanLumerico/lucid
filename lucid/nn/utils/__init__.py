@@ -3,6 +3,11 @@ lucid.nn.utils: utility functions for neural networks.
 """
 
 from lucid.nn.utils.clip_grad import clip_grad_norm_, clip_grad_value_
+from lucid.nn.utils.convert_parameters import (
+    parameters_to_vector,
+    vector_to_parameters,
+)
+from lucid.nn.utils.weight_norm import remove_weight_norm, weight_norm
 from lucid.nn.utils.rnn import (
     PackedSequence,
     pack_padded_sequence,
@@ -13,6 +18,10 @@ from lucid.nn.utils.rnn import (
 __all__ = [
     "clip_grad_norm_",
     "clip_grad_value_",
+    "parameters_to_vector",
+    "vector_to_parameters",
+    "weight_norm",
+    "remove_weight_norm",
     "PackedSequence",
     "pack_padded_sequence",
     "pad_packed_sequence",
