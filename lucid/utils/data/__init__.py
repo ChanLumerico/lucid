@@ -7,6 +7,8 @@ from lucid.utils.data.dataset import (
     IterableDataset,
     TensorDataset,
     ConcatDataset,
+    ChainDataset,
+    StackDataset,
     Subset,
     random_split,
 )
@@ -26,6 +28,8 @@ __all__ = [
     "IterableDataset",
     "TensorDataset",
     "ConcatDataset",
+    "ChainDataset",
+    "StackDataset",
     "Subset",
     "random_split",
     "Sampler",

@@ -149,3 +149,72 @@ def random_split(
         result.append(Subset(dataset, indices[offset : offset + length]))
         offset += length
     return result
+
+
+class ChainDataset(IterableDataset):
+    """Concatenate multiple :class:`IterableDataset` instances end-to-end.
+
+    Iteration yields every element from the first dataset, then every element
+    from the second, and so on. Mirrors ``reference framework.utils.data.ChainDataset``.
+
+    Each child must be an :class:`IterableDataset`; map-style datasets must be
+    iterated through a sampler-driven DataLoader instead.
+    """
+
+    def __init__(self, datasets: "list[IterableDataset]") -> None:
+        bad: list[type] = [
+            type(d) for d in datasets if not isinstance(d, IterableDataset)
+        ]
+        if bad:
+            raise TypeError(
+                f"ChainDataset requires IterableDataset children, got {bad}"
+            )
+        self.datasets: list[IterableDataset] = list(datasets)
+
+    def __iter__(self) -> "Iterator[Tensor | tuple[Tensor, ...]]":
+        for d in self.datasets:
+            yield from d
+
+
+class StackDataset(Dataset):
+    """Bundle several map-style datasets so each index returns a stacked tuple.
+
+    The bundled datasets must agree in length. Item ``i`` is the tuple of
+    ``d[i]`` for each child dataset — handy when paired modalities (image,
+    caption, label) live in separate sources but share an index.
+
+    Mirrors ``reference framework.utils.data.StackDataset``. Accepts both positional
+    children (``StackDataset(d1, d2)``) and keyword children
+    (``StackDataset(image=d1, label=d2)``); positional and keyword forms are
+    mutually exclusive — match the reference framework's behaviour.
+    """
+
+    def __init__(self, *args: Dataset, **kwargs: Dataset) -> None:
+        if args and kwargs:
+            raise ValueError(
+                "StackDataset takes either positional or keyword child datasets, not both"
+            )
+        children: tuple[Dataset, ...] = args if args else tuple(kwargs.values())
+        if not children:
+            raise ValueError("StackDataset requires at least one child dataset")
+        n: int = len(children[0])
+        for child in children[1:]:
+            if len(child) != n:
+                raise ValueError(
+                    f"StackDataset children must agree in length; "
+                    f"saw {n} then {len(child)}"
+                )
+        self.datasets: tuple[Dataset, ...] = children
+        self._keys: tuple[str, ...] | None = (
+            tuple(kwargs.keys()) if kwargs else None
+        )
+        self._n: int = n
+
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self, idx: int) -> tuple[object, ...] | dict[str, object]:
+        items: tuple[object, ...] = tuple(d[idx] for d in self.datasets)
+        if self._keys is not None:
+            return dict(zip(self._keys, items))
+        return items
