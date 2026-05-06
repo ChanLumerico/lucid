@@ -739,6 +739,141 @@ class TestLossParity:
         )
 
 
+class TestMHAParity:
+    """Multi-head attention parity vs the reference framework."""
+
+    @staticmethod
+    def _mirror(lp, rt):
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        new_impl = _ce.TensorImpl(
+            rt.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+        )
+        lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+
+    def _build_pair(self, **kwargs):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.MultiheadAttention(**kwargs)
+        l_mod = lnn.MultiheadAttention(**kwargs)
+        ref_sd = t_mod.state_dict()
+        if "in_proj_weight" in ref_sd:
+            self._mirror(l_mod.in_proj_weight, ref_sd["in_proj_weight"])
+            self._mirror(l_mod.in_proj_bias, ref_sd["in_proj_bias"])
+        else:
+            self._mirror(l_mod.q_proj_weight, ref_sd["q_proj_weight"])
+            self._mirror(l_mod.k_proj_weight, ref_sd["k_proj_weight"])
+            self._mirror(l_mod.v_proj_weight, ref_sd["v_proj_weight"])
+            if "in_proj_bias" in ref_sd:
+                self._mirror(l_mod.in_proj_bias, ref_sd["in_proj_bias"])
+        self._mirror(l_mod.out_proj_weight, ref_sd["out_proj.weight"])
+        if "out_proj.bias" in ref_sd:
+            self._mirror(l_mod.out_proj_bias, ref_sd["out_proj.bias"])
+        return l_mod, t_mod
+
+    def test_self_attention_forward(self):
+        l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
+        y_l, _ = l_mod(
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            need_weights=False,
+        )
+        y_t, _ = t_mod(
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            need_weights=False,
+        )
+        check_parity(y_l, y_t, atol=1e-5)
+
+    def test_self_attention_with_weights(self):
+        l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
+        rng = np.random.default_rng(1)
+        x_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
+        y_l, w_l = l_mod(
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            need_weights=True,
+            average_attn_weights=False,
+        )
+        y_t, w_t = t_mod(
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            need_weights=True,
+            average_attn_weights=False,
+        )
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(w_l, w_t, atol=1e-5)
+
+    def test_cross_attention(self):
+        l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
+        rng = np.random.default_rng(2)
+        q_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
+        kv_np = rng.standard_normal((2, 7, 16)).astype(np.float32)
+        y_l, _ = l_mod(
+            lucid.tensor(q_np.copy()),
+            lucid.tensor(kv_np.copy()),
+            lucid.tensor(kv_np.copy()),
+            need_weights=False,
+        )
+        y_t, _ = t_mod(
+            ref.tensor(q_np.copy()),
+            ref.tensor(kv_np.copy()),
+            ref.tensor(kv_np.copy()),
+            need_weights=False,
+        )
+        check_parity(y_l, y_t, atol=1e-5)
+
+    def test_kpm_forward(self):
+        l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
+        rng = np.random.default_rng(3)
+        x_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
+        kpm = np.array([[False, False, False, True, True], [False, True, True, True, True]])
+        y_l, _ = l_mod(
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            key_padding_mask=lucid.tensor(kpm.copy(), dtype=lucid.bool_),
+            need_weights=False,
+        )
+        y_t, _ = t_mod(
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            key_padding_mask=ref.tensor(kpm.copy()),
+            need_weights=False,
+        )
+        check_parity(y_l, y_t, atol=1e-5)
+
+    def test_attn_mask_2d(self):
+        l_mod, t_mod = self._build_pair(embed_dim=16, num_heads=4, batch_first=True)
+        rng = np.random.default_rng(4)
+        x_np = rng.standard_normal((2, 5, 16)).astype(np.float32)
+        am = np.triu(np.ones((5, 5), dtype=bool), k=1)  # causal-style upper triangle
+        y_l, _ = l_mod(
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            lucid.tensor(x_np.copy()),
+            attn_mask=lucid.tensor(am.copy(), dtype=lucid.bool_),
+            need_weights=False,
+        )
+        y_t, _ = t_mod(
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            ref.tensor(x_np.copy()),
+            attn_mask=ref.tensor(am.copy()),
+            need_weights=False,
+        )
+        check_parity(y_l, y_t, atol=1e-5)
+
+
 class TestLSTMProjSizeParity:
     """LSTMP (projected LSTM) numerical parity with the reference framework."""
 
@@ -805,6 +940,83 @@ class TestLSTMProjSizeParity:
         check_parity(l_mod.weight_ih_l0.grad, t_mod.weight_ih_l0.grad, atol=1e-5)
         check_parity(l_mod.weight_hh_l0.grad, t_mod.weight_hh_l0.grad, atol=1e-5)
         check_parity(l_mod.weight_hr_l0.grad, t_mod.weight_hr_l0.grad, atol=1e-5)
+
+
+class TestLSTMMultiLayerParity:
+    """Multi-layer / bidirectional LSTM parity vs reference framework."""
+
+    @staticmethod
+    def _mirror_state_dict(l_mod, t_mod):
+        from lucid._C import engine as _ce
+        from lucid._tensor.tensor import _impl_with_grad as _iwg
+
+        sd = t_mod.state_dict()
+        for key, t in sd.items():
+            lp = getattr(l_mod, key)
+            new_impl = _ce.TensorImpl(
+                t.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+            )
+            lp._impl = _iwg(new_impl, lp._impl.requires_grad)
+
+    def test_multi_layer_forward(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.LSTM(4, 8, num_layers=2)
+        l_mod = lnn.LSTM(4, 8, num_layers=2)
+        self._mirror_state_dict(l_mod, t_mod)
+        rng = np.random.default_rng(0)
+        x_np = rng.standard_normal((5, 2, 4)).astype(np.float32)
+        y_l, (hn_l, cn_l) = l_mod(lucid.tensor(x_np.copy()))
+        y_t, (hn_t, cn_t) = t_mod(ref.tensor(x_np.copy()))
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(hn_l, hn_t, atol=1e-5)
+        check_parity(cn_l, cn_t, atol=1e-5)
+
+    def test_bidirectional_forward(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.LSTM(4, 8, bidirectional=True)
+        l_mod = lnn.LSTM(4, 8, bidirectional=True)
+        self._mirror_state_dict(l_mod, t_mod)
+        rng = np.random.default_rng(1)
+        x_np = rng.standard_normal((5, 2, 4)).astype(np.float32)
+        y_l, (hn_l, cn_l) = l_mod(lucid.tensor(x_np.copy()))
+        y_t, (hn_t, cn_t) = t_mod(ref.tensor(x_np.copy()))
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(hn_l, hn_t, atol=1e-5)
+        check_parity(cn_l, cn_t, atol=1e-5)
+
+    def test_multi_layer_bidirectional_forward(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.LSTM(4, 8, num_layers=2, bidirectional=True)
+        l_mod = lnn.LSTM(4, 8, num_layers=2, bidirectional=True)
+        self._mirror_state_dict(l_mod, t_mod)
+        rng = np.random.default_rng(2)
+        x_np = rng.standard_normal((5, 2, 4)).astype(np.float32)
+        y_l, (hn_l, cn_l) = l_mod(lucid.tensor(x_np.copy()))
+        y_t, (hn_t, cn_t) = t_mod(ref.tensor(x_np.copy()))
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(hn_l, hn_t, atol=1e-5)
+        check_parity(cn_l, cn_t, atol=1e-5)
+
+    def test_multi_layer_proj_size(self):
+        import lucid.nn as lnn
+
+        ref.manual_seed(0)
+        t_mod = ref.nn.LSTM(4, 8, num_layers=2, proj_size=3)
+        l_mod = lnn.LSTM(4, 8, num_layers=2, proj_size=3)
+        self._mirror_state_dict(l_mod, t_mod)
+        rng = np.random.default_rng(3)
+        x_np = rng.standard_normal((5, 2, 4)).astype(np.float32)
+        y_l, (hn_l, cn_l) = l_mod(lucid.tensor(x_np.copy()))
+        y_t, (hn_t, cn_t) = t_mod(ref.tensor(x_np.copy()))
+        check_parity(y_l, y_t, atol=1e-5)
+        check_parity(hn_l, hn_t, atol=1e-5)
+        check_parity(cn_l, cn_t, atol=1e-5)
 
 
 class TestSDPAParity:

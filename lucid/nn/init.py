@@ -160,26 +160,105 @@ def trunc_normal_(
 
 
 def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
-    """Fill tensor with a (semi-)orthogonal matrix via SVD."""
-    rows = tensor.shape[0]
-    cols = tensor.numel() // rows
-    dt = tensor._impl.dtype
-    dev = tensor._impl.device
-    flat = _C_engine.normal([rows, cols], 0.0, 1.0, dt, dev)
-    # linalg.svd returns (U, S, Vt) as a Python tuple.
-    svd_result = _C_engine.linalg.svd(flat, True)
-    U = svd_result[0]  # (rows, min(rows,cols))
-    Vt = svd_result[2]  # (min(rows,cols), cols)
-    q = U if rows < cols else Vt
-    # Slice q to (rows, cols) via gather on both axes.
-    r_idx = _C_engine.arange(0, rows, 1, _C_engine.I32, dev)
-    c_idx = _C_engine.arange(0, cols, 1, _C_engine.I32, dev)
-    q = _C_engine.gather(q, r_idx, 0)
-    q = _C_engine.gather(q, c_idx, 1)
+    """Fill tensor with a (semi-)orthogonal matrix via QR.
+
+    For tensors with rank > 2 the leading axis is flattened against the
+    rest, the resulting 2-D matrix is made orthogonal, and the original
+    shape is restored — matching the reference framework.
+    """
+    import lucid as _lucid
+    import numpy as _np
+
+    if tensor.ndim < 2:
+        raise ValueError("orthogonal_() requires at least a 2D tensor")
+    rows: int = int(tensor.shape[0])
+    cols: int = int(tensor.numel() // rows)
+    rng: _np.random.Generator = _np.random.default_rng()
+    flat: _np.ndarray = rng.normal(0.0, 1.0, size=(rows, cols)).astype(_np.float32)
+    # Use QR on the (max-dim × min-dim) shape so we always get an
+    # orthonormal Q with the right number of columns.
+    if rows < cols:
+        # Q is (cols × rows), transpose for the (rows × cols) layout.
+        q_full, _ = _np.linalg.qr(flat.T)
+        q: _np.ndarray = q_full[:, :rows].T
+    else:
+        q, _ = _np.linalg.qr(flat)
+        q = q[:, :cols]
     if gain != 1.0:
-        g = _C_engine.full([rows, cols], gain, dt, dev)
-        q = _C_engine.mul(q, g)
-    return _fill_from_impl(tensor, q)
+        q = q * gain
+    src_t: Tensor = _lucid.tensor(
+        q.astype(_np.float32), dtype=tensor._impl.dtype, device=tensor._impl.device
+    )
+    return _fill_from_impl(tensor, src_t._impl)
+
+
+def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
+    """Fill a 2-D tensor in-place with a sparse matrix.
+
+    Each column has ``floor(sparsity * rows)`` zero entries (drawn at
+    random); the remaining entries are sampled from ``N(0, std²)``.
+    Only 2-D tensors are supported, matching the reference framework.
+    """
+    if tensor.ndim != 2:
+        raise ValueError("sparse_() requires a 2D tensor")
+    if not 0.0 <= sparsity <= 1.0:
+        raise ValueError(f"sparsity must be in [0, 1], got {sparsity!r}")
+
+    import lucid as _lucid
+    import numpy as _np
+
+    rows: int = int(tensor.shape[0])
+    cols: int = int(tensor.shape[1])
+    n_zero: int = int(math.floor(sparsity * rows))
+    rng: _np.random.Generator = _np.random.default_rng()
+    arr: _np.ndarray = rng.normal(0.0, std, size=(rows, cols)).astype(_np.float32)
+    for c in range(cols):
+        idx: _np.ndarray = rng.choice(rows, size=n_zero, replace=False)
+        arr[idx, c] = 0.0
+    src_t: Tensor = _lucid.tensor(
+        arr, dtype=tensor._impl.dtype, device=tensor._impl.device
+    )
+    return _fill_from_impl(tensor, src_t._impl)
+
+
+def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
+    """Fill a 3/4/5-D tensor in-place with a Dirac-delta filter.
+
+    Conv weights of shape ``(out_channels, in_channels // groups, *K)``
+    are filled so the convolution acts as the identity (per group, with
+    the kernel centred).  Useful for residual / identity initialisation.
+    """
+    if tensor.ndim not in (3, 4, 5):
+        raise ValueError(
+            f"dirac_() expects a 3/4/5-D tensor; got ndim={tensor.ndim}"
+        )
+    out_ch: int = int(tensor.shape[0])
+    in_ch_per_group: int = int(tensor.shape[1])
+    if out_ch % groups != 0:
+        raise ValueError(
+            f"out_channels ({out_ch}) must be divisible by groups ({groups})"
+        )
+
+    import lucid as _lucid
+    import numpy as _np
+
+    out_per_group: int = out_ch // groups
+    min_dim: int = min(in_ch_per_group, out_per_group)
+    arr: _np.ndarray = _np.zeros(
+        [int(s) for s in tensor.shape], dtype=_np.float32
+    )
+    # Centre indices for each spatial dim.
+    spatial_centres: tuple[int, ...] = tuple(
+        int(s) // 2 for s in tensor.shape[2:]
+    )
+    for g in range(groups):
+        for d in range(min_dim):
+            out_idx: int = g * out_per_group + d
+            arr[(out_idx, d) + spatial_centres] = 1.0
+    src_t: Tensor = _lucid.tensor(
+        arr, dtype=tensor._impl.dtype, device=tensor._impl.device
+    )
+    return _fill_from_impl(tensor, src_t._impl)
 
 
 def calculate_gain(nonlinearity: str, param: float | None = None) -> float:

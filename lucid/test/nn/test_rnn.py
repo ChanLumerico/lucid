@@ -140,13 +140,25 @@ class TestLSTMProjSize:
         assert m.weight_hh_l0.grad.shape == m.weight_hh_l0.shape
         assert m.weight_hr_l0.grad.shape == m.weight_hr_l0.shape
 
-    def test_proj_size_with_multilayer_rejected(self):
-        with pytest.raises(NotImplementedError, match="proj_size"):
-            nn.LSTM(8, 16, num_layers=2, proj_size=4)
+    def test_proj_size_with_multilayer_supported(self):
+        # The Python multi-layer driver composes single-layer engine
+        # calls, so proj_size now works with stacked layers.
+        m = nn.LSTM(8, 16, num_layers=2, proj_size=4)
+        x = make_tensor((5, 2, 8))
+        out, (hn, cn) = m(x)
+        # Output / hn carry the projected dim; cn keeps the cell-state dim.
+        assert out.shape == (5, 2, 4)
+        assert hn.shape == (2, 2, 4)
+        assert cn.shape == (2, 2, 16)
 
-    def test_proj_size_with_bidirectional_rejected(self):
-        with pytest.raises(NotImplementedError, match="proj_size"):
-            nn.LSTM(8, 16, bidirectional=True, proj_size=4)
+    def test_proj_size_with_bidirectional_supported(self):
+        m = nn.LSTM(8, 16, num_layers=1, bidirectional=True, proj_size=4)
+        x = make_tensor((5, 2, 8))
+        out, (hn, cn) = m(x)
+        # Bidirectional concatenates forward + reverse → 2 * proj_size.
+        assert out.shape == (5, 2, 8)
+        assert hn.shape == (2, 2, 4)
+        assert cn.shape == (2, 2, 16)
 
     def test_proj_size_validation(self):
         with pytest.raises(ValueError, match="proj_size"):
@@ -209,19 +221,22 @@ class TestStackedBidirectional:
         assert hn.shape == (2 * 2, 4, 16)
 
     def test_lstm_single_layer_bidirectional(self):
-        # LSTM bidirectional is dispatched into the engine; multi-layer
-        # support there is a separate engine fix.  Cover the single-layer
-        # bidirectional case (which the current engine does handle via
-        # BNNS for inference and the BLAS path for training).
         m = nn.LSTM(8, 16, num_layers=1, bidirectional=True, batch_first=True)
         x = make_tensor((4, 6, 8))
         y, (hn, cn) = m(x)
-        # LSTM concatenates forward + backward outputs along the last dim.
-        assert y.shape[0] == 4
-        assert y.shape[1] == 6
-        # Hidden / cell carry per-direction layers: (1*2, B, H).
-        assert hn.shape[-2:] == (4, 16)
-        assert cn.shape[-2:] == (4, 16)
+        # Concatenated forward + reverse along the last dim.
+        assert y.shape == (4, 6, 32)
+        # Per-direction layer states: (D*L, B, H).
+        assert hn.shape == (2, 4, 16)
+        assert cn.shape == (2, 4, 16)
+
+    def test_lstm_multi_layer_bidirectional(self):
+        m = nn.LSTM(8, 16, num_layers=2, bidirectional=True, batch_first=True)
+        x = make_tensor((4, 6, 8))
+        y, (hn, cn) = m(x)
+        assert y.shape == (4, 6, 32)
+        assert hn.shape == (4, 4, 16)
+        assert cn.shape == (4, 4, 16)
 
 
 class TestGRURNNStateDictNaming:

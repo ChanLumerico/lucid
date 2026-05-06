@@ -227,12 +227,11 @@ class LSTM(Module):
                 f"proj_size ({proj_size}) must be smaller than hidden_size "
                 f"({hidden_size})"
             )
-        if proj_size > 0 and (num_layers != 1 or bidirectional):
-            raise NotImplementedError(
-                "proj_size > 0 currently requires num_layers=1 and "
-                "bidirectional=False; the engine does not yet support the "
-                "projected LSTM with stacked / bidirectional configurations."
-            )
+        # proj_size > 0 with multi-layer / bidirectional configurations is
+        # composed in Python by looping single-layer engine calls — see
+        # ``forward``.  The C++ engine itself still handles only the
+        # single-layer single-direction case; the Python wrapper bridges
+        # the gap.
         self.input_size: int = input_size
         self.hidden_size: int = hidden_size
         self.num_layers: int = num_layers
@@ -299,70 +298,151 @@ class LSTM(Module):
         """
         return None
 
+    def _reverse_along_time(self, x: "Tensor") -> "Tensor":
+        """Flip a sequence-major tensor along the time (axis-0) dimension.
+
+        Implemented via ``gather`` so the backward path works correctly —
+        the engine's ``Tensor.flip`` backward is currently broken.
+        """
+        import lucid as _lucid
+        import numpy as _np
+
+        T: int = int(x.shape[0])
+        rev_idx_1d: _np.ndarray = _np.arange(T - 1, -1, -1, dtype=_np.int32)
+        target_shape: list[int] = [1] * x.ndim
+        target_shape[0] = T
+        idx_np: _np.ndarray = _np.broadcast_to(
+            rev_idx_1d.reshape(target_shape),
+            tuple(int(s) for s in x.shape),
+        ).copy()
+        idx: "Tensor" = _lucid.tensor(idx_np, dtype=_lucid.int32)
+        return _lucid.gather(x, idx, 0)
+
+    def _run_single_layer_engine(
+        self,
+        layer_input: "Tensor",
+        h0_layer: "Tensor",
+        c0_layer: "Tensor",
+        layer: int,
+        direction: int,
+    ) -> "tuple[Tensor, Tensor, Tensor]":
+        """Run one ``lstm_forward`` engine call for a single layer / direction."""
+        import numpy as _np
+
+        suffix: str = "_reverse" if direction == 1 else ""
+        weights: list[object] = []
+        weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
+        weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
+        gate_size: int = 4 * self.hidden_size
+        if self.bias:
+            weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
+            weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+        else:
+            dev = _unwrap(layer_input).device
+            zero_b = _C_engine.TensorImpl(
+                _np.zeros(gate_size, dtype="float32"), dev, False
+            )
+            weights.append(zero_b)
+            weights.append(zero_b)
+        if self.proj_size > 0:
+            weights.append(
+                _unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"])
+            )
+
+        out_impl, h_impl, c_impl = _C_engine.nn.lstm_forward(
+            _unwrap(layer_input),
+            _unwrap(h0_layer),
+            _unwrap(c0_layer),
+            weights,
+            self.hidden_size,
+            1,            # single-layer engine call
+            False,        # batch_first handled by us
+            False,        # bidirectional handled by us
+            True,
+            self.proj_size,
+        )
+        return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
+
     def forward(
         self,
         x: "Tensor",
         hx: "tuple[Tensor, Tensor] | None" = None,
     ) -> "tuple[Tensor, tuple[Tensor, Tensor]]":
+        """Multi-layer × bidirectional forward.
+
+        The C++ engine only handles a single layer in a single direction
+        at a time, so this loops over layers and directions, applying
+        inter-layer dropout and concatenating bidirectional outputs as
+        the input to the next layer.
+        """
+        import lucid as _lucid
+
         _check_not_packed(x, "LSTM")
-        h0_impl: object | None = _unwrap(hx[0]) if hx is not None else None
-        c0_impl: object | None = _unwrap(hx[1]) if hx is not None else None
 
+        if self.batch_first:
+            x = x.permute([1, 0, 2])
+
+        T: int = int(x.shape[0])
+        B: int = int(x.shape[1])
         num_dirs: int = 2 if self.bidirectional else 1
-        gate_size: int = 4 * self.hidden_size
+        L: int = self.num_layers
+        rec_size: int = self.proj_size if self.proj_size > 0 else self.hidden_size
 
-        weights: list[object] = []
-        for layer in range(self.num_layers):
+        # Allocate / split the initial states.
+        if hx is None:
+            h0_full: "Tensor" = _lucid.zeros(
+                L * num_dirs, B, rec_size, device=x.device, dtype=x.dtype
+            )
+            c0_full: "Tensor" = _lucid.zeros(
+                L * num_dirs, B, self.hidden_size, device=x.device, dtype=x.dtype
+            )
+        else:
+            h0_full, c0_full = hx
+
+        h_n_layers: list["Tensor"] = []
+        c_n_layers: list["Tensor"] = []
+
+        layer_input: "Tensor" = x
+
+        for layer in range(L):
+            dir_outs: list["Tensor"] = []
             for direction in range(num_dirs):
-                suffix: str = "_reverse" if direction == 1 else ""
-                weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
-                weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
-                if self.bias:
-                    weights.append(
-                        _unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"])
-                    )
-                    weights.append(
-                        _unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"])
-                    )
-                else:
-                    # Engine training path requires bias tensors; supply zeros
-                    # so computation is equivalent to bias=False.
-                    dev = _unwrap(x).device
-                    dt = _unwrap(x).dtype
-                    zero_b = _C_engine.TensorImpl(
-                        __import__("numpy").zeros(gate_size, dtype="float32"),
-                        dev,
-                        False,
-                    )
-                    weights.append(zero_b)
-                    weights.append(zero_b)
-                if self.proj_size > 0:
-                    weights.append(
-                        _unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"])
-                    )
+                idx: int = layer * num_dirs + direction
+                # Slice (1, B, *) initial state for this layer/direction.
+                h0_slice: "Tensor" = h0_full[idx : idx + 1]
+                c0_slice: "Tensor" = c0_full[idx : idx + 1]
 
-        x_impl = _unwrap(x)
+                inp: "Tensor" = (
+                    self._reverse_along_time(layer_input) if direction == 1 else layer_input
+                )
+                out, h_n, c_n = self._run_single_layer_engine(
+                    inp, h0_slice, c0_slice, layer, direction
+                )
+                if direction == 1:
+                    out = self._reverse_along_time(out)
+                dir_outs.append(out)
+                h_n_layers.append(h_n)
+                c_n_layers.append(c_n)
+
+            # Combine forward / reverse outputs along the feature axis.
+            if num_dirs == 2:
+                layer_input = _lucid.cat(dir_outs, 2)
+            else:
+                layer_input = dir_outs[0]
+
+            # Inter-layer dropout (skip after the last layer).
+            if self.dropout_val > 0.0 and layer < L - 1 and self.training:
+                from lucid.nn.functional.dropout import dropout as _dropout
+
+                layer_input = _dropout(layer_input, self.dropout_val, training=True)
+
+        h_n_final: "Tensor" = _lucid.cat(h_n_layers, 0)
+        c_n_final: "Tensor" = _lucid.cat(c_n_layers, 0)
+
         if self.batch_first:
-            x_impl = _C_engine.permute(x_impl, [1, 0, 2])
+            layer_input = layer_input.permute([1, 0, 2])
 
-        output_impl, h_n_impl, c_n_impl = _C_engine.nn.lstm_forward(
-            x_impl,
-            h0_impl,
-            c0_impl,
-            weights,
-            self.hidden_size,
-            self.num_layers,
-            False,
-            self.bidirectional,
-            True,  # always True: we always supply bias tensors above
-            self.proj_size,
-        )
-
-        output = _wrap(output_impl)
-        if self.batch_first:
-            output = _wrap(_C_engine.permute(output._impl, [1, 0, 2]))
-
-        return output, (_wrap(h_n_impl), _wrap(c_n_impl))
+        return layer_input, (h_n_final, c_n_final)
 
     def extra_repr(self) -> str:
         s: str = (
