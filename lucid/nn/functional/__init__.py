@@ -92,6 +92,9 @@ from lucid.nn.functional.sampling import (
     unfold,
     fold,
     embedding_bag,
+    pixel_shuffle,
+    pixel_unshuffle,
+    multi_head_attention_forward,
 )
 
 __all__ = [
@@ -188,4 +191,7 @@ __all__ = [
     "unfold",
     "fold",
     "embedding_bag",
+    "pixel_shuffle",
+    "pixel_unshuffle",
+    "multi_head_attention_forward",
 ]

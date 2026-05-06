@@ -366,3 +366,134 @@ def pad(
             continue
         result = _pad_one_dim(result, d, lo, hi, mode)
     return result
+
+
+def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:
+    """Rearrange ``(N, C·r², H, W)`` → ``(N, C, H·r, W·r)`` for a 4-D input.
+
+    The transformation is a reshape + permute + reshape — autograd flows
+    through ``ReshapeBackward`` and ``PermuteBackward`` automatically.
+    """
+    r: int = int(upscale_factor)
+    if len(x.shape) != 4:
+        raise ValueError(f"pixel_shuffle: expected 4-D input, got shape {tuple(x.shape)}")
+    n, c_r2, h, w = x.shape
+    if c_r2 % (r * r) != 0:
+        raise ValueError(
+            f"pixel_shuffle: channels {c_r2} not divisible by upscale_factor² ({r * r})"
+        )
+    c: int = c_r2 // (r * r)
+    impl = _unwrap(x)
+    t = _C_engine.reshape(impl, [n, c, r, r, h, w])
+    t = _C_engine.permute(t, [0, 1, 4, 2, 5, 3])
+    return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
+
+
+def pixel_unshuffle(x: Tensor, downscale_factor: int) -> Tensor:
+    """Inverse of ``pixel_shuffle``: ``(N, C, H·r, W·r)`` → ``(N, C·r², H, W)``."""
+    r: int = int(downscale_factor)
+    if len(x.shape) != 4:
+        raise ValueError(f"pixel_unshuffle: expected 4-D input, got shape {tuple(x.shape)}")
+    n, c, h_r, w_r = x.shape
+    if h_r % r != 0 or w_r % r != 0:
+        raise ValueError(
+            f"pixel_unshuffle: spatial dims ({h_r}, {w_r}) not divisible by {r}"
+        )
+    h, w = h_r // r, w_r // r
+    impl = _unwrap(x)
+    t = _C_engine.reshape(impl, [n, c, h, r, w, r])
+    t = _C_engine.permute(t, [0, 1, 3, 5, 2, 4])
+    return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
+
+
+def multi_head_attention_forward(
+    query: Tensor,
+    key: Tensor,
+    value: Tensor,
+    embed_dim_to_check: int,
+    num_heads: int,
+    in_proj_weight: Tensor | None = None,
+    in_proj_bias: Tensor | None = None,
+    bias_k: Tensor | None = None,
+    bias_v: Tensor | None = None,
+    add_zero_attn: bool = False,
+    dropout_p: float = 0.0,
+    out_proj_weight: Tensor | None = None,
+    out_proj_bias: Tensor | None = None,
+    training: bool = True,
+    key_padding_mask: Tensor | None = None,
+    need_weights: bool = True,
+    attn_mask: Tensor | None = None,
+    use_separate_proj_weight: bool = False,
+    q_proj_weight: Tensor | None = None,
+    k_proj_weight: Tensor | None = None,
+    v_proj_weight: Tensor | None = None,
+    static_k: Tensor | None = None,
+    static_v: Tensor | None = None,
+    average_attn_weights: bool = True,
+    is_causal: bool = False,
+) -> tuple[Tensor, Tensor | None]:
+    """Stateless functional form of ``MultiheadAttention.forward``.
+
+    Mirrors the reference framework's ``F.multi_head_attention_forward`` —
+    the same signature ``MultiheadAttention`` calls internally.  Most users
+    should reach for the ``MultiheadAttention`` module instead; this lives
+    here for code that builds attention layers without instantiating a module
+    (e.g. when porting reference code that calls the functional directly).
+
+    The implementation delegates the heavy lifting to a temporary
+    ``MultiheadAttention`` whose parameters are bound to the supplied
+    weight tensors — keeps the behaviour bit-identical to the module.
+    """
+    from lucid.nn.modules.attention import MultiheadAttention
+
+    # The unused-but-validated arguments below are kept on the signature for
+    # ``F.multi_head_attention_forward`` source-level compatibility.  Static
+    # K/V and zero-attn slots are advanced features the module path doesn't
+    # cover yet — they raise rather than silently misbehaving.
+    if static_k is not None or static_v is not None:
+        raise NotImplementedError("multi_head_attention_forward: static_k/static_v unsupported")
+    if add_zero_attn:
+        raise NotImplementedError("multi_head_attention_forward: add_zero_attn unsupported")
+    if use_separate_proj_weight:
+        raise NotImplementedError(
+            "multi_head_attention_forward: use_separate_proj_weight unsupported"
+        )
+
+    # Build a temporary module; bind external weights so the call mirrors the
+    # functional contract exactly.
+    mha: MultiheadAttention = MultiheadAttention(
+        embed_dim=int(embed_dim_to_check),
+        num_heads=int(num_heads),
+        dropout=float(dropout_p),
+        bias=in_proj_bias is not None or out_proj_bias is not None,
+        add_bias_kv=bias_k is not None,
+        batch_first=False,
+    )
+    if in_proj_weight is not None and mha.in_proj_weight is not None:
+        mha.in_proj_weight._impl = _unwrap(in_proj_weight)
+    if in_proj_bias is not None and mha.in_proj_bias is not None:
+        mha.in_proj_bias._impl = _unwrap(in_proj_bias)
+    if out_proj_weight is not None:
+        mha.out_proj_weight._impl = _unwrap(out_proj_weight)
+    if out_proj_bias is not None and mha.out_proj_bias is not None:
+        mha.out_proj_bias._impl = _unwrap(out_proj_bias)
+    if bias_k is not None and mha.bias_k is not None:
+        mha.bias_k._impl = _unwrap(bias_k)
+    if bias_v is not None and mha.bias_v is not None:
+        mha.bias_v._impl = _unwrap(bias_v)
+
+    if training:
+        mha.train()
+    else:
+        mha.eval()
+    return mha(
+        query,
+        key,
+        value,
+        key_padding_mask=key_padding_mask,
+        need_weights=need_weights,
+        attn_mask=attn_mask,
+        average_attn_weights=average_attn_weights,
+        is_causal=is_causal,
+    )
