@@ -503,20 +503,9 @@ class Tensor[DT: dtype, DV: device]:
         self._impl.copy_from(src)
         return self
 
-    def flip(self, dims: int | list[int]) -> Self:
-        """Reverse the tensor along the given dimension(s)."""
-        dims_list = [dims] if isinstance(dims, int) else list(dims)
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
-            _C_engine.flip(self._impl, dims_list)
-        )
-
-    def fliplr(self) -> Self:
-        """Reverse the tensor along dimension 1 (left-right)."""
-        return self.flip(1)
-
-    def flipud(self) -> Self:
-        """Reverse the tensor along dimension 0 (up-down)."""
-        return self.flip(0)
+    # ``flip`` / ``fliplr`` / ``flipud`` are auto-injected from the registry
+    # (see ``_ops/_registry.py``); the previous explicit definitions
+    # duplicated that path.
 
     def index_select(self, dim: int, index: Self) -> Self:
         """Select elements along dim using integer index tensor."""

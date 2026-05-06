@@ -180,6 +180,26 @@ def _expand_adapter(x_impl, *sizes):
     return _C_engine.expand(x_impl, s)
 
 
+def _flip_adapter(x_impl, dims):
+    """flip(x, dims) — accept ``dims=int`` or list/tuple of ints."""
+    dims_list = [int(dims)] if isinstance(dims, int) else [int(d) for d in dims]
+    return _C_engine.flip(x_impl, dims_list)
+
+
+def _fliplr_adapter(x_impl):
+    """fliplr(x) — flip along axis 1.  ``x`` must be at least 2-D."""
+    if len(x_impl.shape) < 2:
+        raise ValueError(f"fliplr: input must be at least 2-D, got shape {tuple(x_impl.shape)}")
+    return _C_engine.flip(x_impl, [1])
+
+
+def _flipud_adapter(x_impl):
+    """flipud(x) — flip along axis 0.  ``x`` must be at least 1-D."""
+    if len(x_impl.shape) < 1:
+        raise ValueError(f"flipud: input must be at least 1-D, got shape {tuple(x_impl.shape)}")
+    return _C_engine.flip(x_impl, [0])
+
+
 def _squeeze_adapter(x_impl, dim=None):
     """squeeze(x, dim=None) — None drops all size-1; list squeezes multiple."""
     if dim is None:

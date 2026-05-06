@@ -144,6 +144,39 @@ class TestFlip:
         out.sum().backward()
         np.testing.assert_allclose(t.grad.numpy(), np.ones((2, 2)))
 
+    def test_flip_top_level_function(self):
+        # Top-level ``lucid.flip`` matches the Tensor method.
+        t: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        np.testing.assert_allclose(
+            lucid.flip(t, [0]).numpy(), t.flip([0]).numpy()
+        )
+
+    def test_flip_accepts_int_dim(self):
+        # ``flip(t, 0)`` and ``flip(t, [0])`` must agree.
+        t: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        np.testing.assert_allclose(
+            lucid.flip(t, 0).numpy(), lucid.flip(t, [0]).numpy()
+        )
+
+    def test_fliplr(self):
+        t: lucid.Tensor = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        np.testing.assert_allclose(
+            lucid.fliplr(t).numpy(),
+            np.array([[3.0, 2.0, 1.0], [6.0, 5.0, 4.0]]),
+        )
+
+    def test_fliplr_rejects_1d(self):
+        t: lucid.Tensor = lucid.tensor([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="2-D"):
+            lucid.fliplr(t)
+
+    def test_flipud(self):
+        t: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        np.testing.assert_allclose(
+            lucid.flipud(t).numpy(),
+            np.array([[5.0, 6.0], [3.0, 4.0], [1.0, 2.0]]),
+        )
+
 
 class TestPad:
     def test_pad_1d(self):
