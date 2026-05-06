@@ -116,35 +116,82 @@ class TestLBFGSRoundTrip:
         assert opt2._lbfgs_state["H_diag"] == opt._lbfgs_state["H_diag"]
 
 
-class TestEngineMomentGap:
-    """Documents the known limitation that engine-managed moment buffers
-    (Adam m/v, SGD momentum) do NOT round-trip. Marked xfail so the gap is
-    visible but the suite stays green; remove the marker when C++ extraction
-    lands."""
+class TestEngineMomentRoundTrip:
+    """Engine-managed buffers (Adam moments, SGD momentum) round-trip through
+    ``state_dict``. The fixture trains opt1, snapshots both model and
+    optimizer, restores into a fresh pair, then runs one more step on each
+    and asserts the parameter updates are bit-identical."""
 
-    @pytest.mark.xfail(
-        reason="engine-managed Adam moment buffers (m, v) are not yet exposed "
-        "for state_dict round-trip — see lucid/optim/optimizer.py",
-        strict=True,
-    )
-    def test_adam_moments_survive_roundtrip(self) -> None:
-        np.random.seed(0)
+    def _check_match(
+        self,
+        make_opt: object,
+        seed: int = 0,
+        n_steps: int = 5,
+        atol: float = 1e-6,
+    ) -> None:
+        np.random.seed(seed)
         m1: nn.Linear = nn.Linear(4, 2)
-        m2: nn.Linear = nn.Linear(4, 2)
-        m2.load_state_dict(m1.state_dict())
-
-        opt1: optim.Adam = optim.Adam(m1.parameters(), lr=1e-3)
-        opt2: optim.Adam = optim.Adam(m2.parameters(), lr=1e-3)
-
+        opt1: optim.Optimizer = make_opt(m1.parameters())  # type: ignore[operator]
         x: lucid.Tensor = lucid.randn(3, 4)
-        for _ in range(5):
+        for _ in range(n_steps):
             _train_step(m1, opt1, x)
 
+        m2: nn.Linear = nn.Linear(4, 2)
+        m2.load_state_dict(m1.state_dict())
+        opt2: optim.Optimizer = make_opt(m2.parameters())  # type: ignore[operator]
         opt2.load_state_dict(opt1.state_dict())
-        # Run one more step on each — without restored moments the updates diverge.
+
         x_next: lucid.Tensor = lucid.randn(3, 4)
         _train_step(m1, opt1, x_next)
         _train_step(m2, opt2, x_next)
         np.testing.assert_allclose(
-            m1.weight.numpy(), m2.weight.numpy(), atol=1e-6
+            m1.weight.numpy(), m2.weight.numpy(), atol=atol
+        )
+
+    def test_adam(self) -> None:
+        self._check_match(lambda p: optim.Adam(p, lr=1e-3))
+
+    def test_adamw(self) -> None:
+        self._check_match(lambda p: optim.AdamW(p, lr=1e-3))
+
+    def test_sgd_with_momentum(self) -> None:
+        self._check_match(lambda p: optim.SGD(p, lr=1e-2, momentum=0.9))
+
+    def test_sgd_no_momentum(self) -> None:
+        # No momentum buffer to round-trip — should still work end-to-end.
+        self._check_match(lambda p: optim.SGD(p, lr=1e-2))
+
+    def test_adam_step_count_restored(self) -> None:
+        np.random.seed(0)
+        m: nn.Linear = nn.Linear(4, 2)
+        opt: optim.Adam = optim.Adam(m.parameters(), lr=1e-3)
+        x: lucid.Tensor = lucid.randn(3, 4)
+        for _ in range(7):
+            _train_step(m, opt, x)
+        sd: dict[str, object] = opt.state_dict()
+        # Each per-slot snapshot carries the (group-wide) step counter.
+        assert sd["state"][0]["step"] == 7  # type: ignore[index]
+
+
+class TestEngineMomentRoundTripGPU:
+    """GPU optimizer state must round-trip the same as CPU — the C++ snapshot
+    path goes through ``mlx::core::array`` clone instead of memcpy, which is a
+    distinct code path worth locking down."""
+
+    def test_adam_gpu(self) -> None:
+        np.random.seed(0)
+        m1: nn.Linear = nn.Linear(4, 2).to("metal")
+        opt1: optim.Adam = optim.Adam(m1.parameters(), lr=1e-3)
+        x: lucid.Tensor = lucid.randn(3, 4).to("metal")
+        for _ in range(3):
+            _train_step(m1, opt1, x)
+        m2: nn.Linear = nn.Linear(4, 2).to("metal")
+        m2.load_state_dict(m1.state_dict())
+        opt2: optim.Adam = optim.Adam(m2.parameters(), lr=1e-3)
+        opt2.load_state_dict(opt1.state_dict())
+        x_next: lucid.Tensor = lucid.randn(3, 4).to("metal")
+        _train_step(m1, opt1, x_next)
+        _train_step(m2, opt2, x_next)
+        np.testing.assert_allclose(
+            m1.weight.numpy(), m2.weight.numpy(), atol=1e-5
         )

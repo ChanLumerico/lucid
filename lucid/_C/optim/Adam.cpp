@@ -219,6 +219,56 @@ void Adam::update_one(std::size_t slot_idx,
     pc.bump_version();
 }
 
+std::vector<Optimizer::NamedBuffers> Adam::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    if (m_.empty())
+        return out;
+    std::vector<std::shared_ptr<TensorImpl>> ms;
+    std::vector<std::shared_ptr<TensorImpl>> vs;
+    ms.reserve(params_.size());
+    vs.reserve(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
+            ms.push_back(nullptr);
+            vs.push_back(nullptr);
+            continue;
+        }
+        const auto& p = params_[i];
+        ms.push_back(clone_state_storage(m_[i], p->shape(), p->dtype(), p->device()));
+        vs.push_back(clone_state_storage(v_[i], p->shape(), p->dtype(), p->device()));
+    }
+    out.emplace_back("exp_avg", std::move(ms));
+    out.emplace_back("exp_avg_sq", std::move(vs));
+    return out;
+}
+
+void Adam::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    if (m_.size() != params_.size())
+        m_.resize(params_.size());
+    if (v_.size() != params_.size())
+        v_.resize(params_.size());
+    if (state_initialized_.size() != params_.size())
+        state_initialized_.assign(params_.size(), false);
+    for (const auto& [name, tensors] : bufs) {
+        std::vector<Storage>* dst = nullptr;
+        if (name == "exp_avg")
+            dst = &m_;
+        else if (name == "exp_avg_sq")
+            dst = &v_;
+        else
+            continue;
+        for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
+            if (!tensors[i] || !params_[i])
+                continue;
+            if (!state_initialized_[i]) {
+                init_state_slot(i, params_[i]);
+                state_initialized_[i] = true;
+            }
+            overwrite_state_storage((*dst)[i], tensors[i]->storage());
+        }
+    }
+}
+
 AdamW::AdamW(std::vector<std::shared_ptr<TensorImpl>> params,
              double lr,
              double beta1,
@@ -294,6 +344,56 @@ void AdamW::update_one(std::size_t slot_idx,
         ErrorBuilder("AdamW").not_implemented("dtype not supported (F32/F64)");
     }
     pc.bump_version();
+}
+
+std::vector<Optimizer::NamedBuffers> AdamW::state_buffers() const {
+    std::vector<NamedBuffers> out;
+    if (m_.empty())
+        return out;
+    std::vector<std::shared_ptr<TensorImpl>> ms;
+    std::vector<std::shared_ptr<TensorImpl>> vs;
+    ms.reserve(params_.size());
+    vs.reserve(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
+            ms.push_back(nullptr);
+            vs.push_back(nullptr);
+            continue;
+        }
+        const auto& p = params_[i];
+        ms.push_back(clone_state_storage(m_[i], p->shape(), p->dtype(), p->device()));
+        vs.push_back(clone_state_storage(v_[i], p->shape(), p->dtype(), p->device()));
+    }
+    out.emplace_back("exp_avg", std::move(ms));
+    out.emplace_back("exp_avg_sq", std::move(vs));
+    return out;
+}
+
+void AdamW::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    if (m_.size() != params_.size())
+        m_.resize(params_.size());
+    if (v_.size() != params_.size())
+        v_.resize(params_.size());
+    if (state_initialized_.size() != params_.size())
+        state_initialized_.assign(params_.size(), false);
+    for (const auto& [name, tensors] : bufs) {
+        std::vector<Storage>* dst = nullptr;
+        if (name == "exp_avg")
+            dst = &m_;
+        else if (name == "exp_avg_sq")
+            dst = &v_;
+        else
+            continue;
+        for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
+            if (!tensors[i] || !params_[i])
+                continue;
+            if (!state_initialized_[i]) {
+                init_state_slot(i, params_[i]);
+                state_initialized_[i] = true;
+            }
+            overwrite_state_storage((*dst)[i], tensors[i]->storage());
+        }
+    }
 }
 
 NAdam::NAdam(std::vector<std::shared_ptr<TensorImpl>> p,

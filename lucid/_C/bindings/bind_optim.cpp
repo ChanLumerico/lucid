@@ -51,9 +51,16 @@ void register_optim(py::module_& m) {
         .def("zero_grad", &Optimizer::zero_grad)
         .def_property("lr", &Optimizer::lr, &Optimizer::set_lr)
         .def_property_readonly("num_params", &Optimizer::num_params)
-        // state_dict_id is a monotonically-increasing counter incremented on
-        // each step() call; used by the Python layer to detect stale caches.
-        .def_property_readonly("state_dict_id", &Optimizer::state_dict_id);
+        // Versioned tag identifying the optimizer family; used by the Python
+        // layer to validate state_dict compatibility on load.
+        .def_property_readonly("state_dict_id", &Optimizer::state_dict_id)
+        // Per-parameter mutable state (Adam moments, SGD momentum buffer ...).
+        // Returns an ordered list of (name, tensors) pairs where each
+        // ``tensors`` runs parallel to the parameter list — entries may be
+        // ``None`` for slots that haven't been touched by step() yet.
+        .def("state_buffers", &Optimizer::state_buffers)
+        .def("load_state_buffers", &Optimizer::load_state_buffers, py::arg("bufs"))
+        .def_property("step_count", &Optimizer::step_count, &Optimizer::set_step_count);
 
     // SGD with optional Nesterov momentum and L2 weight decay.
     py::class_<SGD, Optimizer>(m, "SGD")

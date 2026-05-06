@@ -199,6 +199,47 @@ void SGD::update_one(std::size_t slot_idx,
     param_cpu.bump_version();
 }
 
+std::vector<Optimizer::NamedBuffers> SGD::state_buffers() const {
+    // Without momentum SGD has no per-parameter state; emit nothing.
+    if (momentum_ == 0.0 || moment_.empty())
+        return {};
+    std::vector<std::shared_ptr<TensorImpl>> mom;
+    mom.reserve(params_.size());
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        if (i >= state_initialized_.size() || !state_initialized_[i] || !params_[i]) {
+            mom.push_back(nullptr);
+            continue;
+        }
+        const auto& p = params_[i];
+        mom.push_back(clone_state_storage(moment_[i], p->shape(), p->dtype(), p->device()));
+    }
+    std::vector<NamedBuffers> out;
+    out.emplace_back("momentum_buffer", std::move(mom));
+    return out;
+}
+
+void SGD::load_state_buffers(const std::vector<NamedBuffers>& bufs) {
+    if (momentum_ == 0.0)
+        return;
+    if (moment_.size() != params_.size())
+        moment_.resize(params_.size());
+    if (state_initialized_.size() != params_.size())
+        state_initialized_.assign(params_.size(), false);
+    for (const auto& [name, tensors] : bufs) {
+        if (name != "momentum_buffer")
+            continue;
+        for (std::size_t i = 0; i < tensors.size() && i < params_.size(); ++i) {
+            if (!tensors[i] || !params_[i])
+                continue;
+            if (!state_initialized_[i]) {
+                init_state_slot(i, params_[i]);
+                state_initialized_[i] = true;
+            }
+            overwrite_state_storage(moment_[i], tensors[i]->storage());
+        }
+    }
+}
+
 ASGD::ASGD(std::vector<std::shared_ptr<TensorImpl>> p,
            double lr,
            double mom,

@@ -51,6 +51,11 @@ public:
 
     std::string state_dict_id() const override { return "adam_v1"; }
 
+    std::vector<NamedBuffers> state_buffers() const override;
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+    std::int64_t step_count() const override { return step_count_; }
+    void set_step_count(std::int64_t s) override { step_count_ = s; }
+
 protected:
     // Apply the standard Adam update (decoupled_wd = false) to a single
     // parameter, dispatching to GPU or CPU.
@@ -96,6 +101,11 @@ public:
     double lr() const override { return lr_; }
 
     std::string state_dict_id() const override { return "adamw_v1"; }
+
+    std::vector<NamedBuffers> state_buffers() const override;
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+    std::int64_t step_count() const override { return step_count_; }
+    void set_step_count(std::int64_t s) override { step_count_ = s; }
 
 protected:
     // Apply the decoupled-weight-decay Adam update (decoupled_wd = true).

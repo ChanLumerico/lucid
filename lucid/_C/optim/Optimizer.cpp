@@ -7,9 +7,70 @@
 
 #include "Optimizer.h"
 
+#include <cstring>
+#include <variant>
+
+#include "../core/Allocator.h"
+#include "../core/ErrorBuilder.h"
+#include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 
+#include <mlx/array.h>
+#include <mlx/ops.h>
+
 namespace lucid {
+
+// Wrap an optimizer state Storage as a TensorImpl that deep-copies the
+// underlying buffer.  Used by state_buffers() so that a snapshot is
+// independent of subsequent in-place updates.
+std::shared_ptr<TensorImpl>
+clone_state_storage(const Storage& src, const Shape& shape, Dtype dtype, Device device) {
+    Storage dst;
+    if (std::holds_alternative<CpuStorage>(src)) {
+        const auto& s = std::get<CpuStorage>(src);
+        CpuStorage cs;
+        cs.dtype = s.dtype;
+        cs.nbytes = s.nbytes;
+        cs.ptr = allocate_aligned_bytes(s.nbytes, Device::CPU);
+        if (s.nbytes > 0)
+            std::memcpy(cs.ptr.get(), s.ptr.get(), s.nbytes);
+        dst = std::move(cs);
+    } else if (std::holds_alternative<GpuStorage>(src)) {
+        const auto& s = std::get<GpuStorage>(src);
+        // Force materialisation, then make an independent copy via MLX.
+        s.arr->eval();
+        auto copy = ::mlx::core::array(*s.arr);
+        copy.eval();
+        GpuStorage gs;
+        gs.arr = std::make_shared<::mlx::core::array>(std::move(copy));
+        dst = std::move(gs);
+    } else {
+        ErrorBuilder("clone_state_storage").fail("unsupported storage variant");
+    }
+    return std::make_shared<TensorImpl>(std::move(dst), shape, dtype, device, false);
+}
+
+// Copy ``src`` into ``dst`` in place — used by load_state_buffers().  Both
+// must already share shape and dtype; only the buffer bytes are overwritten.
+void overwrite_state_storage(Storage& dst, const Storage& src) {
+    if (std::holds_alternative<CpuStorage>(dst) && std::holds_alternative<CpuStorage>(src)) {
+        auto& d = std::get<CpuStorage>(dst);
+        const auto& s = std::get<CpuStorage>(src);
+        if (d.nbytes != s.nbytes)
+            ErrorBuilder("load_state_buffers").fail("byte size mismatch");
+        if (s.nbytes > 0)
+            std::memcpy(d.ptr.get(), s.ptr.get(), s.nbytes);
+        return;
+    }
+    if (std::holds_alternative<GpuStorage>(dst) && std::holds_alternative<GpuStorage>(src)) {
+        auto& d = std::get<GpuStorage>(dst);
+        const auto& s = std::get<GpuStorage>(src);
+        d.arr = std::make_shared<::mlx::core::array>(*s.arr);
+        d.arr->eval();
+        return;
+    }
+    ErrorBuilder("load_state_buffers").fail("device mismatch between live and saved state");
+}
 
 // Drives one optimizer update across all registered parameters.
 //

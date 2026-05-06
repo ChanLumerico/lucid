@@ -15,12 +15,22 @@
 #include <vector>
 
 #include "../api.h"
+#include "../core/Shape.h"
 #include "../core/Storage.h"
 #include "../core/fwd.h"
 
 namespace lucid {
 
 class TensorImpl;
+
+// Snapshot a state Storage into a fresh TensorImpl with deep-copied data.
+// Defined in Optimizer.cpp; used by derived classes' state_buffers().
+LUCID_API std::shared_ptr<TensorImpl>
+clone_state_storage(const Storage& src, const Shape& shape, Dtype dtype, Device device);
+
+// Overwrite ``dst`` with bytes from ``src`` in place.  Both must already share
+// shape/dtype/device — only the buffer contents are updated.
+LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 
 // Owns a collection of trainable parameters and provides the canonical
 // training-step interface.
@@ -59,6 +69,26 @@ public:
 
     // Short identifier for checkpoint serialization (e.g., "sgd_v1").
     virtual std::string state_dict_id() const = 0;
+
+    // Snapshot of the optimizer's per-parameter mutable state, exposed as a
+    // list of (name, tensors) pairs.  ``tensors`` runs parallel to ``params_``;
+    // entries are clones, so callers may freely keep them after the optimizer
+    // is destroyed.  Optimizers with no Python-visible state return an empty
+    // vector.
+    using NamedBuffers = std::pair<std::string, std::vector<std::shared_ptr<TensorImpl>>>;
+    virtual std::vector<NamedBuffers> state_buffers() const { return {}; }
+
+    // Restore the per-parameter state in-place from a snapshot.  ``bufs`` must
+    // match the layout returned by ``state_buffers`` (same names, same per-slot
+    // shapes/dtypes); mismatches raise.  After this returns, every state slot
+    // is treated as initialised so ``step()`` will not re-zero it.
+    virtual void load_state_buffers(const std::vector<NamedBuffers>& bufs) { (void)bufs; }
+
+    // Global iteration counter — Adam uses it for bias correction, NAdam for
+    // its momentum schedule, etc.  Optimizers without one return 0 and ignore
+    // the setter.
+    virtual std::int64_t step_count() const { return 0; }
+    virtual void set_step_count(std::int64_t) {}
 
 protected:
     // Apply the optimizer's update rule for a single parameter.

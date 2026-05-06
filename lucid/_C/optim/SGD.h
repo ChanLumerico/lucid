@@ -48,6 +48,9 @@ public:
 
     std::string state_dict_id() const override { return "sgd_v1"; }
 
+    std::vector<NamedBuffers> state_buffers() const override;
+    void load_state_buffers(const std::vector<NamedBuffers>& bufs) override;
+
 protected:
     // Execute the SGD or SGD-with-momentum update for a single parameter,
     // dispatching to the CPU scalar loop or the MLX GPU path.

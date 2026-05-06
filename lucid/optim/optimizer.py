@@ -136,19 +136,84 @@ class Optimizer:
     # themselves live on the model — saving them inside the optimizer would
     # double-checkpoint the weights and break partial restores.
     #
-    # NOTE: engine-side moment buffers (Adam's m/v, SGD momentum, etc.) live
-    # inside the C++ optimizer and are not currently round-trippable. Restoring
-    # an Adam state_dict will preserve hyperparameters but the moment buffers
-    # restart from zero. Subclasses that own Python-side state (e.g. LBFGS)
-    # should override _save_state / _load_state to round-trip it.
+    # Engine optimizers (Adam, AdamW, SGD) expose their per-parameter mutable
+    # state via the C++ ``state_buffers``/``load_state_buffers`` hooks; the base
+    # class harvests those automatically below. Subclasses that own additional
+    # Python-side state (e.g. LBFGS history) should override _save_state /
+    # _load_state to round-trip it.
 
     def _save_state(self) -> dict[int, dict[str, object]]:
-        """Hook for subclasses to populate ``state``. Default: no Python-side state."""
-        return {}
+        """Snapshot per-parameter state. Default: pull from engine optimizers."""
+        return self._save_engine_state()
 
     def _load_state(self, state: dict[int, dict[str, object]]) -> None:
-        """Hook for subclasses to restore ``state``. Default: no-op."""
-        return
+        """Restore per-parameter state. Default: push back to engine optimizers."""
+        self._load_engine_state(state)
+
+    def _save_engine_state(self) -> dict[int, dict[str, object]]:
+        """Snapshot every engine optimizer's state buffers + step_count.
+
+        Output is keyed by flat parameter index. Each entry stores:
+        - one numpy array per state buffer (``exp_avg``, ``exp_avg_sq``,
+          ``momentum_buffer`` ...) keyed by buffer name
+        - ``step``: per-group step counter (broadcast across all params in
+          that group, so it's available wherever you look it up)
+        """
+        out: dict[int, dict[str, object]] = {}
+        flat_idx: int = 0
+        for group, eng in zip(self.param_groups, self._engine_optims):
+            params: list[Parameter] = group["params"]  # type: ignore[assignment]
+            if eng is None:
+                flat_idx += len(params)
+                continue
+            buffers: list[tuple[str, list[object]]] = eng.state_buffers()
+            step_count: int = int(getattr(eng, "step_count", 0) or 0)
+            for slot, _ in enumerate(params):
+                snapshot: dict[str, object] = {}
+                for name, tensors in buffers:
+                    if slot < len(tensors) and tensors[slot] is not None:
+                        # tensors[slot] is a TensorImpl — round-trip via numpy
+                        # so the saved checkpoint is portable across processes
+                        # (no shared C++ pointers across pickling).
+                        import numpy as _np
+                        snapshot[name] = _np.asarray(tensors[slot].data_as_python()).copy()
+                if step_count != 0:
+                    snapshot["step"] = step_count
+                if snapshot:
+                    out[flat_idx + slot] = snapshot
+            flat_idx += len(params)
+        return out
+
+    def _load_engine_state(self, state: dict[int, dict[str, object]]) -> None:
+        """Push numpy-backed state buffers back into each engine optimizer."""
+        if not state:
+            return
+        flat_idx: int = 0
+        for group, eng in zip(self.param_groups, self._engine_optims):
+            params: list[Parameter] = group["params"]  # type: ignore[assignment]
+            if eng is None:
+                flat_idx += len(params)
+                continue
+            # Collect per-buffer-name lists running parallel to params.
+            by_name: dict[str, list[object | None]] = {}
+            step_count: int = 0
+            for slot, p in enumerate(params):
+                snapshot: dict[str, object] = state.get(flat_idx + slot, {})  # type: ignore[arg-type]
+                for k, v in snapshot.items():
+                    if k == "step":
+                        step_count = max(step_count, int(v))  # type: ignore[arg-type]
+                        continue
+                    by_name.setdefault(k, [None] * len(params))
+                    # Wrap as TensorImpl on the param's device so the engine
+                    # can copy it back into its buffer slot.
+                    by_name[k][slot] = _C_engine.TensorImpl(
+                        v, p._impl.device, False
+                    )
+            if by_name:
+                eng.load_state_buffers([(k, v) for k, v in by_name.items()])
+            if step_count and hasattr(eng, "step_count"):
+                eng.step_count = step_count
+            flat_idx += len(params)
 
     def _param_id_map(self) -> dict[int, int]:
         """Map ``id(param)`` → flat integer index across all param groups."""
