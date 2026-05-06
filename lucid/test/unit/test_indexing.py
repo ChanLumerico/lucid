@@ -122,6 +122,30 @@ class TestFlip:
         expected = lucid.tensor([[3.0, 4.0], [1.0, 2.0]])
         assert_close(out, expected)
 
+    def test_flip_backward_1d(self):
+        t: lucid.Tensor = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
+        out: lucid.Tensor = t.flip([0])
+        out.sum().backward()
+        assert t.grad is not None
+        np.testing.assert_allclose(t.grad.numpy(), np.ones(3))
+
+    def test_flip_backward_preserves_per_element_grad(self):
+        # grad of out wrt input is a flipped permutation — feeding a non-uniform
+        # upstream grad should arrive flipped at the input.
+        t: lucid.Tensor = lucid.tensor([1.0, 2.0, 3.0, 4.0], requires_grad=True)
+        out: lucid.Tensor = t.flip([0])
+        upstream: lucid.Tensor = lucid.tensor([10.0, 20.0, 30.0, 40.0])
+        (out * upstream).sum().backward()
+        np.testing.assert_allclose(t.grad.numpy(), np.array([40.0, 30.0, 20.0, 10.0]))
+
+    def test_flip_backward_multi_axis(self):
+        t: lucid.Tensor = lucid.tensor(
+            [[1.0, 2.0], [3.0, 4.0]], requires_grad=True
+        )
+        out: lucid.Tensor = t.flip([0, 1])
+        out.sum().backward()
+        np.testing.assert_allclose(t.grad.numpy(), np.ones((2, 2)))
+
 
 class TestPad:
     def test_pad_1d(self):

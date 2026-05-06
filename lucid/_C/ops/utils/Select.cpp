@@ -327,6 +327,7 @@ LUCID_REGISTER_OP(MaskedFillBackward)
 LUCID_REGISTER_OP(RollBackward)
 LUCID_REGISTER_OP(GatherBackward)
 LUCID_REGISTER_OP(DiagonalBackward)
+// FlipBackward register lives after the class definition near flip_op below.
 
 }  // namespace
 
@@ -510,6 +511,25 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
 
 // ── flip ──────────────────────────────────────────────────────────────────────
 
+// Backward node for flip_op.
+//
+// Backward formula: flipping is its own inverse — applying the same flip to
+// grad_out reproduces the gradient with respect to the input.  No saved
+// tensors needed beyond the dims list.
+class FlipBackward : public FuncOp<FlipBackward, 1> {
+public:
+    static const OpSchema schema_v1;
+
+    std::vector<int> dims_;
+
+    std::vector<Storage> apply(Storage grad_out) override {
+        return {backend::Dispatcher::for_device(device_).flip(
+            grad_out, out_shape_, dims_, dtype_)};
+    }
+};
+
+const OpSchema FlipBackward::schema_v1{"flip", 1, AmpPolicy::KeepInput, true};
+
 TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
     Validator::input(a, "flip").non_null();
     const auto& sh = a->shape();
@@ -521,9 +541,21 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
             ErrorBuilder("flip").fail("dim out of range");
     }
 
-    auto& be = backend::Dispatcher::for_device(a->device());
-    Storage out = be.flip(a->storage(), sh, dims, a->dtype());
-    return std::make_shared<TensorImpl>(std::move(out), sh, a->dtype(), a->device(), false);
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"flip", device, dt, sh};
+
+    auto& be = backend::Dispatcher::for_device(device);
+    Storage out = be.flip(a->storage(), sh, dims, dt);
+    auto result = fresh(std::move(out), sh, dt, device);
+    auto bwd = std::make_shared<FlipBackward>();
+    bwd->input_shapes_ = {a->shape()};
+    bwd->out_shape_ = result->shape();
+    bwd->dtype_ = dt;
+    bwd->device_ = device;
+    bwd->input_tensors_ = {a};
+    bwd->dims_ = std::move(dims);
+    return attach_unary_grad(a, std::move(result), std::move(bwd));
 }
 
 // ── masked_select ─────────────────────────────────────────────────────────────
@@ -544,5 +576,7 @@ TensorImplPtr masked_select_op(const TensorImplPtr& a, const TensorImplPtr& mask
                                     a->shape(), mask->shape(), n, a->dtype());
     return std::make_shared<TensorImpl>(std::move(out), out_shape, a->dtype(), a->device(), false);
 }
+
+LUCID_REGISTER_OP(FlipBackward)
 
 }  // namespace lucid
