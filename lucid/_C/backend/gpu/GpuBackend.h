@@ -1529,7 +1529,9 @@ public:
         const auto& p = factors[0];
         const auto& u = factors[2];
         auto diag = ::mlx::core::diagonal(u, 0, -2, -1);
-        auto det_u = ::mlx::core::prod(diag, false);
+        // Reduce only along the last axis (the diagonal); a no-axis prod() would
+        // collapse all batch dimensions into a single scalar.
+        auto det_u = ::mlx::core::prod(diag, -1, false, k_linalg_stream);
 
         Shape out_shape(shape.begin(), shape.end() - 2);
         std::int64_t batch = 1;
