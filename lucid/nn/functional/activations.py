@@ -182,8 +182,30 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
 
 
 def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
-    """Softplus activation."""
-    return _wrap(_C_engine.softplus(_unwrap(x)))
+    """Softplus activation: ``(1/beta) * log(1 + exp(beta * x))``.
+
+    Falls back to the identity ``x`` element-wise when ``beta * x > threshold``
+    so the ``exp`` term doesn't overflow on large positive inputs — matches
+    the reference framework's ``F.softplus`` semantics.
+
+    The engine's bare ``softplus`` kernel implements the special case
+    ``beta=1, threshold≈inf``; when either argument deviates we compose the
+    full formula via ``mul``/``log``/``exp``/``where`` so the gradient still
+    flows through the existing backward nodes.
+    """
+    if beta == 1.0 and threshold >= 50.0:
+        # Hot-path: the bare engine kernel is already correct here.
+        return _wrap(_C_engine.softplus(_unwrap(x)))
+    xi = _unwrap(x)
+    beta_t = _C_engine.full(list(xi.shape), float(beta), xi.dtype, xi.device)
+    threshold_t = _C_engine.full(list(xi.shape), float(threshold), xi.dtype, xi.device)
+    bx = _C_engine.mul(xi, beta_t)
+    # log1p(exp(bx)) / beta — composed because the engine's ``softplus`` is
+    # beta-agnostic.
+    inv_beta = _C_engine.full(list(xi.shape), 1.0 / float(beta), xi.dtype, xi.device)
+    softplus_full = _C_engine.mul(_C_engine.softplus(bx), inv_beta)
+    above = _C_engine.greater(bx, threshold_t)
+    return _wrap(_C_engine.where(above, xi, softplus_full))
 
 
 def relu6(x: Tensor, inplace: bool = False) -> Tensor:

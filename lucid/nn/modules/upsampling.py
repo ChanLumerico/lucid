@@ -51,6 +51,41 @@ class Upsample(Module):
         return ", ".join(parts)
 
 
+class UpsamplingNearest2d(Upsample):
+    """Pre-configured ``Upsample`` with ``mode='nearest'`` for 4-D input.
+
+    Mirrors the reference framework's ``UpsamplingNearest2d`` — convenience
+    over passing ``mode='nearest'`` to ``Upsample`` every time.  Marked
+    deprecated in upstream but still widely used in older codebases.
+    """
+
+    def __init__(
+        self,
+        size: int | tuple[int, int] | None = None,
+        scale_factor: float | tuple[float, float] | None = None,
+    ) -> None:
+        super().__init__(size=size, scale_factor=scale_factor, mode="nearest")
+
+
+class UpsamplingBilinear2d(Upsample):
+    """Pre-configured ``Upsample`` with ``mode='bilinear'`` and
+    ``align_corners=True`` for 4-D input.
+
+    The ``align_corners=True`` default matches the reference framework's
+    ``UpsamplingBilinear2d`` — different from ``Upsample(mode='bilinear')``,
+    which leaves ``align_corners`` unset (defaults to ``False``).
+    """
+
+    def __init__(
+        self,
+        size: int | tuple[int, int] | None = None,
+        scale_factor: float | tuple[float, float] | None = None,
+    ) -> None:
+        super().__init__(
+            size=size, scale_factor=scale_factor, mode="bilinear", align_corners=True
+        )
+
+
 class PixelShuffle(Module):
     """Rearrange (N, C*r^2, H, W) → (N, C, H*r, W*r).
 

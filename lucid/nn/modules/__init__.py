@@ -22,6 +22,7 @@ from lucid.nn.modules.activation import (
     GELU,
     SiLU,
     Mish,
+    Softplus,
     Hardswish,
     Hardsigmoid,
     Sigmoid,
@@ -74,7 +75,14 @@ from lucid.nn.modules.pooling import (
     LPPool1d,
     LPPool2d,
 )
-from lucid.nn.modules.dropout import Dropout, Dropout2d, AlphaDropout, Dropout3d
+from lucid.nn.modules.dropout import (
+    Dropout,
+    Dropout1d,
+    Dropout2d,
+    Dropout3d,
+    AlphaDropout,
+    FeatureAlphaDropout,
+)
 from lucid.nn.modules.sparse import Embedding, EmbeddingBag
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
@@ -110,14 +118,22 @@ from lucid.nn.modules.padding import (
     ConstantPad1d,
     ConstantPad2d,
     ConstantPad3d,
+    ZeroPad1d,
     ZeroPad2d,
+    ZeroPad3d,
     ReflectionPad1d,
     ReflectionPad2d,
     ReplicationPad1d,
     ReplicationPad2d,
     ReplicationPad3d,
 )
-from lucid.nn.modules.upsampling import Upsample, PixelShuffle, PixelUnshuffle
+from lucid.nn.modules.upsampling import (
+    Upsample,
+    UpsamplingNearest2d,
+    UpsamplingBilinear2d,
+    PixelShuffle,
+    PixelUnshuffle,
+)
 from lucid.nn.modules.transformer import (
     TransformerEncoderLayer,
     TransformerEncoder,
@@ -145,6 +161,7 @@ __all__ = [
     "GELU",
     "SiLU",
     "Mish",
+    "Softplus",
     "Hardswish",
     "Hardsigmoid",
     "Sigmoid",
@@ -187,9 +204,11 @@ __all__ = [
     "LPPool1d",
     "LPPool2d",
     "Dropout",
+    "Dropout1d",
     "Dropout2d",
     "Dropout3d",
     "AlphaDropout",
+    "FeatureAlphaDropout",
     "Embedding",
     "EmbeddingBag",
     "MultiheadAttention",
@@ -229,13 +248,17 @@ __all__ = [
     "ConstantPad1d",
     "ConstantPad2d",
     "ConstantPad3d",
+    "ZeroPad1d",
     "ZeroPad2d",
+    "ZeroPad3d",
     "ReflectionPad1d",
     "ReflectionPad2d",
     "ReplicationPad1d",
     "ReplicationPad2d",
     "ReplicationPad3d",
     "Upsample",
+    "UpsamplingNearest2d",
+    "UpsamplingBilinear2d",
     "PixelShuffle",
     "PixelUnshuffle",
     "TransformerEncoderLayer",

@@ -105,3 +105,38 @@ class TestDropoutScaling:
         # Check: per-channel std along (H, W) axes is zero.
         per_chan_std = out[0].reshape(32, -1).std(axis=1)
         np.testing.assert_allclose(per_chan_std, 0.0, atol=1e-5)
+
+
+class TestDropout1d:
+    def test_eval_mode_identity(self) -> None:
+        layer: nn.Dropout1d = nn.Dropout1d(p=0.5)
+        layer.eval()
+        x: lucid.Tensor = lucid.randn(2, 4, 8)
+        np.testing.assert_allclose(layer(x).numpy(), x.numpy())
+
+    def test_zeros_whole_channels(self) -> None:
+        layer: nn.Dropout1d = nn.Dropout1d(p=0.5)
+        layer.train()
+        x: lucid.Tensor = lucid.tensor(np.ones((1, 32, 16), dtype=np.float32))
+        out: np.ndarray = layer(x).numpy()
+        # Each (n, c) channel is uniform along the length dim.
+        per_chan_std: np.ndarray = out[0].std(axis=-1)
+        np.testing.assert_allclose(per_chan_std, 0.0, atol=1e-5)
+
+
+class TestFeatureAlphaDropout:
+    def test_eval_mode_identity(self) -> None:
+        layer: nn.FeatureAlphaDropout = nn.FeatureAlphaDropout(p=0.5)
+        layer.eval()
+        x: lucid.Tensor = lucid.randn(2, 3, 4, 4)
+        np.testing.assert_allclose(layer(x).numpy(), x.numpy())
+
+    def test_train_mode_runs(self) -> None:
+        # The arithmetic is shared with ``alpha_dropout`` (already covered by
+        # the AlphaDropout suite); here we just exercise the broadcast path
+        # for ``(N, C, *)`` masks.
+        layer: nn.FeatureAlphaDropout = nn.FeatureAlphaDropout(p=0.5)
+        layer.train()
+        x: lucid.Tensor = lucid.randn(2, 3, 4, 4)
+        out: lucid.Tensor = layer(x)
+        assert out.shape == x.shape

@@ -58,10 +58,30 @@ class ConstantPad3d(_ConstantPadNd):
         super().__init__(padding, value)
 
 
+class ZeroPad1d(ConstantPad1d):
+    """Pad a 3-D tensor with zeros along the last dim (left/right)."""
+
+    def __init__(self, padding: _Size2d) -> None:
+        super().__init__(padding, value=0.0)
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"
+
+
 class ZeroPad2d(ConstantPad2d):
     """Pad a 4-D tensor with zeros."""
 
     def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        super().__init__(padding, value=0.0)
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"
+
+
+class ZeroPad3d(ConstantPad3d):
+    """Pad a 5-D tensor with zeros."""
+
+    def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
         super().__init__(padding, value=0.0)
 
     def extra_repr(self) -> str:

@@ -28,7 +28,7 @@ def interpolate(
                 assert scale_factor is not None
                 sf = (
                     (scale_factor, scale_factor)
-                    if isinstance(scale_factor, float)
+                    if isinstance(scale_factor, (int, float))
                     else scale_factor
                 )
                 oh = int(x.shape[2] * sf[0])
@@ -41,7 +41,7 @@ def interpolate(
                 assert scale_factor is not None
                 sf = (
                     (scale_factor,) * 3
-                    if isinstance(scale_factor, float)
+                    if isinstance(scale_factor, (int, float))
                     else scale_factor
                 )
                 od = int(x.shape[2] * sf[0])
@@ -55,7 +55,7 @@ def interpolate(
             assert scale_factor is not None
             sf = (
                 (scale_factor, scale_factor)
-                if isinstance(scale_factor, float)
+                if isinstance(scale_factor, (int, float))
                 else scale_factor
             )
             oh = int(x.shape[2] * sf[0])
@@ -68,7 +68,9 @@ def interpolate(
         else:
             assert scale_factor is not None
             sf = (
-                (scale_factor,) * 3 if isinstance(scale_factor, float) else scale_factor
+                (scale_factor,) * 3
+                if isinstance(scale_factor, (int, float))
+                else scale_factor
             )
             od = int(x.shape[2] * sf[0])
             oh = int(x.shape[3] * sf[1])

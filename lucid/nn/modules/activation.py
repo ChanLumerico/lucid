@@ -31,6 +31,7 @@ from lucid.nn.functional.activations import (
     hardshrink,
     tanhshrink,
     softshrink,
+    softplus,
 )
 
 
@@ -118,6 +119,28 @@ class Mish(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return mish(x)
+
+
+class Softplus(Module):
+    """Smooth approximation of ReLU: ``log(1 + exp(beta * x)) / beta``.
+
+    For numerical stability, ``softplus`` falls back to the identity
+    ``x`` when ``beta * x > threshold`` — captures the asymptote without
+    overflowing the ``exp`` term.
+    """
+
+    def __init__(self, beta: float = 1.0, threshold: float = 20.0) -> None:
+        super().__init__()
+        self.beta = beta
+        self.threshold = threshold
+
+    def forward(self, x: Tensor) -> Tensor:
+        return softplus(x, self.beta, self.threshold)
+
+    def extra_repr(self) -> str:
+        if self.beta == 1.0 and self.threshold == 20.0:
+            return ""
+        return f"beta={self.beta}, threshold={self.threshold}"
 
 
 class Hardswish(Module):

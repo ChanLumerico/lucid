@@ -3,6 +3,7 @@
 import pytest
 import numpy as np
 import lucid
+import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid.test._comparison import assert_close
 from lucid.test.helpers.numerics import make_tensor
@@ -116,3 +117,33 @@ class TestOtherActivations:
         t = make_tensor(_SHAPE, low=-5.0, high=5.0)
         out = F.hardsigmoid(t).numpy()
         assert (out >= 0).all() and (out <= 1).all()
+
+
+class TestSoftplus:
+    def test_default_matches_log1p_exp(self) -> None:
+        # Default beta=1, threshold=20 — straight ``log(1 + exp(x))``.
+        layer: nn.Softplus = nn.Softplus()
+        x: lucid.Tensor = lucid.tensor([0.0, 1.0, 2.0, -1.0])
+        np.testing.assert_allclose(
+            layer(x).numpy(),
+            np.log1p(np.exp(np.array([0.0, 1.0, 2.0, -1.0]))),
+            atol=1e-5,
+        )
+
+    def test_beta_scales_input(self) -> None:
+        # ``softplus(x; beta) = (1/beta) * log(1 + exp(beta * x))``
+        layer: nn.Softplus = nn.Softplus(beta=2.0)
+        x_np: np.ndarray = np.array([0.5, 1.0])
+        x: lucid.Tensor = lucid.tensor(x_np.astype(np.float32))
+        expected: np.ndarray = np.log1p(np.exp(2.0 * x_np)) / 2.0
+        np.testing.assert_allclose(layer(x).numpy(), expected, atol=1e-5)
+
+    def test_threshold_falls_back_to_identity(self) -> None:
+        # For ``beta * x > threshold`` the function returns ``x`` directly so
+        # the ``exp`` term doesn't overflow.
+        layer: nn.Softplus = nn.Softplus(beta=1.0, threshold=20.0)
+        x: lucid.Tensor = lucid.tensor([100.0, 0.5])
+        out: np.ndarray = layer(x).numpy()
+        # 100.0 hits the identity branch; 0.5 follows the analytic formula.
+        assert out[0] == pytest.approx(100.0)
+        assert out[1] == pytest.approx(np.log1p(np.exp(0.5)), abs=1e-5)
