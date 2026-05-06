@@ -152,6 +152,20 @@ def _isclose_adapter(a_impl, b_impl, rtol=1e-5, atol=1e-8, equal_nan=False):
     return _C_engine.isclose(a_impl, b_impl, float(rtol), float(atol))
 
 
+def _repeat_method_adapter(x_impl, *sizes):
+    """Tensor.repeat(*sizes) — tile copies along each dim (reference Tensor.repeat).
+
+    Distinct from ``lucid.repeat`` (the free function), which interleaves
+    elements like NumPy's ``repeat``.  The Tensor-method path delegates to
+    ``engine.tile`` so the two surfaces have clearly separated semantics.
+    """
+    if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
+        reps = list(sizes[0])
+    else:
+        reps = list(sizes)
+    return _C_engine.tile(x_impl, [int(r) for r in reps])
+
+
 def _repeat_interleave_adapter(a_impl, repeats, dim=None):
     """repeat_interleave(x, repeats, dim=None) — defers to engine.repeat.
 
@@ -238,43 +252,62 @@ def _bessel_correct(result_impl, x_impl, axes_list, correction):
     return _C_engine.mul(result_impl, scale_t)
 
 
-def _sum_adapter(x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
+def _sum_adapter(
+    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+):
     """sum(x, dim=None, keepdim=False) with axis/axes/keepdims aliases."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _C_engine.sum(x_impl, ax, kd)
 
 
-def _mean_adapter(x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
+def _mean_adapter(
+    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+):
     """mean(x, dim=None, keepdim=False) with axis/axes/keepdims aliases."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _C_engine.mean(x_impl, ax, kd)
 
 
-def _prod_adapter(x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
+def _prod_adapter(
+    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+):
     """prod(x, dim=None, keepdim=False)."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _C_engine.prod(x_impl, ax, kd)
 
 
-def _max_adapter(x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
+def _max_adapter(
+    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+):
     """max(x, dim=None, keepdim=False)."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _C_engine.max(x_impl, ax, kd)
 
 
-def _min_adapter(x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None):
+def _min_adapter(
+    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
+):
     """min(x, dim=None, keepdim=False)."""
     ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
     kd = keepdims if keepdims is not None else keepdim
     return _C_engine.min(x_impl, ax, kd)
 
 
-def _var_adapter(x_impl, dim=None, keepdim=False, *,
-                 correction=1, unbiased=None, axis=None, axes=None, keepdims=None):
+def _var_adapter(
+    x_impl,
+    dim=None,
+    keepdim=False,
+    *,
+    correction=1,
+    unbiased=None,
+    axis=None,
+    axes=None,
+    keepdims=None,
+):
     """var(x, dim, keepdim, correction=1) — ddof default matches reference."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
@@ -284,8 +317,17 @@ def _var_adapter(x_impl, dim=None, keepdim=False, *,
     return _bessel_correct(result, x_impl, ax, correction)
 
 
-def _std_adapter(x_impl, dim=None, keepdim=False, *,
-                 correction=1, unbiased=None, axis=None, axes=None, keepdims=None):
+def _std_adapter(
+    x_impl,
+    dim=None,
+    keepdim=False,
+    *,
+    correction=1,
+    unbiased=None,
+    axis=None,
+    axes=None,
+    keepdims=None,
+):
     """std(x, dim, keepdim, correction=1) = sqrt(var(...))."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
@@ -583,8 +625,15 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("expand",     _expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["axis"]),
-    OpEntry("repeat",     _repeat_adapter, 1, method_name="repeat",     free_fn_name="repeat",
+    # ``lucid.repeat(x, repeats, dim=None)`` — interleave semantics.  No
+    # ``method_name`` because Tensor.repeat (below) follows the reference
+    # framework's ``Tensor.repeat`` instead, which tiles copies.
+    OpEntry("repeat",     _repeat_adapter, 1, method_name=None,         free_fn_name="repeat",
             extra_kwargs=["dim"]),
+    # ``Tensor.repeat(*sizes)`` — tile copies (separate semantics from the
+    # free function above; see ``_repeat_method_adapter``).
+    OpEntry("repeat_method", _repeat_method_adapter, 1,
+            method_name="repeat", free_fn_name=None),
     OpEntry("tile",       _R.tile,       1, method_name="tile",       free_fn_name="tile",
             extra_kwargs=["reps"]),
     OpEntry("roll",       _R.roll,       1, method_name="roll",       free_fn_name="roll",
@@ -807,6 +856,12 @@ _REGISTRY: list[OpEntry] = [
             method_name="cross", free_fn_name="cross"),
     OpEntry("norm",  _norm_adapter, 1,
             method_name="norm", free_fn_name="norm"),
+
+    # ── transpose shorthand ─────────────────────────────────────────────────
+    # ``Tensor.t()`` is the standard 2-D transpose — same engine kernel as
+    # the ``T`` property, exposed here as a method so registry-driven method
+    # injection picks it up alongside everything else.
+    OpEntry("t", _R.T, 1, method_name="t", free_fn_name=None),
 
     # ── top-level forwarder into the einops sub-module ─────────────────────
     # The user explicitly wanted ``lucid.einops.einsum`` to remain the
