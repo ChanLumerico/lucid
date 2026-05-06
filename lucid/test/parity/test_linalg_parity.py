@@ -208,29 +208,38 @@ class TestLinalgBackwardParity:
         np.testing.assert_allclose(b_l.grad.numpy(), b_t.grad.numpy(), atol=2e-4)
 
 
-class TestLinalgKnownGaps:
-    """Lock down behaviours that are known not to round-trip yet, so they
-    surface as visible failures (xfail) the day someone closes the gap."""
+class TestMatrixPowerBackward:
+    """matrix_power autograd is provided by a Python decomposition over
+    matmul + inv (see lucid/linalg/__init__.py:matrix_power), since the
+    engine kernel itself has no backward node."""
 
-    @pytest.mark.xfail(
-        reason="matrix_power_op has no autograd wired (see "
-        "lucid/_C/ops/linalg/MatrixPower.cpp:13).",
-        strict=True,
-    )
-    def test_matrix_power_backward(self) -> None:
-        la, _ = _sq(4)
-        la.requires_grad = True
-        out: lucid.Tensor = LLA.matrix_power(la, 2)
-        out.sum().backward()
-        assert la.grad is not None
+    @pytest.mark.parametrize("n", [2, 3, -1, -2])
+    def test_matrix_power_backward(self, n: int) -> None:
+        ll, lt = _sq(4)
+        ll.requires_grad = True
+        lt.requires_grad_(True)
+        LLA.matrix_power(ll, n).sum().backward()
+        TLA.matrix_power(lt, n).sum().backward()
+        np.testing.assert_allclose(ll.grad.numpy(), lt.grad.numpy(), atol=1e-3)
 
-    @pytest.mark.xfail(
-        reason="cholesky_op has no autograd wired (see "
-        "lucid/_C/ops/linalg/Cholesky.cpp:50).",
-        strict=True,
-    )
-    def test_cholesky_backward(self) -> None:
-        la, _ = _spd(4)
-        la.requires_grad = True
-        LLA.cholesky(la).sum().backward()
-        assert la.grad is not None
+
+class TestCholeskyBackward:
+    """Cholesky autograd is wired in Python on top of solve_triangular and
+    matmul (Murray 2016 formula); the engine cholesky_op itself has no
+    backward node."""
+
+    def test_cholesky_lower_backward(self) -> None:
+        ll, lt = _spd(4)
+        ll.requires_grad = True
+        lt.requires_grad_(True)
+        LLA.cholesky(ll).sum().backward()
+        TLA.cholesky(lt).sum().backward()
+        np.testing.assert_allclose(ll.grad.numpy(), lt.grad.numpy(), atol=1e-3)
+
+    def test_cholesky_upper_backward(self) -> None:
+        ll, lt = _spd(4)
+        ll.requires_grad = True
+        lt.requires_grad_(True)
+        LLA.cholesky(ll, upper=True).sum().backward()
+        TLA.cholesky(lt, upper=True).sum().backward()
+        np.testing.assert_allclose(ll.grad.numpy(), lt.grad.numpy(), atol=1e-3)

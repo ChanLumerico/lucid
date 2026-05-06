@@ -65,10 +65,74 @@ def solve(A: Tensor, b: Tensor) -> Tensor:
     return _la.solve(A, b)  # type: ignore[arg-type]
 
 
-@_linalg_op
 def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
-    """Cholesky decomposition."""
-    return _la.cholesky(x, upper)  # type: ignore[arg-type]
+    """Cholesky decomposition.
+
+    Differentiable via Murray's 2016 formula:
+        S = L^{-T} @ Phi(L^T @ G) @ L^{-1}
+        ∂L/∂A = (S + S^T) / 2
+    where Phi(M) zeroes the strictly upper triangle and halves the diagonal.
+
+    The engine ``cholesky_op`` has no autograd node, so the backward is
+    computed in Python on top of ``solve_triangular``, ``matmul``, ``tril``
+    and ``eye`` — all of which are themselves differentiable.
+    """
+    return _CholeskyAutograd.apply(x, upper)  # type: ignore[no-any-return]
+
+
+from lucid.autograd.function import Function as _AutogradFunction
+
+
+class _CholeskyAutograd(_AutogradFunction):
+    """Custom-autograd wrapper around the engine's non-differentiable
+    cholesky_op. Forward calls the engine; backward computes the input
+    gradient via Murray (2016)."""
+
+    @staticmethod
+    def forward(ctx, x, upper):  # type: ignore[no-untyped-def]
+        out = _wrap(_la.cholesky(_unwrap(x), upper))
+        ctx.save_for_backward(out)
+        ctx.upper = bool(upper)
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+        import lucid as _lucid
+
+        (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)
+        upper: bool = ctx.upper
+
+        # Normalise to lower-triangular form L; gradient w.r.t. that L.
+        if upper:
+            L = factor.mT
+            gL = grad_out.mT
+        else:
+            L = factor
+            gL = grad_out
+
+        n: int = int(L.shape[-1])
+        eye_n = _lucid.eye(n, dtype=L.dtype)
+        if L.device != "cpu":
+            eye_n = eye_n.to(L.device)
+        # Mask gL to its lower triangle — the strictly upper half doesn't
+        # contribute to L (which is lower-triangular by construction).
+        gL_tril = _lucid.tril(gL)
+        # Phi(M): tril(M) with diagonal halved.
+        M = _lucid.matmul(L.mT, gL_tril)
+        Phi = _lucid.tril(M) - 0.5 * (M * eye_n)
+
+        # S = L^{-T} @ Phi @ L^{-1}, computed via two triangular solves.
+        # Step 1: Y = L^{-T} Phi  →  solve L^T Y = Phi (upper=True against L^T).
+        Y = solve_triangular(L.mT, Phi, upper=True)
+        # Step 2: Z = Y L^{-1}.  Take transposes: Z^T = L^{-T} Y^T, so solve
+        # L^T Z^T = Y^T then transpose back.
+        Z = solve_triangular(L.mT, Y.mT, upper=True).mT
+        # ``Z`` is already symmetric in exact arithmetic (Phi sandwiched
+        # between L^{-T} and L^{-1} applied to the lower-tri-only gradient
+        # produces a symmetric result); the explicit symmetrisation below
+        # absorbs any floating-point asymmetry.
+        grad_A = 0.5 * (Z + Z.mT)
+        return grad_A
 
 
 def norm(
@@ -103,10 +167,48 @@ def svdvals(x: Tensor) -> Tensor:
     return _wrap(result)
 
 
-@_linalg_op
 def matrix_power(x: Tensor, n: int) -> Tensor:
-    """Raise a matrix to an integer power."""
-    return _la.matrix_power(x, n)  # type: ignore[arg-type]
+    """Raise a matrix to an integer power.
+
+    Implemented in Python on top of ``matmul`` and ``inv`` so autograd flows
+    through naturally — the engine ``matrix_power_op`` is not differentiable
+    on its own. Uses repeated squaring so the work is O(log |n|) matmuls.
+    """
+    import lucid as _lucid  # local to avoid a top-level cycle with linalg
+
+    if not isinstance(n, int):
+        raise TypeError(f"matrix_power exponent must be int, got {type(n).__name__}")
+
+    sh: tuple[int, ...] = tuple(_unwrap(x).shape)
+    if len(sh) < 2 or sh[-1] != sh[-2]:
+        raise ValueError(
+            f"matrix_power requires a square matrix in the last two dims, got {sh}"
+        )
+
+    if n == 0:
+        # Identity broadcast to the input's batch shape.
+        eye_2d: Tensor = _lucid.eye(int(sh[-1]), dtype=x.dtype)
+        if len(sh) == 2:
+            return eye_2d
+        return _lucid.broadcast_to(eye_2d, list(sh))
+
+    base: Tensor = inv(x) if n < 0 else x
+    exponent: int = -n if n < 0 else n
+    if exponent == 1:
+        return base
+
+    # Standard binary exponentiation: result starts at base if the lowest
+    # bit is set, otherwise it gets multiplied in on the first set bit.
+    result: Tensor | None = None
+    cur: Tensor = base
+    while exponent > 0:
+        if exponent & 1:
+            result = cur if result is None else _lucid.matmul(result, cur)
+        exponent >>= 1
+        if exponent:
+            cur = _lucid.matmul(cur, cur)
+    assert result is not None  # exponent was non-zero on entry
+    return result
 
 
 @_linalg_op
