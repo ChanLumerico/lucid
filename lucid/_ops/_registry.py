@@ -4,7 +4,7 @@ Ops registry: maps op names to engine functions and Tensor method names.
 Used by ``_methods.py`` to auto-inject Tensor methods and by
 ``_ops/__init__.py`` to expose free functions.
 
-Adapter functions (signature normalisers, e.g. ``_sum_adapter``) live in
+Adapter functions (signature normalisers, e.g. ``A._sum_adapter``) live in
 ``_adapters.py`` — this file references them so the registry stays a
 declarative table of ``OpEntry`` records, not a mix of declarations and
 plumbing.
@@ -14,50 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from lucid._C import engine as _C_engine
-from lucid._ops._adapters import (
-    _argmax_adapter,
-    _argmin_adapter,
-    _bucketize_adapter,
-    _cartesian_prod_adapter,
-    _concat_adapter,
-    _cross_adapter,
-    _detach_adapter,
-    _einsum_adapter,
-    _expand_adapter,
-    _histc_adapter,
-    _index_select_adapter,
-    _isclose_adapter,
-    _kthvalue_adapter,
-    _logsumexp_adapter,
-    _masked_fill_adapter,
-    _max_adapter,
-    _mean_adapter,
-    _meshgrid_adapter,
-    _min_adapter,
-    _movedim_adapter,
-    _narrow_adapter,
-    _norm_adapter,
-    _pad_adapter,
-    _permute_adapter,
-    _prod_adapter,
-    _repeat_adapter,
-    _repeat_interleave_adapter,
-    _repeat_method_adapter,
-    _reshape_adapter,
-    _scatter_add_adapter,
-    _scatter_adapter,
-    _searchsorted_adapter,
-    _split_adapter,
-    _squeeze_adapter,
-    _std_adapter,
-    _sum_adapter,
-    _take_adapter,
-    _tensordot_adapter,
-    _unflatten_adapter,
-    _var_adapter,
-    _view_adapter,
-    _where_adapter,
-)
+from lucid._ops import _adapters as A  # accessor for every signature-normaliser
 
 
 @dataclass
@@ -163,22 +120,22 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("minimum_", _R.minimum_, 2, inplace=True, method_name="minimum_"),
 
     # ── reduction (with API-compat adapters) ───────────────────────────────
-    OpEntry("sum",    _sum_adapter,    1, method_name="sum",    free_fn_name="sum",
+    OpEntry("sum",    A._sum_adapter,    1, method_name="sum",    free_fn_name="sum",
             extra_kwargs=["dim", "keepdim", "axis", "axes", "keepdims"]),
-    OpEntry("mean",   _mean_adapter,   1, method_name="mean",   free_fn_name="mean",
+    OpEntry("mean",   A._mean_adapter,   1, method_name="mean",   free_fn_name="mean",
             extra_kwargs=["dim", "keepdim", "axis", "axes", "keepdims"]),
-    OpEntry("prod",   _prod_adapter,   1, method_name="prod",   free_fn_name="prod",
+    OpEntry("prod",   A._prod_adapter,   1, method_name="prod",   free_fn_name="prod",
             extra_kwargs=["dim", "keepdim", "axis", "axes", "keepdims"]),
-    OpEntry("max",    _max_adapter,    1, method_name="max",    free_fn_name="max",
+    OpEntry("max",    A._max_adapter,    1, method_name="max",    free_fn_name="max",
             extra_kwargs=["dim", "keepdim", "axis", "axes", "keepdims"]),
-    OpEntry("min",    _min_adapter,    1, method_name="min",    free_fn_name="min",
+    OpEntry("min",    A._min_adapter,    1, method_name="min",    free_fn_name="min",
             extra_kwargs=["dim", "keepdim", "axis", "axes", "keepdims"]),
-    OpEntry("var",    _var_adapter,    1, method_name="var",    free_fn_name="var",
+    OpEntry("var",    A._var_adapter,    1, method_name="var",    free_fn_name="var",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased",
                           "axis", "axes", "keepdims"]),
-    OpEntry("argmax", _argmax_adapter, 1, method_name="argmax", free_fn_name="argmax",
+    OpEntry("argmax", A._argmax_adapter, 1, method_name="argmax", free_fn_name="argmax",
             extra_kwargs=["dim", "keepdim", "axis", "keepdims"]),
-    OpEntry("argmin", _argmin_adapter, 1, method_name="argmin", free_fn_name="argmin",
+    OpEntry("argmin", A._argmin_adapter, 1, method_name="argmin", free_fn_name="argmin",
             extra_kwargs=["dim", "keepdim", "axis", "keepdims"]),
     OpEntry("cumsum", _R.cumsum, 1, method_name="cumsum", free_fn_name="cumsum",
             extra_kwargs=["axis"]),
@@ -187,31 +144,31 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("trace",  _R.trace,  1, method_name="trace",  free_fn_name="trace"),
 
     # ── shape / layout ─────────────────────────────────────────────────────
-    OpEntry("reshape",    _reshape_adapter, 1, method_name="reshape",    free_fn_name="reshape"),
-    OpEntry("squeeze",    _squeeze_adapter, 1, method_name="squeeze",    free_fn_name="squeeze",
+    OpEntry("reshape",    A._reshape_adapter, 1, method_name="reshape",    free_fn_name="reshape"),
+    OpEntry("squeeze",    A._squeeze_adapter, 1, method_name="squeeze",    free_fn_name="squeeze",
             extra_kwargs=["dim"]),
     OpEntry("squeeze_all",_R.squeeze_all,1, method_name="squeeze_all"),
     OpEntry("unsqueeze",  _R.unsqueeze,  1, method_name="unsqueeze",  free_fn_name="unsqueeze",
             extra_kwargs=["dim"]),
     OpEntry("flatten",    _R.flatten,    1, method_name="flatten",    free_fn_name="flatten",
             extra_kwargs=["start", "end"]),
-    OpEntry("permute",    _permute_adapter, 1, method_name="permute",    free_fn_name="permute"),
+    OpEntry("permute",    A._permute_adapter, 1, method_name="permute",    free_fn_name="permute"),
     OpEntry("transpose",  _R.transpose,  1, method_name="transpose",  free_fn_name="transpose"),
     OpEntry("swapaxes",   _R.swapaxes,   1, method_name="swapaxes",
             extra_kwargs=["d0", "d1"]),  # positional: swapaxes(d0, d1)
     OpEntry("broadcast_to",_R.broadcast_to,1,method_name="broadcast_to",free_fn_name="broadcast_to",
             extra_kwargs=["shape"]),
-    OpEntry("expand",     _expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
+    OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["axis"]),
     # ``lucid.repeat(x, repeats, dim=None)`` — interleave semantics.  No
     # ``method_name`` because Tensor.repeat (below) follows the reference
     # framework's ``Tensor.repeat`` instead, which tiles copies.
-    OpEntry("repeat",     _repeat_adapter, 1, method_name=None,         free_fn_name="repeat",
+    OpEntry("repeat",     A._repeat_adapter, 1, method_name=None,         free_fn_name="repeat",
             extra_kwargs=["dim"]),
     # ``Tensor.repeat(*sizes)`` — tile copies (separate semantics from the
-    # free function above; see ``_repeat_method_adapter``).
-    OpEntry("repeat_method", _repeat_method_adapter, 1,
+    # free function above; see ``A._repeat_method_adapter``).
+    OpEntry("repeat_method", A._repeat_method_adapter, 1,
             method_name="repeat", free_fn_name=None),
     OpEntry("tile",       _R.tile,       1, method_name="tile",       free_fn_name="tile",
             extra_kwargs=["reps"]),
@@ -221,7 +178,7 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["k"]),
     OpEntry("triu",       _R.triu,       1, method_name="triu",       free_fn_name="triu",
             extra_kwargs=["k"]),
-    OpEntry("pad",        _pad_adapter, 1, method_name="pad",        free_fn_name="pad",
+    OpEntry("pad",        A._pad_adapter, 1, method_name="pad",        free_fn_name="pad",
             extra_kwargs=["padding", "mode", "value"]),
 
     # ── index / gather ─────────────────────────────────────────────────────
@@ -250,8 +207,8 @@ _REGISTRY: list[OpEntry] = [
     # ``where`` and ``masked_fill`` auto-cast their condition/mask to bool to
     # match reference behaviour, so they need adapters rather than direct
     # engine bindings.
-    OpEntry("where",       _where_adapter, 0, free_fn_name="where"),
-    OpEntry("masked_fill", _masked_fill_adapter, 1,
+    OpEntry("where",       A._where_adapter, 0, free_fn_name="where"),
+    OpEntry("masked_fill", A._masked_fill_adapter, 1,
             method_name="masked_fill", free_fn_name="masked_fill",
             extra_kwargs=["value"]),
 
@@ -262,13 +219,13 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["axis"]),
     OpEntry("hstack",      _R.hstack,      -1, free_fn_name="hstack"),
     OpEntry("vstack",      _R.vstack,      -1, free_fn_name="vstack"),
-    OpEntry("split",       _split_adapter, 1,  method_name="split",      free_fn_name="split",
+    OpEntry("split",       A._split_adapter, 1,  method_name="split",      free_fn_name="split",
             extra_kwargs=["dim"]),
     OpEntry("chunk",       _R.chunk,       1,  method_name="chunk",      free_fn_name="chunk",
             extra_kwargs=["n", "axis"]),
     OpEntry("unbind",      _R.unbind,      1,  method_name="unbind",     free_fn_name="unbind",
             extra_kwargs=["axis"]),
-    OpEntry("meshgrid",    _meshgrid_adapter, 0, free_fn_name="meshgrid",
+    OpEntry("meshgrid",    A._meshgrid_adapter, 0, free_fn_name="meshgrid",
             extra_kwargs=["indexing"]),
 
     # ── softmax / log_softmax (have axis kwarg) ────────────────────────────
@@ -279,7 +236,7 @@ _REGISTRY: list[OpEntry] = [
 
     # ── rsqrt / std (engine-native) ────────────────────────────────────────
     OpEntry("rsqrt", _R.rsqrt, 1, method_name="rsqrt", free_fn_name="rsqrt"),
-    OpEntry("std",   _std_adapter, 1, method_name="std",   free_fn_name="std",
+    OpEntry("std",   A._std_adapter, 1, method_name="std",   free_fn_name="std",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased",
                           "axis", "axes", "keepdims"]),
 
@@ -288,7 +245,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("all", _R.all, 1, method_name="all", free_fn_name="all"),
 
     # ── linear algebra ─────────────────────────────────────────────────────
-    OpEntry("tensordot",  _tensordot_adapter, 2, free_fn_name="tensordot",
+    OpEntry("tensordot",  A._tensordot_adapter, 2, free_fn_name="tensordot",
             extra_kwargs=["dims"]),
     OpEntry("clip",       _R.clip,      1, method_name="clip",       free_fn_name="clip",
             extra_kwargs=["min", "max"]),
@@ -302,7 +259,7 @@ _REGISTRY: list[OpEntry] = [
 
     # ── tensor lifecycle ────────────────────────────────────────────────────
     # detach: deep-copy without gradient tracking (uses contiguous + clone_with_grad).
-    OpEntry("detach",      _detach_adapter, 1, method_name="detach", free_fn_name="detach"),
+    OpEntry("detach",      A._detach_adapter, 1, method_name="detach", free_fn_name="detach"),
     # clone: deep-copy preserving autograd history (contiguous = storage copy).
     OpEntry("clone",       _R.contiguous,   1, method_name="clone",  free_fn_name="clone"),
     # clamp is an alias for clip (same signature, same engine op).
@@ -312,7 +269,7 @@ _REGISTRY: list[OpEntry] = [
     # Python:  scatter_add(x, dim, index, src)
     # Engine:  scatter_add(base, indices, src, dim)
     # n_tensor_args=1 auto-unwraps x; the adapter manually unwraps index/src.
-    OpEntry("scatter_add", _scatter_add_adapter, 1,
+    OpEntry("scatter_add", A._scatter_add_adapter, 1,
             method_name="scatter_add", free_fn_name="scatter_add"),
 
     # ══ composite ops (impl in _C/ops/composite/) ═══════════════════════════
@@ -334,7 +291,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("logaddexp", _R.logaddexp, 2, method_name="logaddexp", free_fn_name="logaddexp"),
 
     # ── reduction compositions ──────────────────────────────────────────────
-    OpEntry("logsumexp", _logsumexp_adapter, 1,
+    OpEntry("logsumexp", A._logsumexp_adapter, 1,
             method_name="logsumexp", free_fn_name="logsumexp"),
 
     # ── linear-algebra compositions ─────────────────────────────────────────
@@ -353,33 +310,33 @@ _REGISTRY: list[OpEntry] = [
             method_name="logical_not", free_fn_name="logical_not"),
 
     # ── indexing compositions ───────────────────────────────────────────────
-    OpEntry("take",         _take_adapter, 1,
+    OpEntry("take",         A._take_adapter, 1,
             method_name="take", free_fn_name="take"),
-    OpEntry("index_select", _index_select_adapter, 1,
+    OpEntry("index_select", A._index_select_adapter, 1,
             method_name="index_select", free_fn_name="index_select"),
-    OpEntry("narrow",       _narrow_adapter, 1,
+    OpEntry("narrow",       A._narrow_adapter, 1,
             method_name="narrow", free_fn_name="narrow"),
-    OpEntry("scatter",      _scatter_adapter, 1,
+    OpEntry("scatter",      A._scatter_adapter, 1,
             method_name="scatter", free_fn_name="scatter",
             extra_kwargs=["reduce"]),
-    OpEntry("kthvalue",     _kthvalue_adapter, 1,
+    OpEntry("kthvalue",     A._kthvalue_adapter, 1,
             method_name="kthvalue", free_fn_name="kthvalue"),
 
     # ── layout compositions ─────────────────────────────────────────────────
-    OpEntry("movedim",   _movedim_adapter, 1,
+    OpEntry("movedim",   A._movedim_adapter, 1,
             method_name="movedim", free_fn_name="movedim"),
-    OpEntry("unflatten", _unflatten_adapter, 1,
+    OpEntry("unflatten", A._unflatten_adapter, 1,
             method_name="unflatten", free_fn_name="unflatten"),
 
     # ── stats / search compositions ─────────────────────────────────────────
-    OpEntry("histc",         _histc_adapter, 1,
+    OpEntry("histc",         A._histc_adapter, 1,
             method_name="histc", free_fn_name="histc"),
-    OpEntry("cartesian_prod", _cartesian_prod_adapter, 0,
+    OpEntry("cartesian_prod", A._cartesian_prod_adapter, 0,
             method_name=None, free_fn_name="cartesian_prod"),
-    OpEntry("searchsorted",  _searchsorted_adapter, 2,
+    OpEntry("searchsorted",  A._searchsorted_adapter, 2,
             method_name=None, free_fn_name="searchsorted",
             extra_kwargs=["right"]),
-    OpEntry("bucketize",     _bucketize_adapter, 2,
+    OpEntry("bucketize",     A._bucketize_adapter, 2,
             method_name=None, free_fn_name="bucketize",
             extra_kwargs=["right"]),
 
@@ -415,25 +372,25 @@ _REGISTRY: list[OpEntry] = [
 
     # isclose: composite op with rtol/atol/equal_nan keyword arguments.
     # n_tensor_args=2 so both operands get unwrapped before the adapter runs.
-    OpEntry("isclose", _isclose_adapter, 2,
+    OpEntry("isclose", A._isclose_adapter, 2,
             method_name="isclose", free_fn_name="isclose",
             extra_kwargs=["rtol", "atol", "equal_nan"]),
 
     # repeat_interleave: thin wrapper around engine.repeat that supports
     # ``dim=None`` (flatten first) like the reference framework's API.
-    OpEntry("repeat_interleave", _repeat_interleave_adapter, 1,
+    OpEntry("repeat_interleave", A._repeat_interleave_adapter, 1,
             method_name="repeat_interleave", free_fn_name="repeat_interleave"),
 
     # Shape aliases.
-    OpEntry("view",   _view_adapter,   1,
+    OpEntry("view",   A._view_adapter,   1,
             method_name="view", free_fn_name="view"),
-    OpEntry("concat", _concat_adapter, -1,
+    OpEntry("concat", A._concat_adapter, -1,
             method_name=None, free_fn_name="concat"),
 
     # ── top-level forwarders into the linalg sub-module ────────────────────
-    OpEntry("cross", _cross_adapter, 2,
+    OpEntry("cross", A._cross_adapter, 2,
             method_name="cross", free_fn_name="cross"),
-    OpEntry("norm",  _norm_adapter, 1,
+    OpEntry("norm",  A._norm_adapter, 1,
             method_name="norm", free_fn_name="norm"),
 
     # ── transpose shorthand ─────────────────────────────────────────────────
@@ -447,7 +404,7 @@ _REGISTRY: list[OpEntry] = [
     # primary entry point; this top-level alias just gives Python users the
     # familiar ``lucid.einsum(...)`` shorthand without going through that
     # sub-module.  Both expose the same engine kernel.
-    OpEntry("einsum", _einsum_adapter, 0,
+    OpEntry("einsum", A._einsum_adapter, 0,
             method_name=None, free_fn_name="einsum"),
 ]
 # fmt: on
