@@ -93,3 +93,45 @@ class TestExistingDatasetsStillWork:
         td: TensorDataset = TensorDataset(lucid.arange(10).reshape(10, 1))
         a, b = random_split(td, [7, 3])
         assert len(a) + len(b) == 10
+
+
+class TestDistributedSampler:
+    def _make(self) -> TensorDataset:
+        return TensorDataset(lucid.arange(10).reshape(10, 1))
+
+    def test_single_rank_yields_all_indices(self) -> None:
+        from lucid.utils.data import DistributedSampler
+
+        sampler = DistributedSampler(self._make(), num_replicas=1, rank=0, shuffle=False)
+        assert list(sampler) == list(range(10))
+        assert len(sampler) == 10
+
+    def test_two_replicas_split_disjointly(self) -> None:
+        from lucid.utils.data import DistributedSampler
+
+        td: TensorDataset = self._make()
+        rank0 = list(DistributedSampler(td, num_replicas=2, rank=0, shuffle=False))
+        rank1 = list(DistributedSampler(td, num_replicas=2, rank=1, shuffle=False))
+        assert rank0 == [0, 2, 4, 6, 8]
+        assert rank1 == [1, 3, 5, 7, 9]
+        assert set(rank0) | set(rank1) == set(range(10))
+
+    def test_epoch_affects_shuffle(self) -> None:
+        from lucid.utils.data import DistributedSampler
+
+        sampler = DistributedSampler(
+            self._make(), num_replicas=1, rank=0, shuffle=True, seed=42
+        )
+        sampler.set_epoch(0)
+        first: list[int] = list(sampler)
+        sampler.set_epoch(1)
+        second: list[int] = list(sampler)
+        assert first != second
+        assert sorted(first) == sorted(second)  # same elements, different order
+
+    def test_invalid_rank_rejected(self) -> None:
+        import pytest as _pytest
+        from lucid.utils.data import DistributedSampler
+
+        with _pytest.raises(ValueError, match="rank"):
+            DistributedSampler(self._make(), num_replicas=2, rank=2)

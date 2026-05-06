@@ -19,6 +19,7 @@ from lucid.utils.data.sampler import (
     SubsetRandomSampler,
     WeightedRandomSampler,
     BatchSampler,
+    DistributedSampler,
 )
 from lucid.utils.data.dataloader import DataLoader, default_collate
 from lucid.utils.data._worker import get_worker_info, WorkerInfo
@@ -38,6 +39,7 @@ __all__ = [
     "SubsetRandomSampler",
     "WeightedRandomSampler",
     "BatchSampler",
+    "DistributedSampler",
     "DataLoader",
     "default_collate",
     "get_worker_info",

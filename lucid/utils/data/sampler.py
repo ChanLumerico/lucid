@@ -150,3 +150,77 @@ class BatchSampler(Sampler):
         if self.drop_last:
             return n // self.batch_size
         return (n + self.batch_size - 1) // self.batch_size
+
+
+class DistributedSampler(Sampler):
+    """Subset-and-shuffle sampler for distributed training.
+
+    Lucid is single-process, single-machine — there is no real distributed
+    backend to coordinate with — but ``DistributedSampler`` is part of the
+    standard ``DataLoader`` surface and user code routinely instantiates it
+    even in single-rank contexts (e.g. ``num_replicas=1, rank=0``).  This
+    implementation supports exactly that: it partitions the dataset into
+    ``num_replicas`` slabs and yields the indices belonging to ``rank``.
+    With the default ``num_replicas=1`` it degenerates to a plain
+    sequential / random sampler that respects ``shuffle`` and ``seed``.
+
+    A multi-process backend would require a process group + collective
+    communication; the surface stays compatible should that land later.
+    """
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        num_replicas: int = 1,
+        rank: int = 0,
+        shuffle: bool = True,
+        seed: int = 0,
+        drop_last: bool = False,
+    ) -> None:
+        if num_replicas < 1:
+            raise ValueError(f"num_replicas must be >= 1, got {num_replicas}")
+        if rank < 0 or rank >= num_replicas:
+            raise ValueError(
+                f"rank {rank} is out of range for num_replicas={num_replicas}"
+            )
+        self.dataset: Dataset = dataset
+        self.num_replicas: int = num_replicas
+        self.rank: int = rank
+        self.shuffle: bool = shuffle
+        self.seed: int = seed
+        self.drop_last: bool = drop_last
+        self.epoch: int = 0
+
+        # Split the index range into ``num_replicas`` evenly-sized slabs.
+        # With ``drop_last=False`` we wrap-pad so every replica sees the
+        # same number of indices; with ``drop_last=True`` we round down.
+        n: int = len(dataset)
+        if drop_last:
+            self.num_samples: int = n // num_replicas
+            self.total_size: int = self.num_samples * num_replicas
+        else:
+            self.num_samples = (n + num_replicas - 1) // num_replicas
+            self.total_size = self.num_samples * num_replicas
+
+    def set_epoch(self, epoch: int) -> None:
+        """Set the epoch number — affects the shuffling RNG seed."""
+        self.epoch = int(epoch)
+
+    def __iter__(self) -> Iterator[int]:
+        n: int = len(self.dataset)
+        indices: list[int] = list(range(n))
+        if self.shuffle:
+            rng = random.Random(self.seed + self.epoch)
+            rng.shuffle(indices)
+        if self.drop_last:
+            indices = indices[: self.total_size]
+        else:
+            # Wrap-pad so the slab division is even.
+            padding: int = self.total_size - n
+            if padding > 0:
+                indices += indices[:padding]
+        # Slab pick: take every ``num_replicas``-th index starting at ``rank``.
+        return iter(indices[self.rank : self.total_size : self.num_replicas])
+
+    def __len__(self) -> int:
+        return self.num_samples
