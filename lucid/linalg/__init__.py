@@ -610,6 +610,261 @@ def ldl_factor(
     return _wrap(ld_impl), _wrap(piv_impl)
 
 
+# ── *_ex variants — return (result, info) instead of raising ───────────────
+#
+# LAPACK's ``*_ex`` family writes a non-zero ``info`` integer when the
+# matrix is singular / not positive definite / etc., instead of erroring.
+# Lucid's existing ``cholesky`` / ``inv`` / ``solve`` raise ``LucidError``
+# in those cases (translated from the LAPACK status by the engine
+# layer).  We re-shape that into the ``info`` return contract by catching
+# the engine error and emitting a non-zero ``info`` tensor.
+#
+# ``info == 0``  → success; ``result`` is meaningful.
+# ``info != 0``  → numerical failure; ``result`` is a *shape-correct
+#                  placeholder* (zeros).  Callers must check ``info``
+#                  before trusting the result, exactly as in LAPACK.
+
+
+def _info_zero(A: Tensor) -> Tensor:
+    """Build a scalar (or batched) int32 ``info`` tensor of zeros aligned
+    with the leading-batch dims of ``A`` (everything except the trailing
+    two matrix dims).  Mirrors LAPACK's batched-info contract."""
+    import lucid as _l
+
+    batch = list(A.shape[:-2])
+    if not batch:
+        return _l.zeros(tuple(), dtype=_l.int32, device=A.device)
+    return _l.zeros(*batch, dtype=_l.int32, device=A.device)
+
+
+def cholesky_ex(
+    A: Tensor,
+    *,
+    upper: bool = False,
+    check_errors: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """Cholesky factorization with an explicit ``info`` flag.
+
+    Returns ``(L, info)`` where ``info == 0`` on success and non-zero
+    when ``A`` is not positive-definite.  When ``info != 0`` the returned
+    ``L`` is filled with zeros — callers must check ``info`` first.
+    ``check_errors=True`` re-raises the underlying error instead of
+    silently returning a zero tensor (useful while debugging).
+    """
+    import lucid as _l
+
+    try:
+        L = cholesky(A, upper=upper)
+        return L, _info_zero(A)
+    except Exception:
+        if check_errors:
+            raise
+        zero_L = _l.zeros(*A.shape, dtype=A.dtype, device=A.device)
+        info = _info_zero(A) + 1  # non-zero sentinel
+        return zero_L, info
+
+
+def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
+    """Matrix inverse with an explicit ``info`` flag.
+
+    Returns ``(Ainv, info)``.  ``info != 0`` indicates that ``A`` was
+    singular; ``Ainv`` is then a zero placeholder.
+    """
+    import lucid as _l
+
+    try:
+        return inv(A), _info_zero(A)
+    except Exception:
+        if check_errors:
+            raise
+        zero_inv = _l.zeros(*A.shape, dtype=A.dtype, device=A.device)
+        info = _info_zero(A) + 1
+        return zero_inv, info
+
+
+def solve_ex(
+    A: Tensor,
+    B: Tensor,
+    *,
+    left: bool = True,
+    check_errors: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """Solve the linear system ``A·X = B`` with an explicit ``info`` flag.
+
+    Returns ``(X, info)``.  ``info != 0`` indicates ``A`` was singular;
+    ``X`` is then a zero placeholder shaped like ``B``.  Currently only
+    ``left=True`` (the default) is wired — callers wanting ``X·A = B``
+    can route through :func:`solve_triangular` themselves.
+    """
+    import lucid as _l
+
+    if not left:
+        raise NotImplementedError("solve_ex: only left=True is supported")
+    try:
+        return solve(A, B), _info_zero(A)
+    except Exception:
+        if check_errors:
+            raise
+        zero_X = _l.zeros(*B.shape, dtype=B.dtype, device=B.device)
+        info = _info_zero(A) + 1
+        return zero_X, info
+
+
+# ── Full LU decomposition (P, L, U) ────────────────────────────────────────
+
+
+def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
+    """Full LU decomposition: ``A = P · L · U``.
+
+    Returns the explicit factors as a tuple ``(P, L, U)``:
+
+    * ``P`` (m × m) — permutation matrix derived from the pivot vector.
+    * ``L`` (m × m, unit-lower-triangular) — strictly lower part of the
+      packed factor with 1s on the diagonal.
+    * ``U`` (m × m, upper-triangular) — upper part including the diagonal.
+
+    Implemented as a Python composite over :func:`lu_factor`.  ``pivot``
+    is currently always ``True`` (matches the engine kernel); when set to
+    ``False`` the call raises — Lucid does not have a pivoted-vs-unpivoted
+    LU split kernel.
+    """
+    import lucid as _l
+
+    if not pivot:
+        raise NotImplementedError("lu: pivot=False is not supported")
+    sh = tuple(_unwrap(A).shape)
+    if len(sh) < 2 or sh[-1] != sh[-2]:
+        raise ValueError(
+            f"lu requires a square matrix in the last two dims, got {sh}"
+        )
+    n = int(sh[-1])
+
+    LU, pivots = lu_factor(A)
+
+    # Split the packed LU into L (unit-lower) and U (upper).
+    eye_n = _l.eye(n, dtype=A.dtype, device=A.device)
+    L_strict = _l.tril(LU) - _l.tril(LU) * eye_n  # zero out diagonal
+    L = L_strict + eye_n  # add unit diagonal
+    U = _l.triu(LU)
+
+    # Reconstruct the permutation matrix from the LAPACK pivot vector.
+    # LAPACK pivots are 1-based: ``pivots[i]`` holds the row swapped with
+    # row ``i`` during step ``i``.  We start from the identity and apply
+    # the swap sequence in reverse to recover ``P`` such that ``P · A``
+    # equals the *unpermuted* LU product.
+    P = _build_permutation_matrix(pivots, n, A.dtype, A.device)
+    return P, L, U
+
+
+def _build_permutation_matrix(
+    pivots: Tensor,
+    n: int,
+    dtype: object,
+    device: object,
+) -> Tensor:
+    """Convert LAPACK's 1-based pivot vector to an explicit (n × n) P
+    matrix such that ``A = P · L · U`` (LAPACK's contract is
+    ``P · A = L · U``; we transpose at the end so callers can use the
+    factor product directly)."""
+    import lucid as _l
+
+    perm: list[int] = list(range(n))
+    pv = pivots.numpy()
+    # If batched, only the leading instance is exposed here — caller
+    # should iterate.  Lucid's lu_factor on a non-batched 2-D input
+    # gives a length-n pivot vector; that's what we handle.
+    if pv.ndim != 1:
+        raise NotImplementedError("lu: batched LU is not yet exposed")
+    for i in range(n):
+        j = int(pv[i]) - 1  # 1-based → 0-based
+        perm[i], perm[j] = perm[j], perm[i]
+    # Build the explicit matrix.  P[i, perm[i]] = 1.
+    P_np = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        P_np[i][perm[i]] = 1.0
+    return _l.tensor(P_np, dtype=dtype, device=device).mT  # transpose: A = P·L·U
+
+
+# ── ldl_solve — back-substitution using the LDL factorization ──────────────
+
+
+def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
+    """Solve ``A · X = B`` given the LDL factorization of a symmetric ``A``.
+
+    ``LD`` and ``pivots`` are :func:`ldl_factor`'s output.  This function
+    only supports the simple-pivot case (every pivot index is positive,
+    indicating a 1×1 diagonal block) — block 2×2 pivots from LAPACK's
+    Bunch-Kaufman algorithm raise ``NotImplementedError``.  In the simple
+    case the solve reduces to three consecutive triangular solves:
+
+    .. code-block::
+
+        L · y = B   (lower triangular, unit diagonal)
+        D · z = y   (diagonal)
+        Lᵀ · X = z  (upper triangular, unit diagonal)
+    """
+    import lucid as _l
+
+    pv = pivots.numpy()
+    if pv.ndim != 1:
+        raise NotImplementedError("ldl_solve: batched solve not yet exposed")
+    if int(pv.min()) <= 0:
+        raise NotImplementedError(
+            "ldl_solve: 2x2 block pivots from Bunch-Kaufman are not yet "
+            "supported.  All pivot entries must be > 0 (1x1 simple pivots)."
+        )
+    n = int(LD.shape[-1])
+    eye_n = _l.eye(n, dtype=LD.dtype, device=LD.device)
+    # L is the strictly lower triangle of LD with 1s on the diagonal;
+    # D's diagonal lives in LD's diagonal.
+    L_strict = _l.tril(LD) - _l.tril(LD) * eye_n
+    L = L_strict + eye_n
+    diag = _l.diagonal(LD)  # length-n vector
+
+    # Apply LAPACK's pivot permutation to B before the triangular solves.
+    perm: list[int] = list(range(n))
+    pv_l = pv.tolist()
+    for i in range(n):
+        j = int(pv_l[i]) - 1
+        perm[i], perm[j] = perm[j], perm[i]
+    B_perm = B.index_select(
+        -2, _l.tensor(perm, dtype=_l.int64, device=B.device)
+    )
+
+    y = solve_triangular(L, B_perm, upper=False, unitriangular=True)
+    # Diagonal solve via element-wise division along the leading dim of y.
+    diag_col = diag.reshape(n, 1)
+    z = y / diag_col
+    X_perm = solve_triangular(L.mT, z, upper=True, unitriangular=True)
+
+    # Inverse permutation to restore the original row order.
+    inv_perm: list[int] = [0] * n
+    for i, p in enumerate(perm):
+        inv_perm[p] = i
+    return X_perm.index_select(
+        -2, _l.tensor(inv_perm, dtype=_l.int64, device=B.device)
+    )
+
+
+# ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────
+
+
+def diagonal(
+    A: Tensor,
+    *,
+    offset: int = 0,
+    dim1: int = -2,
+    dim2: int = -1,
+) -> Tensor:
+    """Linalg-style ``diagonal``: extract the (off)diagonal of every
+    matrix in a batched ``A``.  Same engine kernel as ``lucid.diagonal``;
+    the linalg variant differs only by the kwarg-only / matrix-aware
+    defaults (``dim1=-2``, ``dim2=-1``)."""
+    import lucid as _l
+
+    return _l.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
+
+
 __all__ = [
     "inv",
     "det",
@@ -643,4 +898,10 @@ __all__ = [
     "lu_solve",
     "householder_product",
     "ldl_factor",
+    "ldl_solve",
+    "lu",
+    "cholesky_ex",
+    "inv_ex",
+    "solve_ex",
+    "diagonal",
 ]
