@@ -397,24 +397,16 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("concat", A._concat_adapter, -1,
             method_name=None, free_fn_name="concat"),
 
-    # ── top-level forwarders into the linalg sub-module ────────────────────
-    OpEntry("cross", A._cross_adapter, 2,
-            method_name="cross", free_fn_name="cross"),
-    OpEntry("norm",  A._norm_adapter, 1,
-            method_name="norm", free_fn_name="norm"),
+    # No `cross` / `norm` / `einsum` top-level forwarders.  Lucid's API tree
+    # gives each op exactly one canonical path: linalg ops live only under
+    # ``lucid.linalg.*`` and einops-style ops only under ``lucid.einops.*``.
+    # Adding shortcut aliases here would re-introduce the duplication this
+    # policy is meant to avoid.
 
     # ── transpose shorthand ─────────────────────────────────────────────────
     # ``Tensor.t()`` is the standard 2-D transpose — same engine kernel as
     # the ``T`` property, exposed here as a method so registry-driven method
     # injection picks it up alongside everything else.
     OpEntry("t", _R.T, 1, method_name="t", free_fn_name=None),
-
-    # ── top-level forwarder into the einops sub-module ─────────────────────
-    # The user explicitly wanted ``lucid.einops.einsum`` to remain the
-    # primary entry point; this top-level alias just gives Python users the
-    # familiar ``lucid.einsum(...)`` shorthand without going through that
-    # sub-module.  Both expose the same engine kernel.
-    OpEntry("einsum", A._einsum_adapter, 0,
-            method_name=None, free_fn_name="einsum"),
 ]
 # fmt: on

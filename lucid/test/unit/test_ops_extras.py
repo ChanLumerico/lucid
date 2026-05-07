@@ -307,26 +307,33 @@ class TestLinAlg:
         b: lucid.Tensor = lucid.tensor([[[3.0], [4.0]]])
         np.testing.assert_allclose(_np(lucid.bmm(a, b)), [[[11.0]]])
 
-    def test_einsum_top_level(self) -> None:
+    def test_einsum_canonical_path(self) -> None:
+        # Einops ops are accessed only via ``lucid.einops``.
         a: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
-        out: float = float(lucid.einsum("ij,ij->", a, a).item())
+        out: float = float(lucid.einops.einsum("ij,ij->", a, a).item())
         assert out == 30.0  # 1+4+9+16
 
-    def test_einsum_via_einops_package(self) -> None:
-        # The user explicitly wanted ``lucid.einops.einsum`` to remain a
-        # valid entry point even after the top-level ``lucid.einsum`` lands.
+    def test_einsum_dot_product(self) -> None:
         a: lucid.Tensor = lucid.tensor([1.0, 2.0])
         b: lucid.Tensor = lucid.tensor([3.0, 4.0])
         assert float(lucid.einops.einsum("i,i->", a, b).item()) == 11.0
 
-    def test_top_level_norm(self) -> None:
-        # ``lucid.norm`` is a top-level alias of ``lucid.linalg.norm``.
+    def test_linalg_norm(self) -> None:
+        # Linalg ops are accessed only via ``lucid.linalg``.
         assert float(lucid.linalg.norm(lucid.tensor([3.0, 4.0])).item()) == 5.0
 
-    def test_top_level_cross(self) -> None:
+    def test_linalg_cross(self) -> None:
         a: lucid.Tensor = lucid.tensor([1.0, 0.0, 0.0])
         b: lucid.Tensor = lucid.tensor([0.0, 1.0, 0.0])
         np.testing.assert_allclose(_np(lucid.linalg.cross(a, b)), [0.0, 0.0, 1.0])
+
+    def test_no_top_level_subpackage_shortcuts(self) -> None:
+        # Policy: linalg / einops ops have exactly one canonical access path.
+        for name in ("cross", "norm", "einsum", "vander"):
+            assert not hasattr(lucid, name), (
+                f"lucid.{name} should be removed — use the canonical "
+                f"sub-package path instead"
+            )
 
     def test_kron_product(self) -> None:
         a: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])

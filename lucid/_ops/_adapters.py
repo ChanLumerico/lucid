@@ -581,41 +581,8 @@ def _isclose_adapter(
     return _C_engine.isclose(a_impl, b_impl, float(rtol), float(atol))
 
 
-# ── Sub-module forwarders ────────────────────────────────────────────────────
-
-
-def _cross_adapter(a_impl: _Impl, b_impl: _Impl, dim: int = -1) -> _Impl:
-    """cross(a, b, dim=-1) — forwards to lucid.linalg.cross.
-
-    ``lucid.linalg.cross`` is a Python wrapper around an engine kernel; this
-    adapter lets the top-level ``lucid.cross`` behave identically without
-    duplicating the wrapper logic.
-    """
-    from lucid._dispatch import _wrap as _w
-    from lucid.linalg import cross as _linalg_cross
-
-    return _unwrap(_linalg_cross(_w(a_impl), _w(b_impl), dim=int(dim)))
-
-
-def _norm_adapter(
-    a_impl: _Impl,
-    ord: int | float | str | None = None,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """norm(a, ord, dim, keepdim) — forwards to lucid.linalg.norm."""
-    from lucid._dispatch import _wrap as _w
-    from lucid.linalg import norm as _linalg_norm
-
-    return _unwrap(_linalg_norm(_w(a_impl), ord=ord, dim=dim, keepdim=keepdim))
-
-
-def _einsum_adapter(equation: str, *operands: Tensor) -> _Impl:
-    """einsum(equation, *operands) — top-level alias for ``lucid.einops.einsum``.
-
-    The engine's einsum kernel lives in the ``einops`` sub-module; we forward
-    here so the top-level ``lucid.einsum(...)`` calling form works without
-    bypassing the registry.
-    """
-    impls = [_unwrap(t) if hasattr(t, "_impl") else t for t in operands]
-    return _C_engine.einops.einsum(equation, impls)
+# Sub-module forwarders for ``cross`` / ``norm`` / ``einsum`` were removed
+# (2026-05-08).  Lucid's API tree exposes those ops only via their canonical
+# sub-package paths — ``lucid.linalg.cross``, ``lucid.linalg.norm``,
+# ``lucid.einops.einsum`` — so the adapters that used to forward them at the
+# top level were dead code under the new policy.

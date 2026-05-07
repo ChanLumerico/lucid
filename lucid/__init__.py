@@ -93,8 +93,7 @@ __all__ = [
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
     "add", "sub", "mul", "div", "pow",
-    "matmul", "mm", "bmm", "tensordot",
-    "einsum", "kron",
+    "matmul", "mm", "bmm", "tensordot", "kron",
     "atan2", "fmod", "remainder", "hypot", "logaddexp",
     "maximum", "minimum",
     "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
@@ -144,7 +143,7 @@ __all__ = [
     "column_stack", "row_stack", "dstack",
     "atleast_1d", "atleast_2d", "atleast_3d",
     "vsplit", "hsplit", "dsplit", "tensor_split",
-    "take_along_dim", "vander", "rot90",
+    "take_along_dim", "rot90",
     # ── extras: predicates / introspection ────────────────────────────────
     "numel", "is_storage", "is_nonzero", "is_same_size", "is_neg", "is_conj",
     "isin", "isneginf", "isposinf", "isreal",
@@ -193,7 +192,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "atan2", "fmod", "remainder", "hypot", "logaddexp",
     "maximum", "minimum",
     # ── linear algebra ────────────────────────────────────────────────────
-    "matmul", "mm", "bmm", "tensordot", "einsum", "kron",
+    "matmul", "mm", "bmm", "tensordot", "kron",
     # ── comparison ────────────────────────────────────────────────────────
     "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
     "eq", "ne", "lt", "le", "gt", "ge", "isclose",

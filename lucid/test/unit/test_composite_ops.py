@@ -245,11 +245,14 @@ class TestShapeMisc:
         assert (out - lucid.tensor([[1.0, 3.0], [5.0, 4.0]])).abs().max().item() == 0.0
 
     def test_vander(self) -> None:
-        out = lucid.vander(lucid.tensor([1.0, 2.0, 3.0]), N=4)
+        # `vander` is a linalg op — accessed only via ``lucid.linalg``.
+        out = lucid.linalg.vander(lucid.tensor([1.0, 2.0, 3.0]), N=4)
         # Last column (decreasing power) should be x^0 = 1.
         assert (out[:, 3] - lucid.tensor([1.0, 1.0, 1.0])).abs().max().item() < 1e-6
         # Increasing variant.
-        out_inc = lucid.vander(lucid.tensor([1.0, 2.0, 3.0]), N=4, increasing=True)
+        out_inc = lucid.linalg.vander(
+            lucid.tensor([1.0, 2.0, 3.0]), N=4, increasing=True
+        )
         assert (out_inc[:, 0] - lucid.tensor([1.0, 1.0, 1.0])).abs().max().item() < 1e-6
 
     def test_rot90_k_cycles(self) -> None:

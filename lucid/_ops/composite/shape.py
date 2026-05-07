@@ -164,17 +164,6 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     return lucid.gather(x, indices, dim)
 
 
-def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
-    """Vandermonde matrix: ``out[i, j] = x[i] ** (N-1-j)``."""
-    if x.ndim != 1:
-        raise ValueError("vander expects a 1-D input tensor")
-    cols = N if N is not None else x.shape[0]
-    powers = lucid.arange(cols, dtype=x.dtype, device=x.device)
-    if not increasing:
-        powers = lucid.flip(powers, [0])
-    return lucid.pow(x.unsqueeze(1), powers.unsqueeze(0))
-
-
 def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     """Rotate by 90° in the plane defined by ``dims``, ``k`` times."""
     d0, d1 = dims[0], dims[1]
@@ -205,6 +194,5 @@ __all__ = [
     "dsplit",
     "tensor_split",
     "take_along_dim",
-    "vander",
     "rot90",
 ]
