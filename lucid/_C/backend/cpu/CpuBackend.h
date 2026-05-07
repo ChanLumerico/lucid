@@ -190,6 +190,20 @@ public:
     }
 
     Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        if (dt == Dtype::C64) {
+            // Element-wise complex multiply on interleaved [re, im, re, im, ...].
+            // ``vDSP_zvmul`` operates on this exact layout via DSPComplex*; the
+            // strides are 1 because both inputs and outputs are contiguous.
+            const auto& ca = std::get<CpuStorage>(a);
+            const auto& cb = std::get<CpuStorage>(b);
+            const std::size_t n = shape_numel(shape);
+            const std::size_t nb = n * dtype_size(dt);
+            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+            cpu::vzmul_c64(reinterpret_cast<const float*>(ca.ptr.get()),
+                           reinterpret_cast<const float*>(cb.ptr.get()),
+                           reinterpret_cast<float*>(ptr.get()), n);
+            return Storage{CpuStorage{ptr, nb, dt}};
+        }
         return binary_op(
             a, b, shape, dt,
             [](const float* ap, const float* bp, float* op, std::size_t n) {
@@ -791,6 +805,68 @@ public:
             ErrorBuilder("cpu_backend::invert").not_implemented("dtype not supported");
         }
         return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    // ── Complex viewing (interleaved [re, im, re, im, ...] storage) ────────
+
+    Storage complex_real(const Storage& a, const Shape& shape) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * sizeof(float);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
+        float* op = reinterpret_cast<float*>(ptr.get());
+        // Stride-2 copy: even indices in interleaved storage are the real parts.
+        for (std::size_t i = 0; i < n; ++i)
+            op[i] = ip[2 * i];
+        return Storage{CpuStorage{ptr, nb, Dtype::F32}};
+    }
+
+    Storage complex_imag(const Storage& a, const Shape& shape) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * sizeof(float);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
+        float* op = reinterpret_cast<float*>(ptr.get());
+        // Odd indices in interleaved storage are the imag parts.
+        for (std::size_t i = 0; i < n; ++i)
+            op[i] = ip[2 * i + 1];
+        return Storage{CpuStorage{ptr, nb, Dtype::F32}};
+    }
+
+    Storage complex_combine(
+        const Storage& re, const Storage& im, const Shape& shape) override {
+        const auto& re_s = std::get<CpuStorage>(re);
+        const auto& im_s = std::get<CpuStorage>(im);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(Dtype::C64);  // 8 bytes per complex
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const float* rp = reinterpret_cast<const float*>(re_s.ptr.get());
+        const float* ip = reinterpret_cast<const float*>(im_s.ptr.get());
+        float* op = reinterpret_cast<float*>(ptr.get());
+        // Interleave two F32 arrays into one C64 array.  vDSP's ``vDSP_ztoc``
+        // does this from split-complex form (separate re/im pointers); our
+        // inputs match that layout exactly.
+        DSPSplitComplex split{const_cast<float*>(rp), const_cast<float*>(ip)};
+        vDSP_ztoc(&split, 1, reinterpret_cast<DSPComplex*>(op), 2,
+                  static_cast<vDSP_Length>(n));
+        return Storage{CpuStorage{ptr, nb, Dtype::C64}};
+    }
+
+    Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) override {
+        // Real dtypes: conjugate is the identity.  Returning the input
+        // storage directly avoids a needless allocation + copy.
+        if (dt != Dtype::C64) {
+            return a;
+        }
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(Dtype::C64);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        cpu::vzconj_c64(reinterpret_cast<const float*>(cs.ptr.get()),
+                        reinterpret_cast<float*>(ptr.get()), n);
+        return Storage{CpuStorage{ptr, nb, Dtype::C64}};
     }
 
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
@@ -9513,6 +9589,15 @@ private:
                 p[i] = 1;
             break;
         }
+        case Dtype::C64: {
+            // Interleaved [re, im, re, im, ...] — set re=1, im=0 per element.
+            float* p = reinterpret_cast<float*>(ptr);
+            for (std::size_t i = 0; i < n; ++i) {
+                p[2 * i] = 1.0f;
+                p[2 * i + 1] = 0.0f;
+            }
+            break;
+        }
         default:
             ErrorBuilder("cpu_backend::ones").not_implemented("dtype not supported");
         }
@@ -10133,6 +10218,18 @@ private:
             auto v = fill_value;
             for (std::size_t i = 0; i < n; ++i)
                 reinterpret_cast<double*>(p)[i] = v;
+            break;
+        }
+        case Dtype::C64: {
+            // Interleaved [re, im, re, im, ...]; ``fill_value`` becomes the
+            // real part, imag is set to 0.  Users wanting non-zero imag
+            // should construct the array via ``complex_combine(real, imag)``.
+            auto v = static_cast<float>(fill_value);
+            float* fp = reinterpret_cast<float*>(p);
+            for (std::size_t i = 0; i < n; ++i) {
+                fp[2 * i] = v;
+                fp[2 * i + 1] = 0.0f;
+            }
             break;
         }
         default:

@@ -225,6 +225,10 @@ lucid_object_library(
     ops/fft/Ifftn.cpp
     ops/fft/Rfftn.cpp
     ops/fft/Irfftn.cpp
+    ops/complex/Real.cpp
+    ops/complex/Imag.cpp
+    ops/complex/Complex.cpp
+    ops/complex/Conj.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp
@@ -274,6 +278,7 @@ lucid_object_library(
     bindings/bind_linalg.cpp
     bindings/bind_einops.cpp
     bindings/bind_fft.cpp
+    bindings/bind_complex.cpp
     bindings/bind.cpp)
 
 add_library(

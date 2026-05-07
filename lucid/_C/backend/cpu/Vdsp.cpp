@@ -13,6 +13,9 @@
 
 #include "Vdsp.h"
 
+#include <complex>
+#include <cstring>
+
 #include <Accelerate/Accelerate.h>
 
 namespace lucid::backend::cpu {
@@ -200,6 +203,28 @@ void vadd_i32(const std::int32_t* a, const std::int32_t* b, std::int32_t* out, s
 void vadd_i64(const std::int64_t* a, const std::int64_t* b, std::int64_t* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
         out[i] = a[i] + b[i];
+}
+
+void vzmul_c64(const float* a, const float* b, float* out, std::size_t n) {
+    // vDSP's ``zvmul`` operates on split-complex ``DSPSplitComplex`` (separate
+    // real / imag arrays), but Lucid's C64 storage is interleaved
+    // ``[re, im, re, im, ...]``.  Going through ``vDSP_ctoz`` + ``zvmul``
+    // + ``vDSP_ztoc`` would mean two extra full passes over the data; a
+    // straight ``std::complex<float>`` loop is simpler and the compiler
+    // auto-vectorises it with NEON on Apple Silicon.
+    const auto* ac = reinterpret_cast<const std::complex<float>*>(a);
+    const auto* bc = reinterpret_cast<const std::complex<float>*>(b);
+    auto* oc = reinterpret_cast<std::complex<float>*>(out);
+    for (std::size_t i = 0; i < n; ++i)
+        oc[i] = ac[i] * bc[i];
+}
+
+void vzconj_c64(const float* a, float* out, std::size_t n) {
+    // Copy the full interleaved buffer, then negate only the imag halves
+    // via a stride-2 view starting at offset 1.  ``vDSP_vneg`` handles the
+    // stride natively.
+    std::memcpy(out, a, n * 2 * sizeof(float));
+    vDSP_vneg(out + 1, 2, out + 1, 2, L(n));
 }
 
 }  // namespace lucid::backend::cpu

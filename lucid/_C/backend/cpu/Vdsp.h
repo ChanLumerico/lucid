@@ -97,4 +97,16 @@ vadd_i32(const std::int32_t* a, const std::int32_t* b, std::int32_t* out, std::s
 LUCID_INTERNAL void
 vadd_i64(const std::int64_t* a, const std::int64_t* b, std::int64_t* out, std::size_t n);
 
+// Complex (C64) element-wise multiply on interleaved ``[re, im, re, im, ...]``
+// storage.  Wraps ``vDSP_zvmul`` so the call site stays free of the
+// ``DSPComplex *`` cast and the ``flag = 1`` (no-conj) literal.  ``n`` is the
+// number of complex elements (NOT floats) — internally each element is two
+// floats.
+LUCID_INTERNAL void vzmul_c64(const float* a, const float* b, float* out, std::size_t n);
+
+// Complex (C64) conjugate on interleaved storage: negates every imag part,
+// leaves real parts unchanged.  Implemented via ``vDSP_vneg`` over the
+// imag-stride-2 view.
+LUCID_INTERNAL void vzconj_c64(const float* a, float* out, std::size_t n);
+
 }  // namespace lucid::backend::cpu

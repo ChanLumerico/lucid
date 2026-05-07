@@ -71,19 +71,21 @@ def isreal(x: Tensor) -> Tensor:
     return lucid.isfinite(x) | lucid.isnan(x) | lucid.isinf(x)
 
 
-def conj(x: Tensor) -> Tensor:
-    return x
-
-
 def conj_physical(x: Tensor) -> Tensor:
-    return x
+    """Materialised conjugate.  Lucid never carries lazy conjugate metadata,
+    so this is just an alias for :func:`lucid.conj` (the engine op)."""
+    return lucid.conj(x)
 
 
 def resolve_conj(x: Tensor) -> Tensor:
+    """No-op: Lucid never lazily marks tensors as conjugated, so there is
+    nothing to resolve.  Provided for API parity."""
     return x
 
 
 def resolve_neg(x: Tensor) -> Tensor:
+    """No-op: Lucid never lazily marks tensors as negated.  Provided for
+    API parity."""
     return x
 
 
@@ -98,7 +100,6 @@ __all__ = [
     "isneginf",
     "isposinf",
     "isreal",
-    "conj",
     "conj_physical",
     "resolve_conj",
     "resolve_neg",

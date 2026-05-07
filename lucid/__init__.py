@@ -165,6 +165,8 @@ __all__ = [
     "subtract", "multiply", "divide", "true_divide", "rsub",
     "arccosh", "acosh", "arcsinh", "asinh", "arctanh", "atanh", "arctan2",
     "swapaxes", "swapdims", "moveaxis", "adjoint", "t",
+    "real", "imag", "complex", "angle", "polar",
+    "view_as_real", "view_as_complex",
     "conj", "conj_physical", "resolve_conj", "resolve_neg",
     "result_type", "promote_types", "can_cast",
     # ── extras: special elementwise ───────────────────────────────────────
@@ -230,6 +232,8 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "maximum", "minimum",
     # ── linear algebra ────────────────────────────────────────────────────
     "matmul", "mm", "bmm", "tensordot", "kron",
+    # ── complex viewing (engine ops) ──────────────────────────────────────
+    "real", "imag", "complex", "conj",
     # ── comparison ────────────────────────────────────────────────────────
     "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
     "eq", "ne", "lt", "le", "gt", "ge", "isclose",

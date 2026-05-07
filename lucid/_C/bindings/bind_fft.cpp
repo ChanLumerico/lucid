@@ -37,30 +37,18 @@ static TensorImplPtr conj_complex(const TensorImplPtr& a) {
     return fft_detail::fresh(std::move(out_st), a->shape(), a->dtype(), a->device());
 }
 
-// Scalar multiplication helper used by lucid.fft for normalisation scaling.
-// Works for any dtype — including C64, where the standard ``Tensor * float``
-// path fails because CpuBackend lacks ``full(C64)`` (so the broadcast scalar
-// can't be constructed).  Going through MLX sidesteps that by building the
-// scalar directly as an mlx array.
-static TensorImplPtr scale_op(const TensorImplPtr& a, double s) {
-    if (s == 1.0)
-        return a;
-    OpScopeFull scope{"fft._scale", a->device(), a->dtype(), a->shape()};
-    auto in_arr = fft_detail::as_mlx_input(a);
-    ::mlx::core::array scalar_arr =
-        ::mlx::core::astype(::mlx::core::array(static_cast<float>(s)),
-                            ::lucid::gpu::to_mlx_dtype(a->dtype()));
-    auto out = ::mlx::core::multiply(in_arr, scalar_arr, fft_detail::kMlxFftStream);
-    Storage out_st = fft_detail::finalise_result(std::move(out), a->dtype(), a->shape(), a->device());
-    return fft_detail::fresh(std::move(out_st), a->shape(), a->dtype(), a->device());
-}
+// The previous ``scale_op`` helper (private ``_C_engine.fft._scale``) was a
+// workaround for CpuBackend lacking ``full(C64)`` — the standard
+// ``Tensor * float`` path needed a broadcast scalar that the backend
+// couldn't build.  P2-B (2026-05-08) extended both backends to support
+// C64 ``full`` / ``ones`` / ``mul``, so the helper is no longer needed.
+// ``_conj_complex`` is also redundant now that the public ``lucid.conj``
+// engine op exists, but we keep it here for the small handful of internal
+// fft callers — it lets them stay independent of registry-driven dispatch.
 
 void register_fft(py::module_& m) {
     m.def("_conj_complex", &conj_complex, py::arg("a"),
           "Complex conjugate.  No-op on real tensors.  Used by hfft/ihfft.");
-    m.def("_scale", &scale_op, py::arg("a"), py::arg("s"),
-          "Multiply tensor by a real scalar.  Routes through MLX so it works "
-          "for C64 inputs (which CpuBackend's full(C64) does not support).");
 
     m.def(
         "fftn",

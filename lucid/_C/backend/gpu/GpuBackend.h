@@ -296,6 +296,46 @@ public:
         });
     }
 
+    // ── Complex viewing (mlx native) ──────────────────────────────────────
+
+    Storage complex_real(const Storage& a, const Shape&) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::contiguous(::mlx::core::real(*gs.arr));
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::F32)};
+    }
+
+    Storage complex_imag(const Storage& a, const Shape&) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::contiguous(::mlx::core::imag(*gs.arr));
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::F32)};
+    }
+
+    Storage complex_combine(
+        const Storage& re, const Storage& im, const Shape&) override {
+        const auto& re_g = std::get<GpuStorage>(re);
+        const auto& im_g = std::get<GpuStorage>(im);
+        // ``re + 1j * im``: cast both to complex64, scale imag by ``j``,
+        // then add.  No native ``complex(r, i)`` builder in MLX yet, so we
+        // construct it from the algebraic identity.
+        auto re_c = ::mlx::core::astype(*re_g.arr, ::mlx::core::complex64);
+        auto im_c = ::mlx::core::astype(*im_g.arr, ::mlx::core::complex64);
+        ::mlx::core::array j(std::complex<float>(0.0f, 1.0f));
+        auto out = ::mlx::core::contiguous(
+            ::mlx::core::add(re_c, ::mlx::core::multiply(im_c, j)));
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::C64)};
+    }
+
+    Storage complex_conj(const Storage& a, const Shape&, Dtype dt) override {
+        if (dt != Dtype::C64) {
+            // For real dtypes the conjugate is the identity — return the
+            // input directly without an MLX call.
+            return a;
+        }
+        const auto& gs = std::get<GpuStorage>(a);
+        auto out = ::mlx::core::contiguous(::mlx::core::conjugate(*gs.arr));
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::C64)};
+    }
+
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt,
                          [](auto& x) { return ::mlx::core::multiply(x, ::mlx::core::sigmoid(x)); });
@@ -5359,6 +5399,11 @@ private:
                 return ::mlx::core::array(static_cast<int64_t>(fill_value));
             case Dtype::Bool:
                 return ::mlx::core::array(fill_value != 0.0);
+            case Dtype::C64:
+                // Real-only fill: imag = 0.  For arbitrary complex fill use
+                // ``complex_combine`` after the fact.
+                return ::mlx::core::array(
+                    std::complex<float>(static_cast<float>(fill_value), 0.0f));
             default:
                 ErrorBuilder("gpu_backend::full").not_implemented("dtype not supported");
             }

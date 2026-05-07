@@ -188,6 +188,27 @@ public:
     // Bitwise NOT (integer types only).
     virtual Storage invert(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
+    // ── Complex viewing ────────────────────────────────────────────────────
+    // Each backend implements these on its native primitive: CPU uses
+    // Apple Accelerate (vDSP / interleaved-complex element walks), GPU uses
+    // ``mlx::core::real`` / ``imag`` / ``conjugate``.
+
+    // Real part of a complex (C64) input — output dtype is F32.
+    virtual Storage complex_real(const Storage& a, const Shape& shape) = 0;
+
+    // Imaginary part of a complex (C64) input — output dtype is F32.
+    virtual Storage complex_imag(const Storage& a, const Shape& shape) = 0;
+
+    // Build a C64 array from two F32 arrays of the same shape; the result
+    // satisfies ``complex_real(out) == re`` and ``complex_imag(out) == im``.
+    virtual Storage complex_combine(const Storage& re,
+                                    const Storage& im,
+                                    const Shape& shape) = 0;
+
+    // Element-wise complex conjugate.  No-op for real dtypes (returned
+    // unchanged); negates the imaginary part for C64.
+    virtual Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) = 0;
+
     // Activation functions that need both a forward and a backward pass.
     // The *_backward variants receive the pre-activation input `a` and the
     // upstream gradient `grad`, and return the input gradient.

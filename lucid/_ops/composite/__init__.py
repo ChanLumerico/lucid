@@ -36,6 +36,7 @@ from lucid._ops.composite import (
     dtype,
     statistics,
     indexing,
+    complex as complex_mod,
 )
 
 # Re-export everything in each submodule's ``__all__`` so callers can do
@@ -52,6 +53,7 @@ _SUBMODULES = (
     dtype,
     statistics,
     indexing,
+    complex_mod,
 )
 
 _seen: set[str] = set()

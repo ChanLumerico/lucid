@@ -150,12 +150,13 @@ def _conj(x: Tensor) -> Tensor:
 
 
 def _scale(x: Tensor, s: float) -> Tensor:
-    """Multiply by a real scalar.  Goes through the C++ ``fft._scale`` helper
-    so that C64 inputs work (the standard ``Tensor * float`` path requires
-    ``full(C64)`` which CpuBackend does not currently support)."""
+    """Multiply by a real scalar.  Now a thin wrapper over ``Tensor * float``
+    — both backends support ``full(C64)`` and ``mul(C64, C64)`` natively
+    after the P2-B complex extension landed, so the previous private
+    ``_C_engine.fft._scale`` helper is no longer required."""
     if s == 1.0:
         return x
-    return _wrap(_fft._scale(_unwrap(x), float(s)))
+    return x * s
 
 
 # ── Autograd Function classes (one per base transform) ──────────────────────

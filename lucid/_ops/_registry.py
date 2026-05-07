@@ -408,5 +408,14 @@ _REGISTRY: list[OpEntry] = [
     # the ``T`` property, exposed here as a method so registry-driven method
     # injection picks it up alongside everything else.
     OpEntry("t", _R.T, 1, method_name="t", free_fn_name=None),
+
+    # ── complex viewing (engine ops, dual backend) ─────────────────────────
+    # Each backend implements these natively: CPU walks the interleaved
+    # ``[re, im, ...]`` storage; GPU dispatches to ``mlx::core::real`` /
+    # ``imag`` / ``conjugate``.  ``complex`` builds a C64 from two F32 inputs.
+    OpEntry("real",    _R.real,    1, method_name=None, free_fn_name="real"),
+    OpEntry("imag",    _R.imag,    1, method_name=None, free_fn_name="imag"),
+    OpEntry("complex", _R.complex, 2, method_name=None, free_fn_name="complex"),
+    OpEntry("conj",    _R.conj,    1, method_name=None, free_fn_name="conj"),
 ]
 # fmt: on
