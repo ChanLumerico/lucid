@@ -277,7 +277,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── core ML stack ─────────────────────────────────────────────────────
     "nn", "optim", "autograd",
     # ── numerical sub-packages ────────────────────────────────────────────
-    "linalg", "fft", "signal", "special",
+    "linalg", "fft", "signal", "special", "distributions",
     # ── infra / tooling ───────────────────────────────────────────────────
     "utils", "amp", "profiler", "einops",
     "metal", "backends", "test",
