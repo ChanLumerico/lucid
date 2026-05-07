@@ -301,3 +301,79 @@ class TestSurface:
                 f"lucid.{name} should not exist at top level — H8 forbids "
                 f"distributions shortcuts"
             )
+
+
+# ── P8-B: Independent / StudentT / Transforms ─────────────────────────────
+
+
+class TestIndependent:
+    def test_log_prob_summed(self) -> None:
+        base = D.Normal(
+            lucid.tensor([0.0, 0.0, 0.0]), lucid.tensor([1.0, 1.0, 1.0])
+        )
+        ind = D.Independent(base, 1)
+        v = lucid.tensor([0.0, 0.0, 0.0])
+        assert ind.batch_shape == ()
+        assert ind.event_shape == (3,)
+        # 3 × log p(0 | 0, 1) = 3 · −0.5·log 2π.
+        expected = 3.0 * base.log_prob(v).numpy()[0]
+        assert abs(ind.log_prob(v).item() - expected) < 1e-5
+
+
+class TestStudentT:
+    def test_log_prob_at_origin(self) -> None:
+        # StudentT(df=5, loc=0, scale=1) at x=0 has a known closed form:
+        # log Γ(3) − log Γ(2.5) − 0.5·log(5π).
+        t = D.StudentT(5.0, 0.0, 1.0)
+        expected = (
+            math.lgamma(3.0) - math.lgamma(2.5) - 0.5 * math.log(5.0 * math.pi)
+        )
+        assert abs(t.log_prob(lucid.tensor(0.0)).item() - expected) < 1e-4
+
+    def test_sample_shape(self) -> None:
+        t = D.StudentT(5.0, 0.0, 1.0)
+        assert t.sample((10,)).shape == (10,)
+
+
+class TestTransforms:
+    def test_exp_inverse_roundtrip(self) -> None:
+        x = lucid.tensor(1.5)
+        e = D.ExpTransform()
+        np.testing.assert_allclose(
+            e.inv(e(x)).numpy(), x.numpy(), atol=1e-5
+        )
+
+    def test_sigmoid_inverse_roundtrip(self) -> None:
+        x = lucid.tensor(0.5)
+        s = D.SigmoidTransform()
+        np.testing.assert_allclose(
+            s.inv(s(x)).numpy(), x.numpy(), atol=1e-5
+        )
+
+    def test_affine_inverse(self) -> None:
+        a = D.AffineTransform(3.0, 2.0)
+        x = lucid.tensor(1.0)
+        np.testing.assert_allclose(
+            a.inv(a(x)).numpy(), x.numpy(), atol=1e-5
+        )
+
+    def test_compose_chain(self) -> None:
+        c = D.ComposeTransform([D.ExpTransform(), D.AffineTransform(0.0, 2.0)])
+        x = lucid.tensor(1.0)
+        # exp(1) · 2 ≈ 2 · e ≈ 5.436.
+        assert abs(c(x).item() - 2.0 * math.e) < 1e-4
+        np.testing.assert_allclose(
+            c.inv(c(x)).numpy(), x.numpy(), atol=1e-5
+        )
+
+
+class TestTransformedDistribution:
+    def test_normal_through_exp_matches_lognormal(self) -> None:
+        n = D.Normal(0.0, 1.0)
+        td = D.TransformedDistribution(n, D.ExpTransform())
+        ref = D.LogNormal(0.0, 1.0)
+        for v in (0.5, 1.0, 2.0, 3.0):
+            assert abs(
+                td.log_prob(lucid.tensor(v)).item()
+                - ref.log_prob(lucid.tensor(v)).item()
+            ) < 1e-4

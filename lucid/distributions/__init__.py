@@ -13,9 +13,20 @@ from lucid.distributions.categorical import Categorical, OneHotCategorical
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 from lucid.distributions.exponential import Cauchy, Exponential, Laplace
 from lucid.distributions.gamma import Beta, Chi2, Dirichlet, Gamma
+from lucid.distributions.independent import Independent
 from lucid.distributions.kl import kl_divergence, register_kl
 from lucid.distributions.multivariate import MultivariateNormal
 from lucid.distributions.normal import LogNormal, Normal
+from lucid.distributions.student import StudentT
+from lucid.distributions.transforms import (
+    AffineTransform,
+    ComposeTransform,
+    ExpTransform,
+    SigmoidTransform,
+    TanhTransform,
+    Transform,
+    TransformedDistribution,
+)
 from lucid.distributions.uniform import Uniform
 
 __all__ = [
@@ -31,6 +42,7 @@ __all__ = [
     "Exponential",
     "Laplace",
     "Cauchy",
+    "StudentT",
     # gamma family
     "Gamma",
     "Chi2",
@@ -43,6 +55,16 @@ __all__ = [
     "OneHotCategorical",
     # multivariate
     "MultivariateNormal",
+    # wrappers
+    "Independent",
+    "TransformedDistribution",
+    # transforms
+    "Transform",
+    "ComposeTransform",
+    "AffineTransform",
+    "ExpTransform",
+    "SigmoidTransform",
+    "TanhTransform",
     # kl
     "kl_divergence",
     "register_kl",
