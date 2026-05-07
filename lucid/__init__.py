@@ -192,7 +192,7 @@ __all__ = [
     # ── serialization ─────────────────────────────────────────────────────
     "save", "load",
     # ── subpackages ───────────────────────────────────────────────────────
-    "nn", "optim", "autograd", "linalg", "fft",
+    "nn", "optim", "autograd", "linalg", "fft", "signal",
     "utils", "amp", "profiler", "einops",
     "metal", "backends", "test",
     # ── public type aliases ───────────────────────────────────────────────
@@ -277,7 +277,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── core ML stack ─────────────────────────────────────────────────────
     "nn", "optim", "autograd",
     # ── numerical sub-packages ────────────────────────────────────────────
-    "linalg", "fft",
+    "linalg", "fft", "signal",
     # ── infra / tooling ───────────────────────────────────────────────────
     "utils", "amp", "profiler", "einops",
     "metal", "backends", "test",
