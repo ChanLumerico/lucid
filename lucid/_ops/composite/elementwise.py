@@ -12,91 +12,98 @@ Three subgroups:
 """
 
 import math
+import math as _math
+from typing import TYPE_CHECKING
 
 import lucid
 from lucid._ops.composite._shared import _is_tensor
+from lucid._types import Scalar
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
 
 # ── Aliases ────────────────────────────────────────────────────────────────
 
 
-def absolute(x):  # type: ignore[no-untyped-def]
+def absolute(x: Tensor) -> Tensor:
     return lucid.abs(x)
 
 
-def negative(x):  # type: ignore[no-untyped-def]
+def negative(x: Tensor) -> Tensor:
     return lucid.neg(x)
 
 
-def positive(x):  # type: ignore[no-untyped-def]
+def positive(x: Tensor) -> Tensor:
     """PyTorch parity: returns the input unchanged."""
     return x
 
 
-def subtract(a, b, *, alpha: float = 1.0):  # type: ignore[no-untyped-def]
+def subtract(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     if alpha == 1.0:
         return a - b
     return a - (b * alpha)
 
 
-def multiply(a, b):  # type: ignore[no-untyped-def]
+def multiply(a: Tensor, b: Tensor | Scalar) -> Tensor:
     return a * b
 
 
-def divide(a, b):  # type: ignore[no-untyped-def]
+def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     return a / b
 
 
-def true_divide(a, b):  # type: ignore[no-untyped-def]
+def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
     return a / b
 
 
-def rsub(a, b, *, alpha: float = 1.0):  # type: ignore[no-untyped-def]
+def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
     """``b - alpha * a`` — reverse subtract, mirroring ``torch.rsub``."""
     if alpha == 1.0:
         return b - a
     return b - (a * alpha)
 
 
-def arctan2(y, x):  # type: ignore[no-untyped-def]
+def arctan2(y: Tensor, x: Tensor) -> Tensor:
     return lucid.atan2(y, x)
 
 
 # ── Inverse hyperbolic (composed) ──────────────────────────────────────────
 
 
-def arccosh(x):  # type: ignore[no-untyped-def]
+def arccosh(x: Tensor) -> Tensor:
     return lucid.log(x + lucid.sqrt(x * x - 1.0))
 
 
-def acosh(x):  # type: ignore[no-untyped-def]
+def acosh(x: Tensor) -> Tensor:
     return arccosh(x)
 
 
-def arcsinh(x):  # type: ignore[no-untyped-def]
+def arcsinh(x: Tensor) -> Tensor:
     return lucid.log(x + lucid.sqrt(x * x + 1.0))
 
 
-def asinh(x):  # type: ignore[no-untyped-def]
+def asinh(x: Tensor) -> Tensor:
     return arcsinh(x)
 
 
-def arctanh(x):  # type: ignore[no-untyped-def]
+def arctanh(x: Tensor) -> Tensor:
     return lucid.log((1.0 + x) / (1.0 - x)) * 0.5
 
 
-def atanh(x):  # type: ignore[no-untyped-def]
+def atanh(x: Tensor) -> Tensor:
     return arctanh(x)
 
 
 # ── Specials ───────────────────────────────────────────────────────────────
 
 
-def expm1(x):  # type: ignore[no-untyped-def]
+def expm1(x: Tensor) -> Tensor:
     """``exp(x) - 1`` — loses some precision near 0 vs a true engine primitive."""
     return lucid.exp(x) - 1.0
 
 
-def sinc(x):  # type: ignore[no-untyped-def]
+def sinc(x: Tensor) -> Tensor:
     """Normalised sinc: ``sin(pi*x) / (pi*x)``, with ``sinc(0) = 1``."""
     px = x * math.pi
     is_zero = x == 0.0
@@ -105,7 +112,7 @@ def sinc(x):  # type: ignore[no-untyped-def]
     return lucid.where(is_zero, lucid.full_like(x, 1.0), val)
 
 
-def heaviside(x, values):  # type: ignore[no-untyped-def]
+def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
     """Heaviside step: 0 for x<0, 1 for x>0, ``values`` for x==0."""
     if not _is_tensor(values):
         values = lucid.full_like(x, float(values))
@@ -116,7 +123,7 @@ def heaviside(x, values):  # type: ignore[no-untyped-def]
     )
 
 
-def xlogy(x, y):  # type: ignore[no-untyped-def]
+def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     """``x * log(y)``, with the convention 0 * log(0) = 0."""
     if not _is_tensor(x):
         x = lucid.tensor(float(x))
@@ -127,19 +134,19 @@ def xlogy(x, y):  # type: ignore[no-untyped-def]
     return lucid.where(x == 0.0, lucid.full_like(out, 0.0), out)
 
 
-def logit(x, eps: float | None = None):  # type: ignore[no-untyped-def]
+def logit(x: Tensor, eps: float | None = None) -> Tensor:
     """``log(x / (1-x))``, optionally clamping to ``[eps, 1-eps]`` first."""
     if eps is not None:
         x = lucid.clamp(x, eps, 1.0 - eps)
     return lucid.log(x / (1.0 - x))
 
 
-def signbit(x):  # type: ignore[no-untyped-def]
+def signbit(x: Tensor) -> Tensor:
     """True where ``x < 0``."""
     return x < 0.0
 
 
-def float_power(x, y):  # type: ignore[no-untyped-def]
+def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     """``pow`` always done in F64 (matches ``torch.float_power``)."""
     if _is_tensor(x):
         x = x.to(dtype=lucid.float64)
@@ -152,7 +159,7 @@ def float_power(x, y):  # type: ignore[no-untyped-def]
     return lucid.pow(x, y)
 
 
-def fmax(a, b):  # type: ignore[no-untyped-def]
+def fmax(a: Tensor, b: Tensor) -> Tensor:
     """Like ``maximum`` but returns the non-NaN value when one side is NaN."""
     a_is_nan = lucid.isnan(a)
     b_is_nan = lucid.isnan(b)
@@ -162,7 +169,7 @@ def fmax(a, b):  # type: ignore[no-untyped-def]
     return m
 
 
-def fmin(a, b):  # type: ignore[no-untyped-def]
+def fmin(a: Tensor, b: Tensor) -> Tensor:
     """Like ``minimum`` but returns the non-NaN value when one side is NaN."""
     a_is_nan = lucid.isnan(a)
     b_is_nan = lucid.isnan(b)
@@ -175,17 +182,17 @@ def fmin(a, b):  # type: ignore[no-untyped-def]
 # ── Special math functions ─────────────────────────────────────────────────
 
 
-def erfc(x):  # type: ignore[no-untyped-def]
+def erfc(x: Tensor) -> Tensor:
     """Complementary error function: ``erfc(x) = 1 - erf(x)``."""
     return lucid.full_like(x, 1.0) - lucid.erf(x)
 
 
-def copysign(x, y):  # type: ignore[no-untyped-def]
+def copysign(x: Tensor, y: Tensor) -> Tensor:
     """Return a tensor with magnitudes from ``x`` and signs from ``y``."""
     return lucid.where(y < 0.0, -lucid.abs(x), lucid.abs(x))
 
 
-def ldexp(input, exponent):  # type: ignore[no-untyped-def]
+def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
     """``input * 2 ** exponent`` element-wise (differentiable w.r.t. both)."""
     return input * lucid.exp(exponent * math.log(2.0))
 
@@ -193,10 +200,7 @@ def ldexp(input, exponent):  # type: ignore[no-untyped-def]
 # ── Integer math (non-differentiable) ────────────────────────────────────
 
 
-import math as _math
-
-
-def gcd(x, y):  # type: ignore[no-untyped-def]
+def gcd(x: Tensor, y: Tensor) -> Tensor:
     """Element-wise greatest common divisor (integer tensors)."""
     flat_x = x.reshape(-1)
     flat_y = y.reshape(-1)
@@ -205,7 +209,7 @@ def gcd(x, y):  # type: ignore[no-untyped-def]
     return lucid.tensor(result, dtype=x.dtype, device=x.device).reshape(x.shape)
 
 
-def lcm(x, y):  # type: ignore[no-untyped-def]
+def lcm(x: Tensor, y: Tensor) -> Tensor:
     """Element-wise least common multiple (integer tensors)."""
     flat_x = x.reshape(-1)
     flat_y = y.reshape(-1)
@@ -227,7 +231,7 @@ def lcm(x, y):  # type: ignore[no-untyped-def]
 #   argument above 8, then apply the asymptotic series.
 
 _LANCZOS_G = 7.0
-_LANCZOS_P = [
+_LANCZOS_P: list[float] = [
     0.99999999999980993,
     676.5203681218851,
     -1259.1392167224028,
@@ -240,7 +244,7 @@ _LANCZOS_P = [
 ]
 
 
-def lgamma(x):  # type: ignore[no-untyped-def]
+def lgamma(x: Tensor) -> Tensor:
     """Natural log of the gamma function via the Lanczos approximation."""
     z = x - 1.0
     t = z + (_LANCZOS_G + 0.5)
@@ -252,7 +256,7 @@ def lgamma(x):  # type: ignore[no-untyped-def]
     )
 
 
-def digamma(x):  # type: ignore[no-untyped-def]
+def digamma(x: Tensor) -> Tensor:
     """Digamma function ψ(x) = d/dx ln Γ(x) via recurrence + asymptotic series."""
     # Shift to xr = x + 8 accumulating the correction sum.
     # ψ(x) = ψ(x+8) − 1/x − 1/(x+1) − … − 1/(x+7)
@@ -274,7 +278,7 @@ def digamma(x):  # type: ignore[no-untyped-def]
 #   |x| ≤ 3.75 : series in (x/3.75)²
 #   |x| > 3.75 : series in 3.75/|x|, multiplied by exp(|x|)/√|x|
 
-_I0_SMALL_COEFFS = [
+_I0_SMALL_COEFFS: list[float] = [
     1.0,
     3.5156229,
     3.0899424,
@@ -283,7 +287,7 @@ _I0_SMALL_COEFFS = [
     0.0360768,
     0.0045813,
 ]
-_I0_LARGE_COEFFS = [
+_I0_LARGE_COEFFS: list[float] = [
     0.39894228,
     0.01328592,
     0.00225319,
@@ -296,7 +300,7 @@ _I0_LARGE_COEFFS = [
 ]
 
 
-def i0(x):  # type: ignore[no-untyped-def]
+def i0(x: Tensor) -> Tensor:
     """Modified Bessel function of the first kind, order 0."""
     ax = lucid.abs(x)
     # Guard: avoid division by zero in large-argument branch (ax == 0 → use small branch)

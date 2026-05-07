@@ -67,20 +67,21 @@ void bind_unary_extra(py::module_& m, Fn fn, PyArgs&&... extra_args) {
 }
 
 // Registers a reduction op with the standard signature
-// (a, axes=[], keepdims=False) → TensorImplPtr, using the name from
-// BackwardNode::schema_v1.  The empty axes default means "reduce all dims".
+// (a, dim=[], keepdims=False) → TensorImplPtr, using the name from
+// BackwardNode::schema_v1.  The empty `dim` default means "reduce all dims".
 //
-// The axes argument is typed std::vector<int> (not int64_t) because the C++
+// The `dim` argument is typed std::vector<int> (not int64_t) because the C++
 // reduction ops use plain `int` indices internally; pybind11 converts the
-// Python list automatically.
+// Python list automatically.  Singular naming matches the standard tensor
+// framework convention (``dim`` accepts an int or a list of ints).
 //
-// Usage: bind_reduce<SumBackward>(m, &sum_op, "Reduce-sum along axes.");
+// Usage: bind_reduce<SumBackward>(m, &sum_op, "Reduce-sum along dim.");
 template <class BackwardNode>
 void bind_reduce(py::module_& m,
                  TensorImplPtr (*fn)(const TensorImplPtr&, const std::vector<int>&, bool),
                  const char* doc = "") {
     m.def(BackwardNode::schema_v1.name.data(), fn, py::arg("a"),
-          py::arg("axes") = std::vector<int>{}, py::arg("keepdims") = false, doc);
+          py::arg("dim") = std::vector<int>{}, py::arg("keepdims") = false, doc);
 }
 
 }  // namespace lucid::bindings

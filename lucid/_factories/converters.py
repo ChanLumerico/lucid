@@ -8,7 +8,7 @@ import numpy as np
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _parse_device, _unwrap
 from lucid._dtype import dtype, to_engine_dtype
-from lucid._types_base import DeviceLike, DTypeLike
+from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor

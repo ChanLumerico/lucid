@@ -1,37 +1,48 @@
 """Predicates and zero-cost identity ops surfaced for PyTorch parity."""
 
+from typing import TYPE_CHECKING
+
 import lucid
 from lucid._ops.composite._shared import _is_tensor
+from lucid._types import TensorLike
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
 
 
-def numel(x) -> int:  # type: ignore[no-untyped-def]
+def numel(x: Tensor) -> int:
     return int(x.numel())
 
 
-def is_storage(x) -> bool:  # type: ignore[no-untyped-def]
+def is_storage(x: Tensor) -> bool:
     """Lucid has no separate Storage type — always False."""
     return False
 
 
-def is_nonzero(x) -> bool:  # type: ignore[no-untyped-def]
+def is_nonzero(x: Tensor) -> bool:
     if x.numel() != 1:
         raise RuntimeError("is_nonzero is defined only for scalar tensors (numel == 1)")
     return bool(x.item() != 0)
 
 
-def is_same_size(a, b) -> bool:  # type: ignore[no-untyped-def]
+def is_same_size(a: Tensor, b: Tensor) -> bool:
     return tuple(a.shape) == tuple(b.shape)
 
 
-def is_neg(x) -> bool:  # type: ignore[no-untyped-def]
+def is_neg(x: Tensor) -> bool:
     return False
 
 
-def is_conj(x) -> bool:  # type: ignore[no-untyped-def]
+def is_conj(x: Tensor) -> bool:
     return False
 
 
-def isin(elements, test_elements, *, invert: bool = False):  # type: ignore[no-untyped-def]
+def isin(
+    elements: Tensor | TensorLike,
+    test_elements: Tensor | TensorLike,
+    *,
+    invert: bool = False,
+) -> Tensor:
     """Per-element membership test against ``test_elements``."""
     if not _is_tensor(elements):
         elements = lucid.tensor(elements)
@@ -47,32 +58,32 @@ def isin(elements, test_elements, *, invert: bool = False):  # type: ignore[no-u
     return ~out if invert else out
 
 
-def isneginf(x):  # type: ignore[no-untyped-def]
+def isneginf(x: Tensor) -> Tensor:
     return lucid.logical_and(lucid.isinf(x), x < 0.0)
 
 
-def isposinf(x):  # type: ignore[no-untyped-def]
+def isposinf(x: Tensor) -> Tensor:
     return lucid.logical_and(lucid.isinf(x), x > 0.0)
 
 
-def isreal(x):  # type: ignore[no-untyped-def]
+def isreal(x: Tensor) -> Tensor:
     """Real tensors are always real — all-True bool tensor."""
     return lucid.isfinite(x) | lucid.isnan(x) | lucid.isinf(x)
 
 
-def conj(x):  # type: ignore[no-untyped-def]
+def conj(x: Tensor) -> Tensor:
     return x
 
 
-def conj_physical(x):  # type: ignore[no-untyped-def]
+def conj_physical(x: Tensor) -> Tensor:
     return x
 
 
-def resolve_conj(x):  # type: ignore[no-untyped-def]
+def resolve_conj(x: Tensor) -> Tensor:
     return x
 
 
-def resolve_neg(x):  # type: ignore[no-untyped-def]
+def resolve_neg(x: Tensor) -> Tensor:
     return x
 
 

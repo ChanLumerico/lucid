@@ -134,12 +134,12 @@ class TestArgmax:
 class TestScanOps:
     def test_cumsum(self):
         t = lucid.tensor([1.0, 2.0, 3.0, 4.0])
-        r = lucid.cumsum(t, axis=0)
+        r = lucid.cumsum(t, dim=0)
         assert_close(r, lucid.tensor([1.0, 3.0, 6.0, 10.0]))
 
     def test_cumprod(self):
         t = lucid.tensor([1.0, 2.0, 3.0, 4.0])
-        r = lucid.cumprod(t, axis=0)
+        r = lucid.cumprod(t, dim=0)
         assert_close(r, lucid.tensor([1.0, 2.0, 6.0, 24.0]))
 
     def test_trace_identity(self):

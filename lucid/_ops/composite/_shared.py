@@ -18,11 +18,11 @@ Conventions used by every composite:
 from lucid._tensor.tensor import Tensor
 
 
-def _is_tensor(x) -> bool:  # type: ignore[no-untyped-def]
+def _is_tensor(x: object) -> bool:
     return isinstance(x, Tensor)
 
 
-def _swap_dims(t, d0: int, d1: int):  # type: ignore[no-untyped-def]
+def _swap_dims(t: Tensor, d0: int, d1: int) -> Tensor:
     """Swap exactly two dims by building a permute permutation.
 
     The engine's ``transpose`` reverses every dim — we don't want that.

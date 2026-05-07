@@ -52,7 +52,7 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     return _wrap(_C_engine.selu(_unwrap(x)))
 
 
-def _erf_approx(xi):
+def _erf_approx(xi: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     """Polynomial approximation of erf (Abramowitz & Stegun 7.1.26, max err < 1.5e-7)."""
     p_coef = 0.3275911
     a1, a2, a3, a4, a5 = (

@@ -29,7 +29,9 @@ from typing import Sequence, TYPE_CHECKING
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._types import DeviceLike, DTypeLike
 from lucid.autograd.function import Function as _AutogradFunction
+from lucid.autograd.function import FunctionCtx
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -173,7 +175,14 @@ def _scale(x: Tensor, s: float) -> Tensor:
 
 class _FftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(ctx, x, s, axes, norm, N):  # type: ignore[no-untyped-def]
+    def forward(
+        ctx: FunctionCtx,
+        x: Tensor,
+        s: list[int],
+        axes: list[int],
+        norm: str,
+        N: int,
+    ) -> Tensor:
         ctx.s = s
         ctx.axes = axes
         ctx.norm = norm
@@ -185,7 +194,7 @@ class _FftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         # grad_x = ifft(grad_out, dual(norm)) restricted to the input axis sizes.
         dual = _dual_norm(ctx.norm)
         g = _engine_ifftn(grad_out, ctx.s, ctx.axes)
@@ -197,7 +206,14 @@ class _FftnAutograd(_AutogradFunction):
 
 class _IfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(ctx, x, s, axes, norm, N):  # type: ignore[no-untyped-def]
+    def forward(
+        ctx: FunctionCtx,
+        x: Tensor,
+        s: list[int],
+        axes: list[int],
+        norm: str,
+        N: int,
+    ) -> Tensor:
         ctx.s = s
         ctx.axes = axes
         ctx.norm = norm
@@ -209,7 +225,7 @@ class _IfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         dual = _dual_norm(ctx.norm)
         g = _engine_fftn(grad_out, ctx.s, ctx.axes)
         scale = _scale_after_fft(ctx.N, dual)
@@ -220,7 +236,15 @@ class _IfftnAutograd(_AutogradFunction):
 
 class _RfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(ctx, x, s, axes, norm, N, in_sizes):  # type: ignore[no-untyped-def]
+    def forward(
+        ctx: FunctionCtx,
+        x: Tensor,
+        s: list[int],
+        axes: list[int],
+        norm: str,
+        N: int,
+        in_sizes: list[int],
+    ) -> Tensor:
         ctx.in_sizes = in_sizes  # full-length sizes along each transformed axis
         ctx.axes = axes
         ctx.norm = norm
@@ -232,7 +256,7 @@ class _RfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         # rfft backward: the dual transform is irfft restricted to the original
         # full real length along each transformed axis.
         dual = _dual_norm(ctx.norm)
@@ -245,7 +269,15 @@ class _RfftnAutograd(_AutogradFunction):
 
 class _IrfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(ctx, x, s, axes, norm, N, out_sizes):  # type: ignore[no-untyped-def]
+    def forward(
+        ctx: FunctionCtx,
+        x: Tensor,
+        s: list[int],
+        axes: list[int],
+        norm: str,
+        N: int,
+        out_sizes: list[int],
+    ) -> Tensor:
         ctx.axes = axes
         ctx.norm = norm
         ctx.N = N
@@ -257,7 +289,7 @@ class _IrfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         # irfft backward: rfft of the real grad with the same size along the
         # last transformed axis, dual normalisation.
         dual = _dual_norm(ctx.norm)
@@ -271,7 +303,12 @@ class _IrfftnAutograd(_AutogradFunction):
 # ── Public API: complex FFT (fft / fft2 / fftn) ──────────────────────────────
 
 
-def fftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def fftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     """N-dimensional discrete Fourier transform."""
     norm_v = _check_norm(norm)
     rank = input.ndim
@@ -283,7 +320,12 @@ def fftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
     return _FftnAutograd.apply(input, s_list, axes, norm_v, N)
 
 
-def ifftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def ifftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     """N-dimensional inverse discrete Fourier transform."""
     norm_v = _check_norm(norm)
     rank = input.ndim
@@ -295,22 +337,32 @@ def ifftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
     return _IfftnAutograd.apply(input, s_list, axes, norm_v, N)
 
 
-def fft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def fft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     """1-D discrete Fourier transform along ``dim``."""
     return fftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def ifft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def ifft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     """1-D inverse discrete Fourier transform along ``dim``."""
     return ifftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def fft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def fft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     """2-D discrete Fourier transform over ``dim``."""
     return fftn(input, s=s, dim=list(dim), norm=norm)
 
 
-def ifft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def ifft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     """2-D inverse discrete Fourier transform over ``dim``."""
     return ifftn(input, s=s, dim=list(dim), norm=norm)
 
@@ -318,7 +370,12 @@ def ifft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-de
 # ── Public API: real-input FFT (rfft / rfft2 / rfftn) ────────────────────────
 
 
-def rfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def rfftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     """N-dimensional FFT of a real input.  Output is C64 with last axis n//2+1."""
     norm_v = _check_norm(norm)
     rank = input.ndim
@@ -326,18 +383,24 @@ def rfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
     s_list = _as_size_list(s)
     _validate_axes_and_s(axes, s_list, "rfftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
-    full_sizes = list(s_list) if s_list else list(in_sizes)
+    full_sizes: list[int] = list(s_list) if s_list else list(in_sizes)
     N = _transform_size(s_list, in_sizes)
     return _RfftnAutograd.apply(input, s_list, axes, norm_v, N, full_sizes)
 
 
-def irfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def irfftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     """N-dimensional inverse of :func:`rfftn`.  Output is real."""
     norm_v = _check_norm(norm)
     rank = input.ndim
     axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
     s_list = _as_size_list(s)
     _validate_axes_and_s(axes, s_list, "irfftn")
+    out_sizes: list[int]
     if s_list:
         out_sizes = list(s_list)
     else:
@@ -350,19 +413,29 @@ def irfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
     return _IrfftnAutograd.apply(input, s_list, axes, norm_v, N, out_sizes)
 
 
-def rfft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def rfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     return rfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def irfft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def irfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     return irfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def rfft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def rfft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     return rfftn(input, s=s, dim=list(dim), norm=norm)
 
 
-def irfft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def irfft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     return irfftn(input, s=s, dim=list(dim), norm=norm)
 
 
@@ -378,36 +451,62 @@ def irfft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-d
 # forward-real one.
 
 
-def hfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def hfftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     norm_v = _check_norm(norm)
     return irfftn(_conj(input), s=s, dim=dim, norm=_dual_norm(norm_v))
 
 
-def ihfftn(input, s=None, dim=None, norm=None):  # type: ignore[no-untyped-def]
+def ihfftn(
+    input: Tensor,
+    s: int | Sequence[int] | None = None,
+    dim: int | Sequence[int] | None = None,
+    norm: str | None = None,
+) -> Tensor:
     norm_v = _check_norm(norm)
     return _conj(rfftn(input, s=s, dim=dim, norm=_dual_norm(norm_v)))
 
 
-def hfft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def hfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     return hfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def ihfft(input, n=None, dim=-1, norm=None):  # type: ignore[no-untyped-def]
+def ihfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
     return ihfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def hfft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def hfft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     return hfftn(input, s=s, dim=list(dim), norm=norm)
 
 
-def ihfft2(input, s=None, dim=(-2, -1), norm=None):  # type: ignore[no-untyped-def]
+def ihfft2(
+    input: Tensor,
+    s: Sequence[int] | None = None,
+    dim: Sequence[int] = (-2, -1),
+    norm: str | None = None,
+) -> Tensor:
     return ihfftn(input, s=s, dim=list(dim), norm=norm)
 
 
 # ── Public API: utility functions ────────────────────────────────────────────
 
 
-def fftfreq(n, d=1.0, *, dtype=None, device=None):  # type: ignore[no-untyped-def]
+def fftfreq(
+    n: int,
+    d: float = 1.0,
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+) -> Tensor:
     """Sample frequencies for ``fft``: ``[0, 1, ..., n/2-1, -n/2, ..., -1] / (d*n)``.
 
     Implemented as a closed-form expression over ``lucid.arange`` — no
@@ -424,7 +523,13 @@ def fftfreq(n, d=1.0, *, dtype=None, device=None):  # type: ignore[no-untyped-de
     return full * (1.0 / (float(d) * n))
 
 
-def rfftfreq(n, d=1.0, *, dtype=None, device=None):  # type: ignore[no-untyped-def]
+def rfftfreq(
+    n: int,
+    d: float = 1.0,
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+) -> Tensor:
     """Sample frequencies for ``rfft``: ``[0, 1, ..., n/2] / (d*n)``."""
     n = int(n)
     if n <= 0:
@@ -433,20 +538,20 @@ def rfftfreq(n, d=1.0, *, dtype=None, device=None):  # type: ignore[no-untyped-d
     return bins * (1.0 / (float(d) * n))
 
 
-def fftshift(input, dim=None):  # type: ignore[no-untyped-def]
+def fftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     """Shift the zero-frequency bin to the centre.  Composes ``lucid.roll``."""
     rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    shifts = [int(input.shape[a]) // 2 for a in axes]
-    return lucid.roll(input, shifts=shifts, axes=axes)
+    dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
+    shifts = [int(input.shape[a]) // 2 for a in dims]
+    return lucid.roll(input, shifts=shifts, dims=dims)
 
 
-def ifftshift(input, dim=None):  # type: ignore[no-untyped-def]
+def ifftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     """Inverse of :func:`fftshift`.  Composes ``lucid.roll`` in the other direction."""
     rank = input.ndim
-    axes = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
-    shifts = [-(int(input.shape[a]) // 2) for a in axes]
-    return lucid.roll(input, shifts=shifts, axes=axes)
+    dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
+    shifts = [-(int(input.shape[a]) // 2) for a in dims]
+    return lucid.roll(input, shifts=shifts, dims=dims)
 
 
 __all__ = [

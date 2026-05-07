@@ -2,7 +2,7 @@
 nn.functional pooling operations.
 """
 
-from typing import TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -86,8 +86,10 @@ def _adaptive_pool_python_avg(x: "Tensor", output_size: tuple[int, ...]) -> "Ten
 
 
 def _adaptive_avg_call(
-    x: "Tensor", output_size: tuple[int, ...], engine_fn
-) -> "Tensor":
+    x: Tensor,
+    output_size: tuple[int, ...],
+    engine_fn: Callable[..., _C_engine.TensorImpl],
+) -> Tensor:
     """Engine call with Python fallback when the input dims aren't divisible."""
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])

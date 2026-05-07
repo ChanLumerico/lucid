@@ -407,8 +407,8 @@ def _load_method_aliases() -> dict[str, object]:
     """
     from lucid._tensor.tensor import Tensor as _T
 
-    def _make(method_name: str):
-        def _fn(input, *args, **kwargs):
+    def _make(method_name: str) -> Callable[..., object]:
+        def _fn(input: object, *args: object, **kwargs: object) -> object:
             if not isinstance(input, _T):
                 raise TypeError(
                     f"lucid.{method_name}() expects a Tensor as the first "

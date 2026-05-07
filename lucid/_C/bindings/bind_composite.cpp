@@ -50,7 +50,7 @@ void register_composite(py::module_& m) {
 
     // ── reductions ──────────────────────────────────────────────────────────
     m.def("logsumexp", &logsumexp_op,
-          py::arg("a"), py::arg("axes"), py::arg("keepdims"));
+          py::arg("a"), py::arg("dim"), py::arg("keepdims"));
 
     // ── linear algebra ──────────────────────────────────────────────────────
     m.def("mm",   &mm_op,   py::arg("a"), py::arg("b"));
@@ -113,9 +113,9 @@ void register_composite(py::module_& m) {
     m.def("view", [](const TensorImplPtr& a, const Shape& shape) {
         return reshape_op(a, shape);
     }, py::arg("a"), py::arg("shape"));
-    m.def("concat", [](const std::vector<TensorImplPtr>& xs, int axis) {
-        return concatenate_op(xs, axis);
-    }, py::arg("tensors"), py::arg("axis"));
+    m.def("concat", [](const std::vector<TensorImplPtr>& xs, int dim) {
+        return concatenate_op(xs, dim);
+    }, py::arg("tensors"), py::arg("dim"));
 
     // Top-level ``cross`` and ``norm`` are aliases for the linalg sub-module
     // entries.  They live in Python (lucid.linalg.{cross, norm}); the Python

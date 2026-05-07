@@ -2,13 +2,25 @@
 
 import math
 import random
+from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._C import engine as _C_engine
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
 
 # ── quantile helpers ──────────────────────────────────────────────────────────
 
 
-def _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n):
+def _quantile_sorted(
+    sorted_x: Tensor,
+    q_list: Sequence[float],
+    dim: int | None,
+    keepdim: bool,
+    interpolation: str,
+    n: int,
+) -> list[Tensor]:
     """Core quantile computation on an already-sorted tensor."""
     results = []
     for qi in q_list:
@@ -51,7 +63,7 @@ def _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n):
     return results
 
 
-def _parse_q(q):
+def _parse_q(q: float | Sequence[float] | Tensor) -> tuple[list[float], bool]:
     """Return (q_list of floats, scalar_flag)."""
     if isinstance(q, lucid.Tensor):
         if q.ndim == 0:
@@ -66,7 +78,13 @@ def _parse_q(q):
 # ── public API ────────────────────────────────────────────────────────────────
 
 
-def quantile(input, q, dim=None, keepdim: bool = False, interpolation: str = "linear"):
+def quantile(
+    input: Tensor,
+    q: float | Sequence[float] | Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+    interpolation: str = "linear",
+) -> Tensor:
     """Compute the *q*-th quantile of ``input``.
 
     Supports ``interpolation`` in ``{'linear','lower','higher','midpoint','nearest'}``.
@@ -89,8 +107,12 @@ def quantile(input, q, dim=None, keepdim: bool = False, interpolation: str = "li
 
 
 def nanquantile(
-    input, q, dim=None, keepdim: bool = False, interpolation: str = "linear"
-):
+    input: Tensor,
+    q: float | Sequence[float] | Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+    interpolation: str = "linear",
+) -> Tensor:
     """Like :func:`quantile` but ignores NaN values."""
     # Replace NaN with +inf so they sort to the end, then count valid entries.
     nan_mask = lucid.isnan(input)
@@ -138,7 +160,7 @@ def nanquantile(
 # ── covariance & correlation ──────────────────────────────────────────────────
 
 
-def cov(input, correction: int = 1):
+def cov(input: Tensor, correction: int = 1) -> Tensor:
     """Covariance matrix of ``input``.
 
     ``input`` has shape ``(N,)`` or ``(N, M)`` where *N* = variables,
@@ -156,7 +178,7 @@ def cov(input, correction: int = 1):
     return lucid.matmul(xc, xc.swapaxes(-1, -2)) * (1.0 / denom)  # (N, N)
 
 
-def corrcoef(input):
+def corrcoef(input: Tensor) -> Tensor:
     """Pearson correlation matrix of ``input`` (shape ``(N,)`` or ``(N, M)``)."""
     c = cov(input, correction=1)  # (N, N)
     d = lucid.sqrt(lucid.diagonal(c))  # (N,) — std deviations
@@ -169,7 +191,7 @@ def corrcoef(input):
 # ── pairwise distances ────────────────────────────────────────────────────────
 
 
-def cdist(x1, x2, p: float = 2.0):
+def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
     """Pairwise distance matrix between rows of ``x1`` and ``x2``.
 
     ``x1`` shape ``(..., P, M)``, ``x2`` shape ``(..., R, M)``.
@@ -209,7 +231,11 @@ def cdist(x1, x2, p: float = 2.0):
 # ── bincount ──────────────────────────────────────────────────────────────────
 
 
-def bincount(input, weights=None, minlength: int = 0):
+def bincount(
+    input: Tensor,
+    weights: Tensor | None = None,
+    minlength: int = 0,
+) -> Tensor:
     """Count occurrences of each integer value in ``input``.
 
     ``input`` must be a 1-D non-negative integer tensor.
@@ -234,7 +260,13 @@ def bincount(input, weights=None, minlength: int = 0):
         return lucid.tensor(counts, dtype=lucid.int64)
 
 
-def multinomial(input, num_samples: int, replacement: bool = False, *, generator=None):
+def multinomial(
+    input: Tensor,
+    num_samples: int,
+    replacement: bool = False,
+    *,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
     """Draw ``num_samples`` indices from the categorical distribution defined by ``input``.
 
     ``input`` can be 1-D (single distribution) or 2-D (batch of distributions).
@@ -244,7 +276,7 @@ def multinomial(input, num_samples: int, replacement: bool = False, *, generator
     This op is not differentiable.
     """
 
-    def _sample_row(probs_list: list, k: int, replace: bool) -> list:
+    def _sample_row(probs_list: list[float], k: int, replace: bool) -> list[int]:
         total = sum(probs_list)
         probs_list = [p / total for p in probs_list]
         population = list(range(len(probs_list)))
@@ -281,7 +313,13 @@ def multinomial(input, num_samples: int, replacement: bool = False, *, generator
         return lucid.tensor(rows, dtype=lucid.int64)
 
 
-def histogram(input, bins=10, range=None, density: bool = False, weight=None):
+def histogram(
+    input: Tensor,
+    bins: int | Sequence[float] = 10,
+    range: tuple[float, float] | None = None,
+    density: bool = False,
+    weight: Tensor | None = None,
+) -> tuple[Tensor, Tensor]:
     """Compute a histogram of ``input`` values.
 
     Returns ``(hist, bin_edges)`` — a 1-D count/density tensor and a

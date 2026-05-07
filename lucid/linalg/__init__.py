@@ -79,6 +79,7 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
 
 
 from lucid.autograd.function import Function as _AutogradFunction
+from lucid.autograd.function import FunctionCtx
 
 
 class _CholeskyAutograd(_AutogradFunction):
@@ -87,14 +88,14 @@ class _CholeskyAutograd(_AutogradFunction):
     gradient via Murray (2016)."""
 
     @staticmethod
-    def forward(ctx, x, upper):  # type: ignore[no-untyped-def]
+    def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:
         out = _wrap(_la.cholesky(_unwrap(x), upper))
         ctx.save_for_backward(out)
         ctx.upper = bool(upper)
         return out
 
     @staticmethod
-    def backward(ctx, grad_out):  # type: ignore[no-untyped-def]
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
         import lucid as _lucid
 
         (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)

@@ -355,7 +355,9 @@ class SparseAdam(Optimizer):
                 m = self._exp_avg[flat_idx]
                 v = self._exp_avg_sq[flat_idx]
 
-                def _scale(tensor, scalar: float):
+                def _scale(
+                    tensor: _C_engine.TensorImpl, scalar: float
+                ) -> _C_engine.TensorImpl:
                     return _C_engine.mul(tensor, _C_engine.full(sh, scalar, dt, dv))
 
                 # m = b1 * m + (1 - b1) * g

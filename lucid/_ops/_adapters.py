@@ -21,13 +21,24 @@ Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
 adapters and live at the top of the module.
 """
 
+from typing import Sequence, TYPE_CHECKING
+
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+# Convenience alias for the engine's TensorImpl class — it's the lingua
+# franca of every adapter signature.  Adapters consume the engine's raw
+# storage type, while user-facing args are typed as ``Tensor``.
+_Impl = _C_engine.TensorImpl
+
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
 
 
-def _to_axes(dim):
+def _to_axes(dim: int | Sequence[int] | None) -> list[int]:
     """Convert ``None | int | list[int]`` → ``list[int]`` for the engine."""
     if dim is None:
         return []
@@ -36,7 +47,12 @@ def _to_axes(dim):
     return [int(dim)]
 
 
-def _bessel_correct(result_impl, x_impl, axes_list, correction):
+def _bessel_correct(
+    result_impl: _Impl,
+    x_impl: _Impl,
+    axes_list: Sequence[int],
+    correction: int,
+) -> _Impl:
     """Scale a ddof=0 variance to match ``correction``.  No-op when 0."""
     if correction == 0:
         return result_impl
@@ -59,12 +75,17 @@ def _bessel_correct(result_impl, x_impl, axes_list, correction):
 # ── Engine-arg-order adapters ────────────────────────────────────────────────
 
 
-def _detach_adapter(impl):
+def _detach_adapter(impl: _Impl) -> _Impl:
     """detach(x): deep-copy without gradient tracking."""
     return _C_engine.contiguous(impl).clone_with_grad(False)
 
 
-def _scatter_add_adapter(x_impl, dim: int, index, src):
+def _scatter_add_adapter(
+    x_impl: _Impl,
+    dim: int,
+    index: Tensor,
+    src: Tensor,
+) -> _Impl:
     """scatter_add(x, dim, index, src) — Python order → engine order.
 
     Engine takes ``(base, indices, src, dim)``; we reorder here.
@@ -79,17 +100,23 @@ def _scatter_add_adapter(x_impl, dim: int, index, src):
 # ── Composite indexing adapters ──────────────────────────────────────────────
 
 
-def _take_adapter(a_impl, indices):
+def _take_adapter(a_impl: _Impl, indices: Tensor) -> _Impl:
     """take(a, indices) — second tensor needs unwrap."""
     return _C_engine.take(a_impl, _unwrap(indices))
 
 
-def _index_select_adapter(a_impl, dim: int, index):
+def _index_select_adapter(a_impl: _Impl, dim: int, index: Tensor) -> _Impl:
     """index_select(a, dim, index) — third arg is a tensor."""
     return _C_engine.index_select(a_impl, int(dim), _unwrap(index))
 
 
-def _scatter_adapter(base_impl, dim: int, index, src, reduce=None):
+def _scatter_adapter(
+    base_impl: _Impl,
+    dim: int,
+    index: Tensor,
+    src: Tensor,
+    reduce: str | None = None,
+) -> _Impl:
     """scatter(base, dim, index, src, reduce=None).
 
     ``reduce=None``  → overwrite (composite C++ op).
@@ -112,12 +139,17 @@ def _scatter_adapter(base_impl, dim: int, index, src, reduce=None):
     )
 
 
-def _kthvalue_adapter(a_impl, k, dim=-1, keepdim=False):
+def _kthvalue_adapter(
+    a_impl: _Impl,
+    k: int,
+    dim: int = -1,
+    keepdim: bool = False,
+) -> _Impl:
     """kthvalue(a, k, dim=-1, keepdim=False)."""
     return _C_engine.kthvalue(a_impl, int(k), int(dim), bool(keepdim))
 
 
-def _narrow_adapter(a_impl, dim, start, length):
+def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     """narrow(a, dim, start, length)."""
     return _C_engine.narrow(a_impl, int(dim), int(start), int(length))
 
@@ -125,7 +157,11 @@ def _narrow_adapter(a_impl, dim, start, length):
 # ── Layout / shape adapters ──────────────────────────────────────────────────
 
 
-def _movedim_adapter(a_impl, source, destination):
+def _movedim_adapter(
+    a_impl: _Impl,
+    source: int | Sequence[int],
+    destination: int | Sequence[int],
+) -> _Impl:
     """movedim(a, source, destination) — accept int or list for either arg."""
     src = [int(source)] if isinstance(source, int) else [int(s) for s in source]
     dst = (
@@ -136,61 +172,61 @@ def _movedim_adapter(a_impl, source, destination):
     return _C_engine.movedim(a_impl, src, dst)
 
 
-def _unflatten_adapter(a_impl, dim, sizes):
+def _unflatten_adapter(a_impl: _Impl, dim: int, sizes: Sequence[int]) -> _Impl:
     """unflatten(a, dim, sizes)."""
     return _C_engine.unflatten(a_impl, int(dim), [int(s) for s in sizes])
 
 
-def _view_adapter(a_impl, *shape):
+def _view_adapter(a_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
     """view(a, *shape) — accept ``view(t, 2, 3)`` and ``view(t, [2, 3])``."""
     if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
         s = [int(d) for d in shape[0]]
     else:
-        s = [int(d) for d in shape]
+        s = [int(d) for d in shape]  # type: ignore[arg-type]
     return _C_engine.view(a_impl, s)
 
 
-def _concat_adapter(tensors, dim: int = 0):
+def _concat_adapter(tensors: Sequence[Tensor], dim: int = 0) -> _Impl:
     """concat(tensors, dim=0) — first arg is a list of tensors."""
     return _C_engine.concat([_unwrap(t) for t in tensors], int(dim))
 
 
-def _reshape_adapter(x_impl, *shape):
+def _reshape_adapter(x_impl: _Impl, *shape: int | Sequence[int]) -> _Impl:
     """reshape(x, *shape) — accept variadic ints or single list/tuple."""
     if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
         s = [int(d) for d in shape[0]]
     elif len(shape) == 1 and isinstance(shape[0], int):
         s = [int(shape[0])]
     else:
-        s = [int(d) for d in shape]
+        s = [int(d) for d in shape]  # type: ignore[arg-type]
     return _C_engine.reshape(x_impl, s)
 
 
-def _permute_adapter(x_impl, *dims):
+def _permute_adapter(x_impl: _Impl, *dims: int | Sequence[int]) -> _Impl:
     """permute(x, *dims) — accept variadic ints or single list/tuple."""
     if len(dims) == 1 and isinstance(dims[0], (list, tuple)):
         p = [int(d) for d in dims[0]]
     else:
-        p = [int(d) for d in dims]
+        p = [int(d) for d in dims]  # type: ignore[arg-type]
     return _C_engine.permute(x_impl, p)
 
 
-def _expand_adapter(x_impl, *sizes):
+def _expand_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
     """expand(x, *sizes) — accept variadic ints or single list/tuple."""
     if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
         s = [int(d) for d in sizes[0]]
     else:
-        s = [int(d) for d in sizes]
+        s = [int(d) for d in sizes]  # type: ignore[arg-type]
     return _C_engine.expand(x_impl, s)
 
 
-def _flip_adapter(x_impl, dims):
+def _flip_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:
     """flip(x, dims) — accept ``dims=int`` or list/tuple of ints."""
     dims_list = [int(dims)] if isinstance(dims, int) else [int(d) for d in dims]
     return _C_engine.flip(x_impl, dims_list)
 
 
-def _fliplr_adapter(x_impl):
+def _fliplr_adapter(x_impl: _Impl) -> _Impl:
     """fliplr(x) — flip along axis 1.  ``x`` must be at least 2-D."""
     if len(x_impl.shape) < 2:
         raise ValueError(
@@ -199,7 +235,7 @@ def _fliplr_adapter(x_impl):
     return _C_engine.flip(x_impl, [1])
 
 
-def _flipud_adapter(x_impl):
+def _flipud_adapter(x_impl: _Impl) -> _Impl:
     """flipud(x) — flip along axis 0.  ``x`` must be at least 1-D."""
     if len(x_impl.shape) < 1:
         raise ValueError(
@@ -208,7 +244,10 @@ def _flipud_adapter(x_impl):
     return _C_engine.flip(x_impl, [0])
 
 
-def _squeeze_adapter(x_impl, dim=None):
+def _squeeze_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+) -> _Impl:
     """squeeze(x, dim=None) — None drops all size-1; list squeezes multiple."""
     if dim is None:
         return _C_engine.squeeze_all(x_impl)
@@ -235,109 +274,109 @@ def _squeeze_adapter(x_impl, dim=None):
 
 
 def _sum_adapter(
-    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
-):
-    """sum(x, dim=None, keepdim=False) with axis/axes/keepdims aliases."""
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.sum(x_impl, ax, kd)
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """sum(x, dim=None, keepdim=False)."""
+    return _C_engine.sum(x_impl, _to_axes(dim), bool(keepdim))
 
 
 def _mean_adapter(
-    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
-):
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """mean(x, dim=None, keepdim=False)."""
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.mean(x_impl, ax, kd)
+    return _C_engine.mean(x_impl, _to_axes(dim), bool(keepdim))
 
 
 def _prod_adapter(
-    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
-):
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """prod(x, dim=None, keepdim=False)."""
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.prod(x_impl, ax, kd)
+    return _C_engine.prod(x_impl, _to_axes(dim), bool(keepdim))
 
 
 def _max_adapter(
-    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
-):
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """max(x, dim=None, keepdim=False)."""
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.max(x_impl, ax, kd)
+    return _C_engine.max(x_impl, _to_axes(dim), bool(keepdim))
 
 
 def _min_adapter(
-    x_impl, dim=None, keepdim=False, *, axis=None, axes=None, keepdims=None
-):
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """min(x, dim=None, keepdim=False)."""
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.min(x_impl, ax, kd)
+    return _C_engine.min(x_impl, _to_axes(dim), bool(keepdim))
 
 
 def _var_adapter(
-    x_impl,
-    dim=None,
-    keepdim=False,
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
     *,
-    correction=1,
-    unbiased=None,
-    axis=None,
-    axes=None,
-    keepdims=None,
-):
+    correction: int = 1,
+    unbiased: bool | None = None,
+) -> _Impl:
     """var(x, dim, keepdim, correction=1) — ddof default matches reference."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    result = _C_engine.var(x_impl, ax, kd)
+    ax = _to_axes(dim)
+    result = _C_engine.var(x_impl, ax, bool(keepdim))
     return _bessel_correct(result, x_impl, ax, correction)
 
 
 def _std_adapter(
-    x_impl,
-    dim=None,
-    keepdim=False,
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
     *,
-    correction=1,
-    unbiased=None,
-    axis=None,
-    axes=None,
-    keepdims=None,
-):
+    correction: int = 1,
+    unbiased: bool | None = None,
+) -> _Impl:
     """std(x, dim, keepdim, correction=1) = sqrt(var(...))."""
     if unbiased is not None:
         correction = 1 if unbiased else 0
-    ax = _to_axes(dim if dim is not None else axis if axis is not None else axes)
-    kd = keepdims if keepdims is not None else keepdim
-    v = _C_engine.var(x_impl, ax, kd)
+    ax = _to_axes(dim)
+    v = _C_engine.var(x_impl, ax, bool(keepdim))
     v = _bessel_correct(v, x_impl, ax, correction)
     return _C_engine.sqrt(v)
 
 
-def _argmax_adapter(x_impl, dim=None, keepdim=False, *, axis=None, keepdims=None):
+def _argmax_adapter(
+    x_impl: _Impl,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """argmax(x, dim=None, keepdim=False)."""
-    d = dim if dim is not None else axis
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.argmax(x_impl, -1 if d is None else int(d), bool(kd))
+    return _C_engine.argmax(x_impl, -1 if dim is None else int(dim), bool(keepdim))
 
 
-def _argmin_adapter(x_impl, dim=None, keepdim=False, *, axis=None, keepdims=None):
+def _argmin_adapter(
+    x_impl: _Impl,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """argmin(x, dim=None, keepdim=False)."""
-    d = dim if dim is not None else axis
-    kd = keepdims if keepdims is not None else keepdim
-    return _C_engine.argmin(x_impl, -1 if d is None else int(d), bool(kd))
+    return _C_engine.argmin(x_impl, -1 if dim is None else int(dim), bool(keepdim))
 
 
-def _logsumexp_adapter(a_impl, dim=None, keepdim=False):
+def _logsumexp_adapter(
+    a_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """logsumexp(a, dim=None, keepdim=False) — accept axis/None like sum/mean."""
     if dim is None:
-        axes = []
+        axes: list[int] = []
     elif isinstance(dim, (list, tuple)):
         axes = [int(d) for d in dim]
     else:
@@ -348,7 +387,7 @@ def _logsumexp_adapter(a_impl, dim=None, keepdim=False):
 # ── Repeat / split adapters ──────────────────────────────────────────────────
 
 
-def _repeat_adapter(x_impl, repeats, dim=None):
+def _repeat_adapter(x_impl: _Impl, repeats: int, dim: int | None = None) -> _Impl:
     """``lucid.repeat(x, repeats, dim=None)`` — interleaved replication along
     axis 0 when ``dim`` is None, else along the given axis.
 
@@ -360,7 +399,7 @@ def _repeat_adapter(x_impl, repeats, dim=None):
     return _C_engine.repeat(x_impl, int(repeats), axis)
 
 
-def _repeat_method_adapter(x_impl, *sizes):
+def _repeat_method_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
     """``Tensor.repeat(*sizes)`` — tile copies along each dim.
 
     Routes to ``engine.tile`` so the method semantics match the reference
@@ -370,11 +409,15 @@ def _repeat_method_adapter(x_impl, *sizes):
     if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
         reps = list(sizes[0])
     else:
-        reps = list(sizes)
+        reps = list(sizes)  # type: ignore[arg-type]
     return _C_engine.tile(x_impl, [int(r) for r in reps])
 
 
-def _repeat_interleave_adapter(a_impl, repeats, dim=None):
+def _repeat_interleave_adapter(
+    a_impl: _Impl,
+    repeats: int,
+    dim: int | None = None,
+) -> _Impl:
     """repeat_interleave(x, repeats, dim=None) — defers to engine.repeat.
 
     The engine's ``repeat`` op already implements interleaved replication
@@ -387,17 +430,21 @@ def _repeat_interleave_adapter(a_impl, repeats, dim=None):
     return _C_engine.repeat(a_impl, int(repeats), int(dim))
 
 
-def _split_adapter(x_impl, split_size_or_sections, dim=0):
+def _split_adapter(
+    x_impl: _Impl,
+    split_size_or_sections: int | Sequence[int],
+    dim: int = 0,
+) -> list[_Impl]:
     """split(x, sections, dim=0) — int → equal chunks; list → explicit sizes."""
     axis_size = int(x_impl.shape[dim])
     if isinstance(split_size_or_sections, int):
         chunk = split_size_or_sections
         n = (axis_size + chunk - 1) // chunk
         return _C_engine.split(x_impl, n, int(dim))
-    indices = []
+    indices: list[int] = []
     cumsum = 0
     for s in split_size_or_sections[:-1]:
-        cumsum += s
+        cumsum += int(s)
         indices.append(cumsum)
     return _C_engine.split_at(x_impl, indices, int(dim))
 
@@ -405,22 +452,27 @@ def _split_adapter(x_impl, split_size_or_sections, dim=0):
 # ── tensordot / meshgrid / where / masked_fill / pad ─────────────────────────
 
 
-def _tensordot_adapter(a_impl, b_impl, dims=2, _axes_b=None):
+def _tensordot_adapter(
+    a_impl: _Impl,
+    b_impl: _Impl,
+    dims: int | Sequence[int] | Sequence[Sequence[int]] = 2,
+    _axes_b: Sequence[int] | None = None,
+) -> _Impl:
     """tensordot — accept int / nested-list / pair-of-lists ``dims``."""
     if _axes_b is not None:
-        axes_a = [int(d) for d in dims]
+        axes_a = [int(d) for d in dims]  # type: ignore[union-attr]
         axes_b = [int(d) for d in _axes_b]
     elif isinstance(dims, int):
         ra = len(a_impl.shape)
         axes_a = list(range(ra - int(dims), ra))
         axes_b = list(range(int(dims)))
     else:
-        axes_a = [int(d) for d in dims[0]]
-        axes_b = [int(d) for d in dims[1]]
+        axes_a = [int(d) for d in dims[0]]  # type: ignore[index]
+        axes_b = [int(d) for d in dims[1]]  # type: ignore[index]
     return _C_engine.tensordot(a_impl, b_impl, axes_a, axes_b)
 
 
-def _meshgrid_adapter(*tensors, indexing="ij"):
+def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     """meshgrid(*tensors, indexing='ij') — variadic input; ``indexing`` kwarg
     selects between matrix ('ij') and Cartesian ('xy') ordering."""
     if len(tensors) == 1 and isinstance(tensors[0], (list, tuple)):
@@ -429,7 +481,7 @@ def _meshgrid_adapter(*tensors, indexing="ij"):
     return _C_engine.meshgrid(impls, indexing == "xy")
 
 
-def _where_adapter(cond, x, y):
+def _where_adapter(cond: Tensor, x: Tensor, y: Tensor) -> _Impl:
     """where(cond, x, y) — auto-cast cond to bool to match reference behaviour."""
     c = _unwrap(cond)
     if c.dtype != _C_engine.Bool:
@@ -437,7 +489,7 @@ def _where_adapter(cond, x, y):
     return _C_engine.where(c, _unwrap(x), _unwrap(y))
 
 
-def _masked_fill_adapter(x_impl, mask, value):
+def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
     """masked_fill(x, mask, value) — auto-cast mask to bool."""
     m = _unwrap(mask)
     if m.dtype != _C_engine.Bool:
@@ -445,7 +497,12 @@ def _masked_fill_adapter(x_impl, mask, value):
     return _C_engine.masked_fill(x_impl, m, float(value))
 
 
-def _pad_adapter(x_impl, padding, mode="constant", value=0.0):
+def _pad_adapter(
+    x_impl: _Impl,
+    padding: Sequence[int],
+    mode: str = "constant",
+    value: float = 0.0,
+) -> _Impl:
     """pad(x, padding, mode, value) — reference flat (last-dim-first) convention."""
     if mode != "constant":
         raise NotImplementedError(
@@ -453,7 +510,7 @@ def _pad_adapter(x_impl, padding, mode="constant", value=0.0):
         )
     ndim = len(x_impl.shape)
     n_pad_dims = len(padding) // 2
-    pad_pairs = [(0, 0)] * ndim
+    pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
     for i in range(n_pad_dims):
         dim_idx = ndim - 1 - i
         pad_pairs[dim_idx] = (int(padding[2 * i]), int(padding[2 * i + 1]))
@@ -463,12 +520,17 @@ def _pad_adapter(x_impl, padding, mode="constant", value=0.0):
 # ── Stats / search / combinatorial ───────────────────────────────────────────
 
 
-def _histc_adapter(a_impl, bins=100, min=0.0, max=0.0):
+def _histc_adapter(
+    a_impl: _Impl,
+    bins: int = 100,
+    min: float = 0.0,
+    max: float = 0.0,
+) -> _Impl:
     """histc(a, bins=100, min=0, max=0) — defaults match the reference framework."""
     return _C_engine.histc(a_impl, int(bins), float(min), float(max))
 
 
-def _cartesian_prod_adapter(*tensors):
+def _cartesian_prod_adapter(*tensors: Tensor) -> _Impl:
     """cartesian_prod(*tensors) — accept variadic tensor args.
 
     The registry's list-arg path requires the user to pass a list;
@@ -480,17 +542,33 @@ def _cartesian_prod_adapter(*tensors):
     return _C_engine.cartesian_prod([_unwrap(t) for t in tensors])
 
 
-def _searchsorted_adapter(sorted_seq, values, *, right=False):
+def _searchsorted_adapter(
+    sorted_seq: Tensor,
+    values: Tensor,
+    *,
+    right: bool = False,
+) -> _Impl:
     """searchsorted(sorted_seq, values, right=False) — accept tensor inputs."""
     return _C_engine.searchsorted(_unwrap(sorted_seq), _unwrap(values), bool(right))
 
 
-def _bucketize_adapter(values, boundaries, *, right=False):
+def _bucketize_adapter(
+    values: Tensor,
+    boundaries: Tensor,
+    *,
+    right: bool = False,
+) -> _Impl:
     """bucketize(values, boundaries, right=False)."""
     return _C_engine.bucketize(_unwrap(values), _unwrap(boundaries), bool(right))
 
 
-def _isclose_adapter(a_impl, b_impl, rtol=1e-5, atol=1e-8, equal_nan=False):
+def _isclose_adapter(
+    a_impl: _Impl,
+    b_impl: _Impl,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+    equal_nan: bool = False,
+) -> _Impl:
     """isclose(a, b, rtol, atol, equal_nan) — equal_nan branch handled here."""
     if equal_nan:
         # ``isclose ∨ (isnan(a) ∧ isnan(b))`` — we lift to bitwise on bool
@@ -506,7 +584,7 @@ def _isclose_adapter(a_impl, b_impl, rtol=1e-5, atol=1e-8, equal_nan=False):
 # ── Sub-module forwarders ────────────────────────────────────────────────────
 
 
-def _cross_adapter(a_impl, b_impl, dim: int = -1):
+def _cross_adapter(a_impl: _Impl, b_impl: _Impl, dim: int = -1) -> _Impl:
     """cross(a, b, dim=-1) — forwards to lucid.linalg.cross.
 
     ``lucid.linalg.cross`` is a Python wrapper around an engine kernel; this
@@ -519,7 +597,12 @@ def _cross_adapter(a_impl, b_impl, dim: int = -1):
     return _unwrap(_linalg_cross(_w(a_impl), _w(b_impl), dim=int(dim)))
 
 
-def _norm_adapter(a_impl, ord=None, dim=None, keepdim=False):
+def _norm_adapter(
+    a_impl: _Impl,
+    ord: int | float | str | None = None,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
     """norm(a, ord, dim, keepdim) — forwards to lucid.linalg.norm."""
     from lucid._dispatch import _wrap as _w
     from lucid.linalg import norm as _linalg_norm
@@ -527,7 +610,7 @@ def _norm_adapter(a_impl, ord=None, dim=None, keepdim=False):
     return _unwrap(_linalg_norm(_w(a_impl), ord=ord, dim=dim, keepdim=keepdim))
 
 
-def _einsum_adapter(equation, *operands):
+def _einsum_adapter(equation: str, *operands: Tensor) -> _Impl:
     """einsum(equation, *operands) — top-level alias for ``lucid.einops.einsum``.
 
     The engine's einsum kernel lives in the ``einops`` sub-module; we forward

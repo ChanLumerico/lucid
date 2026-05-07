@@ -245,8 +245,8 @@ void register_nn(py::module_& m) {
           py::arg("gamma"), py::arg("beta"), py::arg("eps") = 1e-5,
           "Inference-mode BatchNorm using precomputed running stats.");
 
-    m.def("lp_normalize", &lp_normalize_op, py::arg("x"), py::arg("ord"), py::arg("axis"),
-          py::arg("eps") = 1e-12, "Lp normalize: y = x / max(||x||_p, eps) along `axis`.");
+    m.def("lp_normalize", &lp_normalize_op, py::arg("x"), py::arg("ord"), py::arg("dim"),
+          py::arg("eps") = 1e-12, "Lp normalize: y = x / max(||x||_p, eps) along `dim`.");
 
     m.def("global_response_norm", &global_response_norm_op, py::arg("x"), py::arg("gamma"),
           py::arg("beta"), py::arg("eps") = 1e-6,

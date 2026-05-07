@@ -8,16 +8,13 @@ These serve three purposes:
   3. **Extensibility** — :class:`TensorLikeProtocol` lets user-defined types
      participate in lucid's functional interface without subclassing ``Tensor``.
 
-Import style
-------------
-Early modules (factories, dispatch, _dtype, _device) that are themselves imported
-by ``tensor.py`` must use :mod:`lucid._types_base` to avoid circular imports.
-All other modules may import from here directly::
-
-    from lucid._types import DeviceLike, DTypeLike, ShapeLike, _ModuleOutput
-
-Public-facing names (``Scalar``, ``TensorLike``, ``DeviceLike``, …) are also
-re-exported from ``lucid.__init__`` for advanced users.
+Import policy
+-------------
+Every module — including those imported during ``lucid._tensor.tensor``
+construction — can import from here.  The ``Tensor`` reference itself is
+held under ``TYPE_CHECKING`` and the Tensor-dependent aliases are PEP 695
+``type`` statements, which lazily evaluate their value, so importing this
+module does not trigger an early ``Tensor`` import.
 
 Naming conventions
 ------------------
@@ -28,32 +25,56 @@ Naming conventions
 from typing import (
     Callable,
     Protocol,
+    TYPE_CHECKING,
     TypedDict,
+    TypeVar,
+    ParamSpec,
     runtime_checkable,
 )
 
 import numpy as np
 
-from lucid._tensor.tensor import Tensor
 from lucid._dtype import dtype as _DType
 from lucid._device import device as _Device
 
-# ── Re-export everything from _types_base ─────────────────────────────────────
-# Consumers that only need the Tensor-free aliases can import from _types_base;
-# everyone else can import from here and get the full set.
-from lucid._types_base import (  # noqa: F401
-    DT,
-    DV,
-    _T,
-    _P,
-    Scalar,
-    DeviceLike,
-    DTypeLike,
-    ShapeLike,
-    _Size1d,
-    _Size2d,
-    _Size3d,
-)
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+
+# ── TypeVars ──────────────────────────────────────────────────────────────────
+
+DT = TypeVar("DT", bound=_DType)
+"""TypeVar for dtype-parametric functions."""
+
+DV = TypeVar("DV", bound=_Device)
+"""TypeVar for device-parametric functions."""
+
+_T = TypeVar("_T")
+"""Generic return TypeVar used in decorator helpers."""
+
+_P = ParamSpec("_P")
+"""ParamSpec for preserving callable signatures through decorators."""
+
+
+# ── Public type aliases (no Tensor dependency) ───────────────────────────────
+
+# Scalar numeric types — valid operands alongside Tensor in arithmetic.
+type Scalar = int | float | bool
+
+# Device specifier: an actual device object, a string name ('cpu'/'metal'), or None.
+type DeviceLike = _Device | str | None
+
+# DType specifier: an actual dtype object or None (→ use the global default).
+type DTypeLike = _DType | None
+
+# Shape / size specifier used in factory functions and reshape.
+type ShapeLike = int | tuple[int, ...]
+
+# Spatial size variants for 1-D / 2-D / 3-D ops (Conv, Pool, …).
+type _Size1d = int | tuple[int]
+type _Size2d = int | tuple[int, int]
+type _Size3d = int | tuple[int, int, int]
+
 
 # ── Protocols ─────────────────────────────────────────────────────────────────
 
@@ -85,7 +106,7 @@ class SupportsGrad(Protocol):
 
     def backward(self, *, retain_graph: bool = ...) -> None: ...
 
-    def detach(self) -> "SupportsGrad": ...
+    def detach(self) -> SupportsGrad: ...
 
 
 @runtime_checkable
@@ -119,7 +140,7 @@ class TensorLikeProtocol(HasShape, SupportsNumpyConversion, Protocol):
     @property
     def device(self) -> _Device: ...
 
-    def to(self, *args: object, **kwargs: object) -> "TensorLikeProtocol": ...
+    def to(self, *args: object, **kwargs: object) -> TensorLikeProtocol: ...
 
 
 # ── TypedDict: optimizer parameter group ─────────────────────────────────────
@@ -145,12 +166,10 @@ class ParamGroupDict(TypedDict, total=False):
     fused: bool | None
 
 
-# ── Public type aliases (Tensor-dependent) ────────────────────────────────────
+# ── Public type aliases (Tensor-dependent — PEP 695 lazy values) ─────────────
 
 # Any value that lucid can meaningfully convert to a Tensor.
 type TensorLike = Tensor | np.ndarray | list[object] | int | float | bool
-
-# ── Tensor operand / indexing ─────────────────────────────────────────────────
 
 # Right-hand operand for arithmetic dunders (+, -, *, /, **, …).
 type TensorOrScalar = Tensor | Scalar
@@ -164,6 +183,10 @@ type _IndexType = (
     | tuple[int | slice | Tensor | list[int] | None, ...]
     | None
 )
+
+# Reduction / op axis specifier
+type DimLike = int | list[int] | tuple[int, ...] | None
+
 
 # ── Neural network ────────────────────────────────────────────────────────────
 
@@ -180,6 +203,7 @@ type _ForwardHook = Callable[
     [object, tuple[Tensor, ...], _ModuleOutput], _ModuleOutput | None
 ]
 type _BackwardHook = Callable[..., None]
+
 
 # ── Optimizers ────────────────────────────────────────────────────────────────
 

@@ -2,34 +2,42 @@
 miscellaneous fillers (``rot90``, ``vander``, ``take_along_dim``).
 """
 
-from typing import Sequence
+from typing import Sequence, TYPE_CHECKING
 
 import lucid
 from lucid._ops.composite._shared import _swap_dims
 
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+
 # ── Axis swaps ─────────────────────────────────────────────────────────────
 
 
-def swapaxes(x, axis0: int, axis1: int):  # type: ignore[no-untyped-def]
+def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
     return _swap_dims(x, axis0, axis1)
 
 
-def swapdims(x, dim0: int, dim1: int):  # type: ignore[no-untyped-def]
+def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
     return _swap_dims(x, dim0, dim1)
 
 
-def moveaxis(x, source, destination):  # type: ignore[no-untyped-def]
+def moveaxis(
+    x: Tensor,
+    source: int | Sequence[int],
+    destination: int | Sequence[int],
+) -> Tensor:
     return lucid.movedim(x, source, destination)
 
 
-def adjoint(x):  # type: ignore[no-untyped-def]
+def adjoint(x: Tensor) -> Tensor:
     """Conjugate transpose of the last two dims.  Real-only for now."""
     if x.ndim < 2:
         raise ValueError("adjoint requires at least 2 dimensions")
     return _swap_dims(x, x.ndim - 2, x.ndim - 1)
 
 
-def t(x):  # type: ignore[no-untyped-def]
+def t(x: Tensor) -> Tensor:
     """Transpose for ≤2-D tensors (PyTorch's ``Tensor.t`` semantics)."""
     if x.ndim < 2:
         return x
@@ -41,20 +49,20 @@ def t(x):  # type: ignore[no-untyped-def]
 # ── Stacks ─────────────────────────────────────────────────────────────────
 
 
-def column_stack(tensors):  # type: ignore[no-untyped-def]
+def column_stack(tensors: Sequence[Tensor]) -> Tensor:
     """Stack 1-D tensors as columns (other ranks pass through unchanged)."""
     fixed = [t_i.unsqueeze(1) if t_i.ndim == 1 else t_i for t_i in tensors]
     return lucid.cat(fixed, 1)
 
 
-def row_stack(tensors):  # type: ignore[no-untyped-def]
+def row_stack(tensors: Sequence[Tensor]) -> Tensor:
     """Alias for ``vstack`` (PyTorch parity)."""
     return lucid.vstack(list(tensors))
 
 
-def dstack(tensors):  # type: ignore[no-untyped-def]
+def dstack(tensors: Sequence[Tensor]) -> Tensor:
     """Concatenate along the third axis, reshaping lower-rank inputs."""
-    fixed = []
+    fixed: list[Tensor] = []
     for t_i in tensors:
         if t_i.ndim == 0:
             t_i = t_i.reshape(1, 1, 1)
@@ -66,13 +74,13 @@ def dstack(tensors):  # type: ignore[no-untyped-def]
     return lucid.cat(fixed, 2)
 
 
-def atleast_1d(*tensors):  # type: ignore[no-untyped-def]
+def atleast_1d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
     out = [t_i.reshape(1) if t_i.ndim == 0 else t_i for t_i in tensors]
     return out[0] if len(out) == 1 else tuple(out)
 
 
-def atleast_2d(*tensors):  # type: ignore[no-untyped-def]
-    out = []
+def atleast_2d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
+    out: list[Tensor] = []
     for t_i in tensors:
         if t_i.ndim == 0:
             t_i = t_i.reshape(1, 1)
@@ -82,8 +90,8 @@ def atleast_2d(*tensors):  # type: ignore[no-untyped-def]
     return out[0] if len(out) == 1 else tuple(out)
 
 
-def atleast_3d(*tensors):  # type: ignore[no-untyped-def]
-    out = []
+def atleast_3d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
+    out: list[Tensor] = []
     for t_i in tensors:
         if t_i.ndim == 0:
             t_i = t_i.reshape(1, 1, 1)
@@ -98,7 +106,11 @@ def atleast_3d(*tensors):  # type: ignore[no-untyped-def]
 # ── Splits ─────────────────────────────────────────────────────────────────
 
 
-def _split_along(x, indices_or_sections, dim):  # type: ignore[no-untyped-def]
+def _split_along(
+    x: Tensor,
+    indices_or_sections: int | Sequence[int],
+    dim: int,
+) -> list[Tensor]:
     """Convert NumPy-style splits to lucid's size-list form."""
     if isinstance(indices_or_sections, int):
         n = x.shape[dim]
@@ -117,30 +129,34 @@ def _split_along(x, indices_or_sections, dim):  # type: ignore[no-untyped-def]
     return lucid.split(x, sizes, dim)
 
 
-def vsplit(x, indices_or_sections):  # type: ignore[no-untyped-def]
+def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     if x.ndim < 1:
         raise ValueError("vsplit requires at least 1-D input")
     return _split_along(x, indices_or_sections, 0)
 
 
-def hsplit(x, indices_or_sections):  # type: ignore[no-untyped-def]
+def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     return _split_along(x, indices_or_sections, 0 if x.ndim == 1 else 1)
 
 
-def dsplit(x, indices_or_sections):  # type: ignore[no-untyped-def]
+def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     if x.ndim < 3:
         raise ValueError("dsplit requires at least 3-D input")
     return _split_along(x, indices_or_sections, 2)
 
 
-def tensor_split(x, indices_or_sections, dim: int = 0):  # type: ignore[no-untyped-def]
+def tensor_split(
+    x: Tensor,
+    indices_or_sections: int | Sequence[int],
+    dim: int = 0,
+) -> list[Tensor]:
     return _split_along(x, indices_or_sections, dim)
 
 
 # ── Misc ───────────────────────────────────────────────────────────────────
 
 
-def take_along_dim(x, indices, dim: int):  # type: ignore[no-untyped-def]
+def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     """Gather elements at ``indices`` along ``dim``.
 
     lucid's ``gather`` signature is ``(input, indices, axis)``.
@@ -148,7 +164,7 @@ def take_along_dim(x, indices, dim: int):  # type: ignore[no-untyped-def]
     return lucid.gather(x, indices, dim)
 
 
-def vander(x, N: int | None = None, increasing: bool = False):  # type: ignore[no-untyped-def]
+def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     """Vandermonde matrix: ``out[i, j] = x[i] ** (N-1-j)``."""
     if x.ndim != 1:
         raise ValueError("vander expects a 1-D input tensor")
@@ -159,7 +175,7 @@ def vander(x, N: int | None = None, increasing: bool = False):  # type: ignore[n
     return lucid.pow(x.unsqueeze(1), powers.unsqueeze(0))
 
 
-def rot90(x, k: int = 1, dims: Sequence[int] = (0, 1)):  # type: ignore[no-untyped-def]
+def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     """Rotate by 90° in the plane defined by ``dims``, ``k`` times."""
     d0, d1 = dims[0], dims[1]
     k = k % 4

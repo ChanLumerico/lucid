@@ -91,10 +91,10 @@ void register_ufunc(py::module_& m) {
     bind_unary<HardSwishBackward>(m, &hard_swish_op);
     bind_unary<Relu6Backward>(m, &relu6_op);
 
-    // softmax is registered manually because its extra `axis` argument is
+    // softmax is registered manually because its extra `dim` argument is
     // not captured by the plain bind_unary<> signature.
-    m.def("softmax",     &softmax_op,     py::arg("a"), py::arg("axis") = -1);
-    m.def("log_softmax", &log_softmax_op, py::arg("a"), py::arg("axis") = -1);
+    m.def("softmax",     &softmax_op,     py::arg("a"), py::arg("dim") = -1);
+    m.def("log_softmax", &log_softmax_op, py::arg("a"), py::arg("dim") = -1);
 
     // Scalar-parameter ops: base ** exp, base ** a, and clamp.
     m.def("pow_scalar", &pow_scalar_op, py::arg("a"), py::arg("exp"));
@@ -108,32 +108,32 @@ void register_ufunc(py::module_& m) {
     bind_unary<InvertBackward>(m, &invert_op);
     bind_unary<RsqrtBackward>(m, &rsqrt_op);
 
-    // Reduction ops share the (a, axes=[], keepdims=False) signature; empty
-    // axes means reduce over all dimensions.
-    bind_reduce<SumBackward>(m, &sum_op, "Reduce-sum along given axes (empty = all).");
+    // Reduction ops share the (a, dim=[], keepdims=False) signature; empty
+    // `dim` means reduce over all dimensions.
+    bind_reduce<SumBackward>(m, &sum_op, "Reduce-sum along given dim (empty = all).");
     bind_reduce<MeanBackward>(m, &mean_op, "Reduce-mean.");
     bind_reduce<ProdBackward>(m, &prod_op, "Reduce-product.");
     bind_reduce<MaxBackward>(m, &max_op, "Reduce-max.");
     bind_reduce<MinBackward>(m, &min_op, "Reduce-min.");
 
-    // Axis manipulation ops live here rather than in bind_utils because their
+    // Dim manipulation ops live here rather than in bind_utils because their
     // backward nodes are in the ufunc layer.
-    m.def("permute", &permute_op, py::arg("a"), py::arg("perm"), "General axis permutation.");
-    m.def("transpose", &transpose_op, py::arg("a"), "Reverse all axes (alias for `T`).");
-    m.def("T", &T_op, py::arg("a"), "Reverse all axes.");
-    m.def("mT", &mT_op, py::arg("a"), "Swap last two axes (matrix transpose).");
-    m.def("swapaxes", &swapaxes_op, py::arg("a"), py::arg("axis1"), py::arg("axis2"),
-          "Swap two axes.");
+    m.def("permute", &permute_op, py::arg("a"), py::arg("dims"), "General dim permutation.");
+    m.def("transpose", &transpose_op, py::arg("a"), "Reverse all dims (alias for `T`).");
+    m.def("T", &T_op, py::arg("a"), "Reverse all dims.");
+    m.def("mT", &mT_op, py::arg("a"), "Swap last two dims (matrix transpose).");
+    m.def("swapaxes", &swapaxes_op, py::arg("a"), py::arg("dim1"), py::arg("dim2"),
+          "Swap two dims.");
 
-    m.def("var", &var_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
+    m.def("var", &var_op, py::arg("a"), py::arg("dim") = std::vector<int>{},
           py::arg("keepdims") = false, "Variance reduction (sample variance, ddof=0).");
-    m.def("std", &std_op, py::arg("a"), py::arg("axes") = std::vector<int>{},
+    m.def("std", &std_op, py::arg("a"), py::arg("dim") = std::vector<int>{},
           py::arg("keepdims") = false, "Standard deviation (sqrt of variance).");
-    m.def("trace", &trace_op, py::arg("a"), "Sum of the main diagonal (last 2 axes).");
-    m.def("cumsum", &cumsum_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("cumprod", &cumprod_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("cummax", &cummax_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("cummin", &cummin_op, py::arg("a"), py::arg("axis") = -1);
+    m.def("trace", &trace_op, py::arg("a"), "Sum of the main diagonal (last 2 dims).");
+    m.def("cumsum", &cumsum_op, py::arg("a"), py::arg("dim") = -1);
+    m.def("cumprod", &cumprod_op, py::arg("a"), py::arg("dim") = -1);
+    m.def("cummax", &cummax_op, py::arg("a"), py::arg("dim") = -1);
+    m.def("cummin", &cummin_op, py::arg("a"), py::arg("dim") = -1);
     bind_unary<ErfBackward>(m, &erf_op);
     bind_unary<ErfinvBackward>(m, &erfinv_op);
 

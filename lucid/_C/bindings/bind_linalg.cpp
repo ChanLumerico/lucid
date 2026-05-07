@@ -47,10 +47,10 @@ void register_linalg(py::module_& m) {
     // avoid a redundant copy.
     m.def(
         "norm",
-        [](const TensorImplPtr& a, double ord, std::vector<int> axis, bool keepdims) {
-            return norm_op(a, ord, std::move(axis), keepdims);
+        [](const TensorImplPtr& a, double ord, std::vector<int> dim, bool keepdims) {
+            return norm_op(a, ord, std::move(dim), keepdims);
         },
-        py::arg("a"), py::arg("ord") = 2.0, py::arg("axis") = std::vector<int>{},
+        py::arg("a"), py::arg("ord") = 2.0, py::arg("dim") = std::vector<int>{},
         py::arg("keepdims") = false);
 
     // qr returns (Q, R); the C++ op returns a 2-element vector.

@@ -45,7 +45,7 @@ _ENGINE_HEADER = """\
 # fmt: off
 
 from __future__ import annotations
-from typing import Any, List, Optional
+from typing import List, Optional, Sequence, SupportsInt
 
 class Dtype:
     F16: Dtype
@@ -80,12 +80,12 @@ class TensorImpl:
     @property
     def is_leaf(self) -> bool: ...
     def numel(self) -> int: ...
-    def data_as_python(self) -> Any: ...
-    def grad_as_python(self) -> Any: ...
+    def data_as_python(self) -> object: ...
+    def grad_as_python(self) -> object: ...
     def zero_grad(self) -> None: ...
     def is_contiguous(self) -> bool: ...
     def bump_version(self) -> None: ...
-    def __init__(self, data: Any, device: Device, requires_grad: bool) -> None: ...
+    def __init__(self, data: object, device: Device, requires_grad: bool) -> None: ...
 
 class Node: ...
 
@@ -159,18 +159,84 @@ def gen_engine_pyi() -> str:
     lines = []
     for name in names:
         comment = _amp_policy_comment(name, policy_map)
+        sig_str = _engine_fn_sig(name, getattr(e, name))
         if comment:
-            lines.append(
-                f"def {name}(*args: Any, **kwargs: Any) -> TensorImpl:{comment}"
-            )
+            lines.append(f"def {name}{sig_str}:{comment}")
             lines.append("    ...")
             lines.append("")
         else:
-            lines.append(f"def {name}(*args: Any, **kwargs: Any) -> TensorImpl: ...")
+            lines.append(f"def {name}{sig_str}: ...")
 
     # Count for summary
     count = len(names)
     return _ENGINE_HEADER + "\n".join(lines) + "\n", count
+
+
+def _engine_fn_sig(name: str, fn: object) -> str:
+    """Parse a pybind11 builtin's first-line docstring into ``(...) -> R``.
+
+    pybind11 emits a self-describing signature on line 1 of every function's
+    ``__doc__`` — we lift that directly so engine.pyi mirrors the real C++
+    surface (with concrete dtypes, defaults, and return type) instead of
+    a uselessly generic ``*args, **kwargs``.
+
+    Falls back to a tensor-pass-through signature when parsing fails — the
+    project policy forbids ``Any`` in stubs.
+    """
+    import re
+
+    doc = getattr(fn, "__doc__", "") or ""
+    first = doc.splitlines()[0] if doc else ""
+    # pybind11 lines look like:  name(arg: Type [= dflt], ...) -> RetType
+    m = re.match(rf"^{re.escape(name)}\((?P<params>.*)\)\s*->\s*(?P<ret>.+?)\s*$", first)
+    if not m:
+        return "(input: TensorImpl, /, *args: object, **kwargs: object) -> TensorImpl"
+    params_raw = m.group("params").strip()
+    ret_raw = _engine_strip(m.group("ret").strip())
+
+    # Top-level comma-split that respects nested brackets.
+    params: list[str] = []
+    depth = 0
+    cur = ""
+    for ch in params_raw + ",":
+        if ch == "," and depth == 0:
+            piece = cur.strip()
+            cur = ""
+            if not piece:
+                continue
+            params.append(_engine_param(piece))
+        else:
+            if ch in "[(":
+                depth += 1
+            elif ch in "])":
+                depth -= 1
+            cur += ch
+    return f"({', '.join(params)}) -> {ret_raw}"
+
+
+def _engine_param(piece: str) -> str:
+    """Render one parsed engine parameter — ``name: type [= ...]``."""
+    if "=" in piece:
+        head, _ = piece.split("=", 1)
+        head = head.strip()
+        return f"{_engine_strip_param(head)} = ..."
+    return _engine_strip_param(piece)
+
+
+def _engine_strip_param(piece: str) -> str:
+    if ":" in piece:
+        pname, ann = piece.split(":", 1)
+        return f"{pname.strip()}: {_engine_strip(ann.strip())}"
+    return piece
+
+
+def _engine_strip(t: str) -> str:
+    """Normalise a pybind11 type string for use inside a stub."""
+    t = t.replace("lucid._C.engine.", "")
+    t = t.replace("collections.abc.", "")
+    t = t.replace("typing.", "")
+    t = t.replace("NoneType", "None")
+    return t
 
 
 # ── 2. tensor.pyi ─────────────────────────────────────────────────────────────
@@ -183,13 +249,14 @@ _TENSOR_HEADER = """\
 # fmt: off
 
 from __future__ import annotations
-from typing import Any, Iterator, Self
+from typing import Iterator, Self, Sequence
 
 import numpy as np
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype
 from lucid._device import device
+from lucid._types import DeviceLike, DTypeLike, DimLike, ShapeLike, Scalar
 
 class Tensor:
 
@@ -456,7 +523,8 @@ _INIT_HEADER = """\
 # fmt: off
 
 from __future__ import annotations
-from typing import Any
+from contextlib import AbstractContextManager
+from typing import Sequence
 
 import numpy as np
 
@@ -476,6 +544,7 @@ from lucid._types import (
     TensorLike as TensorLike,
     DeviceLike as DeviceLike,
     DTypeLike as DTypeLike,
+    DimLike as DimLike,
     ShapeLike as ShapeLike,
     StateDict as StateDict,
     TensorOrScalar as TensorOrScalar,
@@ -519,15 +588,15 @@ def set_default_device(dev: device | str) -> None: ...
 def get_default_device() -> device: ...
 
 # ── Gradient control ──────────────────────────────────────────────────────────
-def no_grad() -> Any: ...
-def enable_grad() -> Any: ...
-def inference_mode() -> Any: ...
+def no_grad() -> AbstractContextManager[None]: ...
+def enable_grad() -> AbstractContextManager[None]: ...
+def inference_mode() -> AbstractContextManager[None]: ...
 def is_grad_enabled() -> bool: ...
 def set_grad_enabled(mode: bool) -> None: ...
 
 # ── Serialization ─────────────────────────────────────────────────────────────
-def save(obj: Any, path: str) -> None: ...
-def load(path: str) -> Any: ...
+def save(obj: object, path: str) -> None: ...
+def load(path: str) -> object: ...
 
 # ── Subpackages ───────────────────────────────────────────────────────────────
 from lucid import nn as nn
@@ -715,63 +784,342 @@ def randn_like(
 
 
 def _free_fn_sig(entry) -> str:
-    """Generate a free function signature for a registry entry."""
-    name = entry.free_fn_name or entry.name
-    n = entry.n_tensor_args
-    extra = entry.extra_kwargs
+    """Generate a free function signature for a registry entry.
 
+    Pulls the explicit ``__signature__`` that ``lucid._ops._make_free_fn``
+    attaches to every wrapper, so the stub mirrors the runtime surface
+    without us having to redo all the parsing here.  Falls back to the
+    legacy heuristic only if the wrapper hasn't been built yet (e.g.
+    during a partial registry).
+    """
+    import inspect as _inspect
+
+    name = entry.free_fn_name or entry.name
+
+    # Live-introspect the actual wrapper.  This includes Tensor unwrapping
+    # signatures + any param renames done in ``_rename_leading_tensor_params``.
+    try:
+        from lucid._ops import _make_free_fn
+
+        wrapper = _make_free_fn(name)
+        sig = _inspect.signature(wrapper)
+    except Exception:
+        sig = None
+
+    if sig is not None:
+        parts = []
+        for pname, param in sig.parameters.items():
+            kind = param.kind
+            ann = _annotation_for_param(pname, param.annotation, entry, kind)
+            ann_str = f": {ann}" if ann else ""
+            if kind == _inspect.Parameter.VAR_POSITIONAL:
+                parts.append(f"*{pname}{ann_str}")
+            elif kind == _inspect.Parameter.VAR_KEYWORD:
+                parts.append(f"**{pname}{ann_str}")
+            elif kind == _inspect.Parameter.KEYWORD_ONLY:
+                if not any(p == "*" for p in parts):
+                    parts.append("*")
+                if param.default is _inspect.Parameter.empty:
+                    parts.append(f"{pname}{ann_str}")
+                else:
+                    parts.append(f"{pname}{ann_str} = ...")
+            else:  # POSITIONAL_OR_KEYWORD / POSITIONAL_ONLY
+                if param.default is _inspect.Parameter.empty:
+                    parts.append(f"{pname}{ann_str}")
+                else:
+                    parts.append(f"{pname}{ann_str} = ...")
+        return f"def {name}({', '.join(parts)}) -> Tensor: ..."
+
+    # Fallback (shouldn't trigger in normal builds): legacy heuristic.
+    n = entry.n_tensor_args
     if n == -1:
         return f"def {name}(tensors: list[Tensor], *args: object) -> Tensor: ..."
-
-    if n == 1 and not extra:
-        return f"def {name}(x: Tensor) -> Tensor: ..."
-
-    if n == 2 and not extra:
-        return f"def {name}(x: Tensor, y: Tensor | float) -> Tensor: ..."
-
-    if n == 3 and not extra:
-        return f"def {name}(a: Tensor, b: Tensor, c: Tensor) -> Tensor: ..."
-
-    # ops with extra_kwargs — emit simplified *args sig
     parts = []
     if n >= 1:
-        parts.append("x: Tensor")
+        parts.append("input: Tensor")
     if n >= 2:
-        parts.append("y: Tensor | float")
-    if extra:
+        parts.append("other: Tensor | float")
+    if entry.extra_kwargs:
         parts.append("*args: Any")
         parts.append("**kwargs: Any")
     return f"def {name}({', '.join(parts)}) -> Tensor: ..."
 
 
+# Canonical type for every parameter name we expect to see across the
+# registry / composite / alias layers.  Drives both ``_annotation_for_param``
+# (for wrappers without source annotations) and ``_simplify_annotation``'s
+# fallback (for parameters whose runtime annotation is ``empty``).
+#
+# Every name here MUST resolve to a concrete type — ``Any`` is forbidden by
+# project policy.  When in doubt, prefer ``object`` (catch-all opaque) over
+# ``Any`` so type checkers still narrow at use sites.
+_PARAM_TYPE_MAP: dict[str, str] = {
+    # ── tensors (all forms) ─────────────────────────────────────────────────
+    "input": "Tensor",
+    "other": "Tensor | Scalar",
+    "cond": "Tensor",
+    "x": "Tensor",
+    "y": "Tensor",
+    "a": "Tensor",
+    "b": "Tensor",
+    "tensor": "Tensor",
+    "tensors": "list[Tensor]",
+    "arrays": "list[Tensor]",
+    "indices": "Tensor",
+    "index": "Tensor",
+    "mask": "Tensor",
+    "src": "Tensor",
+    "source": "Tensor",
+    "base": "Tensor",
+    "elements": "Tensor",
+    "test_elements": "Tensor",
+    "exponent": "Tensor | Scalar",
+    "weight": "Tensor",
+    "self": "Tensor",
+    # ── dim-style (single int, never None) ─────────────────────────────────
+    "dim1": "int",
+    "dim2": "int",
+    "dim0": "int",
+    "axis0": "int",
+    "axis1": "int",
+    "axis2": "int",
+    "start_dim": "int",
+    "end_dim": "int",
+    "start_axis": "int",
+    "end_axis": "int",
+    # ── dim (accepts int / list[int] / None) ───────────────────────────────
+    "dim": "DimLike",
+    "dims": "Sequence[int]",
+    # ── shape-like ─────────────────────────────────────────────────────────
+    "shape": "ShapeLike",
+    "size": "ShapeLike",
+    "new_shape": "ShapeLike",
+    "perm": "Sequence[int]",
+    "reps": "Sequence[int]",
+    "repeats": "int | Sequence[int]",
+    "shifts": "int | Sequence[int]",
+    "padding": "Sequence[int] | Sequence[tuple[int, int]]",
+    "pad_width": "Sequence[tuple[int, int]]",
+    # ── scalars / numerics ─────────────────────────────────────────────────
+    "value": "Scalar",
+    "fill_value": "Scalar",
+    "scalar": "Scalar",
+    "constant": "Scalar",
+    "min": "Scalar | None",
+    "max": "Scalar | None",
+    "k": "int",
+    "n": "int",
+    "N": "int",
+    "m": "int",
+    "M": "int",
+    "offset": "int",
+    "chunks": "int",
+    "num_splits": "int",
+    "split_size_or_sections": "int | Sequence[int]",
+    "bins": "int",
+    "bins_a": "int",
+    "bins_b": "int",
+    "lo": "float",
+    "hi": "float",
+    "lo_a": "float",
+    "hi_a": "float",
+    "lo_b": "float",
+    "hi_b": "float",
+    "ranges": "Sequence[tuple[float, float]]",
+    "step": "float",
+    "start": "float",
+    "end": "float",
+    "steps": "int",
+    "p": "float",
+    "ord": "int | float | str",
+    "eps": "float",
+    "alpha": "float",
+    "beta": "float",
+    "gamma": "float",
+    "slope": "float",
+    "lambd": "float",
+    "scale": "float",
+    "tau": "float",
+    "rtol": "float",
+    "atol": "float",
+    "nan": "float | None",
+    "posinf": "float | None",
+    "neginf": "float | None",
+    "rcond": "float | None",
+    "tol": "float | None",
+    "q": "float | Tensor",
+    # ── booleans ───────────────────────────────────────────────────────────
+    "keepdim": "bool",
+    "keepdims": "bool",
+    "unbiased": "bool | None",
+    "correction": "int",
+    "ddof": "int",
+    "upper": "bool",
+    "lower": "bool",
+    "training": "bool",
+    "inplace": "bool",
+    "include_self": "bool",
+    "invert": "bool",
+    "return_inverse": "bool",
+    "return_counts": "bool",
+    "right": "bool",
+    "sorted": "bool",
+    "largest": "bool",
+    "stable": "bool",
+    "density": "bool",
+    "replacement": "bool",
+    "increasing": "bool",
+    "exclusive": "bool",
+    "hermitian": "bool",
+    "antialias": "bool",
+    "align_corners": "bool",
+    "recompute_scale_factor": "bool",
+    "with_replacement": "bool",
+    "complex_output": "bool",
+    "ceil_mode": "bool",
+    "count_include_pad": "bool",
+    "return_indices": "bool",
+    "requires_grad": "bool",
+    "as_tuple": "bool",
+    # ── strings ────────────────────────────────────────────────────────────
+    "mode": "str",
+    "norm": "str | None",
+    "indexing": "str",
+    "indexing_xy": "bool",
+    "reduce": "str | None",
+    "reduction": "str",
+    "driver": "str | None",
+    "kind": "str",
+    "interpolation": "str",
+    "padding_mode": "str",
+    "name": "str",
+    "path": "str",
+    "format": "str",
+    # ── dtype / device / generator ─────────────────────────────────────────
+    "dtype": "DTypeLike",
+    "device": "DeviceLike",
+    "generator": "_C_engine.Generator | None",
+    "rng": "_C_engine.Generator | None",
+    "out_dtype": "DTypeLike",
+    "a_dtype": "DTypeLike",
+    "b_dtype": "DTypeLike",
+    # ── data / opaque ──────────────────────────────────────────────────────
+    "data": "object",
+    "obj": "object",
+    "arr": "np.ndarray",
+    "ndarray": "np.ndarray",
+    "destination": "int | str",
+    # ── fft-specific ───────────────────────────────────────────────────────
+    "s": "Sequence[int] | None",
+    # ── linalg-specific ────────────────────────────────────────────────────
+    "A": "Tensor",
+    "B": "Tensor",
+    "LU": "Tensor",
+    "pivots": "Tensor",
+    "H": "Tensor",
+    "UPLO": "str",
+    "full_matrices": "bool",
+    "compute_uv": "bool",
+    "left": "bool",
+    "unitriangular": "bool",
+    "num_samples": "int",
+}
+
+
+def _annotation_for_param(name: str, ann, entry, kind) -> str:
+    """Pick a stub-friendly annotation for a wrapper parameter.
+
+    The runtime ``__signature__`` rarely carries annotations (most wrappers
+    inherit from a body with bare names), so we infer from the parameter
+    name via ``_PARAM_TYPE_MAP``.  Honours an explicit annotation if one
+    *is* present (adapters with proper signatures).
+    """
+    import inspect as _inspect
+
+    if ann is not _inspect.Parameter.empty:
+        return _stringify_annotation(ann)
+
+    n = entry.n_tensor_args
+
+    # ``*shape`` / ``*sizes`` / ``*dims`` variadic — single ints.
+    if kind == _inspect.Parameter.VAR_POSITIONAL:
+        if name in {"shape", "sizes", "size", "dims"}:
+            return "int"
+        return "object"
+
+    # List-style ops: the first slot is the tensor list.
+    if n == -1 and name == "tensors":
+        return "list[Tensor]"
+
+    if name in _PARAM_TYPE_MAP:
+        return _PARAM_TYPE_MAP[name]
+
+    # Final guard — never emit ``Any``.  Unknown role → opaque ``object``.
+    return "object"
+
+
+def _stringify_annotation(ann) -> str:
+    """Convert a runtime annotation to a stub-friendly string."""
+    import re as _re
+    import typing as _typing
+
+    # ForwardRef instances stringify with their evaluation owner (whose
+    # address rotates every interpreter run) — collapse to the bare name.
+    if isinstance(ann, _typing.ForwardRef):
+        return ann.__forward_arg__
+
+    raw = repr(ann) if not isinstance(ann, str) else ann
+    raw = raw.replace("<class '", "").replace("'>", "")
+    raw = raw.replace("typing.", "")
+    raw = raw.replace("lucid._tensor.tensor.Tensor", "Tensor")
+    raw = raw.replace("lucid._dtype.dtype", "dtype")
+    raw = raw.replace("lucid._device.device", "device")
+    raw = raw.replace("NoneType", "None")
+    # Strip the ``ForwardRef('Name', owner=<function … at 0xADDR>)``
+    # debug repr that leaks into stubs when ``Format.FORWARDREF`` parses an
+    # adapter's TYPE_CHECKING annotation.  Keep only the name inside quotes.
+    raw = _re.sub(
+        r"ForwardRef\(\s*'([^']+)'(?:\s*,[^)]*)?\)",
+        r"\1",
+        raw,
+    )
+    # The literal string ``Any`` is forbidden in this codebase's stubs —
+    # replace with ``object`` if it sneaks in via a dependency type repr.
+    raw = raw.replace(" Any ", " object ").replace("[Any]", "[object]")
+    if raw.strip() == "Any":
+        raw = "object"
+    return raw
+
+
 def _sig_from_callable(name: str, fn: object) -> str:
     """Generate a stub line from a live callable via inspect.signature().
 
-    Falls back to ``(*args: Any, **kwargs: Any) -> Any`` when the signature
-    cannot be introspected (C extensions, built-ins, etc.).
+    Falls back to a tensor-pass-through signature (``input: Tensor`` →
+    ``Tensor``) when the signature cannot be introspected — never to
+    ``Any``, which is forbidden in stubs.
     """
     import inspect
 
     try:
         sig = inspect.signature(fn, eval_str=False)  # type: ignore[arg-type]
     except Exception:
-        return f"def {name}(*args: Any, **kwargs: Any) -> Any: ..."
+        return f"def {name}(input: Tensor, /, *args: object, **kwargs: object) -> Tensor: ..."
 
     parts = []
     for pname, param in sig.parameters.items():
         ann = param.annotation
-        ann_str = (
-            ""
-            if ann is inspect.Parameter.empty
-            else f": {_simplify_annotation(ann)}"
-        )
+        if ann is inspect.Parameter.empty:
+            ann_str = f": {_inferred_param_type(pname, param.kind)}"
+        else:
+            ann_str = f": {_simplify_annotation(ann)}"
         if param.kind == inspect.Parameter.VAR_POSITIONAL:
             parts.append(f"*{pname}{ann_str}")
         elif param.kind == inspect.Parameter.VAR_KEYWORD:
             parts.append(f"**{pname}{ann_str}")
         elif param.kind == inspect.Parameter.KEYWORD_ONLY:
-            # Only emit the `*,` separator once — before the first keyword-only param.
-            if not any(p.startswith("*,") for p in parts) and not any(p.startswith("*") and not p.startswith("**") for p in parts):
+            if not any(p.startswith("*,") for p in parts) and not any(
+                p.startswith("*") and not p.startswith("**") for p in parts
+            ):
                 parts.append("*")
             default = param.default
             if default is inspect.Parameter.empty:
@@ -785,12 +1133,28 @@ def _sig_from_callable(name: str, fn: object) -> str:
             else:
                 parts.append(f"{pname}{ann_str} = ...")
     ret = sig.return_annotation
-    ret_str = (
-        " -> Any"
-        if ret is inspect.Parameter.empty
-        else f" -> {_simplify_annotation(ret)}"
-    )
+    if ret is inspect.Parameter.empty:
+        ret_str = " -> Tensor"  # Most lucid free fns return Tensor.
+    else:
+        ret_str = f" -> {_simplify_annotation(ret)}"
     return f"def {name}({', '.join(parts)}){ret_str}: ..."
+
+
+def _inferred_param_type(name: str, kind) -> str:
+    """Stub annotation for a parameter whose runtime annotation is empty.
+
+    Mirrors ``_annotation_for_param`` but without an OpEntry — used by the
+    composite / alias paths in ``gen_init_pyi``.
+    """
+    import inspect as _inspect
+
+    if kind == _inspect.Parameter.VAR_POSITIONAL:
+        if name in {"shape", "sizes", "size", "dims"}:
+            return "int"
+        return "object"
+    if kind == _inspect.Parameter.VAR_KEYWORD:
+        return "object"
+    return _PARAM_TYPE_MAP.get(name, "object")
 
 
 def _simplify_annotation(ann: object) -> str:

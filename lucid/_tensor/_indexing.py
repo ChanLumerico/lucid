@@ -25,7 +25,7 @@ In-place assignment:
 """
 
 import math
-from typing import TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
@@ -39,11 +39,11 @@ if TYPE_CHECKING:
 # ── low-level helpers ──────────────────────────────────────────────────────────
 
 
-def _is_bool_tensor(x) -> bool:
+def _is_bool_tensor(x: object) -> bool:
     return hasattr(x, "_impl") and getattr(x, "dtype", None) is _bool_dtype
 
 
-def _is_int_tensor(x) -> bool:
+def _is_int_tensor(x: object) -> bool:
     return hasattr(x, "_impl") and not _is_bool_tensor(x)
 
 
@@ -54,7 +54,7 @@ def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     return impl
 
 
-def _prod(seq) -> int:
+def _prod(seq: Sequence[int]) -> int:
     """Integer product of a sequence."""
     result = 1
     for v in seq:
@@ -541,7 +541,7 @@ def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
 
 
 def _dim_indicator(
-    size: int, positions_impl: _C_engine.TensorImpl, device
+    size: int, positions_impl: _C_engine.TensorImpl, device: _C_engine.Device
 ) -> _C_engine.TensorImpl:
     """
     Build a 1-D float indicator of length ``size``:
@@ -557,7 +557,9 @@ def _dim_indicator(
     return _C_engine.scatter_add(zeros, idx32, ones, 0)
 
 
-def _slice_positions(s: slice, size: int, device) -> _C_engine.TensorImpl:
+def _slice_positions(
+    s: slice, size: int, device: _C_engine.Device
+) -> _C_engine.TensorImpl:
     """Convert a Python slice to an int32 position TensorImpl via engine arange."""
     start, stop, step = s.indices(size)
     if step > 0:

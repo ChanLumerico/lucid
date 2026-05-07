@@ -63,24 +63,24 @@ void register_utils(py::module_& m) {
     bind_unary<ContiguousBackward>(m, &contiguous_op, "Force a contiguous copy.");
 
     // Concatenation and splitting.
-    m.def("concatenate", &concatenate_op, py::arg("arrays"), py::arg("axis") = 0);
-    m.def("stack", &stack_op, py::arg("arrays"), py::arg("axis") = 0);
+    m.def("concatenate", &concatenate_op, py::arg("arrays"), py::arg("dim") = 0);
+    m.def("stack", &stack_op, py::arg("arrays"), py::arg("dim") = 0);
     m.def("hstack", &hstack_op, py::arg("arrays"));
     m.def("vstack", &vstack_op, py::arg("arrays"));
-    m.def("split", &split_op, py::arg("a"), py::arg("num_splits"), py::arg("axis") = 0);
+    m.def("split", &split_op, py::arg("a"), py::arg("num_splits"), py::arg("dim") = 0);
     // split_at takes a Python list of indices; std::move transfers ownership
     // into the C++ op to avoid an extra copy.
     m.def(
         "split_at",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis) {
-            return split_at_op(a, std::move(indices), axis);
+        [](const TensorImplPtr& a, std::vector<std::int64_t> indices, int dim) {
+            return split_at_op(a, std::move(indices), dim);
         },
-        py::arg("a"), py::arg("indices"), py::arg("axis") = 0);
-    m.def("chunk", &chunk_op, py::arg("a"), py::arg("chunks"), py::arg("axis") = 0);
-    m.def("unbind", &unbind_op, py::arg("a"), py::arg("axis") = 0);
+        py::arg("a"), py::arg("indices"), py::arg("dim") = 0);
+    m.def("chunk", &chunk_op, py::arg("a"), py::arg("chunks"), py::arg("dim") = 0);
+    m.def("unbind", &unbind_op, py::arg("a"), py::arg("dim") = 0);
 
     // Tiling and padding.
-    m.def("repeat", &repeat_op, py::arg("a"), py::arg("repeats"), py::arg("axis") = 0);
+    m.def("repeat", &repeat_op, py::arg("a"), py::arg("repeats"), py::arg("dim") = 0);
     // tile accepts a Python list of per-axis repetition counts.
     m.def(
         "tile",
@@ -123,23 +123,23 @@ void register_utils(py::module_& m) {
     // roll and split_at take Python lists; std::move avoids copying the vectors.
     m.def(
         "roll",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<int> axes) {
-            return roll_op(a, std::move(shifts), std::move(axes));
+        [](const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<int> dims) {
+            return roll_op(a, std::move(shifts), std::move(dims));
         },
-        py::arg("a"), py::arg("shifts"), py::arg("axes"));
-    m.def("gather", &gather_op, py::arg("a"), py::arg("indices"), py::arg("axis") = -1);
-    m.def("diagonal", &diagonal_op, py::arg("a"), py::arg("offset") = 0, py::arg("axis1") = -2,
-          py::arg("axis2") = -1);
+        py::arg("a"), py::arg("shifts"), py::arg("dims"));
+    m.def("gather", &gather_op, py::arg("a"), py::arg("indices"), py::arg("dim") = -1);
+    m.def("diagonal", &diagonal_op, py::arg("a"), py::arg("offset") = 0, py::arg("dim1") = -2,
+          py::arg("dim2") = -1);
     m.def("flip", &flip_op, py::arg("a"), py::arg("dims"),
           "Reverse tensor along the given dims. CPU: loop copy. GPU: take with reversed indices.");
     m.def("masked_select", &masked_select_op, py::arg("a"), py::arg("mask"),
           "Boolean masked selection: returns 1-D tensor of elements where mask==True.");
 
     // Sorting and indexing.
-    m.def("sort", &sort_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("argsort", &argsort_op, py::arg("a"), py::arg("axis") = -1);
-    m.def("argmax", &argmax_op, py::arg("a"), py::arg("axis") = -1, py::arg("keepdims") = false);
-    m.def("argmin", &argmin_op, py::arg("a"), py::arg("axis") = -1, py::arg("keepdims") = false);
+    m.def("sort", &sort_op, py::arg("a"), py::arg("dim") = -1);
+    m.def("argsort", &argsort_op, py::arg("a"), py::arg("dim") = -1);
+    m.def("argmax", &argmax_op, py::arg("a"), py::arg("dim") = -1, py::arg("keepdims") = false);
+    m.def("argmin", &argmin_op, py::arg("a"), py::arg("dim") = -1, py::arg("keepdims") = false);
     m.def("nonzero", &nonzero_op, py::arg("a"));
     m.def("unique", &unique_op, py::arg("a"));
 
@@ -147,17 +147,17 @@ void register_utils(py::module_& m) {
     // vector which is unpacked here so Python sees a native tuple.
     m.def(
         "topk",
-        [](const TensorImplPtr& a, std::int64_t k, int axis) {
-            auto res = topk_op(a, k, axis);
+        [](const TensorImplPtr& a, std::int64_t k, int dim) {
+            auto res = topk_op(a, k, dim);
             return py::make_tuple(res[0], res[1]);
         },
-        py::arg("a"), py::arg("k"), py::arg("axis") = -1);
+        py::arg("a"), py::arg("k"), py::arg("dim") = -1);
 
     m.def("meshgrid", &meshgrid_op, py::arg("arrays"), py::arg("indexing_xy") = false);
 
     // Convenience aliases.
-    m.def("expand_dims", &unsqueeze_op, py::arg("a"), py::arg("axis"),
-          "Insert a size-1 dim at position `axis` (alias for unsqueeze).");
+    m.def("expand_dims", &unsqueeze_op, py::arg("a"), py::arg("dim"),
+          "Insert a size-1 dim at position `dim` (alias for unsqueeze).");
     // ravel is implemented as a reshape to [-1] rather than a separate C++ op.
     m.def(
         "ravel",

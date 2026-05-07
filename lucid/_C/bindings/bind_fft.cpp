@@ -64,42 +64,42 @@ void register_fft(py::module_& m) {
 
     m.def(
         "fftn",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> axes) {
-            return fftn_op(a, std::move(n), std::move(axes));
+        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
+            return fftn_op(a, std::move(n), std::move(dim));
         },
         py::arg("a"),
         py::arg("s") = std::vector<std::int64_t>{},
-        py::arg("axes") = std::vector<int>{},
+        py::arg("dim") = std::vector<int>{},
         "N-dimensional discrete Fourier transform (complex output).");
 
     m.def(
         "ifftn",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> axes) {
-            return ifftn_op(a, std::move(n), std::move(axes));
+        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
+            return ifftn_op(a, std::move(n), std::move(dim));
         },
         py::arg("a"),
         py::arg("s") = std::vector<std::int64_t>{},
-        py::arg("axes") = std::vector<int>{},
+        py::arg("dim") = std::vector<int>{},
         "N-dimensional inverse discrete Fourier transform.");
 
     m.def(
         "rfftn",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> axes) {
-            return rfftn_op(a, std::move(n), std::move(axes));
+        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
+            return rfftn_op(a, std::move(n), std::move(dim));
         },
         py::arg("a"),
         py::arg("s") = std::vector<std::int64_t>{},
-        py::arg("axes") = std::vector<int>{},
+        py::arg("dim") = std::vector<int>{},
         "N-dimensional real-input DFT.  Output dtype is C64; last axis size is n//2+1.");
 
     m.def(
         "irfftn",
-        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> axes) {
-            return irfftn_op(a, std::move(n), std::move(axes));
+        [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
+            return irfftn_op(a, std::move(n), std::move(dim));
         },
         py::arg("a"),
         py::arg("s") = std::vector<std::int64_t>{},
-        py::arg("axes") = std::vector<int>{},
+        py::arg("dim") = std::vector<int>{},
         "N-dimensional inverse real DFT.  Output dtype is F32.");
 }
 

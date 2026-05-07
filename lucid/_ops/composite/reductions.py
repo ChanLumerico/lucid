@@ -1,11 +1,19 @@
 """NaN-safe reductions composed from ``where`` + standard reductions."""
 
 import math
+from typing import Sequence, TYPE_CHECKING
 
 import lucid
 
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
 
-def nansum(x, dim=None, keepdim: bool = False):  # type: ignore[no-untyped-def]
+
+def nansum(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> Tensor:
     """Sum of ``x`` treating NaN as zero."""
     safe = lucid.where(lucid.isnan(x), lucid.full_like(x, 0.0), x)
     if dim is None:
@@ -13,7 +21,11 @@ def nansum(x, dim=None, keepdim: bool = False):  # type: ignore[no-untyped-def]
     return lucid.sum(safe, dim, keepdim)
 
 
-def nanmean(x, dim=None, keepdim: bool = False):  # type: ignore[no-untyped-def]
+def nanmean(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> Tensor:
     """Mean of ``x`` ignoring NaN entries (denominator is the non-NaN count)."""
     mask = lucid.isnan(x)
     safe = lucid.where(mask, lucid.full_like(x, 0.0), x)
@@ -24,7 +36,11 @@ def nanmean(x, dim=None, keepdim: bool = False):  # type: ignore[no-untyped-def]
     return lucid.sum(safe, dim, keepdim) / lucid.sum(not_nan, dim, keepdim)
 
 
-def nanmedian(x, dim=None, keepdim: bool = False):  # type: ignore[no-untyped-def]
+def nanmedian(
+    x: Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> Tensor:
     """Median ignoring NaN entries.
 
     NaN entries are replaced with +inf before sorting, so they sink to

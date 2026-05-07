@@ -3,7 +3,10 @@ nn.Module: base class for all neural network layers.
 """
 
 from collections import OrderedDict
-from typing import Callable, ClassVar, Iterator, Self
+from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lucid.autograd.function import FunctionCtx
 
 from lucid._C import engine as _C_engine
 from lucid._tensor.tensor import Tensor
@@ -1110,13 +1113,13 @@ class _ModuleInputBackwardHookFunction:
 
         class _InputHook(Function):
             @staticmethod
-            def forward(ctx, x):
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
                 ctx.state = state
                 ctx.index = index
                 return x
 
             @staticmethod
-            def backward(ctx, grad_input):
+            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:
                 return ctx.state.apply_full_backward_hooks_for_input(
                     ctx.index, grad_input
                 )
@@ -1131,13 +1134,13 @@ class _ModuleOutputBackwardHookFunction:
 
         class _OutputHook(Function):
             @staticmethod
-            def forward(ctx, x):
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
                 ctx.state = state
                 ctx.index = index
                 return x
 
             @staticmethod
-            def backward(ctx, grad_output):
+            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:
                 updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)
                 ctx.state.apply_full_backward_hooks_without_inputs()
                 return updated

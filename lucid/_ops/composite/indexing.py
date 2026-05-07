@@ -11,14 +11,19 @@ All ops here follow the PyTorch API surface:
 All implementations use only engine primitives — no numpy at the Python level.
 """
 
+from typing import TYPE_CHECKING
+
 import lucid
 from lucid._dispatch import _unwrap, _wrap
 import lucid._C.engine as _C_engine
 
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
-def _to_i32(impl: "_C_engine.TensorImpl") -> "_C_engine.TensorImpl":
+def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     if impl.dtype == _C_engine.I64:
         return _C_engine.astype(impl, _C_engine.I32)
     if impl.dtype != _C_engine.I32:
@@ -28,9 +33,9 @@ def _to_i32(impl: "_C_engine.TensorImpl") -> "_C_engine.TensorImpl":
 
 def _dim_indicator(
     size: int,
-    positions_impl: "_C_engine.TensorImpl",
-    device,
-) -> "_C_engine.TensorImpl":
+    positions_impl: _C_engine.TensorImpl,
+    device: _C_engine.Device,
+) -> _C_engine.TensorImpl:
     """1-D float F32 indicator of length *size*; 1.0 at each listed position."""
     n = int(positions_impl.shape[0]) if positions_impl.shape else 0
     zeros = _C_engine.zeros([size], _C_engine.F32, device)
@@ -44,7 +49,12 @@ def _dim_indicator(
 # ── public API ─────────────────────────────────────────────────────────────
 
 
-def index_fill(input, dim: int, index, value: float):
+def index_fill(
+    input: Tensor,
+    dim: int,
+    index: Tensor,
+    value: float,
+) -> Tensor:
     """Return a copy of ``input`` with positions ``index`` along ``dim`` set to ``value``.
 
     Autograd flows through the *unmasked* positions; filled positions receive
@@ -70,7 +80,13 @@ def index_fill(input, dim: int, index, value: float):
     return lucid.where(mask > 0.0, lucid.full_like(input, float(value)), input)
 
 
-def index_add(input, dim: int, index, source, alpha: float = 1.0):
+def index_add(
+    input: Tensor,
+    dim: int,
+    index: Tensor,
+    source: Tensor,
+    alpha: float = 1.0,
+) -> Tensor:
     """Return ``input`` with ``alpha * source`` accumulated at ``index`` positions along ``dim``.
 
     ``index`` is a 1-D integer tensor of length *m*;
@@ -93,15 +109,25 @@ def index_add(input, dim: int, index, source, alpha: float = 1.0):
     return input.scatter_add(dim, idx_t, scaled)
 
 
-def index_copy(input, dim: int, index, source):
+def index_copy(
+    input: Tensor,
+    dim: int,
+    index: Tensor,
+    source: Tensor,
+) -> Tensor:
     """Return a copy of ``input`` with slices at ``index`` replaced by ``source``."""
     zeroed = index_fill(input, dim, index, 0.0)
     return index_add(zeroed, dim, index, source)
 
 
 def scatter_reduce(
-    input, dim: int, index, src, reduce: str = "sum", include_self: bool = True
-):
+    input: Tensor,
+    dim: int,
+    index: Tensor,
+    src: Tensor,
+    reduce: str = "sum",
+    include_self: bool = True,
+) -> Tensor:
     """Reduce ``src`` into ``input`` along ``dim`` at positions given by ``index``.
 
     Supported ``reduce`` modes: ``'sum'``, ``'mean'``, ``'prod'``, ``'amax'``, ``'amin'``.
@@ -161,7 +187,7 @@ def scatter_reduce(
         )
 
 
-def masked_scatter(input, mask, source):
+def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor:
     """Copy elements from ``source`` into ``input`` at positions where ``mask`` is True."""
     flat_input = input.reshape(-1)
     flat_mask = mask.reshape(-1)

@@ -3,7 +3,13 @@ Container modules: Sequential, ModuleList, ModuleDict.
 """
 
 from collections import OrderedDict
-from collections.abc import Iterable, Mapping
+from collections.abc import (
+    Iterable,
+    ItemsView,
+    KeysView,
+    Mapping,
+    ValuesView,
+)
 from typing import Iterator, overload
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
@@ -177,13 +183,13 @@ class ModuleDict(Module):
     def __delitem__(self, key: str) -> None:
         del self._modules[key]
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         return self._modules.keys()
 
-    def items(self):
+    def items(self) -> ItemsView[str, Module]:
         return self._modules.items()
 
-    def values(self):
+    def values(self) -> ValuesView[Module]:
         return self._modules.values()
 
     def get(self, key: str, default: Module | None = None) -> Module | None:
@@ -294,13 +300,13 @@ class ParameterDict(Module):
     def __delitem__(self, key: str) -> None:
         del self._parameters[key]
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         return self._parameters.keys()
 
-    def items(self):
+    def items(self) -> ItemsView[str, Parameter]:
         return self._parameters.items()
 
-    def values(self):
+    def values(self) -> ValuesView[Parameter]:
         return self._parameters.values()
 
     def get(self, key: str, default: Parameter | None = None) -> Parameter | None:

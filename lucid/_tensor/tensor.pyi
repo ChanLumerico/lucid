@@ -5,13 +5,14 @@
 # fmt: off
 
 from __future__ import annotations
-from typing import Any, Iterator, Self
+from typing import Iterator, Self, Sequence
 
 import numpy as np
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype
 from lucid._device import device
+from lucid._types import DeviceLike, DTypeLike, DimLike, ShapeLike, Scalar
 
 class Tensor:
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
 from lucid._dtype import dtype, int64
-from lucid._types_base import DeviceLike, DTypeLike
+from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor

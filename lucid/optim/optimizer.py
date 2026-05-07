@@ -25,7 +25,9 @@ class Optimizer:
         if "step" in cls.__dict__:
             _orig = cls.__dict__["step"]
 
-            def _step_with_eval(self: "Optimizer", closure: "_OptimizerClosure" = None):
+            def _step_with_eval(
+                self: Optimizer, closure: _OptimizerClosure = None
+            ) -> Tensor | None:
                 result = _orig(self, closure)
                 self._metal_eval_params()
                 return result
