@@ -211,6 +211,16 @@ def _engine_fn_sig(name: str, fn: object) -> str:
             elif ch in "])":
                 depth -= 1
             cur += ch
+    # Python forbids a positional-with-default followed by a positional
+    # without one — pybind11 doesn't enforce that, so strip leftover defaults
+    # from any param that appears before a non-defaulted positional.
+    last_no_default = -1
+    for i, p in enumerate(params):
+        if "= ..." not in p and not p.startswith("*"):
+            last_no_default = i
+    for i in range(last_no_default):
+        if params[i].endswith(" = ...") and not params[i].startswith("*"):
+            params[i] = params[i][: -len(" = ...")]
     return f"({', '.join(params)}) -> {ret_raw}"
 
 
@@ -817,7 +827,12 @@ def _free_fn_sig(entry) -> str:
             elif kind == _inspect.Parameter.VAR_KEYWORD:
                 parts.append(f"**{pname}{ann_str}")
             elif kind == _inspect.Parameter.KEYWORD_ONLY:
-                if not any(p == "*" for p in parts):
+                # Suppress redundant ``*`` if a VAR_POSITIONAL ``*xxx`` is
+                # already present — Python's grammar disallows two ``*``
+                # markers in one signature.
+                if not any(p == "*" for p in parts) and not any(
+                    p.startswith("*") and not p.startswith("**") for p in parts
+                ):
                     parts.append("*")
                 if param.default is _inspect.Parameter.empty:
                     parts.append(f"{pname}{ann_str}")

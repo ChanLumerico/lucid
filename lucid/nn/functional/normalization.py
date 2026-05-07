@@ -190,3 +190,60 @@ def instance_norm(
     if bias is not None:
         y = y + bias.reshape(bcast_shape)
     return y
+
+
+# ── P3 fill: local_response_norm (functional form of LocalResponseNorm) ────
+
+
+def local_response_norm(
+    x: Tensor,
+    size: int,
+    alpha: float = 1e-4,
+    beta: float = 0.75,
+    k: float = 1.0,
+) -> Tensor:
+    """Local response normalisation across channels (Krizhevsky 2012):
+    ``y[c] = x[c] / (k + α · Σ_{j∈N(c)} x[j]²)^β``.
+
+    The neighbourhood ``N(c)`` is the ``size`` channels centred at
+    ``c`` (zero-padded at the boundary).  Implemented exactly like
+    :class:`lucid.nn.LocalResponseNorm`, factored out so callers can
+    hit the functional surface without instantiating a module.
+    """
+    xi = _unwrap(x)
+    if len(xi.shape) < 2:
+        return x
+
+    ndim = len(xi.shape)
+    C = int(xi.shape[1])
+    # Pad totals to ``size - 1`` so the post-pad unfold yields exactly C
+    # windows.  Asymmetric for even ``size`` (LAPACK / cuDNN convention).
+    pad_l = (size - 1) // 2
+    pad_r = size // 2
+
+    x_sq = _C_engine.mul(xi, xi)
+    pad_pairs: list[tuple[int, int]] = (
+        [(0, 0)] + [(pad_l, pad_r)] + [(0, 0)] * (ndim - 2)
+    )
+    x_sq_pad = _C_engine.pad(x_sq, pad_pairs, 0.0)
+
+    spatial_size = 1
+    for d in range(2, ndim):
+        spatial_size *= int(xi.shape[d])
+    flat = _C_engine.reshape(
+        x_sq_pad, [int(xi.shape[0]), C + pad_l + pad_r, spatial_size]
+    )
+    # Transpose to (N, S, C+2h) so unfold_dim slides along the last axis.
+    flat_t = _C_engine.permute(flat, [0, 2, 1])
+    unf = _C_engine.unfold_dim(flat_t, 2, size, 1)  # (N, S, C, size)
+    window_sum = _C_engine.sum(unf, [3], False)  # (N, S, C)
+    window_sum_t = _C_engine.permute(window_sum, [0, 2, 1])  # (N, C, S)
+    out_shape = list(xi.shape)
+    window_sum_rs = _C_engine.reshape(window_sum_t, out_shape)
+
+    k_t = _C_engine.full(out_shape, k, xi.dtype, xi.device)
+    alpha_t = _C_engine.full(out_shape, alpha, xi.dtype, xi.device)
+    scale = _C_engine.pow_scalar(
+        _C_engine.add(k_t, _C_engine.mul(alpha_t, window_sum_rs)), beta
+    )
+    return _wrap(_C_engine.div(xi, scale))

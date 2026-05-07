@@ -24,6 +24,10 @@ from lucid.nn.functional.activations import (
     normalize,
     cosine_similarity,
     pairwise_distance,
+    hardtanh,
+    logsigmoid,
+    softsign,
+    threshold,
 )
 from lucid.nn.functional.linear import linear, bilinear
 from lucid.nn.functional.conv import (
@@ -40,6 +44,7 @@ from lucid.nn.functional.normalization import (
     group_norm,
     rms_norm,
     instance_norm,
+    local_response_norm,
 )
 from lucid.nn.functional.pooling import (
     max_pool1d,
@@ -54,6 +59,13 @@ from lucid.nn.functional.pooling import (
     adaptive_max_pool2d,
     adaptive_max_pool1d,
     adaptive_max_pool3d,
+    lp_pool1d,
+    lp_pool2d,
+    max_unpool1d,
+    max_unpool2d,
+    max_unpool3d,
+    fractional_max_pool2d,
+    fractional_max_pool3d,
 )
 from lucid.nn.functional.dropout import (
     dropout,
@@ -82,6 +94,8 @@ from lucid.nn.functional.loss import (
     ctc_loss,
     multi_margin_loss,
     multilabel_margin_loss,
+    soft_margin_loss,
+    multilabel_soft_margin_loss,
 )
 from lucid.nn.functional.sparse import embedding, one_hot
 from lucid.nn.functional.sampling import (
@@ -95,6 +109,8 @@ from lucid.nn.functional.sampling import (
     pixel_shuffle,
     pixel_unshuffle,
     multi_head_attention_forward,
+    channel_shuffle,
+    pdist,
 )
 
 __all__ = [
@@ -124,6 +140,10 @@ __all__ = [
     "normalize",
     "cosine_similarity",
     "pairwise_distance",
+    "hardtanh",
+    "logsigmoid",
+    "softsign",
+    "threshold",
     # linear
     "linear",
     "bilinear",
@@ -140,6 +160,7 @@ __all__ = [
     "group_norm",
     "rms_norm",
     "instance_norm",
+    "local_response_norm",
     # pooling
     "max_pool1d",
     "max_pool2d",
@@ -153,6 +174,13 @@ __all__ = [
     "adaptive_max_pool2d",
     "adaptive_max_pool1d",
     "adaptive_max_pool3d",
+    "lp_pool1d",
+    "lp_pool2d",
+    "max_unpool1d",
+    "max_unpool2d",
+    "max_unpool3d",
+    "fractional_max_pool2d",
+    "fractional_max_pool3d",
     # dropout
     "dropout",
     "dropout2d",
@@ -180,6 +208,8 @@ __all__ = [
     "ctc_loss",
     "multi_margin_loss",
     "multilabel_margin_loss",
+    "soft_margin_loss",
+    "multilabel_soft_margin_loss",
     # sparse
     "embedding",
     "one_hot",
@@ -194,4 +224,6 @@ __all__ = [
     "pixel_shuffle",
     "pixel_unshuffle",
     "multi_head_attention_forward",
+    "channel_shuffle",
+    "pdist",
 ]

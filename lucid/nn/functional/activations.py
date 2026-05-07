@@ -365,3 +365,47 @@ def softshrink(x: "Tensor", lambd: float = 0.5) -> "Tensor":
     out = _C_engine.where(pos_mask, pos_val, zeros)
     out = _C_engine.where(neg_mask, neg_val, out)
     return _wrap(out)
+
+
+# ── P3 fills: missing activations ──────────────────────────────────────────
+
+
+def hardtanh(
+    x: Tensor,
+    min_val: float = -1.0,
+    max_val: float = 1.0,
+    inplace: bool = False,
+) -> Tensor:
+    """Element-wise ``clamp(x, min_val, max_val)`` — the standard
+    reference framework's ``Hardtanh`` activation.  ``inplace`` is
+    accepted for API compatibility and ignored."""
+    import lucid as _l
+
+    return _l.clamp(x, min_val, max_val)
+
+
+def logsigmoid(x: Tensor) -> Tensor:
+    """Numerically stable ``log(sigmoid(x))`` via ``-softplus(-x)``."""
+    return -softplus(-x)
+
+
+def softsign(x: Tensor) -> Tensor:
+    """``x / (1 + |x|)``."""
+    import lucid as _l
+
+    return x / (1.0 + _l.abs(x))
+
+
+def threshold(
+    x: Tensor,
+    threshold: float,
+    value: float,
+    inplace: bool = False,
+) -> Tensor:
+    """``threshold(x, t, v) = x where x > t else v``.  ``inplace`` is
+    accepted for API compatibility and ignored."""
+    import lucid as _l
+
+    keep = x > threshold
+    replacement = _l.full_like(x, float(value))
+    return _l.where(keep, x, replacement)

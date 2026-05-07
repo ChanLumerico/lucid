@@ -633,3 +633,65 @@ def multilabel_margin_loss(
         _C_engine.full([N], float(C), xi.dtype, xi.device),
     )  # (N,)
     return _apply_reduction(loss_n, reduction)
+
+
+# ── P3 fills: soft_margin_loss / multilabel_soft_margin_loss ───────────────
+
+
+def soft_margin_loss(
+    input: Tensor,
+    target: Tensor,
+    reduction: str = "mean",
+) -> Tensor:
+    """Logistic-style binary loss: ``log(1 + exp(-target · input))``
+    summed (or averaged) over all elements.  ``target`` is expected to
+    hold ±1 sentinels, but the formula works for any real value.
+
+    Implemented over ``softplus(-target · input)`` for numerical
+    stability instead of ``log(1 + exp(...))`` directly.
+    """
+    import lucid as _l
+
+    raw = _l.nn.functional.softplus(-target * input)
+    if reduction == "mean":
+        return _l.mean(raw)
+    if reduction == "sum":
+        return _l.sum(raw)
+    if reduction == "none":
+        return raw
+    raise ValueError(f"soft_margin_loss: unknown reduction={reduction!r}")
+
+
+def multilabel_soft_margin_loss(
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: str = "mean",
+) -> Tensor:
+    """Multi-label sigmoid loss:
+    ``-Σ_c [t_c · log σ(x_c) + (1 - t_c) · log(1 - σ(x_c))] / C``.
+
+    Equivalent to ``binary_cross_entropy_with_logits`` averaged over the
+    last (class) axis, then reduced over the batch.  ``weight`` rescales
+    each class contribution element-wise before the per-sample mean.
+    """
+    import lucid as _l
+
+    # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
+    # are numerically stable for large |x|.
+    log_sig = -_l.nn.functional.softplus(-input)
+    log_one_minus_sig = -_l.nn.functional.softplus(input)
+    per_class = -(target * log_sig + (1.0 - target) * log_one_minus_sig)
+    if weight is not None:
+        per_class = per_class * weight
+    per_sample = _l.mean(per_class, dim=-1, keepdim=False)
+
+    if reduction == "mean":
+        return _l.mean(per_sample)
+    if reduction == "sum":
+        return _l.sum(per_sample)
+    if reduction == "none":
+        return per_sample
+    raise ValueError(
+        f"multilabel_soft_margin_loss: unknown reduction={reduction!r}"
+    )

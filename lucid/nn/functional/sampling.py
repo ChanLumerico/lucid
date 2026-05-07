@@ -505,3 +505,65 @@ def multi_head_attention_forward(
         average_attn_weights=average_attn_weights,
         is_causal=is_causal,
     )
+
+
+# ── P3 fills: channel_shuffle / pdist ──────────────────────────────────────
+
+
+def channel_shuffle(x: Tensor, groups: int) -> Tensor:
+    """ShuffleNet channel-shuffle: split the channel axis into ``groups``,
+    transpose, and flatten back.  Re-orders channels so that information
+    from each group reaches every other group in the next layer.
+
+    Expects an ``(N, C, *spatial)`` tensor with ``C`` divisible by
+    ``groups``.
+    """
+    import lucid as _l
+
+    if x.ndim < 2:
+        raise ValueError(
+            f"channel_shuffle: expected at least 2-D input (N, C, *), got "
+            f"shape {tuple(x.shape)}"
+        )
+    n = int(x.shape[0])
+    c = int(x.shape[1])
+    if c % int(groups) != 0:
+        raise ValueError(
+            f"channel_shuffle: channel count {c} not divisible by groups "
+            f"{groups}"
+        )
+    ch_per_group = c // int(groups)
+    spatial = list(x.shape[2:])
+
+    # (N, groups, C/groups, *spatial) → (N, C/groups, groups, *spatial) →
+    # flatten the two leading channel-related axes back into a single ``C``.
+    reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
+    perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
+    transposed = _l.permute(reshaped, *perm)
+    return transposed.reshape(n, c, *spatial)
+
+
+def pdist(x: Tensor, p: float = 2.0) -> Tensor:
+    """Pairwise ``Lp`` distances between rows of a 2-D tensor.
+
+    ``x`` has shape ``(N, M)`` and the result is a 1-D vector of length
+    ``N · (N - 1) / 2`` holding the upper-triangular (excluding the
+    diagonal) distances in row-major order — same convention as the
+    reference framework's ``pdist``.
+    """
+    import lucid as _l
+
+    if x.ndim != 2:
+        raise ValueError(
+            f"pdist: expected a 2-D input, got shape {tuple(x.shape)}"
+        )
+    n = int(x.shape[0])
+    if n < 2:
+        return _l.zeros(0, dtype=x.dtype, device=x.device)
+    full = _l.cdist(x, x, p=p)  # (N, N)
+    # Pull out the strict upper triangle (i < j) in row-major order via the
+    # index pair generator from ``triu_indices``.
+    pairs = _l.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
+    flat = full.reshape(n * n)
+    flat_idx = pairs[0] * n + pairs[1]
+    return _l.gather(flat, flat_idx, dim=0)
