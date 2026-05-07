@@ -2,8 +2,6 @@
 lucid.linalg: linear algebra operations.
 """
 
-from __future__ import annotations
-
 import functools
 from typing import Callable, TYPE_CHECKING
 
@@ -489,6 +487,21 @@ def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     return _wrap(_C_engine.sum(prod, [dim], False))
 
 
+def dot(x: Tensor, y: Tensor) -> Tensor:
+    """1-D vector dot product."""
+    return _wrap(_C_engine.dot(_unwrap(x), _unwrap(y)))
+
+
+def inner(x: Tensor, y: Tensor) -> Tensor:
+    """Inner product: last-dim contraction (equivalent to dot for 1-D)."""
+    return _wrap(_C_engine.inner(_unwrap(x), _unwrap(y)))
+
+
+def outer(x: Tensor, y: Tensor) -> Tensor:
+    """Outer product of two 1-D tensors."""
+    return _wrap(_C_engine.outer(_unwrap(x), _unwrap(y)))
+
+
 def matrix_norm(
     x: Tensor,
     ord: int | float | str = "fro",
@@ -620,6 +633,9 @@ __all__ = [
     "solve_triangular",
     "cross",
     "vecdot",
+    "dot",
+    "inner",
+    "outer",
     "matrix_norm",
     "vector_norm",
     "lstsq",

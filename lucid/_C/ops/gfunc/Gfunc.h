@@ -136,6 +136,29 @@ LUCID_API TensorImplPtr scatter_add_op(const TensorImplPtr& base,
                                        const TensorImplPtr& src,
                                        int dim);
 
+// Scatter-reduce variants — forward is the specified reduce; backward flows
+// only through the "winning" element at each output position.
+//
+// d/d(src[j])  = grad[idx[j]]  if src[j] == output[idx[j]]  else 0
+// d/d(base[i]) = grad[i]       if base[i] == output[i]       else 0
+// Ties broken by "all winners receive the gradient equally" (matches PyTorch).
+LUCID_API TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
+                                        const TensorImplPtr& indices,
+                                        const TensorImplPtr& src,
+                                        int dim);
+LUCID_API TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
+                                        const TensorImplPtr& indices,
+                                        const TensorImplPtr& src,
+                                        int dim);
+
+// scatter_prod: out[i] = base[i] * prod_j(src[j]) for j where idx[j]==i.
+// Gradient: d/d(src[j]) = grad[idx[j]] * (out[idx[j]] / src[j])  (product rule).
+// d/d(base[i]) = grad[i] * out[i] / base[i]  (if base[i] != 0).
+LUCID_API TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
+                                        const TensorImplPtr& indices,
+                                        const TensorImplPtr& src,
+                                        int dim);
+
 // Sliding-window view along a single dimension.
 // Output shape: (*in_shape[:dim], L, *in_shape[dim+1:], size)
 // where L = (dim_size - size) / step + 1.

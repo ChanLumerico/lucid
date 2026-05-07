@@ -23,4 +23,13 @@ LUCID_API TensorImplPtr cumsum_op(const TensorImplPtr& a, int axis);
 // computed via the reverse-cumsum trick on grad_y * cumprod_y, divided by x.
 LUCID_API TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis);
 
+// Inclusive cumulative maximum along `axis`.  The output has the same shape as `a`.
+// Backward: gradient flows only to the element that first achieved the running max
+// at each position (argmax of the prefix up to that point), zero elsewhere.
+LUCID_API TensorImplPtr cummax_op(const TensorImplPtr& a, int axis);
+
+// Inclusive cumulative minimum along `axis`.  The output has the same shape as `a`.
+// Backward: gradient flows only to the element that first achieved the running min.
+LUCID_API TensorImplPtr cummin_op(const TensorImplPtr& a, int axis);
+
 }  // namespace lucid

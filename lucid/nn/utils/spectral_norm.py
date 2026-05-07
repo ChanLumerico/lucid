@@ -29,7 +29,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
-
 # Sentinel attribute used by ``remove_spectral_norm`` to find an active
 # registration on a module.
 _SN_HOOK_ATTR: str = "_spectral_norm_hooks"
@@ -75,9 +74,7 @@ def spectral_norm(
     which uses the input-channel axis (1) instead.
     """
     if not isinstance(module, Module):
-        raise TypeError(
-            f"spectral_norm requires a Module, got {type(module).__name__}"
-        )
+        raise TypeError(f"spectral_norm requires a Module, got {type(module).__name__}")
     if not hasattr(module, name):
         raise AttributeError(f"module has no parameter '{name}'")
     weight: Parameter = getattr(module, name)
@@ -93,7 +90,9 @@ def spectral_norm(
         cls_name: str = type(module).__name__
         dim = 1 if cls_name.startswith("ConvTranspose") else 0
     if dim < 0 or dim >= len(weight.shape):
-        raise ValueError(f"dim {dim} out of range for weight of shape {tuple(weight.shape)}")
+        raise ValueError(
+            f"dim {dim} out of range for weight of shape {tuple(weight.shape)}"
+        )
 
     # Move the original weight to ``{name}_orig`` and seed the iteration
     # vectors.  ``u`` is the row-side iterate (size = rows of the flattened

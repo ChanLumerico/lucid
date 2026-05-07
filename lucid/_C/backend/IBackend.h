@@ -172,6 +172,8 @@ public:
     // Additional elementwise unary ops: logarithmic, trigonometric, and
     // activation functions not covered by the basic set above.
     virtual Storage log2(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage erf(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage square(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage cube(const Storage& a, const Shape& shape, Dtype dt) = 0;
@@ -254,6 +256,8 @@ public:
     // Scan operations along a single axis.
     virtual Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
     virtual Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
+    virtual Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
 
     // Stable numerically-safe softmax forward and its vector-Jacobian product.
     // softmax_backward receives the softmax output `z` (not the pre-activation
@@ -421,6 +425,19 @@ public:
                                 const Shape& idx_shape,
                                 int dim,
                                 Dtype dt) = 0;
+
+    // Scatter-reduce variants: base is pre-initialised with the appropriate
+    // neutral element (−∞ for amax, +∞ for amin, 1 for prod) when include_self
+    // is false; the callers set this up before dispatching.
+    virtual Storage scatter_amax(const Storage& base, const Storage& indices,
+                                 const Storage& src, const Shape& base_shape,
+                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
+    virtual Storage scatter_amin(const Storage& base, const Storage& indices,
+                                 const Storage& src, const Shape& base_shape,
+                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
+    virtual Storage scatter_prod(const Storage& base, const Storage& indices,
+                                 const Storage& src, const Shape& base_shape,
+                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
 
     // Sliding-window view along a single dimension.
     // Returns shape (*base.shape[:dim], L, *base.shape[dim+1:], size)

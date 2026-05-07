@@ -19,7 +19,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
-
 # Sentinel attribute on a parametrized module.  Maps original-parameter
 # name → ``ParametrizationContainer``; the container in turn holds the
 # transformation module and the underlying ``original`` parameter.
@@ -144,7 +143,9 @@ def remove_parametrizations(
     handle = container._hook_handle  # type: ignore[attr-defined]
     handle.remove()
 
-    final_value: Tensor = container() if leave_parametrized else container.original.detach()
+    final_value: Tensor = (
+        container() if leave_parametrized else container.original.detach()
+    )
 
     # Drop the cached non-leaf attribute so ``register_parameter`` succeeds.
     if tensor_name in module.__dict__:

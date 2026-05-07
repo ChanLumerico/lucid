@@ -38,7 +38,7 @@ class TestMSELoss:
 
 class TestBCELoss:
     def test_output_is_scalar(self):
-        pred = lucid.sigmoid(make_tensor((8,)))
+        pred = lucid.nn.functional.sigmoid(make_tensor((8,)))
         target = lucid.tensor([1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0])
         loss = F.binary_cross_entropy(pred, target)
         assert loss.shape == ()
@@ -226,7 +226,7 @@ class TestNLLLossContract:
 class TestBCEContract:
     def test_module_accepts_weight(self):
         loss_fn = nn.BCELoss(weight=lucid.ones((4,)))
-        x = lucid.sigmoid(make_tensor((4,)))
+        x = lucid.nn.functional.sigmoid(make_tensor((4,)))
         t = lucid.tensor([0.0, 1.0, 0.0, 1.0])
         assert loss_fn(x, t).shape == ()
 

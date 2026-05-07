@@ -20,15 +20,12 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
-
 # Sentinel attribute mapping ``tensor_name`` → handle so ``remove`` /
 # ``is_pruned`` can find the registration.
 _PRUNE_HOOK_ATTR: str = "_prune_hooks"
 
 
-def _install_mask(
-    module: Module, name: str, mask: Tensor
-) -> Module:
+def _install_mask(module: Module, name: str, mask: Tensor) -> Module:
     """Shared backend for the various pruning methods.
 
     Captures the original Parameter as ``{name}_orig``, registers ``mask``
@@ -129,9 +126,7 @@ def l1_unstructured(
     threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())
     threshold_t: Tensor = lucid.full_like(abs_w, threshold_scalar)
     keep: Tensor = abs_w > threshold_t
-    mask: Tensor = lucid.where(
-        keep, lucid.ones_like(weight), lucid.zeros_like(weight)
-    )
+    mask: Tensor = lucid.where(keep, lucid.ones_like(weight), lucid.zeros_like(weight))
     return _install_mask(module, name, mask)
 
 

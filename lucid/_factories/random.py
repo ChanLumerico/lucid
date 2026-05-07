@@ -140,7 +140,4 @@ def randn_like(
     return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
 
 
-def _size_to_list(*size: int | tuple[int, ...]) -> list[int]:
-    if len(size) == 1 and isinstance(size[0], (list, tuple)):
-        return list(size[0])
-    return list(size)
+from lucid._factories.creation import _size_to_list

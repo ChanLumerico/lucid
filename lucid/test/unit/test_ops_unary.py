@@ -120,34 +120,34 @@ class TestHyperbolic:
 class TestActivations:
     def test_relu_zeros_negatives(self):
         t = make_tensor(_SHAPE, low=-2.0, high=-0.01)
-        assert_close(lucid.relu(t), lucid.zeros(*_SHAPE))
+        assert_close(lucid.nn.functional.relu(t), lucid.zeros(*_SHAPE))
 
     def test_relu_preserves_positives(self):
         t = _pos()
-        assert_close(lucid.relu(t), t)
+        assert_close(lucid.nn.functional.relu(t), t)
 
     def test_sigmoid_range(self):
         t = _neg_to_pos()
-        out = lucid.sigmoid(t)
+        out = lucid.nn.functional.sigmoid(t)
         arr = out.numpy()
         assert (arr > 0).all() and (arr < 1).all()
 
     def test_sigmoid_at_zero_is_half(self):
         t = lucid.zeros(4)
         half = lucid.full((4,), 0.5)
-        assert_close(lucid.sigmoid(t), half, atol=1e-6)
+        assert_close(lucid.nn.functional.sigmoid(t), half, atol=1e-6)
 
     def test_silu_shape(self):
         t = _neg_to_pos()
-        assert lucid.silu(t).shape == t.shape
+        assert lucid.nn.functional.silu(t).shape == t.shape
 
     def test_gelu_shape(self):
         t = _neg_to_pos()
-        assert lucid.gelu(t).shape == t.shape
+        assert lucid.nn.functional.gelu(t).shape == t.shape
 
     def test_softplus_positive(self):
         t = _neg_to_pos()
-        out = lucid.softplus(t)
+        out = lucid.nn.functional.softplus(t)
         assert bool(lucid.min(out).item() > 0)
 
 

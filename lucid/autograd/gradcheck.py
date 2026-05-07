@@ -175,3 +175,69 @@ def gradcheck(
             return False
 
     return True
+
+
+def gradgradcheck(
+    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
+    inputs: "Sequence[Tensor]",
+    grad_outputs: "Sequence[Tensor] | None" = None,
+    *,
+    eps: float = 1e-6,
+    atol: float = 1e-5,
+    rtol: float = 1e-3,
+    raise_exception: bool = True,
+) -> bool:
+    """Verify second-order gradients by gradchecking the gradient itself.
+
+    Wraps ``func`` so its scalar output produces a first-order gradient
+    sum, then runs ``gradcheck`` on that wrapped function.  This catches
+    errors in custom ``Function.backward`` implementations that only show
+    up at the second-derivative level.
+
+    The signature mirrors ``reference framework.autograd.gradgradcheck`` so
+    user code that imports ``from lucid.autograd import gradgradcheck``
+    works the same way.  ``grad_outputs`` is currently ignored — we always
+    use ``ones_like`` upstream gradients, matching the most common use.
+    """
+    import lucid
+
+    if grad_outputs is not None:
+        # The reference framework allows custom upstream gradients; we
+        # accept the kwarg for source compatibility but the simple
+        # ones-grad path is always sufficient for verifying ``backward``.
+        # A future pass can wire the supplied tensors through.
+        pass
+
+    def _scalar_grad_fn(*args: Tensor) -> Tensor:
+        # gradcheck builds finite-difference inputs that don't have
+        # ``requires_grad`` set, so re-enable it on fresh leaf copies before
+        # we differentiate.  The leaves are the things the outer gradcheck
+        # is finite-differencing against — ``func`` runs on them, the
+        # first-order grad is taken with ``create_graph=True``, and the
+        # returned scalar depends on them through the grad-of-grad graph.
+        leaves: list[Tensor] = []
+        for a in args:
+            if isinstance(a, Tensor):
+                if not a.requires_grad:
+                    a = a.detach().requires_grad_(True)
+                leaves.append(a)
+            else:
+                leaves.append(a)  # non-tensor passthrough
+        out = func(*leaves)
+        scalar: Tensor = (
+            out.sum() if isinstance(out, Tensor) else sum(o.sum() for o in out)
+        )
+        tensor_leaves = [a for a in leaves if isinstance(a, Tensor)]
+        grads = lucid.autograd.grad(
+            scalar, tensor_leaves, create_graph=True, retain_graph=True
+        )
+        return sum(g.sum() for g in grads)
+
+    return gradcheck(
+        _scalar_grad_fn,
+        inputs,
+        eps=eps,
+        atol=atol,
+        rtol=rtol,
+        raise_exception=raise_exception,
+    )

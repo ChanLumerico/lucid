@@ -8,9 +8,6 @@ from lucid.autograd.function import Function
 from lucid.autograd._grad_mode import no_grad, enable_grad
 import lucid.autograd as _autograd
 
-if TYPE_CHECKING:
-    pass
-
 
 def checkpoint(
     function: Callable[..., Tensor | tuple[Tensor, ...]],

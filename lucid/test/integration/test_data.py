@@ -102,7 +102,9 @@ class TestDistributedSampler:
     def test_single_rank_yields_all_indices(self) -> None:
         from lucid.utils.data import DistributedSampler
 
-        sampler = DistributedSampler(self._make(), num_replicas=1, rank=0, shuffle=False)
+        sampler = DistributedSampler(
+            self._make(), num_replicas=1, rank=0, shuffle=False
+        )
         assert list(sampler) == list(range(10))
         assert len(sampler) == 10
 

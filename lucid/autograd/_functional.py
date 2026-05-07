@@ -2,7 +2,6 @@
 Higher-order autograd utilities: jacobian, hessian, vjp, jvp.
 """
 
-from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:

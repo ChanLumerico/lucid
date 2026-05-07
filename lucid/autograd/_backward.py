@@ -23,7 +23,8 @@ def backward(
         tensors:      Root tensor(s) to differentiate.
         grad_tensors: Seed gradients per root tensor (default: ones-like).
         retain_graph: Keep the computation graph after backward.
-        create_graph: Not yet supported.
+        create_graph: If True, build the graph of the derivative so that
+                      higher-order gradients can be computed.
         inputs:       Not yet supported.
     """
     if not isinstance(tensors, (list, tuple)):
@@ -62,7 +63,8 @@ def grad(
     retain_graph : bool, optional
         Keep the computation graph after backward. Defaults to ``create_graph``.
     create_graph : bool, optional
-        Not yet supported.
+        If True, build the graph of the derivative so the returned grads
+        are themselves differentiable (used by ``gradgradcheck``).
     allow_unused : bool, optional
         If ``True``, return ``None`` for inputs with no gradient path.
 
@@ -95,14 +97,21 @@ def grad(
     # Run backward
     if grad_outputs is None:
         for out in outputs:
-            out.backward(retain_graph=_retain)
+            out.backward(retain_graph=_retain, create_graph=create_graph)
     else:
         for out, g in zip(outputs, grad_outputs):
-            out.backward(gradient=g, retain_graph=_retain)
+            out.backward(gradient=g, retain_graph=_retain, create_graph=create_graph)
 
-    # Collect computed gradients
+    # Collect computed gradients.  When create_graph=True we must preserve the
+    # grad-of-grad graph, so prefer grad_as_impl() (returns the actual TensorImpl
+    # with grad_fn intact) and only fall back to the python-buffer path when no
+    # graph-mode gradient is available.
     result: list[Tensor | None] = []
     for inp in inputs:
+        g_impl = inp._impl.grad_as_impl()
+        if g_impl is not None:
+            result.append(_wrap(g_impl))
+            continue
         g_raw = inp._impl.grad_as_python()
         if g_raw is None:
             if not allow_unused:

@@ -166,14 +166,14 @@ class LBFGS(Optimizer):
         for i in range(num_old - 1, -1, -1):
             y = old_dirs[i]
             s = old_stps[i]
-            ys = float(lucid.dot(y.flatten(), s.flatten()).item())
+            ys = float(lucid.linalg.dot(y.flatten(), s.flatten()).item())
             if abs(ys) < 1e-10:
                 rhos.append(0.0)
                 alphas.append(0.0)
                 continue
             rho = 1.0 / ys
             rhos.append(rho)
-            alpha = rho * float(lucid.dot(s.flatten(), q.flatten()).item())
+            alpha = rho * float(lucid.linalg.dot(s.flatten(), q.flatten()).item())
             alphas.append(alpha)
             q = lucid.sub(q, lucid.mul(lucid.tensor(alpha), y))
 
@@ -185,7 +185,7 @@ class LBFGS(Optimizer):
             s = old_stps[j]
             if rhos[j] == 0.0:
                 continue
-            beta = rhos[j] * float(lucid.dot(y.flatten(), r.flatten()).item())
+            beta = rhos[j] * float(lucid.linalg.dot(y.flatten(), r.flatten()).item())
             r = lucid.add(r, lucid.mul(lucid.tensor(alphas[j] - beta), s))
 
         return r.neg()
@@ -209,7 +209,7 @@ class LBFGS(Optimizer):
         alpha_lo = 0.0
         alpha_hi = float("inf")
         f_lo = f_k
-        g_d = float(lucid.dot(g_k.flatten(), d.flatten()).item())
+        g_d = float(lucid.linalg.dot(g_k.flatten(), d.flatten()).item())
 
         for _ in range(max_ls):
             x_new = lucid.add(x_k, lucid.mul(lucid.tensor(alpha), d))
@@ -253,7 +253,9 @@ class LBFGS(Optimizer):
 
         flat_grad = self._gather_flat_grad()
         g_norm = float(
-            lucid.sqrt(lucid.dot(flat_grad.flatten(), flat_grad.flatten())).item()
+            lucid.sqrt(
+                lucid.linalg.dot(flat_grad.flatten(), flat_grad.flatten())
+            ).item()
         )
 
         if g_norm <= tol_grad:
@@ -265,10 +267,10 @@ class LBFGS(Optimizer):
         # Armijo line search
         t = lr
         f0 = loss
-        gtd = float(lucid.dot(flat_grad.flatten(), d.flatten()).item())
+        gtd = float(lucid.linalg.dot(flat_grad.flatten(), d.flatten()).item())
         if gtd >= 0:
             d = flat_grad.neg()
-            gtd = float(lucid.dot(flat_grad.flatten(), d.flatten()).item())
+            gtd = float(lucid.linalg.dot(flat_grad.flatten(), d.flatten()).item())
 
         x0 = self._gather_flat_params()
 
@@ -298,14 +300,14 @@ class LBFGS(Optimizer):
         y = lucid.sub(flat_grad_new, flat_grad)
         s = lucid.sub(x_new, x0)
 
-        ys = float(lucid.dot(y.flatten(), s.flatten()).item())
+        ys = float(lucid.linalg.dot(y.flatten(), s.flatten()).item())
         if ys > 1e-10:
             if len(st["old_dirs"]) >= history_size:
                 st["old_dirs"].pop(0)
                 st["old_stps"].pop(0)
             st["old_dirs"].append(y)
             st["old_stps"].append(s)
-            yy = float(lucid.dot(y.flatten(), y.flatten()).item())
+            yy = float(lucid.linalg.dot(y.flatten(), y.flatten()).item())
             st["H_diag"] = ys / max(yy, 1e-10)
 
         st["n_iter"] += 1

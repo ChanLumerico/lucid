@@ -12,10 +12,10 @@ from lucid.test.helpers.numerics import make_tensor
 
 def _set_weight(target_param, src_np: np.ndarray) -> None:
     """Mirror a numpy array into a lucid Parameter without going through .data."""
-    from lucid._C import engine as _ce
+    from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import _impl_with_grad as _iwg
 
-    new_impl = _ce.TensorImpl(src_np.copy(), _ce.Device.CPU, False)
+    new_impl = _C_engine.TensorImpl(src_np.copy(), _C_engine.Device.CPU, False)
     target_param._impl = _iwg(new_impl, target_param._impl.requires_grad)
 
 

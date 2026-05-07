@@ -89,6 +89,12 @@ void register_gfunc(py::module_& m) {
 
     m.def("scatter_add", &scatter_add_op,
           py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
+    m.def("scatter_amax", &scatter_amax_op,
+          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
+    m.def("scatter_amin", &scatter_amin_op,
+          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
+    m.def("scatter_prod", &scatter_prod_op,
+          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
 
     m.def("unfold_dim", &unfold_dim_op,
           py::arg("a"), py::arg("dim"), py::arg("size"), py::arg("step"));

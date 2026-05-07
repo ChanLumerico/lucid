@@ -296,3 +296,22 @@ def _calculate_correct_fan(tensor: Tensor, mode: str) -> int:
     if mode == "fan_out":
         return fan_out
     raise ValueError(f"Unknown mode: {mode!r}")
+
+
+__all__ = [
+    "calculate_gain",
+    "constant_",
+    "dirac_",
+    "eye_",
+    "kaiming_normal_",
+    "kaiming_uniform_",
+    "normal_",
+    "ones_",
+    "orthogonal_",
+    "sparse_",
+    "trunc_normal_",
+    "uniform_",
+    "xavier_normal_",
+    "xavier_uniform_",
+    "zeros_",
+]

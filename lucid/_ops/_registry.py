@@ -141,6 +141,12 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["axis"]),
     OpEntry("cumprod",_R.cumprod,1, method_name="cumprod",free_fn_name="cumprod",
             extra_kwargs=["axis"]),
+    OpEntry("cummax", _R.cummax, 1, method_name="cummax", free_fn_name="cummax",
+            extra_kwargs=["axis"]),
+    OpEntry("cummin", _R.cummin, 1, method_name="cummin", free_fn_name="cummin",
+            extra_kwargs=["axis"]),
+    OpEntry("erf",    _R.erf,    1, method_name="erf",    free_fn_name="erf"),
+    OpEntry("erfinv", _R.erfinv, 1, method_name="erfinv", free_fn_name="erfinv"),
     OpEntry("trace",  _R.trace,  1, method_name="trace",  free_fn_name="trace"),
 
     # ── shape / layout ─────────────────────────────────────────────────────

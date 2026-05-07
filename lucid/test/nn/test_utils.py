@@ -113,9 +113,7 @@ class TestSpectralNorm:
         x: lucid.Tensor = lucid.randn(2, 8)
         for _ in range(20):
             _ = m(x)  # let power iteration converge
-        sigma: float = float(
-            np.linalg.svd(m.weight.numpy(), compute_uv=False)[0]
-        )
+        sigma: float = float(np.linalg.svd(m.weight.numpy(), compute_uv=False)[0])
         # σ_max should be ~1 after spectral_norm + enough iterations.
         assert abs(sigma - 1.0) < 0.05
 
@@ -139,9 +137,7 @@ class TestPackSequence:
         # ``data`` collects per-timestep elements in the time-major order
         # that ``pack_padded_sequence`` produces from a padded batch.
         # batch_sizes encodes how many sequences are still alive at each step.
-        np.testing.assert_array_equal(
-            ps.batch_sizes.numpy().astype(int), [3, 2, 1]
-        )
+        np.testing.assert_array_equal(ps.batch_sizes.numpy().astype(int), [3, 2, 1])
         # Total number of valid elements should match the sum of lengths.
         assert int(ps.data._impl.numel()) == 6
 

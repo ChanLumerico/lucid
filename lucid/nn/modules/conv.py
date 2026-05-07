@@ -386,7 +386,14 @@ class Conv3d(Module):
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
+        self._init_weights()
+
+    def _init_weights(self) -> None:
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1.0 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
 
     def _resolve_pad(
         self, x: Tensor
@@ -467,7 +474,14 @@ class ConvTranspose1d(Module):
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
+        self._init_weights()
+
+    def _init_weights(self) -> None:
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1.0 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:
         return conv_transpose1d(
@@ -524,7 +538,14 @@ class ConvTranspose2d(Module):
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
+        self._init_weights()
+
+    def _init_weights(self) -> None:
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1.0 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:
         return conv_transpose2d(
@@ -587,7 +608,14 @@ class ConvTranspose3d(Module):
         self.bias: Parameter | None = (
             Parameter(empty(out_channels, dtype=dtype, device=device)) if bias else None
         )
+        self._init_weights()
+
+    def _init_weights(self) -> None:
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1.0 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:
         return conv_transpose3d(

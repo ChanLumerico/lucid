@@ -39,10 +39,10 @@ class TestShapeView:
         # Engine raises a LucidError-derived IndexError that doesn't inherit
         # from Python's builtin ``IndexError`` — match against the engine's
         # base class instead so the assertion is precise.
-        from lucid._C import engine as _engine
+        from lucid._C import engine as _C_engine
 
         t: lucid.Tensor = lucid.tensor([1.0, 2.0])
-        with pytest.raises(_engine.LucidError, match="out of bounds"):
+        with pytest.raises(_C_engine.LucidError, match="out of bounds"):
             lucid.narrow(t, 0, 0, 10)
 
     def test_movedim_swaps_axes(self) -> None:
@@ -75,10 +75,10 @@ class TestIndexing:
         )
 
     def test_index_select_int_dtype_required(self) -> None:
-        from lucid._C import engine as _engine
+        from lucid._C import engine as _C_engine
 
         t: lucid.Tensor = lucid.tensor([[1.0]])
-        with pytest.raises(_engine.LucidError, match="int"):
+        with pytest.raises(_C_engine.LucidError, match="int"):
             lucid.index_select(t, 0, lucid.tensor([0.0]))
 
     def test_masked_select_returns_flat(self) -> None:
@@ -297,9 +297,9 @@ class TestLinAlg:
         np.testing.assert_allclose(_np(lucid.mm(a, a)), [[7.0, 10.0], [15.0, 22.0]])
 
     def test_mm_rejects_non_2d(self) -> None:
-        from lucid._C import engine as _engine
+        from lucid._C import engine as _C_engine
 
-        with pytest.raises(_engine.LucidError, match="2-D"):
+        with pytest.raises(_C_engine.LucidError, match="2-D"):
             lucid.mm(lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0]))
 
     def test_bmm_batched(self) -> None:
@@ -321,12 +321,12 @@ class TestLinAlg:
 
     def test_top_level_norm(self) -> None:
         # ``lucid.norm`` is a top-level alias of ``lucid.linalg.norm``.
-        assert float(lucid.norm(lucid.tensor([3.0, 4.0])).item()) == 5.0
+        assert float(lucid.linalg.norm(lucid.tensor([3.0, 4.0])).item()) == 5.0
 
     def test_top_level_cross(self) -> None:
         a: lucid.Tensor = lucid.tensor([1.0, 0.0, 0.0])
         b: lucid.Tensor = lucid.tensor([0.0, 1.0, 0.0])
-        np.testing.assert_allclose(_np(lucid.cross(a, b)), [0.0, 0.0, 1.0])
+        np.testing.assert_allclose(_np(lucid.linalg.cross(a, b)), [0.0, 0.0, 1.0])
 
     def test_kron_product(self) -> None:
         a: lucid.Tensor = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])

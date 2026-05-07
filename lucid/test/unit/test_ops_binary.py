@@ -95,13 +95,13 @@ class TestMatmul:
     def test_dot_1d(self):
         a = lucid.tensor([1.0, 2.0, 3.0])
         b = lucid.tensor([4.0, 5.0, 6.0])
-        result = lucid.dot(a, b)
+        result = lucid.linalg.dot(a, b)
         assert abs(float(result.item()) - 32.0) < 1e-4
 
     def test_outer_product(self):
         a = lucid.tensor([1.0, 2.0])
         b = lucid.tensor([3.0, 4.0])
-        r = lucid.outer(a, b)
+        r = lucid.linalg.outer(a, b)
         assert r.shape == (2, 2)
         expected = lucid.tensor([[3.0, 4.0], [6.0, 8.0]])
         assert_close(r, expected)

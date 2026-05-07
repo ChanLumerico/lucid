@@ -53,7 +53,12 @@ class TestUnaryParity:
             l_out = getattr(lucid, name)(l_pos)
             t_out = getattr(ref, name)(t_pos)
         else:
-            l_out = getattr(lucid, name)(l)
+            # sigmoid and relu live in lucid.nn.functional (no top-level shortcut)
+            _NN_FUNCTIONAL = {"sigmoid", "relu"}
+            if name in _NN_FUNCTIONAL:
+                l_out = getattr(lucid.nn.functional, name)(l)
+            else:
+                l_out = getattr(lucid, name)(l)
             t_fn = getattr(ref, name, None) or getattr(ref.nn.functional, name, None)
             if t_fn is None:
                 pytest.skip(f"reference op {name!r} not found")

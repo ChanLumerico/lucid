@@ -43,6 +43,10 @@
 #include "../../autograd/Node.h"
 #include "../../kernel/BinaryKernel.h"
 #include "../../ops/utils/Select.h"
+#include "../../ops/bfunc/Add.h"
+#include "../../ops/bfunc/Compare.h"
+#include "../../ops/bfunc/Mul.h"
+#include "../../ops/bfunc/Div.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -398,6 +402,282 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
 
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_amax / scatter_amin / scatter_prod ────────────────────────────────
+//
+// Shared helper: dispatch the backend call, wire autograd using the mask-based
+// rule described in Gfunc.h.
+
+namespace {
+
+// Build "winner" mask: 1.0 where `lhs == rhs`, 0.0 elsewhere (as float).
+// Uses where_op to avoid bool * float dtype mismatch in the multiply path.
+TensorImplPtr winner_mask(const TensorImplPtr& lhs, const TensorImplPtr& rhs) {
+    auto eq = equal_op(lhs, rhs);  // bool
+    return where_op(eq, ones_like_op(lhs), zeros_like_op(lhs));
+}
+
+}  // anonymous namespace
+
+// ── scatter_amax ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
+                               const TensorImplPtr& indices,
+                               const TensorImplPtr& src,
+                               int dim) {
+    Validator::input(base,    "scatter_amax.base").non_null();
+    Validator::input(indices, "scatter_amax.indices").non_null();
+    Validator::input(src,     "scatter_amax.src").non_null();
+
+    const Dtype dt  = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim  = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_amax", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s = be.scatter_amax(base->storage(), indices->storage(),
+                                    src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad = GradMode::is_enabled() &&
+                            (base->requires_grad() || src->requires_grad());
+    if (!needs_grad) return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAmaxNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_amax"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        // Gradient is split equally among all tied winners at each output
+        // position (matches PyTorch's scatter_reduce backward convention).
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+
+            // 1. Winner masks (float 0/1 per element)
+            auto mask_base_f  = winner_mask(saved_base_, saved_out_);
+            auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
+            auto mask_src_f   = winner_mask(saved_src_, gathered_out);
+
+            // 2. Count total tied winners per output position:
+            //    winners_from_src[i] = Σ mask_src_f[j]  (over j where idx[j]==i)
+            auto zeros_out      = zeros_like_op(saved_out_);
+            auto wins_from_src  = scatter_add_op(zeros_out, saved_indices_,
+                                                  mask_src_f, dim_);
+            auto total_wins     = add_op(mask_base_f, wins_from_src);  // per-output count
+            // Clamp to avoid divide-by-zero at non-participating positions
+            auto safe_wins      = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                           ones_like_op(total_wins),
+                                           total_wins);
+
+            // 3. grad_base = g * mask_base_f / safe_wins
+            Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
+
+            // 4. grad_src = gather(g / safe_wins) * mask_src_f
+            auto g_normed    = div_op(g_impl, safe_wins);
+            auto gathered_gn = gather_op(g_normed, saved_indices_, dim_);
+            Storage grad_src = mul_op(gathered_gn, mask_src_f)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAmaxNode>();
+    bwd->dim_           = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_     = out;
+    bwd->saved_base_    = base;
+    bwd->saved_src_     = src;
+    bwd->base_shape_    = bs;
+    bwd->dtype_         = dt;
+    bwd->device_        = dv;
+    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
+                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_amin ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
+                               const TensorImplPtr& indices,
+                               const TensorImplPtr& src,
+                               int dim) {
+    Validator::input(base,    "scatter_amin.base").non_null();
+    Validator::input(indices, "scatter_amin.indices").non_null();
+    Validator::input(src,     "scatter_amin.src").non_null();
+
+    const Dtype dt  = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim  = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_amin", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s = be.scatter_amin(base->storage(), indices->storage(),
+                                    src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad = GradMode::is_enabled() &&
+                            (base->requires_grad() || src->requires_grad());
+    if (!needs_grad) return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAminNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_amin"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            auto mask_base_f  = winner_mask(saved_base_, saved_out_);
+            auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
+            auto mask_src_f   = winner_mask(saved_src_, gathered_out);
+            auto zeros_out    = zeros_like_op(saved_out_);
+            auto wins_src     = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
+            auto total_wins   = add_op(mask_base_f, wins_src);
+            auto safe_wins    = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                         ones_like_op(total_wins), total_wins);
+            Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
+            auto g_normed     = div_op(g_impl, safe_wins);
+            auto gathered_gn  = gather_op(g_normed, saved_indices_, dim_);
+            Storage grad_src  = mul_op(gathered_gn, mask_src_f)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAminNode>();
+    bwd->dim_           = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_     = out;
+    bwd->saved_base_    = base;
+    bwd->saved_src_     = src;
+    bwd->base_shape_    = bs;
+    bwd->dtype_         = dt;
+    bwd->device_        = dv;
+    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
+                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_prod ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
+                               const TensorImplPtr& indices,
+                               const TensorImplPtr& src,
+                               int dim) {
+    Validator::input(base,    "scatter_prod.base").non_null();
+    Validator::input(indices, "scatter_prod.indices").non_null();
+    Validator::input(src,     "scatter_prod.src").non_null();
+
+    const Dtype dt  = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim  = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_prod", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s = be.scatter_prod(base->storage(), indices->storage(),
+                                    src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad = GradMode::is_enabled() &&
+                            (base->requires_grad() || src->requires_grad());
+    if (!needs_grad) return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+
+    // Gradient of scatter_prod:
+    //   d/d(src[j])  = grad[idx[j]] * out[idx[j]] / src[j]   (product rule)
+    //   d/d(base[i]) = grad[i]      * out[i]      / base[i]  (if base ≠ 0)
+    // Both formulas involve dividing by the input, which is numerically unsafe
+    // near zero but correct elsewhere.
+    struct ScatterProdNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_prod"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            // grad_base = g * out / base
+            auto grad_base_impl = mul_op(g_impl, div_op(saved_out_, saved_base_));
+            Storage grad_base   = grad_base_impl->storage();
+            // grad_src: gather (g * out), then divide by src
+            auto g_times_out     = mul_op(g_impl, saved_out_);
+            auto gathered_g_out  = gather_op(g_times_out, saved_indices_, dim_);
+            Storage grad_src     = div_op(gathered_g_out, saved_src_)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterProdNode>();
+    bwd->dim_           = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_     = out;
+    bwd->saved_base_    = base;
+    bwd->saved_src_     = src;
+    bwd->base_shape_    = bs;
+    bwd->dtype_         = dt;
+    bwd->device_        = dv;
+    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
+                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
     out->set_requires_grad(true);

@@ -6,10 +6,15 @@
 
 #include "Exponential.h"
 
+#include "../../autograd/Helpers.h"
+#include "../../backend/Dispatcher.h"
 #include "../../core/OpRegistry.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Div.h"
 #include "../bfunc/Mul.h"
+#include "../bfunc/Sub.h"
+#include "../gfunc/Gfunc.h"
+#include "Arith.h"
 
 namespace lucid {
 
@@ -115,5 +120,74 @@ TensorImplPtr rsqrt_op(const TensorImplPtr& a) {
     return RsqrtBackward::forward(a);
 }
 LUCID_REGISTER_OP(RsqrtBackward)
+
+// erf — AmpPolicy::Promote so float64 inputs remain float64.
+const OpSchema ErfBackward::schema_v1{"erf", 1, AmpPolicy::Promote, true};
+
+// dL/dx = (2/√π) * exp(-x²) * dL/dy.
+// Saves the input x to compute exp(-x²) in the backward pass.
+static constexpr double kTwoOverSqrtPi = 1.1283791670955126;  // 2/sqrt(pi)
+
+Storage ErfBackward::grad_formula(const Storage& g) {
+    const std::size_t n = shape_numel(out_shape_);
+    const Storage& x = saved_inputs_[0];
+    // x^2
+    Storage x2 = multiply_storages(x, x, n, dtype_, device_);
+    // -x^2
+    Storage neg_x2 = mul_scalar_storage(x2, -1.0, n, dtype_, device_);
+    // exp(-x^2)
+    Storage ex2 = backend::Dispatcher::for_device(device_).exp(neg_x2, out_shape_, dtype_);
+    // (2/sqrt(pi)) * exp(-x^2)
+    Storage coeff = mul_scalar_storage(ex2, kTwoOverSqrtPi, n, dtype_, device_);
+    // multiply by upstream gradient
+    return multiply_storages(g, coeff, n, dtype_, device_);
+}
+
+TensorImplPtr ErfBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+    // dx = (2/sqrt(pi)) * exp(-x^2) * g
+    auto neg_x2 = neg_op(mul_op(x, x));
+    auto ex2 = exp_op(neg_x2);
+    // Multiply ex2 by the 2/sqrt(pi) constant via full_like
+    auto scale = full_like_op(ex2, kTwoOverSqrtPi, /*requires_grad=*/false);
+    return mul_op(g, mul_op(scale, ex2));
+}
+
+TensorImplPtr erf_op(const TensorImplPtr& a) {
+    return ErfBackward::forward(a);
+}
+LUCID_REGISTER_OP(ErfBackward)
+
+// erfinv — AmpPolicy::Promote so float64 inputs remain float64.
+const OpSchema ErfinvBackward::schema_v1{"erfinv", 1, AmpPolicy::Promote, true};
+
+// dL/dx = (sqrt(π)/2) * exp(out²) * g   (out = erfinv(x) was saved as forward output).
+static constexpr double kSqrtPiOver2 = 0.8862269254527580;  // sqrt(pi)/2
+
+Storage ErfinvBackward::grad_formula(const Storage& g) {
+    const std::size_t n = shape_numel(out_shape_);
+    const Storage& y = saved_output_;
+    // y^2
+    Storage y2 = multiply_storages(y, y, n, dtype_, device_);
+    // exp(y^2)
+    Storage ey2 = backend::Dispatcher::for_device(device_).exp(y2, out_shape_, dtype_);
+    // sqrt(pi)/2 * exp(y^2)
+    Storage coeff = mul_scalar_storage(ey2, kSqrtPiOver2, n, dtype_, device_);
+    return multiply_storages(g, coeff, n, dtype_, device_);
+}
+
+TensorImplPtr ErfinvBackward::grad_formula_impl(
+    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+    // dx = sqrt(pi)/2 * exp(out^2) * g
+    auto out2 = mul_op(out, out);
+    auto ey2  = exp_op(out2);
+    auto coeff = mul_op(full_like_op(ey2, kSqrtPiOver2), ey2);
+    return mul_op(g, coeff);
+}
+
+TensorImplPtr erfinv_op(const TensorImplPtr& a) {
+    return ErfinvBackward::forward(a);
+}
+LUCID_REGISTER_OP(ErfinvBackward)
 
 }  // namespace lucid

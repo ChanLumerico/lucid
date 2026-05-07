@@ -7,7 +7,7 @@ from lucid.autograd._grad_mode import (
 )
 from lucid.autograd._backward import backward, grad
 from lucid.autograd.function import Function, FunctionCtx
-from lucid.autograd.gradcheck import gradcheck
+from lucid.autograd.gradcheck import gradcheck, gradgradcheck
 from lucid.autograd._anomaly import detect_anomaly
 from lucid.autograd._functional import jacobian, hessian, vjp, jvp
 
@@ -22,6 +22,7 @@ __all__ = [
     "Function",
     "FunctionCtx",
     "gradcheck",
+    "gradgradcheck",
     "detect_anomaly",
     "jacobian",
     "hessian",

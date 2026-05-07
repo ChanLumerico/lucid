@@ -132,6 +132,10 @@ void register_ufunc(py::module_& m) {
     m.def("trace", &trace_op, py::arg("a"), "Sum of the main diagonal (last 2 axes).");
     m.def("cumsum", &cumsum_op, py::arg("a"), py::arg("axis") = -1);
     m.def("cumprod", &cumprod_op, py::arg("a"), py::arg("axis") = -1);
+    m.def("cummax", &cummax_op, py::arg("a"), py::arg("axis") = -1);
+    m.def("cummin", &cummin_op, py::arg("a"), py::arg("axis") = -1);
+    bind_unary<ErfBackward>(m, &erf_op);
+    bind_unary<ErfinvBackward>(m, &erfinv_op);
 
     // In-place variants.  These mutate `a` directly, bump its version counter,
     // and are not differentiable.  The underscore suffix follows reference convention.

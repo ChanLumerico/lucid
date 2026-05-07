@@ -9,9 +9,6 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._ops import cat
 
-if TYPE_CHECKING:
-    pass
-
 
 class PackedSequence(NamedTuple):
     """Holds packed padded sequence data."""

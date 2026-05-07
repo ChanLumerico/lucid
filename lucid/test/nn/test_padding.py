@@ -28,9 +28,7 @@ class TestZeroPad1d:
 class TestZeroPad3d:
     def test_uniform_padding(self) -> None:
         layer: nn.ZeroPad3d = nn.ZeroPad3d(1)
-        x: lucid.Tensor = lucid.tensor(
-            np.ones((1, 1, 2, 2, 2), dtype=np.float32)
-        )
+        x: lucid.Tensor = lucid.tensor(np.ones((1, 1, 2, 2, 2), dtype=np.float32))
         out: np.ndarray = layer(x).numpy()
         assert out.shape == (1, 1, 4, 4, 4)
         # Inner block is all ones; everywhere else is zero.

@@ -88,7 +88,9 @@ class TestMultiHeadAttentionForward:
         q: lucid.Tensor = lucid.randn(3, 1, 8)  # (T, B, E)
         module_out, _ = mha(q, q, q, need_weights=False)
         fn_out, _ = F.multi_head_attention_forward(
-            q, q, q,
+            q,
+            q,
+            q,
             embed_dim_to_check=8,
             num_heads=2,
             in_proj_weight=mha.in_proj_weight,

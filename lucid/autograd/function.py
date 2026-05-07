@@ -113,3 +113,18 @@ class Function(metaclass=FunctionMeta):
     ) -> Tensor | tuple[Tensor, ...]:
         """Compute the backward pass. Override in subclasses."""
         raise NotImplementedError
+
+    @classmethod
+    def apply(cls, *args: object, **kwargs: object) -> object:
+        """Run the function — autograd-tracked when ``forward`` requests grad.
+
+        ``FunctionMeta`` rewrites this on every concrete subclass to dispatch
+        through ``forward``/``backward``; the base implementation here exists
+        only so ``Function.apply`` is a real attribute (matters for tooling
+        and ``hasattr`` checks).  Calling it on the base class is meaningless
+        and raises.
+        """
+        raise NotImplementedError(
+            "Function.apply must be called on a concrete subclass that "
+            "implements forward / backward."
+        )

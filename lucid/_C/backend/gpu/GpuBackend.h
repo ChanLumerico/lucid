@@ -235,6 +235,14 @@ public:
         return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::log2(x); });
     }
 
+    Storage erf(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erf(x); });
+    }
+
+    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erfinv(x); });
+    }
+
     Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::reciprocal(x); });
     }
@@ -603,6 +611,18 @@ public:
     Storage cumprod(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto result = ::mlx::core::cumprod(*gs.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage cummax(const Storage& a, const Shape&, int axis, Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::cummax(*gs.arr, axis);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+    }
+
+    Storage cummin(const Storage& a, const Shape&, int axis, Dtype dt) override {
+        const auto& gs = std::get<GpuStorage>(a);
+        auto result = ::mlx::core::cummin(*gs.arr, axis);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
@@ -1036,6 +1056,96 @@ public:
         auto out = ::mlx::core::scatter_add(*gb.arr, index_list, *gs.arr,
                                              std::vector<int>{dim});
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+    }
+
+private:
+    // Helper: evaluate three GPU arrays to CPU, apply scatter_reduce_loop via the
+    // CPU backend, then return the result as GPU (MLX) storage.
+    // InitVal is the neutral element (−∞ / +∞ / 1) for when include_self is handled
+    // externally (base already has the neutral value from the caller).
+    template <typename Op>
+    Storage scatter_reduce_gpu_via_cpu(const Storage& base, const Storage& indices,
+                                       const Storage& src, const Shape& base_shape,
+                                       const Shape& idx_shape, int dim, Dtype dt,
+                                       const char* name, Op op) {
+        const auto& gb = std::get<GpuStorage>(base);
+        const auto& gi = std::get<GpuStorage>(indices);
+        const auto& gs = std::get<GpuStorage>(src);
+        gb.arr->eval(); gi.arr->eval(); gs.arr->eval();
+        auto b_c = ::mlx::core::contiguous(*gb.arr); b_c.eval();
+        auto i_c = ::mlx::core::contiguous(*gi.arr); i_c.eval();
+        auto s_c = ::mlx::core::contiguous(*gs.arr); s_c.eval();
+
+        std::size_t base_n = shape_numel(base_shape);
+
+        int d = dim < 0 ? dim + (int)base_shape.size() : dim;
+        std::size_t outer = 1;
+        for (int dd = 0; dd < d; ++dd)
+            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dd)]);
+        std::size_t inner = 1;
+        for (int dd = d + 1; dd < (int)base_shape.size(); ++dd)
+            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dd)]);
+        std::size_t base_dim = static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
+        std::size_t idx_dim  = static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(d)]);
+        const auto* ip = i_c.data<std::int32_t>();
+
+        auto shape_mlx = gpu::to_mlx_shape(base_shape);
+        auto mlx_dt    = gpu::to_mlx_dtype(dt);
+
+        if (dt == Dtype::F32) {
+            std::vector<float> buf(b_c.data<float>(), b_c.data<float>() + base_n);
+            const float* sp = s_c.data<float>();
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j)
+                    for (std::size_t k = 0; k < idx_dim; ++k) {
+                        const std::size_t sf = (o * idx_dim + k) * inner + j;
+                        std::int32_t tgt = ip[sf];
+                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
+                        const std::size_t df = (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
+                        op(buf[df], sp[sf]);
+                    }
+            ::mlx::core::array result(buf.data(), shape_mlx, mlx_dt);
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        } else if (dt == Dtype::F64) {
+            std::vector<double> buf(b_c.data<double>(), b_c.data<double>() + base_n);
+            const double* sp = s_c.data<double>();
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j)
+                    for (std::size_t k = 0; k < idx_dim; ++k) {
+                        const std::size_t sf = (o * idx_dim + k) * inner + j;
+                        std::int32_t tgt = ip[sf];
+                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
+                        const std::size_t df = (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
+                        op(buf[df], sp[sf]);
+                    }
+            ::mlx::core::array result(buf.data(), shape_mlx, mlx_dt);
+            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        } else {
+            ErrorBuilder(name).not_implemented("dtype not supported");
+            return Storage{};  // unreachable
+        }
+    }
+
+public:
+    Storage scatter_amax(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
+            "scatter_amax", [](auto& d, auto s) { if (s > d) d = s; });
+    }
+
+    Storage scatter_amin(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
+            "scatter_amin", [](auto& d, auto s) { if (s < d) d = s; });
+    }
+
+    Storage scatter_prod(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
+            "scatter_prod", [](auto& d, auto s) { d *= s; });
     }
 
     Storage unfold_dim(const Storage& a,

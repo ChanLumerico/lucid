@@ -16,9 +16,6 @@ from contextlib import contextmanager
 from typing import Iterator, TYPE_CHECKING
 from lucid._C import engine as _C_engine
 
-if TYPE_CHECKING:
-    pass
-
 
 class OpEvent:
     """A single recorded operation event."""

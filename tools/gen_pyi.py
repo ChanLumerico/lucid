@@ -744,7 +744,73 @@ def _free_fn_sig(entry) -> str:
     return f"def {name}({', '.join(parts)}) -> Tensor: ..."
 
 
+def _sig_from_callable(name: str, fn: object) -> str:
+    """Generate a stub line from a live callable via inspect.signature().
+
+    Falls back to ``(*args: Any, **kwargs: Any) -> Any`` when the signature
+    cannot be introspected (C extensions, built-ins, etc.).
+    """
+    import inspect
+
+    try:
+        sig = inspect.signature(fn, eval_str=False)  # type: ignore[arg-type]
+    except Exception:
+        return f"def {name}(*args: Any, **kwargs: Any) -> Any: ..."
+
+    parts = []
+    for pname, param in sig.parameters.items():
+        ann = param.annotation
+        ann_str = (
+            ""
+            if ann is inspect.Parameter.empty
+            else f": {_simplify_annotation(ann)}"
+        )
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            parts.append(f"*{pname}{ann_str}")
+        elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            parts.append(f"**{pname}{ann_str}")
+        elif param.kind == inspect.Parameter.KEYWORD_ONLY:
+            # Only emit the `*,` separator once — before the first keyword-only param.
+            if not any(p.startswith("*,") for p in parts) and not any(p.startswith("*") and not p.startswith("**") for p in parts):
+                parts.append("*")
+            default = param.default
+            if default is inspect.Parameter.empty:
+                parts.append(f"{pname}{ann_str}")
+            else:
+                parts.append(f"{pname}{ann_str} = ...")
+        else:
+            default = param.default
+            if default is inspect.Parameter.empty:
+                parts.append(f"{pname}{ann_str}")
+            else:
+                parts.append(f"{pname}{ann_str} = ...")
+    ret = sig.return_annotation
+    ret_str = (
+        " -> Any"
+        if ret is inspect.Parameter.empty
+        else f" -> {_simplify_annotation(ret)}"
+    )
+    return f"def {name}({', '.join(parts)}){ret_str}: ..."
+
+
+def _simplify_annotation(ann: object) -> str:
+    """Convert a runtime annotation object to a terse string for stubs."""
+    import inspect
+
+    if ann is inspect.Parameter.empty:
+        return "Any"
+    raw = str(ann)
+    # Strip module prefixes that would be unknown inside the stub.
+    raw = raw.replace("<class '", "").replace("'>", "")
+    raw = raw.replace("typing.", "").replace("lucid._tensor.tensor.", "")
+    raw = raw.replace("lucid._dtype.", "").replace("lucid._device.", "")
+    # Collapse common generics to something valid in stubs.
+    raw = raw.replace("NoneType", "None")
+    return raw
+
+
 def gen_init_pyi() -> tuple[str, int]:
+    import inspect
     from lucid._ops._registry import _REGISTRY
 
     seen: set[str] = set()
@@ -777,12 +843,59 @@ def gen_init_pyi() -> tuple[str, int]:
         "def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]: ...",
     ]
 
+    # ── Composite ops (lucid._ops.composite) ─────────────────────────────────
+    import lucid._ops.composite as _comp
+    from lucid._ops.composite import COMPOSITE_NAMES
+
+    composite_lines = [
+        "\n# ── Constants ────────────────────────────────────────────────────────",
+        "pi: float",
+        "e: float",
+        "inf: float",
+        "nan: float",
+        "newaxis: None",
+        "\n# ── Composite ops (elementwise / shape / blas / reductions / predicates / dtype) ─",
+    ]
+    _CONSTANT_NAMES = {"pi", "e", "inf", "nan", "newaxis"}
+    for n in sorted(COMPOSITE_NAMES - _CONSTANT_NAMES):
+        if n in seen:
+            continue
+        fn = getattr(_comp, n, None)
+        if fn is None or not callable(fn):
+            continue
+        seen.add(n)
+        composite_lines.append(_sig_from_callable(n, fn))
+
+    # ── nn.functional / linalg / method aliases ───────────────────────────────
+    import lucid
+    alias_groups = {
+        "Tensor-method aliases": lucid._METHOD_ALIASES,  # type: ignore[attr-defined]
+    }
+    alias_lines = []
+    for group_label, name_set in alias_groups.items():
+        group: list[str] = []
+        for n in sorted(name_set):
+            if n in seen:
+                continue
+            fn = getattr(lucid, n, None)
+            if fn is None:
+                continue
+            seen.add(n)
+            group.append(_sig_from_callable(n, fn))
+        if group:
+            alias_lines.append(f"\n# ── {group_label} ─────────────────")
+            alias_lines.extend(group)
+
     content = _INIT_HEADER + "\n".join(lines) + "\n\n"
     content += (
         "# ── Reference-compatible overrides (see _ops/__init__.py) ───────────\n"
     )
     content += "\n".join(overrides) + "\n"
-    return content, count
+    content += "\n".join(composite_lines) + "\n"
+    content += "\n".join(alias_lines) + "\n"
+
+    total = count + len([l for l in composite_lines + alias_lines if l.startswith("def ")])
+    return content, total
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

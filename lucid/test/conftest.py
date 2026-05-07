@@ -22,10 +22,10 @@ from lucid.test._comparison import assert_close as _assert_close
 def _available_devices() -> list[str]:
     devices = ["cpu"]
     try:
-        from lucid._C import engine as _e
+        from lucid._C import engine as _C_engine
 
         # GPU available if we can round-trip a small tensor
-        t = _e.zeros([1], _e.F32, _e.GPU)
+        t = _C_engine.zeros([1], _C_engine.F32, _C_engine.GPU)
         devices.append("gpu")
     except Exception:
         pass

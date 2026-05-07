@@ -2,8 +2,6 @@
 Worker utilities for DataLoader multi-process data loading.
 """
 
-from __future__ import annotations
-
 import threading
 from dataclasses import dataclass
 from lucid.utils.data.dataset import Dataset

@@ -17,6 +17,7 @@
 #include "Vforce.h"
 
 #include <Accelerate/Accelerate.h>
+#include <cmath>
 
 namespace lucid::backend::cpu {
 
@@ -134,5 +135,17 @@ LUCID_VFORCE_UNARY(vceil, vvceilf, vvceil)
 LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)
 
 #undef LUCID_VFORCE_UNARY
+
+// erf — Apple Accelerate does not expose a vForce erf symbol, so we fall
+// back to a scalar loop over std::erf.  The function is still vectorised by
+// the compiler's auto-vectoriser in practice.
+void verf_f32(const float* in, float* out, std::size_t n) {
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = std::erf(in[i]);
+}
+void verf_f64(const double* in, double* out, std::size_t n) {
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = std::erf(in[i]);
+}
 
 }  // namespace lucid::backend::cpu

@@ -376,7 +376,9 @@ def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:
     """
     r: int = int(upscale_factor)
     if len(x.shape) != 4:
-        raise ValueError(f"pixel_shuffle: expected 4-D input, got shape {tuple(x.shape)}")
+        raise ValueError(
+            f"pixel_shuffle: expected 4-D input, got shape {tuple(x.shape)}"
+        )
     n, c_r2, h, w = x.shape
     if c_r2 % (r * r) != 0:
         raise ValueError(
@@ -393,7 +395,9 @@ def pixel_unshuffle(x: Tensor, downscale_factor: int) -> Tensor:
     """Inverse of ``pixel_shuffle``: ``(N, C, H·r, W·r)`` → ``(N, C·r², H, W)``."""
     r: int = int(downscale_factor)
     if len(x.shape) != 4:
-        raise ValueError(f"pixel_unshuffle: expected 4-D input, got shape {tuple(x.shape)}")
+        raise ValueError(
+            f"pixel_unshuffle: expected 4-D input, got shape {tuple(x.shape)}"
+        )
     n, c, h_r, w_r = x.shape
     if h_r % r != 0 or w_r % r != 0:
         raise ValueError(
@@ -452,9 +456,13 @@ def multi_head_attention_forward(
     # K/V and zero-attn slots are advanced features the module path doesn't
     # cover yet — they raise rather than silently misbehaving.
     if static_k is not None or static_v is not None:
-        raise NotImplementedError("multi_head_attention_forward: static_k/static_v unsupported")
+        raise NotImplementedError(
+            "multi_head_attention_forward: static_k/static_v unsupported"
+        )
     if add_zero_attn:
-        raise NotImplementedError("multi_head_attention_forward: add_zero_attn unsupported")
+        raise NotImplementedError(
+            "multi_head_attention_forward: add_zero_attn unsupported"
+        )
     if use_separate_proj_weight:
         raise NotImplementedError(
             "multi_head_attention_forward: use_separate_proj_weight unsupported"

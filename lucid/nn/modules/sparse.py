@@ -87,18 +87,18 @@ class Embedding(Module):
         does not need this.
         """
         import lucid as _lucid
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         arr = self.weight.numpy().copy()
         arr[self.padding_idx] = 0.0
-        new_impl = _ce.TensorImpl(arr, _ce.Device.CPU, False)
+        new_impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, False)
         self.weight._impl = _iwg(new_impl, self.weight._impl.requires_grad)
 
     def _renorm_weight_inplace(self) -> None:
         """Apply ``max_norm`` rescaling to rows that exceed the cap."""
         import lucid as _lucid
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
         import numpy as _np
 
@@ -116,7 +116,7 @@ class Embedding(Module):
             arr.dtype
         )
         arr = arr * scale[:, None]
-        new_impl = _ce.TensorImpl(arr, _ce.Device.CPU, False)
+        new_impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, False)
         self.weight._impl = _iwg(new_impl, self.weight._impl.requires_grad)
 
     def forward(self, x: Tensor) -> Tensor:

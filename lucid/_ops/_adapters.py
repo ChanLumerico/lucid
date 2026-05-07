@@ -68,8 +68,12 @@ def _scatter_add_adapter(x_impl, dim: int, index, src):
     """scatter_add(x, dim, index, src) — Python order → engine order.
 
     Engine takes ``(base, indices, src, dim)``; we reorder here.
+    The engine scatter_add is buggy for int64 indices — coerce to int32.
     """
-    return _C_engine.scatter_add(x_impl, _unwrap(index), _unwrap(src), dim)
+    idx_impl = _unwrap(index)
+    if idx_impl.dtype == _C_engine.I64:
+        idx_impl = _C_engine.astype(idx_impl, _C_engine.I32)
+    return _C_engine.scatter_add(x_impl, idx_impl, _unwrap(src), dim)
 
 
 # ── Composite indexing adapters ──────────────────────────────────────────────
@@ -189,14 +193,18 @@ def _flip_adapter(x_impl, dims):
 def _fliplr_adapter(x_impl):
     """fliplr(x) — flip along axis 1.  ``x`` must be at least 2-D."""
     if len(x_impl.shape) < 2:
-        raise ValueError(f"fliplr: input must be at least 2-D, got shape {tuple(x_impl.shape)}")
+        raise ValueError(
+            f"fliplr: input must be at least 2-D, got shape {tuple(x_impl.shape)}"
+        )
     return _C_engine.flip(x_impl, [1])
 
 
 def _flipud_adapter(x_impl):
     """flipud(x) — flip along axis 0.  ``x`` must be at least 1-D."""
     if len(x_impl.shape) < 1:
-        raise ValueError(f"flipud: input must be at least 1-D, got shape {tuple(x_impl.shape)}")
+        raise ValueError(
+            f"flipud: input must be at least 1-D, got shape {tuple(x_impl.shape)}"
+        )
     return _C_engine.flip(x_impl, [0])
 
 

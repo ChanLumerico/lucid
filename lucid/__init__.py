@@ -89,13 +89,11 @@ __all__ = [
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
-    "relu", "sigmoid", "silu", "gelu", "mish", "selu", "softplus",
-    "softmax", "log_softmax",
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
     "add", "sub", "mul", "div", "pow",
-    "matmul", "mm", "bmm", "dot", "inner", "outer", "tensordot",
+    "matmul", "mm", "bmm", "tensordot",
     "einsum", "kron",
     "atan2", "fmod", "remainder", "hypot", "logaddexp",
     "maximum", "minimum",
@@ -103,7 +101,6 @@ __all__ = [
     "eq", "ne", "lt", "le", "gt", "ge", "isclose",
     "logical_and", "logical_or", "logical_xor", "logical_not",
     "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
-    "cross", "norm",
     # ── ops — reduction ───────────────────────────────────────────────────
     "sum", "mean", "max", "min", "prod",
     "argmax", "argmin", "cumsum", "cumprod",
@@ -124,6 +121,33 @@ __all__ = [
     "contiguous", "detach", "clone",
     # ── stats / search ────────────────────────────────────────────────────
     "searchsorted", "bucketize", "histc", "cartesian_prod",
+    # ── Tensor-method ops surfaced as free functions ──────────────────────
+    "lerp", "diff",
+    # ── extras: constants ─────────────────────────────────────────────────
+    "pi", "e", "inf", "nan", "newaxis",
+    # ── extras: aliases / dtype promotion ─────────────────────────────────
+    "absolute", "negative", "positive",
+    "subtract", "multiply", "divide", "true_divide", "rsub",
+    "arccosh", "acosh", "arcsinh", "asinh", "arctanh", "atanh", "arctan2",
+    "swapaxes", "swapdims", "moveaxis", "adjoint", "t",
+    "conj", "conj_physical", "resolve_conj", "resolve_neg",
+    "result_type", "promote_types", "can_cast",
+    # ── extras: special elementwise ───────────────────────────────────────
+    "expm1", "sinc", "heaviside", "xlogy", "logit", "signbit",
+    "float_power", "fmax", "fmin",
+    # ── extras: nan-safe reductions ───────────────────────────────────────
+    "nansum", "nanmean", "nanmedian",
+    # ── extras: BLAS variants ─────────────────────────────────────────────
+    "addmm", "addbmm", "baddbmm", "addmv", "addr", "addcmul", "addcdiv",
+    "mv", "ger", "vdot", "block_diag",
+    # ── extras: shape ─────────────────────────────────────────────────────
+    "column_stack", "row_stack", "dstack",
+    "atleast_1d", "atleast_2d", "atleast_3d",
+    "vsplit", "hsplit", "dsplit", "tensor_split",
+    "take_along_dim", "vander", "rot90",
+    # ── extras: predicates / introspection ────────────────────────────────
+    "numel", "is_storage", "is_nonzero", "is_same_size", "is_neg", "is_conj",
+    "isin", "isneginf", "isposinf", "isreal",
     # ── grad control ──────────────────────────────────────────────────────
     "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled", "inference_mode",
     # ── type predicates ───────────────────────────────────────────────────
@@ -195,15 +219,6 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "sinh",
         "cosh",
         "tanh",
-        "relu",
-        "sigmoid",
-        "silu",
-        "gelu",
-        "mish",
-        "selu",
-        "softplus",
-        "softmax",
-        "log_softmax",
         "clip",
         "clamp",
         "isinf",
@@ -216,9 +231,6 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "div",
         "pow",
         "matmul",
-        "dot",
-        "inner",
-        "outer",
         "tensordot",
         "maximum",
         "minimum",
@@ -237,6 +249,10 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "argmin",
         "cumsum",
         "cumprod",
+        "cummax",
+        "cummin",
+        "erf",
+        "erfinv",
         "std",
         "var",
         "trace",
@@ -311,8 +327,6 @@ _OPS_NAMES: frozenset[str] = frozenset(
         "bitwise_and",
         "bitwise_or",
         "bitwise_xor",
-        "cross",
-        "norm",
         # ── math unary extras ─────────────────────────────────────────────
         "asin",
         "acos",
@@ -379,6 +393,8 @@ _SUBPKG_NAMES: frozenset[str] = frozenset(
         "test",
     ]
 )
+
+_METHOD_ALIASES: frozenset[str] = frozenset(["lerp", "diff"])
 
 _TYPE_ALIAS_NAMES: frozenset[str] = frozenset(
     [
@@ -467,12 +483,13 @@ def _load_grad() -> dict[str, object]:
 
 @_register(_PREDICATE_NAMES)
 def _load_predicates() -> dict[str, object]:
-    from lucid._C import engine as _ce
+    from lucid._C import engine as _C_engine
 
-    _FLOAT_DTYPES = frozenset([_ce.F16, _ce.F32, _ce.F64])
-    _COMPLEX_DTYPES = frozenset([_ce.C64])
+    _FLOAT_DTYPES = frozenset([_C_engine.F16, _C_engine.F32, _C_engine.F64])
+    _COMPLEX_DTYPES = frozenset([_C_engine.C64])
     _SIGNED_DTYPES = frozenset(
-        [_ce.F16, _ce.F32, _ce.F64, _ce.C64, _ce.I8, _ce.I16, _ce.I32, _ce.I64]
+        [_C_engine.F16, _C_engine.F32, _C_engine.F64, _C_engine.C64,
+         _C_engine.I8, _C_engine.I16, _C_engine.I32, _C_engine.I64]
     )
 
     def is_tensor(obj: object) -> bool:  # type: ignore
@@ -512,6 +529,55 @@ def _load_serialization() -> dict[str, object]:
     import lucid.serialization as _ser
 
     return {"save": _ser.save, "load": _ser.load}
+
+
+def _get_composite_names() -> frozenset[str]:
+    """Lazily query ``lucid._ops.composite`` for its export set (avoids cycles)."""
+    from lucid._ops.composite import COMPOSITE_NAMES
+
+    return COMPOSITE_NAMES
+
+
+# Pre-populate the loader registry for the composite ops surface.  The actual
+# loader runs once on first attribute access.
+_COMPOSITE_NAMES_CACHED: frozenset[str] = _get_composite_names()
+
+
+@_register(_COMPOSITE_NAMES_CACHED)
+def _load_composite_ops() -> dict[str, object]:
+    """Pure-Python composites layered on engine primitives."""
+    import lucid._ops.composite as _comp
+
+    return {n: getattr(_comp, n) for n in _COMPOSITE_NAMES_CACHED}
+
+
+@_register(_METHOD_ALIASES)
+def _load_method_aliases() -> dict[str, object]:
+    """Surface select Tensor methods as free functions (PyTorch parity).
+
+    ``torch.lerp(a, b, w)`` etc. are commonly used standalone — we wrap each
+    method so the call ``lucid.lerp(a, b, w)`` dispatches to ``a.lerp(b, w)``.
+    """
+    from lucid._tensor.tensor import Tensor as _T
+
+    def _make(method_name: str):
+        def _fn(input, *args, **kwargs):
+            if not isinstance(input, _T):
+                raise TypeError(
+                    f"lucid.{method_name}() expects a Tensor as the first "
+                    f"argument, got {type(input).__name__}"
+                )
+            return getattr(input, method_name)(*args, **kwargs)
+
+        _fn.__name__ = method_name
+        _fn.__qualname__ = method_name
+        _fn.__doc__ = (
+            f"Free-function alias for ``Tensor.{method_name}``. "
+            f"Equivalent to ``input.{method_name}(*args, **kwargs)``."
+        )
+        return _fn
+
+    return {n: _make(n) for n in _METHOD_ALIASES}
 
 
 @_register(_TYPE_ALIAS_NAMES)
@@ -570,12 +636,12 @@ def eval(*tensors: object) -> None:  # type: ignore[override]
     step causes the forward + backward + optimizer graph to accumulate as a
     single large graph, which is significantly slower to schedule.
     """
-    from lucid._C import engine as _ce
+    from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import Tensor as _T
 
     impls = [t._impl for t in tensors if isinstance(t, _T)]
     if impls:
-        _ce.eval_tensors(impls)  # C++ batch eval — no mlx import
+        _C_engine.eval_tensors(impls)  # C++ batch eval — no mlx import
 
 
 # ── Module __getattr__ ────────────────────────────────────────────────────────

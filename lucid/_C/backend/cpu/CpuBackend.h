@@ -585,6 +585,62 @@ public:
                         });
     }
 
+    Storage erf(const Storage& a, const Shape& shape, Dtype dt) override {
+        return unary_op(a, shape, dt, cpu::verf_f32, cpu::verf_f64,
+                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
+                            for (std::size_t i = 0; i < n; ++i)
+                                op[i] = static_cast<std::int32_t>(
+                                    std::erf(static_cast<float>(ip[i])));
+                        });
+    }
+
+    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {
+        // erfinv via Winitzki (2008) initial guess + 3 Newton steps.
+        static constexpr double kTwoOverSqrtPi = 1.1283791670955126;
+        static constexpr double kA = 0.147;  // Winitzki constant
+
+        auto scalar_erfinv = [&](double x) -> double {
+            if (x >= 1.0)  return std::numeric_limits<double>::infinity();
+            if (x <= -1.0) return -std::numeric_limits<double>::infinity();
+            if (x == 0.0)  return 0.0;
+            double s = (x > 0) ? 1.0 : -1.0;
+            double ax = std::abs(x);
+            double ln1 = std::log(1.0 - ax * ax);
+            double b = 2.0 / (M_PI * kA) + ln1 * 0.5;
+            double y = s * std::sqrt(std::sqrt(b * b - ln1 / kA) - b);
+            // Newton refinement: y_new = y - (erf(y) - x) / ((2/sqrt(pi))*exp(-y^2))
+            for (int k = 0; k < 3; ++k) {
+                double ey = std::erf(y);
+                double dy = (ey - x) / (kTwoOverSqrtPi * std::exp(-y * y));
+                y -= dy;
+            }
+            return y;
+        };
+
+        auto run_f32 = [&](const float* ip, float* op, std::size_t n) {
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = static_cast<float>(scalar_erfinv(static_cast<double>(ip[i])));
+        };
+        auto run_f64 = [&](const double* ip, double* op, std::size_t n) {
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = scalar_erfinv(ip[i]);
+        };
+
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32)
+            run_f32(reinterpret_cast<const float*>(cs.ptr.get()),
+                    reinterpret_cast<float*>(ptr.get()), n);
+        else if (dt == Dtype::F64)
+            run_f64(reinterpret_cast<const double*>(cs.ptr.get()),
+                    reinterpret_cast<double*>(ptr.get()), n);
+        else
+            ErrorBuilder("cpu_backend::erfinv").not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -1517,6 +1573,94 @@ public:
                 reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
         else
             ErrorBuilder("cpu_backend::cumprod").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const int ndim = static_cast<int>(shape.size());
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (int d = axis + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+
+        auto run = [&](auto* dst, const auto* src) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j) {
+                    T running = src[(o * L) * inner + j];
+                    dst[(o * L) * inner + j] = running;
+                    for (std::size_t k = 1; k < L; ++k) {
+                        T v = src[(o * L + k) * inner + j];
+                        if (v > running)
+                            running = v;
+                        dst[(o * L + k) * inner + j] = running;
+                    }
+                }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else if (dt == Dtype::I32)
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::cummax").not_implemented("dtype not supported");
+
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t nb = cs.nbytes;
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        const int ndim = static_cast<int>(shape.size());
+        std::size_t outer = 1, inner = 1;
+        for (int d = 0; d < axis; ++d)
+            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        for (int d = axis + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+
+        auto run = [&](auto* dst, const auto* src) {
+            using T = std::remove_pointer_t<decltype(dst)>;
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j) {
+                    T running = src[(o * L) * inner + j];
+                    dst[(o * L) * inner + j] = running;
+                    for (std::size_t k = 1; k < L; ++k) {
+                        T v = src[(o * L + k) * inner + j];
+                        if (v < running)
+                            running = v;
+                        dst[(o * L + k) * inner + j] = running;
+                    }
+                }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else if (dt == Dtype::I32)
+            run(reinterpret_cast<std::int32_t*>(ptr.get()),
+                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
+        else if (dt == Dtype::I64)
+            run(reinterpret_cast<std::int64_t*>(ptr.get()),
+                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
+        else
+            ErrorBuilder("cpu_backend::cummin").not_implemented("dtype not supported");
 
         return Storage{CpuStorage{ptr, nb, dt}};
     }
@@ -2796,6 +2940,84 @@ public:
         else
             ErrorBuilder("cpu_backend::scatter_add").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
+private:
+    // Generic scatter-reduce loop shared by scatter_amax / scatter_amin / scatter_prod.
+    // Op is a binary functor: (T& dst_elem, T src_elem) → void  (modifies dst in-place).
+    template <typename Op>
+    Storage scatter_reduce_loop(const Storage& base, const Storage& indices,
+                                const Storage& src, const Shape& base_shape,
+                                const Shape& idx_shape, int dim, Dtype dt,
+                                const char* name, Op op) {
+        const auto& cb = std::get<CpuStorage>(base);
+        const auto& ci = std::get<CpuStorage>(indices);
+        const auto& cs = std::get<CpuStorage>(src);
+
+        const std::size_t base_n = shape_numel(base_shape);
+        const std::size_t nbytes = base_n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
+        std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
+
+        const int ndim = static_cast<int>(base_shape.size());
+        if (dim < 0) dim += ndim;
+
+        std::size_t outer = 1;
+        for (int d = 0; d < dim; ++d)
+            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
+        std::size_t inner = 1;
+        for (int d = dim + 1; d < ndim; ++d)
+            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
+        const std::size_t base_dim = static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dim)]);
+        const std::size_t idx_dim  = static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(dim)]);
+        const auto* ip = reinterpret_cast<const std::int32_t*>(ci.ptr.get());
+
+        auto run = [&](auto* dst, const auto* sp) {
+            for (std::size_t o = 0; o < outer; ++o)
+                for (std::size_t j = 0; j < inner; ++j)
+                    for (std::size_t k = 0; k < idx_dim; ++k) {
+                        const std::size_t sf = (o * idx_dim + k) * inner + j;
+                        std::int32_t tgt = ip[sf];
+                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
+                        const std::size_t df = (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
+                        op(dst[df], sp[sf]);
+                    }
+        };
+
+        if (dt == Dtype::F32)
+            run(reinterpret_cast<float*>(ptr.get()),
+                reinterpret_cast<const float*>(cs.ptr.get()));
+        else if (dt == Dtype::F64)
+            run(reinterpret_cast<double*>(ptr.get()),
+                reinterpret_cast<const double*>(cs.ptr.get()));
+        else
+            ErrorBuilder(name).not_implemented("dtype not supported");
+        return Storage{CpuStorage{ptr, nbytes, dt}};
+    }
+
+public:
+    Storage scatter_amax(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
+            "cpu_backend::scatter_amax",
+            [](auto& d, auto s) { if (s > d) d = s; });
+    }
+
+    Storage scatter_amin(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
+            "cpu_backend::scatter_amin",
+            [](auto& d, auto s) { if (s < d) d = s; });
+    }
+
+    Storage scatter_prod(const Storage& base, const Storage& indices, const Storage& src,
+                         const Shape& base_shape, const Shape& idx_shape,
+                         int dim, Dtype dt) override {
+        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
+            "cpu_backend::scatter_prod",
+            [](auto& d, auto s) { d *= s; });
     }
 
     // Sliding-window view: out shape is (*in_shape[:dim], L, *in_shape[dim+1:], size)

@@ -2,8 +2,6 @@
 DataLoader and default_collate.
 """
 
-from __future__ import annotations
-
 import multiprocessing as _mp
 import random
 import threading

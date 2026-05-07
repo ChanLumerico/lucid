@@ -107,16 +107,16 @@ class TestUnaryGradients:
 
     def test_grad_of_sigmoid(self):
         x = make_tensor((4,), low=-2.0, high=2.0, requires_grad=True)
-        y = lucid.sum(lucid.sigmoid(x))
+        y = lucid.sum(lucid.nn.functional.sigmoid(x))
         y.backward()
         # grad of sigmoid = sigma(x) * (1 - sigma(x))
-        s = lucid.sigmoid(x.detach())
+        s = lucid.nn.functional.sigmoid(x.detach())
         expected = s * (lucid.ones(4) - s)
         assert_close(x.grad, expected, atol=1e-5)
 
     def test_grad_of_relu(self):
         x = lucid.tensor([-1.0, 0.5, 2.0], requires_grad=True)
-        y = lucid.sum(lucid.relu(x))
+        y = lucid.sum(lucid.nn.functional.relu(x))
         y.backward()
         # grad of relu: 0 for x<0, 1 for x>0
         expected = lucid.tensor([0.0, 1.0, 1.0])

@@ -65,6 +65,9 @@ LUCID_INTERNAL void vcosh_f64(const double* in, double* out, std::size_t n);
 // Base-2 logarithm: out[i] = log2(in[i]).  Uses vvlog2f / vvlog2.
 LUCID_INTERNAL void vlog2_f32(const float* in, float* out, std::size_t n);
 LUCID_INTERNAL void vlog2_f64(const double* in, double* out, std::size_t n);
+// Error function: out[i] = erf(in[i]).  Uses vverff / vverf.
+LUCID_INTERNAL void verf_f32(const float* in, float* out, std::size_t n);
+LUCID_INTERNAL void verf_f64(const double* in, double* out, std::size_t n);
 // Floating-point absolute value via vvfabsf / vvfabs.
 LUCID_INTERNAL void vfabs_f32(const float* in, float* out, std::size_t n);
 LUCID_INTERNAL void vfabs_f64(const double* in, double* out, std::size_t n);

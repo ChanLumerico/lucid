@@ -84,10 +84,10 @@ class TestNormParity:
         t_mod = ref.nn.LayerNorm(8, bias=False)
         weight_np = t_mod.weight.detach().numpy().copy()
         l_mod = lnn.LayerNorm(8, bias=False)
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
-        new_impl = _ce.TensorImpl(weight_np, _ce.Device.CPU, False)
+        new_impl = _C_engine.TensorImpl(weight_np, _C_engine.Device.CPU, False)
         l_mod.weight._impl = _iwg(new_impl, l_mod.weight._impl.requires_grad)
         check_parity(
             l_mod(lucid.tensor(x_np.copy())),
@@ -109,7 +109,7 @@ class TestNormParity:
     @pytest.mark.parametrize("affine", [True, False])
     def test_batch_norm_train_running_stats(self, affine):
         import lucid.nn as lnn
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         ref.manual_seed(0)
@@ -118,7 +118,7 @@ class TestNormParity:
         if affine:
             for n, lp in l_mod.named_parameters():
                 td_p = dict(t_mod.named_parameters())[n].detach().numpy().copy()
-                new_impl = _ce.TensorImpl(td_p, _ce.Device.CPU, False)
+                new_impl = _C_engine.TensorImpl(td_p, _C_engine.Device.CPU, False)
                 lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         # Run several batches in train mode → running stats accumulate.
         rng = np.random.default_rng(3)
@@ -132,7 +132,7 @@ class TestNormParity:
 
     def test_batch_norm_eval_uses_running_stats(self):
         import lucid.nn as lnn
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         ref.manual_seed(0)
@@ -140,7 +140,7 @@ class TestNormParity:
         l_mod = lnn.BatchNorm2d(4)
         for n, lp in l_mod.named_parameters():
             td_p = dict(t_mod.named_parameters())[n].detach().numpy().copy()
-            new_impl = _ce.TensorImpl(td_p, _ce.Device.CPU, False)
+            new_impl = _C_engine.TensorImpl(td_p, _C_engine.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         rng = np.random.default_rng(4)
         # Train a few steps to populate running stats.
@@ -288,11 +288,11 @@ class TestConvPaddingModeParity:
         l_mod = mod_cls(*args, **kwargs)
         # Mirror weights into lucid module — using internal _impl swap to dodge
         # the read-only Parameter.data setter.
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         for name, lp in l_mod.named_parameters():
-            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            new_impl = _C_engine.TensorImpl(td[name], _C_engine.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         return l_mod, t_mod
 
@@ -372,11 +372,11 @@ class TestConvSamePaddingParity:
         t_mod = ref.nn.Conv2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.Conv2d(*args, **kwargs)
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         for name, lp in l_mod.named_parameters():
-            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            new_impl = _C_engine.TensorImpl(td[name], _C_engine.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         return l_mod, t_mod
 
@@ -413,11 +413,11 @@ class TestGroupedConvParity:
         t_mod = ref.nn.Conv2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.Conv2d(*args, **kwargs)
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         for name, lp in l_mod.named_parameters():
-            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            new_impl = _C_engine.TensorImpl(td[name], _C_engine.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         return l_mod, t_mod
 
@@ -464,11 +464,11 @@ class TestConvTransposeParity:
         t_mod = ref.nn.ConvTranspose2d(*args, **kwargs)
         td = {n: p.detach().numpy().copy() for n, p in t_mod.named_parameters()}
         l_mod = lnn.ConvTranspose2d(*args, **kwargs)
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         for name, lp in l_mod.named_parameters():
-            new_impl = _ce.TensorImpl(td[name], _ce.Device.CPU, False)
+            new_impl = _C_engine.TensorImpl(td[name], _C_engine.Device.CPU, False)
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
         return l_mod, t_mod
 
@@ -896,11 +896,11 @@ class TestMHAParity:
 
     @staticmethod
     def _mirror(lp, rt):
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
-        new_impl = _ce.TensorImpl(
-            rt.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+        new_impl = _C_engine.TensorImpl(
+            rt.detach().numpy().astype(np.float32), _C_engine.Device.CPU, False
         )
         lp._impl = _iwg(new_impl, lp._impl.requires_grad)
 
@@ -1033,11 +1033,11 @@ class TestLSTMProjSizeParity:
 
     @staticmethod
     def _mirror(lucid_param, ref_t):
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
-        new_impl = _ce.TensorImpl(
-            ref_t.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+        new_impl = _C_engine.TensorImpl(
+            ref_t.detach().numpy().astype(np.float32), _C_engine.Device.CPU, False
         )
         lucid_param._impl = _iwg(new_impl, lucid_param._impl.requires_grad)
 
@@ -1101,14 +1101,14 @@ class TestLSTMMultiLayerParity:
 
     @staticmethod
     def _mirror_state_dict(l_mod, t_mod):
-        from lucid._C import engine as _ce
+        from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import _impl_with_grad as _iwg
 
         sd = t_mod.state_dict()
         for key, t in sd.items():
             lp = getattr(l_mod, key)
-            new_impl = _ce.TensorImpl(
-                t.detach().numpy().astype(np.float32), _ce.Device.CPU, False
+            new_impl = _C_engine.TensorImpl(
+                t.detach().numpy().astype(np.float32), _C_engine.Device.CPU, False
             )
             lp._impl = _iwg(new_impl, lp._impl.requires_grad)
 

@@ -37,12 +37,12 @@ class TestAstype:
         assert out.dtype == lucid.float32
 
     def test_astype_free_fn(self):
-        from lucid._C import engine as e
+        from lucid._C import engine as _C_engine
 
         t = make_tensor((4,))
         impl = t._impl
-        out = e.astype(impl, e.F64)
-        assert out.dtype == e.F64
+        out = _C_engine.astype(impl, _C_engine.F64)
+        assert out.dtype == _C_engine.F64
 
     def test_values_preserved_f32_to_f64(self):
         t = lucid.tensor([1.5, 2.5, 3.5], dtype=lucid.float32)

@@ -13,10 +13,6 @@ from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 
-if TYPE_CHECKING:
-    pass
-
-
 # ── Allowed types for weights_only=True ──────────────────────────────────────
 
 _SAFE_CLASSES = frozenset(
