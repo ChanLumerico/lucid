@@ -84,7 +84,9 @@ class TestEmbeddingContract:
         m = nn.Embedding(5, 4, padding_idx=2)
         rng = np.random.default_rng(0)
         W = rng.standard_normal((5, 4)).astype(np.float32)
-        m.weight._impl = _iwg(_C_engine.TensorImpl(W, _C_engine.Device.CPU, False), True)
+        m.weight._impl = _iwg(
+            _C_engine.TensorImpl(W, _C_engine.Device.CPU, False), True
+        )
         x = lucid.tensor([0, 2, 1, 2, 0], dtype=lucid.int32)
         out = m(x)
         out.sum().backward()

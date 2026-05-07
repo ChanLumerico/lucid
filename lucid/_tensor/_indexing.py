@@ -540,8 +540,9 @@ def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
     return _wrap(_advanced_getitem(impl, expanded))
 
 
-def _dim_indicator(size: int, positions_impl: _C_engine.TensorImpl,
-                   device) -> _C_engine.TensorImpl:
+def _dim_indicator(
+    size: int, positions_impl: _C_engine.TensorImpl, device
+) -> _C_engine.TensorImpl:
     """
     Build a 1-D float indicator of length ``size``:
     1.0 at positions listed in ``positions_impl`` (int32), 0.0 elsewhere.
@@ -579,8 +580,8 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
         reshape back.
     """
     device = t._impl.device
-    shape  = list(t._impl.shape)
-    ndim   = len(shape)
+    shape = list(t._impl.shape)
+    ndim = len(shape)
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -602,7 +603,8 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
         if isinstance(item, int):
             k = item if item >= 0 else d + item
             dim_pos[tensor_dim] = _to_i32(
-                _C_engine.full([1], float(k), _C_engine.I32, device))
+                _C_engine.full([1], float(k), _C_engine.I32, device)
+            )
             tensor_dim += 1
 
         elif isinstance(item, slice):
@@ -615,14 +617,17 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
                 nz = _C_engine.nonzero(item_impl)  # (n_true, k)
                 k_dims = nz.shape[1] if len(nz.shape) > 1 else 1
                 for kd in range(k_dims):
-                    col = (_C_engine.squeeze(nz, 1) if k_dims == 1 else
-                           _C_engine.squeeze(
-                               _C_engine.split_at(nz, [kd, kd + 1], 1)[1], 1))
+                    col = (
+                        _C_engine.squeeze(nz, 1)
+                        if k_dims == 1
+                        else _C_engine.squeeze(
+                            _C_engine.split_at(nz, [kd, kd + 1], 1)[1], 1
+                        )
+                    )
                     dim_pos[tensor_dim] = _to_i32(col)
                     tensor_dim += 1
             else:
-                dim_pos[tensor_dim] = _to_i32(
-                    _C_engine.reshape(item_impl, [-1]))
+                dim_pos[tensor_dim] = _to_i32(_C_engine.reshape(item_impl, [-1]))
                 tensor_dim += 1
         else:
             raise IndexError(f"Unsupported __setitem__ index: {type(item).__name__}")
@@ -638,13 +643,14 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
         mask_impl = _C_engine.full(shape, 1.0, _C_engine.F32, device)
         for d, pos in dim_pos.items():
             ind = _dim_indicator(shape[d], pos, device)
-            rs  = [1] * ndim; rs[d] = shape[d]
+            rs = [1] * ndim
+            rs[d] = shape[d]
             ind_bc = _C_engine.broadcast_to(_C_engine.reshape(ind, rs), shape)
             mask_impl = _C_engine.mul(mask_impl, ind_bc)
         val_full = _C_engine.full(shape, float(value), t._impl.dtype, device)
-        half     = _C_engine.full(shape, 0.5, _C_engine.F32, device)
-        cond     = _C_engine.greater(mask_impl, half)
-        t._impl  = _C_engine.where(cond, val_full, t._impl)
+        half = _C_engine.full(shape, 0.5, _C_engine.F32, device)
+        cond = _C_engine.greater(mask_impl, half)
+        t._impl = _C_engine.where(cond, val_full, t._impl)
         return
 
     # ── tensor path: flat-index scatter ──────────────────────────────────────
@@ -668,12 +674,15 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     for d in range(ndim):
         pos = dim_pos[d]  # shape (n_d,)
         # Scale by stride
-        stride_tensor = _C_engine.full(pos.shape, float(strides[d]), _C_engine.I32, device)
+        stride_tensor = _C_engine.full(
+            pos.shape, float(strides[d]), _C_engine.I32, device
+        )
         scaled = _C_engine.mul(pos, stride_tensor)  # (n_d,)
         # Reshape to broadcast along dim d of flat_idx
-        rs = [1] * ndim; rs[d] = grid_shape[d]
+        rs = [1] * ndim
+        rs[d] = grid_shape[d]
         scaled_bc = _C_engine.broadcast_to(_C_engine.reshape(scaled, rs), grid_shape)
-        flat_idx  = _C_engine.add(flat_idx, scaled_bc)
+        flat_idx = _C_engine.add(flat_idx, scaled_bc)
 
     flat_idx_1d = _to_i32(_C_engine.reshape(flat_idx, [-1]))  # (M,)
     M = _prod(grid_shape)
@@ -703,7 +712,7 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     # Engine scatter takes (base, dim, index, src) and REPLACES (not adds).
     # index is same shape as src.
     flat_out = _C_engine.scatter(flat_t, 0, flat_idx_1d, flat_val)
-    t._impl   = _C_engine.reshape(flat_out, shape)
+    t._impl = _C_engine.reshape(flat_out, shape)
 
 
 # Legacy export used in tensor.py (kept for compatibility)

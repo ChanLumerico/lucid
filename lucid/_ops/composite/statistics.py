@@ -256,7 +256,9 @@ def multinomial(input, num_samples: int, replacement: bool = False, *, generator
         w = list(probs_list)
         for _ in range(k):
             if not remaining:
-                raise ValueError("multinomial: not enough elements for sampling without replacement")
+                raise ValueError(
+                    "multinomial: not enough elements for sampling without replacement"
+                )
             (sel,) = random.choices(remaining, weights=w, k=1)
             chosen.append(sel)
             pos = remaining.index(sel)
@@ -325,7 +327,9 @@ def histogram(input, bins=10, range=None, density: bool = False, weight=None):
     if density:
         total = sum(counts)
         if total > 0:
-            counts = [c / (total * (edges[j + 1] - edges[j])) for j, c in enumerate(counts)]
+            counts = [
+                c / (total * (edges[j + 1] - edges[j])) for j, c in enumerate(counts)
+            ]
         hist_t = lucid.tensor(counts, dtype=lucid.float64)
     else:
         hist_t = lucid.tensor(counts, dtype=lucid.int64)

@@ -15,7 +15,6 @@ import lucid
 from lucid._dispatch import _unwrap, _wrap
 import lucid._C.engine as _C_engine
 
-
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
@@ -63,7 +62,9 @@ def index_fill(input, dim: int, index, value: float):
     bcast_shape = [1] * ndim
     bcast_shape[dim] = n
     mask = _wrap(
-        _C_engine.broadcast_to(_C_engine.reshape(indicator, bcast_shape), list(input.shape))
+        _C_engine.broadcast_to(
+            _C_engine.reshape(indicator, bcast_shape), list(input.shape)
+        )
     )
 
     return lucid.where(mask > 0.0, lucid.full_like(input, float(value)), input)

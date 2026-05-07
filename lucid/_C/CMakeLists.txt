@@ -221,6 +221,10 @@ lucid_object_library(
     ops/linalg/LUSolve.cpp
     ops/linalg/HouseholderProduct.cpp
     ops/linalg/LDLFactor.cpp
+    ops/fft/Fftn.cpp
+    ops/fft/Ifftn.cpp
+    ops/fft/Rfftn.cpp
+    ops/fft/Irfftn.cpp
     nn/Linear.cpp
     nn/Dropout.cpp
     nn/LayerNorm.cpp
@@ -269,6 +273,7 @@ lucid_object_library(
     bindings/bind_composite.cpp
     bindings/bind_linalg.cpp
     bindings/bind_einops.cpp
+    bindings/bind_fft.cpp
     bindings/bind.cpp)
 
 add_library(

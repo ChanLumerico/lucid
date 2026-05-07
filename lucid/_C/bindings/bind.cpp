@@ -44,6 +44,7 @@ void register_utils(py::module_& m);
 void register_composite(py::module_& m);
 void register_linalg(py::module_& m);
 void register_einops(py::module_& m);
+void register_fft(py::module_& m);
 }  // namespace lucid::bindings
 
 PYBIND11_MODULE(engine, m) {
@@ -88,6 +89,8 @@ PYBIND11_MODULE(engine, m) {
     lucid::bindings::register_linalg(linalg);
     auto einops = m.def_submodule("einops", "einops-style rearrange/reduce/repeat/einsum.");
     lucid::bindings::register_einops(einops);
+    auto fft = m.def_submodule("fft", "Discrete Fourier transform ops (mlx::core::fft wrappers).");
+    lucid::bindings::register_fft(fft);
 
     // Fused kernel bindings that directly call IBackend dispatch and therefore
     // cannot be separated into their own translation units without exposing

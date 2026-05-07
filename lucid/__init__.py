@@ -155,7 +155,7 @@ __all__ = [
     # ── serialization ─────────────────────────────────────────────────────
     "save", "load",
     # ── subpackages ───────────────────────────────────────────────────────
-    "nn", "optim", "autograd", "linalg",
+    "nn", "optim", "autograd", "linalg", "fft",
     "utils", "amp", "profiler", "einops",
     "metal", "backends", "test",
     # ── public type aliases ───────────────────────────────────────────────
@@ -165,252 +165,91 @@ __all__ = [
 ]
 
 # ── Name sets used by the dispatch table ─────────────────────────────────────
-_FACTORY_NAMES: frozenset[str] = frozenset(
-    [
-        "tensor",
-        "as_tensor",
-        "from_numpy",
-        "zeros",
-        "ones",
-        "empty",
-        "full",
-        "eye",
-        "arange",
-        "linspace",
-        "logspace",
-        "zeros_like",
-        "ones_like",
-        "empty_like",
-        "full_like",
-        "rand",
-        "randn",
-        "randint",
-        "bernoulli",
-        "normal",
-        "rand_like",
-        "randn_like",
-        "manual_seed",
-    ]
-)
+_FACTORY_NAMES: frozenset[str] = frozenset([
+    # ── deterministic ─────────────────────────────────────────────────────
+    "tensor", "as_tensor", "from_numpy",
+    "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
+    "zeros_like", "ones_like", "empty_like", "full_like",
+    # ── random ────────────────────────────────────────────────────────────
+    "rand", "randn", "randint", "bernoulli", "normal",
+    "rand_like", "randn_like", "manual_seed",
+])
 
 _SCATTER_NAMES: frozenset[str] = frozenset(["scatter_add"])
 
-_OPS_NAMES: frozenset[str] = frozenset(
-    [
-        "abs",
-        "neg",
-        "sign",
-        "exp",
-        "log",
-        "log2",
-        "sqrt",
-        "square",
-        "reciprocal",
-        "rsqrt",
-        "floor",
-        "ceil",
-        "round",
-        "sin",
-        "cos",
-        "tan",
-        "arcsin",
-        "arccos",
-        "arctan",
-        "sinh",
-        "cosh",
-        "tanh",
-        "clip",
-        "clamp",
-        "isinf",
-        "isnan",
-        "isfinite",
-        "nan_to_num",
-        "add",
-        "sub",
-        "mul",
-        "div",
-        "pow",
-        "matmul",
-        "tensordot",
-        "maximum",
-        "minimum",
-        "equal",
-        "not_equal",
-        "greater",
-        "greater_equal",
-        "less",
-        "less_equal",
-        "sum",
-        "mean",
-        "max",
-        "min",
-        "prod",
-        "argmax",
-        "argmin",
-        "cumsum",
-        "cumprod",
-        "cummax",
-        "cummin",
-        "erf",
-        "erfinv",
-        "std",
-        "var",
-        "trace",
-        "any",
-        "all",
-        "reshape",
-        "permute",
-        "transpose",
-        "unsqueeze",
-        "squeeze",
-        "flatten",
-        "expand",
-        "broadcast_to",
-        "repeat",
-        "repeat_interleave",
-        "tile",
-        "cat",
-        "stack",
-        "hstack",
-        "vstack",
-        "split",
-        "chunk",
-        "unbind",
-        "gather",
-        "scatter_add",
-        "where",
-        "masked_fill",
-        "pad",
-        "roll",
-        "flip",
-        "fliplr",
-        "flipud",
-        "sort",
-        "argsort",
-        "topk",
-        "nonzero",
-        "unique",
-        "meshgrid",
-        "tril",
-        "triu",
-        "contiguous",
-        "detach",
-        "clone",
-        "ravel",
-        "diagonal",
-        # ── shape / view aliases ──────────────────────────────────────────
-        "view",
-        "concat",
-        "narrow",
-        "movedim",
-        "unflatten",
-        # ── indexing extras ───────────────────────────────────────────────
-        "take",
-        "index_select",
-        "masked_select",
-        "scatter",
-        "kthvalue",
-        # ── comparison free functions ─────────────────────────────────────
-        "eq",
-        "ne",
-        "lt",
-        "le",
-        "gt",
-        "ge",
-        "isclose",
-        # ── logical / bitwise ─────────────────────────────────────────────
-        "logical_and",
-        "logical_or",
-        "logical_xor",
-        "logical_not",
-        "bitwise_not",
-        "bitwise_and",
-        "bitwise_or",
-        "bitwise_xor",
-        # ── math unary extras ─────────────────────────────────────────────
-        "asin",
-        "acos",
-        "atan",
-        "log10",
-        "log1p",
-        "exp2",
-        "trunc",
-        "frac",
-        # ── math binary extras ────────────────────────────────────────────
-        "atan2",
-        "fmod",
-        "remainder",
-        "hypot",
-        "logaddexp",
-        # ── reduction extras ──────────────────────────────────────────────
-        "logsumexp",
-        # ── linear algebra extras ─────────────────────────────────────────
-        "mm",
-        "bmm",
-        "einsum",
-        "kron",
-        # ── stats / search ────────────────────────────────────────────────
-        "searchsorted",
-        "bucketize",
-        "histc",
-        "cartesian_prod",
-    ]
-)
+_OPS_NAMES: frozenset[str] = frozenset([
+    # ── unary math ────────────────────────────────────────────────────────
+    "abs", "neg", "sign",
+    "exp", "exp2", "log", "log2", "log10", "log1p",
+    "sqrt", "square", "reciprocal", "rsqrt",
+    "floor", "ceil", "round", "trunc", "frac",
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan", "asin", "acos", "atan",
+    "sinh", "cosh", "tanh",
+    "clip", "clamp",
+    "isinf", "isnan", "isfinite", "nan_to_num",
+    "erf", "erfinv",
+    # ── binary math ───────────────────────────────────────────────────────
+    "add", "sub", "mul", "div", "pow",
+    "atan2", "fmod", "remainder", "hypot", "logaddexp",
+    "maximum", "minimum",
+    # ── linear algebra ────────────────────────────────────────────────────
+    "matmul", "mm", "bmm", "tensordot", "einsum", "kron",
+    # ── comparison ────────────────────────────────────────────────────────
+    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
+    "eq", "ne", "lt", "le", "gt", "ge", "isclose",
+    # ── logical / bitwise ─────────────────────────────────────────────────
+    "logical_and", "logical_or", "logical_xor", "logical_not",
+    "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+    # ── reduction ─────────────────────────────────────────────────────────
+    "sum", "mean", "max", "min", "prod",
+    "argmax", "argmin", "cumsum", "cumprod", "cummax", "cummin",
+    "std", "var", "trace", "any", "all", "logsumexp",
+    # ── shape / view ──────────────────────────────────────────────────────
+    "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
+    "unflatten", "narrow", "movedim",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
+    "cat", "concat", "stack", "hstack", "vstack",
+    "split", "chunk", "unbind",
+    "ravel", "diagonal", "tril", "triu",
+    "flip", "fliplr", "flipud", "roll", "pad",
+    "contiguous", "detach", "clone",
+    # ── indexing / scatter ────────────────────────────────────────────────
+    "gather", "scatter", "scatter_add",
+    "take", "index_select", "masked_select",
+    "where", "masked_fill",
+    # ── sort / search ─────────────────────────────────────────────────────
+    "sort", "argsort", "topk", "kthvalue",
+    "nonzero", "unique", "meshgrid",
+    "searchsorted", "bucketize", "histc", "cartesian_prod",
+])
 
-_GRAD_NAMES: frozenset[str] = frozenset(
-    [
-        "no_grad",
-        "enable_grad",
-        "is_grad_enabled",
-        "set_grad_enabled",
-        "inference_mode",
-    ]
-)
+_GRAD_NAMES: frozenset[str] = frozenset([
+    "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled", "inference_mode",
+])
 
-_PREDICATE_NAMES: frozenset[str] = frozenset(
-    [
-        "is_tensor",
-        "is_floating_point",
-        "is_complex",
-        "is_signed",
-    ]
-)
+_PREDICATE_NAMES: frozenset[str] = frozenset([
+    "is_tensor", "is_floating_point", "is_complex", "is_signed",
+])
 
 _SERIALIZATION_NAMES: frozenset[str] = frozenset(["save", "load"])
 
-_SUBPKG_NAMES: frozenset[str] = frozenset(
-    [
-        "nn",
-        "optim",
-        "autograd",
-        "linalg",
-        "utils",
-        "amp",
-        "profiler",
-        "einops",
-        "metal",
-        "backends",
-        "test",
-    ]
-)
+_SUBPKG_NAMES: frozenset[str] = frozenset([
+    # ── core ML stack ─────────────────────────────────────────────────────
+    "nn", "optim", "autograd",
+    # ── numerical sub-packages ────────────────────────────────────────────
+    "linalg", "fft",
+    # ── infra / tooling ───────────────────────────────────────────────────
+    "utils", "amp", "profiler", "einops",
+    "metal", "backends", "test",
+])
 
 _METHOD_ALIASES: frozenset[str] = frozenset(["lerp", "diff"])
 
-_TYPE_ALIAS_NAMES: frozenset[str] = frozenset(
-    [
-        "Scalar",
-        "TensorLike",
-        "DeviceLike",
-        "DTypeLike",
-        "ShapeLike",
-        "StateDict",
-        "TensorOrScalar",
-        "HasShape",
-        "SupportsNumpyConversion",
-        "SupportsGrad",
-        "TensorLikeProtocol",
-    ]
-)
+_TYPE_ALIAS_NAMES: frozenset[str] = frozenset([
+    "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
+    "StateDict", "TensorOrScalar",
+    "HasShape", "SupportsNumpyConversion", "SupportsGrad", "TensorLikeProtocol",
+])
 
 # ── Lazy group loaders ────────────────────────────────────────────────────────
 # Each loader is called at most once per interpreter session: it populates
@@ -488,8 +327,16 @@ def _load_predicates() -> dict[str, object]:
     _FLOAT_DTYPES = frozenset([_C_engine.F16, _C_engine.F32, _C_engine.F64])
     _COMPLEX_DTYPES = frozenset([_C_engine.C64])
     _SIGNED_DTYPES = frozenset(
-        [_C_engine.F16, _C_engine.F32, _C_engine.F64, _C_engine.C64,
-         _C_engine.I8, _C_engine.I16, _C_engine.I32, _C_engine.I64]
+        [
+            _C_engine.F16,
+            _C_engine.F32,
+            _C_engine.F64,
+            _C_engine.C64,
+            _C_engine.I8,
+            _C_engine.I16,
+            _C_engine.I32,
+            _C_engine.I64,
+        ]
     )
 
     def is_tensor(obj: object) -> bool:  # type: ignore

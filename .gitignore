@@ -68,3 +68,6 @@ compile_commands.json
 .pyre/
 .pytype/
 docs/_build/
+
+# CLAUDE
+CLAUDE.md
