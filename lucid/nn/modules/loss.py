@@ -4,6 +4,8 @@ Loss function modules.
 
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
+from collections.abc import Callable
+
 from lucid.nn.functional.loss import (
     mse_loss,
     l1_loss,
@@ -23,6 +25,8 @@ from lucid.nn.functional.loss import (
     ctc_loss,
     multi_margin_loss,
     multilabel_margin_loss,
+    soft_margin_loss,
+    multilabel_soft_margin_loss,
 )
 
 
@@ -444,3 +448,99 @@ class MultilabelMarginLoss(Module):
 
     def extra_repr(self) -> str:
         return f"reduction={self.reduction!r}"
+
+
+# ── P4 fill: SoftMargin / MultiLabelSoftMargin / TripletMarginWithDistance ──
+
+
+class SoftMarginLoss(Module):
+    """``log(1 + exp(-target · input))`` averaged per element."""
+
+    def __init__(self, reduction: str = "mean") -> None:
+        super().__init__()
+        self.reduction = reduction
+
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+        return soft_margin_loss(x, target, reduction=self.reduction)
+
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
+
+
+class MultiLabelSoftMarginLoss(Module):
+    """Element-wise binary cross-entropy with logits, averaged across the
+    class dimension — the multi-label soft-margin form."""
+
+    def __init__(
+        self, weight: Tensor | None = None, reduction: str = "mean"
+    ) -> None:
+        super().__init__()
+        self.weight = weight
+        self.reduction = reduction
+
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+        return multilabel_soft_margin_loss(
+            x, target, weight=self.weight, reduction=self.reduction
+        )
+
+    def extra_repr(self) -> str:
+        return f"reduction={self.reduction!r}"
+
+
+class TripletMarginWithDistanceLoss(Module):
+    """Triplet margin loss with a user-supplied distance function.
+
+    Generalises :class:`TripletMarginLoss` — the caller passes a callable
+    ``distance_function(x, y) -> Tensor`` instead of an L_p norm.  Falls
+    back to L₂ when none is provided, matching the reference framework.
+    """
+
+    def __init__(
+        self,
+        distance_function: Callable[[Tensor, Tensor], Tensor] | None = None,
+        margin: float = 1.0,
+        swap: bool = False,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
+        if distance_function is None:
+            from lucid.nn.functional.activations import pairwise_distance
+
+            def _default(a: Tensor, b: Tensor) -> Tensor:
+                return pairwise_distance(a, b, p=2.0)
+
+            self.distance_function: Callable[[Tensor, Tensor], Tensor] = _default
+        else:
+            self.distance_function = distance_function
+        self.margin = margin
+        self.swap = swap
+        self.reduction = reduction
+
+    def forward(
+        self, anchor: Tensor, positive: Tensor, negative: Tensor
+    ) -> Tensor:
+        from lucid._factories.creation import zeros_like
+
+        d_pos = self.distance_function(anchor, positive)
+        d_neg = self.distance_function(anchor, negative)
+        if self.swap:
+            d_swap = self.distance_function(positive, negative)
+            d_neg = d_neg.minimum(d_swap)
+
+        zero = zeros_like(d_pos)
+        loss = (d_pos - d_neg + self.margin).maximum(zero)
+        if self.reduction == "mean":
+            return loss.mean()
+        if self.reduction == "sum":
+            return loss.sum()
+        if self.reduction == "none":
+            return loss
+        raise ValueError(
+            f"TripletMarginWithDistanceLoss: invalid reduction {self.reduction!r}"
+        )
+
+    def extra_repr(self) -> str:
+        return (
+            f"margin={self.margin}, swap={self.swap}, "
+            f"reduction={self.reduction!r}"
+        )

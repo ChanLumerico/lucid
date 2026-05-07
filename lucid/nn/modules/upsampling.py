@@ -6,7 +6,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.nn.functional.sampling import interpolate
+from lucid.nn.functional.sampling import channel_shuffle, interpolate
 
 
 class Upsample(Module):
@@ -132,3 +132,22 @@ class PixelUnshuffle(Module):
 
     def extra_repr(self) -> str:
         return f"downscale_factor={self.downscale_factor}"
+
+
+class ChannelShuffle(Module):
+    """Permute channels in equal-sized groups (ShuffleNet).
+
+    Splits ``C`` channels into ``groups`` chunks, transposes the chunk
+    axis with the within-chunk axis, then flattens back to ``C``.
+    Identity when ``groups == 1``; ``C`` must be divisible by ``groups``.
+    """
+
+    def __init__(self, groups: int) -> None:
+        super().__init__()
+        self.groups = groups
+
+    def forward(self, x: Tensor) -> Tensor:
+        return channel_shuffle(x, groups=self.groups)
+
+    def extra_repr(self) -> str:
+        return f"groups={self.groups}"

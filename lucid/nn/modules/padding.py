@@ -160,3 +160,61 @@ class ReplicationPad3d(Module):
 
     def extra_repr(self) -> str:
         return f"padding={self.padding}"
+
+
+class ReflectionPad3d(Module):
+    """Pad a 5-D tensor using reflection."""
+
+    def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        super().__init__()
+        self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return pad(x, self.padding, mode="reflect")
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"
+
+
+class CircularPad1d(Module):
+    """Pad a 3-D tensor with wrap-around (circular) values."""
+
+    def __init__(self, padding: _Size2d) -> None:
+        super().__init__()
+        self.padding = (
+            (padding, padding) if isinstance(padding, int) else tuple(padding)
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return pad(x, self.padding, mode="circular")
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"
+
+
+class CircularPad2d(Module):
+    """Pad a 4-D tensor with wrap-around (circular) values."""
+
+    def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        super().__init__()
+        self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return pad(x, self.padding, mode="circular")
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"
+
+
+class CircularPad3d(Module):
+    """Pad a 5-D tensor with wrap-around (circular) values."""
+
+    def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        super().__init__()
+        self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return pad(x, self.padding, mode="circular")
+
+    def extra_repr(self) -> str:
+        return f"padding={self.padding}"

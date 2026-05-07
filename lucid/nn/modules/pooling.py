@@ -18,6 +18,11 @@ from lucid.nn.functional.pooling import (
     adaptive_max_pool2d,
     adaptive_max_pool1d,
     adaptive_max_pool3d,
+    max_unpool1d,
+    max_unpool2d,
+    max_unpool3d,
+    fractional_max_pool2d,
+    fractional_max_pool3d,
 )
 
 
@@ -410,4 +415,145 @@ class LPPool2d(Module):
         return (
             f"norm_type={self.norm_type}, kernel_size=({self.kh},{self.kw}), "
             f"stride=({self.sh},{self.sw})"
+        )
+
+
+# ── P4 fill: MaxUnpool / FractionalMaxPool ────────────────────────────────
+
+
+class _MaxUnpoolNd(Module):
+    """Shared base — stores kernel/stride/padding, defers to functional call."""
+
+    def __init__(
+        self,
+        kernel_size: int | tuple[int, ...],
+        stride: int | tuple[int, ...] | None = None,
+        padding: int | tuple[int, ...] = 0,
+    ) -> None:
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride if stride is not None else kernel_size
+        self.padding = padding
+
+    def extra_repr(self) -> str:
+        return (
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}"
+        )
+
+
+class MaxUnpool1d(_MaxUnpoolNd):
+    """Inverse of :class:`MaxPool1d`.  Scatters values back into a sparse
+    tensor at the indices saved by the forward pool."""
+
+    def forward(
+        self,
+        x: Tensor,
+        indices: Tensor,
+        output_size: tuple[int, ...] | None = None,
+    ) -> Tensor:
+        return max_unpool1d(
+            x,
+            indices,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
+            output_size=output_size,
+        )
+
+
+class MaxUnpool2d(_MaxUnpoolNd):
+    """Inverse of :class:`MaxPool2d`."""
+
+    def forward(
+        self,
+        x: Tensor,
+        indices: Tensor,
+        output_size: tuple[int, ...] | None = None,
+    ) -> Tensor:
+        return max_unpool2d(
+            x,
+            indices,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
+            output_size=output_size,
+        )
+
+
+class MaxUnpool3d(_MaxUnpoolNd):
+    """Inverse of :class:`MaxPool3d`."""
+
+    def forward(
+        self,
+        x: Tensor,
+        indices: Tensor,
+        output_size: tuple[int, ...] | None = None,
+    ) -> Tensor:
+        return max_unpool3d(
+            x,
+            indices,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
+            output_size=output_size,
+        )
+
+
+class FractionalMaxPool2d(Module):
+    """Fractional max-pooling over a 2-D spatial input.
+
+    Stub matching the reference framework's surface — the engine has no
+    return-indices random-pool path yet, so calls raise
+    :class:`NotImplementedError`.  Wired here so model code that
+    *imports* the module loads cleanly.
+    """
+
+    def __init__(
+        self,
+        kernel_size: int | tuple[int, int],
+        output_size: int | tuple[int, int] | None = None,
+        output_ratio: float | tuple[float, float] | None = None,
+        return_indices: bool = False,
+    ) -> None:
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.output_size = output_size
+        self.output_ratio = output_ratio
+        self.return_indices = return_indices
+
+    def forward(self, x: Tensor) -> Tensor:
+        return fractional_max_pool2d(
+            x,
+            kernel_size=self.kernel_size,
+            output_size=self.output_size,
+            output_ratio=self.output_ratio,
+            return_indices=self.return_indices,
+        )
+
+
+class FractionalMaxPool3d(Module):
+    """Fractional max-pooling over a 3-D spatial input — stub (see
+    :class:`FractionalMaxPool2d`)."""
+
+    def __init__(
+        self,
+        kernel_size: int | tuple[int, int, int],
+        output_size: int | tuple[int, int, int] | None = None,
+        output_ratio: float | tuple[float, float, float] | None = None,
+        return_indices: bool = False,
+    ) -> None:
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.output_size = output_size
+        self.output_ratio = output_ratio
+        self.return_indices = return_indices
+
+    def forward(self, x: Tensor) -> Tensor:
+        return fractional_max_pool3d(
+            x,
+            kernel_size=self.kernel_size,
+            output_size=self.output_size,
+            output_ratio=self.output_ratio,
+            return_indices=self.return_indices,
         )

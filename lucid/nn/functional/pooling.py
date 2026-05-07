@@ -421,8 +421,8 @@ def max_unpool3d(
 def fractional_max_pool2d(
     x: Tensor,
     kernel_size: int | tuple[int, int],
-    output_size: tuple[int, int] | None = None,
-    output_ratio: tuple[float, float] | None = None,
+    output_size: int | tuple[int, int] | None = None,
+    output_ratio: float | tuple[float, float] | None = None,
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
 ) -> Tensor:
@@ -443,8 +443,8 @@ def fractional_max_pool2d(
 def fractional_max_pool3d(
     x: Tensor,
     kernel_size: int | tuple[int, int, int],
-    output_size: tuple[int, int, int] | None = None,
-    output_ratio: tuple[float, float, float] | None = None,
+    output_size: int | tuple[int, int, int] | None = None,
+    output_ratio: float | tuple[float, float, float] | None = None,
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
 ) -> Tensor:
