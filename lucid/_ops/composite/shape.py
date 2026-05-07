@@ -164,6 +164,86 @@ def take_along_dim(x: Tensor, indices: Tensor, dim: int) -> Tensor:
     return lucid.gather(x, indices, dim)
 
 
+def tril_indices(
+    row: int,
+    col: int | None = None,
+    offset: int = 0,
+    *,
+    dtype: object = None,
+    device: object = None,
+) -> Tensor:
+    """Indices of the lower-triangular part of an ``(row, col)`` matrix.
+
+    Returns a 2-row tensor where row 0 holds row indices and row 1 holds
+    column indices, in row-major order.  ``offset`` shifts the diagonal
+    (positive = above, negative = below the main).
+    """
+    if col is None:
+        col = row
+    rows: list[int] = []
+    cols: list[int] = []
+    for i in range(row):
+        for j in range(col):
+            if j - i <= offset:
+                rows.append(i)
+                cols.append(j)
+    out_dtype = dtype if dtype is not None else lucid.int64
+    return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
+
+
+def triu_indices(
+    row: int,
+    col: int | None = None,
+    offset: int = 0,
+    *,
+    dtype: object = None,
+    device: object = None,
+) -> Tensor:
+    """Indices of the upper-triangular part of an ``(row, col)`` matrix.
+
+    Mirrors :func:`tril_indices` with the inequality flipped: keeps
+    entries where ``j - i >= offset``.
+    """
+    if col is None:
+        col = row
+    rows: list[int] = []
+    cols: list[int] = []
+    for i in range(row):
+        for j in range(col):
+            if j - i >= offset:
+                rows.append(i)
+                cols.append(j)
+    out_dtype = dtype if dtype is not None else lucid.int64
+    return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
+
+
+def combinations(
+    input: Tensor,
+    r: int = 2,
+    with_replacement: bool = False,
+) -> Tensor:
+    """All ``r``-length combinations of the elements of a 1-D ``input``.
+
+    Returns shape ``(C, r)`` where ``C = C(n, r)`` (or ``C(n+r-1, r)``
+    when ``with_replacement=True``).  Output dtype follows ``input``.
+    """
+    import itertools as _it
+
+    if input.ndim != 1:
+        raise ValueError("combinations: input must be 1-D")
+    n = int(input.shape[0])
+    py_vals = [input[i].item() for i in range(n)]
+    iterator = (
+        _it.combinations_with_replacement(py_vals, r)
+        if with_replacement
+        else _it.combinations(py_vals, r)
+    )
+    rows = [list(combo) for combo in iterator]
+    if not rows:
+        return lucid.zeros(0, r, dtype=input.dtype, device=input.device)
+    return lucid.tensor(rows, dtype=input.dtype, device=input.device)
+
+
 def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     """Rotate by 90° in the plane defined by ``dims``, ``k`` times."""
     d0, d1 = dims[0], dims[1]
@@ -194,5 +274,8 @@ __all__ = [
     "dsplit",
     "tensor_split",
     "take_along_dim",
+    "tril_indices",
+    "triu_indices",
+    "combinations",
     "rot90",
 ]

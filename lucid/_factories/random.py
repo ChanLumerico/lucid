@@ -141,3 +141,31 @@ def randn_like(
 
 
 from lucid._factories.creation import _size_to_list
+
+
+def randperm(
+    n: int,
+    *,
+    generator: _C_engine.Generator | None = None,
+    dtype: DTypeLike = int64,
+    device: DeviceLike = None,
+    requires_grad: bool = False,
+) -> Tensor:
+    """Return a random permutation of integers in ``[0, n)``.
+
+    Implemented as ``argsort(rand(n))`` — the lottery-ticket trick: each
+    element gets a uniform random key, and the argsort of those keys is
+    a uniformly random permutation.  Output is int64 by default to match
+    the standard reference framework.
+    """
+    if n < 0:
+        raise ValueError(f"randperm requires n >= 0, got {n}")
+    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
+    if n == 0:
+        impl = _C_engine.zeros([0], _dt, _dev)
+        return _wrap(_impl_with_grad(impl, requires_grad) if requires_grad else impl)
+    keys_impl = _C_engine.rand([n], _C_engine.F32, _dev, _get_gen(generator))
+    perm_impl = _C_engine.argsort(keys_impl, -1)
+    if perm_impl.dtype != _dt:
+        perm_impl = _C_engine.astype(perm_impl, _dt)
+    return _wrap(_impl_with_grad(perm_impl, requires_grad) if requires_grad else perm_impl)

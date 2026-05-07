@@ -67,4 +67,25 @@ def nanmedian(
     return out if keepdim else out.squeeze(dim)
 
 
-__all__ = ["nansum", "nanmean", "nanmedian"]
+def count_nonzero(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+) -> Tensor:
+    """Count non-zero elements along ``dim`` (or whole tensor when ``None``).
+
+    Output dtype is int64 — the count semantics match the reference
+    framework's ``torch.count_nonzero``.
+
+    The current CpuBackend lacks ``where(bool, i64, i64)`` and
+    ``astype(bool → i64)``; we work in F32 (a 1.0/0.0 mask), reduce, then
+    cast the resulting scalar / tensor to int64 via ``astype(F32 → I64)``,
+    which the backend does support.
+    """
+    one_f = lucid.ones_like(x, dtype=lucid.float32)
+    zero_f = lucid.zeros_like(x, dtype=lucid.float32)
+    mask = lucid.where(x != lucid.zeros_like(x), one_f, zero_f)
+    counts = lucid.sum(mask) if dim is None else lucid.sum(mask, dim, False)
+    return counts.to(dtype=lucid.int64)
+
+
+__all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero"]

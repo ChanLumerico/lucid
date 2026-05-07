@@ -197,6 +197,35 @@ def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
     return input * lucid.exp(exponent * math.log(2.0))
 
 
+def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
+    """Decompose ``input`` into mantissa ``m`` and exponent ``e`` such that
+    ``input = m * 2**e`` with ``|m|`` in ``[0.5, 1)`` (or ``m == 0``).
+
+    Returns a ``(mantissa, exponent)`` tuple.  Exponent dtype is int32.
+    Non-finite inputs propagate: NaN → (NaN, 0); ±inf → (±inf, 0); 0 → (0, 0).
+    """
+    abs_x = lucid.abs(input)
+    is_zero = abs_x == 0.0
+    is_nonfinite = lucid.logical_or(lucid.isinf(input), lucid.isnan(input))
+    safe_abs = lucid.where(
+        lucid.logical_or(is_zero, is_nonfinite),
+        lucid.full_like(input, 1.0),
+        abs_x,
+    )
+    # e = floor(log2(|x|)) + 1 puts |m| in [0.5, 1).
+    e_float = lucid.floor(lucid.log2(safe_abs)) + 1.0
+    e_float = lucid.where(
+        lucid.logical_or(is_zero, is_nonfinite),
+        lucid.full_like(e_float, 0.0),
+        e_float,
+    )
+    m = input * lucid.exp(-e_float * math.log(2.0))
+    m = lucid.where(is_zero, lucid.full_like(m, 0.0), m)
+    m = lucid.where(is_nonfinite, input, m)
+    e_i32 = e_float.to(dtype=lucid.int32)
+    return m, e_i32
+
+
 # ── Integer math (non-differentiable) ────────────────────────────────────
 
 
@@ -354,6 +383,7 @@ __all__ = [
     "erfc",
     "copysign",
     "ldexp",
+    "frexp",
     "gcd",
     "lcm",
     "lgamma",

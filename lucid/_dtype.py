@@ -89,3 +89,104 @@ def to_engine_dtype(
             return _NAME_TO_DTYPE[name]._engine
         raise ValueError(f"Unknown dtype string: {d!r}")
     raise TypeError(f"Cannot convert {type(d).__name__} to engine Dtype")
+
+
+# ── finfo / iinfo ────────────────────────────────────────────────────────────
+
+
+import dataclasses as _dc
+
+
+def _resolve_dtype_name(d: "dtype | _C_engine.Dtype | str") -> str:  # type: ignore[name-defined]
+    """Map any dtype-like input to its canonical lucid dtype name.
+
+    Used by ``finfo`` / ``iinfo`` to discriminate ``float16`` from
+    ``bfloat16`` (both share engine enum ``F16``) and to produce the
+    user-facing ``dtype: str`` field on the info objects.
+    """
+    if isinstance(d, dtype):
+        return d._name
+    if isinstance(d, str):
+        name = d.lower()
+        if name in _NAME_TO_DTYPE:
+            return _NAME_TO_DTYPE[name]._name
+        raise ValueError(f"Unknown dtype string: {d!r}")
+    # Engine Dtype enum — best-effort reverse lookup (loses bfloat16/float16
+    # distinction; both report ``float16``).
+    if isinstance(d, _C_engine.Dtype):
+        for nm, lucid_dt in _NAME_TO_DTYPE.items():
+            if lucid_dt._engine == d:
+                return lucid_dt._name
+    raise TypeError(f"Cannot resolve dtype name for {type(d).__name__}: {d!r}")
+
+
+@_dc.dataclass(frozen=True)
+class finfo:
+    """Floating-point dtype info — mirrors ``numpy.finfo`` / ``torch.finfo``.
+
+    Constructed from a floating dtype (``float16`` / ``bfloat16`` /
+    ``float32`` / ``float64``).
+    """
+
+    bits: int = 0
+    eps: float = 0.0
+    max: float = 0.0
+    min: float = 0.0
+    tiny: float = 0.0
+    smallest_normal: float = 0.0
+    resolution: float = 0.0
+    dtype: str = ""
+
+    def __init__(self, dt: "dtype | _C_engine.Dtype | str") -> None:  # type: ignore[name-defined]
+        # Resolve to a lucid dtype name first — bfloat16 and float16 share the
+        # same engine enum (F16), so we can't distinguish them via the engine.
+        name = _resolve_dtype_name(dt)
+        table: dict[str, tuple[int, float, float, float, float, float]] = {
+            "float64": (64, 2.220446049250313e-16, 1.7976931348623157e308,
+                        -1.7976931348623157e308, 2.2250738585072014e-308, 1e-15),
+            "float32": (32, 1.1920929e-7, 3.4028235e38,
+                        -3.4028235e38, 1.1754944e-38, 1e-6),
+            "float16": (16, 9.7656e-4, 65504.0, -65504.0, 6.1035e-5, 1e-3),
+            "bfloat16": (16, 7.8125e-3, 3.3895314e38,
+                         -3.3895314e38, 1.1754944e-38, 1e-2),
+        }
+        if name not in table:
+            raise TypeError(f"finfo expects a floating dtype, got {dt!r}")
+        bits, eps, mx, mn, tiny, res = table[name]
+        object.__setattr__(self, "bits", bits)
+        object.__setattr__(self, "eps", eps)
+        object.__setattr__(self, "max", mx)
+        object.__setattr__(self, "min", mn)
+        object.__setattr__(self, "tiny", tiny)
+        object.__setattr__(self, "smallest_normal", tiny)
+        object.__setattr__(self, "resolution", res)
+        object.__setattr__(self, "dtype", name)
+
+
+@_dc.dataclass(frozen=True)
+class iinfo:
+    """Integer dtype info — mirrors ``numpy.iinfo`` / ``torch.iinfo``.
+
+    Constructed from an integer dtype (``int8`` / ``int16`` / ``int32`` / ``int64``).
+    """
+
+    bits: int = 0
+    max: int = 0
+    min: int = 0
+    dtype: str = ""
+
+    def __init__(self, dt: "dtype | _C_engine.Dtype | str") -> None:  # type: ignore[name-defined]
+        name = _resolve_dtype_name(dt)
+        table: dict[str, tuple[int, int, int]] = {
+            "int8":  (8, -(2**7), 2**7 - 1),
+            "int16": (16, -(2**15), 2**15 - 1),
+            "int32": (32, -(2**31), 2**31 - 1),
+            "int64": (64, -(2**63), 2**63 - 1),
+        }
+        if name not in table:
+            raise TypeError(f"iinfo expects an integer dtype, got {dt!r}")
+        bits, lo, hi = table[name]
+        object.__setattr__(self, "bits", bits)
+        object.__setattr__(self, "min", lo)
+        object.__setattr__(self, "max", hi)
+        object.__setattr__(self, "dtype", name)

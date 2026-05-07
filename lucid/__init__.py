@@ -48,12 +48,40 @@ from lucid._dtype import (
     bool_   as bool,    # lucid.bool   == bool_   == bool_
 )
 from lucid._device import device
+from lucid._dtype import finfo, iinfo
 from lucid._globals import (
     set_default_dtype,
     get_default_dtype,
     set_default_device,
     get_default_device,
 )
+from lucid._threads import (
+    set_num_threads,
+    get_num_threads,
+    set_num_interop_threads,
+    get_num_interop_threads,
+)
+
+
+# ── Determinism (top-level reference-framework names) ───────────────────────
+# The engine already exposes ``set_deterministic`` / ``is_deterministic``;
+# wrap them under the standard ``use_deterministic_algorithms`` /
+# ``are_deterministic_algorithms_enabled`` names without an alias hop.
+def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # noqa: F821
+    """Globally toggle deterministic kernel selection.
+
+    Lucid does not ship a separate ``warn_only`` mode — callers either get
+    deterministic kernels or they don't.  The kwarg is accepted for API
+    compatibility and ignored.
+    """
+    # ``bool`` here resolves to ``lucid.bool`` (the dtype alias) — use the
+    # builtin saved at module top.
+    _C_engine.set_deterministic(_py_bool(mode))
+
+
+def are_deterministic_algorithms_enabled() -> bool:  # noqa: F821
+    """Return whether deterministic kernel selection is currently active."""
+    return _py_bool(_C_engine.is_deterministic())
 
 # ── Public API ────────────────────────────────────────────────────────────────
 # Organised by category — mirrors the standard tensor framework surface.
@@ -72,6 +100,13 @@ __all__ = [
     "device",
     "set_default_dtype", "get_default_dtype",
     "set_default_device", "get_default_device",
+    # ── dtype info ────────────────────────────────────────────────────────
+    "finfo", "iinfo",
+    # ── threading (advisory — see lucid/_threads.py) ──────────────────────
+    "set_num_threads", "get_num_threads",
+    "set_num_interop_threads", "get_num_interop_threads",
+    # ── determinism ───────────────────────────────────────────────────────
+    "use_deterministic_algorithms", "are_deterministic_algorithms_enabled",
     # ── core tensor ───────────────────────────────────────────────────────
     "Tensor",
     # ── factory — deterministic ───────────────────────────────────────────
@@ -80,7 +115,7 @@ __all__ = [
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── factory — random ──────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
-    "rand_like", "randn_like", "manual_seed",
+    "rand_like", "randn_like", "manual_seed", "randperm",
     # ── ops — unary ───────────────────────────────────────────────────────
     "abs", "neg", "sign",
     "exp", "exp2", "log", "log2", "log10", "log1p",
@@ -89,6 +124,7 @@ __all__ = [
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
+    "relu", "sigmoid",
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
@@ -171,7 +207,7 @@ _FACTORY_NAMES: frozenset[str] = frozenset([
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── random ────────────────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
-    "rand_like", "randn_like", "manual_seed",
+    "rand_like", "randn_like", "manual_seed", "randperm",
 ])
 
 _SCATTER_NAMES: frozenset[str] = frozenset(["scatter_add"])
@@ -184,6 +220,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "floor", "ceil", "round", "trunc", "frac",
     "sin", "cos", "tan", "arcsin", "arccos", "arctan", "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
+    "relu", "sigmoid",
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     "erf", "erfinv",
