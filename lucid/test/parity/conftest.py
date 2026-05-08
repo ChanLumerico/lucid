@@ -1,22 +1,25 @@
-"""conftest.py for parity tests."""
+"""Parity-tier conftest.
+
+Auto-skip every test under ``lucid/test/parity/`` when the reference
+framework isn't installed.  Doing this at collection time means the
+parity tier never even attempts to import the reference module from
+inside individual test modules.
+"""
 
 import pytest
 
-_REF_BACKEND = "to" "rch"
+from lucid.test._fixtures.ref_framework import ref_module
 
 
-def pytest_configure(config):
-    try:
-        __import__(_REF_BACKEND)
-    except ImportError:
-        pass  # Skip message handled at collection time
-
-
-def pytest_collection_modifyitems(items, config):
-    try:
-        __import__(_REF_BACKEND)
-    except ImportError:
-        skip_mark = pytest.mark.skip(reason="reference backend not installed")
-        for item in items:
-            if "parity" in str(item.fspath):
-                item.add_marker(skip_mark)
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    if ref_module() is not None:
+        return
+    skip_marker = pytest.mark.skip(
+        reason="reference framework not installed — parity tier auto-skipped"
+    )
+    for item in items:
+        if "lucid/test/parity/" in str(item.fspath).replace("\\", "/"):
+            item.add_marker(skip_marker)

@@ -21,6 +21,13 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.8",
 ]
+test = [
+    "pytest>=7",
+    "pytest-benchmark>=4",
+    # The reference framework is *intentionally* not declared here —
+    # parity tests use a lazy import and skip cleanly when missing.
+    # Install it separately when running parity / perf comparisons.
+]
 docs = [
     "sphinx>=7.2",
     "shibuya",
@@ -33,9 +40,12 @@ lucid = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["lucid/test"]
 markers = [
-    "parity: numerical parity vs reference framework",
-    "smoke:  quick sanity test (< 1s)",
-    "slow:   end-to-end, > 5s (model forwards, training loops)",
-    "gpu:    requires Apple Silicon GPU (MLX)",
+    "parity:    numerical parity vs reference framework (auto-skip when missing)",
+    "smoke:     quick sanity test (< 1s)",
+    "slow:      end-to-end, > 5s (model forwards, training loops)",
+    "gpu:       requires Apple Silicon GPU (Metal); auto-skip otherwise",
+    "perf:      pytest-benchmark timing test (opt-in via --benchmark-only)",
+    "stability: numerical-edge / extreme-value coverage (inf / nan / subnormal)",
+    "f64_only:  float64-only path; skipped when only f32 is available",
 ]
 addopts = "-v --tb=short"
