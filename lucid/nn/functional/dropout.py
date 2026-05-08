@@ -23,6 +23,13 @@ def dropout(
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 
+def dropout1d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
+    """Randomly zero entire 1-D feature maps (channels) of an
+    ``(N, C, L)`` input.  Uses the same engine kernel as ``dropout2d`` /
+    ``dropout3d`` — channel-wise masking is rank-agnostic."""
+    return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
+
+
 def dropout2d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
     """Randomly zero entire channels with probability p during training."""
     return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))

@@ -335,6 +335,52 @@ def triplet_margin_loss(
     return _apply_reduction(loss, reduction)
 
 
+def triplet_margin_with_distance_loss(
+    anchor: Tensor,
+    positive: Tensor,
+    negative: Tensor,
+    distance_function: object | None = None,
+    margin: float = 1.0,
+    swap: bool = False,
+    reduction: str = "mean",
+) -> Tensor:
+    """Triplet margin loss with a user-supplied distance callable.
+
+    ``distance_function(x, y) -> Tensor`` defaults to L₂ pairwise
+    distance (matches the reference framework).  When ``swap=True`` the
+    "anchor-swap" trick from Balntas et al. 2016 is applied: replace
+    ``d(a, n)`` with ``min(d(a, n), d(p, n))`` so the harder negative
+    drives the gradient.
+
+    The Lucid module wrapper :class:`lucid.nn.TripletMarginWithDistanceLoss`
+    forwards into this function — kept here so callers can use the
+    functional surface directly.
+    """
+    import lucid as _l
+    from lucid.nn.functional.activations import pairwise_distance
+
+    df: object = distance_function
+    if df is None:
+        def df(a: Tensor, b: Tensor) -> Tensor:  # type: ignore[no-redef]
+            return pairwise_distance(a, b, p=2.0)
+
+    d_ap: Tensor = df(anchor, positive)  # type: ignore[operator]
+    d_an: Tensor = df(anchor, negative)  # type: ignore[operator]
+    if swap:
+        d_pn: Tensor = df(positive, negative)  # type: ignore[operator]
+        d_an = d_an.minimum(d_pn)
+
+    zero: Tensor = _l.zeros_like(d_ap)
+    loss_t: Tensor = (d_ap - d_an + margin).maximum(zero)
+
+    _validate_reduction(reduction)
+    if reduction == "mean":
+        return loss_t.mean()
+    if reduction == "sum":
+        return loss_t.sum()
+    return loss_t
+
+
 def cosine_embedding_loss(
     x1: Tensor,
     x2: Tensor,

@@ -329,6 +329,25 @@ def lp_pool2d(
     )
 
 
+def lp_pool3d(
+    x: Tensor,
+    norm_type: float,
+    kernel_size: int | tuple[int, int, int],
+    stride: int | tuple[int, int, int] | None = None,
+    ceil_mode: bool = False,
+) -> Tensor:
+    """3-D power-average pooling: ``(avg_pool3d(|x|^p) · K)^(1/p)``."""
+    return _lp_pool(
+        x,
+        norm_type,
+        avg_pool3d,
+        kernel_size=kernel_size,
+        stride=stride,
+        ceil_mode=ceil_mode,
+        n=3,
+    )
+
+
 def _scatter_unpool(
     x: Tensor,
     indices: Tensor,

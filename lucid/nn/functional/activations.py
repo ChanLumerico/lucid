@@ -409,3 +409,76 @@ def threshold(
     keep = x > threshold
     replacement = _l.full_like(x, float(value))
     return _l.where(keep, x, replacement)
+
+
+def gumbel_softmax(
+    logits: Tensor,
+    tau: float = 1.0,
+    hard: bool = False,
+    dim: int = -1,
+) -> Tensor:
+    """Gumbel-Softmax — differentiable relaxation of categorical sampling.
+
+    Draws ``g ∼ Gumbel(0, 1)`` (via ``-log(-log U)`` from a uniform), adds
+    it to ``logits``, and softmaxes by temperature ``tau``.  When
+    ``hard=True``, the output is straight-through-estimator one-hot:
+    forward pass picks ``argmax``, backward pass uses the soft gradients.
+
+    Mirrors the reference framework's contract — used heavily in
+    discrete-action RL and VQ training.
+    """
+    import lucid as _l
+
+    # Sample Gumbel noise: −log(−log U) with U ∈ (0, 1).  Clamp away
+    # from the boundaries to avoid log(0).
+    u: Tensor = _l.rand(
+        *tuple(int(s) for s in logits.shape),
+        dtype=logits.dtype,
+        device=logits.device,
+    ).clip(1e-7, 1.0 - 1e-7)
+    gumbel: Tensor = -(-(u.log())).log()
+
+    y_soft: Tensor = softmax((logits + gumbel) / tau, dim=dim)
+
+    if not hard:
+        return y_soft
+
+    # Straight-through: build a one-hot at argmax, then re-attach
+    # ``y_soft``'s gradient via ``y_hard − y_soft.detach() + y_soft``.
+    idx: Tensor = y_soft.argmax(dim=dim, keepdim=True)
+    y_hard: Tensor = _l.zeros_like(y_soft)
+    y_hard = y_hard.scatter(dim, idx, _l.ones_like(idx, dtype=y_soft.dtype))
+    return y_hard - y_soft.detach() + y_soft
+
+
+def rrelu(
+    x: Tensor,
+    lower: float = 1.0 / 8.0,
+    upper: float = 1.0 / 3.0,
+    training: bool = False,
+    inplace: bool = False,
+) -> Tensor:
+    """Randomized leaky ReLU.
+
+    Per the original Empirical Evaluation paper (Xu et al. 2015):
+
+      * **Training**: each negative element gets a per-element slope drawn
+        uniformly from ``[lower, upper]``.
+      * **Eval**: negatives are scaled by the fixed midpoint
+        ``(lower + upper) / 2`` — the expectation of the training slope.
+
+    ``inplace`` is accepted for API compatibility and ignored.
+    """
+    import lucid as _l
+
+    if training:
+        # Per-element uniform slope, only applied where x < 0.
+        slope: Tensor = _l.rand(
+            *tuple(int(s) for s in x.shape), dtype=x.dtype, device=x.device
+        ) * (upper - lower) + lower
+    else:
+        # Constant midpoint slope.
+        mid: float = 0.5 * (lower + upper)
+        slope = _l.full_like(x, mid)
+    neg_part: Tensor = slope * x
+    return _l.where(x >= 0, x, neg_part)

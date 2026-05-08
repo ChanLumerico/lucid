@@ -450,6 +450,16 @@ class MultilabelMarginLoss(Module):
         return f"reduction={self.reduction!r}"
 
 
+# CamelCase alias for parity with the reference framework's
+# ``MultiLabelMarginLoss`` (capital ``L``).  Kept as a subclass rather
+# than a simple ``= MultilabelMarginLoss`` so ``__name__`` and
+# ``__repr__`` carry the canonical name.
+class MultiLabelMarginLoss(MultilabelMarginLoss):
+    """CamelCase alias for :class:`MultilabelMarginLoss` — provided so
+    ``nn.MultiLabelMarginLoss`` (the reference framework's spelling)
+    resolves to the same implementation.  No behavioural difference."""
+
+
 # ── P4 fill: SoftMargin / MultiLabelSoftMargin / TripletMarginWithDistance ──
 
 
@@ -515,24 +525,18 @@ class TripletMarginWithDistanceLoss(Module):
         self.reduction = reduction
 
     def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
-        from lucid._factories.creation import zeros_like
+        # Delegate to the functional implementation so the F. and nn.
+        # surfaces stay byte-equivalent.
+        from lucid.nn.functional.loss import triplet_margin_with_distance_loss
 
-        d_pos = self.distance_function(anchor, positive)
-        d_neg = self.distance_function(anchor, negative)
-        if self.swap:
-            d_swap = self.distance_function(positive, negative)
-            d_neg = d_neg.minimum(d_swap)
-
-        zero = zeros_like(d_pos)
-        loss = (d_pos - d_neg + self.margin).maximum(zero)
-        if self.reduction == "mean":
-            return loss.mean()
-        if self.reduction == "sum":
-            return loss.sum()
-        if self.reduction == "none":
-            return loss
-        raise ValueError(
-            f"TripletMarginWithDistanceLoss: invalid reduction {self.reduction!r}"
+        return triplet_margin_with_distance_loss(
+            anchor,
+            positive,
+            negative,
+            distance_function=self.distance_function,
+            margin=self.margin,
+            swap=self.swap,
+            reduction=self.reduction,
         )
 
     def extra_repr(self) -> str:

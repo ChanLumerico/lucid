@@ -418,6 +418,44 @@ class LPPool2d(Module):
         )
 
 
+class LPPool3d(Module):
+    """3-D power-average pooling.
+
+    Thin wrapper around :func:`lp_pool3d` so the module surface is
+    available alongside :class:`LPPool1d` / :class:`LPPool2d`.
+    """
+
+    def __init__(
+        self,
+        norm_type: float,
+        kernel_size: int | tuple[int, int, int],
+        stride: int | tuple[int, int, int] | None = None,
+        ceil_mode: bool = False,
+    ) -> None:
+        super().__init__()
+        self.norm_type = norm_type
+        self.kernel_size = kernel_size
+        self.stride = stride if stride is not None else kernel_size
+        self.ceil_mode = ceil_mode
+
+    def forward(self, x: Tensor) -> Tensor:
+        from lucid.nn.functional.pooling import lp_pool3d
+
+        return lp_pool3d(
+            x,
+            norm_type=self.norm_type,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            ceil_mode=self.ceil_mode,
+        )
+
+    def extra_repr(self) -> str:
+        return (
+            f"norm_type={self.norm_type}, kernel_size={self.kernel_size}, "
+            f"stride={self.stride}"
+        )
+
+
 # ── P4 fill: MaxUnpool / FractionalMaxPool ────────────────────────────────
 
 

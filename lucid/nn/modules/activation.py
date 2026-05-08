@@ -32,6 +32,9 @@ from lucid.nn.functional.activations import (
     tanhshrink,
     softshrink,
     softplus,
+    rrelu,
+    cosine_similarity,
+    pairwise_distance,
 )
 
 
@@ -199,6 +202,50 @@ class LogSoftmax(Module):
         return f"dim={self.dim}"
 
 
+class Softmax2d(Module):
+    """Apply softmax over the channel dimension of a 4-D tensor.
+
+    Shorthand for ``softmax(x, dim=-3)`` on ``(N, C, H, W)`` inputs —
+    used by segmentation heads where each pixel's channel scores form a
+    categorical distribution.  No ``dim`` parameter; the channel axis
+    is always second-to-last (matches the reference framework).
+    """
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.ndim != 4:
+            raise ValueError(
+                f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={x.ndim}"
+            )
+        return softmax(x, -3)
+
+
+class RReLU(Module):
+    """Randomized leaky ReLU.
+
+    Per-element negative slope drawn uniformly from ``[lower, upper]``
+    during training; eval mode uses the fixed midpoint
+    ``(lower + upper) / 2`` (the slope's expectation), matching the
+    reference framework.
+    """
+
+    def __init__(
+        self,
+        lower: float = 1.0 / 8.0,
+        upper: float = 1.0 / 3.0,
+        inplace: bool = False,
+    ) -> None:
+        super().__init__()
+        self.lower = lower
+        self.upper = upper
+        self.inplace = inplace
+
+    def forward(self, x: Tensor) -> Tensor:
+        return rrelu(x, self.lower, self.upper, training=self.training, inplace=self.inplace)
+
+    def extra_repr(self) -> str:
+        return f"lower={self.lower}, upper={self.upper}"
+
+
 class ReLU6(Module):
     """ReLU6 activation."""
 
@@ -363,3 +410,47 @@ class Softshrink(Module):
 
     def extra_repr(self) -> str:
         return f"lambd={self.lambd}"
+
+
+# ── distance / similarity wrappers ─────────────────────────────────────────
+
+
+class CosineSimilarity(Module):
+    """Module wrapping :func:`cosine_similarity`.
+
+    Returns the cosine of the angle between ``x1`` and ``x2`` along
+    ``dim``, with a small ``eps`` added to the magnitudes for numerical
+    stability."""
+
+    def __init__(self, dim: int = 1, eps: float = 1e-8) -> None:
+        super().__init__()
+        self.dim = dim
+        self.eps = eps
+
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+        return cosine_similarity(x1, x2, dim=self.dim, eps=self.eps)
+
+    def extra_repr(self) -> str:
+        return f"dim={self.dim}, eps={self.eps}"
+
+
+class PairwiseDistance(Module):
+    """Module wrapping :func:`pairwise_distance` — element-wise L_p
+    distance between rows of two tensors."""
+
+    def __init__(
+        self,
+        p: float = 2.0,
+        eps: float = 1e-6,
+        keepdim: bool = False,
+    ) -> None:
+        super().__init__()
+        self.p = p
+        self.eps = eps
+        self.keepdim = keepdim
+
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+        return pairwise_distance(x1, x2, p=self.p, eps=self.eps, keepdim=self.keepdim)
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}, eps={self.eps}, keepdim={self.keepdim}"

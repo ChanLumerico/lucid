@@ -28,6 +28,8 @@ from lucid.nn.functional.activations import (
     logsigmoid,
     softsign,
     threshold,
+    rrelu,
+    gumbel_softmax,
 )
 from lucid.nn.functional.linear import linear, bilinear
 from lucid.nn.functional.conv import (
@@ -61,6 +63,7 @@ from lucid.nn.functional.pooling import (
     adaptive_max_pool3d,
     lp_pool1d,
     lp_pool2d,
+    lp_pool3d,
     max_unpool1d,
     max_unpool2d,
     max_unpool3d,
@@ -69,6 +72,7 @@ from lucid.nn.functional.pooling import (
 )
 from lucid.nn.functional.dropout import (
     dropout,
+    dropout1d,
     dropout2d,
     dropout3d,
     alpha_dropout,
@@ -86,6 +90,7 @@ from lucid.nn.functional.loss import (
     binary_cross_entropy_with_logits,
     kl_div,
     triplet_margin_loss,
+    triplet_margin_with_distance_loss,
     cosine_embedding_loss,
     margin_ranking_loss,
     hinge_embedding_loss,
@@ -144,6 +149,8 @@ __all__ = [
     "logsigmoid",
     "softsign",
     "threshold",
+    "rrelu",
+    "gumbel_softmax",
     # linear
     "linear",
     "bilinear",
@@ -176,6 +183,7 @@ __all__ = [
     "adaptive_max_pool3d",
     "lp_pool1d",
     "lp_pool2d",
+    "lp_pool3d",
     "max_unpool1d",
     "max_unpool2d",
     "max_unpool3d",
@@ -183,6 +191,7 @@ __all__ = [
     "fractional_max_pool3d",
     # dropout
     "dropout",
+    "dropout1d",
     "dropout2d",
     "dropout3d",
     "alpha_dropout",
@@ -200,6 +209,7 @@ __all__ = [
     "binary_cross_entropy_with_logits",
     "kl_div",
     "triplet_margin_loss",
+    "triplet_margin_with_distance_loss",
     "cosine_embedding_loss",
     "margin_ranking_loss",
     "hinge_embedding_loss",
