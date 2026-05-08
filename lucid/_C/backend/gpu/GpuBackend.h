@@ -1073,32 +1073,32 @@ public:
                         const Storage& indices,
                         const Storage& src,
                         const Shape& base_shape,
-                        const Shape& idx_shape,
+                        const Shape& /*idx_shape*/,
                         int dim,
                         Dtype dt) override {
+        // Torch-style scatter_add (axis-scatter):
+        //   out[..., idx[..., j, ...], ...] += src[..., j, ...]   along dim
+        //
+        // The earlier impl wired MLX's multi-axis ``scatter_add`` (np.add.at-
+        // flavour: one index array per axis, all coordinates supplied), which
+        // is a different semantic from torch's axis-scatter and tripped MLX's
+        // "Number of index arrays does not match number of axes" guard.
+        // ``mlx::core::scatter_add_axis`` is the exact axis-scatter primitive
+        // we need — same one already used in the gradient path on line 804.
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
-        // MLX scatter_add: out = base.at[indices].add(src) along dim
-        // Build index list: one per axis, with a slice for non-scatter axes
         const int ndim = static_cast<int>(base_shape.size());
-        if (dim < 0) const_cast<int&>(dim) += ndim;
-        std::vector<::mlx::core::array> index_list;
-        for (int d = 0; d < ndim; ++d) {
-            if (d == dim) {
-                index_list.push_back(*gi.arr);
-            } else {
-                auto sz = static_cast<int>(idx_shape[static_cast<std::size_t>(d)]);
-                index_list.push_back(::mlx::core::arange(0, sz, 1, ::mlx::core::int32));
-                // reshape to broadcast against the index tensor
-                std::vector<int> reshape_dims(ndim, 1);
-                reshape_dims[d] = sz;
-                index_list.back() = ::mlx::core::reshape(index_list.back(),
-                    ::mlx::core::Shape(reshape_dims.begin(), reshape_dims.end()));
-            }
-        }
-        auto out = ::mlx::core::scatter_add(*gb.arr, index_list, *gs.arr,
-                                             std::vector<int>{dim});
+        const int d = dim < 0 ? dim + ndim : dim;
+        // Normalise negative indices the same way the gradient path does so
+        // user code can mirror torch's ``idx[i] += N`` convention.
+        auto idx = *gi.arr;
+        auto axis_len = ::mlx::core::array(
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx.dtype());
+        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx.dtype());
+        auto fixed =
+            ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
+        auto out = ::mlx::core::scatter_add_axis(*gb.arr, fixed, *gs.arr, d);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
