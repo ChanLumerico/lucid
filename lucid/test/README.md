@@ -37,21 +37,29 @@ lucid/test/
 ## Running
 
 ```bash
-# everything except slow + perf — what dev iterations want
-pytest -m "not slow and not perf"
+# fast tier (unit + numerical + stubs; no reference framework)
+pytest lucid/test/ \
+    --ignore=lucid/test/parity \
+    --ignore=lucid/test/integration \
+    --ignore=lucid/test/perf
 
 # GPU-only sweep (Apple Silicon)
-pytest -m gpu
+pytest lucid/test/ -m gpu
 
-# parity tier (auto-skip when reference isn't installed)
+# parity tier (auto-skips when reference framework isn't installed)
 pytest lucid/test/parity/
 
-# integration tier
-pytest lucid/test/integration/ -m slow
+# integration tier (training loops + checkpoint round-trip)
+pytest lucid/test/integration/
 
-# perf tier — needs `pip install pytest-benchmark`
-pytest lucid/test/perf/ --benchmark-only
+# perf tier — install ``pytest-benchmark`` for full timing tables
+pytest lucid/test/perf/ -m perf
+pytest lucid/test/perf/ --benchmark-only          # with pytest-benchmark
 ```
+
+`scripts/ci_full.sh` runs all four tiers in order and treats parity /
+perf failures as warnings, so a fresh checkout without the reference
+framework or `pytest-benchmark` still passes the gate.
 
 ## Reference framework
 

@@ -13,21 +13,27 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 echo "==> Release build"
 "$PYTHON_BIN" -m pip install -e . --no-build-isolation
 
-# ── 2. Python unit + nn + autograd + linalg tests (fast, no torch) ──────────
-echo "==> Python fast tests (unit / nn / autograd / linalg)"
+# ── 2. Python fast tier (unit + numerical + stubs, no reference framework) ─
+echo "==> Python fast tier (unit / numerical / stubs)"
 "$PYTHON_BIN" -m pytest lucid/test/ \
     --ignore=lucid/test/parity \
     --ignore=lucid/test/integration \
+    --ignore=lucid/test/perf \
     -x -q
 
-# ── 3. Parity tests (require torch) ─────────────────────────────────────────
-echo "==> Parity tests (lucid vs PyTorch)"
+# ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
+echo "==> Parity tier (vs reference framework)"
 "$PYTHON_BIN" -m pytest lucid/test/parity/ --tb=short -q || \
-    echo "[WARN] Parity tests failed or torch not installed — continuing."
+    echo "[WARN] Parity tier failed or reference framework not installed — continuing."
 
-# ── 4. Integration / slow tests ──────────────────────────────────────────────
-echo "==> Integration tests"
+# ── 4. Integration tier ──────────────────────────────────────────────────────
+echo "==> Integration tier"
 "$PYTHON_BIN" -m pytest lucid/test/integration/ --tb=short -q
+
+# ── 4b. Perf tier (opt-in; uses pytest-benchmark when installed) ────────────
+echo "==> Perf tier"
+"$PYTHON_BIN" -m pytest lucid/test/perf/ -m perf --tb=short -q || \
+    echo "[WARN] Perf tier failed — continuing."
 
 # ── 5. C++ unit tests (debug build with GoogleTest) ───────────────────────────
 echo "==> C++ unit tests (debug build)"
