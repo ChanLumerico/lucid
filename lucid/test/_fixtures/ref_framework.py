@@ -1,9 +1,19 @@
 """Lazy reference-framework loader.
 
-Only ``lucid/test/`` is allowed to import the reference framework, and
-only on demand.  We hide the literal name behind a string concat so
-the H5 rule (no "torch" word in Lucid source) stays satisfied while
-the parity intent remains obvious to a human reader.
+The H5 rule (no ``torch`` / ``PyTorch`` literal in Lucid source) is
+relaxed inside ``lucid/test/`` because:
+
+  - ``test/`` is excluded from the published wheel and is reachable
+    only through ``pip install lucid[test]``;
+  - the user explicitly opts into reference-framework value/speed
+    comparison by running the parity / perf tiers;
+  - keeping the literal name visible here makes the test intent
+    obvious and lets IDE tooling (auto-complete, type checking)
+    actually work on the reference symbols.
+
+This is the *only* file in the Lucid tree where ``torch`` may appear
+as a literal — every parity test reaches it through the ``ref``
+fixture and never imports the reference framework directly.
 
 Usage
 -----
@@ -21,29 +31,27 @@ In ``parity/conftest.py``::
     collect_skip_if_missing()  # in pytest_collection_modifyitems
 """
 
-import importlib
 import functools
-from typing import Any
+from types import ModuleType
 
 import pytest
 
-# String-concat the reference framework's name so the literal never
-# appears in Lucid source.  Re-exported tests / parity modules pass
-# this name to ``importlib.import_module``.
-_REF_NAME = "to" + "rch"
+
+_REF_NAME = "torch"
 
 
 @functools.lru_cache(maxsize=1)
-def ref_module() -> Any | None:
+def ref_module() -> ModuleType | None:
     """Return the reference framework module, or ``None`` when not
     installed.  Cached so we only attempt the import once per session."""
     try:
-        return importlib.import_module(_REF_NAME)
+        import torch  # noqa: PLC0415 — lazy import is the whole point
+        return torch
     except ImportError:
         return None
 
 
-def require_ref() -> Any:
+def require_ref() -> ModuleType:
     """Return the reference module or skip the calling test when it's
     unavailable.  Use inside test bodies that need the reference but
     can't take it as a fixture (e.g. parametrize-time)."""
@@ -54,7 +62,7 @@ def require_ref() -> Any:
 
 
 @pytest.fixture
-def ref() -> Any:
+def ref() -> ModuleType:
     """Inject the reference framework module, or skip when missing."""
     return require_ref()
 
