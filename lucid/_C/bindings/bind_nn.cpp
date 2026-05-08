@@ -60,6 +60,34 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
+// Convolution bias-or-zero helper.
+//
+// ``ConvNdBackward::forward`` rejects null bias unconditionally (the kernel
+// always adds a bias term).  When the user opts out of bias on the Python
+// side (``Conv2d(bias=False)``), we materialise a zero tensor of shape
+// ``(C_out,)`` matching the weight's dtype + device so the engine path
+// stays branch-free.  The cost is one tiny zero allocation per forward
+// (negligible against the conv itself).
+//
+// ``cout_axis`` is 0 for ``conv*`` (weight: (C_out, C_in/g, K...))
+// and 1 for ``conv_transpose*`` (weight: (C_in, C_out, K...)).
+static TensorImplPtr conv_bias_or_zero(const TensorImplPtr& W,
+                                       py::object bias_obj,
+                                       int cout_axis) {
+    if (!bias_obj.is_none()) {
+        return bias_obj.cast<TensorImplPtr>();
+    }
+    if (!W) {
+        throw std::invalid_argument("conv: weight must not be null");
+    }
+    const std::int64_t cout = W->shape()[static_cast<std::size_t>(cout_axis)];
+    Shape s{cout};
+    auto& be = backend::Dispatcher::for_device(W->device());
+    Storage zero_s = be.zeros(s, W->dtype());
+    return std::make_shared<TensorImpl>(std::move(zero_s), std::move(s),
+                                        W->dtype(), W->device(), false);
+}
+
 // Registers all nn ops on the sub-module `m` (engine.nn).
 void register_nn(py::module_& m) {
     // linear delegates directly; its C++ signature already matches pybind11
@@ -148,23 +176,42 @@ void register_nn(py::module_& m) {
     // padding, and dilation scalars so callers are explicit about anisotropic
     // kernels.  `groups` enables depthwise and grouped convolution.
     // All three share the same per-parameter gradient API (dx, dW, db).
-    m.def("conv1d", &conv1d_op, py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1,
-          py::arg("pad_l") = 0, py::arg("dilation_l") = 1, py::arg("groups") = 1,
-          "1D convolution. x:(B,C_in,L), W:(C_out,C_in/G,KL), b:(C_out,). "
-          "Backward returns (dx, dW, db).");
+    m.def(
+        "conv1d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int dl, int groups) {
+            return conv1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0), sl, pl, dl, groups);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1,
+        py::arg("pad_l") = 0, py::arg("dilation_l") = 1, py::arg("groups") = 1,
+        "1D convolution. x:(B,C_in,L), W:(C_out,C_in/G,KL), b:(C_out,) or None. "
+        "Backward returns (dx, dW, db).");
 
-    m.def("conv2d", &conv2d_op, py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1,
-          py::arg("stride_w") = 1, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
-          py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
-          "2D convolution. x:(B,C_in,H,W), W:(C_out,C_in/G,KH,KW), b:(C_out,). "
-          "Backward returns (dx, dW, db).");
+    m.def(
+        "conv2d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw,
+           int dh, int dw, int groups) {
+            return conv2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0),
+                             sh, sw, ph, pw, dh, dw, groups);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1,
+        py::arg("stride_w") = 1, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
+        py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
+        "2D convolution. x:(B,C_in,H,W), W:(C_out,C_in/G,KH,KW), b:(C_out,) or None. "
+        "Backward returns (dx, dW, db).");
 
-    m.def("conv3d", &conv3d_op, py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1,
-          py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_d") = 0,
-          py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("dilation_d") = 1,
-          py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
-          "3D convolution. x:(B,C_in,D,H,W), W:(C_out,C_in/G,KD,KH,KW), b:(C_out,). "
-          "Backward returns (dx, dW, db).");
+    m.def(
+        "conv3d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw,
+           int pd, int ph, int pw, int dd, int dh, int dw, int groups) {
+            return conv3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0),
+                             sd, sh, sw, pd, ph, pw, dd, dh, dw, groups);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1,
+        py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_d") = 0,
+        py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("dilation_d") = 1,
+        py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
+        "3D convolution. x:(B,C_in,D,H,W), W:(C_out,C_in/G,KD,KH,KW), b:(C_out,) or None. "
+        "Backward returns (dx, dW, db).");
 
     // unfold (im2col) extracts sliding local blocks from the input; the output
     // layout matches reference framework's unfold so it can feed gemm-based conv2d.
@@ -174,18 +221,38 @@ void register_nn(py::module_& m) {
     // Transposed convolutions.  opad_{d,h,w} adds extra output padding on the
     // trailing edge to resolve ambiguity when stride > 1 produces multiple
     // valid output sizes.
-    m.def("conv_transpose1d", &conv_transpose1d_op, py::arg("x"), py::arg("W"), py::arg("b"),
-          py::arg("stride_l") = 1, py::arg("pad_l") = 0, py::arg("opad_l") = 0,
-          "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out,KL), b:(C_out,).");
-    m.def("conv_transpose2d", &conv_transpose2d_op, py::arg("x"), py::arg("W"), py::arg("b"),
-          py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_h") = 0,
-          py::arg("pad_w") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
-          "2D transposed convolution. x:(B,C_in,H,W), W:(C_in,C_out,KH,KW).");
-    m.def("conv_transpose3d", &conv_transpose3d_op, py::arg("x"), py::arg("W"), py::arg("b"),
-          py::arg("stride_d") = 1, py::arg("stride_h") = 1, py::arg("stride_w") = 1,
-          py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("opad_d") = 0,
-          py::arg("opad_h") = 0, py::arg("opad_w") = 0,
-          "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW).");
+    m.def(
+        "conv_transpose1d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int opadl) {
+            return conv_transpose1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
+                                       sl, pl, opadl);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"),
+        py::arg("stride_l") = 1, py::arg("pad_l") = 0, py::arg("opad_l") = 0,
+        "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out,KL), b:(C_out,) or None.");
+    m.def(
+        "conv_transpose2d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw,
+           int opadh, int opadw) {
+            return conv_transpose2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
+                                       sh, sw, ph, pw, opadh, opadw);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"),
+        py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_h") = 0,
+        py::arg("pad_w") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
+        "2D transposed convolution. x:(B,C_in,H,W), W:(C_in,C_out,KH,KW), b:(C_out,) or None.");
+    m.def(
+        "conv_transpose3d",
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw,
+           int pd, int ph, int pw, int opadd, int opadh, int opadw) {
+            return conv_transpose3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
+                                       sd, sh, sw, pd, ph, pw, opadd, opadh, opadw);
+        },
+        py::arg("x"), py::arg("W"), py::arg("b"),
+        py::arg("stride_d") = 1, py::arg("stride_h") = 1, py::arg("stride_w") = 1,
+        py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("opad_d") = 0,
+        py::arg("opad_h") = 0, py::arg("opad_w") = 0,
+        "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW), b:(C_out,) or None.");
 
     // Adaptive pooling: output size is specified directly; the kernel and
     // stride are computed internally assuming uniform spatial partitioning.

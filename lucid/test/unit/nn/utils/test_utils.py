@@ -78,3 +78,17 @@ class TestFuseConvBnEval:
         fused = nn.utils.fusion.fuse_conv_bn_eval(conv, bn)
         out = fused(x).numpy()
         np.testing.assert_allclose(ref, out, atol=1e-5)
+
+    def test_no_bias_conv(self) -> None:
+        # Conv2d(bias=False) is now accepted by the engine binding.
+        np.random.seed(0)
+        conv = nn.Conv2d(3, 4, kernel_size=3, padding=1, bias=False)
+        bn = nn.BatchNorm2d(4)
+        bn.eval(); conv.eval()
+        bn.running_mean._impl.copy_from((lucid.ones(4) * 0.2)._impl)
+
+        x = lucid.tensor(np.random.randn(1, 3, 6, 6).astype(np.float32))
+        ref = bn(conv(x)).numpy()
+        fused = nn.utils.fusion.fuse_conv_bn_eval(conv, bn)
+        out = fused(x).numpy()
+        np.testing.assert_allclose(ref, out, atol=1e-5)

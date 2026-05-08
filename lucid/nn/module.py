@@ -321,8 +321,16 @@ class Module:
             self._non_persistent_buffers.remove(name)
 
         if isinstance(value, Parameter) and value._is_parameter:
+            # When promoting an attribute into ``_parameters``, also remove
+            # any plain entry from ``__dict__`` — otherwise ``self.<name>``
+            # short-circuits via ``__dict__`` and silently returns the old
+            # value.  This commonly bit ``Conv2d(bias=False)`` where
+            # ``self.bias`` was first set to ``None`` (landing in ``__dict__``)
+            # and a later ``self.bias = Parameter(...)`` failed to take effect.
+            self.__dict__.pop(name, None)
             self._parameters[name] = value
         elif isinstance(value, Module):
+            self.__dict__.pop(name, None)
             self._modules[name] = value
         else:
             object.__setattr__(self, name, value)
