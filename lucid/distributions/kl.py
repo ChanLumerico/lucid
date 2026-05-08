@@ -42,8 +42,7 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
             if (p_base, q_base) in _KL_REGISTRY:
                 return _KL_REGISTRY[(p_base, q_base)](p, q)
     raise NotImplementedError(
-        f"kl_divergence({type(p).__name__}, {type(q).__name__}) "
-        f"is not registered."
+        f"kl_divergence({type(p).__name__}, {type(q).__name__}) " f"is not registered."
     )
 
 
@@ -100,8 +99,10 @@ def _kl_beta_beta(p: Beta, q: Beta) -> Tensor:
     sum_q = q.concentration1 + q.concentration0
     t1 = lucid.lgamma(sum_p) - lucid.lgamma(sum_q)
     t2 = (
-        lucid.lgamma(q.concentration1) - lucid.lgamma(p.concentration1)
-        + lucid.lgamma(q.concentration0) - lucid.lgamma(p.concentration0)
+        lucid.lgamma(q.concentration1)
+        - lucid.lgamma(p.concentration1)
+        + lucid.lgamma(q.concentration0)
+        - lucid.lgamma(p.concentration0)
     )
     t3 = (p.concentration1 - q.concentration1) * (
         lucid.digamma(p.concentration1) - lucid.digamma(sum_p)

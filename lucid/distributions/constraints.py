@@ -19,9 +19,7 @@ class Constraint:
     event_dim: int = 0
 
     def check(self, value: Tensor) -> Tensor:
-        raise NotImplementedError(
-            f"{type(self).__name__}.check is not implemented"
-        )
+        raise NotImplementedError(f"{type(self).__name__}.check is not implemented")
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"

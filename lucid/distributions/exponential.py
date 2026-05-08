@@ -12,7 +12,10 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
-from lucid.distributions._util import as_tensor as _as_tensor, broadcast_pair as _broadcast_pair
+from lucid.distributions._util import (
+    as_tensor as _as_tensor,
+    broadcast_pair as _broadcast_pair,
+)
 
 
 class Exponential(ExponentialFamily):
@@ -149,11 +152,7 @@ class Cauchy(Distribution):
 
     def log_prob(self, value: Tensor) -> Tensor:
         z = (value - self.loc) / self.scale
-        return (
-            -math.log(math.pi)
-            - self.scale.log()
-            - (1.0 + z * z).log()
-        )
+        return -math.log(math.pi) - self.scale.log() - (1.0 + z * z).log()
 
     def cdf(self, value: Tensor) -> Tensor:
         z = (value - self.loc) / self.scale

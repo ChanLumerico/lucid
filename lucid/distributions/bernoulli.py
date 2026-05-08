@@ -41,9 +41,7 @@ class Bernoulli(ExponentialFamily):
         validate_args: bool | None = None,
     ) -> None:
         if (probs is None) == (logits is None):
-            raise ValueError(
-                "Bernoulli: pass exactly one of `probs` or `logits`."
-            )
+            raise ValueError("Bernoulli: pass exactly one of `probs` or `logits`.")
         if probs is not None:
             self.probs = _as_tensor(probs)
             self._is_logits = False
@@ -51,12 +49,9 @@ class Bernoulli(ExponentialFamily):
             self.logits = _as_tensor(logits)
             self._is_logits = True
         shape = (
-            tuple(self.probs.shape) if not self._is_logits
-            else tuple(self.logits.shape)
+            tuple(self.probs.shape) if not self._is_logits else tuple(self.logits.shape)
         )
-        super().__init__(
-            batch_shape=shape, event_shape=(), validate_args=validate_args
-        )
+        super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
 
     @property
     def param(self) -> Tensor:
@@ -82,7 +77,9 @@ class Bernoulli(ExponentialFamily):
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         shape = self._extended_shape(sample_shape)
         u = lucid.rand(*shape, dtype=self._probs.dtype, device=self._probs.device)
-        p = self._probs + lucid.zeros(shape, dtype=self._probs.dtype, device=self._probs.device)
+        p = self._probs + lucid.zeros(
+            shape, dtype=self._probs.dtype, device=self._probs.device
+        )
         out = (u < p).to(self._probs.dtype)
         return out.detach()
 
@@ -113,9 +110,7 @@ class Geometric(Distribution):
         validate_args: bool | None = None,
     ) -> None:
         if (probs is None) == (logits is None):
-            raise ValueError(
-                "Geometric: pass exactly one of `probs` or `logits`."
-            )
+            raise ValueError("Geometric: pass exactly one of `probs` or `logits`.")
         if probs is not None:
             self.probs = _as_tensor(probs)
         else:

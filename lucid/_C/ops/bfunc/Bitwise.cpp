@@ -35,6 +35,20 @@ bool is_integer_or_bool(Dtype dt) {
     }
 }
 
+// Shift operations require true integer (Bool excluded — shifting a bool
+// has no defined meaning).
+bool is_integer(Dtype dt) {
+    switch (dt) {
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+    case Dtype::I64:
+        return true;
+    default:
+        return false;
+    }
+}
+
 // Shared implementation for all bitwise binary operations.
 //
 // Op codes match the backend's bitwise_binary convention:
@@ -67,6 +81,32 @@ TensorImplPtr bitwise_or_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 
 TensorImplPtr bitwise_xor_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     return bit_dispatch(a, b, "bitwise_xor", 2);
+}
+
+namespace {
+
+// Shared dispatcher for the shift ops.  Differs from ``bit_dispatch`` only in
+// the dtype guard (Bool not allowed) — kept as its own helper to keep the
+// error messages tight.
+TensorImplPtr
+shift_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, int op) {
+    validate_pair_eq_shape(a, b, name);
+    if (!is_integer(a->dtype()))
+        ErrorBuilder(name).fail("dtype must be a signed integer (I8/I16/I32/I64)");
+    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    Storage out = backend::Dispatcher::for_device(a->device())
+                      .bitwise_binary(a->storage(), b->storage(), a->shape(), a->dtype(), op);
+    return fresh(std::move(out), a->shape(), a->dtype(), a->device());
+}
+
+}  // namespace
+
+TensorImplPtr bitwise_left_shift_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    return shift_dispatch(a, b, "bitwise_left_shift", 3);
+}
+
+TensorImplPtr bitwise_right_shift_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+    return shift_dispatch(a, b, "bitwise_right_shift", 4);
 }
 
 }  // namespace lucid

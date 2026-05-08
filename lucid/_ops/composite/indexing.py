@@ -204,10 +204,154 @@ def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor:
     return result_flat.reshape(input.shape)
 
 
+def index_put(
+    input: Tensor,
+    indices: list[Tensor] | tuple[Tensor, ...],
+    values: Tensor,
+    accumulate: bool = False,
+) -> Tensor:
+    """Out-of-place advanced-indexing write.
+
+    Equivalent to ``out = input.clone(); out[indices] = values`` (or
+    ``out[indices] += values`` when ``accumulate=True``) under reference
+    framework semantics.  ``indices`` is a sequence of integer tensors,
+    one per leading dimension; broadcasting between them follows the
+    standard rules.
+
+    Currently restricted to the case where ``len(indices) ==
+    input.ndim`` and every index tensor broadcasts to a common shape —
+    partial advanced indexing (where trailing dims are implicitly
+    sliced) is filed as a follow-up.
+
+    Parameters
+    ----------
+    input : Tensor
+        Destination tensor.
+    indices : sequence of Tensors
+        One integer index tensor per dimension of ``input``.  All
+        broadcast to a common shape.
+    values : Tensor
+        Values to scatter, broadcastable to the common index shape.
+    accumulate : bool, default False
+        If True, add at each position; otherwise overwrite.
+    """
+    if not isinstance(indices, (list, tuple)) or len(indices) == 0:
+        raise ValueError(
+            "index_put: `indices` must be a non-empty sequence of Tensors"
+        )
+    if len(indices) != input.ndim:
+        raise NotImplementedError(
+            f"index_put: partial advanced indexing not supported — "
+            f"expected exactly {input.ndim} index tensors, got {len(indices)}"
+        )
+
+    # Broadcast all index tensors to a common shape.
+    common_shape: tuple[int, ...] = tuple(indices[0].shape)
+    for idx in indices[1:]:
+        common_shape = lucid._tensor.tensor.broadcast_shapes(  # type: ignore[attr-defined]
+            common_shape, tuple(idx.shape)
+        ) if hasattr(lucid._tensor.tensor, "broadcast_shapes") else common_shape
+
+    bcast_indices: list[Tensor] = []
+    for idx in indices:
+        if tuple(idx.shape) != common_shape:
+            zero = lucid.zeros(common_shape, dtype=idx.dtype, device=idx.device)
+            bcast_indices.append(idx + zero)
+        else:
+            bcast_indices.append(idx)
+
+    # Compute flat indices via multi-dim row-major contraction.
+    shape: tuple[int, ...] = tuple(int(s) for s in input.shape)
+    strides: list[int] = []
+    s: int = 1
+    for d in reversed(range(len(shape))):
+        strides.insert(0, s)
+        s *= shape[d]
+
+    flat_idx: Tensor | None = None
+    for d, idx in enumerate(bcast_indices):
+        contrib = idx * strides[d]
+        flat_idx = contrib if flat_idx is None else flat_idx + contrib
+    assert flat_idx is not None
+
+    # Broadcast values to common_shape if scalar/smaller.
+    if tuple(values.shape) != common_shape:
+        zero = lucid.zeros(common_shape, dtype=values.dtype, device=values.device)
+        values_b = values + zero
+    else:
+        values_b = values
+
+    return put(input, flat_idx, values_b, accumulate=accumulate)
+
+
+def put(
+    input: Tensor,
+    index: Tensor,
+    source: Tensor,
+    accumulate: bool = False,
+) -> Tensor:
+    """Write ``source`` into ``input`` at the *flat* positions in ``index``.
+
+    Mirrors the reference framework's ``Tensor.put`` semantics: indices
+    refer to the row-major linearisation of ``input``, regardless of its
+    shape.  ``accumulate=True`` performs additive scatter (duplicates
+    add), otherwise duplicates resolve to the last write (``scatter``
+    semantics).
+
+    Parameters
+    ----------
+    input : Tensor
+        Destination — its shape is preserved in the output.
+    index : Tensor
+        1-D (or flattenable) integer tensor of flat positions in
+        ``[0, input.numel())``.
+    source : Tensor
+        Values to scatter; must be flattenable to the same length as
+        ``index``.
+    accumulate : bool, default False
+        If True, add to the existing value at each position; otherwise
+        overwrite.
+    """
+    flat_input: Tensor = input.reshape(-1)
+    n: int = int(index.numel())
+    flat_index: Tensor = index.reshape(-1)
+    flat_source: Tensor = source.reshape(-1).narrow(0, 0, n)
+
+    flat_idx32: Tensor = flat_index.int()
+    if accumulate:
+        result_flat: Tensor = index_add(flat_input, 0, flat_idx32, flat_source)
+    else:
+        result_flat = index_copy(flat_input, 0, flat_idx32, flat_source)
+    return result_flat.reshape(input.shape)
+
+
+def index_put_(
+    input: Tensor,
+    indices: list[Tensor] | tuple[Tensor, ...],
+    values: Tensor,
+    accumulate: bool = False,
+) -> Tensor:
+    """In-place variant of :func:`index_put` — mutates ``input`` so the
+    write is visible through the same Tensor reference.
+
+    Internally this rebinds ``input._impl`` to the freshly-built result,
+    matching the convention Lucid already uses for engine-level in-place
+    ops (``add_``, ``mul_``).  Storage-level mutation is not currently
+    available for composite indexing — autograd consumers should treat
+    the returned tensor as a new node.
+    """
+    new_t: Tensor = index_put(input, indices, values, accumulate=accumulate)
+    input._impl = new_t._impl  # type: ignore[attr-defined]
+    return input
+
+
 __all__ = [
     "index_fill",
     "index_add",
     "index_copy",
     "scatter_reduce",
     "masked_scatter",
+    "put",
+    "index_put",
+    "index_put_",
 ]

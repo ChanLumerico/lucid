@@ -230,7 +230,7 @@ def general_gaussian(
     n = _ramp(N, dtype=dtype, device=device)
     centred = lucid.abs(n - 0.5 * float(N - 1))
     twop = 2.0 * float(p)
-    w = lucid.exp(-0.5 * (centred ** twop) / (float(sig) ** twop))
+    w = lucid.exp(-0.5 * (centred**twop) / (float(sig) ** twop))
     return _trim(w, M, sym)
 
 
@@ -303,23 +303,23 @@ def _i0_scalar(x: float) -> float:
         return (
             1.0
             + 3.5156229 * t
-            + 3.0899424 * t ** 2
-            + 1.2067492 * t ** 3
-            + 0.2659732 * t ** 4
-            + 0.0360768 * t ** 5
-            + 0.0045813 * t ** 6
+            + 3.0899424 * t**2
+            + 1.2067492 * t**3
+            + 0.2659732 * t**4
+            + 0.0360768 * t**5
+            + 0.0045813 * t**6
         )
     y = 3.75 / ax
     poly = (
         0.39894228
         + 0.01328592 * y
-        + 0.00225319 * y ** 2
-        - 0.00157565 * y ** 3
-        + 0.00916281 * y ** 4
-        - 0.02057706 * y ** 5
-        + 0.02635537 * y ** 6
-        - 0.01647633 * y ** 7
-        + 0.00392377 * y ** 8
+        + 0.00225319 * y**2
+        - 0.00157565 * y**3
+        + 0.00916281 * y**4
+        - 0.02057706 * y**5
+        + 0.02635537 * y**6
+        - 0.01647633 * y**7
+        + 0.00392377 * y**8
     )
     return poly * math.exp(ax) / math.sqrt(ax)
 

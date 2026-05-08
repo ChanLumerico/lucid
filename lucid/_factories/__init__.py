@@ -23,6 +23,11 @@ from lucid._factories.random import (
     randn_like,
     manual_seed,
     randperm,
+    Generator,
+    seed,
+    initial_seed,
+    get_rng_state,
+    set_rng_state,
 )
 
 __all__ = [
@@ -50,4 +55,9 @@ __all__ = [
     "randn_like",
     "manual_seed",
     "randperm",
+    "Generator",
+    "seed",
+    "initial_seed",
+    "get_rng_state",
+    "set_rng_state",
 ]

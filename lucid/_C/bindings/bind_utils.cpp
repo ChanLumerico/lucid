@@ -26,6 +26,7 @@
 #include "../ops/utils/Concat.h"
 #include "../ops/utils/Contiguous.h"
 #include "../ops/utils/Histogram.h"
+#include "../ops/utils/Nextafter.h"
 #include "../ops/utils/Layout.h"
 #include "../ops/utils/Meshgrid.h"
 #include "../ops/utils/Pad.h"
@@ -197,6 +198,9 @@ void register_utils(py::module_& m) {
             return py::make_tuple(out.at(0), out.at(1));
         },
         py::arg("a"), py::arg("bins"), py::arg("ranges"), py::arg("density") = false);
+
+    // IEEE-754 next representable float — CPU-only, GPU inputs round-trip.
+    m.def("nextafter", &nextafter_op, py::arg("a"), py::arg("b"));
 }
 
 }  // namespace lucid::bindings

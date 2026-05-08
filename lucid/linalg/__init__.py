@@ -734,9 +734,7 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
         raise NotImplementedError("lu: pivot=False is not supported")
     sh = tuple(_unwrap(A).shape)
     if len(sh) < 2 or sh[-1] != sh[-2]:
-        raise ValueError(
-            f"lu requires a square matrix in the last two dims, got {sh}"
-        )
+        raise ValueError(f"lu requires a square matrix in the last two dims, got {sh}")
     n = int(sh[-1])
 
     LU, pivots = lu_factor(A)
@@ -827,9 +825,7 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     for i in range(n):
         j = int(pv_l[i]) - 1
         perm[i], perm[j] = perm[j], perm[i]
-    B_perm = B.index_select(
-        -2, _l.tensor(perm, dtype=_l.int64, device=B.device)
-    )
+    B_perm = B.index_select(-2, _l.tensor(perm, dtype=_l.int64, device=B.device))
 
     y = solve_triangular(L, B_perm, upper=False, unitriangular=True)
     # Diagonal solve via element-wise division along the leading dim of y.
@@ -841,9 +837,7 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     inv_perm: list[int] = [0] * n
     for i, p in enumerate(perm):
         inv_perm[p] = i
-    return X_perm.index_select(
-        -2, _l.tensor(inv_perm, dtype=_l.int64, device=B.device)
-    )
+    return X_perm.index_select(-2, _l.tensor(inv_perm, dtype=_l.int64, device=B.device))
 
 
 # ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────

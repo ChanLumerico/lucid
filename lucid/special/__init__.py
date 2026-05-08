@@ -99,9 +99,7 @@ def i1(x: Tensor) -> Tensor:
     ``3.75/|x|`` multiplied by ``exp(|x|)/√|x|`` and the sign of ``x``.
     """
     ax = lucid.abs(x)
-    ax_safe = lucid.where(
-        ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax
-    )
+    ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
 
     # Small-argument branch: x · poly((x / 3.75)²)
     t_small = (x * (1.0 / 3.75)) ** 2
@@ -202,13 +200,23 @@ def ndtri(p: Tensor) -> Tensor:
     q = p - 0.5
     r_central = q * q
     num_c = (
-        ((((_NDTRI_A[0] * r_central + _NDTRI_A[1]) * r_central + _NDTRI_A[2]) * r_central
-          + _NDTRI_A[3]) * r_central + _NDTRI_A[4]) * r_central + _NDTRI_A[5]
-    )
+        (
+            ((_NDTRI_A[0] * r_central + _NDTRI_A[1]) * r_central + _NDTRI_A[2])
+            * r_central
+            + _NDTRI_A[3]
+        )
+        * r_central
+        + _NDTRI_A[4]
+    ) * r_central + _NDTRI_A[5]
     den_c = (
-        ((((_NDTRI_B[0] * r_central + _NDTRI_B[1]) * r_central + _NDTRI_B[2]) * r_central
-          + _NDTRI_B[3]) * r_central + _NDTRI_B[4]) * r_central + 1.0
-    )
+        (
+            ((_NDTRI_B[0] * r_central + _NDTRI_B[1]) * r_central + _NDTRI_B[2])
+            * r_central
+            + _NDTRI_B[3]
+        )
+        * r_central
+        + _NDTRI_B[4]
+    ) * r_central + 1.0
     central = q * num_c / den_c
 
     # Tails: same polynomial form on r = √(-2·log(p_tail)), with a sign flip
@@ -222,13 +230,17 @@ def ndtri(p: Tensor) -> Tensor:
     p_tail_safe = lucid.clip(p_tail_in, 1e-300, 1.0)
     r_tail = lucid.sqrt(-2.0 * lucid.log(p_tail_safe))
     num_t = (
-        ((((_NDTRI_C[0] * r_tail + _NDTRI_C[1]) * r_tail + _NDTRI_C[2]) * r_tail
-          + _NDTRI_C[3]) * r_tail + _NDTRI_C[4]) * r_tail + _NDTRI_C[5]
-    )
+        (
+            ((_NDTRI_C[0] * r_tail + _NDTRI_C[1]) * r_tail + _NDTRI_C[2]) * r_tail
+            + _NDTRI_C[3]
+        )
+        * r_tail
+        + _NDTRI_C[4]
+    ) * r_tail + _NDTRI_C[5]
     den_t = (
-        (((_NDTRI_D[0] * r_tail + _NDTRI_D[1]) * r_tail + _NDTRI_D[2]) * r_tail
-         + _NDTRI_D[3]) * r_tail + 1.0
-    )
+        ((_NDTRI_D[0] * r_tail + _NDTRI_D[1]) * r_tail + _NDTRI_D[2]) * r_tail
+        + _NDTRI_D[3]
+    ) * r_tail + 1.0
     tail_low = num_t / den_t
     tail = lucid.where(p < lucid.full_like(p, 0.5), tail_low, -tail_low)
 
@@ -254,9 +266,7 @@ def entr(x: Tensor) -> Tensor:
     safe_x = lucid.where(x > lucid.zeros_like(x), x, lucid.full_like(x, 1.0))
     val = -safe_x * lucid.log(safe_x)
     val = lucid.where(x == lucid.zeros_like(x), lucid.full_like(val, 0.0), val)
-    val = lucid.where(
-        x < lucid.zeros_like(x), lucid.full_like(val, float("nan")), val
-    )
+    val = lucid.where(x < lucid.zeros_like(x), lucid.full_like(val, float("nan")), val)
     return val
 
 
@@ -278,39 +288,93 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
 def polygamma(n: int, x: Tensor) -> Tensor:
     """``n``-th derivative of the digamma function.
 
-    * ``n = 0`` is the digamma function itself — falls through to
-      ``lucid.digamma``.
-    * ``n = 1`` is the trigamma function, computed via shift to
-      ``x ≥ 6`` plus the standard asymptotic series:
-      ``ψ¹(x) ≈ 1/x + 1/(2·x²) + 1/(6·x³) − 1/(30·x⁵) + …``
-    * ``n ≥ 2`` raises — implementing a stable family of
-      polygammas needs more care than this one-file composite layer
-      affords.  Filed as a follow-up.
+    * ``n = 0`` is the digamma function — falls through to
+      :func:`lucid.digamma`.
+    * ``n = 1, 2, 3`` use the standard recurrence-then-asymptotic
+      strategy: shift ``x`` upward by ``K=6`` via
+      ``ψ⁽ⁿ⁾(x) = ψ⁽ⁿ⁾(x+1) + (−1)ⁿ⁺¹·n!/x^(n+1)``,
+      accumulating the per-step corrections, then evaluate the
+      Bernoulli-series asymptotic expansion at the shifted argument
+      where it is well-conditioned.
+    * ``n ≥ 4`` raises — extending the Bernoulli series to higher
+      orders is mechanical but not currently needed.
+
+    The reference framework only defines ``polygamma`` for non-negative
+    integer ``n``; we follow that contract.
     """
-    if int(n) == 0:
+    n = int(n)
+    if n < 0:
+        raise ValueError(f"polygamma: n must be ≥ 0, got {n}")
+    if n == 0:
         return lucid.digamma(x)
-    if int(n) != 1:
+    if n > 3:
         raise NotImplementedError(
-            f"polygamma: only n=0 (digamma) and n=1 (trigamma) are wired; "
-            f"got n={n}"
+            f"polygamma: only n ∈ {{0, 1, 2, 3}} are wired; got n={n}. "
+            "Higher orders need an extended Bernoulli-series term table."
         )
-    # Shift x by k=6 using the recurrence ψ¹(x) = ψ¹(x+1) + 1/x²,
-    # accumulating the corrections.  Then evaluate the asymptotic series
-    # at the shifted argument xr.
-    correction = lucid.zeros_like(x)
-    for k in range(6):
-        correction = correction + 1.0 / ((x + float(k)) ** 2)
-    xr = x + 6.0
-    r = 1.0 / xr
-    r2 = r * r
-    psi1 = (
-        r
-        + 0.5 * r2
-        + (1.0 / 6.0) * r2 * r
-        - (1.0 / 30.0) * r2 * r2 * r
-        + (1.0 / 42.0) * r2 * r2 * r2 * r
+
+    # ── recurrence shift: K=6 steps so the asymptotic series at x+6 is
+    #    accurate to ~7 digits across the typical positive-real regime. ──
+    K: int = 6
+    sign: float = 1.0 if n % 2 == 1 else -1.0  # (−1)^(n+1) — n odd → +.
+    # n!  pre-computed as a Python int; ints up to 3! = 6 fit happily in float.
+    n_fact: float = float(math.factorial(n))
+    correction: Tensor = lucid.zeros_like(x)
+    for k in range(K):
+        correction = correction + sign * n_fact / ((x + float(k)) ** (n + 1))
+    xr: Tensor = x + float(K)
+
+    # ── asymptotic series at xr.  For n ≥ 1 (Wikipedia, "Polygamma function"):
+    #   ψ⁽ⁿ⁾(x) ≈ (−1)^(n+1) · [ (n−1)!/x^n + n!/(2·x^(n+1))
+    #                          + ∑_{k≥1} B_{2k} · (2k+n−1)!/((2k)!) ·
+    #                                     1/x^(2k+n) ]
+    # Powers in the series: m, m+1, m+2, m+4, m+6 (for k=1..3).  The
+    # earlier hand-tuned trigamma branch used the same five-term truncation;
+    # we generalise with closed-form per-n coefficients. ──
+    r: Tensor = 1.0 / xr
+    inv_xn: Tensor = r ** n            # 1 / xr^n.
+    inv_xnp1: Tensor = inv_xn * r      # 1 / xr^(n+1).
+    inv_xnp2: Tensor = inv_xnp1 * r    # 1 / xr^(n+2)  ← k=1 term.
+    inv_xnp4: Tensor = inv_xnp2 * r * r  # 1 / xr^(n+4)  ← k=2 term.
+    inv_xnp6: Tensor = inv_xnp4 * r * r  # 1 / xr^(n+6)  ← k=3 term.
+
+    # Coefficients per n.  The leading two are (n−1)! and n!/2; the
+    # Bernoulli triplet is B_{2k}·(2k+n−1)!/(2k)! for k=1..3.
+    if n == 1:
+        c_lead: float = 1.0           # 0! = 1.
+        c_half: float = 0.5           # 1!/2 = 1/2.
+        # k=1: B₂·2!/2! = 1/6, k=2: B₄·4!/4! = −1/30, k=3: B₆·6!/6! = 1/42.
+        c1: float = 1.0 / 6.0
+        c2: float = -1.0 / 30.0
+        c3: float = 1.0 / 42.0
+    elif n == 2:
+        c_lead = 1.0                  # 1! = 1.
+        c_half = 1.0                  # 2!/2 = 1.
+        # k=1: B₂·3!/2! = (1/6)·3 = 1/2.
+        # k=2: B₄·5!/4! = (−1/30)·5 = −1/6.
+        # k=3: B₆·7!/6! = (1/42)·7 = 1/6.
+        c1 = 0.5
+        c2 = -1.0 / 6.0
+        c3 = 1.0 / 6.0
+    else:  # n == 3
+        c_lead = 2.0                  # 2! = 2.
+        c_half = 3.0                  # 3!/2 = 3.
+        # k=1: B₂·4!/2! = (1/6)·12 = 2.
+        # k=2: B₄·6!/4! = (−1/30)·30 = −1.
+        # k=3: B₆·8!/6! = (1/42)·56 = 4/3.
+        c1 = 2.0
+        c2 = -1.0
+        c3 = 4.0 / 3.0
+
+    series: Tensor = (
+        c_lead * inv_xn
+        + c_half * inv_xnp1
+        + c1 * inv_xnp2
+        + c2 * inv_xnp4
+        + c3 * inv_xnp6
     )
-    return psi1 + correction
+    asym: Tensor = sign * series
+    return asym + correction
 
 
 # ── Spherical Bessel ───────────────────────────────────────────────────────

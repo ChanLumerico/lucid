@@ -69,6 +69,8 @@ void register_bfunc(py::module_& m) {
     m.def("bitwise_and", &bitwise_and_op, py::arg("a"), py::arg("b"));
     m.def("bitwise_or", &bitwise_or_op, py::arg("a"), py::arg("b"));
     m.def("bitwise_xor", &bitwise_xor_op, py::arg("a"), py::arg("b"));
+    m.def("bitwise_left_shift", &bitwise_left_shift_op, py::arg("a"), py::arg("b"));
+    m.def("bitwise_right_shift", &bitwise_right_shift_op, py::arg("a"), py::arg("b"));
 
     // Contraction ops with non-standard signatures.
     m.def("dot", &dot_op, py::arg("a"), py::arg("b"));

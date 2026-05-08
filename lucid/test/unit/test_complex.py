@@ -157,8 +157,14 @@ class TestSurfacePolicy:
     def test_complex_ops_at_top_level(self) -> None:
         # All four engine ops + four composites are accessible at top level.
         for name in (
-            "real", "imag", "complex", "conj",
-            "angle", "polar", "view_as_real", "view_as_complex",
+            "real",
+            "imag",
+            "complex",
+            "conj",
+            "angle",
+            "polar",
+            "view_as_real",
+            "view_as_complex",
         ):
             assert hasattr(lucid, name), f"lucid.{name} should be exposed"
             assert callable(getattr(lucid, name))

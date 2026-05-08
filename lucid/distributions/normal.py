@@ -14,7 +14,10 @@ from lucid.distributions.distribution import Distribution, ExponentialFamily
 _LOG_SQRT_2PI = 0.5 * math.log(2.0 * math.pi)
 
 
-from lucid.distributions._util import as_tensor as _as_tensor, broadcast_pair as _broadcast_pair
+from lucid.distributions._util import (
+    as_tensor as _as_tensor,
+    broadcast_pair as _broadcast_pair,
+)
 
 
 class Normal(ExponentialFamily):
@@ -65,14 +68,12 @@ class Normal(ExponentialFamily):
             self._validate_sample(value)
         var = self.variance
         log_scale = self.scale.log()
-        return (
-            -((value - self.loc) ** 2) / (2.0 * var)
-            - log_scale
-            - _LOG_SQRT_2PI
-        )
+        return -((value - self.loc) ** 2) / (2.0 * var) - log_scale - _LOG_SQRT_2PI
 
     def cdf(self, value: Tensor) -> Tensor:
-        return 0.5 * (1.0 + lucid.erf((value - self.loc) / (self.scale * math.sqrt(2.0))))
+        return 0.5 * (
+            1.0 + lucid.erf((value - self.loc) / (self.scale * math.sqrt(2.0)))
+        )
 
     def icdf(self, value: Tensor) -> Tensor:
         return self.loc + self.scale * lucid.erfinv(2.0 * value - 1.0) * math.sqrt(2.0)

@@ -338,12 +338,16 @@ def ifftn(
     return _IfftnAutograd.apply(input, s_list, axes, norm_v, N)
 
 
-def fft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def fft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     """1-D discrete Fourier transform along ``dim``."""
     return fftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def ifft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def ifft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     """1-D inverse discrete Fourier transform along ``dim``."""
     return ifftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
@@ -414,11 +418,15 @@ def irfftn(
     return _IrfftnAutograd.apply(input, s_list, axes, norm_v, N, out_sizes)
 
 
-def rfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def rfft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     return rfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def irfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def irfft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     return irfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
@@ -472,11 +480,15 @@ def ihfftn(
     return _conj(rfftn(input, s=s, dim=dim, norm=_dual_norm(norm_v)))
 
 
-def hfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def hfft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     return hfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 
-def ihfft(input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None) -> Tensor:
+def ihfft(
+    input: Tensor, n: int | None = None, dim: int = -1, norm: str | None = None
+) -> Tensor:
     return ihfftn(input, s=None if n is None else [int(n)], dim=[int(dim)], norm=norm)
 
 

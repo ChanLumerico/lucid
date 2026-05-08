@@ -35,9 +35,7 @@ class Categorical(Distribution):
         validate_args: bool | None = None,
     ) -> None:
         if (probs is None) == (logits is None):
-            raise ValueError(
-                "Categorical: pass exactly one of `probs` or `logits`."
-            )
+            raise ValueError("Categorical: pass exactly one of `probs` or `logits`.")
         if probs is not None:
             self.probs = _normalize_probs(_as_tensor(probs))
             self._is_logits = False
@@ -78,16 +76,16 @@ class Categorical(Distribution):
         # mean of Categorical isn't well-defined (no metric on labels)
         # but reference framework returns NaN with the right shape.
         return lucid.full(
-            self._batch_shape, float("nan"),
-            device=self._probs.device, dtype=self._probs.dtype,
+            self._batch_shape,
+            float("nan"),
+            device=self._probs.device,
+            dtype=self._probs.dtype,
         )
 
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         # Gumbel-max trick, no replacement: draw G ~ −log(−log U), pick argmax.
         shape = tuple(sample_shape) + tuple(self._batch_shape) + (self._num_events,)
-        u = lucid.rand(
-            *shape, dtype=self._probs.dtype, device=self._probs.device
-        )
+        u = lucid.rand(*shape, dtype=self._probs.dtype, device=self._probs.device)
         u = u.clip(1e-7, 1.0 - 1e-7)
         gumbel = -(-(u.log())).log()
         scores = self._log_probs + gumbel
@@ -102,13 +100,13 @@ class Categorical(Distribution):
         if tuple(v.shape) != target_shape:
             if v.ndim == 0 or v.shape == (1,):
                 v = lucid.full(
-                    target_shape, float(v.item()),
-                    dtype=v.dtype, device=v.device,
+                    target_shape,
+                    float(v.item()),
+                    dtype=v.dtype,
+                    device=v.device,
                 )
             else:
-                v = v + lucid.zeros(
-                    target_shape, dtype=v.dtype, device=v.device
-                )
+                v = v + lucid.zeros(target_shape, dtype=v.dtype, device=v.device)
         v_long = v.to(lucid.int64).unsqueeze(-1)
         gathered = lucid.gather(log_p, v_long, dim=-1)
         return gathered.squeeze(-1)
@@ -149,7 +147,9 @@ class OneHotCategorical(Distribution):
         idx = self._cat.sample(sample_shape)
         from lucid.nn.functional.sparse import one_hot
 
-        return one_hot(idx, num_classes=self._cat._num_events).to(self._cat._probs.dtype)
+        return one_hot(idx, num_classes=self._cat._num_events).to(
+            self._cat._probs.dtype
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         # value is one-hot — log_prob = sum(value * log_probs).

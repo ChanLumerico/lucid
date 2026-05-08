@@ -89,8 +89,5 @@ class StudentT(Distribution):
             + beta_term
             + (self.df + 1.0)
             * 0.5
-            * (
-                lucid.digamma((self.df + 1.0) * 0.5)
-                - lucid.digamma(self.df * 0.5)
-            )
+            * (lucid.digamma((self.df + 1.0) * 0.5) - lucid.digamma(self.df * 0.5))
         )

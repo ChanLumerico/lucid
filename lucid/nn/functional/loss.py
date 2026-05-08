@@ -692,6 +692,4 @@ def multilabel_soft_margin_loss(
         return _l.sum(per_sample)
     if reduction == "none":
         return per_sample
-    raise ValueError(
-        f"multilabel_soft_margin_loss: unknown reduction={reduction!r}"
-    )
+    raise ValueError(f"multilabel_soft_margin_loss: unknown reduction={reduction!r}")

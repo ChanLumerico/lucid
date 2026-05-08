@@ -8,7 +8,6 @@ import pytest
 import lucid
 import lucid.nn.functional as F
 
-
 # ── activations ────────────────────────────────────────────────────────────
 
 
@@ -27,9 +26,7 @@ class TestHardtanh:
 class TestLogsigmoid:
     def test_zero(self) -> None:
         # log σ(0) = log(0.5) = -log(2)
-        assert abs(
-            F.logsigmoid(lucid.tensor([0.0])).item() + math.log(2.0)
-        ) < 1e-6
+        assert abs(F.logsigmoid(lucid.tensor([0.0])).item() + math.log(2.0)) < 1e-6
 
     def test_large_positive_stable(self) -> None:
         # log σ(1000) ≈ 0; the unstable form (log of sigmoid) would
@@ -109,9 +106,7 @@ class TestMaxUnpool:
         v = lucid.tensor([[[[5.0]]]])
         idx = lucid.tensor([[[[3]]]], dtype=lucid.int64)  # bottom-right of 2x2
         out = F.max_unpool2d(v, idx, kernel_size=2, output_size=(2, 2))
-        np.testing.assert_array_equal(
-            out.numpy(), [[[[0.0, 0.0], [0.0, 5.0]]]]
-        )
+        np.testing.assert_array_equal(out.numpy(), [[[[0.0, 0.0], [0.0, 5.0]]]])
 
     def test_unpool_requires_output_size(self) -> None:
         v = lucid.tensor([[[1.0]]])
@@ -165,7 +160,8 @@ class TestMultilabelSoftMarginLoss:
     def test_invalid_reduction(self) -> None:
         with pytest.raises(ValueError):
             F.multilabel_soft_margin_loss(
-                lucid.tensor([[0.0]]), lucid.tensor([[0.0]]),
+                lucid.tensor([[0.0]]),
+                lucid.tensor([[0.0]]),
                 reduction="bogus",
             )
 
@@ -176,17 +172,13 @@ class TestMultilabelSoftMarginLoss:
 class TestChannelShuffle:
     def test_identity_groups_one(self) -> None:
         x = lucid.arange(0.0, 12.0, 1.0).reshape(1, 6, 2)
-        np.testing.assert_array_equal(
-            F.channel_shuffle(x, groups=1).numpy(), x.numpy()
-        )
+        np.testing.assert_array_equal(F.channel_shuffle(x, groups=1).numpy(), x.numpy())
 
     def test_groups_two(self) -> None:
         # 4 channels split into 2 groups of 2: [0,1,2,3] → [0,2,1,3]
         x = lucid.tensor([[[10.0], [11.0], [12.0], [13.0]]])  # (1, 4, 1)
         out = F.channel_shuffle(x, groups=2).numpy()
-        np.testing.assert_array_equal(
-            out, [[[10.0], [12.0], [11.0], [13.0]]]
-        )
+        np.testing.assert_array_equal(out, [[[10.0], [12.0], [11.0], [13.0]]])
 
     def test_indivisible_rejected(self) -> None:
         with pytest.raises(ValueError):

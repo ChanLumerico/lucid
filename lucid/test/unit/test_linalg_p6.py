@@ -66,9 +66,7 @@ class TestSolveEx:
 
 class TestLu:
     def test_factor_product_recovers_A(self) -> None:
-        A = lucid.tensor(
-            [[4.0, 1.0, 1.0], [1.0, 3.0, 1.0], [1.0, 1.0, 2.0]]
-        )
+        A = lucid.tensor([[4.0, 1.0, 1.0], [1.0, 3.0, 1.0], [1.0, 1.0, 2.0]])
         P, L, U = lucid.linalg.lu(A)
         np.testing.assert_allclose((P @ L @ U).numpy(), A.numpy(), atol=1e-4)
 
@@ -100,9 +98,7 @@ class TestLu:
 
 class TestLdlSolve:
     def test_solves_simple_pivot_case(self) -> None:
-        A = lucid.tensor(
-            [[4.0, 1.0, 1.0], [1.0, 3.0, 1.0], [1.0, 1.0, 2.0]]
-        )
+        A = lucid.tensor([[4.0, 1.0, 1.0], [1.0, 3.0, 1.0], [1.0, 1.0, 2.0]])
         LD, piv = lucid.linalg.ldl_factor(A)
         B = lucid.tensor([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
         X = lucid.linalg.ldl_solve(LD, piv, B)
@@ -112,9 +108,7 @@ class TestLdlSolve:
 class TestLinalgDiagonal:
     def test_basic(self) -> None:
         A = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
-        np.testing.assert_array_equal(
-            lucid.linalg.diagonal(A).numpy(), [1.0, 5.0, 9.0]
-        )
+        np.testing.assert_array_equal(lucid.linalg.diagonal(A).numpy(), [1.0, 5.0, 9.0])
 
     def test_offset(self) -> None:
         A = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])

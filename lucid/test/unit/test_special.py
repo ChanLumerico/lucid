@@ -14,7 +14,6 @@ import pytest
 import lucid
 import lucid.special as sp
 
-
 _ATOL_DEFAULT = 1e-4
 _ATOL_LOOSE = 5e-3  # for Abramowitz polynomial-based ops (i1, etc.)
 
@@ -96,10 +95,13 @@ class TestXlog1py:
 
     def test_2_1(self) -> None:
         # 2 · log(2)
-        assert abs(
-            sp.xlog1py(lucid.tensor([2.0]), lucid.tensor([1.0])).item()
-            - 2.0 * math.log(2.0)
-        ) < 1e-6
+        assert (
+            abs(
+                sp.xlog1py(lucid.tensor([2.0]), lucid.tensor([1.0])).item()
+                - 2.0 * math.log(2.0)
+            )
+            < 1e-6
+        )
 
     def test_x_zero_propagates(self) -> None:
         out = sp.xlog1py(lucid.tensor([0.0]), lucid.tensor([5.0])).item()
@@ -128,9 +130,7 @@ class TestMultigammaln:
     def test_p_one_eq_lgamma(self) -> None:
         # Γ_1(a) = Γ(a), so multigammaln(a, 1) = lgamma(a).
         a = lucid.tensor([3.5])
-        assert abs(
-            sp.multigammaln(a, 1).item() - lucid.lgamma(a).item()
-        ) < 1e-5
+        assert abs(sp.multigammaln(a, 1).item() - lucid.lgamma(a).item()) < 1e-5
 
     def test_p_three_known(self) -> None:
         # multigammaln(5, 3) ≈ 9.1406 (cross-check value from SciPy).
@@ -144,25 +144,39 @@ class TestMultigammaln:
 class TestPolygamma:
     def test_n0_eq_digamma(self) -> None:
         # polygamma(0, 1) = ψ(1) = -γ ≈ -0.5772
-        assert abs(
-            sp.polygamma(0, lucid.tensor([1.0])).item() - (-0.5772156649)
-        ) < _ATOL_DEFAULT
+        assert (
+            abs(sp.polygamma(0, lucid.tensor([1.0])).item() - (-0.5772156649))
+            < _ATOL_DEFAULT
+        )
 
     def test_n1_at_one_is_pi2_over_6(self) -> None:
         # ψ¹(1) = ζ(2) = π²/6 ≈ 1.6449
-        assert abs(
-            sp.polygamma(1, lucid.tensor([1.0])).item() - math.pi ** 2 / 6.0
-        ) < 1e-4
+        assert (
+            abs(sp.polygamma(1, lucid.tensor([1.0])).item() - math.pi**2 / 6.0) < 1e-4
+        )
 
     def test_n1_at_two(self) -> None:
         # ψ¹(2) = ζ(2) - 1 ≈ 0.6449
-        assert abs(
-            sp.polygamma(1, lucid.tensor([2.0])).item() - (math.pi ** 2 / 6.0 - 1.0)
-        ) < 1e-4
+        assert (
+            abs(sp.polygamma(1, lucid.tensor([2.0])).item() - (math.pi**2 / 6.0 - 1.0))
+            < 1e-4
+        )
 
-    def test_n_ge_2_not_implemented(self) -> None:
+    def test_n2_negative(self) -> None:
+        # ψ²(x) is negative for x > 0; ψ²(1) = -2·ζ(3) ≈ -2.404.
+        v: float = float(sp.polygamma(2, lucid.tensor([1.0])).item())
+        assert v < 0
+        assert abs(v + 2.0 * 1.20205690315959428) < 1e-3  # 2·ζ(3).
+
+    def test_n3_positive(self) -> None:
+        # ψ³(x) > 0 for x > 0; ψ³(1) = 6·ζ(4) = π⁴/15 ≈ 6.494.
+        v: float = float(sp.polygamma(3, lucid.tensor([1.0])).item())
+        assert v > 0
+        assert abs(v - math.pi**4 / 15.0) < 1e-3
+
+    def test_n_ge_4_not_implemented(self) -> None:
         with pytest.raises(NotImplementedError):
-            sp.polygamma(2, lucid.tensor([1.0]))
+            sp.polygamma(4, lucid.tensor([1.0]))
 
 
 class TestSphericalBessel:
@@ -176,9 +190,10 @@ class TestSphericalBessel:
 
     def test_j0_at_one(self) -> None:
         # sin(1)/1 = sin(1) ≈ 0.84147
-        assert abs(
-            sp.spherical_bessel_j0(lucid.tensor([1.0])).item() - math.sin(1.0)
-        ) < 1e-6
+        assert (
+            abs(sp.spherical_bessel_j0(lucid.tensor([1.0])).item() - math.sin(1.0))
+            < 1e-6
+        )
 
 
 class TestNamespacePolicy:
@@ -186,8 +201,17 @@ class TestNamespacePolicy:
         # New special functions live under ``lucid.special.<name>`` only;
         # no top-level shortcut.
         for name in (
-            "erfcx", "i0e", "i1", "i1e", "ndtr", "ndtri", "log_ndtr",
-            "xlog1py", "entr", "multigammaln", "polygamma",
+            "erfcx",
+            "i0e",
+            "i1",
+            "i1e",
+            "ndtr",
+            "ndtri",
+            "log_ndtr",
+            "xlog1py",
+            "entr",
+            "multigammaln",
+            "polygamma",
             "spherical_bessel_j0",
         ):
             assert not hasattr(lucid, name), (

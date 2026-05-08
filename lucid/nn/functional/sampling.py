@@ -529,8 +529,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     c = int(x.shape[1])
     if c % int(groups) != 0:
         raise ValueError(
-            f"channel_shuffle: channel count {c} not divisible by groups "
-            f"{groups}"
+            f"channel_shuffle: channel count {c} not divisible by groups " f"{groups}"
         )
     ch_per_group = c // int(groups)
     spatial = list(x.shape[2:])
@@ -554,9 +553,7 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     import lucid as _l
 
     if x.ndim != 2:
-        raise ValueError(
-            f"pdist: expected a 2-D input, got shape {tuple(x.shape)}"
-        )
+        raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(x.shape)}")
     n = int(x.shape[0])
     if n < 2:
         return _l.zeros(0, dtype=x.dtype, device=x.device)

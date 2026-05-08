@@ -48,9 +48,7 @@ class Transform:
         raise NotImplementedError(f"{type(self).__name__}._inverse")
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        raise NotImplementedError(
-            f"{type(self).__name__}.log_abs_det_jacobian"
-        )
+        raise NotImplementedError(f"{type(self).__name__}.log_abs_det_jacobian")
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
@@ -138,11 +136,8 @@ class AffineTransform(Transform):
         return (y - self.loc) / self.scale
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        return (
-            self.scale.abs().log()
-            + lucid.zeros(
-                tuple(x.shape), dtype=x.dtype, device=x.device
-            )
+        return self.scale.abs().log() + lucid.zeros(
+            tuple(x.shape), dtype=x.dtype, device=x.device
         )
 
 

@@ -21,7 +21,10 @@ from lucid.distributions.distribution import Distribution, ExponentialFamily
 _MAX_GAMMA_RETRIES: int = 8
 
 
-from lucid.distributions._util import as_tensor as _as_tensor, broadcast_pair as _broadcast_pair
+from lucid.distributions._util import (
+    as_tensor as _as_tensor,
+    broadcast_pair as _broadcast_pair,
+)
 
 
 def _sample_standard_gamma(
@@ -53,9 +56,7 @@ def _sample_standard_gamma(
         # Acceptance: v > 0  AND  log(u) < 0.5·z² + d − d·v + d·log(v).
         v_safe = v.clip(1e-30, float("inf"))
         log_v = v_safe.log()
-        condition = (v > 0) & (
-            u.log() < 0.5 * z * z + d - d * v + d * log_v
-        )
+        condition = (v > 0) & (u.log() < 0.5 * z * z + d - d * v + d * log_v)
         new_accept = condition & (has_sample == 0)
         new_mask = new_accept.to(alpha.dtype)
         accepted = accepted + new_mask * d * v
@@ -64,12 +65,11 @@ def _sample_standard_gamma(
             break
 
     # Apply the α<1 transform: x_α = x_{α+1} · U^{1/α}.
-    boost_factor = (
-        boost
-        * lucid.rand(*out_shape, dtype=alpha.dtype, device=alpha.device).clip(1e-30, 1.0)
-        ** (1.0 / alpha.clip(1e-30, float("inf")))
-        + (1.0 - boost)  # No-op factor when α ≥ 1.
-    )
+    boost_factor = boost * lucid.rand(
+        *out_shape, dtype=alpha.dtype, device=alpha.device
+    ).clip(1e-30, 1.0) ** (1.0 / alpha.clip(1e-30, float("inf"))) + (
+        1.0 - boost
+    )  # No-op factor when α ≥ 1.
     return accepted * boost_factor
 
 
@@ -88,9 +88,7 @@ class Gamma(ExponentialFamily):
     ) -> None:
         self.concentration = _as_tensor(concentration)
         self.rate = _as_tensor(rate)
-        self.concentration, self.rate = _broadcast_pair(
-            self.concentration, self.rate
-        )
+        self.concentration, self.rate = _broadcast_pair(self.concentration, self.rate)
         super().__init__(
             batch_shape=tuple(self.concentration.shape),
             event_shape=(),
@@ -253,4 +251,6 @@ class Dirichlet(ExponentialFamily):
         k = a.shape[-1]
         log_b = lucid.lgamma(a).sum(dim=-1, keepdim=True) - lucid.lgamma(s)
         digamma_diff = (a - 1.0) * (lucid.digamma(a) - lucid.digamma(s))
-        return (log_b + (s - k) * lucid.digamma(s) - digamma_diff.sum(dim=-1, keepdim=True)).squeeze(-1)
+        return (
+            log_b + (s - k) * lucid.digamma(s) - digamma_diff.sum(dim=-1, keepdim=True)
+        ).squeeze(-1)

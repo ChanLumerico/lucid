@@ -8,7 +8,6 @@ import pytest
 import lucid
 import lucid.nn as nn
 
-
 # ── pooling — MaxUnpool / FractionalMaxPool ────────────────────────────────
 
 
@@ -62,9 +61,7 @@ class TestCircularPad:
         m = nn.CircularPad1d(1)
         x = lucid.tensor([[[1.0, 2.0, 3.0]]])
         # Wraps: last element → front, first → back.
-        np.testing.assert_array_equal(
-            m(x).numpy(), [[[3.0, 1.0, 2.0, 3.0, 1.0]]]
-        )
+        np.testing.assert_array_equal(m(x).numpy(), [[[3.0, 1.0, 2.0, 3.0, 1.0]]])
 
     def test_pad2d_shape(self) -> None:
         m = nn.CircularPad2d((1, 1, 1, 1))
@@ -83,21 +80,25 @@ class TestCircularPad:
 class TestSoftMarginLoss:
     def test_default_mean(self) -> None:
         m = nn.SoftMarginLoss()
-        assert abs(
-            m(lucid.tensor([0.0]), lucid.tensor([1.0])).item() - math.log(2.0)
-        ) < 1e-6
+        assert (
+            abs(m(lucid.tensor([0.0]), lucid.tensor([1.0])).item() - math.log(2.0))
+            < 1e-6
+        )
 
 
 class TestMultiLabelSoftMarginLoss:
     def test_default_mean(self) -> None:
         m = nn.MultiLabelSoftMarginLoss()
-        assert abs(
-            m(
-                lucid.tensor([[0.0, 0.0, 0.0]]),
-                lucid.tensor([[0.0, 0.0, 0.0]]),
-            ).item()
-            - math.log(2.0)
-        ) < 1e-6
+        assert (
+            abs(
+                m(
+                    lucid.tensor([[0.0, 0.0, 0.0]]),
+                    lucid.tensor([[0.0, 0.0, 0.0]]),
+                ).item()
+                - math.log(2.0)
+            )
+            < 1e-6
+        )
 
 
 class TestTripletMarginWithDistanceLoss:

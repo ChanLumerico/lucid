@@ -74,20 +74,12 @@ class Independent(Distribution):
         if self.reinterpreted_batch_ndims == 0:
             return log_p
         # Lucid's sum accepts a list of dims.
-        dims = list(
-            range(
-                log_p.ndim - self.reinterpreted_batch_ndims, log_p.ndim
-            )
-        )
+        dims = list(range(log_p.ndim - self.reinterpreted_batch_ndims, log_p.ndim))
         return log_p.sum(dim=dims)
 
     def entropy(self) -> Tensor:
         h = self.base_dist.entropy()
         if self.reinterpreted_batch_ndims == 0:
             return h
-        dims = list(
-            range(
-                h.ndim - self.reinterpreted_batch_ndims, h.ndim
-            )
-        )
+        dims = list(range(h.ndim - self.reinterpreted_batch_ndims, h.ndim))
         return h.sum(dim=dims)

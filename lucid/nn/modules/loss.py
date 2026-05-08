@@ -471,9 +471,7 @@ class MultiLabelSoftMarginLoss(Module):
     """Element-wise binary cross-entropy with logits, averaged across the
     class dimension — the multi-label soft-margin form."""
 
-    def __init__(
-        self, weight: Tensor | None = None, reduction: str = "mean"
-    ) -> None:
+    def __init__(self, weight: Tensor | None = None, reduction: str = "mean") -> None:
         super().__init__()
         self.weight = weight
         self.reduction = reduction
@@ -516,9 +514,7 @@ class TripletMarginWithDistanceLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
-    def forward(
-        self, anchor: Tensor, positive: Tensor, negative: Tensor
-    ) -> Tensor:
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
         from lucid._factories.creation import zeros_like
 
         d_pos = self.distance_function(anchor, positive)
@@ -541,6 +537,5 @@ class TripletMarginWithDistanceLoss(Module):
 
     def extra_repr(self) -> str:
         return (
-            f"margin={self.margin}, swap={self.swap}, "
-            f"reduction={self.reduction!r}"
+            f"margin={self.margin}, swap={self.swap}, " f"reduction={self.reduction!r}"
         )

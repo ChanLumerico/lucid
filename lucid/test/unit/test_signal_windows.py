@@ -163,9 +163,9 @@ class TestNamespacePolicy:
         # Per H8: windows are accessed only through ``lucid.signal.windows``.
         # No top-level ``lucid.hann`` etc.
         for name in ("hann", "hamming", "blackman", "nuttall", "kaiser"):
-            assert not hasattr(lucid, name), (
-                f"lucid.{name} should not exist — H8 forbids window shortcuts"
-            )
+            assert not hasattr(
+                lucid, name
+            ), f"lucid.{name} should not exist — H8 forbids window shortcuts"
 
     def test_signal_subpackage_exists(self) -> None:
         assert callable(lucid.signal.windows.hann)

@@ -116,6 +116,7 @@ __all__ = [
     # ── factory — random ──────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
     "rand_like", "randn_like", "manual_seed", "randperm",
+    "Generator", "seed", "initial_seed", "get_rng_state", "set_rng_state",
     # ── ops — unary ───────────────────────────────────────────────────────
     "abs", "neg", "sign",
     "exp", "exp2", "log", "log2", "log10", "log1p",
@@ -130,12 +131,13 @@ __all__ = [
     # ── ops — binary ──────────────────────────────────────────────────────
     "add", "sub", "mul", "div", "pow",
     "matmul", "mm", "bmm", "tensordot", "kron",
-    "atan2", "fmod", "remainder", "hypot", "logaddexp",
+    "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
     "maximum", "minimum",
     "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
     "eq", "ne", "lt", "le", "gt", "ge", "isclose",
     "logical_and", "logical_or", "logical_xor", "logical_not",
     "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+    "bitwise_left_shift", "bitwise_right_shift",
     # ── ops — reduction ───────────────────────────────────────────────────
     "sum", "mean", "max", "min", "prod",
     "argmax", "argmin", "cumsum", "cumprod",
@@ -210,6 +212,7 @@ _FACTORY_NAMES: frozenset[str] = frozenset([
     # ── random ────────────────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
     "rand_like", "randn_like", "manual_seed", "randperm",
+    "Generator", "seed", "initial_seed", "get_rng_state", "set_rng_state",
 ])
 
 _SCATTER_NAMES: frozenset[str] = frozenset(["scatter_add"])
@@ -228,7 +231,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "erf", "erfinv",
     # ── binary math ───────────────────────────────────────────────────────
     "add", "sub", "mul", "div", "pow",
-    "atan2", "fmod", "remainder", "hypot", "logaddexp",
+    "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
     "maximum", "minimum",
     # ── linear algebra ────────────────────────────────────────────────────
     "matmul", "mm", "bmm", "tensordot", "kron",
@@ -240,6 +243,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     # ── logical / bitwise ─────────────────────────────────────────────────
     "logical_and", "logical_or", "logical_xor", "logical_not",
     "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+    "bitwise_left_shift", "bitwise_right_shift",
     # ── reduction ─────────────────────────────────────────────────────────
     "sum", "mean", "max", "min", "prod",
     "argmax", "argmin", "cumsum", "cumprod", "cummax", "cummin",

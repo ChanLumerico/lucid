@@ -8,14 +8,16 @@ import pytest
 import lucid
 import lucid.distributions as D
 
-
 # ── Normal ────────────────────────────────────────────────────────────────
 
 
 class TestNormal:
     def test_log_prob_at_zero(self) -> None:
         n = D.Normal(0.0, 1.0)
-        assert abs(n.log_prob(lucid.tensor(0.0)).item() + 0.5 * math.log(2.0 * math.pi)) < 1e-5
+        assert (
+            abs(n.log_prob(lucid.tensor(0.0)).item() + 0.5 * math.log(2.0 * math.pi))
+            < 1e-5
+        )
 
     def test_entropy(self) -> None:
         n = D.Normal(0.0, 1.0)
@@ -186,9 +188,7 @@ class TestBeta:
 class TestDirichlet:
     def test_mean_normalized(self) -> None:
         d = D.Dirichlet(lucid.tensor([1.0, 2.0, 3.0]))
-        np.testing.assert_allclose(
-            d.mean.numpy(), [1 / 6, 2 / 6, 3 / 6], atol=1e-5
-        )
+        np.testing.assert_allclose(d.mean.numpy(), [1 / 6, 2 / 6, 3 / 6], atol=1e-5)
 
     def test_sample_simplex(self) -> None:
         d = D.Dirichlet(lucid.tensor([1.0, 2.0, 3.0]))
@@ -209,9 +209,10 @@ class TestMultivariateNormal:
 
     def test_log_prob_at_origin(self) -> None:
         # log p(0 | 0, I) = -D/2 · log 2π = -log 2π.
-        assert abs(
-            self._mvn().log_prob(lucid.zeros(2)).item() + math.log(2.0 * math.pi)
-        ) < 1e-4
+        assert (
+            abs(self._mvn().log_prob(lucid.zeros(2)).item() + math.log(2.0 * math.pi))
+            < 1e-4
+        )
 
     def test_entropy(self) -> None:
         # H = D/2 · (1 + log 2π) for unit covariance.
@@ -278,14 +279,25 @@ class TestConstraints:
 class TestSurface:
     def test_distributions_visible(self) -> None:
         for name in (
-            "Distribution", "ExponentialFamily",
-            "Normal", "LogNormal", "Uniform",
-            "Exponential", "Laplace", "Cauchy",
-            "Gamma", "Chi2", "Beta", "Dirichlet",
-            "Bernoulli", "Geometric",
-            "Categorical", "OneHotCategorical",
+            "Distribution",
+            "ExponentialFamily",
+            "Normal",
+            "LogNormal",
+            "Uniform",
+            "Exponential",
+            "Laplace",
+            "Cauchy",
+            "Gamma",
+            "Chi2",
+            "Beta",
+            "Dirichlet",
+            "Bernoulli",
+            "Geometric",
+            "Categorical",
+            "OneHotCategorical",
             "MultivariateNormal",
-            "kl_divergence", "register_kl",
+            "kl_divergence",
+            "register_kl",
             "constraints",
         ):
             assert hasattr(D, name), f"lucid.distributions.{name} missing"
@@ -293,9 +305,14 @@ class TestSurface:
     def test_h8_no_top_level_leak(self) -> None:
         # H8: distributions live only under lucid.distributions.
         for name in (
-            "Normal", "Bernoulli", "Categorical",
-            "Gamma", "Beta", "MultivariateNormal",
-            "kl_divergence", "Distribution",
+            "Normal",
+            "Bernoulli",
+            "Categorical",
+            "Gamma",
+            "Beta",
+            "MultivariateNormal",
+            "kl_divergence",
+            "Distribution",
         ):
             assert not hasattr(lucid, name), (
                 f"lucid.{name} should not exist at top level — H8 forbids "
@@ -308,9 +325,7 @@ class TestSurface:
 
 class TestIndependent:
     def test_log_prob_summed(self) -> None:
-        base = D.Normal(
-            lucid.tensor([0.0, 0.0, 0.0]), lucid.tensor([1.0, 1.0, 1.0])
-        )
+        base = D.Normal(lucid.tensor([0.0, 0.0, 0.0]), lucid.tensor([1.0, 1.0, 1.0]))
         ind = D.Independent(base, 1)
         v = lucid.tensor([0.0, 0.0, 0.0])
         assert ind.batch_shape == ()
@@ -325,9 +340,7 @@ class TestStudentT:
         # StudentT(df=5, loc=0, scale=1) at x=0 has a known closed form:
         # log Γ(3) − log Γ(2.5) − 0.5·log(5π).
         t = D.StudentT(5.0, 0.0, 1.0)
-        expected = (
-            math.lgamma(3.0) - math.lgamma(2.5) - 0.5 * math.log(5.0 * math.pi)
-        )
+        expected = math.lgamma(3.0) - math.lgamma(2.5) - 0.5 * math.log(5.0 * math.pi)
         assert abs(t.log_prob(lucid.tensor(0.0)).item() - expected) < 1e-4
 
     def test_sample_shape(self) -> None:
@@ -339,32 +352,24 @@ class TestTransforms:
     def test_exp_inverse_roundtrip(self) -> None:
         x = lucid.tensor(1.5)
         e = D.ExpTransform()
-        np.testing.assert_allclose(
-            e.inv(e(x)).numpy(), x.numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(e.inv(e(x)).numpy(), x.numpy(), atol=1e-5)
 
     def test_sigmoid_inverse_roundtrip(self) -> None:
         x = lucid.tensor(0.5)
         s = D.SigmoidTransform()
-        np.testing.assert_allclose(
-            s.inv(s(x)).numpy(), x.numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(s.inv(s(x)).numpy(), x.numpy(), atol=1e-5)
 
     def test_affine_inverse(self) -> None:
         a = D.AffineTransform(3.0, 2.0)
         x = lucid.tensor(1.0)
-        np.testing.assert_allclose(
-            a.inv(a(x)).numpy(), x.numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(a.inv(a(x)).numpy(), x.numpy(), atol=1e-5)
 
     def test_compose_chain(self) -> None:
         c = D.ComposeTransform([D.ExpTransform(), D.AffineTransform(0.0, 2.0)])
         x = lucid.tensor(1.0)
         # exp(1) · 2 ≈ 2 · e ≈ 5.436.
         assert abs(c(x).item() - 2.0 * math.e) < 1e-4
-        np.testing.assert_allclose(
-            c.inv(c(x)).numpy(), x.numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(c.inv(c(x)).numpy(), x.numpy(), atol=1e-5)
 
 
 class TestTransformedDistribution:
@@ -373,7 +378,10 @@ class TestTransformedDistribution:
         td = D.TransformedDistribution(n, D.ExpTransform())
         ref = D.LogNormal(0.0, 1.0)
         for v in (0.5, 1.0, 2.0, 3.0):
-            assert abs(
-                td.log_prob(lucid.tensor(v)).item()
-                - ref.log_prob(lucid.tensor(v)).item()
-            ) < 1e-4
+            assert (
+                abs(
+                    td.log_prob(lucid.tensor(v)).item()
+                    - ref.log_prob(lucid.tensor(v)).item()
+                )
+                < 1e-4
+            )

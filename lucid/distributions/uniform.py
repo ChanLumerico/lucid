@@ -11,7 +11,10 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution
 
 
-from lucid.distributions._util import as_tensor as _as_tensor, broadcast_pair as _broadcast_pair
+from lucid.distributions._util import (
+    as_tensor as _as_tensor,
+    broadcast_pair as _broadcast_pair,
+)
 
 
 class Uniform(Distribution):
@@ -69,8 +72,10 @@ class Uniform(Distribution):
             in_support,
             log_density + value * 0,
             lucid.full(
-                tuple(value.shape), -math.inf,
-                device=value.device, dtype=value.dtype,
+                tuple(value.shape),
+                -math.inf,
+                device=value.device,
+                dtype=value.dtype,
             ),
         )
 

@@ -79,16 +79,12 @@ class TestTriIndices:
         # Lower triangle including diagonal: (0,0), (1,0), (1,1), (2,0), (2,1), (2,2)
         assert out.shape == (2, 6)
         rows, cols = out.tolist()
-        assert list(zip(rows, cols)) == [
-            (0, 0), (1, 0), (1, 1), (2, 0), (2, 1), (2, 2)
-        ]
+        assert list(zip(rows, cols)) == [(0, 0), (1, 0), (1, 1), (2, 0), (2, 1), (2, 2)]
 
     def test_triu_indices_3x3_main_diag(self) -> None:
         out = lucid.triu_indices(3).numpy()
         rows, cols = out.tolist()
-        assert list(zip(rows, cols)) == [
-            (0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)
-        ]
+        assert list(zip(rows, cols)) == [(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)]
 
     def test_tril_offset_negative(self) -> None:
         out = lucid.tril_indices(3, offset=-1).numpy()

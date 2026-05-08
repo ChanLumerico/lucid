@@ -202,6 +202,113 @@ class TestLogical:
         out_t = torch_fn(_REF.tensor(a_np.copy()), _REF.tensor(b_np.copy()))  # type: ignore[operator]
         np.testing.assert_array_equal(_np(out_l), out_t.numpy())
 
+    @pytest.mark.parametrize(
+        "lucid_fn,torch_fn",
+        [
+            (lucid.bitwise_left_shift, _REF.bitwise_left_shift),
+            (lucid.bitwise_right_shift, _REF.bitwise_right_shift),
+        ],
+    )
+    def test_bitwise_shift_pairwise(self, lucid_fn, torch_fn) -> None:  # type: ignore[no-untyped-def]
+        a_np: np.ndarray = np.array([1, 2, 4, 8, -8, 100], dtype=np.int32)
+        b_np: np.ndarray = np.array([1, 2, 3, 0, 1, 1], dtype=np.int32)
+        out_l: lucid.Tensor = lucid_fn(  # type: ignore[operator]
+            lucid.tensor(a_np.copy(), dtype=lucid.int32),
+            lucid.tensor(b_np.copy(), dtype=lucid.int32),
+        )
+        out_t = torch_fn(_REF.tensor(a_np.copy()), _REF.tensor(b_np.copy()))  # type: ignore[operator]
+        np.testing.assert_array_equal(_np(out_l), out_t.numpy())
+
+    def test_bitwise_left_shift_oob_zero(self) -> None:
+        # Out-of-range shift counts return 0 — clamp behaviour.
+        a: lucid.Tensor = lucid.tensor([1, 1], dtype=lucid.int32)
+        # 32-bit width: shift by 100 is undefined in C++ but Lucid clamps to 0.
+        b: lucid.Tensor = lucid.tensor([100, -1], dtype=lucid.int32)
+        np.testing.assert_array_equal(
+            _np(lucid.bitwise_left_shift(a, b)), [0, 0]
+        )
+
+    def test_bitwise_shift_rejects_bool(self) -> None:
+        b: lucid.Tensor = lucid.tensor([True, False], dtype=lucid.bool_)
+        with pytest.raises(Exception):
+            lucid.bitwise_left_shift(b, b)
+
+    def test_bitwise_shift_rejects_float(self) -> None:
+        f: lucid.Tensor = lucid.tensor([1.0, 2.0])
+        with pytest.raises(Exception):
+            lucid.bitwise_right_shift(f, f)
+
+
+# ── Nextafter ───────────────────────────────────────────────────────────────
+
+
+class TestNextafter:
+    def test_basic_directions(self) -> None:
+        import math
+        a: lucid.Tensor = lucid.tensor([1.0, 2.0, -1.0], dtype=lucid.float64)
+        b: lucid.Tensor = lucid.tensor([2.0, 1.0, -2.0], dtype=lucid.float64)
+        out: np.ndarray = _np(lucid.nextafter(a, b))
+        np.testing.assert_array_equal(
+            out,
+            [
+                math.nextafter(1.0, 2.0),
+                math.nextafter(2.0, 1.0),
+                math.nextafter(-1.0, -2.0),
+            ],
+        )
+
+    def test_zero_to_smallest_subnormal(self) -> None:
+        a: lucid.Tensor = lucid.tensor([0.0])
+        b: lucid.Tensor = lucid.tensor([1.0])
+        v: float = float(_np(lucid.nextafter(a, b))[0])
+        assert v > 0 and v < 1e-30  # smallest positive F32 subnormal.
+
+    def test_equal_returns_input(self) -> None:
+        a: lucid.Tensor = lucid.tensor([1.5, -3.0])
+        np.testing.assert_array_equal(_np(lucid.nextafter(a, a)), a.numpy())
+
+    def test_rejects_int(self) -> None:
+        i: lucid.Tensor = lucid.tensor([1], dtype=lucid.int32)
+        with pytest.raises(Exception):
+            lucid.nextafter(i, i)
+
+
+# ── Polygamma extension to n ∈ {2, 3} ──────────────────────────────────────
+
+
+class TestPolygammaExtended:
+    def test_n0_eq_digamma(self) -> None:
+        x: lucid.Tensor = lucid.tensor([1.0, 2.0, 5.0])
+        np.testing.assert_allclose(
+            _np(lucid.special.polygamma(0, x)),
+            _np(lucid.digamma(x)),
+            atol=1e-5,
+        )
+
+    def test_n1_trigamma_at_one(self) -> None:
+        # ψ¹(1) = π²/6.
+        import math
+        v: float = float(lucid.special.polygamma(1, lucid.tensor([1.0])).item())
+        assert abs(v - math.pi ** 2 / 6.0) < 1e-3
+
+    def test_n2_negative(self) -> None:
+        # ψ²(x) is negative for x > 0.
+        out: np.ndarray = _np(lucid.special.polygamma(2, lucid.tensor([1.0, 2.0, 5.0])))
+        assert (out < 0).all()
+
+    def test_n3_positive(self) -> None:
+        # ψ³(x) is positive for x > 0.
+        out: np.ndarray = _np(lucid.special.polygamma(3, lucid.tensor([1.0, 2.0, 5.0])))
+        assert (out > 0).all()
+
+    def test_high_order_rejected(self) -> None:
+        with pytest.raises(NotImplementedError):
+            lucid.special.polygamma(4, lucid.tensor([1.0]))
+
+    def test_negative_n_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            lucid.special.polygamma(-1, lucid.tensor([1.0]))
+
 
 # ── Math (unary) ─────────────────────────────────────────────────────────────
 

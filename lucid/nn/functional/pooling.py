@@ -300,8 +300,13 @@ def lp_pool1d(
 ) -> Tensor:
     """1-D power-average pooling: ``(avg_pool1d(|x|^p) · K)^(1/p)``."""
     return _lp_pool(
-        x, norm_type, avg_pool1d,
-        kernel_size=kernel_size, stride=stride, ceil_mode=ceil_mode, n=1,
+        x,
+        norm_type,
+        avg_pool1d,
+        kernel_size=kernel_size,
+        stride=stride,
+        ceil_mode=ceil_mode,
+        n=1,
     )
 
 
@@ -314,8 +319,13 @@ def lp_pool2d(
 ) -> Tensor:
     """2-D power-average pooling: ``(avg_pool2d(|x|^p) · K)^(1/p)``."""
     return _lp_pool(
-        x, norm_type, avg_pool2d,
-        kernel_size=kernel_size, stride=stride, ceil_mode=ceil_mode, n=2,
+        x,
+        norm_type,
+        avg_pool2d,
+        kernel_size=kernel_size,
+        stride=stride,
+        ceil_mode=ceil_mode,
+        n=2,
     )
 
 
@@ -350,7 +360,13 @@ def _scatter_unpool(
 
     # Flatten the trailing spatial dims of ``x`` and ``indices`` so that
     # ``scatter_add`` works on a single 1-D axis.
-    x_flat_shape = leading + [int(x.shape[-n_spatial:].numel()) if hasattr(x.shape[-n_spatial:], "numel") else 1]
+    x_flat_shape = leading + [
+        (
+            int(x.shape[-n_spatial:].numel())
+            if hasattr(x.shape[-n_spatial:], "numel")
+            else 1
+        )
+    ]
     flat_count = 1
     for s in x.shape[-n_spatial:]:
         flat_count *= int(s)

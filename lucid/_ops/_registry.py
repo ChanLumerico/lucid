@@ -299,6 +299,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("remainder", _R.remainder, 2, method_name="remainder", free_fn_name="remainder"),
     OpEntry("hypot",     _R.hypot,     2, method_name="hypot",     free_fn_name="hypot"),
     OpEntry("logaddexp", _R.logaddexp, 2, method_name="logaddexp", free_fn_name="logaddexp"),
+    OpEntry("nextafter", _R.nextafter, 2, method_name="nextafter", free_fn_name="nextafter"),
 
     # ── reduction compositions ──────────────────────────────────────────────
     OpEntry("logsumexp", A._logsumexp_adapter, 1,
@@ -374,6 +375,10 @@ _REGISTRY: list[OpEntry] = [
             method_name="bitwise_or",  free_fn_name="bitwise_or"),
     OpEntry("bitwise_xor", _R.bitwise_xor, 2,
             method_name="bitwise_xor", free_fn_name="bitwise_xor"),
+    OpEntry("bitwise_left_shift", _R.bitwise_left_shift, 2,
+            method_name="bitwise_left_shift", free_fn_name="bitwise_left_shift"),
+    OpEntry("bitwise_right_shift", _R.bitwise_right_shift, 2,
+            method_name="bitwise_right_shift", free_fn_name="bitwise_right_shift"),
 
     # masked_select: engine kernel returns a flat 1-D tensor of selected
     # elements.  Both inputs are tensors so n_tensor_args=2.

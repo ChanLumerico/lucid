@@ -21,4 +21,11 @@ LUCID_API TensorImplPtr bitwise_or_op(const TensorImplPtr& a, const TensorImplPt
 // Element-wise bitwise XOR: out[i] = a[i] ^ b[i].
 LUCID_API TensorImplPtr bitwise_xor_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
+// Element-wise left shift: out[i] = a[i] << b[i].
+// Bool dtype is rejected — the operation is only defined for integers.
+LUCID_API TensorImplPtr bitwise_left_shift_op(const TensorImplPtr& a, const TensorImplPtr& b);
+
+// Element-wise right shift: out[i] = a[i] >> b[i].
+LUCID_API TensorImplPtr bitwise_right_shift_op(const TensorImplPtr& a, const TensorImplPtr& b);
+
 }  // namespace lucid

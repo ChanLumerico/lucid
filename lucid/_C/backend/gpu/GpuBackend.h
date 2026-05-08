@@ -136,6 +136,10 @@ public:
                 return ::mlx::core::bitwise_or(x, y);
             if (op == 2)
                 return ::mlx::core::bitwise_xor(x, y);
+            if (op == 3)
+                return ::mlx::core::left_shift(x, y);
+            if (op == 4)
+                return ::mlx::core::right_shift(x, y);
             ErrorBuilder("gpu_backend::bitwise_binary").fail("unknown op");
         });
     }

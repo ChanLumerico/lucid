@@ -191,6 +191,7 @@ lucid_object_library(
     ops/utils/Sort.cpp
     ops/utils/Meshgrid.cpp
     ops/utils/Histogram.cpp
+    ops/utils/Nextafter.cpp
     ops/composite/Math.cpp
     ops/composite/Reductions.cpp
     ops/composite/Matrix.cpp

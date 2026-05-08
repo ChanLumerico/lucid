@@ -270,6 +270,9 @@ public:
 
         auto run = [&](auto* dst, const auto* lhs, const auto* rhs) {
             using T = std::remove_pointer_t<decltype(dst)>;
+            // Width of T in bits — used to clamp shift amounts so we don't
+            // hit the C++ undefined-behaviour zone (shifts ≥ width are UB).
+            constexpr std::int64_t kWidth = static_cast<std::int64_t>(sizeof(T) * 8);
             for (std::size_t i = 0; i < n; ++i) {
                 const auto x = static_cast<std::int64_t>(lhs[i]);
                 const auto y = static_cast<std::int64_t>(rhs[i]);
@@ -280,7 +283,25 @@ public:
                     out = x | y;
                 else if (op == 2)
                     out = x ^ y;
-                else
+                else if (op == 3) {
+                    // Left-shift: clamp y into [0, width) — out-of-range
+                    // shifts are UB in C++, but the reference framework
+                    // returns 0 for y ≥ width and 0 for y < 0.
+                    if (y < 0 || y >= kWidth)
+                        out = 0;
+                    else
+                        out = static_cast<std::int64_t>(static_cast<T>(x) << y);
+                } else if (op == 4) {
+                    // Arithmetic right-shift on the *narrow* type so sign
+                    // extension matches the input dtype.  Same out-of-range
+                    // contract as left-shift.
+                    if (y < 0)
+                        out = 0;
+                    else if (y >= kWidth)
+                        out = (x < 0) ? -1 : 0;
+                    else
+                        out = static_cast<std::int64_t>(static_cast<T>(x) >> y);
+                } else
                     ErrorBuilder("cpu_backend::bitwise_binary").fail("unknown op");
                 dst[i] = static_cast<T>(out);
             }

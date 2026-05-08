@@ -142,13 +142,31 @@ class finfo:
         # same engine enum (F16), so we can't distinguish them via the engine.
         name = _resolve_dtype_name(dt)
         table: dict[str, tuple[int, float, float, float, float, float]] = {
-            "float64": (64, 2.220446049250313e-16, 1.7976931348623157e308,
-                        -1.7976931348623157e308, 2.2250738585072014e-308, 1e-15),
-            "float32": (32, 1.1920929e-7, 3.4028235e38,
-                        -3.4028235e38, 1.1754944e-38, 1e-6),
+            "float64": (
+                64,
+                2.220446049250313e-16,
+                1.7976931348623157e308,
+                -1.7976931348623157e308,
+                2.2250738585072014e-308,
+                1e-15,
+            ),
+            "float32": (
+                32,
+                1.1920929e-7,
+                3.4028235e38,
+                -3.4028235e38,
+                1.1754944e-38,
+                1e-6,
+            ),
             "float16": (16, 9.7656e-4, 65504.0, -65504.0, 6.1035e-5, 1e-3),
-            "bfloat16": (16, 7.8125e-3, 3.3895314e38,
-                         -3.3895314e38, 1.1754944e-38, 1e-2),
+            "bfloat16": (
+                16,
+                7.8125e-3,
+                3.3895314e38,
+                -3.3895314e38,
+                1.1754944e-38,
+                1e-2,
+            ),
         }
         if name not in table:
             raise TypeError(f"finfo expects a floating dtype, got {dt!r}")
@@ -178,7 +196,7 @@ class iinfo:
     def __init__(self, dt: "dtype | _C_engine.Dtype | str") -> None:  # type: ignore[name-defined]
         name = _resolve_dtype_name(dt)
         table: dict[str, tuple[int, int, int]] = {
-            "int8":  (8, -(2**7), 2**7 - 1),
+            "int8": (8, -(2**7), 2**7 - 1),
             "int16": (16, -(2**15), 2**15 - 1),
             "int32": (32, -(2**31), 2**31 - 1),
             "int64": (64, -(2**63), 2**63 - 1),

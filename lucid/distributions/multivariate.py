@@ -34,8 +34,7 @@ class MultivariateNormal(Distribution):
         validate_args: bool | None = None,
     ) -> None:
         n_set = sum(
-            x is not None
-            for x in (covariance_matrix, precision_matrix, scale_tril)
+            x is not None for x in (covariance_matrix, precision_matrix, scale_tril)
         )
         if n_set != 1:
             raise ValueError(
