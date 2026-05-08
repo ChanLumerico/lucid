@@ -32,12 +32,11 @@ from typing import (
     runtime_checkable,
 )
 
-import numpy as np
-
 from lucid._dtype import dtype as _DType
 from lucid._device import device as _Device
 
 if TYPE_CHECKING:
+    import numpy as np  # typing-only — no runtime import.
     from lucid._tensor.tensor import Tensor
 
 
