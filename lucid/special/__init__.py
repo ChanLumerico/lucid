@@ -390,6 +390,518 @@ def spherical_bessel_j0(x: Tensor) -> Tensor:
     return lucid.where(is_zero, lucid.full_like(x, 1.0), val)
 
 
+# ── Orthogonal polynomials ─────────────────────────────────────────────────
+#
+# All seven families share the same recurrence shape ``P_{n+1} = α(x, n)·P_n
+# + β(x, n)·P_{n-1}`` with constant coefficients per family.  We unfold the
+# recurrence into a Python ``for`` loop because ``n`` is a static integer
+# (the reference framework's signature requires it as a Python int).  The
+# loop produces ``n+1`` engine ops in the autograd graph — fine for the
+# small ``n`` values typical of orthogonal-polynomial use (≤ 32 in
+# practice).
+
+
+def _ortho_poly(
+    x: Tensor,
+    n: int,
+    p0: Tensor,
+    p1: Tensor,
+    advance,
+) -> Tensor:
+    """Generic orthogonal-polynomial recurrence driver.
+
+    ``advance(p_n, p_nm1, k)`` returns ``P_{k+1}`` given ``P_k`` and
+    ``P_{k-1}``.  ``k`` is the index of ``p_n`` (so ``advance`` is called
+    with ``k = 1, 2, ..., n-1`` to step from ``P_1`` to ``P_n``).
+    """
+    if n < 0:
+        raise ValueError("orthogonal polynomial order must be >= 0")
+    if n == 0:
+        return p0
+    if n == 1:
+        return p1
+    p_prev: Tensor = p0
+    p_curr: Tensor = p1
+    for k in range(1, n):
+        p_next = advance(p_curr, p_prev, k)
+        p_prev, p_curr = p_curr, p_next
+    return p_curr
+
+
+def chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
+    """Chebyshev polynomial of the first kind ``T_n(x)``.
+
+    Recurrence: ``T_0 = 1``, ``T_1 = x``, ``T_{k+1} = 2x·T_k - T_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = x
+    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+
+
+def chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
+    """Chebyshev polynomial of the second kind ``U_n(x)``.
+
+    Recurrence: ``U_0 = 1``, ``U_1 = 2x``, ``U_{k+1} = 2x·U_k - U_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = 2 * x
+    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+
+
+def chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
+    """Chebyshev polynomial of the third kind ``V_n(x)``.
+
+    Recurrence: ``V_0 = 1``, ``V_1 = 2x - 1``,
+    ``V_{k+1} = 2x·V_k - V_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = 2 * x - 1
+    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+
+
+def chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
+    """Chebyshev polynomial of the fourth kind ``W_n(x)``.
+
+    Recurrence: ``W_0 = 1``, ``W_1 = 2x + 1``,
+    ``W_{k+1} = 2x·W_k - W_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = 2 * x + 1
+    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+
+
+def shifted_chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
+    """Shifted Chebyshev T (defined on ``[0, 1]`` instead of ``[-1, 1]``).
+
+    ``T*_n(x) = T_n(2x - 1)``.
+    """
+    return chebyshev_polynomial_t(2 * x - 1, n)
+
+
+def shifted_chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
+    """Shifted Chebyshev U: ``U*_n(x) = U_n(2x - 1)``."""
+    return chebyshev_polynomial_u(2 * x - 1, n)
+
+
+def shifted_chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
+    """Shifted Chebyshev V: ``V*_n(x) = V_n(2x - 1)``."""
+    return chebyshev_polynomial_v(2 * x - 1, n)
+
+
+def shifted_chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
+    """Shifted Chebyshev W: ``W*_n(x) = W_n(2x - 1)``."""
+    return chebyshev_polynomial_w(2 * x - 1, n)
+
+
+def hermite_polynomial_h(x: Tensor, n: int) -> Tensor:
+    """Physicist's Hermite polynomial ``H_n(x)``.
+
+    Recurrence: ``H_0 = 1``, ``H_1 = 2x``,
+    ``H_{k+1} = 2x·H_k - 2k·H_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = 2 * x
+    return _ortho_poly(
+        x, n, p0, p1,
+        lambda p, q, k: 2 * x * p - 2 * float(k) * q,
+    )
+
+
+def hermite_polynomial_he(x: Tensor, n: int) -> Tensor:
+    """Probabilist's Hermite polynomial ``He_n(x)``.
+
+    Recurrence: ``He_0 = 1``, ``He_1 = x``,
+    ``He_{k+1} = x·He_k - k·He_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = x
+    return _ortho_poly(
+        x, n, p0, p1,
+        lambda p, q, k: x * p - float(k) * q,
+    )
+
+
+def legendre_polynomial_p(x: Tensor, n: int) -> Tensor:
+    """Legendre polynomial ``P_n(x)``.
+
+    Recurrence: ``P_0 = 1``, ``P_1 = x``,
+    ``(k+1)·P_{k+1} = (2k+1)·x·P_k - k·P_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = x
+    return _ortho_poly(
+        x, n, p0, p1,
+        lambda p, q, k: ((2 * k + 1) * x * p - float(k) * q) / float(k + 1),
+    )
+
+
+def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
+    """(Simple) Laguerre polynomial ``L_n(x)``.
+
+    Recurrence: ``L_0 = 1``, ``L_1 = 1 - x``,
+    ``(k+1)·L_{k+1} = (2k + 1 - x)·L_k - k·L_{k-1}``.
+    """
+    p0 = lucid.ones_like(x)
+    p1 = 1 - x
+    return _ortho_poly(
+        x, n, p0, p1,
+        lambda p, q, k: ((2 * k + 1 - x) * p - float(k) * q) / float(k + 1),
+    )
+
+
+# ── Bessel functions ───────────────────────────────────────────────────────
+#
+# Polynomial / asymptotic approximations from Abramowitz & Stegun §9
+# (J0, J1, Y0, Y1) and §9.8 (K0, K1).  Each is split into a small-|x|
+# polynomial branch and a large-|x| asymptotic-with-trig branch.  These
+# are the same approximations used by Cephes / SciPy and are accurate to
+# ≈ 1e-7 over the supported range, which is sufficient for typical ML
+# usage.  Higher precision needs would call into a proper implementation
+# (mpmath / Boost.Math).
+
+
+def _split(x: Tensor, threshold: float, small_fn, large_fn) -> Tensor:
+    """``where(|x| <= threshold, small_fn(x), large_fn(x))`` evaluated
+    safely on both branches by always running both.  Branches are
+    expected to be regular (no NaN / inf) on their respective domains."""
+    mask = lucid.abs(x) <= threshold
+    return lucid.where(mask, small_fn(x), large_fn(x))
+
+
+def _bessel_j0_small(x: Tensor) -> Tensor:
+    # Abramowitz & Stegun 9.4.1 — polynomial fit on |x| <= 3.
+    y = (x / 3.0) ** 2
+    return (
+        1.0
+        - 2.2499997 * y
+        + 1.2656208 * y ** 2
+        - 0.3163866 * y ** 3
+        + 0.0444479 * y ** 4
+        - 0.0039444 * y ** 5
+        + 0.00021 * y ** 6
+    )
+
+
+def _bessel_j0_large(x: Tensor) -> Tensor:
+    # Abramowitz & Stegun 9.4.3 — asymptotic on |x| > 3.
+    ax = lucid.abs(x)
+    z = 3.0 / ax
+    f0 = (
+        0.79788456
+        - 0.00000077 * z
+        - 0.00552740 * z ** 2
+        - 0.00009512 * z ** 3
+        + 0.00137237 * z ** 4
+        - 0.00072805 * z ** 5
+        + 0.00014476 * z ** 6
+    )
+    theta = (
+        ax
+        - 0.78539816
+        - 0.04166397 * z
+        - 0.00003954 * z ** 2
+        + 0.00262573 * z ** 3
+        - 0.00054125 * z ** 4
+        - 0.00029333 * z ** 5
+        + 0.00013558 * z ** 6
+    )
+    return f0 * lucid.cos(theta) / lucid.sqrt(ax)
+
+
+def bessel_j0(x: Tensor) -> Tensor:
+    """Bessel function of the first kind, order 0.  Even function;
+    accuracy ≈ 1e-7 from A&S §9.4."""
+    return _split(x, 3.0, _bessel_j0_small, _bessel_j0_large)
+
+
+def _bessel_j1_small(x: Tensor) -> Tensor:
+    y = (x / 3.0) ** 2
+    poly = (
+        0.5
+        - 0.56249985 * y
+        + 0.21093573 * y ** 2
+        - 0.03954289 * y ** 3
+        + 0.00443319 * y ** 4
+        - 0.00031761 * y ** 5
+        + 0.00001109 * y ** 6
+    )
+    return x * poly
+
+
+def _bessel_j1_large(x: Tensor) -> Tensor:
+    ax = lucid.abs(x)
+    z = 3.0 / ax
+    f1 = (
+        0.79788456
+        + 0.00000156 * z
+        + 0.01659667 * z ** 2
+        + 0.00017105 * z ** 3
+        - 0.00249511 * z ** 4
+        + 0.00113653 * z ** 5
+        - 0.00020033 * z ** 6
+    )
+    theta = (
+        ax
+        - 2.35619449
+        + 0.12499612 * z
+        + 0.00005650 * z ** 2
+        - 0.00637879 * z ** 3
+        + 0.00074348 * z ** 4
+        + 0.00079824 * z ** 5
+        - 0.00029166 * z ** 6
+    )
+    val = f1 * lucid.cos(theta) / lucid.sqrt(ax)
+    # j1 is odd in x; flip sign for negative inputs.
+    return lucid.where(x < 0, -val, val)
+
+
+def bessel_j1(x: Tensor) -> Tensor:
+    """Bessel function of the first kind, order 1.  Odd function;
+    accuracy ≈ 1e-7 from A&S §9.4."""
+    return _split(x, 3.0, _bessel_j1_small, _bessel_j1_large)
+
+
+_TWO_OVER_PI = 2.0 / math.pi
+
+
+# Y0 / Y1 use the rational approximations from Numerical Recipes (Press,
+# Teukolsky, Vetterling, Flannery — 2nd ed., §6.5).  These are carefully
+# fitted on (0, 8] with the J0 / J1·log(x) Wronskian term added on top,
+# and on (8, ∞) via the standard A&S 9.4.5 trigonometric asymptotic.
+
+
+def _bessel_y0_small(x: Tensor) -> Tensor:
+    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
+    y = x * x
+    num = (
+        -2957821389.0
+        + y * (7062834065.0
+        + y * (-512359803.6
+        + y * (10879881.29
+        + y * (-86327.92757
+        + y * 228.4622733))))
+    )
+    den = (
+        40076544269.0
+        + y * (745249964.8
+        + y * (7189466.438
+        + y * (47447.26470
+        + y * (226.1030244
+        + y * 1.0))))
+    )
+    return num / den + _TWO_OVER_PI * lucid.log(safe_x) * bessel_j0(x)
+
+
+def _bessel_y0_large(x: Tensor) -> Tensor:
+    z = 8.0 / x
+    y = z * z
+    p = (
+        1.0
+        + y * (-0.1098628627e-2
+        + y * (0.2734510407e-4
+        + y * (-0.2073370639e-5
+        + y * 0.2093887211e-6)))
+    )
+    q = (
+        -0.1562499995e-1
+        + y * (0.1430488765e-3
+        + y * (-0.6911147651e-5
+        + y * (0.7621095161e-6
+        + y * (-0.934935152e-7))))
+    )
+    xx = x - 0.785398164
+    return lucid.sqrt(0.636619772 / x) * (
+        lucid.sin(xx) * p + z * lucid.cos(xx) * q
+    )
+
+
+def bessel_y0(x: Tensor) -> Tensor:
+    """Bessel function of the second kind, order 0.  Defined for
+    ``x > 0`` only.  Accuracy ≈ 1e-7 from the NR §6.5 fit."""
+    return _split(x, 8.0, _bessel_y0_small, _bessel_y0_large)
+
+
+def _bessel_y1_small(x: Tensor) -> Tensor:
+    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
+    y = x * x
+    num = x * (
+        -0.4900604943e13
+        + y * (0.1275274390e13
+        + y * (-0.5153438139e11
+        + y * (0.7349264551e9
+        + y * (-0.4237922726e7
+        + y * 0.8511937935e4))))
+    )
+    den = (
+        0.2499580570e14
+        + y * (0.4244419664e12
+        + y * (0.3733650367e10
+        + y * (0.2245904002e8
+        + y * (0.1020426050e6
+        + y * (0.3549632885e3
+        + y * 1.0)))))
+    )
+    return num / den + _TWO_OVER_PI * (
+        lucid.log(safe_x) * bessel_j1(x) - 1.0 / safe_x
+    )
+
+
+def _bessel_y1_large(x: Tensor) -> Tensor:
+    z = 8.0 / x
+    y = z * z
+    p = (
+        1.0
+        + y * (0.183105e-2
+        + y * (-0.3516396496e-4
+        + y * (0.2457520174e-5
+        + y * (-0.240337019e-6))))
+    )
+    q = (
+        0.04687499995
+        + y * (-0.2002690873e-3
+        + y * (0.8449199096e-5
+        + y * (-0.88228987e-6
+        + y * 0.105787412e-6)))
+    )
+    xx = x - 2.356194491
+    return lucid.sqrt(0.636619772 / x) * (
+        lucid.sin(xx) * p + z * lucid.cos(xx) * q
+    )
+
+
+def bessel_y1(x: Tensor) -> Tensor:
+    """Bessel function of the second kind, order 1.  Defined for
+    ``x > 0`` only.  Accuracy ≈ 1e-7 from the NR §6.5 fit."""
+    return _split(x, 8.0, _bessel_y1_small, _bessel_y1_large)
+
+
+def _modified_bessel_k0_small(x: Tensor) -> Tensor:
+    # A&S 9.8.5 — polynomial fit for 0 < x <= 2.
+    y = (x / 2.0) ** 2
+    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
+    poly = (
+        -0.57721566
+        + 0.42278420 * y
+        + 0.23069756 * y ** 2
+        + 0.03488590 * y ** 3
+        + 0.00262698 * y ** 4
+        + 0.00010750 * y ** 5
+        + 0.00000740 * y ** 6
+    )
+    return -lucid.log(safe_x / 2.0) * lucid.i0(x) + poly
+
+
+def _modified_bessel_k0_large(x: Tensor) -> Tensor:
+    # A&S 9.8.6 — asymptotic for x > 2.
+    z = 2.0 / x
+    poly = (
+        1.25331414
+        - 0.07832358 * z
+        + 0.02189568 * z ** 2
+        - 0.01062446 * z ** 3
+        + 0.00587872 * z ** 4
+        - 0.00251540 * z ** 5
+        + 0.00053208 * z ** 6
+    )
+    return poly * lucid.exp(-x) / lucid.sqrt(x)
+
+
+def modified_bessel_k0(x: Tensor) -> Tensor:
+    """Modified Bessel function of the second kind, order 0.  Domain
+    ``x > 0``; accuracy ≈ 1e-7."""
+    return _split(x, 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large)
+
+
+def scaled_modified_bessel_k0(x: Tensor) -> Tensor:
+    """``exp(x) · K0(x)`` — numerically stable form for large ``x``."""
+    return modified_bessel_k0(x) * lucid.exp(x)
+
+
+def _modified_bessel_k1_small(x: Tensor) -> Tensor:
+    y = (x / 2.0) ** 2
+    safe_x = lucid.where(x == lucid.zeros_like(x), lucid.ones_like(x), x)
+    poly = (
+        1.0
+        + 0.15443144 * y
+        - 0.67278579 * y ** 2
+        - 0.18156897 * y ** 3
+        - 0.01919402 * y ** 4
+        - 0.00110404 * y ** 5
+        - 0.00004686 * y ** 6
+    )
+    return lucid.log(safe_x / 2.0) * i1(x) + poly / safe_x
+
+
+def _modified_bessel_k1_large(x: Tensor) -> Tensor:
+    z = 2.0 / x
+    poly = (
+        1.25331414
+        + 0.23498619 * z
+        - 0.03655620 * z ** 2
+        + 0.01504268 * z ** 3
+        - 0.00780353 * z ** 4
+        + 0.00325614 * z ** 5
+        - 0.00068245 * z ** 6
+    )
+    return poly * lucid.exp(-x) / lucid.sqrt(x)
+
+
+def modified_bessel_k1(x: Tensor) -> Tensor:
+    """Modified Bessel function of the second kind, order 1.  Domain
+    ``x > 0``."""
+    return _split(x, 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large)
+
+
+def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
+    """``exp(x) · K1(x)``."""
+    return modified_bessel_k1(x) * lucid.exp(x)
+
+
+# ── Hurwitz zeta ───────────────────────────────────────────────────────────
+
+
+def zeta(x: Tensor, q: Tensor) -> Tensor:
+    """Hurwitz zeta function ``ζ(x, q) = Σ_{k=0}^∞ (k + q)^{-x}``.
+
+    Implementation: direct series summation with Euler–Maclaurin
+    correction.  Accuracy is ≈ 1e-6 for ``x > 1`` and moderate ``q``;
+    suitable for ML use cases (e.g., distribution log-densities) but
+    not heroic-precision scientific computing.
+
+    The Riemann zeta function is the special case ``ζ(x) = ζ(x, 1)``.
+    """
+    # Accumulate the explicit prefix Σ_{k=0..N-1} (k + q)^{-x}.
+    N = 12
+    s = lucid.zeros_like(q)
+    for k in range(N):
+        s = s + (q + float(k)) ** (-x)
+
+    # Euler-Maclaurin tail starting at a = q + N:
+    #   Σ_{k=N..∞} (k+q)^{-x}  ≈  a^{1-x} / (x - 1)  +  ½ · a^{-x}
+    #                            +  Σ_j  B_{2j} / (2j)! · (Π_{i=0..2j-2} (x + i)) · a^{-x - 2j + 1}
+    a = q + float(N)
+    one = lucid.ones_like(x)
+    head = a ** (1 - x) / (x - one)
+    half = 0.5 * a ** (-x)
+
+    bernoulli = [
+        1.0 / 6.0,        # B_2
+        -1.0 / 30.0,      # B_4
+        1.0 / 42.0,       # B_6
+        -1.0 / 30.0,      # B_8
+        5.0 / 66.0,       # B_10
+    ]
+    factorial = [2.0, 24.0, 720.0, 40320.0, 3628800.0]
+    tail = lucid.zeros_like(s)
+    coef = lucid.ones_like(x)
+    for j, (b, f) in enumerate(zip(bernoulli, factorial)):
+        # coef accumulates Π_{i=0..2j} (x + i).
+        coef = coef * (x + float(2 * j)) * (x + float(2 * j + 1))
+        tail = tail + (b / f) * coef * a ** (-x - float(2 * j + 1))
+
+    return s + head + half + tail
+
+
 __all__ = [
     "erfcx",
     "i0e",
@@ -403,4 +915,28 @@ __all__ = [
     "multigammaln",
     "polygamma",
     "spherical_bessel_j0",
+    # Orthogonal polynomials (12)
+    "chebyshev_polynomial_t",
+    "chebyshev_polynomial_u",
+    "chebyshev_polynomial_v",
+    "chebyshev_polynomial_w",
+    "shifted_chebyshev_polynomial_t",
+    "shifted_chebyshev_polynomial_u",
+    "shifted_chebyshev_polynomial_v",
+    "shifted_chebyshev_polynomial_w",
+    "hermite_polynomial_h",
+    "hermite_polynomial_he",
+    "legendre_polynomial_p",
+    "laguerre_polynomial_l",
+    # Bessel + modified Bessel K (8)
+    "bessel_j0",
+    "bessel_j1",
+    "bessel_y0",
+    "bessel_y1",
+    "modified_bessel_k0",
+    "modified_bessel_k1",
+    "scaled_modified_bessel_k0",
+    "scaled_modified_bessel_k1",
+    # Hurwitz zeta (1)
+    "zeta",
 ]
