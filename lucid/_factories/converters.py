@@ -137,3 +137,35 @@ def as_tensor(
 def from_numpy(arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
     """Create a CPU tensor from a NumPy array with automatic dtype mapping."""
     return tensor(arr)
+
+
+# ── DLPack interop ─────────────────────────────────────────────────────────
+#
+# Lucid's DLPack bridge runs through NumPy: a Lucid tensor exposes
+# ``__dlpack__`` / ``__dlpack_device__`` by converting to NumPy first
+# (which is a no-op for CPU tensors and a CPU round-trip for Metal
+# tensors).  This is enough for PyTorch / JAX / SciPy / etc to consume
+# Lucid tensors zero-copy on the CPU side.  A real engine-side DLPack
+# implementation that avoids the NumPy hop is filed as future work.
+
+
+def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
+    """Construct a Lucid tensor from any object exposing the DLPack
+    protocol (``__dlpack__``) or from a raw PyCapsule.
+
+    Memory is shared with ``ext_tensor`` where possible (CPU only).  The
+    result lives on CPU regardless of the producer's device — Metal
+    consumers should ``.to(device='metal')`` after the import.
+    """
+    arr: np.ndarray = np.from_dlpack(ext_tensor)  # type: ignore[type-arg]
+    return tensor(arr)
+
+
+def to_dlpack(t: Tensor) -> object:
+    """Export ``t`` as a DLPack PyCapsule.
+
+    Always materialises through NumPy, so GPU tensors take a CPU
+    round-trip.  The capsule can be consumed exactly once — pass it
+    directly to ``np.from_dlpack`` / ``torch.from_dlpack`` / etc.
+    """
+    return t.numpy().__dlpack__()

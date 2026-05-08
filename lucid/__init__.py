@@ -110,7 +110,7 @@ __all__ = [
     # ── core tensor ───────────────────────────────────────────────────────
     "Tensor",
     # ── factory — deterministic ───────────────────────────────────────────
-    "tensor", "as_tensor", "from_numpy",
+    "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
     "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── factory — random ──────────────────────────────────────────────────
@@ -206,7 +206,7 @@ __all__ = [
 # ── Name sets used by the dispatch table ─────────────────────────────────────
 _FACTORY_NAMES: frozenset[str] = frozenset([
     # ── deterministic ─────────────────────────────────────────────────────
-    "tensor", "as_tensor", "from_numpy",
+    "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
     "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── random ────────────────────────────────────────────────────────────

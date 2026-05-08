@@ -310,6 +310,29 @@ class Tensor[DT: dtype, DV: device]:
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 
+    # ── DLPack protocol ──────────────────────────────────────────────────
+    #
+    # Both methods route through ``self.numpy()`` so any DLPack-aware
+    # consumer (PyTorch / JAX / etc) can ingest a Lucid tensor directly:
+    #
+    #     >>> torch.from_dlpack(lucid.zeros(3))
+    #
+    # Metal tensors silently round-trip through CPU (numpy() already
+    # does that).  A native engine-side DLPack export is filed as
+    # future work.
+
+    def __dlpack__(self, stream: object | None = None) -> object:
+        """Return a DLPack PyCapsule view of this tensor (CPU memory)."""
+        return self.numpy().__dlpack__(stream=stream) if stream is not None else self.numpy().__dlpack__()
+
+    def __dlpack_device__(self) -> tuple[int, int]:
+        """Return ``(device_type, device_id)`` per the DLPack spec.
+
+        Always reports CPU because the export goes through NumPy.
+        ``1 == kDLCPU``.
+        """
+        return (1, 0)
+
     def tolist(self) -> list[object] | int | float | bool:
         """Return the tensor as a nested Python list."""
         return self.numpy().tolist()

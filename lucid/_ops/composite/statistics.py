@@ -313,6 +313,195 @@ def multinomial(
         return lucid.tensor(rows, dtype=lucid.int64)
 
 
+def poisson(
+    input: Tensor,
+    *,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
+    """Sample element-wise from ``Poisson(rate=input[i])``.
+
+    Returns an int64 tensor of the same shape as ``input``.  Negative
+    rates raise ``ValueError``; zero rates always return zero.
+
+    Algorithm:
+      * Knuth's multiplication method for ``rate < 30`` (exact, but
+        runtime grows with the rate).
+      * Normal approximation ``Pois(λ) ≈ ⌊N(λ, √λ) + 0.5⌋`` for
+        ``rate ≥ 30`` — bias < 0.05 standard deviations and orders of
+        magnitude faster than Knuth in the tail.
+
+    Uses Lucid's Philox PRNG so :func:`manual_seed` controls the stream;
+    pass an explicit ``generator`` for an isolated sequence.
+    """
+    from lucid._factories.random import _active_default_gen
+
+    g: _C_engine.Generator = (
+        generator if generator is not None else _active_default_gen()
+    )
+
+    flat: Tensor = input.reshape(-1)
+    n: int = int(flat.numel())
+    out: list[int] = []
+    _SMALL_RATE_CUTOFF: float = 30.0
+    _TWO_PI: float = 2.0 * math.pi
+
+    for i in range(n):
+        r: float = float(flat[i].item())
+        if r < 0.0:
+            raise ValueError(
+                f"poisson: rate must be non-negative, got {r} at flat index {i}"
+            )
+        if r == 0.0:
+            out.append(0)
+            continue
+
+        if r < _SMALL_RATE_CUTOFF:
+            # Knuth: keep multiplying U(0,1) draws until product ≤ e^{-rate}.
+            L: float = math.exp(-r)
+            k: int = 0
+            p: float = 1.0
+            while True:
+                k += 1
+                u: float = g.next_uniform_float()
+                # Guard against u==0 (Philox 24-bit mantissa never returns
+                # exactly 0, but be defensive against future RNG changes).
+                if u <= 0.0:
+                    u = 1e-300
+                p *= u
+                if p <= L:
+                    break
+            out.append(k - 1)
+        else:
+            # Normal approximation: Box-Muller for one std-normal, scale
+            # by √rate, shift by rate, round to nearest non-negative int.
+            u1: float = g.next_uniform_float()
+            u2: float = g.next_uniform_float()
+            if u1 <= 0.0:
+                u1 = 1e-30
+            z: float = math.sqrt(-2.0 * math.log(u1)) * math.cos(_TWO_PI * u2)
+            s: int = int(math.floor(r + math.sqrt(r) * z + 0.5))
+            out.append(max(0, s))
+
+    return lucid.tensor(out, dtype=lucid.int64).reshape(input.shape)
+
+
+def histogram2d(
+    x: Tensor,
+    y: Tensor,
+    bins: int | tuple[int, int] = 10,
+    range: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    density: bool = False,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Joint 2-D histogram of paired observations ``(x[i], y[i])``.
+
+    Returns ``(counts, x_edges, y_edges)``: a ``(bins_x, bins_y)`` count
+    matrix plus per-axis edge tensors of length ``bins_x + 1`` and
+    ``bins_y + 1``.
+
+    Mirrors the reference framework's contract: ``range`` is a pair of
+    ``(lo, hi)`` tuples.  Unset ranges default to per-axis min/max.
+    """
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    nbins_a, nbins_b = (bins, bins) if isinstance(bins, int) else bins
+    if range is None:
+        x_flat = x.reshape(-1)
+        y_flat = y.reshape(-1)
+        lo_a, hi_a = float(x_flat.min().item()), float(x_flat.max().item())
+        lo_b, hi_b = float(y_flat.min().item()), float(y_flat.max().item())
+        if lo_a == hi_a:
+            hi_a = lo_a + 1.0
+        if lo_b == hi_b:
+            hi_b = lo_b + 1.0
+    else:
+        (lo_a, hi_a), (lo_b, hi_b) = range
+        lo_a, hi_a = float(lo_a), float(hi_a)
+        lo_b, hi_b = float(lo_b), float(hi_b)
+
+    counts_impl, edges_impl = _C_engine.histogram2d(
+        _unwrap(x), _unwrap(y),
+        int(nbins_a), int(nbins_b),
+        lo_a, hi_a, lo_b, hi_b,
+        density,
+    )
+    # Engine packs both edge arrays into a single (a+b+2,)-length tensor;
+    # split it back into the ``(bins_a + 1, bins_b + 1)`` pair the user
+    # expects from a NumPy/SciPy-like API.
+    counts = _wrap(counts_impl)
+    edges = _wrap(edges_impl)
+    x_edges = edges[: nbins_a + 1]
+    y_edges = edges[nbins_a + 1 :]
+    return counts, x_edges, y_edges
+
+
+def histogramdd(
+    input: Tensor,
+    bins: int | Sequence[int] = 10,
+    range: Sequence[tuple[float, float]] | None = None,
+    density: bool = False,
+) -> tuple[Tensor, list[Tensor]]:
+    """N-dimensional histogram.
+
+    ``input`` must have shape ``(N, D)`` — N samples in D dimensions.
+    Returns ``(counts, edges)`` where ``counts`` has shape
+    ``(bins_0, bins_1, …, bins_{D-1})`` and ``edges`` is a list of D
+    1-D tensors holding the per-axis bin boundaries.
+    """
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    if input.ndim != 2:
+        raise ValueError(
+            f"histogramdd: expected (N, D) input, got shape {tuple(input.shape)}"
+        )
+    D: int = int(input.shape[1])
+    if isinstance(bins, int):
+        bins_seq: list[int] = [int(bins)] * D
+    else:
+        bins_seq = [int(b) for b in bins]
+        if len(bins_seq) != D:
+            raise ValueError(
+                f"histogramdd: bins must be an int or a length-{D} sequence, "
+                f"got length {len(bins_seq)}"
+            )
+
+    # ``range`` shadows the Python builtin in this function's signature,
+    # so capture the builtin once for use below.
+    py_range = __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range  # type: ignore[index, union-attr]
+
+    if range is None:
+        ranges: list[tuple[float, float]] = []
+        for d in py_range(D):
+            col = input[:, d]
+            lo: float = float(col.min().item())
+            hi: float = float(col.max().item())
+            if lo == hi:
+                hi = lo + 1.0
+            ranges.append((lo, hi))
+    else:
+        ranges = [(float(lo), float(hi)) for (lo, hi) in range]
+        if len(ranges) != D:
+            raise ValueError(
+                f"histogramdd: range must be a length-{D} sequence, "
+                f"got length {len(ranges)}"
+            )
+
+    counts_impl, edges_impl = _C_engine.histogramdd(
+        _unwrap(input), bins_seq, ranges, density
+    )
+    counts = _wrap(counts_impl)
+    edges_flat = _wrap(edges_impl)
+    # Split the concatenated edges into D per-axis tensors.
+    edges_list: list[Tensor] = []
+    offset: int = 0
+    for d in py_range(D):
+        n = bins_seq[d] + 1
+        edges_list.append(edges_flat[offset : offset + n])
+        offset += n
+    return counts, edges_list
+
+
 def histogram(
     input: Tensor,
     bins: int | Sequence[float] = 10,
@@ -384,5 +573,8 @@ __all__ = [
     "cdist",
     "bincount",
     "histogram",
+    "histogram2d",
+    "histogramdd",
     "multinomial",
+    "poisson",
 ]
