@@ -361,6 +361,7 @@ def triplet_margin_with_distance_loss(
 
     df: object = distance_function
     if df is None:
+
         def df(a: Tensor, b: Tensor) -> Tensor:  # type: ignore[no-redef]
             return pairwise_distance(a, b, p=2.0)
 

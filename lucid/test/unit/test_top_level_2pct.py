@@ -8,7 +8,6 @@ import pytest
 
 import lucid
 
-
 # ── histogram2d / histogramdd ─────────────────────────────────────────────
 
 
@@ -133,9 +132,7 @@ class TestPoisson:
         lucid.manual_seed(0)
         rates = lucid.tensor([5.0])
         N = 2000
-        samples = np.array([
-            float(lucid.poisson(rates).item()) for _ in range(N)
-        ])
+        samples = np.array([float(lucid.poisson(rates).item()) for _ in range(N)])
         assert abs(samples.mean() - 5.0) < 0.3  # within ~3·SE.
 
     def test_mean_matches_rate_large(self) -> None:
@@ -143,11 +140,9 @@ class TestPoisson:
         lucid.manual_seed(0)
         rates = lucid.tensor([100.0])
         N = 500
-        samples = np.array([
-            float(lucid.poisson(rates).item()) for _ in range(N)
-        ])
+        samples = np.array([float(lucid.poisson(rates).item()) for _ in range(N)])
         assert abs(samples.mean() - 100.0) < 2.0  # within ~3·SE.
-        assert abs(samples.std() - 10.0) < 1.5    # √100 = 10.
+        assert abs(samples.std() - 10.0) < 1.5  # √100 = 10.
 
     def test_reproducible_with_manual_seed(self) -> None:
         lucid.manual_seed(7)

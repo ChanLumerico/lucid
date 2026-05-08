@@ -332,24 +332,24 @@ def polygamma(n: int, x: Tensor) -> Tensor:
     # earlier hand-tuned trigamma branch used the same five-term truncation;
     # we generalise with closed-form per-n coefficients. ──
     r: Tensor = 1.0 / xr
-    inv_xn: Tensor = r ** n            # 1 / xr^n.
-    inv_xnp1: Tensor = inv_xn * r      # 1 / xr^(n+1).
-    inv_xnp2: Tensor = inv_xnp1 * r    # 1 / xr^(n+2)  ← k=1 term.
+    inv_xn: Tensor = r**n  # 1 / xr^n.
+    inv_xnp1: Tensor = inv_xn * r  # 1 / xr^(n+1).
+    inv_xnp2: Tensor = inv_xnp1 * r  # 1 / xr^(n+2)  ← k=1 term.
     inv_xnp4: Tensor = inv_xnp2 * r * r  # 1 / xr^(n+4)  ← k=2 term.
     inv_xnp6: Tensor = inv_xnp4 * r * r  # 1 / xr^(n+6)  ← k=3 term.
 
     # Coefficients per n.  The leading two are (n−1)! and n!/2; the
     # Bernoulli triplet is B_{2k}·(2k+n−1)!/(2k)! for k=1..3.
     if n == 1:
-        c_lead: float = 1.0           # 0! = 1.
-        c_half: float = 0.5           # 1!/2 = 1/2.
+        c_lead: float = 1.0  # 0! = 1.
+        c_half: float = 0.5  # 1!/2 = 1/2.
         # k=1: B₂·2!/2! = 1/6, k=2: B₄·4!/4! = −1/30, k=3: B₆·6!/6! = 1/42.
         c1: float = 1.0 / 6.0
         c2: float = -1.0 / 30.0
         c3: float = 1.0 / 42.0
     elif n == 2:
-        c_lead = 1.0                  # 1! = 1.
-        c_half = 1.0                  # 2!/2 = 1.
+        c_lead = 1.0  # 1! = 1.
+        c_half = 1.0  # 2!/2 = 1.
         # k=1: B₂·3!/2! = (1/6)·3 = 1/2.
         # k=2: B₄·5!/4! = (−1/30)·5 = −1/6.
         # k=3: B₆·7!/6! = (1/42)·7 = 1/6.
@@ -357,8 +357,8 @@ def polygamma(n: int, x: Tensor) -> Tensor:
         c2 = -1.0 / 6.0
         c3 = 1.0 / 6.0
     else:  # n == 3
-        c_lead = 2.0                  # 2! = 2.
-        c_half = 3.0                  # 3!/2 = 3.
+        c_lead = 2.0  # 2! = 2.
+        c_half = 3.0  # 3!/2 = 3.
         # k=1: B₂·4!/2! = (1/6)·12 = 2.
         # k=2: B₄·6!/4! = (−1/30)·30 = −1.
         # k=3: B₆·8!/6! = (1/42)·56 = 4/3.

@@ -224,9 +224,7 @@ class TestLogical:
         a: lucid.Tensor = lucid.tensor([1, 1], dtype=lucid.int32)
         # 32-bit width: shift by 100 is undefined in C++ but Lucid clamps to 0.
         b: lucid.Tensor = lucid.tensor([100, -1], dtype=lucid.int32)
-        np.testing.assert_array_equal(
-            _np(lucid.bitwise_left_shift(a, b)), [0, 0]
-        )
+        np.testing.assert_array_equal(_np(lucid.bitwise_left_shift(a, b)), [0, 0])
 
     def test_bitwise_shift_rejects_bool(self) -> None:
         b: lucid.Tensor = lucid.tensor([True, False], dtype=lucid.bool_)
@@ -245,6 +243,7 @@ class TestLogical:
 class TestNextafter:
     def test_basic_directions(self) -> None:
         import math
+
         a: lucid.Tensor = lucid.tensor([1.0, 2.0, -1.0], dtype=lucid.float64)
         b: lucid.Tensor = lucid.tensor([2.0, 1.0, -2.0], dtype=lucid.float64)
         out: np.ndarray = _np(lucid.nextafter(a, b))
@@ -288,8 +287,9 @@ class TestPolygammaExtended:
     def test_n1_trigamma_at_one(self) -> None:
         # ψ¹(1) = π²/6.
         import math
+
         v: float = float(lucid.special.polygamma(1, lucid.tensor([1.0])).item())
-        assert abs(v - math.pi ** 2 / 6.0) < 1e-3
+        assert abs(v - math.pi**2 / 6.0) < 1e-3
 
     def test_n2_negative(self) -> None:
         # ψ²(x) is negative for x > 0.

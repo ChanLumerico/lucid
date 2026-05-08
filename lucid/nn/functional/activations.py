@@ -473,9 +473,11 @@ def rrelu(
 
     if training:
         # Per-element uniform slope, only applied where x < 0.
-        slope: Tensor = _l.rand(
-            *tuple(int(s) for s in x.shape), dtype=x.dtype, device=x.device
-        ) * (upper - lower) + lower
+        slope: Tensor = (
+            _l.rand(*tuple(int(s) for s in x.shape), dtype=x.dtype, device=x.device)
+            * (upper - lower)
+            + lower
+        )
     else:
         # Constant midpoint slope.
         mid: float = 0.5 * (lower + upper)

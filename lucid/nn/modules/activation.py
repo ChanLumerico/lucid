@@ -240,7 +240,9 @@ class RReLU(Module):
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:
-        return rrelu(x, self.lower, self.upper, training=self.training, inplace=self.inplace)
+        return rrelu(
+            x, self.lower, self.upper, training=self.training, inplace=self.inplace
+        )
 
     def extra_repr(self) -> str:
         return f"lower={self.lower}, upper={self.upper}"

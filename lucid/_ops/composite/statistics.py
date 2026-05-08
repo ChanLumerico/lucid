@@ -420,9 +420,14 @@ def histogram2d(
         lo_b, hi_b = float(lo_b), float(hi_b)
 
     counts_impl, edges_impl = _C_engine.histogram2d(
-        _unwrap(x), _unwrap(y),
-        int(nbins_a), int(nbins_b),
-        lo_a, hi_a, lo_b, hi_b,
+        _unwrap(x),
+        _unwrap(y),
+        int(nbins_a),
+        int(nbins_b),
+        lo_a,
+        hi_a,
+        lo_b,
+        hi_b,
         density,
     )
     # Engine packs both edge arrays into a single (a+b+2,)-length tensor;

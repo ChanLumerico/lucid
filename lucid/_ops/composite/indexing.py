@@ -236,9 +236,7 @@ def index_put(
         If True, add at each position; otherwise overwrite.
     """
     if not isinstance(indices, (list, tuple)) or len(indices) == 0:
-        raise ValueError(
-            "index_put: `indices` must be a non-empty sequence of Tensors"
-        )
+        raise ValueError("index_put: `indices` must be a non-empty sequence of Tensors")
     if len(indices) != input.ndim:
         raise NotImplementedError(
             f"index_put: partial advanced indexing not supported — "
@@ -248,9 +246,13 @@ def index_put(
     # Broadcast all index tensors to a common shape.
     common_shape: tuple[int, ...] = tuple(indices[0].shape)
     for idx in indices[1:]:
-        common_shape = lucid._tensor.tensor.broadcast_shapes(  # type: ignore[attr-defined]
-            common_shape, tuple(idx.shape)
-        ) if hasattr(lucid._tensor.tensor, "broadcast_shapes") else common_shape
+        common_shape = (
+            lucid._tensor.tensor.broadcast_shapes(  # type: ignore[attr-defined]
+                common_shape, tuple(idx.shape)
+            )
+            if hasattr(lucid._tensor.tensor, "broadcast_shapes")
+            else common_shape
+        )
 
     bcast_indices: list[Tensor] = []
     for idx in indices:

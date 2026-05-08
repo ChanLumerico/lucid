@@ -11,7 +11,6 @@ import pytest
 
 import lucid
 
-
 # ── put (flat-index scatter) ──────────────────────────────────────────────
 
 

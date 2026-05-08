@@ -323,7 +323,11 @@ class Tensor[DT: dtype, DV: device]:
 
     def __dlpack__(self, stream: object | None = None) -> object:
         """Return a DLPack PyCapsule view of this tensor (CPU memory)."""
-        return self.numpy().__dlpack__(stream=stream) if stream is not None else self.numpy().__dlpack__()
+        return (
+            self.numpy().__dlpack__(stream=stream)
+            if stream is not None
+            else self.numpy().__dlpack__()
+        )
 
     def __dlpack_device__(self) -> tuple[int, int]:
         """Return ``(device_type, device_id)`` per the DLPack spec.

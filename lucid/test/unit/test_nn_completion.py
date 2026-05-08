@@ -14,7 +14,6 @@ import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 
-
 # ── F.dropout1d ───────────────────────────────────────────────────────────
 
 
@@ -69,8 +68,7 @@ class TestLpPool3d:
 
     def test_p1_equals_sum_abs(self) -> None:
         # p=1 reduces to sum-abs over the window.
-        x = lucid.tensor([[[[[1.0, -2.0], [3.0, -4.0]],
-                            [[5.0, -6.0], [7.0, -8.0]]]]])
+        x = lucid.tensor([[[[[1.0, -2.0], [3.0, -4.0]], [[5.0, -6.0], [7.0, -8.0]]]]])
         out = F.lp_pool3d(x, norm_type=1.0, kernel_size=2)
         # Window is the whole 2x2x2 → sum(|x|) = 1+2+3+4+5+6+7+8 = 36.
         np.testing.assert_allclose(out.numpy(), [[[[[36.0]]]]], atol=1e-5)
@@ -128,7 +126,9 @@ class TestTripletWithDistance:
         p = lucid.tensor([[1.0, 0.0]])
         n = lucid.tensor([[0.0, 1.0]])
         out = F.triplet_margin_with_distance_loss(
-            a, p, n,
+            a,
+            p,
+            n,
             distance_function=lambda x, y: (x - y).abs().sum(dim=-1),
             margin=1.0,
         )
@@ -154,9 +154,7 @@ class TestSoftmax2d:
         m = nn.Softmax2d()
         x = lucid.arange(0.0, 24.0, 1.0).reshape(1, 2, 3, 4)
         out = m(x).numpy()
-        np.testing.assert_allclose(
-            out.sum(axis=1), np.ones((1, 3, 4)), atol=1e-5
-        )
+        np.testing.assert_allclose(out.sum(axis=1), np.ones((1, 3, 4)), atol=1e-5)
 
     def test_rejects_non_4d(self) -> None:
         m = nn.Softmax2d()
@@ -204,15 +202,21 @@ class TestMultiLabelMarginLossAlias:
 class TestSurface:
     def test_F_exposes_all_new(self) -> None:
         for n in (
-            "dropout1d", "rrelu", "lp_pool3d",
-            "gumbel_softmax", "triplet_margin_with_distance_loss",
+            "dropout1d",
+            "rrelu",
+            "lp_pool3d",
+            "gumbel_softmax",
+            "triplet_margin_with_distance_loss",
         ):
             assert hasattr(F, n), f"F.{n} missing"
 
     def test_nn_exposes_all_new(self) -> None:
         for n in (
-            "RReLU", "LPPool3d", "Softmax2d",
-            "CosineSimilarity", "PairwiseDistance",
+            "RReLU",
+            "LPPool3d",
+            "Softmax2d",
+            "CosineSimilarity",
+            "PairwiseDistance",
             "MultiLabelMarginLoss",
         ):
             assert hasattr(nn, n), f"nn.{n} missing"
