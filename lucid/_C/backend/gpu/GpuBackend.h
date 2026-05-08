@@ -1103,93 +1103,145 @@ public:
     }
 
 private:
-    // Helper: evaluate three GPU arrays to CPU, apply scatter_reduce_loop via the
-    // CPU backend, then return the result as GPU (MLX) storage.
-    // InitVal is the neutral element (−∞ / +∞ / 1) for when include_self is handled
-    // externally (base already has the neutral value from the caller).
-    template <typename Op>
-    Storage scatter_reduce_gpu_via_cpu(const Storage& base, const Storage& indices,
+    // MLX's ``scatter_{max,min,prod}`` lack a torch-flavoured ``*_axis``
+    // variant (``scatter_add`` is the only one with both forms).  For
+    // axis-scatter we reach the multi-axis API but use **K=1** with a
+    // single index array reshaped to (1,...,N,...,1) — same trick MLX
+    // would do internally for ``scatter_max(a, idx, src, axis)``.
+    //
+    // For torch's axis-scatter ``a[..., idx[i,j,...], ...] op= src[i,j,...]``
+    // along ``dim``: idx and src have identical shape (≤ a along non-dim
+    // axes).  MLX's multi-axis scatter expects updates of shape
+    // ``idx_shape + a.shape[K..]``; with K=1 and reshaping idx so the dim
+    // axis sits at the head, MLX broadcasts updates back across non-dim
+    // axes for us.
+    struct AxisIndexUpdates {
+        ::mlx::core::array idx_for_mlx;
+        ::mlx::core::array updates_for_mlx;
+        int axis;
+    };
+    AxisIndexUpdates prep_axis_scatter(const ::mlx::core::array& idx_in,
+                                       const ::mlx::core::array& src_in,
+                                       const Shape& base_shape,
+                                       const Shape& idx_shape,
+                                       int dim) {
+        const int ndim = static_cast<int>(base_shape.size());
+        const int d = dim < 0 ? dim + ndim : dim;
+
+        // Normalise negative indices for the scatter axis the same way the
+        // gradient path does.
+        auto axis_len = ::mlx::core::array(
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]),
+            idx_in.dtype());
+        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx_in.dtype());
+        auto fixed = ::mlx::core::where(
+            ::mlx::core::less(idx_in, zero),
+            ::mlx::core::add(idx_in, axis_len), idx_in);
+
+        // MLX multi-axis scatter with K=1, axes=[d] expects ``indices`` to
+        // have shape ``idx_shape[d] = (idx_shape[d],)`` (just the scatter
+        // axis) and ``updates`` to broadcast over the non-scatter axes.
+        // We collapse all non-scatter axes from ``fixed`` by selecting the
+        // first slice — torch's invariant guarantees they're all identical
+        // along non-dim axes (they index the same scatter target row by row).
+        // Equivalently: take the values from ``fixed`` along all non-d axes
+        // at index 0, leaving a 1-D index of length idx_shape[d].
+        // BUT that doesn't preserve the per-row addresses.  Instead, we use
+        // the K=ndim multi-axis form where every axis has a coord array;
+        // updates then has shape == idx_shape exactly.
+        AxisIndexUpdates out{fixed, src_in, d};
+        return out;
+    }
+
+    // Multi-axis scatter where K = ndim and one coord array per axis.
+    // For non-scatter axis a: coord = arange(idx_shape[a]).reshape(1..N..1).
+    // For scatter axis dim: coord = idx_in (negative-normalised).
+    // Updates then has shape == idx_shape (same as the broadcast index
+    // shape), satisfying MLX's "updates.ndim == K + (ndim - K)" invariant.
+    template <typename ScatterFn>
+    Storage axis_scatter_via_multiaxis(const Storage& base, const Storage& indices,
                                        const Storage& src, const Shape& base_shape,
                                        const Shape& idx_shape, int dim, Dtype dt,
-                                       const char* name, Op op) {
+                                       ScatterFn scatter_fn) {
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
-        gb.arr->eval(); gi.arr->eval(); gs.arr->eval();
-        auto b_c = ::mlx::core::contiguous(*gb.arr); b_c.eval();
-        auto i_c = ::mlx::core::contiguous(*gi.arr); i_c.eval();
-        auto s_c = ::mlx::core::contiguous(*gs.arr); s_c.eval();
+        const int ndim = static_cast<int>(base_shape.size());
+        const int d = dim < 0 ? dim + ndim : dim;
 
-        std::size_t base_n = shape_numel(base_shape);
+        auto axis_len = ::mlx::core::array(
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]),
+            gi.arr->dtype());
+        auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), gi.arr->dtype());
+        auto fixed = ::mlx::core::where(
+            ::mlx::core::less(*gi.arr, zero),
+            ::mlx::core::add(*gi.arr, axis_len), *gi.arr);
 
-        int d = dim < 0 ? dim + (int)base_shape.size() : dim;
-        std::size_t outer = 1;
-        for (int dd = 0; dd < d; ++dd)
-            outer *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dd)]);
-        std::size_t inner = 1;
-        for (int dd = d + 1; dd < (int)base_shape.size(); ++dd)
-            inner *= static_cast<std::size_t>(base_shape[static_cast<std::size_t>(dd)]);
-        std::size_t base_dim = static_cast<std::size_t>(base_shape[static_cast<std::size_t>(d)]);
-        std::size_t idx_dim  = static_cast<std::size_t>(idx_shape[static_cast<std::size_t>(d)]);
-        const auto* ip = i_c.data<std::int32_t>();
-
-        auto shape_mlx = gpu::to_mlx_shape(base_shape);
-        auto mlx_dt    = gpu::to_mlx_dtype(dt);
-
-        if (dt == Dtype::F32) {
-            std::vector<float> buf(b_c.data<float>(), b_c.data<float>() + base_n);
-            const float* sp = s_c.data<float>();
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j)
-                    for (std::size_t k = 0; k < idx_dim; ++k) {
-                        const std::size_t sf = (o * idx_dim + k) * inner + j;
-                        std::int32_t tgt = ip[sf];
-                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
-                        const std::size_t df = (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
-                        op(buf[df], sp[sf]);
-                    }
-            ::mlx::core::array result(buf.data(), shape_mlx, mlx_dt);
-            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
-        } else if (dt == Dtype::F64) {
-            std::vector<double> buf(b_c.data<double>(), b_c.data<double>() + base_n);
-            const double* sp = s_c.data<double>();
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j)
-                    for (std::size_t k = 0; k < idx_dim; ++k) {
-                        const std::size_t sf = (o * idx_dim + k) * inner + j;
-                        std::int32_t tgt = ip[sf];
-                        if (tgt < 0) tgt += static_cast<std::int32_t>(base_dim);
-                        const std::size_t df = (o * base_dim + static_cast<std::size_t>(tgt)) * inner + j;
-                        op(buf[df], sp[sf]);
-                    }
-            ::mlx::core::array result(buf.data(), shape_mlx, mlx_dt);
-            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
-        } else {
-            ErrorBuilder(name).not_implemented("dtype not supported");
-            return Storage{};  // unreachable
+        std::vector<::mlx::core::array> index_list;
+        std::vector<int> axes_v;
+        index_list.reserve(static_cast<std::size_t>(ndim));
+        axes_v.reserve(static_cast<std::size_t>(ndim));
+        for (int a = 0; a < ndim; ++a) {
+            axes_v.push_back(a);
+            if (a == d) {
+                index_list.push_back(fixed);
+            } else {
+                auto sz = static_cast<int>(idx_shape[static_cast<std::size_t>(a)]);
+                auto coord = ::mlx::core::arange(0, sz, 1, gi.arr->dtype());
+                std::vector<int> reshape_dims(ndim, 1);
+                reshape_dims[a] = sz;
+                coord = ::mlx::core::reshape(
+                    coord, ::mlx::core::Shape(reshape_dims.begin(), reshape_dims.end()));
+                index_list.push_back(std::move(coord));
+            }
         }
+        // MLX multi-axis scatter with K=ndim: updates must include a leading
+        // K-dim index-broadcast block followed by the trailing (ndim-K)
+        // non-scatter dims.  With K=ndim, that's an extra K leading 1s
+        // prepended to src to satisfy the rank check; the actual scatter
+        // payload remains src broadcast across the leading singletons.
+        std::vector<int> upd_shape;
+        upd_shape.reserve(static_cast<std::size_t>(2 * ndim));
+        for (int a = 0; a < ndim; ++a)
+            upd_shape.push_back(static_cast<int>(idx_shape[static_cast<std::size_t>(a)]));
+        for (int a = 0; a < ndim; ++a)
+            upd_shape.push_back(1);
+        auto updates = ::mlx::core::reshape(
+            *gs.arr, ::mlx::core::Shape(upd_shape.begin(), upd_shape.end()));
+
+        auto out = scatter_fn(*gb.arr, index_list, updates, axes_v);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
 public:
     Storage scatter_amax(const Storage& base, const Storage& indices, const Storage& src,
                          const Shape& base_shape, const Shape& idx_shape,
                          int dim, Dtype dt) override {
-        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
-            "scatter_amax", [](auto& d, auto s) { if (s > d) d = s; });
+        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+            [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
+               const ::mlx::core::array& upd, const std::vector<int>& axes) {
+                return ::mlx::core::scatter_max(a, idxs, upd, axes);
+            });
     }
 
     Storage scatter_amin(const Storage& base, const Storage& indices, const Storage& src,
                          const Shape& base_shape, const Shape& idx_shape,
                          int dim, Dtype dt) override {
-        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
-            "scatter_amin", [](auto& d, auto s) { if (s < d) d = s; });
+        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+            [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
+               const ::mlx::core::array& upd, const std::vector<int>& axes) {
+                return ::mlx::core::scatter_min(a, idxs, upd, axes);
+            });
     }
 
     Storage scatter_prod(const Storage& base, const Storage& indices, const Storage& src,
                          const Shape& base_shape, const Shape& idx_shape,
                          int dim, Dtype dt) override {
-        return scatter_reduce_gpu_via_cpu(base, indices, src, base_shape, idx_shape, dim, dt,
-            "scatter_prod", [](auto& d, auto s) { d *= s; });
+        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+            [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
+               const ::mlx::core::array& upd, const std::vector<int>& axes) {
+                return ::mlx::core::scatter_prod(a, idxs, upd, axes);
+            });
     }
 
     Storage unfold_dim(const Storage& a,
@@ -1914,7 +1966,15 @@ public:
         return {std::move(ld_gpu), std::move(piv_gpu)};
     }
 
-    // fold (col2im): use MLX scatter_add
+    // fold (col2im) — Metal-native via ``scatter_add_axis``.
+    //
+    // Algorithm: precompute on CPU a length-(kH*kW*L) table of flat output
+    // positions (oh*outW + ow) for every (ki, kj, l_idx) triple plus a
+    // matching validity mask.  Upload both as small MLX arrays.  Then a
+    // single ``scatter_add_axis`` call accumulates the (N, C, kH*kW, L)
+    // input slices into the (N, C, outH*outW) output buffer along axis 2.
+    // Invalid (out-of-bounds) source elements are zeroed via the mask, so
+    // they scatter +0 to position 0 and have no effect on the result.
     Storage nn_fold(const Storage& x,
                      const Shape& x_shape,
                      const Shape& out_shape,
@@ -1923,16 +1983,80 @@ public:
                      const std::vector<int>& padding,
                      const std::vector<int>& dilation,
                      Dtype dt) override {
-        // Download to CPU, use CPU implementation, re-upload
         const auto& gx = std::get<GpuStorage>(x);
-        auto cx = ::mlx::core::contiguous(*gx.arr); cx.eval();
-        auto x_cpu = allocate_aligned_bytes(cx.nbytes(), Device::CPU);
-        std::memcpy(x_cpu.get(), cx.data<void>(), cx.nbytes());
-        CpuStorage x_cs{x_cpu, cx.nbytes(), dt};
-        auto result = Dispatcher::for_device(Device::CPU).nn_fold(
-            Storage{x_cs}, x_shape, out_shape, kernel_size, stride, padding, dilation, dt);
-        const auto& res_cpu = std::get<CpuStorage>(result);
-        return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
+
+        const int N    = static_cast<int>(x_shape[0]);
+        const int CKK  = static_cast<int>(x_shape[1]);
+        const int L    = static_cast<int>(x_shape[2]);
+        const int kH   = kernel_size[0], kW = kernel_size[1];
+        const int sH   = stride[0],      sW = stride[1];
+        const int pH   = padding[0],     pW = padding[1];
+        const int dH   = dilation[0],    dW = dilation[1];
+        const int C    = CKK / (kH * kW);
+        const int outH = static_cast<int>(out_shape[2]);
+        const int outW = static_cast<int>(out_shape[3]);
+        const int H_pad = outH + 2 * pH;
+        const int W_pad = outW + 2 * pW;
+        (void)H_pad;  // outH_blocks computed below uses outW_blocks only
+        const int outW_blocks = (W_pad - kW) / sW + 1;
+        const int K = kH * kW;
+        const int M = K * L;  // total source positions per (n, c)
+
+        // Build the (K * L,) flat index + mask tables on CPU.  Invalid
+        // positions land at index 0 with mask 0 so the scatter_add is a
+        // no-op there.
+        std::vector<std::int32_t> idx_host(static_cast<std::size_t>(M));
+        std::vector<float> mask_host(static_cast<std::size_t>(M), 0.0f);
+        for (int k = 0; k < K; ++k) {
+            const int ki = k / kW;
+            const int kj = k % kW;
+            for (int l = 0; l < L; ++l) {
+                const int oh_blk = l / outW_blocks;
+                const int ow_blk = l % outW_blocks;
+                const int oh = oh_blk * sH + ki * dH - pH;
+                const int ow = ow_blk * sW + kj * dW - pW;
+                const std::size_t pos = static_cast<std::size_t>(k * L + l);
+                if (oh < 0 || oh >= outH || ow < 0 || ow >= outW) {
+                    idx_host[pos] = 0;
+                    mask_host[pos] = 0.0f;
+                } else {
+                    idx_host[pos] = oh * outW + ow;
+                    mask_host[pos] = 1.0f;
+                }
+            }
+        }
+
+        namespace mx = ::mlx::core;
+        // Upload index + mask as small (M,) MLX arrays.
+        mx::array idx_mlx(idx_host.data(),
+                          mx::Shape{static_cast<int>(M)}, mx::int32);
+        mx::array mask_mlx(mask_host.data(),
+                           mx::Shape{static_cast<int>(M)}, mx::float32);
+
+        // x_reshaped: (N, CKK, L) → (N, C, K, L) → (N, C, M).  C is the
+        // outer of CKK so this is a pure reshape with no transpose.
+        auto xr = mx::reshape(*gx.arr,
+            mx::Shape{N, C, M});
+
+        // Mask invalid positions: cast mask to dt to avoid implicit promote.
+        auto mask_dt = mx::astype(mask_mlx, gpu::to_mlx_dtype(dt));
+        // Broadcast mask (M,) against xr (N, C, M).
+        auto x_masked = mx::multiply(xr, mask_dt);
+
+        // out_flat: (N, C, outH * outW).
+        const int OF = outH * outW;
+        auto base = mx::zeros(mx::Shape{N, C, OF}, gpu::to_mlx_dtype(dt));
+
+        // scatter_add_axis with axis=2: indices is broadcast (1, 1, M) →
+        // every (n, c) pair scatters into the same flat layout.
+        auto idx_bc = mx::reshape(idx_mlx, mx::Shape{1, 1, M});
+        idx_bc = mx::broadcast_to(idx_bc, mx::Shape{N, C, M});
+
+        auto folded = mx::scatter_add_axis(base, idx_bc, x_masked, /*axis=*/2);
+
+        // Reshape (N, C, outH * outW) → (N, C, outH, outW).
+        auto out = mx::reshape(folded, mx::Shape{N, C, outH, outW});
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
     // embedding_bag: use MLX gather + reduce

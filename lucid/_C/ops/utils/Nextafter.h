@@ -1,10 +1,12 @@
 // lucid/_C/ops/utils/Nextafter.h
 //
 // IEEE-754 "next representable float" operation.  ``nextafter(a, b)`` returns
-// the float adjacent to ``a`` in the direction of ``b``.  Computation is
-// performed on CPU via ``std::nextafter`` regardless of the input device
-// because (1) MLX has no equivalent kernel and (2) the bit-level fiddling is
-// trivial on a per-element loop.  GPU inputs are round-tripped through CPU.
+// the float adjacent to ``a`` in the direction of ``b``.  Two compute paths:
+//
+//   * (GPU, F32): pure MLX bit-twiddle pipeline — view to int32, conditional
+//     ±1 step, view back.  No CPU round-trip.
+//   * (CPU, F32 or F64) and (GPU, F64): per-element ``std::nextafter`` loop
+//     on host memory.  F64 has no GPU path because MLX does not support F64.
 //
 // Both operands must have the same floating-point dtype (F32 or F64).
 

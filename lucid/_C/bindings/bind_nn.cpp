@@ -365,7 +365,8 @@ void register_nn(py::module_& m) {
         py::arg("padding") = std::vector<int>{0, 0},
         py::arg("dilation") = std::vector<int>{1, 1},
         "col2im: inverse of unfold. (N, C*kH*kW, L) → (N, C, outH, outW).\n"
-        "CPU: scatter-add loop.  GPU: CPU fallback.");
+        "CPU: scatter-add loop.  GPU: native MLX scatter_add_axis with "
+        "precomputed flat output indices.");
 
     // embedding_bag: pooled embedding lookup.
     // mode: 0=sum, 1=mean, 2=max.

@@ -150,7 +150,8 @@ def fold(
     This is the inverse operation of ``unfold``.  Given an input of shape
     ``(N, C*kH*kW, L)``, returns a tensor of shape ``(N, C, outH, outW)``.
     Overlapping blocks are summed.
-    CPU: scatter-add loop.  GPU: CPU fallback.
+    CPU: scatter-add loop.  GPU: native MLX scatter_add_axis with
+    precomputed flat output indices (no CPU round-trip).
     Parameters match ``the reference fold API``.
     """
 
@@ -263,9 +264,7 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
     k: int = len(indices_1d)
     target_shape: list[int] = [1] * x.ndim
     target_shape[dim] = k
-    bcast_shape: list[int] = [
-        k if i == dim else int(x.shape[i]) for i in range(x.ndim)
-    ]
+    bcast_shape: list[int] = [k if i == dim else int(x.shape[i]) for i in range(x.ndim)]
     idx_flat: Tensor = _lucid.tensor(
         indices_1d, dtype=_lucid.int32, device=x.device
     ).reshape(target_shape)
