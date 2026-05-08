@@ -141,7 +141,8 @@ LUCID_API TensorImplPtr scatter_add_op(const TensorImplPtr& base,
 //
 // d/d(src[j])  = grad[idx[j]]  if src[j] == output[idx[j]]  else 0
 // d/d(base[i]) = grad[i]       if base[i] == output[i]       else 0
-// Ties broken by "all winners receive the gradient equally" (matches PyTorch).
+// Ties broken by "all winners receive the gradient equally" (matches the
+// reference framework).
 LUCID_API TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
                                         const TensorImplPtr& indices,
                                         const TensorImplPtr& src,

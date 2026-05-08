@@ -306,7 +306,7 @@ class Tensor[DT: dtype, DV: device]:
         """
         return self._impl.item()
 
-    def numpy(self) -> "np.ndarray":  # type: ignore[type-arg]
+    def numpy(self) -> np.ndarray:  # type: ignore[type-arg]
         """Return the tensor as a NumPy array (CPU only).
 
         Imports numpy lazily — the rest of Lucid stays numpy-free unless

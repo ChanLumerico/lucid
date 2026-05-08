@@ -2,7 +2,7 @@
 //
 // ``histc`` is a counts-only wrapper around ``histogram_op``.  When the
 // range is omitted (lo == hi) it auto-derives from the input via min/max
-// reductions, exactly the reference framework's ``torch.histc`` default.
+// reductions, matching the reference framework's ``histc`` default.
 //
 // ``cartesian_prod`` builds the n-dim grid via ``meshgrid`` then flattens
 // each grid component and stacks them along a new last axis.  Inputs must

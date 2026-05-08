@@ -1076,22 +1076,24 @@ public:
                         const Shape& /*idx_shape*/,
                         int dim,
                         Dtype dt) override {
-        // Torch-style scatter_add (axis-scatter):
+        // Axis-scatter add — Lucid's flavour:
         //   out[..., idx[..., j, ...], ...] += src[..., j, ...]   along dim
         //
         // The earlier impl wired MLX's multi-axis ``scatter_add`` (np.add.at-
         // flavour: one index array per axis, all coordinates supplied), which
-        // is a different semantic from torch's axis-scatter and tripped MLX's
-        // "Number of index arrays does not match number of axes" guard.
-        // ``mlx::core::scatter_add_axis`` is the exact axis-scatter primitive
-        // we need — same one already used in the gradient path on line 804.
+        // is a different semantic from the axis-scatter Lucid exposes and
+        // tripped MLX's "Number of index arrays does not match number of
+        // axes" guard.  ``mlx::core::scatter_add_axis`` is the exact axis-
+        // scatter primitive we need — same one already used in the gradient
+        // path on line 804.
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& gs = std::get<GpuStorage>(src);
         const int ndim = static_cast<int>(base_shape.size());
         const int d = dim < 0 ? dim + ndim : dim;
         // Normalise negative indices the same way the gradient path does so
-        // user code can mirror torch's ``idx[i] += N`` convention.
+        // user code can mirror the ``idx[i] += N`` convention used by the
+        // reference framework.
         auto idx = *gi.arr;
         auto axis_len = ::mlx::core::array(
             static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx.dtype());
@@ -1103,13 +1105,13 @@ public:
     }
 
 private:
-    // MLX's ``scatter_{max,min,prod}`` lack a torch-flavoured ``*_axis``
-    // variant (``scatter_add`` is the only one with both forms).  For
-    // axis-scatter we reach the multi-axis API but use **K=1** with a
-    // single index array reshaped to (1,...,N,...,1) — same trick MLX
-    // would do internally for ``scatter_max(a, idx, src, axis)``.
+    // MLX's ``scatter_{max,min,prod}`` lack an axis-only variant the way
+    // ``scatter_add`` does (``scatter_add_axis``).  For axis-scatter we
+    // reach the multi-axis API but use **K=1** with a single index array
+    // reshaped to (1,...,N,...,1) — same trick MLX would do internally
+    // for ``scatter_max(a, idx, src, axis)``.
     //
-    // For torch's axis-scatter ``a[..., idx[i,j,...], ...] op= src[i,j,...]``
+    // For Lucid's axis-scatter ``a[..., idx[i,j,...], ...] op= src[i,j,...]``
     // along ``dim``: idx and src have identical shape (≤ a along non-dim
     // axes).  MLX's multi-axis scatter expects updates of shape
     // ``idx_shape + a.shape[K..]``; with K=1 and reshaping idx so the dim
@@ -1142,8 +1144,9 @@ private:
         // have shape ``idx_shape[d] = (idx_shape[d],)`` (just the scatter
         // axis) and ``updates`` to broadcast over the non-scatter axes.
         // We collapse all non-scatter axes from ``fixed`` by selecting the
-        // first slice — torch's invariant guarantees they're all identical
-        // along non-dim axes (they index the same scatter target row by row).
+        // first slice — the axis-scatter invariant guarantees they're all
+        // identical along non-dim axes (they index the same scatter target
+        // row by row).
         // Equivalently: take the values from ``fixed`` along all non-d axes
         // at index 0, leaving a 1-D index of length idx_shape[d].
         // BUT that doesn't preserve the per-row addresses.  Instead, we use

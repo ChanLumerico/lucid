@@ -471,7 +471,8 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
         }
 
         // Gradient is split equally among all tied winners at each output
-        // position (matches PyTorch's scatter_reduce backward convention).
+        // position (matches the reference framework's scatter_reduce
+        // backward convention).
         std::vector<Storage> apply(Storage g) override {
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
 

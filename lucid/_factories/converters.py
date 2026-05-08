@@ -32,7 +32,7 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
 }
 
 
-def _np_dtype_to_engine(np_dtype: "np.dtype") -> _C_engine.Dtype:  # type: ignore[type-arg]
+def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[type-arg]
     name = np_dtype.name
     if name in _NP_TO_ENGINE_DTYPE:
         return _NP_TO_ENGINE_DTYPE[name]
