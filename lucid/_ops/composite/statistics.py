@@ -519,9 +519,13 @@ def histogram(
     Returns ``(hist, bin_edges)`` — a 1-D count/density tensor and a
     1-D tensor of ``bins + 1`` edges.
     """
+    # ``range`` is a function parameter that shadows the Python
+    # builtin — capture the builtin once for use below.
+    py_range = __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range  # type: ignore[index, union-attr]
+
     flat = input.reshape(-1)
     n = int(flat.shape[0])
-    vals = [float(flat[i].item()) for i in range(n)]
+    vals = [float(flat[i].item()) for i in py_range(n)]
 
     if range is None:
         lo = min(vals) if vals else 0.0
@@ -533,7 +537,7 @@ def histogram(
 
     if isinstance(bins, int):
         n_bins = bins
-        edges = [lo + (hi - lo) * i / n_bins for i in range(n_bins + 1)]
+        edges = [lo + (hi - lo) * i / n_bins for i in py_range(n_bins + 1)]
     else:
         edges = [float(b) for b in bins]
         n_bins = len(edges) - 1
@@ -542,7 +546,7 @@ def histogram(
     w_list = None
     if weight is not None:
         wflat = weight.reshape(-1)
-        w_list = [float(wflat[i].item()) for i in range(int(wflat.shape[0]))]
+        w_list = [float(wflat[i].item()) for i in py_range(int(wflat.shape[0]))]
 
     if density:
         counts: list = [0.0] * n_bins
