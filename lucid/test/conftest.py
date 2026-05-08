@@ -29,6 +29,7 @@ from lucid.test._fixtures.devices import (  # noqa: F401
     device_cpu_only,
     device_gpu_only,
     cross_device_pair,
+    skip_if_unsupported,
 )
 from lucid.test._fixtures.dtypes import (  # noqa: F401
     float_dtype,
