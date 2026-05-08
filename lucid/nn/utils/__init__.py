@@ -16,9 +16,11 @@ from lucid.nn.utils.rnn import (
     pad_packed_sequence,
     pad_sequence,
 )
+from lucid.nn.utils._copy import copy_parameters_and_buffers
 from lucid.nn.utils import parametrize as parametrize
 from lucid.nn.utils import parametrizations as parametrizations
 from lucid.nn.utils import prune as prune
+from lucid.nn.utils import fusion as fusion
 
 __all__ = [
     "clip_grad_norm_",
@@ -34,7 +36,9 @@ __all__ = [
     "pack_sequence",
     "pad_packed_sequence",
     "pad_sequence",
+    "copy_parameters_and_buffers",
     "parametrize",
     "parametrizations",
     "prune",
+    "fusion",
 ]

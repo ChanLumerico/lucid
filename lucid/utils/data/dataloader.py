@@ -40,6 +40,61 @@ def _is_ndarray(obj: object) -> bool:
     return False
 
 
+def default_convert(data: object) -> object:
+    """Recursively convert a single sample's elements to Lucid Tensors.
+
+    The inverse-flavour partner of ``default_collate``: ``default_collate``
+    stacks a *batch list* into batched tensors, ``default_convert`` walks
+    a *single sample* (possibly nested in lists / tuples / dicts / named
+    tuples) and turns leaf ndarrays / scalars into Tensors.  Existing
+    Tensors / strings / bytes pass through unchanged.
+
+    Used by ``DataLoader`` when the dataset returns numpy arrays per
+    sample but the user wants Tensor leaves before batching.
+    """
+    if isinstance(data, Tensor):
+        return data
+    if _is_ndarray(data):
+        return _tensor_fn(data)
+    if isinstance(data, (str, bytes)):
+        return data
+    if isinstance(data, dict):
+        return {k: default_convert(v) for k, v in data.items()}
+    if isinstance(data, tuple) and hasattr(data, "_fields"):
+        return type(data)(*(default_convert(v) for v in data))
+    if isinstance(data, (list, tuple)):
+        converted = [default_convert(v) for v in data]
+        return type(data)(converted) if isinstance(data, tuple) else converted
+    if isinstance(data, (int, float, bool)):
+        return _tensor_fn(data)
+    return data
+
+
+def collate(
+    batch: list[object],
+    *,
+    collate_fn_map: dict[type, Callable[..., object]] | None = None,
+) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
+    """Composable collate — same dispatch as ``default_collate`` plus an
+    optional ``collate_fn_map`` that overrides handling for specific types.
+
+    When ``collate_fn_map`` is ``None`` this is exactly ``default_collate``.
+    Otherwise the first ``isinstance(elem, t)`` match in the map is used,
+    falling back to the default dispatch chain on miss.
+
+    Example::
+
+        loader = DataLoader(ds, collate_fn=lambda b: collate(
+            b, collate_fn_map={MyRecord: my_record_collate}))
+    """
+    elem = batch[0]
+    if collate_fn_map is not None:
+        for t, fn in collate_fn_map.items():
+            if isinstance(elem, t):
+                return fn(batch, collate_fn_map=collate_fn_map)
+    return default_collate(batch)
+
+
 def default_collate(
     batch: list[object],
 ) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:

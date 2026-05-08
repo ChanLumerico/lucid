@@ -21,7 +21,12 @@ from lucid.utils.data.sampler import (
     BatchSampler,
     DistributedSampler,
 )
-from lucid.utils.data.dataloader import DataLoader, default_collate
+from lucid.utils.data.dataloader import (
+    DataLoader,
+    collate,
+    default_collate,
+    default_convert,
+)
 from lucid.utils.data._worker import get_worker_info, WorkerInfo
 
 __all__ = [
@@ -41,7 +46,9 @@ __all__ = [
     "BatchSampler",
     "DistributedSampler",
     "DataLoader",
+    "collate",
     "default_collate",
+    "default_convert",
     "get_worker_info",
     "WorkerInfo",
 ]

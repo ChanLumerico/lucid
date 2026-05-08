@@ -77,3 +77,53 @@ class TestSamplers:
         s = ld.RandomSampler(ds)
         out = list(s)
         assert sorted(out) == list(range(8))
+
+
+class TestDefaultConvert:
+    def test_ndarray_leaf(self) -> None:
+        sample = np.arange(6.0, dtype=np.float32).reshape(2, 3)
+        out = ld.default_convert(sample)
+        assert isinstance(out, lucid.Tensor)
+        np.testing.assert_array_equal(out.numpy(), sample)
+
+    def test_scalar_leaf(self) -> None:
+        out = ld.default_convert(3.14)
+        assert isinstance(out, lucid.Tensor)
+        assert abs(out.item() - 3.14) < 1e-6
+
+    def test_str_passes_through(self) -> None:
+        assert ld.default_convert("hello") == "hello"
+
+    def test_nested_dict_tuple(self) -> None:
+        sample = {
+            "image": np.zeros((2, 2), dtype=np.float32),
+            "tags": ("a", "b"),
+            "scores": [1.0, 2.0],
+        }
+        out = ld.default_convert(sample)
+        assert isinstance(out["image"], lucid.Tensor)
+        assert out["tags"] == ("a", "b")
+        assert all(isinstance(s, lucid.Tensor) for s in out["scores"])
+
+    def test_existing_tensor_passthrough(self) -> None:
+        t = lucid.tensor([1.0, 2.0])
+        out = ld.default_convert(t)
+        assert out is t
+
+
+class TestCollate:
+    def test_no_map_falls_back_to_default(self) -> None:
+        batch = [lucid.tensor([1.0, 2.0]), lucid.tensor([3.0, 4.0])]
+        out = ld.collate(batch)
+        assert out.shape == (2, 2)
+
+    def test_custom_dispatch(self) -> None:
+        class Box:
+            def __init__(self, v: int) -> None:
+                self.v = v
+
+        def box_collate(batch: list, *, collate_fn_map=None) -> list:
+            return [b.v for b in batch]
+
+        out = ld.collate([Box(1), Box(2), Box(3)], collate_fn_map={Box: box_collate})
+        assert out == [1, 2, 3]
