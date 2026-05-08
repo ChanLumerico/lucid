@@ -10,19 +10,36 @@ for the full surface.
 from lucid.distributions import constraints
 from lucid.distributions.bernoulli import Bernoulli, Geometric
 from lucid.distributions.categorical import Categorical, OneHotCategorical
+from lucid.distributions.continuous_extra import (
+    FisherSnedecor,
+    HalfCauchy,
+    HalfNormal,
+    Pareto,
+    Weibull,
+)
+from lucid.distributions.discrete import Binomial, NegativeBinomial, Poisson
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 from lucid.distributions.exponential import Cauchy, Exponential, Laplace
 from lucid.distributions.gamma import Beta, Chi2, Dirichlet, Gamma
 from lucid.distributions.independent import Independent
 from lucid.distributions.kl import kl_divergence, register_kl
+from lucid.distributions.mixture import MixtureSameFamily
 from lucid.distributions.multivariate import MultivariateNormal
 from lucid.distributions.normal import LogNormal, Normal
+from lucid.distributions.relaxed import (
+    RelaxedBernoulli,
+    RelaxedOneHotCategorical,
+)
 from lucid.distributions.student import StudentT
 from lucid.distributions.transforms import (
     AffineTransform,
     ComposeTransform,
     ExpTransform,
+    LowerCholeskyTransform,
+    PowerTransform,
     SigmoidTransform,
+    SoftmaxTransform,
+    StickBreakingTransform,
     TanhTransform,
     Transform,
     TransformedDistribution,
@@ -43,6 +60,11 @@ __all__ = [
     "Laplace",
     "Cauchy",
     "StudentT",
+    "Pareto",
+    "Weibull",
+    "HalfNormal",
+    "HalfCauchy",
+    "FisherSnedecor",
     # gamma family
     "Gamma",
     "Chi2",
@@ -53,11 +75,18 @@ __all__ = [
     "Geometric",
     "Categorical",
     "OneHotCategorical",
+    "Poisson",
+    "Binomial",
+    "NegativeBinomial",
+    # relaxed (Concrete) — differentiable approximations
+    "RelaxedBernoulli",
+    "RelaxedOneHotCategorical",
     # multivariate
     "MultivariateNormal",
     # wrappers
     "Independent",
     "TransformedDistribution",
+    "MixtureSameFamily",
     # transforms
     "Transform",
     "ComposeTransform",
@@ -65,6 +94,10 @@ __all__ = [
     "ExpTransform",
     "SigmoidTransform",
     "TanhTransform",
+    "PowerTransform",
+    "SoftmaxTransform",
+    "StickBreakingTransform",
+    "LowerCholeskyTransform",
     # kl
     "kl_divergence",
     "register_kl",

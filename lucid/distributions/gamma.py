@@ -141,7 +141,10 @@ class Chi2(Gamma):
         self.df = _as_tensor(df)
         super().__init__(
             concentration=self.df * 0.5,
-            rate=lucid.tensor(0.5),
+            # ``_as_tensor(0.5)`` produces a 0-D scalar; using
+            # ``lucid.tensor(0.5)`` would yield a (1,) tensor and force
+            # an unwanted broadcast that propagates into the batch shape.
+            rate=_as_tensor(0.5),
             validate_args=validate_args,
         )
 

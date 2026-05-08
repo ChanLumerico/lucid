@@ -141,6 +141,191 @@ class AffineTransform(Transform):
         )
 
 
+class PowerTransform(Transform):
+    """``y = x^exponent`` (element-wise) for ``x > 0``."""
+
+    def __init__(self, exponent: Tensor | float) -> None:
+        super().__init__()
+        self.exponent = _as_tensor(exponent)
+
+    def _call(self, x: Tensor) -> Tensor:
+        return x ** self.exponent
+
+    def _inverse(self, y: Tensor) -> Tensor:
+        return y ** (1.0 / self.exponent)
+
+    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
+        # |dy/dx| = exponent · x^(exponent − 1) ⇒ log|dy/dx| =
+        #   log|exponent| + (exponent − 1)·log(x).
+        return self.exponent.abs().log() + (self.exponent - 1.0) * x.log()
+
+
+class SoftmaxTransform(Transform):
+    """``y = softmax(x)`` along the last axis — pushes ℝ^K onto the
+    open K-simplex.  Not a true bijection (loses 1-DOF to the
+    constraint), but standard in normalising-flow stacks."""
+
+    event_dim: int = 1
+
+    def _call(self, x: Tensor) -> Tensor:
+        from lucid.nn.functional.activations import softmax
+
+        return softmax(x, dim=-1)
+
+    def _inverse(self, y: Tensor) -> Tensor:
+        # Standard convention: take the un-normalised log-probabilities.
+        # Any constant shift gives the same softmax — we anchor at log y.
+        return y.log()
+
+    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
+        # log |det J| = sum_k log y_k — pseudo-Jacobian for the
+        # over-parameterised softmax, matching the reference framework.
+        return y.log().sum(dim=-1)
+
+
+class StickBreakingTransform(Transform):
+    """Logistic stick-breaking from ℝ^(K-1) to the K-simplex.
+
+    Maps ``x ∈ ℝ^(K-1)`` to ``y ∈ Δ^K`` by
+    ``y_k = σ(x_k − log(K−k)) · ∏_{j<k} (1 − y_j)``,
+    with the last component ``y_{K-1}`` taking the residual stick.
+    """
+
+    event_dim: int = 1
+
+    def _call(self, x: Tensor) -> Tensor:
+        # ``x`` shape (..., K-1).  We extend with a final 0 so the
+        # cumulative-product step yields the residual stick automatically.
+        K_minus_1: int = int(x.shape[-1])
+        offsets: Tensor = lucid.arange(
+            K_minus_1, 0, -1, dtype=x.dtype, device=x.device
+        )
+        # σ(x_k − log(K−k)) for k = 0..K-2.
+        z: Tensor = (x - offsets.log()).sigmoid()
+        # Stick-breaking: y_k = z_k · ∏_{j<k} (1 − z_j).
+        # Compute via cumulative product of (1 − z) and pad with 1 in front.
+        one_minus_z: Tensor = 1.0 - z
+        # Manual prefix-product since lucid has no cumprod-from-1 op handy:
+        # build [1, 1−z₀, (1−z₀)(1−z₁), …].
+        prods: list[Tensor] = []
+        running: Tensor = lucid.ones_like(z.narrow(-1, 0, 1)).squeeze(-1)
+        prods.append(running)
+        for k in range(K_minus_1 - 1):
+            running = running * one_minus_z.narrow(-1, k, 1).squeeze(-1)
+            prods.append(running)
+        prefix: Tensor = lucid.stack(prods, dim=-1)  # shape (..., K-1)
+        head: Tensor = z * prefix  # y_0 .. y_{K-2}
+        # Last component is the residual: y_{K-1} = ∏_{j<K-1} (1 − z_j).
+        last: Tensor = prefix.narrow(-1, K_minus_1 - 1, 1) * one_minus_z.narrow(
+            -1, K_minus_1 - 1, 1
+        )
+        return lucid.cat([head, last], dim=-1)
+
+    def _inverse(self, y: Tensor) -> Tensor:
+        # Recover x_k from y via z_k = y_k / (1 − Σ_{j<k} y_j),
+        # then x_k = logit(z_k) + log(K−k).
+        K: int = int(y.shape[-1])
+        K_minus_1: int = K - 1
+        # Cumulative tail sums: stick remaining before drawing y_k.
+        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)
+        # remaining_before_k = 1 − Σ_{j<k} y_j  → shifted version.
+        remaining: list[Tensor] = []
+        ones: Tensor = lucid.ones_like(y.narrow(-1, 0, 1))
+        remaining.append(ones)
+        for k in range(1, K_minus_1):
+            remaining.append(
+                (1.0 - cum.narrow(-1, k - 1, 1))
+            )
+        rem: Tensor = lucid.cat(remaining, dim=-1).squeeze(-1) if K_minus_1 == 1 \
+            else lucid.cat(remaining, dim=-1)
+        # rem has shape (..., K-1) by construction above.
+        z: Tensor = y.narrow(-1, 0, K_minus_1) / rem
+        offsets: Tensor = lucid.arange(
+            K_minus_1, 0, -1, dtype=y.dtype, device=y.device
+        )
+        return (z.log() - (1.0 - z).log()) + offsets.log()
+
+    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
+        # log|det J| = Σ_k log(y_k) + log(remaining stick before y_k) —
+        # the standard simplex-to-ℝ^(K-1) Jacobian.
+        K_minus_1: int = int(x.shape[-1])
+        z: Tensor = y.narrow(-1, 0, K_minus_1)
+        # remaining-before for each k.
+        remaining: list[Tensor] = []
+        cum: Tensor = z.cumsum(dim=-1)
+        ones: Tensor = lucid.ones_like(z.narrow(-1, 0, 1))
+        remaining.append(ones)
+        for k in range(1, K_minus_1):
+            remaining.append((1.0 - cum.narrow(-1, k - 1, 1)))
+        rem: Tensor = lucid.cat(remaining, dim=-1)
+        return (z.log() + rem.log() + (1.0 - z / rem).log()).sum(dim=-1)
+
+
+class LowerCholeskyTransform(Transform):
+    """ℝ^(D·(D+1)/2) → lower-triangular matrices with positive diagonal.
+
+    The standard reparameterisation used to recover Cholesky factors
+    from an unconstrained vector: off-diagonal entries pass through
+    unchanged, diagonal entries go through ``softplus`` so they stay
+    positive.
+    """
+
+    event_dim: int = 2
+
+    def _call(self, x: Tensor) -> Tensor:
+        from lucid.nn.functional.activations import softplus
+
+        # ``x`` is already a ``(*batch, D, D)`` matrix; we mask out the
+        # upper triangle (lucid has no native vec→tril helper, so the
+        # caller pre-shapes the input).
+        D: int = int(x.shape[-1])
+        # Build a lower-triangular mask.
+        mask: Tensor = _tril_mask(D, x.dtype, x.device)
+        diag_mask: Tensor = _eye_mask(D, x.dtype, x.device)
+        off_mask: Tensor = mask - diag_mask
+        # Diagonal: softplus; off-diagonal: identity; rest: zero.
+        diag: Tensor = softplus(x * diag_mask) * diag_mask
+        off: Tensor = x * off_mask
+        return diag + off
+
+    def _inverse(self, y: Tensor) -> Tensor:
+        # Inverse: invert softplus on the diagonal, off-diagonal as-is,
+        # zero out the upper triangle.
+        D: int = int(y.shape[-1])
+        diag_mask: Tensor = _eye_mask(D, y.dtype, y.device)
+        tril_mask: Tensor = _tril_mask(D, y.dtype, y.device)
+        off_mask: Tensor = tril_mask - diag_mask
+        # ``softplus^{-1}(z) = log(exp(z) − 1)`` — stable for z > 0.
+        diag_in: Tensor = (y * diag_mask).exp().log1p() if False else (
+            (y * diag_mask).exp() - 1.0
+        ).log() * diag_mask
+        off_in: Tensor = y * off_mask
+        return diag_in + off_in
+
+    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
+        # Jacobian: diag entries pass through softplus' = σ(x_diag);
+        # off-diagonal entries have unit Jacobian.  log|det J| =
+        # Σ log σ(x_diag) over the diagonal.
+        D: int = int(x.shape[-1])
+        diag_mask: Tensor = _eye_mask(D, x.dtype, x.device)
+        # σ(x) = 1/(1+exp(-x)) ⇒ log σ(x) = −softplus(−x).
+        from lucid.nn.functional.activations import softplus
+
+        log_sig: Tensor = -softplus(-(x * diag_mask))
+        return (log_sig * diag_mask).sum(dim=(-2, -1))
+
+
+def _eye_mask(D: int, dtype, device) -> Tensor:
+    """``D×D`` identity mask as a Lucid tensor."""
+    return lucid.eye(D, dtype=dtype, device=device)
+
+
+def _tril_mask(D: int, dtype, device) -> Tensor:
+    """``D×D`` lower-triangular indicator (1 on/below diag, 0 above)."""
+    ones: Tensor = lucid.ones(D, D, dtype=dtype, device=device)
+    return lucid.tril(ones)
+
+
 class ComposeTransform(Transform):
     """``T = T_n ∘ … ∘ T_2 ∘ T_1`` — applied left-to-right."""
 

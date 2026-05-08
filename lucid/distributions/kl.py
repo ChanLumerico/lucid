@@ -111,3 +111,62 @@ def _kl_beta_beta(p: Beta, q: Beta) -> Tensor:
         lucid.digamma(p.concentration0) - lucid.digamma(sum_p)
     )
     return t1 + t2 + t3 + t4
+
+
+# ── P8-C: extended pairwise registrations ────────────────────────────────
+
+
+from lucid.distributions.discrete import Poisson
+
+
+@register_kl(Poisson, Poisson)
+def _kl_poisson_poisson(p: Poisson, q: Poisson) -> Tensor:
+    # KL(Pois(λ_p) || Pois(λ_q)) = λ_p · log(λ_p / λ_q) − λ_p + λ_q.
+    return p.rate * (p.rate.log() - q.rate.log()) - p.rate + q.rate
+
+
+from lucid.distributions.gamma import Dirichlet
+
+
+@register_kl(Dirichlet, Dirichlet)
+def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
+    # KL(Dir(α) || Dir(β)) closed form using digamma + lgamma.
+    a = p.concentration
+    b = q.concentration
+    sum_a = a.sum(dim=-1, keepdim=True)
+    sum_b = b.sum(dim=-1, keepdim=True)
+    t1 = (
+        lucid.lgamma(sum_a).squeeze(-1)
+        - lucid.lgamma(a).sum(dim=-1)
+        - lucid.lgamma(sum_b).squeeze(-1)
+        + lucid.lgamma(b).sum(dim=-1)
+    )
+    t2 = ((a - b) * (lucid.digamma(a) - lucid.digamma(sum_a))).sum(dim=-1)
+    return t1 + t2
+
+
+from lucid.distributions.multivariate import MultivariateNormal
+
+
+@register_kl(MultivariateNormal, MultivariateNormal)
+def _kl_mvn_mvn(p: MultivariateNormal, q: MultivariateNormal) -> Tensor:
+    # KL(N(μ_p, Σ_p) || N(μ_q, Σ_q))
+    #   = 0.5·[tr(Σ_q⁻¹ Σ_p) + (μ_q − μ_p)ᵀ Σ_q⁻¹ (μ_q − μ_p)
+    #          − D + log(|Σ_q| / |Σ_p|)]
+    # All work on the lower-triangular factors to avoid forming Σ⁻¹.
+    Lp, Lq = p.scale_tril, q.scale_tril
+    D = int(p._D)
+
+    diag_p = Lp.diagonal(dim1=-2, dim2=-1)
+    diag_q = Lq.diagonal(dim1=-2, dim2=-1)
+    log_det_p = 2.0 * diag_p.log().sum(dim=-1)
+    log_det_q = 2.0 * diag_q.log().sum(dim=-1)
+
+    M = lucid.linalg.solve_triangular(Lq, Lp, upper=False)
+    trace_term = (M * M).sum(dim=(-2, -1))
+
+    diff = (q.loc - p.loc).unsqueeze(-1)
+    z = lucid.linalg.solve_triangular(Lq, diff, upper=False)
+    maha = (z * z).sum(dim=(-2, -1))
+
+    return 0.5 * (trace_term + maha - float(D) + log_det_q - log_det_p)
