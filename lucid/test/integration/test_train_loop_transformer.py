@@ -23,9 +23,7 @@ class TestTransformerTraining:
             d_model=8, nhead=2, dim_feedforward=16, batch_first=True
         ).to(device=device)
         head = nn.Linear(8, 8).to(device=device)
-        opt = optim.Adam(
-            list(block.parameters()) + list(head.parameters()), lr=0.01
-        )
+        opt = optim.Adam(list(block.parameters()) + list(head.parameters()), lr=0.01)
 
         first = float(F.mse_loss(head(block(x_t)), y_t).item())
         for _ in range(50):

@@ -52,7 +52,9 @@ class TestSaveLoadStateDict:
             for k, v in sd.items():
                 v2 = dict(model2.state_dict())[k]
                 np.testing.assert_allclose(
-                    v.numpy(), v2.numpy(), atol=1e-6,
+                    v.numpy(),
+                    v2.numpy(),
+                    atol=1e-6,
                     err_msg=f"parameter {k} drifted on round-trip",
                 )
 

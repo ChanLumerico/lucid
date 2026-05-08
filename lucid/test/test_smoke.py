@@ -40,9 +40,9 @@ def test_seed_resets_between_tests_part2() -> None:
     yield the same sample as part1 — proves determinism is in force."""
     sample = lucid.rand(8).numpy()
     expected = test_seed_resets_between_tests_part1.last_sample  # type: ignore[attr-defined]
-    assert sample.tolist() == expected, (
-        "RNG state did not reset between tests — autouse fixture broken"
-    )
+    assert (
+        sample.tolist() == expected
+    ), "RNG state did not reset between tests — autouse fixture broken"
 
 
 @pytest.mark.smoke

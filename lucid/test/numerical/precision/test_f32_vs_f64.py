@@ -40,9 +40,13 @@ class TestPrecisionParity:
         a = np.random.uniform(-1.0, 1.0, size=(4, 4)).astype(np.float64)
         b = np.random.uniform(-1.0, 1.0, size=(4, 4)).astype(np.float64)
         out32 = (
-            lucid.tensor(a.astype(np.float32), device=device)
-            @ lucid.tensor(b.astype(np.float32), device=device)
-        ).numpy().astype(np.float64)
+            (
+                lucid.tensor(a.astype(np.float32), device=device)
+                @ lucid.tensor(b.astype(np.float32), device=device)
+            )
+            .numpy()
+            .astype(np.float64)
+        )
         out64 = (
             lucid.tensor(a, dtype=lucid.float64, device=device)
             @ lucid.tensor(b, dtype=lucid.float64, device=device)
@@ -52,7 +56,12 @@ class TestPrecisionParity:
     def test_exp(self, device: str) -> None:
         skip_if_unsupported(device, lucid.float64)
         x = np.linspace(-2.0, 2.0, 32, dtype=np.float64)
-        out32 = lucid.tensor(x.astype(np.float32), device=device).exp().numpy().astype(np.float64)
+        out32 = (
+            lucid.tensor(x.astype(np.float32), device=device)
+            .exp()
+            .numpy()
+            .astype(np.float64)
+        )
         out64 = lucid.tensor(x, dtype=lucid.float64, device=device).exp().numpy()
         np.testing.assert_allclose(out32, out64, atol=1e-5)
 
@@ -97,8 +106,13 @@ class TestF32SanityFloor:
         x = np.random.uniform(-1.0, 1.0, size=(1024,)).astype(np.float32)
         y = np.random.uniform(-1.0, 1.0, size=(1024,)).astype(np.float32)
         out = (
-            lucid.tensor(x.copy(), device=device) * lucid.tensor(y.copy(), device=device)
-        ).sum().item()
+            (
+                lucid.tensor(x.copy(), device=device)
+                * lucid.tensor(y.copy(), device=device)
+            )
+            .sum()
+            .item()
+        )
         ref = float(np.sum((x.astype(np.float64) * y.astype(np.float64))))
         rel = abs(out - ref) / max(abs(ref), 1e-9)
         assert rel < 1e-4

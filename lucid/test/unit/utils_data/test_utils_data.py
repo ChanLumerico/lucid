@@ -43,9 +43,8 @@ class TestDataLoader:
         for x, y in dl:
             # Shape is whatever the default collate returns; just
             # check we got 3-batch pieces.
-            assert (
-                (hasattr(x, "shape") and x.shape[0] == 3)
-                or (hasattr(x, "__len__") and len(x) == 3)
+            assert (hasattr(x, "shape") and x.shape[0] == 3) or (
+                hasattr(x, "__len__") and len(x) == 3
             )
 
     def test_shuffle_changes_order(self) -> None:

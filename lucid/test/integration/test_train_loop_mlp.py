@@ -48,9 +48,9 @@ class TestMLPTraining:
             opt.step()
             losses.append(float(loss.item()))
 
-        assert losses[-1] < 0.5 * losses[0], (
-            f"loss did not shrink enough: {losses[0]:.4f} → {losses[-1]:.4f}"
-        )
+        assert (
+            losses[-1] < 0.5 * losses[0]
+        ), f"loss did not shrink enough: {losses[0]:.4f} → {losses[-1]:.4f}"
 
     def test_adam_also_shrinks(self, device: str) -> None:
         x, y = self._build_data(device)

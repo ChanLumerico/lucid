@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _GEN_PYI = _REPO_ROOT / "tools" / "gen_pyi.py"
 _CHECK_STUBS = _REPO_ROOT / "tools" / "check_stubs.py"

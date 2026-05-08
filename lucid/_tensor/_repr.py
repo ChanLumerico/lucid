@@ -23,9 +23,7 @@ def tensor_repr(t: Tensor) -> str:
                 requires_grad=True)
     """
     try:
-        arr_str = t._impl.to_string(
-            _REPR_PRECISION, _REPR_THRESHOLD, _REPR_EDGEITEMS
-        )
+        arr_str = t._impl.to_string(_REPR_PRECISION, _REPR_THRESHOLD, _REPR_EDGEITEMS)
     except Exception:
         arr_str = "<data unavailable>"
 

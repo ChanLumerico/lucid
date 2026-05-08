@@ -9,28 +9,28 @@ import lucid
 from lucid.test._fixtures.devices import skip_if_unsupported
 from lucid.test._helpers.compare import assert_close
 
-
 # (name, lucid_fn, numpy_fn, low, high, atol)
 _BINARY_OPS: list[tuple[str, Callable, Callable, float, float, float]] = [
-    ("add",       lambda a, b: a + b,         np.add,       -2.0, 2.0, 1e-6),
-    ("sub",       lambda a, b: a - b,         np.subtract,  -2.0, 2.0, 1e-6),
-    ("mul",       lambda a, b: a * b,         np.multiply,  -2.0, 2.0, 1e-6),
-    ("div",       lambda a, b: a / b,         np.divide,    0.5, 2.0,  1e-5),
-    ("pow",       lambda a, b: a ** b,        np.power,     0.5, 2.0,  1e-4),
-    ("maximum",   lambda a, b: lucid.maximum(a, b), np.maximum, -2.0, 2.0, 0.0),
-    ("minimum",   lambda a, b: lucid.minimum(a, b), np.minimum, -2.0, 2.0, 0.0),
-    ("atan2",     lambda a, b: lucid.atan2(a, b),   np.arctan2, -2.0, 2.0, 1e-5),
-    ("hypot",     lambda a, b: lucid.hypot(a, b),   np.hypot,    0.1, 2.0, 1e-4),
-    ("fmod",      lambda a, b: lucid.fmod(a, b),    np.fmod,     0.1, 2.0, 1e-5),
+    ("add", lambda a, b: a + b, np.add, -2.0, 2.0, 1e-6),
+    ("sub", lambda a, b: a - b, np.subtract, -2.0, 2.0, 1e-6),
+    ("mul", lambda a, b: a * b, np.multiply, -2.0, 2.0, 1e-6),
+    ("div", lambda a, b: a / b, np.divide, 0.5, 2.0, 1e-5),
+    ("pow", lambda a, b: a**b, np.power, 0.5, 2.0, 1e-4),
+    ("maximum", lambda a, b: lucid.maximum(a, b), np.maximum, -2.0, 2.0, 0.0),
+    ("minimum", lambda a, b: lucid.minimum(a, b), np.minimum, -2.0, 2.0, 0.0),
+    ("atan2", lambda a, b: lucid.atan2(a, b), np.arctan2, -2.0, 2.0, 1e-5),
+    ("hypot", lambda a, b: lucid.hypot(a, b), np.hypot, 0.1, 2.0, 1e-4),
+    ("fmod", lambda a, b: lucid.fmod(a, b), np.fmod, 0.1, 2.0, 1e-5),
     ("remainder", lambda a, b: lucid.remainder(a, b), np.remainder, 0.1, 2.0, 1e-5),
-    ("fmax",      lambda a, b: lucid.fmax(a, b),    np.fmax,     -2.0, 2.0, 0.0),
-    ("fmin",      lambda a, b: lucid.fmin(a, b),    np.fmin,     -2.0, 2.0, 0.0),
+    ("fmax", lambda a, b: lucid.fmax(a, b), np.fmax, -2.0, 2.0, 0.0),
+    ("fmin", lambda a, b: lucid.fmin(a, b), np.fmin, -2.0, 2.0, 0.0),
     ("logaddexp", lambda a, b: lucid.logaddexp(a, b), np.logaddexp, -2.0, 2.0, 1e-5),
 ]
 
 
-@pytest.mark.parametrize("name,lucid_fn,np_fn,low,high,atol", _BINARY_OPS,
-                         ids=[op[0] for op in _BINARY_OPS])
+@pytest.mark.parametrize(
+    "name,lucid_fn,np_fn,low,high,atol", _BINARY_OPS, ids=[op[0] for op in _BINARY_OPS]
+)
 def test_binary_value_match(
     name: str,
     lucid_fn: Callable,

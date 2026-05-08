@@ -52,9 +52,7 @@ class MixtureSameFamily(Distribution):
         comp_mean: Tensor = self.component_distribution.mean  # (..., K, *event)
         # Multiply along the K axis.  ``comp_mean`` may have trailing
         # event dims; broadcast ``probs`` accordingly.
-        weight = probs.reshape(
-            list(probs.shape) + [1] * len(self._event_shape)
-        )
+        weight = probs.reshape(list(probs.shape) + [1] * len(self._event_shape))
         return (weight * comp_mean).sum(dim=-1 - len(self._event_shape))
 
     @property
@@ -63,15 +61,11 @@ class MixtureSameFamily(Distribution):
         probs: Tensor = self.mixture_distribution._probs
         comp_mean: Tensor = self.component_distribution.mean
         comp_var: Tensor = self.component_distribution.variance
-        weight = probs.reshape(
-            list(probs.shape) + [1] * len(self._event_shape)
-        )
+        weight = probs.reshape(list(probs.shape) + [1] * len(self._event_shape))
         ax = -1 - len(self._event_shape)
         mean_of_mean = (weight * comp_mean).sum(dim=ax, keepdim=True)
         within: Tensor = (weight * comp_var).sum(dim=ax)
-        between: Tensor = (
-            weight * (comp_mean - mean_of_mean) ** 2
-        ).sum(dim=ax)
+        between: Tensor = (weight * (comp_mean - mean_of_mean) ** 2).sum(dim=ax)
         return within + between
 
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
@@ -85,14 +79,14 @@ class MixtureSameFamily(Distribution):
         idx_unsq: Tensor = comp_idx.to(lucid.int64)
         # Expand idx to match comp_samples shape (insert event dims as 1
         # then broadcast).
-        idx_shape: list[int] = list(idx_unsq.shape) + [1] + [1] * len(
-            self._event_shape
-        )
-        idx_b: Tensor = idx_unsq.reshape(idx_shape).broadcast_to(
-            list(comp_samples.shape[:ax]) + [1] + list(
-                comp_samples.shape[ax + 1 :]
+        idx_shape: list[int] = list(idx_unsq.shape) + [1] + [1] * len(self._event_shape)
+        idx_b: Tensor = (
+            idx_unsq.reshape(idx_shape)
+            .broadcast_to(
+                list(comp_samples.shape[:ax]) + [1] + list(comp_samples.shape[ax + 1 :])
             )
-        ).contiguous()
+            .contiguous()
+        )
         gathered: Tensor = lucid.gather(comp_samples, idx_b, ax)
         return gathered.squeeze(ax)
 

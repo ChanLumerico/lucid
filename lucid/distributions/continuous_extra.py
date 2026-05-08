@@ -94,9 +94,7 @@ class Weibull(Distribution):
     ) -> None:
         self.scale = _as_tensor(scale)
         self.concentration = _as_tensor(concentration)
-        self.scale, self.concentration = _broadcast_pair(
-            self.scale, self.concentration
-        )
+        self.scale, self.concentration = _broadcast_pair(self.scale, self.concentration)
         super().__init__(
             batch_shape=tuple(self.scale.shape),
             event_shape=(),
@@ -123,20 +121,13 @@ class Weibull(Distribution):
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         # icdf: x = λ · (−log(1 − U))^(1/k).
         shape = self._extended_shape(sample_shape)
-        u: Tensor = lucid.rand(
-            *shape, dtype=self.scale.dtype, device=self.scale.device
-        )
+        u: Tensor = lucid.rand(*shape, dtype=self.scale.dtype, device=self.scale.device)
         return self.scale * (-(1.0 - u).log()) ** (1.0 / self.concentration)
 
     def log_prob(self, value: Tensor) -> Tensor:
         k: Tensor = self.concentration
         lam: Tensor = self.scale
-        return (
-            k.log()
-            - k * lam.log()
-            + (k - 1.0) * value.log()
-            - (value / lam) ** k
-        )
+        return k.log() - k * lam.log() + (k - 1.0) * value.log() - (value / lam) ** k
 
     def entropy(self) -> Tensor:
         # H = γ·(1 − 1/k) + log(λ/k) + 1, where γ is Euler-Mascheroni.
@@ -163,8 +154,9 @@ class HalfNormal(Distribution):
         from lucid.distributions.normal import Normal
 
         self.scale = _as_tensor(scale)
-        self._base = Normal(lucid.zeros_like(self.scale), self.scale,
-                            validate_args=False)
+        self._base = Normal(
+            lucid.zeros_like(self.scale), self.scale, validate_args=False
+        )
         super().__init__(
             batch_shape=tuple(self.scale.shape),
             event_shape=(),
@@ -206,8 +198,9 @@ class HalfCauchy(Distribution):
         from lucid.distributions.exponential import Cauchy
 
         self.scale = _as_tensor(scale)
-        self._base = Cauchy(lucid.zeros_like(self.scale), self.scale,
-                            validate_args=False)
+        self._base = Cauchy(
+            lucid.zeros_like(self.scale), self.scale, validate_args=False
+        )
         super().__init__(
             batch_shape=tuple(self.scale.shape),
             event_shape=(),
@@ -260,10 +253,7 @@ class FisherSnedecor(Distribution):
     def variance(self) -> Tensor:
         # Defined for d2 > 4.
         d1, d2 = self.df1, self.df2
-        return (
-            2.0 * d2 * d2 * (d1 + d2 - 2.0)
-            / (d1 * (d2 - 2.0) ** 2 * (d2 - 4.0))
-        )
+        return 2.0 * d2 * d2 * (d1 + d2 - 2.0) / (d1 * (d2 - 2.0) ** 2 * (d2 - 4.0))
 
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         x: Tensor = self._chi1.sample(sample_shape)

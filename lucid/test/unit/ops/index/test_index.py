@@ -18,9 +18,7 @@ class TestGather:
 class TestScatter:
     def test_scatter(self, device: str) -> None:
         base = lucid.zeros(3, 4, device=device)
-        idx = lucid.tensor(
-            [[0, 1], [2, 1], [0, 2]], dtype=lucid.int32, device=device
-        )
+        idx = lucid.tensor([[0, 1], [2, 1], [0, 2]], dtype=lucid.int32, device=device)
         src = lucid.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], device=device)
         out = lucid.scatter(base, dim=1, index=idx, src=src).numpy()
         expected = np.zeros((3, 4))

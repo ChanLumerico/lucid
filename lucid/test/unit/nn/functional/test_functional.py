@@ -90,4 +90,6 @@ class TestTripletWithDistance:
         a = lucid.tensor([[1.0, 0.0]])
         p = lucid.tensor([[1.0, 0.0]])
         n = lucid.tensor([[0.0, 1.0]])
-        assert abs(F.triplet_margin_with_distance_loss(a, p, n, margin=1.0).item()) < 1e-6
+        assert (
+            abs(F.triplet_margin_with_distance_loss(a, p, n, margin=1.0).item()) < 1e-6
+        )

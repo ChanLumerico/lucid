@@ -29,9 +29,7 @@ def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
 
     if mask.dtype is _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
-        zero_t: Tensor = _lucid.zeros(
-            mask.shape, dtype=float_dtype, device=mask.device
-        )
+        zero_t: Tensor = _lucid.zeros(mask.shape, dtype=float_dtype, device=mask.device)
         ninf_t: Tensor = _lucid.full(
             mask.shape, _NEG_INF, dtype=float_dtype, device=mask.device
         )

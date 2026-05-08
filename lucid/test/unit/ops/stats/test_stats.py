@@ -70,9 +70,7 @@ class TestHistogram:
 
     def test_density(self, device: str) -> None:
         t = lucid.tensor([0.5, 1.5, 2.5, 0.5], device=device)
-        counts, edges = lucid.histogram(
-            t, bins=[0.0, 1.0, 2.0, 3.0], density=True
-        )
+        counts, edges = lucid.histogram(t, bins=[0.0, 1.0, 2.0, 3.0], density=True)
         bw = edges[1].item() - edges[0].item()
         assert abs(counts.sum().item() * bw - 1.0) < 1e-5
 
@@ -81,9 +79,7 @@ class TestHistogram2d:
     def test_basic(self, device: str) -> None:
         x = lucid.tensor([0.0, 1.0, 1.0, 2.0], device=device)
         y = lucid.tensor([0.0, 0.0, 1.0, 1.0], device=device)
-        counts, xe, ye = lucid.histogram2d(
-            x, y, bins=2, range=((0.0, 2.0), (0.0, 1.0))
-        )
+        counts, xe, ye = lucid.histogram2d(x, y, bins=2, range=((0.0, 2.0), (0.0, 1.0)))
         assert counts.shape == (2, 2)
         assert xe.shape == (3,)
         assert ye.shape == (3,)

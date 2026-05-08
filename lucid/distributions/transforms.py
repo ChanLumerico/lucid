@@ -149,7 +149,7 @@ class PowerTransform(Transform):
         self.exponent = _as_tensor(exponent)
 
     def _call(self, x: Tensor) -> Tensor:
-        return x ** self.exponent
+        return x**self.exponent
 
     def _inverse(self, y: Tensor) -> Tensor:
         return y ** (1.0 / self.exponent)
@@ -197,9 +197,7 @@ class StickBreakingTransform(Transform):
         # ``x`` shape (..., K-1).  We extend with a final 0 so the
         # cumulative-product step yields the residual stick automatically.
         K_minus_1: int = int(x.shape[-1])
-        offsets: Tensor = lucid.arange(
-            K_minus_1, 0, -1, dtype=x.dtype, device=x.device
-        )
+        offsets: Tensor = lucid.arange(K_minus_1, 0, -1, dtype=x.dtype, device=x.device)
         # σ(x_k − log(K−k)) for k = 0..K-2.
         z: Tensor = (x - offsets.log()).sigmoid()
         # Stick-breaking: y_k = z_k · ∏_{j<k} (1 − z_j).
@@ -233,16 +231,15 @@ class StickBreakingTransform(Transform):
         ones: Tensor = lucid.ones_like(y.narrow(-1, 0, 1))
         remaining.append(ones)
         for k in range(1, K_minus_1):
-            remaining.append(
-                (1.0 - cum.narrow(-1, k - 1, 1))
-            )
-        rem: Tensor = lucid.cat(remaining, dim=-1).squeeze(-1) if K_minus_1 == 1 \
+            remaining.append((1.0 - cum.narrow(-1, k - 1, 1)))
+        rem: Tensor = (
+            lucid.cat(remaining, dim=-1).squeeze(-1)
+            if K_minus_1 == 1
             else lucid.cat(remaining, dim=-1)
+        )
         # rem has shape (..., K-1) by construction above.
         z: Tensor = y.narrow(-1, 0, K_minus_1) / rem
-        offsets: Tensor = lucid.arange(
-            K_minus_1, 0, -1, dtype=y.dtype, device=y.device
-        )
+        offsets: Tensor = lucid.arange(K_minus_1, 0, -1, dtype=y.dtype, device=y.device)
         return (z.log() - (1.0 - z).log()) + offsets.log()
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
@@ -296,9 +293,11 @@ class LowerCholeskyTransform(Transform):
         tril_mask: Tensor = _tril_mask(D, y.dtype, y.device)
         off_mask: Tensor = tril_mask - diag_mask
         # ``softplus^{-1}(z) = log(exp(z) − 1)`` — stable for z > 0.
-        diag_in: Tensor = (y * diag_mask).exp().log1p() if False else (
-            (y * diag_mask).exp() - 1.0
-        ).log() * diag_mask
+        diag_in: Tensor = (
+            (y * diag_mask).exp().log1p()
+            if False
+            else ((y * diag_mask).exp() - 1.0).log() * diag_mask
+        )
         off_in: Tensor = y * off_mask
         return diag_in + off_in
 

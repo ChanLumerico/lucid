@@ -308,13 +308,15 @@ class LSTM(Module):
 
         T: int = int(x.shape[0])
         # Reverse range [T-1, T-2, …, 0] built on the engine.
-        rev_1d: Tensor = _lucid.arange(T - 1, -1, -1, dtype=_lucid.int32, device=x.device)
+        rev_1d: Tensor = _lucid.arange(
+            T - 1, -1, -1, dtype=_lucid.int32, device=x.device
+        )
         target_shape: list[int] = [1] * x.ndim
         target_shape[0] = T
         bcast_shape: list[int] = [int(s) for s in x.shape]
-        idx: Tensor = rev_1d.reshape(target_shape).broadcast_to(
-            bcast_shape
-        ).contiguous()
+        idx: Tensor = (
+            rev_1d.reshape(target_shape).broadcast_to(bcast_shape).contiguous()
+        )
         return _lucid.gather(x, idx, 0)
 
     def _run_single_layer_engine(

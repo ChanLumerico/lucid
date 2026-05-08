@@ -37,9 +37,7 @@ class TestTranspose:
     def test_2d_default(self, device: str) -> None:
         # ``transpose`` takes no args — flips a 2-D tensor.
         t = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
-        np.testing.assert_array_equal(
-            t.transpose().numpy(), [[1.0, 3.0], [2.0, 4.0]]
-        )
+        np.testing.assert_array_equal(t.transpose().numpy(), [[1.0, 3.0], [2.0, 4.0]])
 
     def test_swapaxes(self, device: str) -> None:
         # ``swapaxes`` is the explicit-axis form.
@@ -50,9 +48,7 @@ class TestTranspose:
 
     def test_mT_property(self, device: str) -> None:
         t = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
-        np.testing.assert_array_equal(
-            t.mT.numpy(), [[1.0, 3.0], [2.0, 4.0]]
-        )
+        np.testing.assert_array_equal(t.mT.numpy(), [[1.0, 3.0], [2.0, 4.0]])
 
 
 class TestUnsqueezeSqueeze:

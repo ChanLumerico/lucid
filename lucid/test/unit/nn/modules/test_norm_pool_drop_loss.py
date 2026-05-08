@@ -8,7 +8,6 @@ import pytest
 import lucid
 import lucid.nn as nn
 
-
 # ── normalization ───────────────────────────────────────────────────────
 
 

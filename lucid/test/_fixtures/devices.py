@@ -68,11 +68,13 @@ def cross_device_pair() -> Iterator[tuple[str, str]]:
 # should call ``skip_if_unsupported(device, dtype)`` before doing any
 # allocation so the parametrize-cross-product cleanly skips the cells
 # that can't run.
-_METAL_UNSUPPORTED_DTYPES: frozenset[Any] = frozenset({
-    lucid.float64,
-    lucid.bfloat16,
-    lucid.complex64,  # complex on Metal is opt-in via specific kernels.
-})
+_METAL_UNSUPPORTED_DTYPES: frozenset[Any] = frozenset(
+    {
+        lucid.float64,
+        lucid.bfloat16,
+        lucid.complex64,  # complex on Metal is opt-in via specific kernels.
+    }
+)
 
 
 def skip_if_unsupported(device: str, dtype: Any) -> None:

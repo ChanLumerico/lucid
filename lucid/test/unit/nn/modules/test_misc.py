@@ -58,8 +58,13 @@ class TestRNNFamily:
         assert out.shape == (2, 5, 8)
 
     def test_rnn_shape(self) -> None:
-        m = nn.RNN(input_size=4, hidden_size=8, num_layers=1, batch_first=True,
-                   nonlinearity="tanh")
+        m = nn.RNN(
+            input_size=4,
+            hidden_size=8,
+            num_layers=1,
+            batch_first=True,
+            nonlinearity="tanh",
+        )
         x = lucid.zeros(2, 5, 4)
         out, _ = m(x)
         assert out.shape == (2, 5, 8)

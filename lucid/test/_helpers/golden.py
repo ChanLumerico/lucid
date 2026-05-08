@@ -16,7 +16,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 _GOLDEN_DIR = Path(__file__).resolve().parent.parent / "numerical" / "golden"
 
 

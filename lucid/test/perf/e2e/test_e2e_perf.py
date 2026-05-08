@@ -10,20 +10,23 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid.test._fixtures.perf import assert_no_regression, load_thresholds
 
-
 _THRESHOLDS = load_thresholds(Path(__file__).parent)
 
 
 @pytest.mark.perf
 class TestMLPForwardBackward:
     def test_mlp_step(self, bench, device: str) -> None:
-        x = lucid.tensor(np.random.standard_normal((64, 32)).astype(np.float32),
-                         device=device)
-        y = lucid.tensor(np.random.standard_normal((64, 1)).astype(np.float32),
-                         device=device)
+        x = lucid.tensor(
+            np.random.standard_normal((64, 32)).astype(np.float32), device=device
+        )
+        y = lucid.tensor(
+            np.random.standard_normal((64, 1)).astype(np.float32), device=device
+        )
         model = nn.Sequential(
-            nn.Linear(32, 64), nn.ReLU(),
-            nn.Linear(64, 64), nn.ReLU(),
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            nn.Linear(64, 64),
+            nn.ReLU(),
             nn.Linear(64, 1),
         ).to(device=device)
 
@@ -42,8 +45,9 @@ class TestMLPForwardBackward:
 @pytest.mark.perf
 class TestTransformerForward:
     def test_block_forward(self, bench, device: str) -> None:
-        x = lucid.tensor(np.random.standard_normal((4, 32, 64)).astype(np.float32),
-                         device=device)
+        x = lucid.tensor(
+            np.random.standard_normal((4, 32, 64)).astype(np.float32), device=device
+        )
         block = nn.TransformerEncoderLayer(
             d_model=64, nhead=4, dim_feedforward=128, batch_first=True
         ).to(device=device)

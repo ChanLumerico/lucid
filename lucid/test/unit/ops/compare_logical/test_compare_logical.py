@@ -6,7 +6,6 @@ import pytest
 import lucid
 from lucid.test._helpers.compare import assert_equal_int
 
-
 # ── comparison ───────────────────────────────────────────────────────────
 
 
@@ -14,9 +13,7 @@ class TestComparison:
     def test_eq(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0, 3.0], device=device)
         b = lucid.tensor([1.0, 0.0, 3.0], device=device)
-        np.testing.assert_array_equal(
-            lucid.eq(a, b).numpy(), [True, False, True]
-        )
+        np.testing.assert_array_equal(lucid.eq(a, b).numpy(), [True, False, True])
 
     def test_ne(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0], device=device)
@@ -26,30 +23,22 @@ class TestComparison:
     def test_lt(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0, 3.0], device=device)
         b = lucid.tensor([2.0, 2.0, 2.0], device=device)
-        np.testing.assert_array_equal(
-            lucid.lt(a, b).numpy(), [True, False, False]
-        )
+        np.testing.assert_array_equal(lucid.lt(a, b).numpy(), [True, False, False])
 
     def test_le(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0, 3.0], device=device)
         b = lucid.tensor([2.0, 2.0, 2.0], device=device)
-        np.testing.assert_array_equal(
-            lucid.le(a, b).numpy(), [True, True, False]
-        )
+        np.testing.assert_array_equal(lucid.le(a, b).numpy(), [True, True, False])
 
     def test_gt(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0, 3.0], device=device)
         b = lucid.tensor([2.0, 2.0, 2.0], device=device)
-        np.testing.assert_array_equal(
-            lucid.gt(a, b).numpy(), [False, False, True]
-        )
+        np.testing.assert_array_equal(lucid.gt(a, b).numpy(), [False, False, True])
 
     def test_ge(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0, 3.0], device=device)
         b = lucid.tensor([2.0, 2.0, 2.0], device=device)
-        np.testing.assert_array_equal(
-            lucid.ge(a, b).numpy(), [False, True, True]
-        )
+        np.testing.assert_array_equal(lucid.ge(a, b).numpy(), [False, True, True])
 
     def test_isclose(self, device: str) -> None:
         a = lucid.tensor([1.0, 2.0], device=device)
@@ -103,16 +92,12 @@ class TestBitwise:
     def test_bitwise_or(self, device: str) -> None:
         a = lucid.tensor([0b1100, 0b1010], dtype=lucid.int32, device=device)
         b = lucid.tensor([0b0011, 0b0101], dtype=lucid.int32, device=device)
-        np.testing.assert_array_equal(
-            lucid.bitwise_or(a, b).numpy(), [0b1111, 0b1111]
-        )
+        np.testing.assert_array_equal(lucid.bitwise_or(a, b).numpy(), [0b1111, 0b1111])
 
     def test_bitwise_xor(self, device: str) -> None:
         a = lucid.tensor([0b1100, 0b1010], dtype=lucid.int32, device=device)
         b = lucid.tensor([0b1010, 0b0110], dtype=lucid.int32, device=device)
-        np.testing.assert_array_equal(
-            lucid.bitwise_xor(a, b).numpy(), [0b0110, 0b1100]
-        )
+        np.testing.assert_array_equal(lucid.bitwise_xor(a, b).numpy(), [0b0110, 0b1100])
 
     def test_bitwise_not(self, device: str) -> None:
         a = lucid.tensor([0, 1, 2], dtype=lucid.int32, device=device)
@@ -141,17 +126,13 @@ class TestShifts:
         # on metal — documented divergence, not a bug.
         a = lucid.tensor([1], dtype=lucid.int32, device=device_cpu_only)
         b = lucid.tensor([100], dtype=lucid.int32, device=device_cpu_only)
-        np.testing.assert_array_equal(
-            lucid.bitwise_left_shift(a, b).numpy(), [0]
-        )
+        np.testing.assert_array_equal(lucid.bitwise_left_shift(a, b).numpy(), [0])
 
     def test_negative_right_shift_signed(self, device: str) -> None:
         # Arithmetic right shift on a signed negative preserves sign.
         a = lucid.tensor([-8], dtype=lucid.int8, device=device)
         b = lucid.tensor([1], dtype=lucid.int8, device=device)
-        np.testing.assert_array_equal(
-            lucid.bitwise_right_shift(a, b).numpy(), [-4]
-        )
+        np.testing.assert_array_equal(lucid.bitwise_right_shift(a, b).numpy(), [-4])
 
     def test_shift_rejects_bool(self, device: str) -> None:
         with pytest.raises(Exception):

@@ -23,26 +23,29 @@ import pytest
 import lucid
 from lucid.test._fixtures.perf import assert_no_regression, load_thresholds
 
-
 _THRESHOLDS = load_thresholds(Path(__file__).parent)
 
 
 @pytest.mark.perf
 class TestArithMicrobench:
     def test_add_2048(self, bench, device: str) -> None:
-        a = lucid.tensor(np.random.standard_normal((2048,)).astype(np.float32),
-                         device=device)
-        b = lucid.tensor(np.random.standard_normal((2048,)).astype(np.float32),
-                         device=device)
+        a = lucid.tensor(
+            np.random.standard_normal((2048,)).astype(np.float32), device=device
+        )
+        b = lucid.tensor(
+            np.random.standard_normal((2048,)).astype(np.float32), device=device
+        )
         bench(lambda: (a + b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"add_2048_{device}", bench.last_elapsed, _THRESHOLDS)
 
     def test_mul_2048(self, bench, device: str) -> None:
-        a = lucid.tensor(np.random.standard_normal((2048,)).astype(np.float32),
-                         device=device)
-        b = lucid.tensor(np.random.standard_normal((2048,)).astype(np.float32),
-                         device=device)
+        a = lucid.tensor(
+            np.random.standard_normal((2048,)).astype(np.float32), device=device
+        )
+        b = lucid.tensor(
+            np.random.standard_normal((2048,)).astype(np.float32), device=device
+        )
         bench(lambda: (a * b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"mul_2048_{device}", bench.last_elapsed, _THRESHOLDS)
@@ -51,29 +54,36 @@ class TestArithMicrobench:
 @pytest.mark.perf
 class TestMatmulMicrobench:
     def test_matmul_64x64(self, bench, device: str) -> None:
-        a = lucid.tensor(np.random.standard_normal((64, 64)).astype(np.float32),
-                         device=device)
-        b = lucid.tensor(np.random.standard_normal((64, 64)).astype(np.float32),
-                         device=device)
+        a = lucid.tensor(
+            np.random.standard_normal((64, 64)).astype(np.float32), device=device
+        )
+        b = lucid.tensor(
+            np.random.standard_normal((64, 64)).astype(np.float32), device=device
+        )
         bench(lambda: (a @ b).numpy())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"matmul_64_{device}", bench.last_elapsed, _THRESHOLDS)
 
     def test_matmul_256x256(self, bench, device: str) -> None:
-        a = lucid.tensor(np.random.standard_normal((256, 256)).astype(np.float32),
-                         device=device)
-        b = lucid.tensor(np.random.standard_normal((256, 256)).astype(np.float32),
-                         device=device)
+        a = lucid.tensor(
+            np.random.standard_normal((256, 256)).astype(np.float32), device=device
+        )
+        b = lucid.tensor(
+            np.random.standard_normal((256, 256)).astype(np.float32), device=device
+        )
         bench(lambda: (a @ b).numpy())
         if hasattr(bench, "last_elapsed"):
-            assert_no_regression(f"matmul_256_{device}", bench.last_elapsed, _THRESHOLDS)
+            assert_no_regression(
+                f"matmul_256_{device}", bench.last_elapsed, _THRESHOLDS
+            )
 
 
 @pytest.mark.perf
 class TestReductionMicrobench:
     def test_sum_4096(self, bench, device: str) -> None:
-        a = lucid.tensor(np.random.standard_normal((4096,)).astype(np.float32),
-                         device=device)
+        a = lucid.tensor(
+            np.random.standard_normal((4096,)).astype(np.float32), device=device
+        )
         bench(lambda: lucid.sum(a).item())
         if hasattr(bench, "last_elapsed"):
             assert_no_regression(f"sum_4096_{device}", bench.last_elapsed, _THRESHOLDS)
@@ -83,8 +93,12 @@ class TestReductionMicrobench:
 class TestActivationMicrobench:
     def test_softmax_1024(self, bench, device: str) -> None:
         from lucid.nn.functional import softmax
-        a = lucid.tensor(np.random.standard_normal((32, 1024)).astype(np.float32),
-                         device=device)
+
+        a = lucid.tensor(
+            np.random.standard_normal((32, 1024)).astype(np.float32), device=device
+        )
         bench(lambda: softmax(a, dim=-1).numpy())
         if hasattr(bench, "last_elapsed"):
-            assert_no_regression(f"softmax_1024_{device}", bench.last_elapsed, _THRESHOLDS)
+            assert_no_regression(
+                f"softmax_1024_{device}", bench.last_elapsed, _THRESHOLDS
+            )

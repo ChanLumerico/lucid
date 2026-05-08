@@ -7,7 +7,6 @@ list.
 
 from collections.abc import Iterator
 
-
 # Compact shape sweep used by the canonical per-op template.  Covers:
 #   - 0-D scalar
 #   - 1-D small / large

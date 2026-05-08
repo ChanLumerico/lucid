@@ -32,7 +32,10 @@ def make_array(
     """
     rng = np.random.default_rng(seed=hash((seed, tuple(shape))) & 0xFFFF_FFFF)
     if dtype is None or dtype in (
-        lucid.float32, lucid.float64, lucid.float16, lucid.bfloat16
+        lucid.float32,
+        lucid.float64,
+        lucid.float16,
+        lucid.bfloat16,
     ):
         arr = rng.uniform(low=low, high=high, size=shape)
         # bfloat16 / float16 not directly representable in numpy across
@@ -64,9 +67,7 @@ def make_tensor(
 ) -> lucid.Tensor:
     """Build a deterministic Lucid tensor on the requested device."""
     arr = make_array(shape, dtype=dtype, seed=seed, low=low, high=high)
-    return lucid.tensor(
-        arr, dtype=dtype, device=device, requires_grad=requires_grad
-    )
+    return lucid.tensor(arr, dtype=dtype, device=device, requires_grad=requires_grad)
 
 
 def make_pair(

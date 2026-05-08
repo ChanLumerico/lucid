@@ -98,6 +98,7 @@ class TestDirac:
 class TestCalculateGain:
     def test_relu(self) -> None:
         import math
+
         assert abs(init.calculate_gain("relu") - math.sqrt(2.0)) < 1e-6
 
     def test_linear(self) -> None:

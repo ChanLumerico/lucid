@@ -130,6 +130,7 @@ class TestSoftmaxStability:
     def test_softmax_large_logits(self, device: str) -> None:
         # softmax must subtract max for stability — feed huge values.
         from lucid.nn.functional import softmax
+
         x = lucid.tensor([1000.0, 1001.0, 1002.0], device=device)
         out = softmax(x, dim=0).numpy()
         # Output must sum to 1 and contain no nans.
@@ -138,6 +139,7 @@ class TestSoftmaxStability:
 
     def test_log_softmax_large_logits(self, device: str) -> None:
         from lucid.nn.functional import log_softmax
+
         x = lucid.tensor([1000.0, 1001.0, 1002.0], device=device)
         out = log_softmax(x, dim=0).numpy()
         # No nans, no infs.

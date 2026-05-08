@@ -45,18 +45,25 @@ def _flat_jacobian_finite_diff(
         plus[j] += eps
         minus[j] -= eps
 
-        in_plus = lucid.tensor(plus.reshape(in_t.shape).astype(np.float32),
-                               dtype=in_t.dtype, device=in_t.device)
-        in_minus = lucid.tensor(minus.reshape(in_t.shape).astype(np.float32),
-                                dtype=in_t.dtype, device=in_t.device)
+        in_plus = lucid.tensor(
+            plus.reshape(in_t.shape).astype(np.float32),
+            dtype=in_t.dtype,
+            device=in_t.device,
+        )
+        in_minus = lucid.tensor(
+            minus.reshape(in_t.shape).astype(np.float32),
+            dtype=in_t.dtype,
+            device=in_t.device,
+        )
         rest = list(inputs[1:])
         out_plus = fn(in_plus, *rest)
         out_minus = fn(in_minus, *rest)
         if isinstance(out_plus, tuple):
             out_plus = out_plus[output_idx]
             out_minus = out_minus[output_idx]
-        diff = (out_plus.numpy().reshape(-1).astype(np.float64)
-                - out_minus.numpy().reshape(-1).astype(np.float64))
+        diff = out_plus.numpy().reshape(-1).astype(
+            np.float64
+        ) - out_minus.numpy().reshape(-1).astype(np.float64)
         jac[:, j] = diff / (2.0 * eps)
     return jac
 
@@ -69,10 +76,7 @@ def _flat_jacobian_autograd(
 ) -> np.ndarray:
     """Analytic Jacobian via autograd: reverse-mode VJP applied to each
     output basis vector."""
-    inputs = [
-        x.requires_grad_(True) if isinstance(x, Tensor) else x
-        for x in inputs
-    ]
+    inputs = [x.requires_grad_(True) if isinstance(x, Tensor) else x for x in inputs]
     out = fn(*inputs)
     if isinstance(out, tuple):
         out = out[output_idx]
@@ -85,9 +89,16 @@ def _flat_jacobian_autograd(
         # Re-run forward each time because autograd graphs are freed
         # after backward by default.
         fresh = [
-            lucid.tensor(x.numpy().copy(), dtype=x.dtype, device=x.device,
-                         requires_grad=x.requires_grad)
-            if isinstance(x, Tensor) else x
+            (
+                lucid.tensor(
+                    x.numpy().copy(),
+                    dtype=x.dtype,
+                    device=x.device,
+                    requires_grad=x.requires_grad,
+                )
+                if isinstance(x, Tensor)
+                else x
+            )
             for x in inputs
         ]
         out_k = fn(*fresh)
@@ -97,8 +108,9 @@ def _flat_jacobian_autograd(
         seed = lucid.zeros_like(flat_k)
         seed_np = np.zeros(out_numel, dtype=np.float32)
         seed_np[k] = 1.0
-        seed = lucid.tensor(seed_np.reshape(out_k.shape),
-                            dtype=out_k.dtype, device=out_k.device)
+        seed = lucid.tensor(
+            seed_np.reshape(out_k.shape), dtype=out_k.dtype, device=out_k.device
+        )
         out_k.backward(seed)
         g = fresh[0].grad
         if g is None:
@@ -127,7 +139,10 @@ def gradcheck(
     fd = _flat_jacobian_finite_diff(fn, inputs, eps=eps, output_idx=output_idx)
     ag = _flat_jacobian_autograd(fn, inputs, output_idx=output_idx)
     np.testing.assert_allclose(
-        ag, fd, atol=atol, rtol=rtol,
+        ag,
+        fd,
+        atol=atol,
+        rtol=rtol,
         err_msg=f"gradcheck mismatch for {getattr(fn, '__name__', fn)!r}",
     )
     return True

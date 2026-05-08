@@ -7,7 +7,6 @@ import pytest
 
 import lucid
 
-
 # Top-level erf/erfc tested in unit/ops/unary; this file covers the
 # special-only entries that don't have a top-level alias.
 
@@ -98,7 +97,7 @@ class TestPolygamma:
     def test_n1_at_one_pi2_over_6(self) -> None:
         # ψ¹(1) = π²/6.
         v = lucid.special.polygamma(1, lucid.tensor([1.0])).item()
-        assert abs(v - math.pi ** 2 / 6.0) < 1e-3
+        assert abs(v - math.pi**2 / 6.0) < 1e-3
 
     def test_n_ge_4_not_implemented(self) -> None:
         with pytest.raises(NotImplementedError):
@@ -108,7 +107,10 @@ class TestPolygamma:
 class TestSphericalBesselJ0:
     def test_at_zero(self) -> None:
         # j₀(0) = 1 by continuous extension.
-        assert abs(lucid.special.spherical_bessel_j0(lucid.tensor([0.0])).item() - 1.0) < 1e-5
+        assert (
+            abs(lucid.special.spherical_bessel_j0(lucid.tensor([0.0])).item() - 1.0)
+            < 1e-5
+        )
 
     def test_at_pi(self) -> None:
         # sin(π)/π = 0.

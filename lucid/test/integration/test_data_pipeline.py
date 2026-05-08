@@ -42,8 +42,16 @@ class TestDataPipeline:
 
         for _ in range(5):  # 5 epochs.
             for xb, yb in loader:
-                xb_t = xb.to(device=device) if isinstance(xb, lucid.Tensor) else lucid.tensor(np.asarray(xb), device=device)
-                yb_t = yb.to(device=device) if isinstance(yb, lucid.Tensor) else lucid.tensor(np.asarray(yb), device=device)
+                xb_t = (
+                    xb.to(device=device)
+                    if isinstance(xb, lucid.Tensor)
+                    else lucid.tensor(np.asarray(xb), device=device)
+                )
+                yb_t = (
+                    yb.to(device=device)
+                    if isinstance(yb, lucid.Tensor)
+                    else lucid.tensor(np.asarray(yb), device=device)
+                )
                 opt.zero_grad()
                 loss = F.binary_cross_entropy(model(xb_t), yb_t)
                 loss.backward()

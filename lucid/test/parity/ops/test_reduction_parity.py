@@ -48,6 +48,4 @@ class TestReductionParity:
     def test_var_unbiased(self, x_pair: tuple[lucid.Tensor, Any], ref: Any) -> None:
         l, r = x_pair
         # Reference framework's default var uses Bessel correction (=1).
-        assert_close(
-            lucid.var(l, correction=1), ref.var(r), atol=1e-5
-        )
+        assert_close(lucid.var(l, correction=1), ref.var(r), atol=1e-5)

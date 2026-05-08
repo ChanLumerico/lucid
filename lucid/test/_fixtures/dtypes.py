@@ -14,7 +14,6 @@ import pytest
 
 import lucid
 
-
 _FLOAT_DTYPES: Sequence[lucid.dtype] = (lucid.float32, lucid.float64)
 _FLOAT_DTYPES_EXTENDED: Sequence[lucid.dtype] = (
     lucid.float16,

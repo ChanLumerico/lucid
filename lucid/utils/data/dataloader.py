@@ -52,6 +52,7 @@ def default_collate(
     if _is_ndarray(elem):
         # User opted into a numpy bridge by handing us an ndarray.
         import numpy as np  # noqa: PLC0415 — lazy bridge import
+
         return Tensor(np.stack(batch, axis=0))
 
     if isinstance(elem, (int, float)):
@@ -98,6 +99,7 @@ def _worker_loop(
     # skip this seeding step.
     try:
         import numpy as np  # noqa: PLC0415 — lazy
+
         np.random.seed(seed % (2**32))
     except ImportError:
         pass

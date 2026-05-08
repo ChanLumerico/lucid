@@ -101,9 +101,7 @@ class Binomial(Distribution):
         validate_args: bool | None = None,
     ) -> None:
         if (probs is None) == (logits is None):
-            raise ValueError(
-                "Binomial: pass exactly one of `probs` or `logits`."
-            )
+            raise ValueError("Binomial: pass exactly one of `probs` or `logits`.")
         self.total_count: Tensor = _as_tensor(total_count)
         if probs is not None:
             self.probs = _as_tensor(probs)
@@ -168,9 +166,7 @@ class Binomial(Distribution):
                 full_shape, dtype=dtype, device=device
             )
             # Per-trial active mask: trial index i is active if i < tc.
-            i_flat: Tensor = lucid.arange(
-                0, max_n, 1, dtype=dtype, device=device
-            )
+            i_flat: Tensor = lucid.arange(0, max_n, 1, dtype=dtype, device=device)
             i_idx: Tensor = i_flat.reshape(
                 [max_n] + [1] * len(out_shape)
             ) + lucid.zeros(full_shape, dtype=dtype, device=device)
@@ -197,9 +193,7 @@ class Binomial(Distribution):
         n: Tensor = self.total_count
         k: Tensor = value
         log_comb: Tensor = (
-            lucid.lgamma(n + 1.0)
-            - lucid.lgamma(k + 1.0)
-            - lucid.lgamma(n - k + 1.0)
+            lucid.lgamma(n + 1.0) - lucid.lgamma(k + 1.0) - lucid.lgamma(n - k + 1.0)
         )
         # Stable form via logits: k·l − n·softplus(l).
         l: Tensor = self._logits

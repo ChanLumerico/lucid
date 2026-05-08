@@ -168,6 +168,7 @@ def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
     consumers should ``.to(device='metal')`` after the import.
     """
     import numpy as np  # noqa: PLC0415 — DLPack bridge is a numpy bridge
+
     arr = np.from_dlpack(ext_tensor)
     return tensor(arr)
 

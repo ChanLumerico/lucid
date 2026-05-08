@@ -46,6 +46,7 @@ class TestGoldenMatmul:
 class TestGoldenSoftmax:
     def test_matches(self, device: str) -> None:
         from lucid.nn.functional import softmax
+
         rng = np.random.default_rng(0)
         x_np = rng.uniform(-2.0, 2.0, size=(8,)).astype(np.float32)
         e = np.exp(x_np - x_np.max())

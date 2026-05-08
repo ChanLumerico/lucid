@@ -17,7 +17,13 @@ class TestNormalParity:
         loc, scale = 0.5, 1.5
         x = np.array([-1.0, 0.0, 1.0, 2.0], dtype=np.float32)
         l = D.Normal(loc, scale).log_prob(lucid.tensor(x.copy())).numpy()
-        r = ref.distributions.Normal(loc, scale).log_prob(ref.tensor(x.copy())).detach().cpu().numpy()
+        r = (
+            ref.distributions.Normal(loc, scale)
+            .log_prob(ref.tensor(x.copy()))
+            .detach()
+            .cpu()
+            .numpy()
+        )
         np.testing.assert_allclose(l, r, atol=1e-5)
 
     def test_entropy(self, ref: Any) -> None:

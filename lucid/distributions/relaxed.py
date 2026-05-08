@@ -62,9 +62,7 @@ class RelaxedBernoulli(Distribution):
             self.logits = _as_tensor(logits)
             self._is_logits = True
             shape = tuple(self.logits.shape)
-        super().__init__(
-            batch_shape=shape, event_shape=(), validate_args=validate_args
-        )
+        super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
 
     @property
     def _logits(self) -> Tensor:
@@ -160,9 +158,7 @@ class RelaxedOneHotCategorical(Distribution):
 
         # Broadcast logits to (sample_shape + batch_shape + (K,)).
         out_shape = (
-            tuple(sample_shape)
-            + tuple(self._batch_shape)
-            + tuple(self._event_shape)
+            tuple(sample_shape) + tuple(self._batch_shape) + tuple(self._event_shape)
         )
         l = self._logits + lucid.zeros(
             out_shape, dtype=self._logits.dtype, device=self._logits.device

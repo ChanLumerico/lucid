@@ -210,9 +210,7 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
     dev = tensor._impl.device
     # Per-column random row selection: ``argsort`` of uniform draws gives a
     # uniform permutation; take the first ``n_zero`` rows of each column.
-    src: Tensor = _lucid.normal(
-        0.0, std, size=(rows, cols), device=dev
-    )
+    src: Tensor = _lucid.normal(0.0, std, size=(rows, cols), device=dev)
     if n_zero > 0:
         # noise is shape (rows, cols); per-column argsort along dim=0.
         noise: Tensor = _lucid.rand(rows, cols, device=dev)
@@ -223,9 +221,7 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
         ones: Tensor = _lucid.ones(n_zero, cols, device=dev)
         mask = mask.scatter_add(0, zero_rows, ones)
         src = _lucid.where(mask > 0.0, _lucid.zeros_like(src), src)
-    src_t: Tensor = _lucid.tensor(
-        src, dtype=tensor._impl.dtype, device=dev
-    )
+    src_t: Tensor = _lucid.tensor(src, dtype=tensor._impl.dtype, device=dev)
     return _fill_from_impl(tensor, src_t._impl)
 
 
@@ -276,9 +272,7 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
             tuple(idx_tensors),
             _lucid.ones(n_writes, device=dev),
         )
-    src_t: Tensor = _lucid.tensor(
-        src, dtype=tensor._impl.dtype, device=dev
-    )
+    src_t: Tensor = _lucid.tensor(src, dtype=tensor._impl.dtype, device=dev)
     return _fill_from_impl(tensor, src_t._impl)
 
 

@@ -5,11 +5,19 @@ import pytest
 
 import lucid
 
-
 _WINDOW_NAMES = [
-    "bartlett", "blackman", "cosine", "exponential", "gaussian",
-    "general_cosine", "general_hamming", "general_gaussian",
-    "hamming", "hann", "kaiser", "nuttall",
+    "bartlett",
+    "blackman",
+    "cosine",
+    "exponential",
+    "gaussian",
+    "general_cosine",
+    "general_hamming",
+    "general_gaussian",
+    "hamming",
+    "hann",
+    "kaiser",
+    "nuttall",
 ]
 
 

@@ -36,7 +36,6 @@ from types import ModuleType
 
 import pytest
 
-
 _REF_NAME = "torch"
 
 
@@ -46,6 +45,7 @@ def ref_module() -> ModuleType | None:
     installed.  Cached so we only attempt the import once per session."""
     try:
         import torch  # noqa: PLC0415 — lazy import is the whole point
+
         return torch
     except ImportError:
         return None

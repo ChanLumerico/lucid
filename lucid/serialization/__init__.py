@@ -69,11 +69,10 @@ class _LucidPickler(pickle.Pickler):
         return None
 
 
-def _restore_tensor(shape: list[int], dtype_name: str,
-                    device_str: str, raw_bytes: bytes) -> object:
-    eng_device = (
-        _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
-    )
+def _restore_tensor(
+    shape: list[int], dtype_name: str, device_str: str, raw_bytes: bytes
+) -> object:
+    eng_device = _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
     eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
     impl = _C_engine.TensorImpl.from_bytes(
         raw_bytes, list(shape), eng_dtype, eng_device, False

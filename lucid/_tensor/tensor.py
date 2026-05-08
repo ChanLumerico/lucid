@@ -306,6 +306,7 @@ class Tensor[DT: dtype, DV: device]:
         if self._impl.numel() != 1:
             raise RuntimeError("item() can only be called on a tensor with one element")
         import struct  # noqa: PLC0415 — std lib, lazy fine
+
         raw = self._impl.to_bytes()
         dt = self._impl.dtype
         _DT = _C_engine.Dtype
@@ -318,8 +319,8 @@ class Tensor[DT: dtype, DV: device]:
             # but here we keep things tight: unpack as uint16 then upcast.
             bits = struct.unpack("<H", raw)[0]
             sign = (bits >> 15) & 0x1
-            exp = (bits >> 10) & 0x1f
-            mant = bits & 0x3ff
+            exp = (bits >> 10) & 0x1F
+            mant = bits & 0x3FF
             if exp == 0:
                 if mant == 0:
                     f = sign << 31
@@ -328,10 +329,10 @@ class Tensor[DT: dtype, DV: device]:
                     while (mant & 0x400) == 0:
                         mant <<= 1
                         e -= 1
-                    mant &= 0x3ff
+                    mant &= 0x3FF
                     f = (sign << 31) | ((e + 112) << 23) | (mant << 13)
             elif exp == 31:
-                f = (sign << 31) | (0xff << 23) | (mant << 13)
+                f = (sign << 31) | (0xFF << 23) | (mant << 13)
             else:
                 f = (sign << 31) | ((exp + 112) << 23) | (mant << 13)
             return struct.unpack("<f", struct.pack("<I", f))[0]
@@ -357,6 +358,7 @@ class Tensor[DT: dtype, DV: device]:
         the user explicitly bridges through this method.
         """
         import numpy as np  # noqa: PLC0415 — lazy bridge import
+
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 
@@ -719,13 +721,16 @@ class Tensor[DT: dtype, DV: device]:
         )
 
 
-def _tensor_unpickle(raw_bytes: bytes,
-                     shape: list[int],
-                     dtype_name: str,
-                     device: object,
-                     requires_grad: bool) -> Tensor:
+def _tensor_unpickle(
+    raw_bytes: bytes,
+    shape: list[int],
+    dtype_name: str,
+    device: object,
+    requires_grad: bool,
+) -> Tensor:
     """Top-level helper so multiprocessing (spawn) can pickle/unpickle Tensor."""
     from lucid._dtype import _resolve_dtype_name, to_engine_dtype
+
     eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
     impl = _C_engine.TensorImpl.from_bytes(
         raw_bytes, list(shape), eng_dtype, device, requires_grad

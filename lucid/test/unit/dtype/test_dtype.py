@@ -58,13 +58,13 @@ class TestFinfo:
 class TestIinfo:
     def test_int32_bounds(self) -> None:
         info = lucid.iinfo(lucid.int32)
-        assert info.min == -(2 ** 31)
-        assert info.max == 2 ** 31 - 1
+        assert info.min == -(2**31)
+        assert info.max == 2**31 - 1
 
     def test_int64_bounds(self) -> None:
         info = lucid.iinfo(lucid.int64)
-        assert info.min == -(2 ** 63)
-        assert info.max == 2 ** 63 - 1
+        assert info.min == -(2**63)
+        assert info.max == 2**63 - 1
 
 
 class TestPromotion:

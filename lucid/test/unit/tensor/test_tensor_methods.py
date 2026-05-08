@@ -50,6 +50,7 @@ class TestNumpyConversion:
 
     def test_metal_round_trip(self) -> None:
         from lucid.test._fixtures.devices import metal_available
+
         if not metal_available():
             pytest.skip("Metal not available")
         t = lucid.tensor([1.0, 2.0, 3.0], device="metal")
@@ -62,10 +63,9 @@ class TestTolist:
         assert lucid.tensor([1.0, 2.0, 3.0], device=device).tolist() == [1.0, 2.0, 3.0]
 
     def test_nested(self, device: str) -> None:
-        assert (
-            lucid.tensor([[1, 2], [3, 4]], dtype=lucid.int64, device=device).tolist()
-            == [[1, 2], [3, 4]]
-        )
+        assert lucid.tensor(
+            [[1, 2], [3, 4]], dtype=lucid.int64, device=device
+        ).tolist() == [[1, 2], [3, 4]]
 
 
 class TestItem:
@@ -84,6 +84,7 @@ class TestToDevice:
 
     def test_cpu_to_metal(self) -> None:
         from lucid.test._fixtures.devices import metal_available
+
         if not metal_available():
             pytest.skip("Metal not available")
         t = lucid.tensor([1.0, 2.0])
