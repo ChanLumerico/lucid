@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, ClassVar, Final, Self, Iterator, overload
 
-import numpy as np
+if TYPE_CHECKING:
+    import numpy as np
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
@@ -167,14 +168,12 @@ class Tensor[DT: dtype, DV: device]:
         g_impl = self._impl.grad_as_impl()
         if g_impl is not None:
             return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
-        # Normal backward pass gradient: wrap the grad storage without copying.
-        # grad_as_python() returns a mutable numpy view; we use it only as input
-        # to TensorImpl construction (interop boundary, not computation).
-        g = self._impl.grad_as_python()
-        if g is None:
+        # Normal backward pass gradient: wrap the grad Storage as a TensorImpl
+        # via the engine's ``grad_to_tensor`` helper — no numpy round-trip.
+        g_impl = self._impl.grad_to_tensor()
+        if g_impl is None:
             return None
-        impl = _C_engine.TensorImpl(g, self._impl.device, False)
-        return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
 
     @grad.setter
     def grad(self, v: Tensor | None) -> None:
@@ -299,14 +298,65 @@ class Tensor[DT: dtype, DV: device]:
     # ── conversion ───────────────────────────────────────────────────────────
 
     def item(self) -> float | int | bool:
-        """Return the value of a single-element tensor as a Python scalar."""
+        """Return the value of a single-element tensor as a Python scalar.
+
+        Uses the engine's ``to_bytes`` + ``struct.unpack`` instead of going
+        through numpy so this stays callable in numpy-free environments.
+        """
         if self._impl.numel() != 1:
             raise RuntimeError("item() can only be called on a tensor with one element")
-        raw = self._impl.data_as_python()
-        return raw.flat[0].item()
+        import struct  # noqa: PLC0415 — std lib, lazy fine
+        raw = self._impl.to_bytes()
+        dt = self._impl.dtype
+        _DT = _C_engine.Dtype
+        if dt == _DT.F32:
+            return struct.unpack("<f", raw)[0]
+        if dt == _DT.F64:
+            return struct.unpack("<d", raw)[0]
+        if dt == _DT.F16:
+            # Reuse the engine's half→float conversion via to_string + parse,
+            # but here we keep things tight: unpack as uint16 then upcast.
+            bits = struct.unpack("<H", raw)[0]
+            sign = (bits >> 15) & 0x1
+            exp = (bits >> 10) & 0x1f
+            mant = bits & 0x3ff
+            if exp == 0:
+                if mant == 0:
+                    f = sign << 31
+                else:
+                    e = 1
+                    while (mant & 0x400) == 0:
+                        mant <<= 1
+                        e -= 1
+                    mant &= 0x3ff
+                    f = (sign << 31) | ((e + 112) << 23) | (mant << 13)
+            elif exp == 31:
+                f = (sign << 31) | (0xff << 23) | (mant << 13)
+            else:
+                f = (sign << 31) | ((exp + 112) << 23) | (mant << 13)
+            return struct.unpack("<f", struct.pack("<I", f))[0]
+        if dt == _DT.I64:
+            return struct.unpack("<q", raw)[0]
+        if dt == _DT.I32:
+            return struct.unpack("<i", raw)[0]
+        if dt == _DT.I16:
+            return struct.unpack("<h", raw)[0]
+        if dt == _DT.I8:
+            return struct.unpack("<b", raw)[0]
+        if dt == _DT.Bool:
+            return bool(struct.unpack("<?", raw)[0])
+        if dt == _DT.C64:
+            re, im = struct.unpack("<ff", raw)
+            return complex(re, im)  # type: ignore[return-value]
+        raise TypeError(f"item(): unsupported dtype {dt}")
 
-    def numpy(self) -> np.ndarray:  # type: ignore[type-arg]
-        """Return the tensor as a NumPy array (CPU only)."""
+    def numpy(self) -> "np.ndarray":  # type: ignore[type-arg]
+        """Return the tensor as a NumPy array (CPU only).
+
+        Imports numpy lazily — the rest of Lucid stays numpy-free unless
+        the user explicitly bridges through this method.
+        """
+        import numpy as np  # noqa: PLC0415 — lazy bridge import
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 
@@ -654,16 +704,32 @@ class Tensor[DT: dtype, DV: device]:
     # ── pickling support (required for multiprocessing DataLoader) ────────────
 
     def __reduce__(self) -> tuple:
-        arr = np.ascontiguousarray(np.asarray(self._impl.data_as_python()))
+        # Wire format mirrors the lucid.serialization v3 contract — raw
+        # bytes + (shape, dtype name, device) — so multiprocessing pickle
+        # is numpy-free.
         return (
             _tensor_unpickle,
-            (arr, self._impl.device, self._impl.requires_grad),
+            (
+                self._impl.to_bytes(),
+                list(self._impl.shape),
+                self.dtype._name,
+                self._impl.device,
+                self._impl.requires_grad,
+            ),
         )
 
 
-def _tensor_unpickle(arr: np.ndarray, device: object, requires_grad: bool) -> Tensor:
+def _tensor_unpickle(raw_bytes: bytes,
+                     shape: list[int],
+                     dtype_name: str,
+                     device: object,
+                     requires_grad: bool) -> Tensor:
     """Top-level helper so multiprocessing (spawn) can pickle/unpickle Tensor."""
-    impl = _C_engine.TensorImpl(arr, device, requires_grad)
+    from lucid._dtype import _resolve_dtype_name, to_engine_dtype
+    eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
+    impl = _C_engine.TensorImpl.from_bytes(
+        raw_bytes, list(shape), eng_dtype, device, requires_grad
+    )
     return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
 
 

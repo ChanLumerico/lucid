@@ -1,6 +1,5 @@
-import numpy as np
-
 from typing import TYPE_CHECKING, Final
+
 from lucid._dtype import float32 as _f32
 
 if TYPE_CHECKING:
@@ -15,19 +14,17 @@ def tensor_repr(t: Tensor) -> str:
     """
     Produce a human-readable tensor representation.
 
+    The data formatting is delegated to the C++ engine
+    (``TensorImpl::to_string``) so this path stays numpy-free.
+
     Examples:
         tensor([1., 2., 3.])
         tensor([[1., 2.], [3., 4.]], device='metal', dtype=lucid.float64,
                 requires_grad=True)
     """
     try:
-        data = t.numpy()
-        arr_str = np.array2string(
-            data,
-            precision=_REPR_PRECISION,
-            separator=", ",
-            threshold=_REPR_THRESHOLD,
-            edgeitems=_REPR_EDGEITEMS,
+        arr_str = t._impl.to_string(
+            _REPR_PRECISION, _REPR_THRESHOLD, _REPR_EDGEITEMS
         )
     except Exception:
         arr_str = "<data unavailable>"

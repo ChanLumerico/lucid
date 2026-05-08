@@ -210,6 +210,41 @@ public:
     py::object grad_as_python() const;
 
     // ---------------------------------------------------------------------------
+    // NumPy-free Python interop  (used by serialization + repr; keeps these
+    // paths off the numpy bridge so ``import lucid`` stays numpy-free)
+    // ---------------------------------------------------------------------------
+
+    // Returns the tensor data as a contiguous bytes blob, in row-major order.
+    // GPU tensors are downloaded to CPU first.  No NumPy involvement.
+    py::bytes to_bytes() const;
+
+    // Reconstructs a TensorImpl from a raw bytes blob + metadata.  The blob
+    // must be ``shape_numel(shape) * dtype_size(dtype)`` bytes long.  When
+    // ``device == GPU`` the buffer is uploaded to MLX before returning.
+    static std::shared_ptr<TensorImpl> from_bytes(py::bytes data,
+                                                  Shape shape,
+                                                  Dtype dtype,
+                                                  Device device,
+                                                  bool requires_grad);
+
+    // Renders the tensor data as a human-readable string suitable for repr().
+    // Format roughly mirrors NumPy's array2string defaults but is implemented
+    // entirely engine-side so neither lucid nor its consumers need numpy.
+    //   precision   — significant digits for floating point
+    //   threshold   — if numel > threshold, an edge-summary is rendered
+    //   edgeitems   — how many items to keep at each edge of a truncated axis
+    std::string to_string(int precision = 4,
+                          std::size_t threshold = 1000,
+                          std::size_t edgeitems = 3) const;
+
+    // Wraps the tensor's accumulated gradient as a fresh TensorImpl that
+    // shares the underlying Storage.  Returns nullptr when no gradient has
+    // been accumulated.  Prefers the graph-mode ``grad_impl`` when present,
+    // otherwise wraps the standard ``autograd_->grad`` Storage directly.
+    // Replaces the prior numpy round-trip in Python's ``Tensor.grad``.
+    std::shared_ptr<TensorImpl> grad_to_tensor() const;
+
+    // ---------------------------------------------------------------------------
     // Data operations
     // ---------------------------------------------------------------------------
 

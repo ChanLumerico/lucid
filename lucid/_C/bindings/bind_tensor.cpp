@@ -135,6 +135,31 @@ void register_tensor_impl(py::module_& m) {
         // for member functions on shared_ptr holders).
         .def("data_as_python", &TensorImpl::data_as_python)
         .def("grad_as_python", &TensorImpl::grad_as_python)
+        // NumPy-free interop — used by the Python serialization and repr
+        // layers so ``import lucid`` works without numpy installed.
+        .def("to_bytes", &TensorImpl::to_bytes,
+             "Return the tensor data as a contiguous bytes blob "
+             "(row-major).  GPU tensors are downloaded to CPU first.")
+        .def_static("from_bytes", &TensorImpl::from_bytes,
+                    py::arg("data"), py::arg("shape"), py::arg("dtype"),
+                    py::arg("device") = Device::CPU,
+                    py::arg("requires_grad") = false,
+                    "Reconstruct a TensorImpl from a raw bytes blob + "
+                    "metadata.  ``len(data)`` must equal "
+                    "``prod(shape) * dtype_size(dtype)``.")
+        .def("to_string", &TensorImpl::to_string,
+             py::arg("precision") = 4, py::arg("threshold") = 1000,
+             py::arg("edgeitems") = 3,
+             "Render the tensor's data as a human-readable string.  "
+             "Used by ``__repr__`` to avoid going through numpy.")
+        .def("grad_to_tensor",
+             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
+                 return t.grad_to_tensor();
+             },
+             "Wrap the accumulated gradient as a fresh TensorImpl sharing "
+             "the same Storage.  Returns None when no gradient has been "
+             "accumulated.  Replaces the prior numpy round-trip in "
+             "``Tensor.grad``.")
         .def("grad_as_impl",
              [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
                  return t.grad_as_impl();

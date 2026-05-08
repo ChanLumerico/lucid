@@ -1,13 +1,15 @@
 """
 DataLoader and default_collate.
+
+NumPy is imported lazily — the dataloader is one of the H4 bridge
+boundaries (external data ingest), so an ``np.ndarray`` input is
+expected, but ``import lucid.utils.data`` itself stays numpy-free.
 """
 
 import multiprocessing as _mp
 import random
 import threading
 from typing import Callable, Iterator
-
-import numpy as np
 
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
@@ -28,6 +30,16 @@ _SHUTDOWN = None
 # ── collation ─────────────────────────────────────────────────────────────────
 
 
+def _is_ndarray(obj: object) -> bool:
+    """True iff ``obj`` quacks like a NumPy ndarray, without importing numpy
+    when it isn't installed.  Avoids triggering a numpy import for batches
+    that are pure Lucid tensors / scalars / strings."""
+    cls = type(obj)
+    if cls.__module__ == "numpy" and cls.__name__ == "ndarray":
+        return True
+    return False
+
+
 def default_collate(
     batch: list[object],
 ) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
@@ -37,12 +49,14 @@ def default_collate(
     if isinstance(elem, Tensor):
         return stack(batch, 0)
 
-    if isinstance(elem, np.ndarray):
+    if _is_ndarray(elem):
+        # User opted into a numpy bridge by handing us an ndarray.
+        import numpy as np  # noqa: PLC0415 — lazy bridge import
         return Tensor(np.stack(batch, axis=0))
 
     if isinstance(elem, (int, float)):
-        arr = np.array(batch, dtype=np.float32 if isinstance(elem, float) else np.int64)
-        return Tensor(arr)
+        # Build a 1-D Tensor from a Python list — no numpy stack needed.
+        return _tensor_fn(list(batch))
 
     if isinstance(elem, (str, bytes)):
         return batch
@@ -78,7 +92,15 @@ def _worker_loop(
     """Worker process: pull index batches, fetch data, push collated results."""
     # Seed this worker independently for reproducibility.
     random.seed(seed)
-    np.random.seed(seed % (2**32))
+    # Best-effort: also seed numpy's RNG when numpy is available (so user
+    # code in __getitem__ that calls np.random.* is reproducible).  We
+    # don't require numpy to load — workers without numpy installed just
+    # skip this seeding step.
+    try:
+        import numpy as np  # noqa: PLC0415 — lazy
+        np.random.seed(seed % (2**32))
+    except ImportError:
+        pass
 
     # Publish WorkerInfo so user code can call get_worker_info().
     _set_worker_info(

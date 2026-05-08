@@ -1,9 +1,13 @@
 """
 Conversion utilities: Python objects / NumPy arrays -> TensorImpl.
+
+This is one of the H4 numpy bridge sites — the only place where a
+``np.ndarray`` is allowed to enter Lucid.  NumPy is imported lazily
+(inside the functions that need it) so ``import lucid`` works
+without numpy installed.
 """
 
 from typing import TYPE_CHECKING
-import numpy as np
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _parse_device, _unwrap
@@ -11,6 +15,7 @@ from lucid._dtype import dtype, to_engine_dtype
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
+    import numpy as np
     from lucid._tensor.tensor import Tensor
 
 
@@ -27,13 +32,19 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
 }
 
 
-def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[type-arg]
+def _np_dtype_to_engine(np_dtype: "np.dtype") -> _C_engine.Dtype:  # type: ignore[type-arg]
     name = np_dtype.name
     if name in _NP_TO_ENGINE_DTYPE:
         return _NP_TO_ENGINE_DTYPE[name]
     if name.startswith("float"):
         return _C_engine.Dtype.F64
     return _C_engine.Dtype.F32
+
+
+def _is_ndarray(obj: object) -> bool:
+    """Check ndarray-ness without importing numpy when it isn't loaded."""
+    cls = type(obj)
+    return cls.__module__ == "numpy" and cls.__name__ == "ndarray"
 
 
 def _to_impl(
@@ -65,27 +76,26 @@ def _to_impl(
             data = _impl_with_grad(data, _rg)
         return data
 
+    # Numpy is the sanctioned conversion library for Python-data → engine.
+    # Imported lazily so ``import lucid`` doesn't need numpy installed —
+    # only the explicit ``tensor(...)`` call at this site does.
+    import numpy as np  # noqa: PLC0415 — bridge import
+
     numpy_input = isinstance(data, np.ndarray)
 
-    # Convert data to numpy
     if not numpy_input:
         # Python list/scalar -> convert to numpy with default dtype (float32)
         tmp = np.array(data)
         if dtype is None:
-            # Use default dtype for Python scalars/lists
-            target_eng = (
-                _dtype_eng  # already set to default by normalize_factory_kwargs
-            )
+            target_eng = _dtype_eng
         else:
             target_eng = _dtype_eng
         arr = tmp.astype(_engine_dtype_to_np(target_eng), copy=False)
         _dtype_eng = target_eng
     else:
         if dtype is not None:
-            # Explicit dtype override
             arr = data.astype(_engine_dtype_to_np(_dtype_eng), copy=False)
         else:
-            # Preserve numpy array's dtype
             arr = data
             _dtype_eng = _np_dtype_to_engine(arr.dtype)
 
@@ -157,7 +167,8 @@ def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
     result lives on CPU regardless of the producer's device — Metal
     consumers should ``.to(device='metal')`` after the import.
     """
-    arr: np.ndarray = np.from_dlpack(ext_tensor)  # type: ignore[type-arg]
+    import numpy as np  # noqa: PLC0415 — DLPack bridge is a numpy bridge
+    arr = np.from_dlpack(ext_tensor)
     return tensor(arr)
 
 

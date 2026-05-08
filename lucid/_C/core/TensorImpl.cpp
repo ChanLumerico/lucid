@@ -13,11 +13,17 @@
 #include "TensorImpl.h"
 
 #include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
 
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include <mlx/ops.h>
 
@@ -260,6 +266,315 @@ py::object TensorImpl::grad_as_python() const {
                           },
                       },
                       *autograd_->grad);
+}
+
+// ---------------------------------------------------------------------------
+// NumPy-free Python interop: to_bytes / from_bytes / to_string
+//
+// These three implement everything ``import lucid`` needs for
+// serialization and tensor printing without touching numpy.  Numpy is
+// still used in the explicit bridge methods (data_as_python /
+// from_numpy) but those are now strictly opt-in.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Walks a strided source buffer in row-major order, copying each element
+// into a packed contiguous destination.  Used when the source storage's
+// stride doesn't match the canonical contiguous stride (e.g. transposed
+// or sliced views).
+void walk_strided_to_contig(const std::byte* src,
+                            std::byte* dst,
+                            const Shape& shape,
+                            const Stride& stride,
+                            std::size_t depth,
+                            std::size_t src_off,
+                            std::size_t& dst_off,
+                            std::size_t elem_size) {
+    if (depth == shape.size()) {
+        std::memcpy(dst + dst_off, src + src_off, elem_size);
+        dst_off += elem_size;
+        return;
+    }
+    for (std::int64_t i = 0; i < shape[depth]; ++i) {
+        walk_strided_to_contig(src, dst, shape, stride, depth + 1,
+                               src_off + static_cast<std::size_t>(i * stride[depth]),
+                               dst_off, elem_size);
+    }
+}
+
+// Materialises a contiguous byte snapshot of a CpuStorage view.  When the
+// stride is already canonical we return a borrow of the underlying buffer
+// (no copy); otherwise we walk the strides into a freshly allocated vector.
+std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
+                                           const Shape& shape,
+                                           const Stride& stride,
+                                           std::size_t storage_offset) {
+    const std::size_t elem = dtype_size(s.dtype);
+    const std::size_t total = shape_numel(shape) * elem;
+    std::vector<std::byte> out(total);
+    if (total == 0) return out;
+
+    Stride contig = contiguous_stride(shape, elem);
+    if (contig == stride && storage_offset == 0) {
+        std::memcpy(out.data(), s.ptr.get(), total);
+        return out;
+    }
+    std::size_t dst_off = 0;
+    walk_strided_to_contig(s.ptr.get() + storage_offset, out.data(),
+                           shape, stride, 0, 0, dst_off, elem);
+    return out;
+}
+
+// Format a single scalar element at ``ptr`` of dtype ``dt`` into ``os``.
+// Mirrors NumPy's default formatting closely enough for human reading:
+//   * floats use %.<precision>g, with explicit "nan" / "inf" / "-inf"
+//   * bools render as True / False
+//   * complex64 renders as "(re+imj)" with Python-side conventions
+//   * integers render with %lld / %ld via std::to_string
+void format_element(const std::byte* ptr, Dtype dt, int precision,
+                    std::ostringstream& os) {
+    auto fmt_float = [&](double v) {
+        if (std::isnan(v)) { os << "nan"; return; }
+        if (std::isinf(v)) { os << (v < 0 ? "-inf" : "inf"); return; }
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%.*g", precision, v);
+        std::string s(buf);
+        // NumPy convention: a trailing dot is appended when the rendered
+        // value would otherwise look like an integer (e.g. "1." instead
+        // of "1") so the reader knows the dtype is floating-point.
+        if (s.find_first_of(".eEnN") == std::string::npos) {
+            s.push_back('.');
+        }
+        os << s;
+    };
+
+    switch (dt) {
+    case Dtype::Bool: {
+        const auto v = *reinterpret_cast<const std::uint8_t*>(ptr);
+        os << (v ? "True" : "False");
+        break;
+    }
+    case Dtype::I8:
+        os << static_cast<int>(*reinterpret_cast<const std::int8_t*>(ptr));
+        break;
+    case Dtype::I16:
+        os << *reinterpret_cast<const std::int16_t*>(ptr);
+        break;
+    case Dtype::I32:
+        os << *reinterpret_cast<const std::int32_t*>(ptr);
+        break;
+    case Dtype::I64:
+        os << *reinterpret_cast<const std::int64_t*>(ptr);
+        break;
+    case Dtype::F16: {
+        // Half is stored as raw bits; cast through float for printing.  We
+        // don't pull in __fp16 — manual IEEE-754 binary16 → float decode.
+        const std::uint16_t bits = *reinterpret_cast<const std::uint16_t*>(ptr);
+        const std::uint32_t sign = (bits >> 15) & 0x1;
+        const std::uint32_t exp = (bits >> 10) & 0x1f;
+        const std::uint32_t mant = bits & 0x3ff;
+        std::uint32_t f;
+        if (exp == 0) {
+            if (mant == 0) {
+                f = sign << 31;
+            } else {
+                std::uint32_t e = 1;
+                std::uint32_t m = mant;
+                while ((m & 0x400) == 0) { m <<= 1; --e; }
+                m &= 0x3ff;
+                f = (sign << 31) | ((e + 112) << 23) | (m << 13);
+            }
+        } else if (exp == 31) {
+            f = (sign << 31) | (0xff << 23) | (mant << 13);
+        } else {
+            f = (sign << 31) | ((exp + 112) << 23) | (mant << 13);
+        }
+        float out;
+        std::memcpy(&out, &f, sizeof(out));
+        fmt_float(static_cast<double>(out));
+        break;
+    }
+    case Dtype::F32:
+        fmt_float(static_cast<double>(*reinterpret_cast<const float*>(ptr)));
+        break;
+    case Dtype::F64:
+        fmt_float(*reinterpret_cast<const double*>(ptr));
+        break;
+    case Dtype::C64: {
+        // Stored as two contiguous f32: real, imag.
+        const float re = *reinterpret_cast<const float*>(ptr);
+        const float im = *reinterpret_cast<const float*>(ptr + 4);
+        os << "(";
+        fmt_float(static_cast<double>(re));
+        if (im >= 0 || std::isnan(im)) os << "+";
+        fmt_float(static_cast<double>(im));
+        os << "j)";
+        break;
+    }
+    }
+}
+
+// Renders a contiguous (already-snapshot) buffer of shape × dtype as a
+// NumPy-flavoured nested-bracket string.  ``threshold`` applies to total
+// element count; ``edgeitems`` clips long axes once that ceiling is
+// exceeded.
+void render_nested(const std::byte* base, const Shape& shape,
+                   std::size_t depth, std::size_t off,
+                   const std::vector<std::int64_t>& contig_stride_bytes,
+                   Dtype dt, int precision,
+                   bool truncate, std::size_t edgeitems,
+                   std::ostringstream& os) {
+    if (depth == shape.size()) {
+        format_element(base + off, dt, precision, os);
+        return;
+    }
+    os << "[";
+    const std::int64_t n = shape[depth];
+    const std::int64_t step = contig_stride_bytes[depth];
+
+    auto render_one = [&](std::int64_t i) {
+        render_nested(base, shape, depth + 1, off + static_cast<std::size_t>(i * step),
+                      contig_stride_bytes, dt, precision, truncate, edgeitems, os);
+    };
+
+    if (truncate && n > static_cast<std::int64_t>(edgeitems) * 2) {
+        for (std::int64_t i = 0; i < static_cast<std::int64_t>(edgeitems); ++i) {
+            if (i > 0) os << ", ";
+            render_one(i);
+        }
+        os << ", ..., ";
+        for (std::int64_t i = n - static_cast<std::int64_t>(edgeitems); i < n; ++i) {
+            render_one(i);
+            if (i + 1 < n) os << ", ";
+        }
+    } else {
+        for (std::int64_t i = 0; i < n; ++i) {
+            if (i > 0) os << ", ";
+            render_one(i);
+        }
+    }
+    os << "]";
+}
+
+}  // namespace
+
+py::bytes TensorImpl::to_bytes() const {
+    const std::size_t total = nbytes();
+    if (total == 0) return py::bytes();
+
+    return std::visit(overloaded{
+        [&](const CpuStorage& s) -> py::bytes {
+            auto buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
+            return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
+        },
+        [&](const GpuStorage& g) -> py::bytes {
+            CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+            return py::bytes(reinterpret_cast<const char*>(cpu.ptr.get()), total);
+        },
+        [&](const SharedStorage& sh) -> py::bytes {
+            CpuStorage v = sh.cpu_view();
+            auto buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
+            return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
+        },
+    }, storage_);
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::from_bytes(py::bytes data,
+                                                   Shape shape,
+                                                   Dtype dtype,
+                                                   Device device,
+                                                   bool requires_grad) {
+    const std::size_t elem = dtype_size(dtype);
+    const std::size_t expected = shape_numel(shape) * elem;
+
+    char* raw_ptr = nullptr;
+    py::ssize_t raw_len = 0;
+    if (PyBytes_AsStringAndSize(data.ptr(), &raw_ptr, &raw_len) != 0) {
+        ErrorBuilder("from_bytes").fail("input is not a bytes object");
+    }
+    if (static_cast<std::size_t>(raw_len) != expected) {
+        ErrorBuilder("from_bytes")
+            .fail("byte length mismatch (got " + std::to_string(raw_len)
+                  + ", expected " + std::to_string(expected) + ")");
+    }
+
+    CpuStorage cpu;
+    cpu.ptr = allocate_aligned_bytes(expected);
+    cpu.nbytes = expected;
+    cpu.dtype = dtype;
+    if (expected > 0) {
+        std::memcpy(cpu.ptr.get(), raw_ptr, expected);
+    }
+
+    if (device == Device::GPU) {
+        return std::make_shared<TensorImpl>(Storage{gpu::upload_cpu_to_gpu(cpu, shape)},
+                                            std::move(shape), dtype, device, requires_grad);
+    }
+    return std::make_shared<TensorImpl>(Storage{std::move(cpu)},
+                                        std::move(shape), dtype, device, requires_grad);
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
+    if (!autograd_) return nullptr;
+    // Prefer the graph-mode gradient (set when backward(create_graph=True)).
+    if (autograd_->grad_impl) return autograd_->grad_impl;
+    if (!autograd_->grad.has_value()) return nullptr;
+    // Wrap the accumulated grad Storage as a fresh leaf TensorImpl with the
+    // same shape/dtype/device as ``this``.  No data copy — the new impl
+    // shares the underlying Storage variant.
+    return std::make_shared<TensorImpl>(*autograd_->grad, meta_.shape,
+                                        meta_.dtype, meta_.device, false);
+}
+
+std::string TensorImpl::to_string(int precision,
+                                  std::size_t threshold,
+                                  std::size_t edgeitems) const {
+    // Snapshot data on CPU regardless of device.  All formatting then
+    // reads through a packed contiguous buffer with canonical stride.
+    std::vector<std::byte> buf;
+    std::visit(overloaded{
+        [&](const CpuStorage& s) {
+            buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
+        },
+        [&](const GpuStorage& g) {
+            CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+            buf = contig_snapshot_cpu(cpu, meta_.shape,
+                                      contiguous_stride(meta_.shape,
+                                                        dtype_size(meta_.dtype)),
+                                      0);
+        },
+        [&](const SharedStorage& sh) {
+            CpuStorage v = sh.cpu_view();
+            buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
+        },
+    }, storage_);
+
+    if (meta_.shape.empty()) {
+        // 0-d scalar — render the single element with no brackets.
+        std::ostringstream os;
+        format_element(buf.data(), meta_.dtype, precision, os);
+        return os.str();
+    }
+
+    // Compute byte-strides for the canonical contiguous layout we just
+    // packed into ``buf``.
+    const std::size_t elem = dtype_size(meta_.dtype);
+    std::vector<std::int64_t> contig_stride_bytes(meta_.shape.size(), 0);
+    if (!meta_.shape.empty()) {
+        contig_stride_bytes.back() = static_cast<std::int64_t>(elem);
+        for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(meta_.shape.size()) - 2;
+             i >= 0; --i) {
+            contig_stride_bytes[i] =
+                contig_stride_bytes[i + 1] * meta_.shape[i + 1];
+        }
+    }
+
+    const bool truncate = numel() > threshold;
+    std::ostringstream os;
+    render_nested(buf.data(), meta_.shape, 0, 0, contig_stride_bytes,
+                  meta_.dtype, precision, truncate, edgeitems, os);
+    return os.str();
 }
 
 // Copies element data from other into this tensor.

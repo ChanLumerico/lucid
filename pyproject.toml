@@ -13,17 +13,25 @@ name = "lucid"
 version = "3.0.0"
 description = "Apple Silicon ML framework"
 requires-python = ">=3.12"
-dependencies = ["numpy>=1.24"]
+# Lucid is self-contained: ``import lucid`` and the full forward + backward +
+# optimizer + save/load lifecycle work without numpy installed.  NumPy is
+# only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
+# ``.numpy()``, ``from_numpy``, DLPack interop) and inside the test tier.
+# Declare it as an optional extra rather than a hard runtime dep.
+dependencies = []
 
 [project.optional-dependencies]
+numpy = ["numpy>=1.24"]
 dev = [
     "pytest>=7",
     "ruff>=0.4",
     "mypy>=1.8",
+    "numpy>=1.24",
 ]
 test = [
     "pytest>=7",
     "pytest-benchmark>=4",
+    "numpy>=1.24",
     # The reference framework is *intentionally* not declared here —
     # parity tests use a lazy import and skip cleanly when missing.
     # Install it separately when running parity / perf comparisons.

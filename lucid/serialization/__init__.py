@@ -1,5 +1,11 @@
 """
 lucid.serialization: save and load tensors and modules.
+
+The wire format goes through the engine's ``to_bytes`` / ``from_bytes``
+contract — no numpy round-trip, so checkpoints can be loaded in a
+numpy-free environment.  Format version 3 records the dtype as the
+canonical Lucid name (``"float32"``, ``"int64"``, …) instead of the
+numpy ``str(arr.dtype)`` it used in v1/v2.
 """
 
 import io
@@ -7,11 +13,10 @@ import pickle
 import warnings
 from typing import Any, Callable, TYPE_CHECKING
 
-import numpy as np
-
 from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
+from lucid._dtype import _resolve_dtype_name, to_engine_dtype
 
 # ── Allowed types for weights_only=True ──────────────────────────────────────
 
@@ -27,8 +32,6 @@ _SAFE_CLASSES = frozenset(
         "builtins.bytes",
         "builtins.NoneType",
         "collections.OrderedDict",
-        "numpy.ndarray",
-        "numpy.dtype",
     }
 )
 
@@ -56,32 +59,42 @@ class _SafeUnpickler(pickle.Unpickler):
 class _LucidPickler(pickle.Pickler):
     def persistent_id(self, obj: object) -> object:
         if isinstance(obj, _T):
-            arr = np.ascontiguousarray(np.asarray(obj._impl.data_as_python()))
             return (
-                "tensor",
+                "tensor_v3",
                 list(obj.shape),
                 obj.dtype._name,
                 "metal" if obj.is_metal else "cpu",
-                arr.tobytes(),
-                str(arr.dtype),
+                obj._impl.to_bytes(),
             )
         return None
 
 
+def _restore_tensor(shape: list[int], dtype_name: str,
+                    device_str: str, raw_bytes: bytes) -> object:
+    eng_device = (
+        _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
+    )
+    eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
+    impl = _C_engine.TensorImpl.from_bytes(
+        raw_bytes, list(shape), eng_dtype, eng_device, False
+    )
+    return _wrap(impl)
+
+
 class _LucidUnpickler(pickle.Unpickler):
     def persistent_load(self, pid: object) -> object:
-        if isinstance(pid, tuple) and pid[0] == "tensor":
-            _, shape, dtype_name, device_str, raw_bytes, np_dtype_str = pid
-            arr = (
-                np.frombuffer(raw_bytes, dtype=np.dtype(np_dtype_str))
-                .reshape(shape)
-                .copy()
-            )
-            eng_device = (
-                _C_engine.Device.GPU if device_str == "metal" else _C_engine.Device.CPU
-            )
-            impl = _C_engine.TensorImpl(arr, eng_device, False)
-            return _wrap(impl)
+        if isinstance(pid, tuple) and pid:
+            tag = pid[0]
+            if tag == "tensor_v3":
+                _, shape, dtype_name, device_str, raw_bytes = pid
+                return _restore_tensor(shape, dtype_name, device_str, raw_bytes)
+            if tag == "tensor":
+                # v1/v2 backward-compat path — those checkpoints stored a
+                # numpy dtype string and went through ``np.frombuffer``.
+                # We translate the wire dtype to the Lucid name and skip
+                # the numpy import entirely.
+                _, shape, dtype_name, device_str, raw_bytes, _np_dtype_str = pid
+                return _restore_tensor(shape, dtype_name, device_str, raw_bytes)
         raise pickle.UnpicklingError(f"Unknown persistent id: {pid}")
 
 
