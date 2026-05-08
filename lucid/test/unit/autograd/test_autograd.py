@@ -94,3 +94,59 @@ class TestFunctionalAutograd:
         # higher-order helpers — values tested under functional/.
         for name in ("backward", "grad"):
             assert hasattr(lucid.autograd, name) or hasattr(lucid, name)
+
+
+class TestSecondOrder:
+    def test_grad_of_grad_x_cubed(self) -> None:
+        # d²/dx² [x³] = 6x; at x=2 → 12.
+        x = lucid.tensor([2.0], requires_grad=True)
+        y = x * x * x
+        g1, = lucid.autograd.grad(y, x, create_graph=True)
+        g2, = lucid.autograd.grad(g1, x)
+        assert abs(g2.item() - 12.0) < 1e-4
+
+    def test_hessian_quartic(self) -> None:
+        # f(x) = sum(x^4); H_ii = 12 x_i², off-diag 0.  At [1, 1] → diag(12, 12).
+        H = lucid.autograd.hessian(lambda x: (x ** 4).sum(), lucid.tensor([1.0, 1.0]))
+        np.testing.assert_allclose(
+            H.numpy(), [[12.0, 0.0], [0.0, 12.0]], atol=1e-3
+        )
+
+
+class TestAnomalyToggle:
+    def test_set_and_query(self) -> None:
+        try:
+            lucid.autograd.set_detect_anomaly(True)
+            assert lucid.autograd.is_anomaly_enabled()
+            lucid.autograd.set_detect_anomaly(False)
+            assert not lucid.autograd.is_anomaly_enabled()
+        finally:
+            lucid.autograd.set_detect_anomaly(False)
+
+
+class TestAutogradGraph:
+    def test_allow_mutation_on_saved_flag_toggles(self) -> None:
+        from lucid._C import engine as _C_engine
+        assert not _C_engine.is_mutation_on_saved_allowed()
+        with lucid.autograd.graph.allow_mutation_on_saved_tensors():
+            assert _C_engine.is_mutation_on_saved_allowed()
+        assert not _C_engine.is_mutation_on_saved_allowed()
+
+    def test_save_on_cpu_callable_stub(self) -> None:
+        # Stub: must enter/exit cleanly and not affect backward correctness.
+        with lucid.autograd.graph.save_on_cpu():
+            x = lucid.tensor([1.0, 2.0], requires_grad=True)
+            (x * x).sum().backward()
+        np.testing.assert_allclose(x.grad.numpy(), [2.0, 4.0], atol=1e-5)
+
+
+class TestAutogradProfilerAlias:
+    def test_alias_matches_lucid_profiler(self) -> None:
+        import lucid.profiler as P
+        assert lucid.autograd.profiler.profile is P.profile
+        assert lucid.autograd.profiler.OpEvent is P.OpEvent
+
+    def test_profile_context_manager_runs(self) -> None:
+        with lucid.autograd.profiler.profile():
+            t = lucid.tensor([1.0, 2.0])
+            _ = t * t

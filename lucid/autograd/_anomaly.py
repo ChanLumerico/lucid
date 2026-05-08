@@ -52,3 +52,33 @@ class detect_anomaly:
                 return fn(*args, **kwargs)  # type: ignore[operator]
 
         return wrapper
+
+
+def set_detect_anomaly(mode: bool, check_nan: bool = True) -> None:
+    """Programmatic toggle for autograd anomaly detection.
+
+    Equivalent to entering / exiting ``detect_anomaly()`` once, but without
+    requiring a ``with`` block.  Useful for enabling anomaly checks at
+    program start (e.g. behind a debug flag) and leaving them on for the
+    remainder of the run.
+
+    Parameters
+    ----------
+    mode : bool
+        ``True`` enables NaN / Inf checking on every backward; ``False``
+        disables it.
+    check_nan : bool, optional
+        Forwarded to the underlying flag.  Currently the only supported
+        check is for NaN / Inf values; included for API symmetry with
+        the reference framework.
+    """
+    from lucid.autograd._grad_mode import _ANOMALY_ENABLED
+
+    _ANOMALY_ENABLED[0] = bool(mode) and bool(check_nan)
+
+
+def is_anomaly_enabled() -> bool:
+    """Return whether autograd anomaly detection is currently enabled."""
+    from lucid.autograd._grad_mode import _ANOMALY_ENABLED
+
+    return bool(_ANOMALY_ENABLED[0])

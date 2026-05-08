@@ -8,8 +8,14 @@ from lucid.autograd._grad_mode import (
 from lucid.autograd._backward import backward, grad
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.autograd.gradcheck import gradcheck, gradgradcheck
-from lucid.autograd._anomaly import detect_anomaly
+from lucid.autograd._anomaly import (
+    detect_anomaly,
+    is_anomaly_enabled,
+    set_detect_anomaly,
+)
 from lucid.autograd._functional import jacobian, hessian, vjp, jvp
+from lucid.autograd import profiler as profiler
+from lucid.autograd import graph as graph
 
 __all__ = [
     "no_grad",
@@ -24,8 +30,12 @@ __all__ = [
     "gradcheck",
     "gradgradcheck",
     "detect_anomaly",
+    "set_detect_anomaly",
+    "is_anomaly_enabled",
     "jacobian",
     "hessian",
     "vjp",
     "jvp",
+    "profiler",
+    "graph",
 ]

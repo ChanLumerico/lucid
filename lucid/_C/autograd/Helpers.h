@@ -205,6 +205,13 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::string_view op_name,
                          std::size_t input_idx);
 
+// Toggle the process-wide flag that disables ``check_version_match``.
+// Used by ``lucid.autograd.graph.allow_mutation_on_saved_tensors`` —
+// the user opts into the unsafe contract that they will not mutate a
+// saved tensor in a way that would corrupt the gradient.
+bool is_mutation_on_saved_allowed();
+void set_mutation_on_saved_allowed(bool v);
+
 // Broadcast grad back to input_shape after a reduction.
 //
 // grad         — the gradient arriving from the consumer, with shape

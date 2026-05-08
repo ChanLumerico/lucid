@@ -267,6 +267,23 @@ Storage in_range_mask_storage(
 // Version counter validation.
 // -------------------------------------------------------------------------
 
+// Process-wide flag controlled by ``lucid.autograd.graph.allow_mutation_on_
+// saved_tensors``.  When set, ``check_version_match`` becomes a no-op — the
+// user has explicitly opted into the unsafe contract that they will not
+// mutate saved tensors in a way that would corrupt the gradient.  The flag
+// is intentionally a plain ``bool`` (no atomic / thread-local): autograd is
+// already a single-threaded contract in Lucid and the cost of synchronisation
+// would dwarf the actual check.
+static bool g_allow_mutation_on_saved = false;
+
+bool is_mutation_on_saved_allowed() {
+    return g_allow_mutation_on_saved;
+}
+
+void set_mutation_on_saved_allowed(bool v) {
+    g_allow_mutation_on_saved = v;
+}
+
 // Compare the version counter of the live TensorImpl against the saved value.
 // A discrepancy means the tensor was mutated in-place between the forward pass
 // and this backward call — which invalidates the saved activation data.
@@ -274,6 +291,9 @@ void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
                          std::string_view op_name,
                          std::size_t input_idx) {
+    if (g_allow_mutation_on_saved) {
+        return;  // user opted into the unsafe contract
+    }
     auto t = live.lock();
     if (!t)
         return;
