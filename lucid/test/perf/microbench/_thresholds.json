@@ -1,0 +1,9 @@
+{
+  "_comment": "Per-op timing ceilings in seconds. Recorded on Apple M-series CPU. Threshold checks apply a 25% tolerance band on top of these values. Re-record after intentional kernel changes.",
+  "add_2048_cpu": 0.005,
+  "mul_2048_cpu": 0.005,
+  "matmul_64_cpu": 0.010,
+  "matmul_256_cpu": 0.050,
+  "sum_4096_cpu": 0.005,
+  "softmax_1024_cpu": 0.020
+}
