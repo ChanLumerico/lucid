@@ -160,6 +160,9 @@ void register_tensor_impl(py::module_& m) {
              "the same Storage.  Returns None when no gradient has been "
              "accumulated.  Replaces the prior numpy round-trip in "
              "``Tensor.grad``.")
+        .def("item", &TensorImpl::item,
+             "Extract a single-element tensor's value as a Python scalar "
+             "(int / float / bool / complex).  Throws when numel() != 1.")
         .def("grad_as_impl",
              [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
                  return t.grad_as_impl();

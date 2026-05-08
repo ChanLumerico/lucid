@@ -47,6 +47,29 @@ def _is_ndarray(obj: object) -> bool:
     return cls.__module__ == "numpy" and cls.__name__ == "ndarray"
 
 
+def _require_numpy(operation: str) -> object:
+    """Lazy-import numpy with a clean error message when it isn't installed.
+
+    Lucid runs without numpy by default; the bridge methods listed in H4
+    (``tensor(np_array)``, ``Tensor.numpy()``, ``from_numpy``,
+    ``from_dlpack`` / ``to_dlpack``) opt into numpy as the canonical
+    interop library.  When the user reaches one of these without having
+    installed numpy, raise an ``ImportError`` that points them at the
+    correct extra rather than the generic ``ModuleNotFoundError``.
+    """
+    try:
+        import numpy as np  # noqa: PLC0415 — bridge import
+    except ImportError as e:
+        raise ImportError(
+            f"{operation} requires numpy, but numpy is not installed.\n"
+            "Install it explicitly:\n"
+            "    pip install lucid[numpy]\n"
+            "or\n"
+            "    pip install numpy"
+        ) from e
+    return np
+
+
 def _to_impl(
     data: object,
     *,
@@ -78,8 +101,9 @@ def _to_impl(
 
     # Numpy is the sanctioned conversion library for Python-data → engine.
     # Imported lazily so ``import lucid`` doesn't need numpy installed —
-    # only the explicit ``tensor(...)`` call at this site does.
-    import numpy as np  # noqa: PLC0415 — bridge import
+    # only the explicit ``tensor(...)`` call at this site does.  When numpy
+    # is missing, ``_require_numpy`` raises a guidance-rich ImportError.
+    np = _require_numpy("lucid.tensor() with non-Tensor input")
 
     numpy_input = isinstance(data, np.ndarray)
 
@@ -151,12 +175,23 @@ def from_numpy(arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
 
 # ── DLPack interop ─────────────────────────────────────────────────────────
 #
-# Lucid's DLPack bridge runs through NumPy: a Lucid tensor exposes
-# ``__dlpack__`` / ``__dlpack_device__`` by converting to NumPy first
-# (which is a no-op for CPU tensors and a CPU round-trip for Metal
-# tensors).  This is enough for the reference framework / JAX / SciPy / etc to consume
-# Lucid tensors zero-copy on the CPU side.  A real engine-side DLPack
-# implementation that avoids the NumPy hop is filed as future work.
+# Lucid's DLPack bridge intentionally goes through NumPy:
+#
+#   * NumPy already implements the DLPack PyCapsule producer/consumer
+#     correctly (lifetime, deleter, all dtypes).  A Lucid CPU tensor's
+#     numpy view is itself zero-copy, so wrapping it via numpy's
+#     ``__dlpack__`` adds no data movement.
+#   * Metal tensors must download to CPU regardless — DLPack with
+#     ``kDLMetal`` device type is supported by almost no consumers.
+#   * Building our own DLPack ABI in C++ would duplicate ~350 lines of
+#     subtle struct / lifetime code without any runtime benefit on top
+#     of what numpy already provides.
+#
+# Calling ``from_dlpack`` / ``to_dlpack`` therefore opts the user into
+# numpy as the canonical interop library — same H4 carve-out as
+# ``tensor(np_array)``, ``Tensor.numpy()``, and ``from_numpy``.
+# ``_require_numpy`` raises a clean ImportError pointing at
+# ``pip install lucid[numpy]`` when numpy is absent.
 
 
 def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
@@ -166,9 +201,11 @@ def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
     Memory is shared with ``ext_tensor`` where possible (CPU only).  The
     result lives on CPU regardless of the producer's device — Metal
     consumers should ``.to(device='metal')`` after the import.
-    """
-    import numpy as np  # noqa: PLC0415 — DLPack bridge is a numpy bridge
 
+    Requires numpy as the canonical DLPack bridge — install via
+    ``pip install lucid[numpy]`` if missing.
+    """
+    np = _require_numpy("lucid.from_dlpack")
     arr = np.from_dlpack(ext_tensor)
     return tensor(arr)
 
@@ -179,5 +216,9 @@ def to_dlpack(t: Tensor) -> object:
     Always materialises through NumPy, so GPU tensors take a CPU
     round-trip.  The capsule can be consumed exactly once — pass it
     directly to ``np.from_dlpack`` / a reference-framework consumer / etc.
+
+    Requires numpy as the canonical DLPack bridge — install via
+    ``pip install lucid[numpy]`` if missing.
     """
+    _require_numpy("lucid.to_dlpack")
     return t.numpy().__dlpack__()

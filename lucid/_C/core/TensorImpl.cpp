@@ -12,10 +12,12 @@
 
 #include "TensorImpl.h"
 
+#include <pybind11/complex.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
 #include <cmath>
+#include <complex>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -513,6 +515,101 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(py::bytes data,
     }
     return std::make_shared<TensorImpl>(Storage{std::move(cpu)},
                                         std::move(shape), dtype, device, requires_grad);
+}
+
+py::object TensorImpl::item() const {
+    if (numel() != 1) {
+        ErrorBuilder("item")
+            .fail("item() can only be called on a tensor with one element");
+    }
+
+    // Snapshot the single element to a contiguous CPU byte buffer.  This
+    // dispatches through to_bytes() to avoid duplicating storage-variant
+    // handling.
+    py::bytes blob = to_bytes();
+    char* raw = nullptr;
+    py::ssize_t len = 0;
+    PyBytes_AsStringAndSize(blob.ptr(), &raw, &len);
+
+    switch (meta_.dtype) {
+    case Dtype::F32: {
+        float v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::float_(static_cast<double>(v));
+    }
+    case Dtype::F64: {
+        double v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::float_(v);
+    }
+    case Dtype::F16: {
+        // Reuse the same IEEE-754 binary16 → float decode used in
+        // to_string()'s format_element(), kept inline so this stays a
+        // self-contained engine helper.
+        std::uint16_t bits;
+        std::memcpy(&bits, raw, sizeof(bits));
+        std::uint32_t sign = (bits >> 15) & 0x1u;
+        std::uint32_t exp = (bits >> 10) & 0x1fu;
+        std::uint32_t mant = bits & 0x3ffu;
+        std::uint32_t f;
+        if (exp == 0) {
+            if (mant == 0) {
+                f = sign << 31;
+            } else {
+                std::uint32_t e = 1;
+                std::uint32_t m = mant;
+                while ((m & 0x400u) == 0) {
+                    m <<= 1;
+                    --e;
+                }
+                m &= 0x3ffu;
+                f = (sign << 31) | ((e + 112) << 23) | (m << 13);
+            }
+        } else if (exp == 31) {
+            f = (sign << 31) | (0xffu << 23) | (mant << 13);
+        } else {
+            f = (sign << 31) | ((exp + 112) << 23) | (mant << 13);
+        }
+        float out;
+        std::memcpy(&out, &f, sizeof(out));
+        return py::float_(static_cast<double>(out));
+    }
+    case Dtype::I64: {
+        std::int64_t v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::int_(v);
+    }
+    case Dtype::I32: {
+        std::int32_t v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::int_(v);
+    }
+    case Dtype::I16: {
+        std::int16_t v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::int_(static_cast<int>(v));
+    }
+    case Dtype::I8: {
+        std::int8_t v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::int_(static_cast<int>(v));
+    }
+    case Dtype::Bool: {
+        std::uint8_t v;
+        std::memcpy(&v, raw, sizeof(v));
+        return py::bool_(v != 0);
+    }
+    case Dtype::C64: {
+        // Two contiguous f32: real, imag.
+        float re, im;
+        std::memcpy(&re, raw, sizeof(re));
+        std::memcpy(&im, raw + sizeof(re), sizeof(im));
+        return py::cast(std::complex<double>(static_cast<double>(re),
+                                             static_cast<double>(im)));
+    }
+    }
+    ErrorBuilder("item").fail("unsupported dtype");
+    return py::none();
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {

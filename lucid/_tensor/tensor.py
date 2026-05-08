@@ -300,65 +300,22 @@ class Tensor[DT: dtype, DV: device]:
     def item(self) -> float | int | bool:
         """Return the value of a single-element tensor as a Python scalar.
 
-        Uses the engine's ``to_bytes`` + ``struct.unpack`` instead of going
-        through numpy so this stays callable in numpy-free environments.
+        Delegates to the engine's ``TensorImpl::item`` which performs the
+        single-element extraction (including IEEE-754 binary16 → float
+        decoding) without going through numpy.
         """
-        if self._impl.numel() != 1:
-            raise RuntimeError("item() can only be called on a tensor with one element")
-        import struct  # noqa: PLC0415 — std lib, lazy fine
-
-        raw = self._impl.to_bytes()
-        dt = self._impl.dtype
-        _DT = _C_engine.Dtype
-        if dt == _DT.F32:
-            return struct.unpack("<f", raw)[0]
-        if dt == _DT.F64:
-            return struct.unpack("<d", raw)[0]
-        if dt == _DT.F16:
-            # Reuse the engine's half→float conversion via to_string + parse,
-            # but here we keep things tight: unpack as uint16 then upcast.
-            bits = struct.unpack("<H", raw)[0]
-            sign = (bits >> 15) & 0x1
-            exp = (bits >> 10) & 0x1F
-            mant = bits & 0x3FF
-            if exp == 0:
-                if mant == 0:
-                    f = sign << 31
-                else:
-                    e = 1
-                    while (mant & 0x400) == 0:
-                        mant <<= 1
-                        e -= 1
-                    mant &= 0x3FF
-                    f = (sign << 31) | ((e + 112) << 23) | (mant << 13)
-            elif exp == 31:
-                f = (sign << 31) | (0xFF << 23) | (mant << 13)
-            else:
-                f = (sign << 31) | ((exp + 112) << 23) | (mant << 13)
-            return struct.unpack("<f", struct.pack("<I", f))[0]
-        if dt == _DT.I64:
-            return struct.unpack("<q", raw)[0]
-        if dt == _DT.I32:
-            return struct.unpack("<i", raw)[0]
-        if dt == _DT.I16:
-            return struct.unpack("<h", raw)[0]
-        if dt == _DT.I8:
-            return struct.unpack("<b", raw)[0]
-        if dt == _DT.Bool:
-            return bool(struct.unpack("<?", raw)[0])
-        if dt == _DT.C64:
-            re, im = struct.unpack("<ff", raw)
-            return complex(re, im)  # type: ignore[return-value]
-        raise TypeError(f"item(): unsupported dtype {dt}")
+        return self._impl.item()
 
     def numpy(self) -> "np.ndarray":  # type: ignore[type-arg]
         """Return the tensor as a NumPy array (CPU only).
 
         Imports numpy lazily — the rest of Lucid stays numpy-free unless
-        the user explicitly bridges through this method.
+        the user explicitly bridges through this method.  When numpy is
+        not installed, raises an ImportError pointing at
+        ``pip install lucid[numpy]``.
         """
-        import numpy as np  # noqa: PLC0415 — lazy bridge import
-
+        from lucid._factories.converters import _require_numpy
+        np = _require_numpy("Tensor.numpy()")
         raw = self._impl.data_as_python()
         return np.asarray(raw)
 

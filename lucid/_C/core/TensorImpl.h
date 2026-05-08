@@ -227,6 +227,13 @@ public:
                                                   Device device,
                                                   bool requires_grad);
 
+    // Extracts a single-element tensor's value as a Python scalar object
+    // (int / float / bool / complex).  Throws when ``numel() != 1``.  GPU
+    // tensors are downloaded to CPU; the F16 IEEE-754 binary16 → float
+    // conversion is performed engine-side so the Python wrapper avoids
+    // duplicating the bit-fiddling logic from to_string().
+    py::object item() const;
+
     // Renders the tensor data as a human-readable string suitable for repr().
     // Format roughly mirrors NumPy's array2string defaults but is implemented
     // entirely engine-side so neither lucid nor its consumers need numpy.
