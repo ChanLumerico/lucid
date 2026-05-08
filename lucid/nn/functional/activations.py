@@ -352,7 +352,7 @@ def pairwise_distance(
     return _wrap(dist)
 
 
-def softshrink(x: "Tensor", lambd: float = 0.5) -> "Tensor":
+def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     """Soft-shrinkage: x-lambd if x>lambd, x+lambd if x<-lambd, else 0."""
     xi = _unwrap(x)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)

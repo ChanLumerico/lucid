@@ -81,43 +81,43 @@ class Embedding(Module):
             self._zero_pad_row()
 
     def _zero_pad_row(self) -> None:
-        """Set ``weight[padding_idx]`` to zero in-place via numpy round-trip.
+        """Set ``weight[padding_idx]`` to zero in-place via engine ops.
 
         Cheap because it only fires from ``__init__``; runtime forward
         does not need this.
         """
         import lucid as _lucid
-        from lucid._C import engine as _C_engine
-        from lucid._tensor.tensor import _impl_with_grad as _iwg
 
-        arr = self.weight.numpy().copy()
-        arr[self.padding_idx] = 0.0
-        new_impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, False)
-        self.weight._impl = _iwg(new_impl, self.weight._impl.requires_grad)
+        # ``index_fill`` on dim=0 zeroes the chosen row; rebind ``weight._impl``
+        # so requires_grad / parameter identity are preserved.
+        new_w: Tensor = _lucid.index_fill(
+            self.weight,
+            0,
+            _lucid.tensor([int(self.padding_idx)], dtype=_lucid.int64,
+                          device=self.weight.device),
+            0.0,
+        )
+        self.weight._impl = new_w._impl
 
     def _renorm_weight_inplace(self) -> None:
         """Apply ``max_norm`` rescaling to rows that exceed the cap."""
         import lucid as _lucid
-        from lucid._C import engine as _C_engine
-        from lucid._tensor.tensor import _impl_with_grad as _iwg
-        import numpy as _np
 
-        arr: _np.ndarray = self.weight.numpy().copy()
-        # Compute per-row Lp-norm without an extra Lucid graph.
+        w: Tensor = self.weight
+        # Per-row Lp-norm via engine ops.
         if self.norm_type == 2.0:
-            norms: _np.ndarray = _np.linalg.norm(arr, ord=2, axis=1)
+            norms: Tensor = (w * w).sum(dim=1).sqrt()
         elif self.norm_type == 1.0:
-            norms = _np.abs(arr).sum(axis=1)
+            norms = w.abs().sum(dim=1)
         else:
-            norms = (_np.abs(arr) ** self.norm_type).sum(axis=1) ** (
-                1.0 / self.norm_type
+            norms = (w.abs() ** float(self.norm_type)).sum(dim=1) ** (
+                1.0 / float(self.norm_type)
             )
-        scale: _np.ndarray = _np.minimum(self.max_norm / (norms + 1e-7), 1.0).astype(
-            arr.dtype
-        )
-        arr = arr * scale[:, None]
-        new_impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, False)
-        self.weight._impl = _iwg(new_impl, self.weight._impl.requires_grad)
+        scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)
+        ones: Tensor = _lucid.ones_like(scale_raw)
+        scale: Tensor = scale_raw.minimum(ones).unsqueeze(-1)
+        new_w: Tensor = w * scale
+        self.weight._impl = new_w._impl
 
     def forward(self, x: Tensor) -> Tensor:
         if self.max_norm is not None:

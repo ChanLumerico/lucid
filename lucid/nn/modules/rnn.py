@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _cat_last(a: "Tensor", b: "Tensor") -> "Tensor":
+def _cat_last(a: Tensor, b: Tensor) -> Tensor:
     """Concatenate two tensors along the last dimension."""
     import lucid
 
@@ -298,37 +298,34 @@ class LSTM(Module):
         """
         return None
 
-    def _reverse_along_time(self, x: "Tensor") -> "Tensor":
+    def _reverse_along_time(self, x: Tensor) -> Tensor:
         """Flip a sequence-major tensor along the time (axis-0) dimension.
 
         Implemented via ``gather`` so the backward path works correctly —
         the engine's ``Tensor.flip`` backward is currently broken.
         """
         import lucid as _lucid
-        import numpy as _np
 
         T: int = int(x.shape[0])
-        rev_idx_1d: _np.ndarray = _np.arange(T - 1, -1, -1, dtype=_np.int32)
+        # Reverse range [T-1, T-2, …, 0] built on the engine.
+        rev_1d: Tensor = _lucid.arange(T - 1, -1, -1, dtype=_lucid.int32, device=x.device)
         target_shape: list[int] = [1] * x.ndim
         target_shape[0] = T
-        idx_np: _np.ndarray = _np.broadcast_to(
-            rev_idx_1d.reshape(target_shape),
-            tuple(int(s) for s in x.shape),
-        ).copy()
-        idx: "Tensor" = _lucid.tensor(idx_np, dtype=_lucid.int32)
+        bcast_shape: list[int] = [int(s) for s in x.shape]
+        idx: Tensor = rev_1d.reshape(target_shape).broadcast_to(
+            bcast_shape
+        ).contiguous()
         return _lucid.gather(x, idx, 0)
 
     def _run_single_layer_engine(
         self,
-        layer_input: "Tensor",
-        h0_layer: "Tensor",
-        c0_layer: "Tensor",
+        layer_input: Tensor,
+        h0_layer: Tensor,
+        c0_layer: Tensor,
         layer: int,
         direction: int,
-    ) -> "tuple[Tensor, Tensor, Tensor]":
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Run one ``lstm_forward`` engine call for a single layer / direction."""
-        import numpy as _np
-
         suffix: str = "_reverse" if direction == 1 else ""
         weights: list[object] = []
         weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
@@ -339,9 +336,8 @@ class LSTM(Module):
             weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
         else:
             dev = _unwrap(layer_input).device
-            zero_b = _C_engine.TensorImpl(
-                _np.zeros(gate_size, dtype="float32"), dev, False
-            )
+            # Engine zero buffer — same dtype as the tensors we'll concat with.
+            zero_b = _C_engine.zeros([gate_size], _C_engine.F32, dev)
             weights.append(zero_b)
             weights.append(zero_b)
         if self.proj_size > 0:
@@ -363,7 +359,7 @@ class LSTM(Module):
 
     def forward(
         self,
-        x: "Tensor",
+        x: Tensor,
         hx: "tuple[Tensor, Tensor] | None" = None,
     ) -> "tuple[Tensor, tuple[Tensor, Tensor]]":
         """Multi-layer × bidirectional forward.
@@ -388,29 +384,29 @@ class LSTM(Module):
 
         # Allocate / split the initial states.
         if hx is None:
-            h0_full: "Tensor" = _lucid.zeros(
+            h0_full: Tensor = _lucid.zeros(
                 L * num_dirs, B, rec_size, device=x.device, dtype=x.dtype
             )
-            c0_full: "Tensor" = _lucid.zeros(
+            c0_full: Tensor = _lucid.zeros(
                 L * num_dirs, B, self.hidden_size, device=x.device, dtype=x.dtype
             )
         else:
             h0_full, c0_full = hx
 
-        h_n_layers: list["Tensor"] = []
-        c_n_layers: list["Tensor"] = []
+        h_n_layers: list[Tensor] = []
+        c_n_layers: list[Tensor] = []
 
-        layer_input: "Tensor" = x
+        layer_input: Tensor = x
 
         for layer in range(L):
-            dir_outs: list["Tensor"] = []
+            dir_outs: list[Tensor] = []
             for direction in range(num_dirs):
                 idx: int = layer * num_dirs + direction
                 # Slice (1, B, *) initial state for this layer/direction.
-                h0_slice: "Tensor" = h0_full[idx : idx + 1]
-                c0_slice: "Tensor" = c0_full[idx : idx + 1]
+                h0_slice: Tensor = h0_full[idx : idx + 1]
+                c0_slice: Tensor = c0_full[idx : idx + 1]
 
-                inp: "Tensor" = (
+                inp: Tensor = (
                     self._reverse_along_time(layer_input)
                     if direction == 1
                     else layer_input
@@ -436,8 +432,8 @@ class LSTM(Module):
 
                 layer_input = _dropout(layer_input, self.dropout_val, training=True)
 
-        h_n_final: "Tensor" = _lucid.cat(h_n_layers, 0)
-        c_n_final: "Tensor" = _lucid.cat(c_n_layers, 0)
+        h_n_final: Tensor = _lucid.cat(h_n_layers, 0)
+        c_n_final: Tensor = _lucid.cat(c_n_layers, 0)
 
         if self.batch_first:
             layer_input = layer_input.permute([1, 0, 2])
@@ -494,7 +490,7 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: "Tensor", hx: "Tensor | None" = None) -> "Tensor":
+    def forward(self, x: Tensor, hx: "Tensor | None" = None) -> Tensor:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -548,7 +544,7 @@ class LSTMCell(Module):
 
     def forward(
         self,
-        x: "Tensor",
+        x: Tensor,
         hx: "tuple[Tensor, Tensor] | None" = None,
     ) -> "tuple[Tensor, Tensor]":
         if hx is None:
@@ -611,7 +607,7 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: "Tensor", hx: "Tensor | None" = None) -> "Tensor":
+    def forward(self, x: Tensor, hx: "Tensor | None" = None) -> Tensor:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         hs = self.hidden_size
@@ -690,7 +686,7 @@ class GRU(_CellNamingMixin, Module):
 
     def forward(
         self,
-        x: "Tensor",
+        x: Tensor,
         hx: "Tensor | None" = None,
     ) -> "tuple[Tensor, Tensor]":
         _check_not_packed(x, "GRU")
@@ -828,7 +824,7 @@ class RNN(_CellNamingMixin, Module):
 
     def forward(
         self,
-        x: "Tensor",
+        x: Tensor,
         hx: "Tensor | None" = None,
     ) -> "tuple[Tensor, Tensor]":
         _check_not_packed(x, "RNN")

@@ -2,7 +2,7 @@
 
 Three subgroups:
 
-1. **Aliases** for engine ops PyTorch exposes under multiple names
+1. **Aliases** for engine ops the reference framework exposes under multiple names
    (``absolute`` ↔ ``abs``, ``subtract`` ↔ ``sub``, etc.).
 2. **Inverse-hyperbolic** functions composed from ``log`` and ``sqrt``.
 3. **Specials** — ``expm1``, ``sinc``, ``heaviside``, ``xlogy``, ``logit``,
@@ -35,7 +35,7 @@ def negative(x: Tensor) -> Tensor:
 
 
 def positive(x: Tensor) -> Tensor:
-    """PyTorch parity: returns the input unchanged."""
+    """Reference-framework parity: returns the input unchanged."""
     return x
 
 
@@ -58,7 +58,7 @@ def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
 
 
 def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
-    """``b - alpha * a`` — reverse subtract, mirroring ``torch.rsub``."""
+    """``b - alpha * a`` — reverse subtract, the reference framework's ``rsub``."""
     if alpha == 1.0:
         return b - a
     return b - (a * alpha)
@@ -147,7 +147,7 @@ def signbit(x: Tensor) -> Tensor:
 
 
 def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
-    """``pow`` always done in F64 (matches ``torch.float_power``)."""
+    """``pow`` always done in F64 (matches the reference framework's ``float_power``)."""
     if _is_tensor(x):
         x = x.to(dtype=lucid.float64)
     if _is_tensor(y):

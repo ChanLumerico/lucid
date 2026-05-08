@@ -17,32 +17,32 @@ _ALPHA_PRIME = -_SELU_ALPHA * _SELU_SCALE  # ≈ -1.7580993408473766
 
 
 def dropout(
-    x: "Tensor", p: float = 0.5, training: bool = True, inplace: bool = False
-) -> "Tensor":
+    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+) -> Tensor:
     """Randomly zero elements with probability p during training."""
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 
-def dropout1d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
+def dropout1d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     """Randomly zero entire 1-D feature maps (channels) of an
     ``(N, C, L)`` input.  Uses the same engine kernel as ``dropout2d`` /
     ``dropout3d`` — channel-wise masking is rank-agnostic."""
     return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
 
 
-def dropout2d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
+def dropout2d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     """Randomly zero entire channels with probability p during training."""
     return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
 
 
-def dropout3d(x: "Tensor", p: float = 0.5, training: bool = True) -> "Tensor":
+def dropout3d(x: Tensor, p: float = 0.5, training: bool = True) -> Tensor:
     """Randomly zero entire 3-D feature maps with probability p during training."""
     return _wrap(_C_engine.nn.dropoutnd(_unwrap(x), p, training))
 
 
 def alpha_dropout(
-    x: "Tensor", p: float = 0.5, training: bool = True, inplace: bool = False
-) -> "Tensor":
+    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+) -> Tensor:
     """Alpha dropout preserving self-normalizing SELU properties.
 
     During training, each element is either kept (probability 1-p) and
@@ -76,8 +76,8 @@ def alpha_dropout(
 
 
 def feature_alpha_dropout(
-    x: "Tensor", p: float = 0.5, training: bool = True, inplace: bool = False
-) -> "Tensor":
+    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+) -> Tensor:
     """Alpha dropout that zeroes entire feature maps (channels).
 
     For input of shape (N, C, *), generates a (N, C) Bernoulli mask and

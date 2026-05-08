@@ -1,6 +1,6 @@
 """Index-based write and scatter operations.
 
-All ops here follow the PyTorch API surface:
+All ops here follow the reference-framework API surface:
 
 * ``index_fill``  — fill elements at 1-D index positions with a scalar.
 * ``index_add``   — accumulate scaled source into input at 1-D index positions.

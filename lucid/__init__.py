@@ -444,9 +444,9 @@ def _load_composite_ops() -> dict[str, object]:
 
 @_register(_METHOD_ALIASES)
 def _load_method_aliases() -> dict[str, object]:
-    """Surface select Tensor methods as free functions (PyTorch parity).
+    """Surface select Tensor methods as free functions (reference-framework parity).
 
-    ``torch.lerp(a, b, w)`` etc. are commonly used standalone — we wrap each
+    ``lerp(a, b, w)`` etc. are commonly used standalone — we wrap each
     method so the call ``lucid.lerp(a, b, w)`` dispatches to ``a.lerp(b, w)``.
     """
     from lucid._tensor.tensor import Tensor as _T

@@ -249,25 +249,27 @@ def _flat_to_per_dim_pairs(
     return pad_pairs
 
 
-def _gather_along(x: Tensor, dim: int, indices_1d: "_np.ndarray") -> Tensor:
-    """Gather x along `dim` with a 1D index array, broadcasting to x.shape.
+def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
+    """Gather x along `dim` with a 1-D index list, broadcasting to x.shape.
 
-    `indices_1d` is a numpy int32 array of length k.  Returns a tensor of the
-    same shape as x except dim has size k.  Uses `lucid.gather` so backward
-    accumulates gradients into the correct source positions — this is what
-    makes reflect/circular padding correctly differentiable.
+    ``indices_1d`` is a Python list of ints of length ``k``.  Returns a
+    tensor of the same shape as ``x`` except ``dim`` has size ``k``.  Uses
+    ``lucid.gather`` so backward accumulates gradients into the correct
+    source positions — this is what makes reflect/circular padding
+    correctly differentiable.
     """
-    import numpy as _np
     import lucid as _lucid
 
     k: int = len(indices_1d)
     target_shape: list[int] = [1] * x.ndim
     target_shape[dim] = k
-    idx_np: _np.ndarray = _np.broadcast_to(
-        _np.asarray(indices_1d, dtype=_np.int32).reshape(target_shape),
-        tuple(k if i == dim else x.shape[i] for i in range(x.ndim)),
-    ).copy()
-    idx: Tensor = _lucid.tensor(idx_np, dtype=_lucid.int32)
+    bcast_shape: list[int] = [
+        k if i == dim else int(x.shape[i]) for i in range(x.ndim)
+    ]
+    idx_flat: Tensor = _lucid.tensor(
+        indices_1d, dtype=_lucid.int32, device=x.device
+    ).reshape(target_shape)
+    idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()
     return _lucid.gather(x, idx, dim)
 
 
@@ -283,17 +285,16 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
     gradient accumulation for reflect (where the same source element
     contributes to both the centre and the reflected copy).
     """
-    import numpy as _np
     import lucid as _lucid
 
     if lo == 0 and hi == 0:
         return x
     size: int = x.shape[dim]
     parts: list[Tensor] = []
-    idx: _np.ndarray
+    idx_list: list[int]
     if lo > 0:
         if mode == "replicate":
-            idx = _np.zeros(lo, dtype=_np.int32)
+            idx_list = [0] * lo
         elif mode == "reflect":
             if lo > size - 1:
                 raise ValueError(
@@ -301,20 +302,20 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
                     f"on dim {dim}"
                 )
             # Reflect mode: indices [lo, lo-1, ..., 1] (boundary excluded).
-            idx = _np.arange(lo, 0, -1, dtype=_np.int32)
+            idx_list = list(range(lo, 0, -1))
         elif mode == "circular":
             if lo > size:
                 raise ValueError(
                     f"circular padding {lo} exceeds input size ({size}) on dim {dim}"
                 )
-            idx = _np.arange(size - lo, size, dtype=_np.int32)
+            idx_list = list(range(size - lo, size))
         else:
             raise ValueError(f"unsupported pad mode: {mode!r}")
-        parts.append(_gather_along(x, dim, idx))
+        parts.append(_gather_along(x, dim, idx_list))
     parts.append(x)
     if hi > 0:
         if mode == "replicate":
-            idx = _np.full(hi, size - 1, dtype=_np.int32)
+            idx_list = [size - 1] * hi
         elif mode == "reflect":
             if hi > size - 1:
                 raise ValueError(
@@ -322,14 +323,14 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
                     f"on dim {dim}"
                 )
             # Reflect mode: indices [size-2, size-3, ..., size-1-hi].
-            idx = _np.arange(size - 2, size - 2 - hi, -1, dtype=_np.int32)
+            idx_list = list(range(size - 2, size - 2 - hi, -1))
         elif mode == "circular":
             if hi > size:
                 raise ValueError(
                     f"circular padding {hi} exceeds input size ({size}) on dim {dim}"
                 )
-            idx = _np.arange(0, hi, dtype=_np.int32)
-        parts.append(_gather_along(x, dim, idx))
+            idx_list = list(range(0, hi))
+        parts.append(_gather_along(x, dim, idx_list))
     if len(parts) == 1:
         return parts[0]
     return _lucid.cat(parts, dim)

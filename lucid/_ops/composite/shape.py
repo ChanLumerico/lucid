@@ -38,7 +38,7 @@ def adjoint(x: Tensor) -> Tensor:
 
 
 def t(x: Tensor) -> Tensor:
-    """Transpose for ≤2-D tensors (PyTorch's ``Tensor.t`` semantics)."""
+    """Transpose for ≤2-D tensors (matches the reference framework's ``Tensor.t``)."""
     if x.ndim < 2:
         return x
     if x.ndim != 2:
@@ -56,7 +56,7 @@ def column_stack(tensors: Sequence[Tensor]) -> Tensor:
 
 
 def row_stack(tensors: Sequence[Tensor]) -> Tensor:
-    """Alias for ``vstack`` (PyTorch parity)."""
+    """Alias for ``vstack`` (reference-framework parity)."""
     return lucid.vstack(list(tensors))
 
 

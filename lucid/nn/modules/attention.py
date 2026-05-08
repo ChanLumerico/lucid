@@ -22,17 +22,17 @@ if TYPE_CHECKING:
 _NEG_INF: float = float("-inf")
 
 
-def _to_additive_mask(mask: "Tensor", float_dtype: object) -> "Tensor":
+def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
     import lucid as _lucid
 
     if mask.dtype is _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
-        zero_t: "Tensor" = _lucid.zeros(
+        zero_t: Tensor = _lucid.zeros(
             mask.shape, dtype=float_dtype, device=mask.device
         )
-        ninf_t: "Tensor" = _lucid.full(
+        ninf_t: Tensor = _lucid.full(
             mask.shape, _NEG_INF, dtype=float_dtype, device=mask.device
         )
         return _lucid.where(mask, ninf_t, zero_t)
@@ -203,7 +203,7 @@ class MultiheadAttention(Module):
         )
 
     def _project_qkv(
-        self, query: "Tensor", key: "Tensor", value: "Tensor"
+        self, query: Tensor, key: Tensor, value: Tensor
     ) -> "tuple[Tensor, Tensor, Tensor]":
         """Apply the input projections, returning ``(q, k, v)`` each shaped
         ``(B, T*, embed_dim)``."""
@@ -211,9 +211,9 @@ class MultiheadAttention(Module):
         if self._qkv_same_embed_dim:
             wt = self.in_proj_weight._impl  # type: ignore[union-attr]
             parts = _C_engine.split_at(wt, [d, 2 * d], 0)
-            q_w: "Tensor" = _wrap(parts[0])
-            k_w: "Tensor" = _wrap(parts[1])
-            v_w: "Tensor" = _wrap(parts[2])
+            q_w: Tensor = _wrap(parts[0])
+            k_w: Tensor = _wrap(parts[1])
+            v_w: Tensor = _wrap(parts[2])
         else:
             q_w = self.q_proj_weight  # type: ignore[assignment]
             k_w = self.k_proj_weight  # type: ignore[assignment]
@@ -228,18 +228,18 @@ class MultiheadAttention(Module):
         else:
             q_b = k_b = v_b = None
 
-        q: "Tensor" = linear(query, q_w, q_b)
-        k: "Tensor" = linear(key, k_w, k_b)
-        v: "Tensor" = linear(value, v_w, v_b)
+        q: Tensor = linear(query, q_w, q_b)
+        k: Tensor = linear(key, k_w, k_b)
+        v: Tensor = linear(value, v_w, v_b)
         return q, k, v
 
-    def _split_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
+    def _split_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Reshape ``(B, T, embed_dim)`` → ``(B, num_heads, T, head_dim)``."""
         return x.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(
             [0, 2, 1, 3]
         )
 
-    def _merge_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
+    def _merge_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Inverse of :meth:`_split_heads`."""
         return x.permute([0, 2, 1, 3]).reshape(batch_size, seq_len, self.embed_dim)
 
@@ -259,7 +259,7 @@ class MultiheadAttention(Module):
         merged: "Tensor | None" = None
 
         if attn_mask is not None:
-            am: "Tensor" = _to_additive_mask(attn_mask, float_dtype)
+            am: Tensor = _to_additive_mask(attn_mask, float_dtype)
             if am.ndim == 2:
                 am = am.reshape(1, 1, target_len, source_len)
             elif am.ndim == 3:
@@ -272,7 +272,7 @@ class MultiheadAttention(Module):
             merged = am
 
         if key_padding_mask is not None:
-            kpm: "Tensor" = _to_additive_mask(key_padding_mask, float_dtype)
+            kpm: Tensor = _to_additive_mask(key_padding_mask, float_dtype)
             # (B, S) → (B, 1, 1, S) so it broadcasts over heads & target length.
             kpm = kpm.reshape(batch_size, 1, 1, source_len)
             merged = kpm if merged is None else merged + kpm
@@ -281,9 +281,9 @@ class MultiheadAttention(Module):
 
     def forward(
         self,
-        query: "Tensor",
-        key: "Tensor",
-        value: "Tensor",
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
         key_padding_mask: "Tensor | None" = None,
         need_weights: bool = True,
         attn_mask: "Tensor | None" = None,
@@ -305,8 +305,8 @@ class MultiheadAttention(Module):
         if self.bias_k is not None:
             import lucid as _lucid
 
-            bk: "Tensor" = self.bias_k.expand(B, 1, self.embed_dim)
-            bv: "Tensor" = self.bias_v.expand(B, 1, self.embed_dim)
+            bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
+            bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
             k = _lucid.cat([k, bk], 1)
             v = _lucid.cat([v, bv], 1)
 
@@ -314,7 +314,7 @@ class MultiheadAttention(Module):
         if self.add_zero_attn:
             import lucid as _lucid
 
-            zero_kv: "Tensor" = _lucid.zeros(
+            zero_kv: Tensor = _lucid.zeros(
                 B, 1, self.embed_dim, dtype=k.dtype, device=k.device
             )
             k = _lucid.cat([k, zero_kv], 1)
@@ -323,9 +323,9 @@ class MultiheadAttention(Module):
         Tk: int = k.shape[1]
 
         # Split heads.
-        qh: "Tensor" = self._split_heads(q, B, Tq)
-        kh: "Tensor" = self._split_heads(k, B, Tk)
-        vh: "Tensor" = self._split_heads(v, B, Tk)
+        qh: Tensor = self._split_heads(q, B, Tq)
+        kh: Tensor = self._split_heads(k, B, Tk)
+        vh: Tensor = self._split_heads(v, B, Tk)
 
         merged_mask: "Tensor | None" = self._build_attn_mask(
             attn_mask, key_padding_mask, B, Tq, Tk, q.dtype
@@ -359,7 +359,7 @@ class MultiheadAttention(Module):
             attn_weights = None
 
         # (B, H, Tq, head_dim) → (B, Tq, embed_dim)
-        out: "Tensor" = self._merge_heads(attn_out, B, Tq)
+        out: Tensor = self._merge_heads(attn_out, B, Tq)
 
         out = linear(out, self.out_proj_weight, self.out_proj_bias)
 
@@ -374,9 +374,9 @@ class MultiheadAttention(Module):
 
     def _attn_with_weights(
         self,
-        q: "Tensor",
-        k: "Tensor",
-        v: "Tensor",
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
         attn_mask: "Tensor | None",
         is_causal: bool,
     ) -> "tuple[Tensor, Tensor]":
@@ -392,7 +392,7 @@ class MultiheadAttention(Module):
         head_dim: int = q.shape[-1]
         scale: float = 1.0 / math.sqrt(head_dim)
         # scores: (B, H, Tq, Tk)
-        scores: "Tensor" = _lucid.matmul(q, k.permute([0, 1, 3, 2])) * scale
+        scores: Tensor = _lucid.matmul(q, k.permute([0, 1, 3, 2])) * scale
 
         if is_causal:
             # Build an upper-triangular -inf mask.
@@ -408,12 +408,12 @@ class MultiheadAttention(Module):
         if attn_mask is not None:
             scores = scores + attn_mask
 
-        weights: "Tensor" = _softmax(scores, dim=-1)
+        weights: Tensor = _softmax(scores, dim=-1)
         if self.training and self.dropout > 0.0:
             from lucid.nn.functional.dropout import dropout as _dropout
 
             weights = _dropout(weights, p=self.dropout, training=True)
-        out: "Tensor" = _lucid.matmul(weights, v)
+        out: Tensor = _lucid.matmul(weights, v)
         return out, weights
 
     def extra_repr(self) -> str:

@@ -313,9 +313,9 @@ class Tensor[DT: dtype, DV: device]:
     # ── DLPack protocol ──────────────────────────────────────────────────
     #
     # Both methods route through ``self.numpy()`` so any DLPack-aware
-    # consumer (PyTorch / JAX / etc) can ingest a Lucid tensor directly:
+    # consumer (reference framework / JAX / etc) can ingest a Lucid tensor directly:
     #
-    #     >>> torch.from_dlpack(lucid.zeros(3))
+    #     >>> any_dlpack_consumer.from_dlpack(lucid.zeros(3))
     #
     # Metal tensors silently round-trip through CPU (numpy() already
     # does that).  A native engine-side DLPack export is filed as
@@ -345,7 +345,7 @@ class Tensor[DT: dtype, DV: device]:
         """Return a contiguous copy of this tensor."""
         return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
 
-    def unfold(self, dimension: int, size: int, step: int) -> "Tensor":
+    def unfold(self, dimension: int, size: int, step: int) -> Tensor:
         """Return a view with an extra dimension for sliding-window slices.
 
         Each slice along *dimension* has *size* elements with stride *step*.
@@ -354,7 +354,7 @@ class Tensor[DT: dtype, DV: device]:
         """
         return _wrap(_C_engine.unfold_dim(self._impl, dimension, size, step))  # type: ignore[return-value]
 
-    def scatter_add(self, dim: int, index: "Tensor", src: "Tensor") -> "Tensor":
+    def scatter_add(self, dim: int, index: Tensor, src: Tensor) -> Tensor:
         """Out-of-place scatter-add along *dim*. Returns a new tensor."""
         from lucid._ops import scatter_add as _sa
 

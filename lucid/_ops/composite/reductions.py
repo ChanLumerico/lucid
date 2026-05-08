@@ -45,7 +45,7 @@ def nanmedian(
 
     NaN entries are replaced with +inf before sorting, so they sink to
     the high end.  The median index is ``(non_nan_count - 1) // 2``
-    (lower-median convention, matching PyTorch for odd counts).
+    (lower-median convention, matching the reference framework for odd counts).
     """
     big = lucid.full_like(x, math.inf)
     safe = lucid.where(lucid.isnan(x), big, x)
@@ -74,7 +74,7 @@ def count_nonzero(
     """Count non-zero elements along ``dim`` (or whole tensor when ``None``).
 
     Output dtype is int64 — the count semantics match the reference
-    framework's ``torch.count_nonzero``.
+    framework's ``count_nonzero``.
 
     The current CpuBackend lacks ``where(bool, i64, i64)`` and
     ``astype(bool → i64)``; we work in F32 (a 1.0/0.0 mask), reduce, then

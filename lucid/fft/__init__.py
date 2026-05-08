@@ -1,6 +1,6 @@
 """lucid.fft — discrete Fourier transform ops.
 
-Mirrors the standard ``torch.fft`` surface: 18 transform variants
+Mirrors the standard FFT surface: 18 transform variants
 (``fft`` / ``ifft`` / ``fft2`` / ``ifft2`` / ``fftn`` / ``ifftn`` and the
 ``r``- and ``h``-prefixed counterparts) plus the four utility helpers
 ``fftfreq`` / ``rfftfreq`` / ``fftshift`` / ``ifftshift``.

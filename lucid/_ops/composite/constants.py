@@ -12,7 +12,7 @@ e: float = math.e
 inf: float = math.inf
 nan: float = math.nan
 
-# ``newaxis`` is ``None`` to match NumPy / PyTorch indexing idioms:
+# ``newaxis`` is ``None`` to match NumPy / reference-framework indexing idioms:
 # ``x[:, lucid.newaxis]`` works because ``None`` already means "insert
 # a singleton axis here" in our advanced-indexing path.
 newaxis = None  # type: ignore[assignment]

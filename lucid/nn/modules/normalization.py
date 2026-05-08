@@ -479,7 +479,7 @@ class LocalResponseNorm(Module):
         self.beta = beta
         self.k = k
 
-    def forward(self, x: "Tensor") -> "Tensor":
+    def forward(self, x: Tensor) -> Tensor:
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 

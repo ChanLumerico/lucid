@@ -19,7 +19,7 @@ def clip_grad_norm_(
     max_norm: float,
     norm_type: float = 2.0,
     error_if_nonfinite: bool = False,
-) -> "Tensor":
+) -> Tensor:
     """Clip gradient norm of parameters in-place. Returns the total norm."""
     params_with_grad = [p for p in parameters if p.grad is not None]
     if not params_with_grad:

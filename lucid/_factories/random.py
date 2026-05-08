@@ -57,7 +57,7 @@ def initial_seed() -> int:
     return int(_active_default_gen().seed)
 
 
-def get_rng_state() -> "Tensor":
+def get_rng_state() -> Tensor:
     """Return the current default generator's state as an ``int64`` tensor
     of length 2: ``[seed, counter]``.
 
@@ -72,7 +72,7 @@ def get_rng_state() -> "Tensor":
     return _lucid.tensor([int(g.seed), int(g.counter)], dtype=int64)
 
 
-def set_rng_state(state: "Tensor") -> None:
+def set_rng_state(state: Tensor) -> None:
     """Restore the default generator's state from a tensor previously
     produced by :func:`get_rng_state`.  Must be a length-2 ``int64``
     tensor ``[seed, counter]``."""

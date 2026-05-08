@@ -1,5 +1,5 @@
 """
-Tensor indexing: __getitem__ and __setitem__ with full PyTorch parity.
+Tensor indexing: __getitem__ and __setitem__ with full reference-framework parity.
 
 Supported forms
 ───────────────
@@ -445,7 +445,7 @@ def _advanced_getitem(
 
     else:
         # Non-contiguous advanced indexing: advanced dims are NOT consecutive.
-        # PyTorch places the advanced result dims at the FRONT of the output.
+        # The reference framework places the advanced result dims at the FRONT of the output.
         # Strategy:
         #   1. Permute result so tensor dims come first, then basic dims.
         #   2. Apply coordinate_select on the first n_tensors dims.

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 # ── shared helpers ─────────────────────────────────────────────────────────
 
 
-def _ramp(M: int, *, dtype: DTypeLike, device: DeviceLike) -> "Tensor":
+def _ramp(M: int, *, dtype: DTypeLike, device: DeviceLike) -> Tensor:
     """``arange(M)`` cast to a F32 (default) ramp.
 
     Pulled out as a helper because every window starts from this index
@@ -51,7 +51,7 @@ def _length_for_sym(M: int, sym: bool) -> int:
     return M if sym else M + 1
 
 
-def _trim(window: "Tensor", M: int, sym: bool) -> "Tensor":
+def _trim(window: Tensor, M: int, sym: bool) -> Tensor:
     """Drop the last sample when ``sym=False`` so the periodic form has the
     user-requested length ``M``."""
     return window if sym else window[:M]
@@ -66,7 +66,7 @@ def bartlett(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Triangular window: ``w[n] = 1 - |2n/(N-1) - 1|``."""
     N = _length_for_sym(M, sym)
     if N <= 1:
@@ -82,7 +82,7 @@ def cosine(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Cosine (a.k.a. half-sine) window: ``w[n] = sin(pi * (n + 0.5) / N)``."""
     N = _length_for_sym(M, sym)
     if N <= 0:
@@ -98,7 +98,7 @@ def hann(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Hann window — special case of ``general_hamming(alpha=0.5)``."""
     return general_hamming(M, alpha=0.5, sym=sym, dtype=dtype, device=device)
 
@@ -109,7 +109,7 @@ def hamming(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Hamming window — special case of ``general_hamming(alpha=0.54)``."""
     return general_hamming(M, alpha=0.54, sym=sym, dtype=dtype, device=device)
 
@@ -121,7 +121,7 @@ def general_hamming(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """``alpha - (1 - alpha) * cos(2*pi*n / (N-1))`` — Hann is α=0.5,
     Hamming is α=0.54."""
     N = _length_for_sym(M, sym)
@@ -142,7 +142,7 @@ def general_cosine(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Weighted sum of cosines:
     ``sum_k a[k] * (-1)^k * cos(2*pi*k*n/(N-1))``.
 
@@ -168,7 +168,7 @@ def blackman(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """3-term Blackman window: ``a = [0.42, 0.50, 0.08]``."""
     return general_cosine(M, [0.42, 0.50, 0.08], sym=sym, dtype=dtype, device=device)
 
@@ -179,7 +179,7 @@ def nuttall(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """4-term Blackman-Nuttall window."""
     return general_cosine(
         M,
@@ -200,7 +200,7 @@ def gaussian(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Gaussian window: ``exp(-0.5 * ((n - (N-1)/2) / std)^2)``."""
     N = _length_for_sym(M, sym)
     if N <= 0:
@@ -219,7 +219,7 @@ def general_gaussian(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Generalised Gaussian: ``exp(-0.5 * |n - (N-1)/2| ** (2*p) / sig ** (2*p))``.
 
     ``p=1`` reduces to the standard Gaussian; larger ``p`` flattens the top.
@@ -245,7 +245,7 @@ def exponential(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Exponential decay around ``center``: ``exp(-|n - center| / tau)``.
 
     ``center=None`` defaults to ``(N-1)/2`` for a symmetric window.
@@ -275,7 +275,7 @@ def kaiser(
     sym: bool = True,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-) -> "Tensor":
+) -> Tensor:
     """Kaiser-Bessel window: ``I0(beta * sqrt(1 - (2n/(N-1) - 1)^2)) / I0(beta)``.
 
     ``beta`` controls the main-lobe / side-lobe trade-off (larger beta →

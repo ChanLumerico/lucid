@@ -119,7 +119,7 @@ class Dropout3d(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: "Tensor") -> "Tensor":
+    def forward(self, x: Tensor) -> Tensor:
         from lucid.nn.functional.dropout import dropout3d
 
         return dropout3d(x, self.p, self.training)

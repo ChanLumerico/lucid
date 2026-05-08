@@ -167,27 +167,25 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     shape is restored — matching the reference framework.
     """
     import lucid as _lucid
-    import numpy as _np
 
     if tensor.ndim < 2:
         raise ValueError("orthogonal_() requires at least a 2D tensor")
     rows: int = int(tensor.shape[0])
     cols: int = int(tensor.numel() // rows)
-    rng: _np.random.Generator = _np.random.default_rng()
-    flat: _np.ndarray = rng.normal(0.0, 1.0, size=(rows, cols)).astype(_np.float32)
+    # All work on the engine — no numpy.
+    flat: Tensor = _lucid.randn(rows, cols, device=tensor._impl.device)
     # Use QR on the (max-dim × min-dim) shape so we always get an
     # orthonormal Q with the right number of columns.
     if rows < cols:
-        # Q is (cols × rows), transpose for the (rows × cols) layout.
-        q_full, _ = _np.linalg.qr(flat.T)
-        q: _np.ndarray = q_full[:, :rows].T
+        q_full, _r = _lucid.linalg.qr(flat.mT)
+        q: Tensor = q_full.narrow(1, 0, rows).mT
     else:
-        q, _ = _np.linalg.qr(flat)
-        q = q[:, :cols]
+        q_full, _r = _lucid.linalg.qr(flat)
+        q = q_full.narrow(1, 0, cols)
     if gain != 1.0:
         q = q * gain
     src_t: Tensor = _lucid.tensor(
-        q.astype(_np.float32), dtype=tensor._impl.dtype, device=tensor._impl.device
+        q, dtype=tensor._impl.dtype, device=tensor._impl.device
     )
     return _fill_from_impl(tensor, src_t._impl)
 
@@ -205,18 +203,28 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
         raise ValueError(f"sparsity must be in [0, 1], got {sparsity!r}")
 
     import lucid as _lucid
-    import numpy as _np
 
     rows: int = int(tensor.shape[0])
     cols: int = int(tensor.shape[1])
     n_zero: int = int(math.floor(sparsity * rows))
-    rng: _np.random.Generator = _np.random.default_rng()
-    arr: _np.ndarray = rng.normal(0.0, std, size=(rows, cols)).astype(_np.float32)
-    for c in range(cols):
-        idx: _np.ndarray = rng.choice(rows, size=n_zero, replace=False)
-        arr[idx, c] = 0.0
+    dev = tensor._impl.device
+    # Per-column random row selection: ``argsort`` of uniform draws gives a
+    # uniform permutation; take the first ``n_zero`` rows of each column.
+    src: Tensor = _lucid.normal(
+        0.0, std, size=(rows, cols), device=dev
+    )
+    if n_zero > 0:
+        # noise is shape (rows, cols); per-column argsort along dim=0.
+        noise: Tensor = _lucid.rand(rows, cols, device=dev)
+        perm: Tensor = noise.argsort(dim=0)  # (rows, cols) int.
+        zero_rows: Tensor = perm.narrow(0, 0, n_zero)  # (n_zero, cols).
+        # Build a (rows, cols) bool mask: 1 where a row was chosen.
+        mask: Tensor = _lucid.zeros(rows, cols, device=dev)
+        ones: Tensor = _lucid.ones(n_zero, cols, device=dev)
+        mask = mask.scatter_add(0, zero_rows, ones)
+        src = _lucid.where(mask > 0.0, _lucid.zeros_like(src), src)
     src_t: Tensor = _lucid.tensor(
-        arr, dtype=tensor._impl.dtype, device=tensor._impl.device
+        src, dtype=tensor._impl.dtype, device=dev
     )
     return _fill_from_impl(tensor, src_t._impl)
 
@@ -238,19 +246,38 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
         )
 
     import lucid as _lucid
-    import numpy as _np
 
     out_per_group: int = out_ch // groups
     min_dim: int = min(in_ch_per_group, out_per_group)
-    arr: _np.ndarray = _np.zeros([int(s) for s in tensor.shape], dtype=_np.float32)
-    # Centre indices for each spatial dim.
     spatial_centres: tuple[int, ...] = tuple(int(s) // 2 for s in tensor.shape[2:])
-    for g in range(groups):
-        for d in range(min_dim):
-            out_idx: int = g * out_per_group + d
-            arr[(out_idx, d) + spatial_centres] = 1.0
+    dev = tensor._impl.device
+    shape: tuple[int, ...] = tuple(int(s) for s in tensor.shape)
+    src: Tensor = _lucid.zeros(*shape, device=dev)
+    # Each (out_idx, d, *centres) gets a 1.  Build per-axis index tensors of
+    # length ``groups·min_dim`` and use ``index_put_`` for the in-place write.
+    n_writes: int = groups * min_dim
+    if n_writes > 0:
+        out_idx_list: list[int] = []
+        in_idx_list: list[int] = []
+        for g in range(groups):
+            for d in range(min_dim):
+                out_idx_list.append(g * out_per_group + d)
+                in_idx_list.append(d)
+        idx_tensors: list[Tensor] = [
+            _lucid.tensor(out_idx_list, dtype=_lucid.int64, device=dev),
+            _lucid.tensor(in_idx_list, dtype=_lucid.int64, device=dev),
+        ]
+        for c in spatial_centres:
+            idx_tensors.append(
+                _lucid.tensor([c] * n_writes, dtype=_lucid.int64, device=dev)
+            )
+        src = _lucid.index_put(
+            src,
+            tuple(idx_tensors),
+            _lucid.ones(n_writes, device=dev),
+        )
     src_t: Tensor = _lucid.tensor(
-        arr, dtype=tensor._impl.dtype, device=tensor._impl.device
+        src, dtype=tensor._impl.dtype, device=dev
     )
     return _fill_from_impl(tensor, src_t._impl)
 

@@ -1,4 +1,4 @@
-"""Predicates and zero-cost identity ops surfaced for PyTorch parity."""
+"""Predicates and zero-cost identity ops surfaced for reference-framework parity."""
 
 from typing import TYPE_CHECKING
 

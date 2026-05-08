@@ -1,7 +1,7 @@
 """``lucid.distributions`` — probability distributions with the
 reference-framework's interface (sample / rsample / log_prob / entropy / …).
 
-Mirrors ``torch.distributions`` for the most-used univariate and
+Mirrors the reference framework's distributions surface for the most-used univariate and
 discrete families plus ``MultivariateNormal``, ``Beta``, ``Gamma``, and
 ``Dirichlet`` from the gamma family.  See [[api-python-distributions]]
 for the full surface.

@@ -122,7 +122,7 @@ def _resolve_dtype_name(d: "dtype | _C_engine.Dtype | str") -> str:  # type: ign
 
 @_dc.dataclass(frozen=True)
 class finfo:
-    """Floating-point dtype info — mirrors ``numpy.finfo`` / ``torch.finfo``.
+    """Floating-point dtype info — mirrors ``numpy.finfo`` (and the reference framework's ``finfo``).
 
     Constructed from a floating dtype (``float16`` / ``bfloat16`` /
     ``float32`` / ``float64``).
@@ -183,7 +183,7 @@ class finfo:
 
 @_dc.dataclass(frozen=True)
 class iinfo:
-    """Integer dtype info — mirrors ``numpy.iinfo`` / ``torch.iinfo``.
+    """Integer dtype info — mirrors ``numpy.iinfo`` (and the reference framework's ``iinfo``).
 
     Constructed from an integer dtype (``int8`` / ``int16`` / ``int32`` / ``int64``).
     """

@@ -28,61 +28,68 @@ def _check_return_indices(return_indices: bool, op_name: str) -> None:
         )
 
 
-def _adaptive_pool_python_avg(x: "Tensor", output_size: tuple[int, ...]) -> "Tensor":
-    """Python fallback for adaptive average pooling with non-divisible sizes.
+def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor:
+    """Engine fallback for adaptive average pooling with non-divisible sizes.
 
     Computes per-output-slot mean over ``input[..., start:end]`` where
     ``start = floor(i * Hin / Hout)`` and ``end = ceil((i+1) * Hin / Hout)``,
-    matching the reference framework's contract.  Used when the engine
-    declines because input dims aren't divisible by output dims.
+    matching the reference framework's contract.  Iterates per output slot
+    via ``narrow`` + ``mean`` — each step is an engine op so the result
+    stays on the original device with no host round-trip.
     """
     import lucid as _lucid
-    import numpy as _np
 
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
+    ndim: int = x.ndim
 
-    # Pre-compute per-axis (start, end) ranges.
-    ranges: list[list[tuple[int, int]]] = []
-    for ax in range(n_spatial):
+    def _ranges(ax: int) -> list[tuple[int, int]]:
         in_d: int = in_spatial[ax]
         out_d: int = int(output_size[ax])
-        per_axis: list[tuple[int, int]] = []
+        out: list[tuple[int, int]] = []
         for i in range(out_d):
             start: int = (i * in_d) // out_d
-            # Match reference framework exactly: end uses ceil((i+1)·Hin/Hout).
+            # Reference contract: end uses ceil((i+1)·Hin/Hout).
             end: int = -(-(i + 1) * in_d // out_d)
-            per_axis.append((start, end))
-        ranges.append(per_axis)
+            out.append((start, end))
+        return out
 
-    # Build the output via Python loop — operates only on output_size
-    # slots so this stays small for typical adaptive pools.
-    out_arr: _np.ndarray = _np.zeros(
-        tuple(int(s) for s in x.shape[:-n_spatial]) + tuple(output_size),
-        dtype=_np.float32,
-    )
-    x_np: _np.ndarray = x.numpy()
+    # Convert spatial axis index (0..n_spatial-1) to absolute dim in ``x``.
+    def _abs(ax: int) -> int:
+        return ndim - n_spatial + ax
+
     if n_spatial == 1:
-        for i in range(output_size[0]):
-            s, e = ranges[0][i]
-            out_arr[..., i] = x_np[..., s:e].mean(axis=-1)
-    elif n_spatial == 2:
-        for i in range(output_size[0]):
-            si, ei = ranges[0][i]
-            for j in range(output_size[1]):
-                sj, ej = ranges[1][j]
-                out_arr[..., i, j] = x_np[..., si:ei, sj:ej].mean(axis=(-2, -1))
-    else:  # 3D
-        for i in range(output_size[0]):
-            si, ei = ranges[0][i]
-            for j in range(output_size[1]):
-                sj, ej = ranges[1][j]
-                for k in range(output_size[2]):
-                    sk, ek = ranges[2][k]
-                    out_arr[..., i, j, k] = x_np[..., si:ei, sj:ej, sk:ek].mean(
-                        axis=(-3, -2, -1)
-                    )
-    return _lucid.tensor(out_arr, dtype=x.dtype, device=x.device)
+        cols: list[Tensor] = []
+        for s, e in _ranges(0):
+            cols.append(x.narrow(_abs(0), s, e - s).mean(dim=_abs(0)))
+        # Each ``cols[i]`` has shape == ``x.shape[:-1]``; stack along last dim.
+        return _lucid.stack(cols, dim=-1)
+
+    if n_spatial == 2:
+        rows: list[Tensor] = []
+        for si, ei in _ranges(0):
+            slab: Tensor = x.narrow(_abs(0), si, ei - si)
+            cols2: list[Tensor] = []
+            for sj, ej in _ranges(1):
+                pane: Tensor = slab.narrow(_abs(1), sj, ej - sj)
+                cols2.append(pane.mean(dim=(_abs(0), _abs(1))))
+            rows.append(_lucid.stack(cols2, dim=-1))
+        return _lucid.stack(rows, dim=-2)
+
+    # n_spatial == 3.
+    planes: list[Tensor] = []
+    for si, ei in _ranges(0):
+        slab_i: Tensor = x.narrow(_abs(0), si, ei - si)
+        rows3: list[Tensor] = []
+        for sj, ej in _ranges(1):
+            slab_ij: Tensor = slab_i.narrow(_abs(1), sj, ej - sj)
+            cols3: list[Tensor] = []
+            for sk, ek in _ranges(2):
+                cube: Tensor = slab_ij.narrow(_abs(2), sk, ek - sk)
+                cols3.append(cube.mean(dim=(_abs(0), _abs(1), _abs(2))))
+            rows3.append(_lucid.stack(cols3, dim=-1))
+        planes.append(_lucid.stack(rows3, dim=-2))
+    return _lucid.stack(planes, dim=-3)
 
 
 def _adaptive_avg_call(
