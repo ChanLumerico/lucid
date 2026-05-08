@@ -12,10 +12,7 @@ import lucid.optim as optim
 
 @pytest.mark.slow
 class TestCNNTraining:
-    # Conv2d backward + reshape on Metal trips a shape mismatch in the
-    # current MLX adapter; pin to CPU until the engine fix lands.
-    def test_loss_shrinks(self, device_cpu_only: str) -> None:
-        device = device_cpu_only
+    def test_loss_shrinks(self, device: str) -> None:
         rng = np.random.default_rng(0)
         # 16 grayscale 8×8 "images", 3 classes.
         x = rng.uniform(-1.0, 1.0, size=(16, 1, 8, 8)).astype(np.float32)

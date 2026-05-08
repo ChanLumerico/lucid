@@ -12,10 +12,7 @@ import lucid.optim as optim
 
 @pytest.mark.slow
 class TestLSTMTraining:
-    # LSTM backward currently exercises a Metal codepath that diverges
-    # in the engine adapter — pin to CPU.
-    def test_loss_shrinks(self, device_cpu_only: str) -> None:
-        device = device_cpu_only
+    def test_loss_shrinks(self, device: str) -> None:
         rng = np.random.default_rng(0)
         # (T=5, B=8, F=3) → (B, 1) regression target.
         x = rng.uniform(-1.0, 1.0, size=(5, 8, 3)).astype(np.float32)

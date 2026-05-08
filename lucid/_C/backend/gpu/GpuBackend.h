@@ -2059,6 +2059,347 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    // ---------------------------------------------------------------------
+    // LSTM (Metal-native, F32, single-layer, unidirectional).
+    //
+    // Each timestep:
+    //   raw = X_t @ W_ih.T + h_prev @ W_hh.T + (b_ih + b_hh)        (B, 4H)
+    //   i, f = sigmoid(raw[:, :H]), sigmoid(raw[:, H:2H])
+    //   g    = tanh(raw[:, 2H:3H])
+    //   o    = sigmoid(raw[:, 3H:4H])
+    //   c    = f * c_prev + i * g
+    //   h_raw= o * tanh(c)
+    //   h    = (proj > 0) ? h_raw @ W_hr.T : h_raw
+    //
+    // Saved for BPTT: per-step gate post-activations (i, f, g, o concatenated)
+    // in ``gates_all`` of shape (T, B, 4H), and the cell trajectory in
+    // ``cells_all`` of shape (T+1, B, H) where cells_all[0] = c0 and
+    // cells_all[t+1] = c_t.
+    //
+    // Configurations outside (F32, num_layers==1, unidirectional, weights ≥
+    // min_w) fall through to ``IBackend::lstm_*`` which raises
+    // not_implemented — Lucid's Python layer does not currently exercise
+    // those configs on Metal.
+    // ---------------------------------------------------------------------
+
+private:
+    bool lstm_metal_supported(const LstmOpts& opts, const std::vector<Storage>& weights,
+                              Dtype dt) const {
+        const int min_w = (opts.proj_size > 0) ? 5 : 4;
+        return dt == Dtype::F32 && !opts.bidirectional && opts.num_layers == 1 &&
+               static_cast<int>(weights.size()) >= min_w;
+    }
+
+public:
+    std::vector<Storage> lstm_forward_train(const Storage& input,
+                                            const Storage& h0,
+                                            const Storage& c0,
+                                            const std::vector<Storage>& weights,
+                                            const LstmOpts& opts,
+                                            Dtype dt) override {
+        if (!lstm_metal_supported(opts, weights, dt))
+            return IBackend::lstm_forward_train(input, h0, c0, weights, opts, dt);
+
+        namespace mx = ::mlx::core;
+        const int T = opts.seq_len, B = opts.batch_size;
+        const int H = opts.hidden_size;
+        const int P = opts.proj_size;
+        const int fH = 4 * H;
+
+        using SE_ = mx::ShapeElem;
+        // h0 / c0 arrive shaped (num_layers, B, Hrec/H).  We've already
+        // restricted to num_layers == 1; reshape to (B, …) for the
+        // per-step recurrence.
+        const int Hrec = (P > 0) ? P : H;
+        auto X   = *std::get<GpuStorage>(input).arr;       // (T, B, I)
+        auto h   = mx::reshape(*std::get<GpuStorage>(h0).arr,
+                               mx::Shape{static_cast<SE_>(B), static_cast<SE_>(Hrec)});
+        auto c   = mx::reshape(*std::get<GpuStorage>(c0).arr,
+                               mx::Shape{static_cast<SE_>(B), static_cast<SE_>(H)});
+        auto Wih = *std::get<GpuStorage>(weights[0]).arr;   // (4H, I)
+        auto Whh = *std::get<GpuStorage>(weights[1]).arr;   // (4H, Hrec)
+        auto bias = mx::add(*std::get<GpuStorage>(weights[2]).arr,
+                            *std::get<GpuStorage>(weights[3]).arr);  // (4H,)
+
+        // Pre-transpose the recurrent weight matrices so each timestep's
+        // matmul reuses the same array (avoiding a transpose per step).
+        auto Wih_T = mx::transpose(Wih, std::vector<int>{1, 0});  // (I, 4H)
+        auto Whh_T = mx::transpose(Whh, std::vector<int>{1, 0});  // (Hrec, 4H)
+        std::optional<mx::array> Whr_T;
+        if (P > 0) {
+            auto Whr = *std::get<GpuStorage>(weights[4]).arr;  // (P, H)
+            Whr_T = mx::transpose(Whr, std::vector<int>{1, 0});  // (H, P)
+        }
+
+        std::vector<mx::array> outputs;
+        outputs.reserve(static_cast<std::size_t>(T));
+        std::vector<mx::array> gates_steps;
+        gates_steps.reserve(static_cast<std::size_t>(T));
+        std::vector<mx::array> cells_steps;
+        cells_steps.reserve(static_cast<std::size_t>(T + 1));
+        cells_steps.push_back(c);
+
+        using SE = mx::ShapeElem;
+        for (int t = 0; t < T; ++t) {
+            auto X_t = mx::slice(X,
+                mx::Shape{static_cast<SE>(t), 0, 0},
+                mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                          static_cast<SE>(opts.input_size)});
+            X_t = mx::reshape(X_t, mx::Shape{static_cast<SE>(B),
+                                             static_cast<SE>(opts.input_size)});
+
+            // raw = X_t @ W_ih.T + h @ W_hh.T + bias  (B, 4H)
+            auto raw = mx::add(
+                mx::add(mx::matmul(X_t, Wih_T), mx::matmul(h, Whh_T)),
+                bias);
+
+            // Slice gates: order matches the reference framework convention
+            // (i, f, g, o).
+            auto i_g = mx::sigmoid(mx::slice(
+                raw, mx::Shape{0, 0}, mx::Shape{static_cast<SE>(B), static_cast<SE>(H)}));
+            auto f_g = mx::sigmoid(mx::slice(
+                raw, mx::Shape{0, static_cast<SE>(H)},
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(2 * H)}));
+            auto g_g = mx::tanh(mx::slice(
+                raw, mx::Shape{0, static_cast<SE>(2 * H)},
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(3 * H)}));
+            auto o_g = mx::sigmoid(mx::slice(
+                raw, mx::Shape{0, static_cast<SE>(3 * H)},
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)}));
+
+            auto gates_t = mx::concatenate(std::vector<mx::array>{i_g, f_g, g_g, o_g}, /*axis=*/1);
+            gates_steps.push_back(gates_t);
+
+            c = mx::add(mx::multiply(f_g, c), mx::multiply(i_g, g_g));
+            cells_steps.push_back(c);
+
+            auto h_raw = mx::multiply(o_g, mx::tanh(c));
+            if (P > 0) {
+                h = mx::matmul(h_raw, *Whr_T);   // (B, P)
+            } else {
+                h = h_raw;
+            }
+            outputs.push_back(h);
+        }
+
+        auto Y = mx::stack(outputs, /*axis=*/0);
+        auto gates_all = mx::stack(gates_steps, /*axis=*/0);
+        auto cells_all = mx::stack(cells_steps, /*axis=*/0);
+        auto hn = h;
+        auto cn = c;
+
+        return {
+            Storage{gpu::wrap_mlx_array(mx::contiguous(Y), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(hn), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(cn), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(gates_all), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(cells_all), dt)},
+        };
+    }
+
+    std::vector<Storage> lstm_forward(const Storage& input,
+                                      const Storage& h0,
+                                      const Storage& c0,
+                                      const std::vector<Storage>& weights,
+                                      const LstmOpts& opts,
+                                      const Shape& out_shape,
+                                      Dtype dt) override {
+        if (!lstm_metal_supported(opts, weights, dt))
+            return IBackend::lstm_forward(input, h0, c0, weights, opts, out_shape, dt);
+        // Inference path delegates to the train path and discards the saved
+        // gate / cell trajectories.  The MLX graph is lazy so the unused
+        // ``gates_all`` / ``cells_all`` are pruned before evaluation.
+        auto v = lstm_forward_train(input, h0, c0, weights, opts, dt);
+        return {std::move(v[0]), std::move(v[1]), std::move(v[2])};
+    }
+
+    std::vector<Storage> lstm_backward(const Storage& grad_output,
+                                       const Storage& grad_hn,
+                                       const Storage& grad_cn,
+                                       const Storage& input,
+                                       const Storage& h0,
+                                       const std::vector<Storage>& weights,
+                                       const Storage& gates_all,
+                                       const Storage& cells_all,
+                                       const LstmOpts& opts,
+                                       Dtype dt) override {
+        if (!lstm_metal_supported(opts, weights, dt))
+            return IBackend::lstm_backward(grad_output, grad_hn, grad_cn, input, h0, weights,
+                                           gates_all, cells_all, opts, dt);
+
+        namespace mx = ::mlx::core;
+        const int T = opts.seq_len, B = opts.batch_size;
+        const int I = opts.input_size, H = opts.hidden_size;
+        const int P = opts.proj_size;
+        const int Hrec = (P > 0) ? P : H;
+        const int fH = 4 * H;
+        using SE = mx::ShapeElem;
+
+        auto dY  = *std::get<GpuStorage>(grad_output).arr;  // (T, B, Hrec)
+        // grad_hn / grad_cn / h0 arrive 3-D as (num_layers=1, B, …).
+        auto dHn = mx::reshape(*std::get<GpuStorage>(grad_hn).arr,
+                               mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
+        auto dCn = mx::reshape(*std::get<GpuStorage>(grad_cn).arr,
+                               mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+        auto X   = *std::get<GpuStorage>(input).arr;        // (T, B, I)
+        auto H0arr = mx::reshape(*std::get<GpuStorage>(h0).arr,
+                                 mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
+        auto Wih = *std::get<GpuStorage>(weights[0]).arr;   // (4H, I)
+        auto Whh = *std::get<GpuStorage>(weights[1]).arr;   // (4H, Hrec)
+        auto Gates = *std::get<GpuStorage>(gates_all).arr;  // (T, B, 4H)
+        auto Cells = *std::get<GpuStorage>(cells_all).arr;  // (T+1, B, H)
+        std::optional<mx::array> Whr_arr;
+        if (P > 0)
+            Whr_arr = *std::get<GpuStorage>(weights[4]).arr;  // (P, H)
+
+        // Accumulators init to zero.
+        auto dWih = mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(I)},
+                              gpu::to_mlx_dtype(dt));
+        auto dWhh = mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(Hrec)},
+                              gpu::to_mlx_dtype(dt));
+        auto dBih = mx::zeros(mx::Shape{static_cast<SE>(fH)}, gpu::to_mlx_dtype(dt));
+        auto dBhh = dBih;
+        std::optional<mx::array> dWhr;
+        if (P > 0)
+            dWhr = mx::zeros(mx::Shape{static_cast<SE>(P), static_cast<SE>(H)},
+                             gpu::to_mlx_dtype(dt));
+
+        auto dh_next = dHn;  // (B, Hrec)
+        auto dc_next = dCn;  // (B, H)
+
+        std::vector<mx::array> dX_steps;
+        dX_steps.resize(static_cast<std::size_t>(T), mx::zeros({1}, gpu::to_mlx_dtype(dt)));
+
+        auto one_f = mx::array(1.0f, gpu::to_mlx_dtype(dt));
+
+        for (int t = T - 1; t >= 0; --t) {
+            // Slice this step's saved tensors.
+            auto X_t = mx::reshape(
+                mx::slice(X, mx::Shape{static_cast<SE>(t), 0, 0},
+                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                    static_cast<SE>(I)}),
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(I)});
+            auto gates_t = mx::reshape(
+                mx::slice(Gates, mx::Shape{static_cast<SE>(t), 0, 0},
+                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                    static_cast<SE>(fH)}),
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+            auto c_t = mx::reshape(
+                mx::slice(Cells, mx::Shape{static_cast<SE>(t + 1), 0, 0},
+                          mx::Shape{static_cast<SE>(t + 2), static_cast<SE>(B),
+                                    static_cast<SE>(H)}),
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+            auto c_prev = mx::reshape(
+                mx::slice(Cells, mx::Shape{static_cast<SE>(t), 0, 0},
+                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                    static_cast<SE>(H)}),
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+
+            auto i_g = mx::slice(gates_t, mx::Shape{0, 0},
+                                 mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+            auto f_g = mx::slice(gates_t, mx::Shape{0, static_cast<SE>(H)},
+                                 mx::Shape{static_cast<SE>(B), static_cast<SE>(2 * H)});
+            auto g_g = mx::slice(gates_t, mx::Shape{0, static_cast<SE>(2 * H)},
+                                 mx::Shape{static_cast<SE>(B), static_cast<SE>(3 * H)});
+            auto o_g = mx::slice(gates_t, mx::Shape{0, static_cast<SE>(3 * H)},
+                                 mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+
+            // h_prev (recurrent dim) for step t.  At t=0 it's H0; otherwise
+            // recompute from cells[t] and gates[t-1]'s o slot, then project
+            // if P > 0.
+            mx::array h_prev = H0arr;
+            if (t > 0) {
+                auto gates_prev = mx::reshape(
+                    mx::slice(Gates, mx::Shape{static_cast<SE>(t - 1), 0, 0},
+                              mx::Shape{static_cast<SE>(t), static_cast<SE>(B),
+                                        static_cast<SE>(fH)}),
+                    mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+                auto o_prev = mx::slice(gates_prev,
+                    mx::Shape{0, static_cast<SE>(3 * H)},
+                    mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+                auto h_raw_prev = mx::multiply(o_prev, mx::tanh(c_prev));
+                if (P > 0) {
+                    auto Whr_T = mx::transpose(*Whr_arr, std::vector<int>{1, 0});  // (H, P)
+                    h_prev = mx::matmul(h_raw_prev, Whr_T);
+                } else {
+                    h_prev = h_raw_prev;
+                }
+            }
+
+            // Combine upstream dh_next with this step's slice of dY.
+            auto dy_t = mx::reshape(
+                mx::slice(dY, mx::Shape{static_cast<SE>(t), 0, 0},
+                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                    static_cast<SE>(Hrec)}),
+                mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
+            auto dh_step = mx::add(dy_t, dh_next);
+
+            mx::array dh_raw = dh_step;
+            if (P > 0) {
+                // Reconstruct h_raw_t for the dW_hr accumulation.
+                auto h_raw_t = mx::multiply(o_g, mx::tanh(c_t));
+                // dW_hr += dh_step.T @ h_raw_t   (P × H)
+                dWhr = mx::add(*dWhr,
+                               mx::matmul(mx::transpose(dh_step, std::vector<int>{1, 0}),
+                                          h_raw_t));
+                // dh_raw = dh_step @ W_hr  (B × H)
+                dh_raw = mx::matmul(dh_step, *Whr_arr);
+            }
+
+            // Gate gradients.
+            auto tanh_c = mx::tanh(c_t);
+            auto dc_k = mx::add(
+                mx::multiply(mx::multiply(dh_raw, o_g),
+                             mx::subtract(one_f, mx::multiply(tanh_c, tanh_c))),
+                dc_next);
+
+            auto d_o = mx::multiply(mx::multiply(dh_raw, tanh_c),
+                                    mx::multiply(o_g, mx::subtract(one_f, o_g)));
+            auto d_f = mx::multiply(mx::multiply(dc_k, c_prev),
+                                    mx::multiply(f_g, mx::subtract(one_f, f_g)));
+            auto d_i = mx::multiply(mx::multiply(dc_k, g_g),
+                                    mx::multiply(i_g, mx::subtract(one_f, i_g)));
+            auto d_g = mx::multiply(mx::multiply(dc_k, i_g),
+                                    mx::subtract(one_f, mx::multiply(g_g, g_g)));
+
+            auto d_gates = mx::concatenate(std::vector<mx::array>{d_i, d_f, d_g, d_o},
+                                           /*axis=*/1);  // (B, 4H)
+
+            // dX_t = d_gates @ W_ih      (B × I)
+            dX_steps[static_cast<std::size_t>(t)] = mx::matmul(d_gates, Wih);
+            // dh_next = d_gates @ W_hh   (B × Hrec)
+            dh_next = mx::matmul(d_gates, Whh);
+            // dW_ih += d_gates.T @ X_t
+            dWih = mx::add(dWih, mx::matmul(mx::transpose(d_gates, std::vector<int>{1, 0}), X_t));
+            // dW_hh += d_gates.T @ h_prev
+            dWhh = mx::add(dWhh,
+                           mx::matmul(mx::transpose(d_gates, std::vector<int>{1, 0}), h_prev));
+            // bias grads accumulate elementwise from each step's d_gates column-sum.
+            auto db_step = mx::sum(d_gates, /*axis=*/std::vector<int>{0});
+            dBih = mx::add(dBih, db_step);
+            dBhh = mx::add(dBhh, db_step);
+
+            dc_next = mx::multiply(dc_k, f_g);
+        }
+
+        auto dX = mx::stack(dX_steps, /*axis=*/0);  // (T, B, I)
+        auto dH0 = dh_next;
+        auto dC0 = dc_next;
+
+        std::vector<Storage> result{
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dX), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dH0), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dC0), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dWih), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dWhh), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dBih), dt)},
+            Storage{gpu::wrap_mlx_array(mx::contiguous(dBhh), dt)},
+        };
+        if (P > 0)
+            result.emplace_back(Storage{gpu::wrap_mlx_array(mx::contiguous(*dWhr), dt)});
+        return result;
+    }
+
     // embedding_bag: use MLX gather + reduce
     Storage embedding_bag_forward(const Storage& weight,
                                    const Storage& indices,
@@ -3219,8 +3560,14 @@ public:
         std::int64_t Sp_total = 1;
         for (int i = 0; i < N; ++i)
             Sp_total *= Sp[i];
-        auto idx_2d = ::mlx::core::reshape(flat_idx, {BC, static_cast<SE>(x_shape[2])});
-        auto g_2d = ::mlx::core::reshape(*gG.arr, {BC, static_cast<SE>(out_shape[2])});
+        // The reshape pair previously here (idx_2d / g_2d using x_shape[2]
+        // / out_shape[2]) was leftover dead code from a 1-D-only iteration
+        // of this impl.  For 2-D and 3-D pools O_total != out_shape[2] and
+        // the reshape would attempt a size mismatch, raising "[reshape]
+        // Cannot reshape array of size N into shape …".  MLX evaluates
+        // even unused graph nodes when the parent computation runs, so
+        // marking the result with ``(void)`` did not avoid the failure.
+        // The actual scatter uses idx_2d_flat / g_2d_flat below.
         auto zero_pad = ::mlx::core::zeros({BC, static_cast<SE>(Sp_total)}, gpu::to_mlx_dtype(dt));
 
         std::int64_t O_total = 1;
@@ -3244,8 +3591,6 @@ public:
         }
         auto dx = ::mlx::core::slice(dx_pad, crop_lo, crop_hi);
         return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
-        (void)idx_2d;
-        (void)g_2d;
     }
 
     Storage avg_pool_nd_forward(const Storage& x,
