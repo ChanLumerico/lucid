@@ -41,11 +41,18 @@ class IncompatibleKeys(
 
 
 def _build_metadata(module: Module, prefix: str = "") -> dict[str, dict[str, object]]:
-    """Walk the module tree and collect per-module ``_version`` tags."""
+    """Walk the module tree and collect per-module ``_version`` tags.
+
+    Every module now carries at least ``{"version": 1}`` (base class default),
+    matching the reference framework.  Subclasses may set ``_version = N``
+    (N ≥ 2) to signal that their ``_load_from_state_dict`` performs key
+    migration for older checkpoints.
+    """
     metadata: dict[str, dict[str, object]] = {}
     version: int | None = getattr(type(module), "_version", None)
     key: str = prefix.rstrip(".") if prefix else ""
-    if version is not None:
+    # Always record when version is a non-None int (includes the base default 1).
+    if isinstance(version, int):
         metadata[key] = {"version": version}
     for name, child in module._modules.items():
         if child is None:
@@ -89,12 +96,23 @@ def _default_load_from_state_dict(
     missing_keys: list[str],
     unexpected_keys: list[str],
     error_msgs: list[str],
+    assign: bool = False,
 ) -> None:
     """Default ``_load_from_state_dict`` impl — params + persistent buffers.
 
     Subclasses should call this from their override (after any pre-processing)
     to share the standard copy / dtype-convert / shape-check logic.
+
+    Parameters
+    ----------
+    assign : bool
+        When ``True`` the loaded tensor is directly assigned as the new
+        parameter / buffer object (no shape check, no dtype coercion).
+        When ``False`` (default) data is copied into the existing tensor
+        preserving its dtype and device.
     """
+    from lucid.nn.parameter import Parameter
+
     persistent_buffers: dict[str, Tensor] = {
         name: b
         for name, b in module._buffers.items()
@@ -117,21 +135,34 @@ def _default_load_from_state_dict(
                 f"got {type(src).__name__}"
             )
             continue
-        if tuple(src.shape) != tuple(attr.shape):
-            error_msgs.append(
-                f"size mismatch for {key}: "
-                f"expected {tuple(attr.shape)}, got {tuple(src.shape)}"
-            )
-            continue
-        # Copy with original dtype/device preserved.
-        converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
-        new_impl: object = _C_engine.contiguous(converted._impl).clone_with_grad(
-            getattr(attr, "requires_grad", False)
-        )
-        if name in module._parameters:
-            module._parameters[name]._impl = new_impl  # type: ignore[union-attr]
+
+        if assign:
+            # assign=True: replace the parameter/buffer object directly,
+            # allowing shape and dtype changes (matches reference framework).
+            needs_grad: bool = getattr(attr, "requires_grad", False)
+            new_impl: object = _C_engine.contiguous(src._impl).clone_with_grad(needs_grad)
+            if name in module._parameters:
+                # Preserve Parameter wrapping.
+                new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)
+                module._parameters[name] = new_param
+            else:
+                module._buffers[name] = _wrap(new_impl)
         else:
-            module._buffers[name] = _wrap(new_impl)
+            if tuple(src.shape) != tuple(attr.shape):
+                error_msgs.append(
+                    f"size mismatch for {key}: "
+                    f"expected {tuple(attr.shape)}, got {tuple(src.shape)}"
+                )
+                continue
+            # Copy with original dtype/device preserved.
+            converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
+            new_impl = _C_engine.contiguous(converted._impl).clone_with_grad(
+                getattr(attr, "requires_grad", False)
+            )
+            if name in module._parameters:
+                module._parameters[name]._impl = new_impl  # type: ignore[union-attr]
+            else:
+                module._buffers[name] = _wrap(new_impl)
 
     # extra_state (rare hook for opaque per-module state).
     extra_key: str = f"{prefix}_extra_state"
@@ -175,6 +206,7 @@ def _walk_load(
     unexpected_keys: list[str],
     error_msgs: list[str],
     post_hook_modules: list[Module],
+    assign: bool = False,
 ) -> None:
     """Pre-order walk: handle this module, then recurse into children.
 
@@ -211,15 +243,32 @@ def _walk_load(
             error_msgs,
         )
 
-    module._load_from_state_dict(
-        state_dict,
-        prefix,
-        local_meta,
-        strict,
-        missing_keys,
-        unexpected_keys,
-        error_msgs,
-    )
+    if assign:
+        # assign=True: use the internal default loader directly with assign
+        # semantics (replaces parameter objects rather than copying data).
+        # Custom _load_from_state_dict overrides are bypassed intentionally —
+        # the assign path is inherently low-level.
+        _default_load_from_state_dict(
+            module,
+            state_dict,
+            prefix,
+            local_meta,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+            assign=True,
+        )
+    else:
+        module._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_meta,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     if module._load_state_dict_post_hooks:
         post_hook_modules.append(module)
@@ -240,6 +289,7 @@ def _walk_load(
             unexpected_keys,
             error_msgs,
             post_hook_modules,
+            assign,
         )
 
 
@@ -247,6 +297,7 @@ def load_state_dict(
     module: Module,
     state_dict: StateDict,
     strict: bool = True,
+    assign: bool = False,
 ) -> IncompatibleKeys:
     """Driver for ``Module.load_state_dict``.
 
@@ -280,6 +331,7 @@ def load_state_dict(
         unexpected_keys,
         error_msgs,
         post_hook_modules,
+        assign,
     )
 
     # Compute final unexpected_keys based on the post-hook state_dict

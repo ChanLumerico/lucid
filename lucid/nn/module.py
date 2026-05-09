@@ -772,10 +772,11 @@ class Module:
 
     # ── state_dict ────────────────────────────────────────────────────────
 
-    # Optional per-class version tag.  Subclasses may set `_version = N` to
-    # opt into versioned migrations; the default of None omits the entry
-    # from `_metadata`.
-    _version: ClassVar[int | None] = None
+    # Per-class version tag.  The base class starts at 1 (matching the
+    # reference framework), so every module appears in ``_metadata`` with at
+    # least ``{"version": 1}``.  Subclasses override to a higher integer when
+    # they need backward-compatible key migration in _load_from_state_dict.
+    _version: ClassVar[int] = 1
 
     def state_dict(
         self,
@@ -851,18 +852,34 @@ class Module:
         )
 
     def load_state_dict(
-        self, state_dict: dict[str, Tensor], strict: bool = True
+        self,
+        state_dict: dict[str, Tensor],
+        strict: bool = True,
+        assign: bool = False,
     ) -> object:
         """Load parameters from a state_dict.
 
-        Calls each module's `_load_from_state_dict` recursively.
+        Calls each module's ``_load_from_state_dict`` recursively.
         Returns ``IncompatibleKeys(missing_keys, unexpected_keys)`` on success.
         Raises ``RuntimeError`` if ``strict=True`` and any keys are missing
         or unexpected, or if any error_msgs accumulated during loading.
+
+        Parameters
+        ----------
+        state_dict : dict
+            A mapping from parameter/buffer names to tensors.
+        strict : bool
+            If ``True`` (default) require an exact key match; raise on any
+            missing or unexpected keys.
+        assign : bool
+            If ``True`` replace each parameter/buffer object with the
+            loaded tensor directly (allows shape/dtype changes).  If
+            ``False`` (default) copy data into the existing parameter
+            preserving its dtype and device.
         """
         from lucid.nn._state_dict import load_state_dict as _driver
 
-        return _driver(self, state_dict, strict=strict)
+        return _driver(self, state_dict, strict=strict, assign=assign)
 
     def register_load_state_dict_pre_hook(
         self,

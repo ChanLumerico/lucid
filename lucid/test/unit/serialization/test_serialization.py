@@ -68,3 +68,79 @@ class TestSaveLoadDict:
             loaded = lucid.load(str(path), weights_only=False)
             np.testing.assert_array_equal(loaded["a"].numpy(), [1.0])
             np.testing.assert_array_equal(loaded["b"].numpy(), [2.0, 3.0])
+
+
+class TestStateDictV2:
+    """state-dict-v2: _metadata version propagation + assign= parameter."""
+
+    def test_metadata_version_in_simple_module(self) -> None:
+        import lucid.nn as nn
+        m = nn.Linear(3, 2)
+        sd = m.state_dict()
+        assert hasattr(sd, '_metadata')
+        assert sd._metadata.get('')['version'] == 1  # type: ignore[index]
+
+    def test_metadata_propagates_to_children(self) -> None:
+        import lucid.nn as nn
+        seq = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 3))
+        sd = seq.state_dict()
+        meta = sd._metadata
+        for key in ('', '0', '1', '2'):
+            assert key in meta, f"'{key}' missing from _metadata"
+            assert meta[key]['version'] == 1
+
+    def test_batchnorm_metadata_version_2(self) -> None:
+        import lucid.nn as nn
+        bn = nn.BatchNorm2d(4)
+        sd = bn.state_dict()
+        assert sd._metadata['']['version'] == 2
+
+    def test_load_state_dict_returns_incompatible_keys(self) -> None:
+        import lucid.nn as nn
+        import lucid
+        m = nn.Linear(3, 2)
+        sd = m.state_dict()
+        result = m.load_state_dict(sd)
+        assert result.missing_keys == []
+        assert result.unexpected_keys == []
+
+    def test_assign_false_shape_mismatch_raises(self) -> None:
+        import lucid.nn as nn
+        import lucid
+        m = nn.Linear(3, 2)
+        bad_sd = {'weight': lucid.randn(4, 3), 'bias': lucid.zeros(4)}
+        with pytest.raises(RuntimeError, match="size mismatch"):
+            m.load_state_dict(bad_sd, strict=True, assign=False)
+
+    def test_assign_true_allows_shape_change(self) -> None:
+        import lucid.nn as nn
+        import lucid
+        m = nn.Linear(3, 2)
+        new_w = lucid.randn(4, 3)
+        new_b = lucid.zeros(4)
+        m.load_state_dict({'weight': new_w, 'bias': new_b}, strict=True, assign=True)
+        assert m.weight.shape == (4, 3)
+        assert m.bias.shape == (4,)
+
+    def test_assign_true_copies_values(self) -> None:
+        import lucid.nn as nn
+        import lucid
+        import numpy as np
+        src = nn.Linear(3, 2)
+        dst = nn.Linear(3, 2)
+        dst.load_state_dict(src.state_dict(), assign=True)
+        np.testing.assert_allclose(dst.weight.numpy(), src.weight.numpy(), atol=1e-6)
+
+    def test_metadata_round_trip_via_save_load(self) -> None:
+        """_metadata survives lucid.save / lucid.load."""
+        import lucid.nn as nn
+        import lucid
+        import io
+        m = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 3))
+        sd = m.state_dict()
+        buf = io.BytesIO()
+        lucid.save(sd, buf)
+        buf.seek(0)
+        loaded = lucid.load(buf, weights_only=False)
+        assert hasattr(loaded, '_metadata')
+        assert loaded._metadata.get('')['version'] == 1  # type: ignore[index]
