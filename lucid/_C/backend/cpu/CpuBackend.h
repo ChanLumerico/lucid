@@ -121,7 +121,17 @@ public:
                        std::size_t storage_offset,
                        bool already_contiguous,
                        Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(src);
+        // SharedStorage (MetalKernelRunner output) is CPU-readable via cpu_view().
+        // Create a temporary CpuStorage view and proceed normally.
+        CpuStorage tmp_view;
+        const CpuStorage* cs_ptr = nullptr;
+        if (storage_is_metal_shared(src)) {
+            tmp_view = std::get<SharedStorage>(src).cpu_view();
+            cs_ptr = &tmp_view;
+        } else {
+            cs_ptr = &std::get<CpuStorage>(src);
+        }
+        const auto& cs = *cs_ptr;
         const std::size_t elem = dtype_size(dt);
         const std::size_t n = shape_numel(shape);
         const std::size_t nbytes = n * elem;

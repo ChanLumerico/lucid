@@ -191,8 +191,13 @@ PYBIND11_MODULE(engine, m) {
             lucid::Storage out = be.run_custom_metal_kernel(
                 kernel_source, function_name, in_storages, out_shape, dt, grid, threads);
 
+            // MetalKernelRunner returns SharedStorage, which lives in MTLResourceStorageModeShared
+            // memory — directly accessible from both the GPU and CPU without a copy.  We label
+            // the TensorImpl as Device::CPU so that the CPU backend handles subsequent ops
+            // (contiguous, numpy, etc.) via SharedStorage::cpu_view().  Users who need the
+            // result as a true GPU (MLX) tensor should call .to(device='metal') afterward.
             return std::make_shared<lucid::TensorImpl>(std::move(out), out_shape, dt,
-                                                       lucid::Device::GPU, false);
+                                                       lucid::Device::CPU, false);
         },
         py::arg("kernel_source"), py::arg("function_name"), py::arg("inputs"),
         py::arg("output_shape"), py::arg("dtype") = "f32", py::arg("grid"), py::arg("threads"),

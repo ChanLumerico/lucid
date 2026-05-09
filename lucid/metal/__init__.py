@@ -1,12 +1,21 @@
 """
 lucid.metal: Apple Metal GPU utilities.
+
+Includes :func:`run_kernel` — the Metal Shader Escape Hatch (Phase 18) that
+lets users execute arbitrary Metal Shading Language (MSL) compute shaders on
+the GPU from Python with Lucid tensors as inputs/outputs.
 """
 
 import time
+from typing import TYPE_CHECKING
 
 import mlx.core as _mx
 
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+
+if TYPE_CHECKING:
+    import lucid
 
 
 def is_available() -> bool:
@@ -127,6 +136,113 @@ class MetalEvent:
         return (end_event._t - self._t) * 1e3
 
 
+# ── MetalKernelRunner (Phase 18) ─────────────────────────────────────────────
+
+_DTYPE_TO_STR: dict[object, str] = {}
+
+
+def _init_dtype_map() -> None:
+    """Lazily populate the dtype→string map to avoid circular imports."""
+    if _DTYPE_TO_STR:
+        return
+    from lucid._dtype import float16, float32, float64, int32, int64, bool_
+
+    _DTYPE_TO_STR.update(
+        {
+            float16: "f16",
+            float32: "f32",
+            float64: "f64",
+            int32:   "i32",
+            int64:   "i64",
+            bool_:   "i32",  # bools are 32-bit ints in MSL
+        }
+    )
+
+
+def run_kernel(
+    source: str,
+    function_name: str,
+    inputs: "list[lucid.Tensor]",
+    output_shape: tuple[int, ...] | list[int],
+    dtype: object = None,
+    grid: tuple[int, int, int] = (1, 1, 1),
+    threads: tuple[int, int, int] = (1, 1, 1),
+) -> "lucid.Tensor":
+    """Run a custom Metal Shading Language (MSL) compute kernel.
+
+    This is the **Metal Shader Escape Hatch** — it lets you write arbitrary
+    GPU-accelerated code in MSL and call it from Python with Lucid tensors.
+
+    Parameters
+    ----------
+    source : str
+        Complete MSL source code (including ``#include <metal_stdlib>``).
+        The kernel function should accept input buffers at indices 0..n-1
+        and write its output to the buffer at index n.
+    function_name : str
+        Name of the ``kernel`` function inside *source* to dispatch.
+    inputs : list[Tensor]
+        Input tensors bound as read-only buffers in declaration order.
+        Tensors on CPU are automatically copied to shared Metal memory;
+        tensors already on Metal are bridged zero-copy when possible.
+    output_shape : tuple[int, ...]
+        Shape of the output tensor.
+    dtype : lucid.dtype, optional
+        Element dtype of the output.  Defaults to ``lucid.float32``.
+    grid : tuple[int, int, int]
+        Threadgroup grid dimensions ``(gx, gy, gz)``.
+    threads : tuple[int, int, int]
+        Threads-per-threadgroup ``(tx, ty, tz)``.
+
+    Returns
+    -------
+    Tensor
+        Output tensor on CPU (backed by shared Metal memory — zero-copy
+        readable).  Call ``.to(device='metal')`` if you need an MLX tensor.
+
+    Examples
+    --------
+    >>> MSL = '''
+    ... #include <metal_stdlib>
+    ... using namespace metal;
+    ... kernel void relu(
+    ...     device const float* x [[buffer(0)]],
+    ...     device float* y       [[buffer(1)]],
+    ...     uint gid [[thread_position_in_grid]])
+    ... {
+    ...     y[gid] = max(0.0f, x[gid]);
+    ... }
+    ... '''
+    >>> x = lucid.tensor([-1.0, 2.0, -0.5, 3.0])
+    >>> y = lucid.metal.run_kernel(MSL, 'relu', [x], (4,))
+    >>> y   # tensor([0., 2., 0., 3.])
+    """
+    import lucid as _lucid
+
+    _init_dtype_map()
+
+    if dtype is None:
+        dtype = _lucid.float32
+
+    dtype_str: str = _DTYPE_TO_STR.get(dtype, "f32")
+
+    impl_inputs = [_unwrap(t) for t in inputs]
+    out_shape_list = list(output_shape)
+    grid_arr = (int(grid[0]), int(grid[1]), int(grid[2]))
+    threads_arr = (int(threads[0]), int(threads[1]), int(threads[2]))
+
+    out_impl = _C_engine._run_metal_kernel(
+        source,
+        function_name,
+        impl_inputs,
+        out_shape_list,
+        dtype_str,
+        grid_arr,
+        threads_arr,
+    )
+    return _wrap(out_impl)
+
+
 __all__ = [
     "is_available",
     "synchronize",
@@ -139,4 +255,5 @@ __all__ = [
     "get_device_name",
     "MetalStream",
     "MetalEvent",
+    "run_kernel",
 ]
