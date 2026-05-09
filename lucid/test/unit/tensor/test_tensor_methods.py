@@ -158,3 +158,86 @@ class TestDunders:
         t = lucid.tensor([1.0, 2.0, 3.0], device=device)
         rows = list(t)
         assert len(rows) == 3
+
+
+class TestTrackBParity:
+    """Track B: newly added Tensor parity APIs."""
+
+    def test_itemsize(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        assert t.itemsize == 4  # float32
+
+    def test_stride_2d(self, device: str) -> None:
+        t = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device=device)
+        assert t.stride() == (3, 1)
+        assert t.stride(0) == 3
+        assert t.stride(1) == 1
+
+    def test_stride_1d(self, device: str) -> None:
+        t = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        assert t.stride() == (1,)
+
+    def test_data_ptr_is_int(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        assert isinstance(t.data_ptr(), int)
+
+    def test_storage_offset_zero(self, device: str) -> None:
+        t = lucid.tensor([[1.0, 2.0]], device=device)
+        assert t.storage_offset() == 0
+
+    def test_H_real(self, device: str) -> None:
+        t = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
+        assert t.H.shape == (2, 2)
+        np.testing.assert_allclose(t.H.numpy(), t.mT.numpy())
+
+    def test_type_returns_string(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        s = t.type()
+        assert isinstance(s, str)
+        assert "Float" in s
+
+    def test_type_cast(self, device: str) -> None:
+        t = lucid.tensor([1.0, 2.0], device=device)
+        # Use IntTensor — float64 is not supported on Metal (MLX limitation).
+        d = t.type("lucid.IntTensor")
+        assert d.dtype == lucid.int32
+
+    def test_get_device_cpu(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        gd = t.get_device()
+        assert gd in (-1, 0)  # -1 CPU, 0 Metal
+
+    def test_pin_memory_noop(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        assert t.pin_memory() is t
+
+    def test_is_pinned_false(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        assert t.is_pinned() is False
+
+    def test_is_cuda_false(self, device: str) -> None:
+        t = lucid.tensor([1.0], device=device)
+        assert t.is_cuda is False
+
+    def test_reshape_as(self, device: str) -> None:
+        a = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device=device)
+        b = lucid.zeros(4, device=device)
+        r = a.reshape_as(b)
+        assert r.shape == (4,)
+
+    def test_untyped_storage_size(self, device: str) -> None:
+        t = lucid.tensor([1.0, 2.0, 3.0], device=device)
+        st = t.untyped_storage()
+        assert st.size() == 12  # 3 × 4 bytes
+        assert st.nbytes() == 12
+        assert isinstance(st.data_ptr(), int)
+
+    def test_expand_minus_one(self, device: str) -> None:
+        t = lucid.tensor([[1.0], [2.0]], device=device)  # (2,1)
+        r = t.expand(-1, 4)
+        assert r.shape == (2, 4)
+
+    def test_expand_all_minus_one(self, device: str) -> None:
+        t = lucid.tensor([[1.0, 2.0]], device=device)  # (1,2)
+        r = t.expand(-1, -1)
+        assert r.shape == (1, 2)

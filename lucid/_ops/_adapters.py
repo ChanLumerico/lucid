@@ -279,12 +279,27 @@ def _permute_adapter(x_impl: _Impl, *dims: int | Sequence[int]) -> _Impl:
 
 
 def _expand_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
-    """expand(x, *sizes) — accept variadic ints or single list/tuple."""
+    """expand(x, *sizes) — accept variadic ints or single list/tuple.
+
+    ``-1`` in any position means *keep the existing size along that dim*,
+    matching the reference framework semantics.
+    """
     if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
-        s = [int(d) for d in sizes[0]]
+        raw = [int(d) for d in sizes[0]]
     else:
-        s = [int(d) for d in sizes]  # type: ignore[arg-type]
-    return _C_engine.expand(x_impl, s)
+        raw = [int(d) for d in sizes]  # type: ignore[arg-type]
+    # Resolve -1 entries: replace with the corresponding source dimension.
+    src_shape = list(x_impl.shape)
+    ndim_src = len(src_shape)
+    ndim_dst = len(raw)
+    # If expanding to more dims, prepend 1s to src_shape (implicit broadcast).
+    if ndim_dst > ndim_src:
+        src_shape = [1] * (ndim_dst - ndim_src) + src_shape
+    resolved = [
+        src_shape[i] if d == -1 else d
+        for i, d in enumerate(raw)
+    ]
+    return _C_engine.expand(x_impl, resolved)
 
 
 def _flip_adapter(x_impl: _Impl, dims: int | Sequence[int]) -> _Impl:

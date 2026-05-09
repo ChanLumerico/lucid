@@ -7,6 +7,11 @@ from lucid._C import engine as _C_engine
 from lucid._dtype import (
     dtype,
     _ENGINE_TO_DTYPE,
+    bool_,
+    int8,
+    int16,
+    int32,
+    int64,
     float16,
     float32,
     float64,
@@ -563,9 +568,165 @@ class Tensor[DT: dtype, DV: device]:
         return self.dtype.itemsize
 
     @property
+    def itemsize(self) -> int:
+        """Alias for :meth:`element_size` — bytes per element."""
+        return self.dtype.itemsize
+
+    @property
     def nbytes(self) -> int:
         """Total number of bytes consumed by the tensor data."""
         return self._impl.numel() * self.dtype.itemsize
+
+    def stride(self, dim: int | None = None) -> tuple[int, ...] | int:
+        """Return the strides of the tensor in *element* counts.
+
+        Parameters
+        ----------
+        dim : int, optional
+            If given, return the stride along that dimension only.
+
+        Returns
+        -------
+        tuple[int, ...] or int
+            Element-count strides (same semantics as the reference framework).
+        """
+        byte_strides: list[int] = list(self._impl.stride)
+        itemsz: int = self.dtype.itemsize
+        elem_strides = tuple(s // itemsz for s in byte_strides)
+        if dim is None:
+            return elem_strides
+        return elem_strides[dim]
+
+    def data_ptr(self) -> int:
+        """Return the address of the first element as an integer.
+
+        On Apple Silicon the tensor lives in unified memory; this method
+        returns a best-effort identifier derived from the storage object.
+        Use :meth:`numpy` + ``ndarray.ctypes.data`` for interop that
+        requires the actual pointer.
+        """
+        # id() of the impl object is a stable, process-unique identifier
+        # suitable for equality checks (e.g. detecting aliasing) even if not
+        # the raw memory address.
+        return id(self._impl)
+
+    def storage_offset(self) -> int:
+        """Return the offset (in elements) of the first element in storage.
+
+        Contiguous tensors always return ``0``.  Non-contiguous view tensors
+        may return a non-zero offset; Lucid currently represents all tensors
+        as contiguous so this always returns ``0``.
+        """
+        return 0
+
+    @property
+    def H(self) -> Tensor:
+        """Conjugate transpose.
+
+        For real tensors this is identical to :attr:`mT`.  For complex
+        tensors the elements are conjugated before transposing.
+        """
+        if self.is_complex():
+            from lucid._ops.composite import conj as _conj
+            return _conj(self).mT  # type: ignore[return-value]
+        return self.mT  # type: ignore[return-value]
+
+    def type(self, dtype: str | None = None) -> str | Tensor:
+        """Return or cast the tensor type.
+
+        * ``t.type()`` — return a string like ``'lucid.FloatTensor'``.
+        * ``t.type('lucid.DoubleTensor')`` — cast and return the new tensor.
+
+        Supported type strings: ``FloatTensor``, ``DoubleTensor``,
+        ``HalfTensor``, ``IntTensor``, ``LongTensor``, ``BoolTensor``,
+        ``ShortTensor``, ``ByteTensor``.
+        """
+        _DTYPE_STR: dict[str, object] = {
+            "lucid.FloatTensor":  float32,
+            "lucid.DoubleTensor": float64,
+            "lucid.HalfTensor":   float16,
+            "lucid.IntTensor":    int32,
+            "lucid.LongTensor":   int64,
+            "lucid.BoolTensor":   bool_,
+            "lucid.ShortTensor":  int16,
+            "lucid.ByteTensor":   int8,
+        }
+        _DTYPE_TO_STR: dict[object, str] = {v: k for k, v in _DTYPE_STR.items()}
+        if dtype is None:
+            return _DTYPE_TO_STR.get(self.dtype, f"lucid.{self.dtype}")
+        if dtype not in _DTYPE_STR:
+            raise TypeError(
+                f"Tensor.type(): unrecognised type string '{dtype}'. "
+                f"Valid values: {list(_DTYPE_STR)}"
+            )
+        return self.to(_DTYPE_STR[dtype])  # type: ignore[arg-type]
+
+    def get_device(self) -> int:
+        """Return the device index.
+
+        Returns ``0`` for Metal (GPU) tensors and ``-1`` for CPU tensors,
+        following the reference framework's convention.
+        """
+        return 0 if self.is_metal else -1
+
+    def pin_memory(self, device: object = None) -> Tensor:
+        """No-op on Apple Silicon.
+
+        Apple Silicon uses unified memory — all tensors are directly accessible
+        by both CPU and GPU without explicit pinning.  Returns ``self``.
+        """
+        return self  # type: ignore[return-value]
+
+    def is_pinned(self, device: object = None) -> bool:
+        """Return ``False`` — pinned memory is not applicable on Apple Silicon."""
+        return False
+
+    @property
+    def is_cuda(self) -> bool:
+        """``False`` — Lucid targets Apple Silicon, not NVIDIA CUDA."""
+        return False
+
+    def reshape_as(self, other: Tensor) -> Tensor:
+        """Return a tensor with the same data reshaped to ``other.shape``."""
+        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+            _C_engine.reshape(self._impl, list(other._impl.shape))
+        )
+
+    class _UntypedStorage:
+        """Minimal storage object returned by :meth:`Tensor.untyped_storage`."""
+
+        def __init__(self, tensor: Tensor) -> None:
+            self._tensor = tensor
+
+        def data_ptr(self) -> int:
+            """Pointer-like identifier for the underlying storage."""
+            return self._tensor.data_ptr()
+
+        def size(self) -> int:
+            """Total size in bytes."""
+            return self._tensor.nbytes
+
+        def nbytes(self) -> int:
+            """Alias for :meth:`size`."""
+            return self.size()
+
+        def __len__(self) -> int:
+            return self.size()
+
+        def __repr__(self) -> str:
+            return (
+                f"UntypedStorage(nbytes={self.size()}, "
+                f"device={self._tensor.device})"
+            )
+
+    def untyped_storage(self) -> _UntypedStorage:
+        """Return the underlying storage object.
+
+        The returned object exposes :meth:`data_ptr`, :meth:`size`,
+        and :meth:`nbytes` — the subset needed for common introspection
+        patterns.
+        """
+        return Tensor._UntypedStorage(self)
 
     def is_floating_point(self) -> bool:
         """Return True if the dtype is a floating-point type."""
