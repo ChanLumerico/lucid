@@ -413,7 +413,7 @@ class MultiMarginLoss(Module):
         self,
         p: int = 1,
         margin: float = 1.0,
-        weight: "Tensor | None" = None,
+        weight: Tensor | None = None,
         reduction: str = "mean",
     ) -> None:
         super().__init__()

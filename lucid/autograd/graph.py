@@ -61,8 +61,8 @@ def allow_mutation_on_saved_tensors() -> Iterator[None]:
 def save_on_cpu(pin_memory: bool = False) -> Iterator[None]:
     """Hint that saved tensors should be staged on CPU during backward.
 
-    Mirrors the reference framework's
-    ``torch.autograd.graph.save_on_cpu`` API.  Currently a documented
+    Mirrors the reference framework's ``autograd.graph.save_on_cpu`` API.
+    Currently a documented
     stub: the context manager is callable and exits cleanly so user
     code that wraps a forward pass with it does not break, but the
     actual host-staging behaviour for built-in op Nodes is not yet

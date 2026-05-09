@@ -10,11 +10,11 @@ if TYPE_CHECKING:
 
 def jacobian(
     func: Callable[..., "Tensor"],
-    inputs: "Tensor | tuple[Tensor, ...]",
+    inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
     vectorize: bool = False,
-) -> "Tensor | tuple[Tensor, ...]":
+) -> Tensor | tuple[Tensor, ...]:
     """Compute the Jacobian of *func* w.r.t. each input.
 
     For scalar-valued functions this is equivalent to :func:`grad`.
@@ -106,11 +106,11 @@ def jacobian(
 
 def hessian(
     func: Callable[..., "Tensor"],
-    inputs: "Tensor | tuple[Tensor, ...]",
+    inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
     vectorize: bool = False,
-) -> "Tensor | tuple[tuple[Tensor, ...], ...]":
+) -> Tensor | tuple[tuple[Tensor, ...], ...]:
     """Compute the Hessian of a scalar-valued *func* w.r.t. each pair of inputs.
 
     Parameters
@@ -192,8 +192,8 @@ def hessian(
 
 def vjp(
     func: Callable[..., "Tensor"],
-    inputs: "Tensor | tuple[Tensor, ...]",
-    v: "Tensor | tuple[Tensor, ...]",
+    inputs: Tensor | tuple[Tensor, ...],
+    v: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple["Tensor", tuple["Tensor | None", ...]]:
@@ -264,8 +264,8 @@ def vjp(
 
 def jvp(
     func: Callable[..., "Tensor"],
-    inputs: "Tensor | tuple[Tensor, ...]",
-    v: "Tensor | tuple[Tensor, ...]",
+    inputs: Tensor | tuple[Tensor, ...],
+    v: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple["Tensor", "Tensor"]:

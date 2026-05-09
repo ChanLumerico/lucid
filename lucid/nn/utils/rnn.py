@@ -192,7 +192,7 @@ def pad_sequence(
 def pack_sequence(
     sequences: list[Tensor],
     enforce_sorted: bool = True,
-) -> "PackedSequence":
+) -> PackedSequence:
     """Pack a list of variable-length sequences into a ``PackedSequence``.
 
     This is the convenience wrapper around ``pad_sequence`` +

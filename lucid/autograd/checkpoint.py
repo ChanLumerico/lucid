@@ -44,12 +44,12 @@ if TYPE_CHECKING:
 
 
 def checkpoint(
-    function: Callable[..., "Tensor"],
-    *args: "Tensor",
+    function: Callable[..., Tensor],
+    *args: Tensor,
     preserve_rng_state: bool = True,
     use_reentrant: bool = True,
     **kwargs: object,
-) -> "Tensor":
+) -> Tensor:
     """Run *function* under gradient checkpointing.
 
     Executes ``function(*args, **kwargs)`` during the forward pass
@@ -98,7 +98,7 @@ def checkpoint(
 
     class _CheckpointFn(Function):
         @staticmethod
-        def forward(ctx: FunctionCtx, *inputs: "Tensor") -> "Tensor":
+        def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor:
             ctx.save_for_backward(*inputs)
             # Run without tracking so intermediate activations are NOT stored.
             with no_grad():
@@ -107,7 +107,7 @@ def checkpoint(
 
         @staticmethod
         def backward(
-            ctx: FunctionCtx, grad_output: "Tensor"
+            ctx: FunctionCtx, grad_output: Tensor
         ) -> tuple["Tensor | None", ...]:
             inputs = ctx.saved_tensors
 

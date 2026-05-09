@@ -19,9 +19,9 @@ class Parameter(Tensor):
 
     def __new__(
         cls,
-        data: "Tensor | list[object] | None" = None,
+        data: Tensor | list[object] | None = None,
         requires_grad: bool = True,
-    ) -> "Parameter":
+    ) -> Parameter:
         if data is None:
             impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
             impl = impl.clone_with_grad(requires_grad)
@@ -35,7 +35,7 @@ class Parameter(Tensor):
 
     def __init__(
         self,
-        data: "Tensor | list[object] | None" = None,
+        data: Tensor | list[object] | None = None,
         requires_grad: bool = True,
     ) -> None:
         pass

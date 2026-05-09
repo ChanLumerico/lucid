@@ -51,7 +51,7 @@ class RemovableHandle:
         for extra_set in self._extra_sets:
             extra_set.discard(self._key)
 
-    def __enter__(self) -> "RemovableHandle":
+    def __enter__(self) -> RemovableHandle:
         return self
 
     def __exit__(self, *args: object) -> None:

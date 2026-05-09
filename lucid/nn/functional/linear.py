@@ -84,18 +84,21 @@ def fused_linear_relu(x: Tensor, weight: Tensor, bias: Tensor) -> Tensor:
     Tensor
         ``relu(x @ weight.T + bias)``, shape ``(..., out_features)``.
     """
-    needs_grad: bool = (
-        _C_engine.grad_enabled()
-        and (x.requires_grad or weight.requires_grad or bias.requires_grad)
+    needs_grad: bool = _C_engine.grad_enabled() and (
+        x.requires_grad or weight.requires_grad or bias.requires_grad
     )
     if needs_grad:
         # Training path: unfused standard ops — autograd graph is correct.
-        return _wrap(_C_engine.relu(
-            _C_engine.nn.linear(_unwrap(x), _unwrap(weight), _unwrap(bias))
-        ))
+        return _wrap(
+            _C_engine.relu(
+                _C_engine.nn.linear(_unwrap(x), _unwrap(weight), _unwrap(bias))
+            )
+        )
 
     # Inference path: single-pass BLAS+vDSP fused kernel.
-    return _wrap(_C_engine._fused_linear_relu(_unwrap(x), _unwrap(weight), _unwrap(bias)))
+    return _wrap(
+        _C_engine._fused_linear_relu(_unwrap(x), _unwrap(weight), _unwrap(bias))
+    )
 
 
 def fused_linear_gelu(
@@ -130,9 +133,8 @@ def fused_linear_gelu(
     """
     from lucid.nn.functional.activations import gelu as _gelu
 
-    needs_grad: bool = (
-        _C_engine.grad_enabled()
-        and (x.requires_grad or weight.requires_grad or bias.requires_grad)
+    needs_grad: bool = _C_engine.grad_enabled() and (
+        x.requires_grad or weight.requires_grad or bias.requires_grad
     )
     if needs_grad:
         # Training path: standard ops — autograd graph is correct.
@@ -140,7 +142,9 @@ def fused_linear_gelu(
         return _gelu(pre, approximate=approximate)
 
     if approximate == "tanh":
-        return _wrap(_C_engine._fused_linear_gelu(_unwrap(x), _unwrap(weight), _unwrap(bias)))
+        return _wrap(
+            _C_engine._fused_linear_gelu(_unwrap(x), _unwrap(weight), _unwrap(bias))
+        )
     # exact erf path — no fused kernel available, fall back to two-op path.
     pre = _wrap(_C_engine.nn.linear(_unwrap(x), _unwrap(weight), _unwrap(bias)))
     return _gelu(pre, approximate="none")

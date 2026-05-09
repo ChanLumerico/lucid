@@ -15,8 +15,8 @@ from lucid._tensor.tensor import Tensor
 
 
 def gradcheck(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    inputs: "Sequence[Tensor]",
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    inputs: Sequence[Tensor],
     *,
     eps: float = 1e-6,
     atol: float = 1e-5,
@@ -180,9 +180,9 @@ def gradcheck(
 
 
 def gradgradcheck(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    inputs: "Sequence[Tensor]",
-    grad_outputs: "Sequence[Tensor] | None" = None,
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    inputs: Sequence[Tensor],
+    grad_outputs: Sequence[Tensor] | None = None,
     *,
     eps: float = 1e-6,
     atol: float = 1e-5,

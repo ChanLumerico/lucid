@@ -29,7 +29,7 @@ class no_grad:
 
     _prev: bool
 
-    def __enter__(self) -> "no_grad":
+    def __enter__(self) -> no_grad:
         self._prev = _C_engine.grad_enabled()
         _C_engine.set_grad_enabled(False)
         return self
@@ -51,7 +51,7 @@ class enable_grad:
 
     _prev: bool
 
-    def __enter__(self) -> "enable_grad":
+    def __enter__(self) -> enable_grad:
         self._prev = _C_engine.grad_enabled()
         _C_engine.set_grad_enabled(True)
         return self

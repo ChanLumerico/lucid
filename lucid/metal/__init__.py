@@ -79,7 +79,7 @@ class MetalStream:
         self._priority = priority
         self._stream = _mx.default_stream(_mx.gpu)
 
-    def __enter__(self) -> "MetalStream":
+    def __enter__(self) -> MetalStream:
         return self
 
     def __exit__(self, *args: object) -> None:
@@ -125,7 +125,7 @@ class MetalEvent:
         """Block until all GPU work preceding this event has completed."""
         _mx.synchronize()
 
-    def elapsed_time(self, end_event: "MetalEvent") -> float:
+    def elapsed_time(self, end_event: MetalEvent) -> float:
         """Return wall-clock milliseconds between this event and *end_event*.
 
         Both events must have been recorded with ``enable_timing=True``.
@@ -162,12 +162,12 @@ def _init_dtype_map() -> None:
 def run_kernel(
     source: str,
     function_name: str,
-    inputs: "list[lucid.Tensor]",
+    inputs: list[lucid.Tensor],
     output_shape: tuple[int, ...] | list[int],
     dtype: object = None,
     grid: tuple[int, int, int] = (1, 1, 1),
     threads: tuple[int, int, int] = (1, 1, 1),
-) -> "lucid.Tensor":
+) -> lucid.Tensor:
     """Run a custom Metal Shading Language (MSL) compute kernel.
 
     This is the **Metal Shader Escape Hatch** — it lets you write arbitrary

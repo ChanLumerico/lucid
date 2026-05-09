@@ -257,8 +257,8 @@ def logspace(
     steps: int,
     base: float = 10.0,
     *,
-    dtype: "DTypeLike" = None,
-    device: "DeviceLike" = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Return *steps* values spaced evenly on a log scale (base^start … base^end)."""
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)

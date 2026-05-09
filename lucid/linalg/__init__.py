@@ -457,7 +457,7 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     ndim = len(xi.shape)
     d = dim if dim >= 0 else ndim + dim
 
-    def _idx(t: "_C_engine.TensorImpl", i: int) -> "_C_engine.TensorImpl":
+    def _idx(t: _C_engine.TensorImpl, i: int) -> _C_engine.TensorImpl:
         # Build an index tensor with the same rank as t, size 1 along d,
         # filled with i.  gather requires equal-rank index.
         idx_shape = list(t.shape)

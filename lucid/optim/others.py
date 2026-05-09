@@ -327,7 +327,7 @@ class SparseAdam(Optimizer):
     def _n_params(self) -> int:
         return sum(len(g["params"]) for g in self.param_groups)
 
-    def step(self, closure: "_OptimizerClosure" = None) -> "Tensor | None":
+    def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         loss = closure() if closure is not None else None
         flat_idx = 0
         for group in self.param_groups:

@@ -201,7 +201,7 @@ class MultiheadAttention(Module):
 
     def _project_qkv(
         self, query: Tensor, key: Tensor, value: Tensor
-    ) -> "tuple[Tensor, Tensor, Tensor]":
+    ) -> tuple[Tensor, Tensor, Tensor]:
         """Apply the input projections, returning ``(q, k, v)`` each shaped
         ``(B, T*, embed_dim)``."""
         d: int = self.embed_dim
@@ -219,9 +219,9 @@ class MultiheadAttention(Module):
         if self.in_proj_bias is not None:
             bt = self.in_proj_bias._impl
             b_parts = _C_engine.split_at(bt, [d, 2 * d], 0)
-            q_b: "Tensor | None" = _wrap(b_parts[0])
-            k_b: "Tensor | None" = _wrap(b_parts[1])
-            v_b: "Tensor | None" = _wrap(b_parts[2])
+            q_b: Tensor | None = _wrap(b_parts[0])
+            k_b: Tensor | None = _wrap(b_parts[1])
+            v_b: Tensor | None = _wrap(b_parts[2])
         else:
             q_b = k_b = v_b = None
 
@@ -242,16 +242,16 @@ class MultiheadAttention(Module):
 
     def _build_attn_mask(
         self,
-        attn_mask: "Tensor | None",
-        key_padding_mask: "Tensor | None",
+        attn_mask: Tensor | None,
+        key_padding_mask: Tensor | None,
         batch_size: int,
         target_len: int,
         source_len: int,
         float_dtype: object,
-    ) -> "Tensor | None":
+    ) -> Tensor | None:
         """Combine ``attn_mask`` and ``key_padding_mask`` into a single
         ``(B, H, T, S)`` additive float mask suitable for SDPA."""
-        merged: "Tensor | None" = None
+        merged: Tensor | None = None
 
         if attn_mask is not None:
             am: Tensor = _to_additive_mask(attn_mask, float_dtype)
@@ -279,12 +279,12 @@ class MultiheadAttention(Module):
         query: Tensor,
         key: Tensor,
         value: Tensor,
-        key_padding_mask: "Tensor | None" = None,
+        key_padding_mask: Tensor | None = None,
         need_weights: bool = True,
-        attn_mask: "Tensor | None" = None,
+        attn_mask: Tensor | None = None,
         average_attn_weights: bool = True,
         is_causal: bool = False,
-    ) -> "tuple[Tensor, Tensor | None]":
+    ) -> tuple[Tensor, Tensor | None]:
         # Internally operate in (B, T, E) layout regardless of batch_first.
         if not self.batch_first:
             query = query.permute([1, 0, 2])
@@ -318,7 +318,7 @@ class MultiheadAttention(Module):
         kh: Tensor = self._split_heads(k, B, Tk)
         vh: Tensor = self._split_heads(v, B, Tk)
 
-        merged_mask: "Tensor | None" = self._build_attn_mask(
+        merged_mask: Tensor | None = self._build_attn_mask(
             attn_mask, key_padding_mask, B, Tq, Tk, q.dtype
         )
 
@@ -368,9 +368,9 @@ class MultiheadAttention(Module):
         q: Tensor,
         k: Tensor,
         v: Tensor,
-        attn_mask: "Tensor | None",
+        attn_mask: Tensor | None,
         is_causal: bool,
-    ) -> "tuple[Tensor, Tensor]":
+    ) -> tuple[Tensor, Tensor]:
         """Manual scaled-dot-product attention that also returns weights.
 
         Used when the caller asks for attention weights — the fused SDPA

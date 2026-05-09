@@ -239,7 +239,7 @@ def _make_free_fn(name: str) -> object:
             if e.n_tensor_args == -1:
 
                 def _fn_list(
-                    tensors: "list[Tensor]", *args: object, **kwargs: object
+                    tensors: list[Tensor], *args: object, **kwargs: object
                 ) -> object:
                     impls = [_unwrap(t) for t in tensors]
                     result = e.engine_fn(impls, *args, **kwargs)

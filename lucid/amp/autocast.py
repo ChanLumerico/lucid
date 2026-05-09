@@ -40,7 +40,7 @@ class autocast:
         self._prev_active: bool = False
         self._prev_dtype: object = None
 
-    def __enter__(self) -> "autocast":
+    def __enter__(self) -> autocast:
         if not self._enabled:
             return self
         self._prev_active = _C_engine.amp_is_active()

@@ -29,13 +29,13 @@ class Transform:
         self._inv: Transform | None = None
 
     @property
-    def inv(self) -> "Transform":
+    def inv(self) -> Transform:
         """Lazy inverse — caches an :class:`_InverseTransform` view."""
         if self._inv is None:
             self._inv = _InverseTransform(self)
         return self._inv
 
-    def __invert__(self) -> "Transform":
+    def __invert__(self) -> Transform:
         return self.inv
 
     def __call__(self, x: Tensor) -> Tensor:

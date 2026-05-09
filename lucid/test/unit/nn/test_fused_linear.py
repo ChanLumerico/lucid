@@ -79,7 +79,7 @@ class TestFusedLinearGelu:
         b = lucid.randn(16)
         with lucid.no_grad():
             y_fused = F.fused_linear_gelu(x, w, b)
-        y_ref = F.gelu(F.linear(x, w, b), approximate='tanh')
+        y_ref = F.gelu(F.linear(x, w, b), approximate="tanh")
         np.testing.assert_allclose(y_fused.numpy(), y_ref.numpy(), atol=1e-5)
 
     def test_training_backward(self) -> None:
@@ -95,8 +95,8 @@ class TestFusedLinearGelu:
         w = lucid.randn(8, 4)
         b = lucid.randn(8)
         with lucid.no_grad():
-            y = F.fused_linear_gelu(x, w, b, approximate='none')
-        y_ref = F.gelu(F.linear(x, w, b), approximate='none')
+            y = F.fused_linear_gelu(x, w, b, approximate="none")
+        y_ref = F.gelu(F.linear(x, w, b), approximate="none")
         np.testing.assert_allclose(y.numpy(), y_ref.numpy(), atol=1e-5)
 
 
@@ -104,26 +104,26 @@ class TestFusedLinearModule:
     """nn.FusedLinear module tests."""
 
     def test_relu_forward_shape(self) -> None:
-        m = nn.FusedLinear(8, 16, activation='relu')
+        m = nn.FusedLinear(8, 16, activation="relu")
         x = lucid.randn(4, 8)
         with lucid.no_grad():
             assert m(x).shape == (4, 16)
 
     def test_gelu_forward_shape(self) -> None:
-        m = nn.FusedLinear(8, 16, activation='gelu')
+        m = nn.FusedLinear(8, 16, activation="gelu")
         x = lucid.randn(4, 8)
         with lucid.no_grad():
             assert m(x).shape == (4, 16)
 
     def test_no_bias(self) -> None:
-        m = nn.FusedLinear(8, 16, activation='relu', bias=False)
+        m = nn.FusedLinear(8, 16, activation="relu", bias=False)
         assert m.bias is None
         x = lucid.randn(2, 8)
         with lucid.no_grad():
             assert m(x).shape == (2, 16)
 
     def test_backward(self) -> None:
-        m = nn.FusedLinear(8, 16, activation='relu')
+        m = nn.FusedLinear(8, 16, activation="relu")
         x = lucid.randn(3, 8, requires_grad=True)
         m(x).sum().backward()
         assert x.grad is not None
@@ -132,12 +132,14 @@ class TestFusedLinearModule:
 
     def test_output_matches_linear_relu(self) -> None:
         """FusedLinear(relu) output == relu(Linear(x)) with same weights."""
-        from lucid._C import engine as _e
+        from lucid._C import engine as _C_engine
 
         m_lin = nn.Linear(8, 16)
-        m_fus = nn.FusedLinear(8, 16, activation='relu')
-        m_fus.weight._impl = _e.TensorImpl(m_lin.weight.numpy().copy(), _e.Device.CPU, True)
-        m_fus.bias._impl = _e.TensorImpl(m_lin.bias.numpy().copy(), _e.Device.CPU, True)
+        m_fus = nn.FusedLinear(8, 16, activation="relu")
+        m_fus.weight._impl = _C_engine.TensorImpl(
+            m_lin.weight.numpy().copy(), _C_engine.Device.CPU, True
+        )
+        m_fus.bias._impl = _C_engine.TensorImpl(m_lin.bias.numpy().copy(), _C_engine.Device.CPU, True)
         x = lucid.randn(4, 8)
         with lucid.no_grad():
             y_lin = lucid.relu(m_lin(x))
@@ -145,14 +147,14 @@ class TestFusedLinearModule:
         np.testing.assert_allclose(y_fus.numpy(), y_lin.numpy(), atol=1e-5)
 
     def test_extra_repr(self) -> None:
-        m = nn.FusedLinear(4, 8, activation='gelu')
+        m = nn.FusedLinear(4, 8, activation="gelu")
         r = repr(m)
-        assert 'gelu' in r
-        assert 'in_features=4' in r
+        assert "gelu" in r
+        assert "in_features=4" in r
 
     def test_invalid_activation_raises(self) -> None:
         with pytest.raises(ValueError, match="unsupported activation"):
-            nn.FusedLinear(4, 8, activation='sigmoid')
+            nn.FusedLinear(4, 8, activation="sigmoid")
 
     def test_parameters_count(self) -> None:
         m = nn.FusedLinear(4, 8)

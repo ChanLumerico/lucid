@@ -161,7 +161,7 @@ class ChainDataset(IterableDataset):
     iterated through a sampler-driven DataLoader instead.
     """
 
-    def __init__(self, datasets: "list[IterableDataset]") -> None:
+    def __init__(self, datasets: list[IterableDataset]) -> None:
         bad: list[type] = [
             type(d) for d in datasets if not isinstance(d, IterableDataset)
         ]
@@ -171,7 +171,7 @@ class ChainDataset(IterableDataset):
             )
         self.datasets: list[IterableDataset] = list(datasets)
 
-    def __iter__(self) -> "Iterator[Tensor | tuple[Tensor, ...]]":
+    def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
         for d in self.datasets:
             yield from d
 

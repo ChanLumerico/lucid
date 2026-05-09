@@ -2,7 +2,7 @@
 lucid.autograd.profiler — namespace alias to ``lucid.profiler``.
 
 The reference framework places its profile context manager under
-``torch.autograd.profiler.profile``; Lucid's primary entry point lives
+``autograd.profiler.profile``; Lucid's primary entry point lives
 at ``lucid.profiler.profile``.  This module re-exports it so existing
 code that uses the ``autograd.profiler.profile`` path keeps working
 without forcing a redundant copy of the context manager.

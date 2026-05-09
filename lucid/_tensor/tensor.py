@@ -687,7 +687,7 @@ class Tensor[DT: dtype, DV: device]:
 
     @property
     def is_cuda(self) -> bool:
-        """``False`` — Lucid targets Apple Silicon, not NVIDIA CUDA."""
+        """``False`` — Lucid targets Apple Silicon (Metal/MLX); this device class is not available."""
         return False
 
     def reshape_as(self, other: Tensor) -> Tensor:

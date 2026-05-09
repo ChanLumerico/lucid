@@ -97,7 +97,7 @@ def to_engine_dtype(
 import dataclasses as _dc
 
 
-def _resolve_dtype_name(d: "dtype | _C_engine.Dtype | str") -> str:  # type: ignore[name-defined]
+def _resolve_dtype_name(d: dtype | _C_engine.Dtype | str) -> str:  # type: ignore[name-defined]
     """Map any dtype-like input to its canonical lucid dtype name.
 
     Used by ``finfo`` / ``iinfo`` to discriminate ``float16`` from
@@ -137,7 +137,7 @@ class finfo:
     resolution: float = 0.0
     dtype: str = ""
 
-    def __init__(self, dt: "dtype | _C_engine.Dtype | str") -> None:  # type: ignore[name-defined]
+    def __init__(self, dt: dtype | _C_engine.Dtype | str) -> None:  # type: ignore[name-defined]
         # Resolve to a lucid dtype name first — bfloat16 and float16 share the
         # same engine enum (F16), so we can't distinguish them via the engine.
         name = _resolve_dtype_name(dt)
@@ -193,7 +193,7 @@ class iinfo:
     min: int = 0
     dtype: str = ""
 
-    def __init__(self, dt: "dtype | _C_engine.Dtype | str") -> None:  # type: ignore[name-defined]
+    def __init__(self, dt: dtype | _C_engine.Dtype | str) -> None:  # type: ignore[name-defined]
         name = _resolve_dtype_name(dt)
         table: dict[str, tuple[int, int, int]] = {
             "int8": (8, -(2**7), 2**7 - 1),

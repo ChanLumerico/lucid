@@ -359,8 +359,8 @@ class LSTM(Module):
     def forward(
         self,
         x: Tensor,
-        hx: "tuple[Tensor, Tensor] | None" = None,
-    ) -> "tuple[Tensor, tuple[Tensor, Tensor]]":
+        hx: tuple[Tensor, Tensor] | None = None,
+    ) -> tuple[Tensor, tuple[Tensor, Tensor]]:
         """Multi-layer × bidirectional forward.
 
         The C++ engine only handles a single layer in a single direction
@@ -487,7 +487,7 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: "Tensor | None" = None) -> Tensor:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -542,8 +542,8 @@ class LSTMCell(Module):
     def forward(
         self,
         x: Tensor,
-        hx: "tuple[Tensor, Tensor] | None" = None,
-    ) -> "tuple[Tensor, Tensor]":
+        hx: tuple[Tensor, Tensor] | None = None,
+    ) -> tuple[Tensor, Tensor]:
         if hx is None:
             batch = x.shape[0]
             h0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
@@ -604,7 +604,7 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: "Tensor | None" = None) -> Tensor:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         hs = self.hidden_size
@@ -684,8 +684,8 @@ class GRU(_CellNamingMixin, Module):
     def forward(
         self,
         x: Tensor,
-        hx: "Tensor | None" = None,
-    ) -> "tuple[Tensor, Tensor]":
+        hx: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
         _check_not_packed(x, "GRU")
         if self.batch_first:
             x = x.permute([1, 0, 2])
@@ -822,8 +822,8 @@ class RNN(_CellNamingMixin, Module):
     def forward(
         self,
         x: Tensor,
-        hx: "Tensor | None" = None,
-    ) -> "tuple[Tensor, Tensor]":
+        hx: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
         _check_not_packed(x, "RNN")
         if self.batch_first:
             x = x.permute([1, 0, 2])

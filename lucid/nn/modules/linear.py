@@ -9,7 +9,12 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 import lucid.nn.init as init
 from lucid._factories.creation import empty
-from lucid.nn.functional.linear import linear, bilinear, fused_linear_relu, fused_linear_gelu
+from lucid.nn.functional.linear import (
+    linear,
+    bilinear,
+    fused_linear_relu,
+    fused_linear_gelu,
+)
 from lucid._types import StateDict
 
 
@@ -150,7 +155,9 @@ class FusedLinear(Module):
         import math as _math
         import lucid.nn.init as _init
 
-        self.weight = Parameter(empty(out_features, in_features, dtype=dtype, device=device))
+        self.weight = Parameter(
+            empty(out_features, in_features, dtype=dtype, device=device)
+        )
         if bias:
             self.bias: Parameter | None = Parameter(
                 empty(out_features, dtype=dtype, device=device)
@@ -168,6 +175,7 @@ class FusedLinear(Module):
         if self.bias is None:
             # No fused kernel for bias=False — fall back to standard ops.
             import lucid.nn.functional as F
+
             act = F.relu if self.activation == "relu" else F.gelu
             return act(linear(x, self.weight, None))
 
