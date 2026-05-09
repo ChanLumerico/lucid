@@ -21,7 +21,7 @@ Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
 adapters and live at the top of the module.
 """
 
-from typing import Sequence, TYPE_CHECKING
+from typing import Callable, Sequence, TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
@@ -33,6 +33,73 @@ if TYPE_CHECKING:
 # franca of every adapter signature.  Adapters consume the engine's raw
 # storage type, while user-facing args are typed as ``Tensor``.
 _Impl = _C_engine.TensorImpl
+
+
+# ── Binary dtype-promotion helpers ───────────────────────────────────────────
+# Mirrors the same table in ``_tensor/_dunders.py``.  Kept in sync manually;
+# both live in Python-only infrastructure (no external deps, H4-safe).
+
+_D = _C_engine.Dtype
+_ARITH_DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
+    _D.Bool: (0, 1),
+    _D.I8:   (1, 8),
+    _D.I16:  (1, 16),
+    _D.I32:  (1, 32),
+    _D.I64:  (1, 64),
+    _D.F16:  (2, 16),
+    _D.F32:  (2, 32),
+    _D.F64:  (2, 64),
+    _D.C64:  (3, 64),
+}
+
+
+def _arith_result_dtype(
+    da: _C_engine.Dtype, db: _C_engine.Dtype
+) -> _C_engine.Dtype:
+    """Return the promoted dtype for an arithmetic binary op."""
+    if da == db:
+        return da
+    ka, wa = _ARITH_DTYPE_KIND_WIDTH.get(da, (2, 32))
+    kb, wb = _ARITH_DTYPE_KIND_WIDTH.get(db, (2, 32))
+    if ka != kb:
+        return da if ka > kb else db
+    return da if wa >= wb else db
+
+
+def _make_arith_adapter(
+    engine_fn: Callable[[_Impl, _Impl], _Impl],
+) -> Callable[[_Impl, _Impl], _Impl]:
+    """Wrap an arithmetic binary engine function with automatic dtype promotion.
+
+    When both operands have the same dtype the call is a zero-overhead
+    passthrough.  Otherwise each operand is cast to the promoted dtype before
+    forwarding to the engine — matching the type-promotion behaviour of the
+    reference framework.
+
+    Only arithmetic ops (add/sub/mul/div/pow/maximum/minimum) should use this
+    wrapper.  matmul/dot/inner/outer deliberately bypass it because they have
+    their own dtype constraints that the engine enforces.
+    """
+
+    def _adapter(a: _Impl, b: _Impl) -> _Impl:
+        da, db = a.dtype, b.dtype
+        if da != db:
+            tgt = _arith_result_dtype(da, db)
+            if da != tgt:
+                a = _C_engine.astype(a, tgt)
+            if db != tgt:
+                b = _C_engine.astype(b, tgt)
+        return engine_fn(a, b)
+
+    # Preserve the pybind11 docstring (contains the canonical signature line)
+    # so that gen_pyi.py's _parse_pybind_signature path extracts the correct
+    # Tensor-typed signature rather than the internal _Impl-typed one.
+    _adapter.__doc__ = getattr(engine_fn, "__doc__", None)
+    _adapter.__name__ = getattr(engine_fn, "__name__", "_arith_adapter")
+    # Store the original engine function so that _signature_for_entry can
+    # fall back to pybind11 doc-string parsing when the AST path fails.
+    _adapter.__wrapped__ = engine_fn  # type: ignore[attr-defined]
+    return _adapter
 
 
 # ── Shared helpers ───────────────────────────────────────────────────────────

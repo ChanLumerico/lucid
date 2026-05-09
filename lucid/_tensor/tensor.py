@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, ClassVar, Final, Self, Iterator, overload
+from typing import TYPE_CHECKING, Callable, ClassVar, Final, Self, Iterator, overload
 
 if TYPE_CHECKING:
     import numpy as np
@@ -26,6 +26,7 @@ from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 if TYPE_CHECKING:
     from lucid.nn.module import Module
     from lucid.nn.parameter import Parameter
+    from lucid.autograd._hooks import RemovableHandle as _RemovableHandle
 
 
 class Tensor[DT: dtype, DV: device]:
@@ -179,6 +180,9 @@ class Tensor[DT: dtype, DV: device]:
     def grad(self, v: Tensor | None) -> None:
         if v is None:
             self._impl.zero_grad()
+        else:
+            from lucid._dispatch import _unwrap
+            self._impl.set_grad(_unwrap(v))
 
     @property
     def grad_fn(self) -> _C_engine.Node | None:
@@ -193,6 +197,52 @@ class Tensor[DT: dtype, DV: device]:
         """Retain gradient on this non-leaf tensor after backward."""
         if hasattr(self._impl, "retain_grad_"):
             self._impl.retain_grad_()
+
+    def register_hook(
+        self, hook: Callable[[Tensor], Tensor | None]
+    ) -> _RemovableHandle:
+        """Register a hook that fires when this tensor's gradient is computed.
+
+        The hook receives the accumulated gradient tensor.  If it returns a
+        non-``None`` :class:`~lucid.Tensor`, that value replaces the gradient.
+
+        Parameters
+        ----------
+        hook : callable
+            ``hook(grad: Tensor) -> Tensor | None``
+
+        Returns
+        -------
+        RemovableHandle
+            Call ``.remove()`` to de-register the hook, or use it as a
+            context manager.
+
+        Notes
+        -----
+        * For leaf tensors the hook fires after :meth:`backward` accumulates
+          the gradient, which is the common use case (gradient clipping,
+          logging).
+        * For non-leaf tensors, call :meth:`retain_grad` before the forward
+          pass so the gradient is preserved and available when hooks fire.
+        * The hook must be registered **before** the forward computation for
+          non-leaf tensors; for leaf tensors any timing works.
+
+        Examples
+        --------
+        >>> x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
+        >>> grads = []
+        >>> h = x.register_hook(lambda g: grads.append(g.clone()))
+        >>> (x * 2).sum().backward()
+        >>> grads[0]          # tensor([2., 2., 2.])
+        >>> h.remove()        # de-register
+        """
+        if not self.requires_grad:
+            raise RuntimeError(
+                "register_hook called on a tensor that does not require grad. "
+                "Only tensors with requires_grad=True can have gradient hooks."
+            )
+        from lucid.autograd._hooks import _register_tensor_hook
+        return _register_tensor_hook(self, hook)
 
     def backward(
         self,
@@ -257,6 +307,11 @@ class Tensor[DT: dtype, DV: device]:
             _C_engine.engine_backward(
                 self._impl, retain_graph=retain_graph, create_graph=create_graph
             )
+
+        # Fire any tensor-level gradient hooks registered via register_hook().
+        # Import lazily to avoid circular imports at module load time.
+        from lucid.autograd._hooks import _dispatch_tensor_grad_hooks
+        _dispatch_tensor_grad_hooks()
 
     def detach(self) -> Self:
         """Return a new Tensor detached from the autograd graph."""

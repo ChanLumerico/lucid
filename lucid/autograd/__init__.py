@@ -14,6 +14,8 @@ from lucid.autograd._anomaly import (
     set_detect_anomaly,
 )
 from lucid.autograd._functional import jacobian, hessian, vjp, jvp
+from lucid.autograd.checkpoint import checkpoint
+from lucid.autograd._hooks import RemovableHandle
 from lucid.autograd import profiler as profiler
 from lucid.autograd import graph as graph
 
@@ -36,6 +38,8 @@ __all__ = [
     "hessian",
     "vjp",
     "jvp",
+    "checkpoint",
+    "RemovableHandle",
     "profiler",
     "graph",
 ]

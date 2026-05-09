@@ -68,13 +68,16 @@ class TestIinfo:
 
 
 class TestPromotion:
-    def test_op_rejects_mixed_dtypes(self, device: str) -> None:
-        # Lucid's binary kernels do *not* auto-promote — adding f32 to
-        # i32 raises with a clear message.  Users cast explicitly.
+    def test_op_promotes_mixed_dtypes(self, device: str) -> None:
+        # Lucid auto-promotes mixed-dtype arithmetic operands to their common
+        # type (same semantics as the reference framework).
+        # float32 + int32 → float32
         a = lucid.tensor([1.5], device=device)
         b = lucid.tensor([2], dtype=lucid.int32, device=device)
-        with pytest.raises(Exception):
-            _ = a + b
+        out = a + b
+        assert out.dtype == lucid.float32
+        import numpy as np
+        np.testing.assert_allclose(out.numpy(), [3.5])
 
     def test_explicit_cast_then_op(self, device: str) -> None:
         a = lucid.tensor([1.5], device=device)

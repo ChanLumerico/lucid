@@ -98,26 +98,32 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("round_",      _R.round_,      1, inplace=True, method_name="round_"),
 
     # ── binary ─────────────────────────────────────────────────────────────
-    OpEntry("add",      _R.add,      2, method_name="add",      free_fn_name="add"),
-    OpEntry("sub",      _R.sub,      2, method_name="sub",      free_fn_name="sub"),
-    OpEntry("mul",      _R.mul,      2, method_name="mul",      free_fn_name="mul"),
-    OpEntry("div",      _R.div,      2, method_name="div",      free_fn_name="div"),
-    OpEntry("pow",      _R.pow,      2, method_name="pow",      free_fn_name="pow"),
-    OpEntry("maximum",  _R.maximum,  2, method_name="maximum",  free_fn_name="maximum"),
-    OpEntry("minimum",  _R.minimum,  2, method_name="minimum",  free_fn_name="minimum"),
+    # add/sub/mul/div/pow/maximum/minimum are wrapped with _make_arith_adapter
+    # so that mixed-dtype operands (e.g. float32 × bool) are automatically
+    # promoted to their common type before entering the C++ kernel — matching
+    # the reference framework's type-promotion semantics.
+    # matmul/dot/inner/outer intentionally bypass promotion: they require
+    # matching float dtypes and the engine enforces that contract.
+    OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add"),
+    OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub"),
+    OpEntry("mul",      A._make_arith_adapter(_R.mul),      2, method_name="mul",      free_fn_name="mul"),
+    OpEntry("div",      A._make_arith_adapter(_R.div),      2, method_name="div",      free_fn_name="div"),
+    OpEntry("pow",      A._make_arith_adapter(_R.pow),      2, method_name="pow",      free_fn_name="pow"),
+    OpEntry("maximum",  A._make_arith_adapter(_R.maximum),  2, method_name="maximum",  free_fn_name="maximum"),
+    OpEntry("minimum",  A._make_arith_adapter(_R.minimum),  2, method_name="minimum",  free_fn_name="minimum"),
     OpEntry("matmul",   _R.matmul,   2, method_name="matmul",   free_fn_name="matmul"),
     OpEntry("dot",      _R.dot,      2, method_name="dot",      free_fn_name="dot"),
     OpEntry("inner",    _R.inner,    2, method_name="inner",    free_fn_name="inner"),
     OpEntry("outer",    _R.outer,    2, method_name="outer",    free_fn_name="outer"),
 
     # ── in-place binary ────────────────────────────────────────────────────
-    OpEntry("add_",     _R.add_,     2, inplace=True, method_name="add_"),
-    OpEntry("sub_",     _R.sub_,     2, inplace=True, method_name="sub_"),
-    OpEntry("mul_",     _R.mul_,     2, inplace=True, method_name="mul_"),
-    OpEntry("div_",     _R.div_,     2, inplace=True, method_name="div_"),
-    OpEntry("pow_",     _R.pow_,     2, inplace=True, method_name="pow_"),
-    OpEntry("maximum_", _R.maximum_, 2, inplace=True, method_name="maximum_"),
-    OpEntry("minimum_", _R.minimum_, 2, inplace=True, method_name="minimum_"),
+    OpEntry("add_",     A._make_arith_adapter(_R.add_),     2, inplace=True, method_name="add_"),
+    OpEntry("sub_",     A._make_arith_adapter(_R.sub_),     2, inplace=True, method_name="sub_"),
+    OpEntry("mul_",     A._make_arith_adapter(_R.mul_),     2, inplace=True, method_name="mul_"),
+    OpEntry("div_",     A._make_arith_adapter(_R.div_),     2, inplace=True, method_name="div_"),
+    OpEntry("pow_",     A._make_arith_adapter(_R.pow_),     2, inplace=True, method_name="pow_"),
+    OpEntry("maximum_", A._make_arith_adapter(_R.maximum_), 2, inplace=True, method_name="maximum_"),
+    OpEntry("minimum_", A._make_arith_adapter(_R.minimum_), 2, inplace=True, method_name="minimum_"),
 
     # ── reduction (with API-compat adapters) ───────────────────────────────
     OpEntry("sum",    A._sum_adapter,    1, method_name="sum",    free_fn_name="sum",

@@ -163,11 +163,30 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
     still works (``help()`` will be uninformative for that op).
     """
     fn = entry.engine_fn
+    # When the engine_fn is an adapter wrapping a pybind11 builtin (e.g.
+    # ``_make_arith_adapter``), it carries ``__wrapped__`` pointing at the
+    # original pybind11 function.  For signature extraction we want the
+    # *original* pybind11 docstring (which has the canonical param names and
+    # types), not the adapter's ``_Impl``-typed internal signature.
+    # Use ``follow_wrapped=False`` so ``inspect.signature`` inspects the
+    # adapter itself; if that still yields bad types, fall back to parsing the
+    # pybind11 docstring via the ``__wrapped__`` reference.
     # Python adapters are introspectable directly.  We pass
     # ``annotation_format=Format.FORWARDREF`` (PEP 749, Python 3.14+) so any
     # name held under ``TYPE_CHECKING`` (e.g. ``Tensor`` in ``_adapters``) is
     # surfaced as a ``ForwardRef`` instead of raising ``NameError`` during
     # registry population.
+    pybind_fn = getattr(fn, "__wrapped__", None)
+    if pybind_fn is not None:
+        # Adapter wrapping a pybind11 builtin: parse the original docstring
+        # directly so the signature uses pybind11 param names, then rename.
+        sig = _parse_pybind_signature(pybind_fn) or inspect.Signature(
+            parameters=[
+                inspect.Parameter("args", inspect.Parameter.VAR_POSITIONAL),
+                inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD),
+            ]
+        )
+        return _rename_leading_tensor_params(sig, entry.n_tensor_args)
     try:
         sig = inspect.signature(fn, annotation_format=_FORWARDREF)
     except (TypeError, ValueError, NameError):

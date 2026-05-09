@@ -15,6 +15,52 @@ if TYPE_CHECKING:
     from lucid._types import TensorOrScalar, _IndexType
 
 
+# ── Dtype promotion helpers ───────────────────────────────────────────────────
+# Maps engine Dtype enum → (kind, width).
+# kind: 0=bool, 1=int, 2=float, 3=complex  (higher kind wins across categories)
+# width: bit-width (higher width wins within the same kind)
+_D = _C_engine.Dtype
+_DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
+    _D.Bool: (0, 1),
+    _D.I8:   (1, 8),
+    _D.I16:  (1, 16),
+    _D.I32:  (1, 32),
+    _D.I64:  (1, 64),
+    _D.F16:  (2, 16),
+    _D.F32:  (2, 32),
+    _D.F64:  (2, 64),
+    _D.C64:  (3, 64),
+}
+
+
+def _result_dtype(
+    da: _C_engine.Dtype, db: _C_engine.Dtype
+) -> _C_engine.Dtype:
+    """Return the type-promotion result dtype for two arithmetic operands."""
+    if da == db:
+        return da
+    ka, wa = _DTYPE_KIND_WIDTH.get(da, (2, 32))
+    kb, wb = _DTYPE_KIND_WIDTH.get(db, (2, 32))
+    if ka != kb:
+        return da if ka > kb else db
+    return da if wa >= wb else db
+
+
+def _maybe_promote(
+    a_impl: _C_engine.TensorImpl, b_impl: _C_engine.TensorImpl
+) -> tuple[_C_engine.TensorImpl, _C_engine.TensorImpl]:
+    """Cast a_impl / b_impl to their common promoted dtype if they differ."""
+    da, db = a_impl.dtype, b_impl.dtype
+    if da == db:
+        return a_impl, b_impl
+    tgt = _result_dtype(da, db)
+    if da != tgt:
+        a_impl = _C_engine.astype(a_impl, tgt)
+    if db != tgt:
+        b_impl = _C_engine.astype(b_impl, tgt)
+    return a_impl, b_impl
+
+
 def _unwrap_or_scalar(
     x: TensorOrScalar,
     ref_impl: _C_engine.TensorImpl | None = None,
@@ -49,63 +95,76 @@ def _inject_dunders(cls: type) -> None:
     """Attach all dunder methods to the Tensor class."""
 
     def __add__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.add(self._impl, _unwrap_or_scalar(other, self._impl)))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.add(a, b))
 
     def __radd__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.add(_unwrap_or_scalar(other, self._impl), self._impl))
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.add(a, b))
 
     def __iadd__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        self._impl = _C_engine.add_(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        self._impl = _C_engine.add_(a, b)
         return self
 
     def __sub__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.sub(self._impl, _unwrap_or_scalar(other, self._impl)))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.sub(a, b))
 
     def __rsub__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.sub(_unwrap_or_scalar(other, self._impl), self._impl))
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.sub(a, b))
 
     def __isub__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        self._impl = _C_engine.sub_(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        self._impl = _C_engine.sub_(a, b)
         return self
 
     def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.mul(self._impl, _unwrap_or_scalar(other, self._impl)))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.mul(a, b))
 
     def __rmul__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.mul(_unwrap_or_scalar(other, self._impl), self._impl))
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.mul(a, b))
 
     def __imul__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        self._impl = _C_engine.mul_(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        self._impl = _C_engine.mul_(a, b)
         return self
 
     def __truediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.div(self._impl, _unwrap_or_scalar(other, self._impl)))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.div(a, b))
 
     def __rtruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.div(_unwrap_or_scalar(other, self._impl), self._impl))
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.div(a, b))
 
     def __itruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        self._impl = _C_engine.div_(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        self._impl = _C_engine.div_(a, b)
         return self
 
     def __floordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(
-            _C_engine.floordiv(self._impl, _unwrap_or_scalar(other, self._impl))
-        )
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.floordiv(a, b))
 
     def __rfloordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(
-            _C_engine.floordiv(_unwrap_or_scalar(other, self._impl), self._impl)
-        )
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.floordiv(a, b))
 
     def __pow__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.pow(self._impl, _unwrap_or_scalar(other, self._impl)))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        return _wrap(_C_engine.pow(a, b))
 
     def __rpow__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        return _wrap(_C_engine.pow(_unwrap_or_scalar(other, self._impl), self._impl))
+        a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
+        return _wrap(_C_engine.pow(a, b))
 
     def __ipow__(self: Tensor, other: TensorOrScalar) -> Tensor:
-        self._impl = _C_engine.pow_(self._impl, _unwrap_or_scalar(other, self._impl))
+        a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
+        self._impl = _C_engine.pow_(a, b)
         return self
 
     def __matmul__(self: Tensor, other: Tensor) -> Tensor:
