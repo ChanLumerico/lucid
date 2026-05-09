@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 import lucid
+import lucid.linalg as _la
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -134,6 +135,18 @@ def block_diag(*tensors: Tensor) -> Tensor:
     return lucid.cat(rows, 0)
 
 
+def logdet(x: Tensor) -> Tensor:
+    """Log-determinant of a square matrix (or batch).
+
+    Returns ``log(det(A))``.  Defined only for matrices with ``det > 0``;
+    returns NaN otherwise.  Uses ``linalg.slogdet`` internally.
+    """
+    sign, logabsdet = _la.slogdet(x)
+    zero = lucid.zeros_like(sign)
+    nan = lucid.full_like(logabsdet, float("nan"))
+    return lucid.where(sign > zero, logabsdet, nan)
+
+
 __all__ = [
     "addmm",
     "addbmm",
@@ -146,4 +159,5 @@ __all__ = [
     "ger",
     "vdot",
     "block_diag",
+    "logdet",
 ]

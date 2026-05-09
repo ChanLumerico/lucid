@@ -55,7 +55,8 @@ class TestFuseConvBnEval:
         np.random.seed(0)
         conv = nn.Conv2d(3, 8, kernel_size=3, padding=1, bias=True)
         bn = nn.BatchNorm2d(8)
-        bn.eval(); conv.eval()
+        bn.eval()
+        conv.eval()
         bn.running_mean._impl.copy_from((lucid.ones(8) * 0.5)._impl)
         bn.running_var._impl.copy_from((lucid.ones(8) * 1.5)._impl)
 
@@ -70,7 +71,8 @@ class TestFuseConvBnEval:
         np.random.seed(0)
         conv = nn.Conv2d(3, 4, kernel_size=3, padding=1, bias=True)
         bn = nn.BatchNorm2d(4, affine=False)
-        bn.eval(); conv.eval()
+        bn.eval()
+        conv.eval()
         bn.running_mean._impl.copy_from((lucid.ones(4) * 0.2)._impl)
 
         x = lucid.tensor(np.random.randn(1, 3, 6, 6).astype(np.float32))
@@ -84,7 +86,8 @@ class TestFuseConvBnEval:
         np.random.seed(0)
         conv = nn.Conv2d(3, 4, kernel_size=3, padding=1, bias=False)
         bn = nn.BatchNorm2d(4)
-        bn.eval(); conv.eval()
+        bn.eval()
+        conv.eval()
         bn.running_mean._impl.copy_from((lucid.ones(4) * 0.2)._impl)
 
         x = lucid.tensor(np.random.randn(1, 3, 6, 6).astype(np.float32))

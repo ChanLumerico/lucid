@@ -7,6 +7,8 @@ Pure Python implementation — no engine changes required.
 from typing import TYPE_CHECKING
 import math
 
+import lucid
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.optim.optimizer import Optimizer
@@ -62,7 +64,6 @@ class GradScaler:
             return outputs
 
         from lucid._tensor.tensor import Tensor
-        import lucid
 
         if isinstance(outputs, Tensor):
             return outputs * self._scale

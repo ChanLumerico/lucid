@@ -89,6 +89,23 @@ def resolve_neg(x: Tensor) -> Tensor:
     return x
 
 
+def allclose(
+    a: Tensor,
+    b: Tensor,
+    rtol: float = 1e-5,
+    atol: float = 1e-8,
+    equal_nan: bool = False,
+) -> bool:
+    """Return True if all ``|a - b| <= atol + rtol * |b|`` element-wise."""
+    diff = lucid.abs(a - b)
+    tol = atol + rtol * lucid.abs(b)
+    close = diff <= tol
+    if equal_nan:
+        both_nan = lucid.isnan(a) & lucid.isnan(b)
+        close = close | both_nan
+    return bool(close.all().item())
+
+
 __all__ = [
     "numel",
     "is_storage",
@@ -103,4 +120,5 @@ __all__ = [
     "conj_physical",
     "resolve_conj",
     "resolve_neg",
+    "allclose",
 ]

@@ -3,6 +3,8 @@ nn.functional loss functions.
 """
 
 from typing import TYPE_CHECKING
+
+import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -79,7 +81,6 @@ def cross_entropy(
         and the uniform distribution
     """
     _validate_reduction(reduction)
-    import lucid as _lucid
     from lucid.nn.functional.activations import log_softmax as _log_softmax
 
     if label_smoothing < 0.0 or label_smoothing >= 1.0:
@@ -156,8 +157,6 @@ def nll_loss(
 ) -> Tensor:
     """Negative log-likelihood loss.  Input ``x`` is already log-probabilities."""
     _validate_reduction(reduction)
-    import lucid as _lucid
-
     target_long: Tensor = target.to(dtype=_lucid.int32)
     target_unsq: Tensor = target_long.unsqueeze(1)
     gathered: Tensor = _lucid.gather(x, target_unsq, 1).squeeze(1)
@@ -202,8 +201,6 @@ def binary_cross_entropy(
 ) -> Tensor:
     """Binary cross-entropy loss.  ``weight`` is broadcast element-wise."""
     _validate_reduction(reduction)
-    import lucid as _lucid
-
     eps: float = 1e-12
     one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
     eps_t: Tensor = _lucid.tensor(eps, dtype=x.dtype, device=x.device)
@@ -238,8 +235,6 @@ def binary_cross_entropy_with_logits(
         (1 + (pos_weight − 1) · y) · base + (pos_weight − 1) · y · clamp_neg(x)
     """
     _validate_reduction(reduction)
-    import lucid as _lucid
-
     one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
     abs_x: Tensor = x.abs()
     # log(1 + exp(-|x|)) — softplus(-|x|).
@@ -356,7 +351,6 @@ def triplet_margin_with_distance_loss(
     forwards into this function — kept here so callers can use the
     functional surface directly.
     """
-    import lucid as _l
     from lucid.nn.functional.activations import pairwise_distance
 
     df: object = distance_function
@@ -371,7 +365,7 @@ def triplet_margin_with_distance_loss(
         d_pn: Tensor = df(positive, negative)  # type: ignore[operator]
         d_an = d_an.minimum(d_pn)
 
-    zero: Tensor = _l.zeros_like(d_ap)
+    zero: Tensor = _lucid.zeros_like(d_ap)
     loss_t: Tensor = (d_ap - d_an + margin).maximum(zero)
 
     _validate_reduction(reduction)
@@ -697,13 +691,11 @@ def soft_margin_loss(
     Implemented over ``softplus(-target · input)`` for numerical
     stability instead of ``log(1 + exp(...))`` directly.
     """
-    import lucid as _l
-
-    raw = _l.nn.functional.softplus(-target * input)
+    raw = _lucid.nn.functional.softplus(-target * input)
     if reduction == "mean":
-        return _l.mean(raw)
+        return _lucid.mean(raw)
     if reduction == "sum":
-        return _l.sum(raw)
+        return _lucid.sum(raw)
     if reduction == "none":
         return raw
     raise ValueError(f"soft_margin_loss: unknown reduction={reduction!r}")
@@ -722,21 +714,19 @@ def multilabel_soft_margin_loss(
     last (class) axis, then reduced over the batch.  ``weight`` rescales
     each class contribution element-wise before the per-sample mean.
     """
-    import lucid as _l
-
     # logσ(x)   = -softplus(-x);  log(1-σ(x)) = -softplus(x).  Both forms
     # are numerically stable for large |x|.
-    log_sig = -_l.nn.functional.softplus(-input)
-    log_one_minus_sig = -_l.nn.functional.softplus(input)
+    log_sig = -_lucid.nn.functional.softplus(-input)
+    log_one_minus_sig = -_lucid.nn.functional.softplus(input)
     per_class = -(target * log_sig + (1.0 - target) * log_one_minus_sig)
     if weight is not None:
         per_class = per_class * weight
-    per_sample = _l.mean(per_class, dim=-1, keepdim=False)
+    per_sample = _lucid.mean(per_class, dim=-1, keepdim=False)
 
     if reduction == "mean":
-        return _l.mean(per_sample)
+        return _lucid.mean(per_sample)
     if reduction == "sum":
-        return _l.sum(per_sample)
+        return _lucid.sum(per_sample)
     if reduction == "none":
         return per_sample
     raise ValueError(f"multilabel_soft_margin_loss: unknown reduction={reduction!r}")

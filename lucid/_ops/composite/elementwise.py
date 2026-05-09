@@ -16,6 +16,8 @@ import math as _math
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar
 
@@ -355,6 +357,83 @@ def i0(x: Tensor) -> Tensor:
     return lucid.where(ax <= 3.75, val_small, val_large)
 
 
+def softmax(x: Tensor, dim: int | None = None) -> Tensor:
+    """Softmax along ``dim`` (default: last axis)."""
+    axis = dim if dim is not None else -1
+    return _wrap(_C_engine.softmax(_unwrap(x), axis))
+
+
+def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
+    """Log-softmax along ``dim`` (default: last axis)."""
+    axis = dim if dim is not None else -1
+    sm = _C_engine.softmax(_unwrap(x), axis)
+    return _wrap(_C_engine.log(sm))
+
+
+def floor_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
+    """Element-wise floor division: ``floor(a / b)``."""
+    return (a / b).floor()
+
+
+def diag_embed(
+    x: Tensor,
+    offset: int = 0,
+    dim1: int = -2,
+    dim2: int = -1,
+) -> Tensor:
+    """Embed the last dimension of ``x`` as the diagonal of a new matrix.
+
+    For a 1-D input of length ``n`` returns shape ``(n+|offset|, n+|offset|)``.
+    For batch inputs the last dimension is embedded; ``dim1``/``dim2`` select
+    which two axes of the *output* carry the matrix (default: last two).
+    """
+    n = int(x.shape[-1])
+    size = n + abs(offset)
+    batch_shape = list(x.shape[:-1])
+    row_off = max(0, -offset)
+    col_off = max(0, offset)
+
+    # Build (size, size) diagonal mask by padding eye(n) with zero rows/cols.
+    eye_n = lucid.eye(n, dtype=x.dtype, device=x.device)
+    if col_off > 0:
+        eye_n = lucid.cat(
+            [lucid.zeros([n, col_off], dtype=x.dtype, device=x.device), eye_n], dim=1
+        )
+    right = size - n - col_off
+    if right > 0:
+        eye_n = lucid.cat(
+            [eye_n, lucid.zeros([n, right], dtype=x.dtype, device=x.device)], dim=1
+        )
+    if row_off > 0:
+        eye_n = lucid.cat(
+            [lucid.zeros([row_off, size], dtype=x.dtype, device=x.device), eye_n], dim=0
+        )
+    bot = size - n - row_off
+    if bot > 0:
+        eye_n = lucid.cat(
+            [eye_n, lucid.zeros([bot, size], dtype=x.dtype, device=x.device)], dim=0
+        )
+    # eye_n is now (size, size) with the diagonal at (row_off+i, col_off+i).
+
+    # Broadcast x (..., n) against diagonal mask (size, size).
+    # For offset==0: n==size, so x.reshape(..., n, 1) * eye_n.reshape(1,...,n,n).
+    # For offset!=0: pad x to (..., size) by prepending/appending zeros.
+    if offset == 0:
+        diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
+        return x.reshape(batch_shape + [n, 1]) * diag_view
+    else:
+        # Expand x to (..., size) with zeros at padded positions.
+        pad_before = lucid.zeros(
+            batch_shape + [row_off], dtype=x.dtype, device=x.device
+        )
+        pad_after = lucid.zeros(
+            batch_shape + [size - n - row_off], dtype=x.dtype, device=x.device
+        )
+        x_pad = lucid.cat([pad_before, x, pad_after], dim=-1)  # (..., size)
+        diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])
+        return x_pad.reshape(batch_shape + [size, 1]) * diag_view
+
+
 __all__ = [
     "absolute",
     "negative",
@@ -389,4 +468,8 @@ __all__ = [
     "lgamma",
     "digamma",
     "i0",
+    "softmax",
+    "log_softmax",
+    "floor_divide",
+    "diag_embed",
 ]

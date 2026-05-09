@@ -5,6 +5,7 @@ lucid.linalg: linear algebra operations.
 import functools
 from typing import Callable, TYPE_CHECKING
 
+import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -96,8 +97,6 @@ class _CholeskyAutograd(_AutogradFunction):
 
     @staticmethod
     def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        import lucid as _lucid
-
         (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)
         upper: bool = ctx.upper
 
@@ -110,15 +109,15 @@ class _CholeskyAutograd(_AutogradFunction):
             gL = grad_out
 
         n: int = int(L.shape[-1])
-        eye_n = _lucid.eye(n, dtype=L.dtype)
+        eye_n = lucid.eye(n, dtype=L.dtype)
         if L.device != "cpu":
             eye_n = eye_n.to(L.device)
         # Mask gL to its lower triangle — the strictly upper half doesn't
         # contribute to L (which is lower-triangular by construction).
-        gL_tril = _lucid.tril(gL)
+        gL_tril = lucid.tril(gL)
         # Phi(M): tril(M) with diagonal halved.
-        M = _lucid.matmul(L.mT, gL_tril)
-        Phi = _lucid.tril(M) - 0.5 * (M * eye_n)
+        M = lucid.matmul(L.mT, gL_tril)
+        Phi = lucid.tril(M) - 0.5 * (M * eye_n)
 
         # S = L^{-T} @ Phi @ L^{-1}, computed via two triangular solves.
         # Step 1: Y = L^{-T} Phi  →  solve L^T Y = Phi (upper=True against L^T).
@@ -173,8 +172,6 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     through naturally — the engine ``matrix_power_op`` is not differentiable
     on its own. Uses repeated squaring so the work is O(log |n|) matmuls.
     """
-    import lucid as _lucid  # local to avoid a top-level cycle with linalg
-
     if not isinstance(n, int):
         raise TypeError(f"matrix_power exponent must be int, got {type(n).__name__}")
 
@@ -186,10 +183,10 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
 
     if n == 0:
         # Identity broadcast to the input's batch shape.
-        eye_2d: Tensor = _lucid.eye(int(sh[-1]), dtype=x.dtype)
+        eye_2d: Tensor = lucid.eye(int(sh[-1]), dtype=x.dtype)
         if len(sh) == 2:
             return eye_2d
-        return _lucid.broadcast_to(eye_2d, list(sh))
+        return lucid.broadcast_to(eye_2d, list(sh))
 
     base: Tensor = inv(x) if n < 0 else x
     exponent: int = -n if n < 0 else n
@@ -202,10 +199,10 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     cur: Tensor = base
     while exponent > 0:
         if exponent & 1:
-            result = cur if result is None else _lucid.matmul(result, cur)
+            result = cur if result is None else lucid.matmul(result, cur)
         exponent >>= 1
         if exponent:
-            cur = _lucid.matmul(cur, cur)
+            cur = lucid.matmul(cur, cur)
     assert result is not None  # exponent was non-zero on entry
     return result
 
@@ -629,12 +626,10 @@ def _info_zero(A: Tensor) -> Tensor:
     """Build a scalar (or batched) int32 ``info`` tensor of zeros aligned
     with the leading-batch dims of ``A`` (everything except the trailing
     two matrix dims).  Mirrors LAPACK's batched-info contract."""
-    import lucid as _l
-
     batch = list(A.shape[:-2])
     if not batch:
-        return _l.zeros(tuple(), dtype=_l.int32, device=A.device)
-    return _l.zeros(*batch, dtype=_l.int32, device=A.device)
+        return lucid.zeros(tuple(), dtype=lucid.int32, device=A.device)
+    return lucid.zeros(*batch, dtype=lucid.int32, device=A.device)
 
 
 def cholesky_ex(
@@ -651,15 +646,13 @@ def cholesky_ex(
     ``check_errors=True`` re-raises the underlying error instead of
     silently returning a zero tensor (useful while debugging).
     """
-    import lucid as _l
-
     try:
         L = cholesky(A, upper=upper)
         return L, _info_zero(A)
     except Exception:
         if check_errors:
             raise
-        zero_L = _l.zeros(*A.shape, dtype=A.dtype, device=A.device)
+        zero_L = lucid.zeros(*A.shape, dtype=A.dtype, device=A.device)
         info = _info_zero(A) + 1  # non-zero sentinel
         return zero_L, info
 
@@ -670,14 +663,12 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     Returns ``(Ainv, info)``.  ``info != 0`` indicates that ``A`` was
     singular; ``Ainv`` is then a zero placeholder.
     """
-    import lucid as _l
-
     try:
         return inv(A), _info_zero(A)
     except Exception:
         if check_errors:
             raise
-        zero_inv = _l.zeros(*A.shape, dtype=A.dtype, device=A.device)
+        zero_inv = lucid.zeros(*A.shape, dtype=A.dtype, device=A.device)
         info = _info_zero(A) + 1
         return zero_inv, info
 
@@ -696,8 +687,6 @@ def solve_ex(
     ``left=True`` (the default) is wired — callers wanting ``X·A = B``
     can route through :func:`solve_triangular` themselves.
     """
-    import lucid as _l
-
     if not left:
         raise NotImplementedError("solve_ex: only left=True is supported")
     try:
@@ -705,7 +694,7 @@ def solve_ex(
     except Exception:
         if check_errors:
             raise
-        zero_X = _l.zeros(*B.shape, dtype=B.dtype, device=B.device)
+        zero_X = lucid.zeros(*B.shape, dtype=B.dtype, device=B.device)
         info = _info_zero(A) + 1
         return zero_X, info
 
@@ -728,8 +717,6 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     ``False`` the call raises — Lucid does not have a pivoted-vs-unpivoted
     LU split kernel.
     """
-    import lucid as _l
-
     if not pivot:
         raise NotImplementedError("lu: pivot=False is not supported")
     sh = tuple(_unwrap(A).shape)
@@ -740,10 +727,10 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     LU, pivots = lu_factor(A)
 
     # Split the packed LU into L (unit-lower) and U (upper).
-    eye_n = _l.eye(n, dtype=A.dtype, device=A.device)
-    L_strict = _l.tril(LU) - _l.tril(LU) * eye_n  # zero out diagonal
+    eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)
+    L_strict = lucid.tril(LU) - lucid.tril(LU) * eye_n  # zero out diagonal
     L = L_strict + eye_n  # add unit diagonal
-    U = _l.triu(LU)
+    U = lucid.triu(LU)
 
     # Reconstruct the permutation matrix from the LAPACK pivot vector.
     # LAPACK pivots are 1-based: ``pivots[i]`` holds the row swapped with
@@ -764,8 +751,6 @@ def _build_permutation_matrix(
     matrix such that ``A = P · L · U`` (LAPACK's contract is
     ``P · A = L · U``; we transpose at the end so callers can use the
     factor product directly)."""
-    import lucid as _l
-
     perm: list[int] = list(range(n))
     pv = pivots.numpy()
     # If batched, only the leading instance is exposed here — caller
@@ -780,7 +765,7 @@ def _build_permutation_matrix(
     P_np = [[0.0] * n for _ in range(n)]
     for i in range(n):
         P_np[i][perm[i]] = 1.0
-    return _l.tensor(P_np, dtype=dtype, device=device).mT  # transpose: A = P·L·U
+    return lucid.tensor(P_np, dtype=dtype, device=device).mT  # transpose: A = P·L·U
 
 
 # ── ldl_solve — back-substitution using the LDL factorization ──────────────
@@ -801,8 +786,6 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
         D · z = y   (diagonal)
         Lᵀ · X = z  (upper triangular, unit diagonal)
     """
-    import lucid as _l
-
     pv = pivots.numpy()
     if pv.ndim != 1:
         raise NotImplementedError("ldl_solve: batched solve not yet exposed")
@@ -812,12 +795,12 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
             "supported.  All pivot entries must be > 0 (1x1 simple pivots)."
         )
     n = int(LD.shape[-1])
-    eye_n = _l.eye(n, dtype=LD.dtype, device=LD.device)
+    eye_n = lucid.eye(n, dtype=LD.dtype, device=LD.device)
     # L is the strictly lower triangle of LD with 1s on the diagonal;
     # D's diagonal lives in LD's diagonal.
-    L_strict = _l.tril(LD) - _l.tril(LD) * eye_n
+    L_strict = lucid.tril(LD) - lucid.tril(LD) * eye_n
     L = L_strict + eye_n
-    diag = _l.diagonal(LD)  # length-n vector
+    diag = lucid.diagonal(LD)  # length-n vector
 
     # Apply LAPACK's pivot permutation to B before the triangular solves.
     perm: list[int] = list(range(n))
@@ -825,7 +808,7 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     for i in range(n):
         j = int(pv_l[i]) - 1
         perm[i], perm[j] = perm[j], perm[i]
-    B_perm = B.index_select(-2, _l.tensor(perm, dtype=_l.int64, device=B.device))
+    B_perm = B.index_select(-2, lucid.tensor(perm, dtype=lucid.int64, device=B.device))
 
     y = solve_triangular(L, B_perm, upper=False, unitriangular=True)
     # Diagonal solve via element-wise division along the leading dim of y.
@@ -837,10 +820,90 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     inv_perm: list[int] = [0] * n
     for i, p in enumerate(perm):
         inv_perm[p] = i
-    return X_perm.index_select(-2, _l.tensor(inv_perm, dtype=_l.int64, device=B.device))
+    return X_perm.index_select(
+        -2, lucid.tensor(inv_perm, dtype=lucid.int64, device=B.device)
+    )
 
 
 # ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────
+
+
+def matrix_exp(A: Tensor) -> Tensor:
+    """Matrix exponential ``exp(A)`` via Padé [6/6] + scaling-and-squaring.
+
+    Algorithm: Higham (2005) "The scaling and squaring method for the matrix
+    exponential revisited."  The Padé approximant is evaluated using even/odd
+    polynomial splitting, then the result is squared ``s`` times to recover
+    ``exp(A)`` from ``exp(A / 2^s)``.
+
+    Accuracy: Frobenius norm is used as a proxy for the 1-norm to determine
+    the number of squarings; the conservatism means we may square one step
+    more than strictly necessary, but the result is numerically correct.
+
+    Only square matrices are supported.  Batched inputs (``A.ndim > 2``)
+    are handled element-wise by the underlying ``matmul`` / ``inv`` ops.
+    """
+    import math as _math
+
+    sh: tuple[int, ...] = tuple(A.shape)
+    if len(sh) < 2 or sh[-1] != sh[-2]:
+        raise ValueError(
+            f"matrix_exp requires a square matrix in the last two dims, got shape {sh}"
+        )
+    n: int = int(sh[-1])
+
+    # -- Padé [6/6] coefficients c_j = (12-j)! * 6! / (12! * j! * (6-j)!) ----
+    _c0: float = 1.0
+    _c1: float = 0.5
+    _c2: float = 5.0 / 44.0
+    _c3: float = 1.0 / 66.0
+    _c4: float = 1.0 / 792.0
+    _c5: float = 1.0 / 15840.0
+    _c6: float = 1.0 / 665280.0
+    # theta_6: Frobenius-norm threshold at which Padé [6/6] is machine-accurate
+    _theta: float = 2.0
+
+    # -- Scaling ---------------------------------------------------------------
+    # Upper bound for the 1-norm: max element × n (safe over-estimate).
+    norm_bound: float = float(A.abs().max().item()) * n
+    s: int = (
+        max(0, _math.ceil(_math.log2(norm_bound / _theta)))
+        if norm_bound > _theta
+        else 0
+    )
+    A_sc: Tensor = A * (2.0 ** (-s))
+
+    # -- Matrix powers ---------------------------------------------------------
+    A2: Tensor = A_sc @ A_sc
+    A4: Tensor = A2 @ A2
+    A6: Tensor = A2 @ A4
+
+    # -- Identity (broadcasts over any batch dims) -----------------------------
+    eye_2d: Tensor = lucid.eye(n, dtype=A.dtype, device=A.device)
+    if len(sh) > 2:
+        # Use arithmetic broadcast: eye_2d + zeros of batch shape keeps autograd.
+        I: Tensor = eye_2d + lucid.zeros(*sh[:-2], n, n, dtype=A.dtype, device=A.device)
+    else:
+        I = eye_2d
+
+    # -- Padé polynomials (even/odd split for efficiency) ----------------------
+    # Even = c0*I + c2*A2 + c4*A4 + c6*A6
+    Even: Tensor = _c0 * I + _c2 * A2 + _c4 * A4 + _c6 * A6
+    # Odd  = A * (c1*I + c3*A2 + c5*A4)
+    Odd: Tensor = A_sc @ (_c1 * I + _c3 * A2 + _c5 * A4)
+
+    # N = Even + Odd,  D = Even - Odd
+    N: Tensor = Even + Odd
+    D: Tensor = Even - Odd
+
+    # -- Solve D @ R = N  →  R = D^{-1} @ N -----------------------------------
+    R: Tensor = inv(D) @ N
+
+    # -- Squaring step ---------------------------------------------------------
+    for _ in range(s):
+        R = R @ R
+
+    return R
 
 
 def diagonal(
@@ -854,9 +917,7 @@ def diagonal(
     matrix in a batched ``A``.  Same engine kernel as ``lucid.diagonal``;
     the linalg variant differs only by the kwarg-only / matrix-aware
     defaults (``dim1=-2``, ``dim2=-1``)."""
-    import lucid as _l
-
-    return _l.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
+    return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
 
 
 __all__ = [
@@ -897,5 +958,6 @@ __all__ = [
     "cholesky_ex",
     "inv_ex",
     "solve_ex",
+    "matrix_exp",
     "diagonal",
 ]

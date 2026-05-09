@@ -11,6 +11,7 @@ from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty, zeros
 from lucid._dispatch import _unwrap, _wrap
 from lucid._C import engine as _C_engine
+import lucid as _lucid
 import lucid.nn.init as init
 from lucid.nn.functional.linear import linear
 from lucid.nn.functional.attention import scaled_dot_product_attention
@@ -25,8 +26,6 @@ _NEG_INF: float = float("-inf")
 def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
-    import lucid as _lucid
-
     if mask.dtype is _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
         zero_t: Tensor = _lucid.zeros(mask.shape, dtype=float_dtype, device=mask.device)
@@ -252,8 +251,6 @@ class MultiheadAttention(Module):
     ) -> "Tensor | None":
         """Combine ``attn_mask`` and ``key_padding_mask`` into a single
         ``(B, H, T, S)`` additive float mask suitable for SDPA."""
-        import lucid as _lucid
-
         merged: "Tensor | None" = None
 
         if attn_mask is not None:
@@ -301,8 +298,6 @@ class MultiheadAttention(Module):
 
         # ── add_bias_kv: prepend learnable bias rows to K / V ───────────
         if self.bias_k is not None:
-            import lucid as _lucid
-
             bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
             bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
             k = _lucid.cat([k, bk], 1)
@@ -310,8 +305,6 @@ class MultiheadAttention(Module):
 
         # ── add_zero_attn: append a zero row to K / V ───────────────────
         if self.add_zero_attn:
-            import lucid as _lucid
-
             zero_kv: Tensor = _lucid.zeros(
                 B, 1, self.embed_dim, dtype=k.dtype, device=k.device
             )
@@ -384,7 +377,6 @@ class MultiheadAttention(Module):
         op returns only the contracted output.  Performance impact is
         small for typical sequence lengths and only triggered on demand.
         """
-        import lucid as _lucid
         from lucid.nn.functional.activations import softmax as _softmax
 
         head_dim: int = q.shape[-1]

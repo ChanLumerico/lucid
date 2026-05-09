@@ -146,6 +146,15 @@ def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
 
 
 from lucid.distributions.multivariate import MultivariateNormal
+from lucid.distributions.exponential import Laplace
+from lucid.distributions.continuous_extra import HalfNormal
+from lucid.distributions.normal import LogNormal
+from lucid.distributions.uniform import Uniform
+from lucid.distributions.bernoulli import Geometric
+from lucid.distributions.independent import Independent
+from lucid.distributions.extra import Gumbel
+
+_EULER_GAMMA: float = 0.5772156649015329
 
 
 @register_kl(MultivariateNormal, MultivariateNormal)
@@ -170,3 +179,83 @@ def _kl_mvn_mvn(p: MultivariateNormal, q: MultivariateNormal) -> Tensor:
     maha = (z * z).sum(dim=(-2, -1))
 
     return 0.5 * (trace_term + maha - float(D) + log_det_q - log_det_p)
+
+
+# ── Additional closed-form KL pairs ──────────────────────────────────────────
+
+
+@register_kl(Laplace, Laplace)
+def _kl_laplace_laplace(p: Laplace, q: Laplace) -> Tensor:
+    # From Gil et al. 2011 §3.2
+    # KL = -log(b1/b2) + |μ1-μ2|/b2 + (b1/b2)·exp(-|μ1-μ2|/b1) - 1
+    scale_ratio: Tensor = p.scale / q.scale
+    loc_diff: Tensor = (p.loc - q.loc).abs()
+    return (
+        -scale_ratio.log()
+        + loc_diff / q.scale
+        + scale_ratio * (-(loc_diff / p.scale)).exp()
+        - 1.0
+    )
+
+
+@register_kl(HalfNormal, HalfNormal)
+def _kl_halfnormal_halfnormal(p: HalfNormal, q: HalfNormal) -> Tensor:
+    # HalfNormal(σ) = |Normal(0, σ)|; KL reduces to the underlying Normals.
+    return _kl_normal_normal(p._base, q._base)  # type: ignore[attr-defined]
+
+
+@register_kl(LogNormal, LogNormal)
+def _kl_lognormal_lognormal(p: LogNormal, q: LogNormal) -> Tensor:
+    # LogNormal(μ, σ²) = exp(Normal(μ, σ²)); KL equals KL of the underlying.
+    return _kl_normal_normal(p._base, q._base)  # type: ignore[attr-defined]
+
+
+@register_kl(Gumbel, Gumbel)
+def _kl_gumbel_gumbel(p: Gumbel, q: Gumbel) -> Tensor:
+    # KL(Gumbel(μ1,β1) || Gumbel(μ2,β2))
+    # ct1 = β1/β2,  ct2 = μ2/β2,  ct3 = μ1/β2
+    # KL = -log(ct1) - ct2 + ct3
+    #     + ct1 · euler_gamma
+    #     + exp(ct2 + lgamma(1 + ct1) - ct3)
+    #     - (1 + euler_gamma)
+    ct1: Tensor = p.scale / q.scale
+    ct2: Tensor = q.loc / q.scale
+    ct3: Tensor = p.loc / q.scale
+    t1 = -ct1.log() - ct2 + ct3
+    t2 = ct1 * _EULER_GAMMA
+    t3 = ((ct2 + lucid.lgamma(1.0 + ct1) - ct3)).exp()
+    return t1 + t2 + t3 - (1.0 + _EULER_GAMMA)
+
+
+@register_kl(Uniform, Uniform)
+def _kl_uniform_uniform(p: Uniform, q: Uniform) -> Tensor:
+    # KL = log((b2-a2)/(b1-a1)) if [a1,b1] ⊆ [a2,b2], else +∞
+    result: Tensor = ((q.high - q.low) / (p.high - p.low)).log()
+    # Mask entries where p is not supported inside q
+    p_outside_q = (q.low > p.low) | (q.high < p.high)
+    inf_val = lucid.full_like(result, float("inf"))
+    return lucid.where(p_outside_q, inf_val, result)
+
+
+@register_kl(Geometric, Geometric)
+def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
+    # KL(Geom(p1) || Geom(p2)) = -H(p) - log(1-p2)/p1 - log(p2)
+    p_logits: Tensor = p.probs.log() - (1.0 - p.probs).log()  # log(p/(1-p))
+    q_logits: Tensor = q.probs.log() - (1.0 - q.probs).log()
+    return -p.entropy() - lucid.log1p(-q.probs) / p.probs - q_logits
+
+
+@register_kl(Independent, Independent)
+def _kl_independent_independent(p: Independent, q: Independent) -> Tensor:
+    # KL sums over the reinterpreted batch dims.
+    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
+        raise NotImplementedError(
+            "kl_divergence(Independent, Independent) requires equal "
+            "reinterpreted_batch_ndims."
+        )
+    kl: Tensor = kl_divergence(p.base_dist, q.base_dist)
+    # Sum over the last `reinterpreted_batch_ndims` dims.
+    n = p.reinterpreted_batch_ndims
+    for _ in range(n):
+        kl = kl.sum(dim=-1)
+    return kl

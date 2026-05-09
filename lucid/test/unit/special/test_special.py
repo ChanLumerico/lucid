@@ -211,9 +211,7 @@ class TestBessel:
         # scipy.special.j0 reference values.
         x = lucid.tensor([0.0, 1.0, 5.0, 2.4048])
         out = lucid.special.bessel_j0(x).numpy()
-        np.testing.assert_allclose(
-            out, [1.0, 0.7651977, -0.1775968, 0.0], atol=1e-4
-        )
+        np.testing.assert_allclose(out, [1.0, 0.7651977, -0.1775968, 0.0], atol=1e-4)
 
     def test_j1_known(self) -> None:
         x = lucid.tensor([0.0, 1.0, -1.0, 5.0])
@@ -262,10 +260,11 @@ class TestBessel:
 class TestZeta:
     def test_riemann_special_values(self) -> None:
         import math
+
         z2 = lucid.special.zeta(lucid.tensor([2.0]), lucid.tensor([1.0])).item()
         z4 = lucid.special.zeta(lucid.tensor([4.0]), lucid.tensor([1.0])).item()
-        assert abs(z2 - math.pi ** 2 / 6.0) < 1e-3
-        assert abs(z4 - math.pi ** 4 / 90.0) < 1e-3
+        assert abs(z2 - math.pi**2 / 6.0) < 1e-3
+        assert abs(z4 - math.pi**4 / 90.0) < 1e-3
 
     def test_hurwitz_shift_identity(self) -> None:
         # ζ(s, q+1) = ζ(s, q) - q^{-s}.

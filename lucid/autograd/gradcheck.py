@@ -7,6 +7,8 @@ analytical gradients from backward() with the numerical Jacobian columns.
 """
 
 from typing import Callable, Sequence
+
+import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
 from lucid._tensor.tensor import Tensor
@@ -199,8 +201,6 @@ def gradgradcheck(
     works the same way.  ``grad_outputs`` is currently ignored — we always
     use ``ones_like`` upstream gradients, matching the most common use.
     """
-    import lucid
-
     if grad_outputs is not None:
         # The reference framework allows custom upstream gradients; we
         # accept the kwarg for source compatibility but the simple

@@ -10,6 +10,7 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty, zeros
 from lucid._factories.random import rand
+import lucid as _lucid
 import lucid.nn.init as init
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
@@ -26,9 +27,7 @@ if TYPE_CHECKING:
 
 def _cat_last(a: Tensor, b: Tensor) -> Tensor:
     """Concatenate two tensors along the last dimension."""
-    import lucid
-
-    return lucid.cat([a, b], a.ndim - 1)
+    return _lucid.cat([a, b], a.ndim - 1)
 
 
 def _check_not_packed(x: object, cls_name: str) -> None:
@@ -304,8 +303,6 @@ class LSTM(Module):
         Implemented via ``gather`` so the backward path works correctly —
         the engine's ``Tensor.flip`` backward is currently broken.
         """
-        import lucid as _lucid
-
         T: int = int(x.shape[0])
         # Reverse range [T-1, T-2, …, 0] built on the engine.
         rev_1d: Tensor = _lucid.arange(
@@ -371,8 +368,6 @@ class LSTM(Module):
         inter-layer dropout and concatenating bidirectional outputs as
         the input to the next layer.
         """
-        import lucid as _lucid
-
         _check_not_packed(x, "LSTM")
 
         if self.batch_first:

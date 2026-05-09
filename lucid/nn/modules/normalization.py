@@ -7,6 +7,7 @@ from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import ones, zeros
+import lucid as _lucid
 import lucid.nn.init as init
 from lucid.nn.functional.normalization import (
     layer_norm,
@@ -193,8 +194,6 @@ class _BatchNormBase(Module):
             # `num_batches_tracked` is int64 scalar regardless of the module's
             # float dtype.  When momentum is None this drives the cumulative
             # moving average via 1/num_batches_tracked.
-            import lucid as _lucid
-
             self.register_buffer(
                 "num_batches_tracked",
                 _lucid.zeros((), dtype=_lucid.int64, device=device),
@@ -224,8 +223,6 @@ class _BatchNormBase(Module):
             key: str = f"{prefix}num_batches_tracked"
             if key not in state_dict:
                 # Pre-populate with zero so the default loader can copy it.
-                import lucid as _lucid
-
                 state_dict[key] = _lucid.zeros((), dtype=_lucid.int64)
         from lucid.nn._state_dict import _default_load_from_state_dict
 
@@ -278,8 +275,6 @@ class _BatchNormBase(Module):
         estimator while the *normalisation* itself uses the biased one;
         both follow the reference framework's behaviour.
         """
-        import lucid as _lucid
-
         # Reduce over batch + spatial dims, keeping the channel dim.
         reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
         n: int = 1
@@ -418,8 +413,6 @@ class _InstanceNormBase(Module):
 
     def _update_running_stats(self, x: Tensor) -> None:
         """Update running stats from per-channel batch statistics."""
-        import lucid as _lucid
-
         # Reduce over batch + spatial → (C,).  Matches BatchNorm's reduction.
         reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
         with _lucid.no_grad():
@@ -589,8 +582,6 @@ class _LazyBatchNormMixin(_BatchNormBase):
             self.register_buffer("num_batches_tracked", None)
 
     def _initialize(self, num_features: int) -> None:
-        import lucid as _lucid
-
         self.num_features = num_features
         if self.affine:
             self.weight = Parameter(

@@ -8,6 +8,7 @@ from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty
+import lucid as _lucid
 import lucid.nn.init as init
 from lucid.nn.functional.sparse import embedding
 
@@ -86,8 +87,6 @@ class Embedding(Module):
         Cheap because it only fires from ``__init__``; runtime forward
         does not need this.
         """
-        import lucid as _lucid
-
         # ``index_fill`` on dim=0 zeroes the chosen row; rebind ``weight._impl``
         # so requires_grad / parameter identity are preserved.
         new_w: Tensor = _lucid.index_fill(
@@ -102,8 +101,6 @@ class Embedding(Module):
 
     def _renorm_weight_inplace(self) -> None:
         """Apply ``max_norm`` rescaling to rows that exceed the cap."""
-        import lucid as _lucid
-
         w: Tensor = self.weight
         # Per-row Lp-norm via engine ops.
         if self.norm_type == 2.0:

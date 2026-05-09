@@ -78,17 +78,22 @@ class TestConvBiasFalse:
     (rejected None bias).  These exercise all six conv variants forward +
     backward and confirm the result equals ``bias=True`` + ``b=0``."""
 
-    def _check_bias_false_matches_zero_bias(self, ctor, x_shape: tuple[int, ...]) -> None:
+    def _check_bias_false_matches_zero_bias(
+        self, ctor, x_shape: tuple[int, ...]
+    ) -> None:
         import numpy as np
+
         np.random.seed(0)
         x_np = np.random.randn(*x_shape).astype(np.float32)
 
         m_no = ctor(bias=False)
         m_zero = ctor(bias=True)
         m_zero.weight._impl.copy_from(m_no.weight._impl)
-        m_zero.bias._impl.copy_from(lucid.zeros(m_no.weight.shape[
-            1 if "Transpose" in type(m_no).__name__ else 0
-        ])._impl)
+        m_zero.bias._impl.copy_from(
+            lucid.zeros(
+                m_no.weight.shape[1 if "Transpose" in type(m_no).__name__ else 0]
+            )._impl
+        )
 
         x = lucid.tensor(x_np.copy(), requires_grad=True)
         out = m_no(x).sum()
@@ -99,6 +104,7 @@ class TestConvBiasFalse:
         out2.backward()
 
         import numpy as np
+
         np.testing.assert_allclose(out.item(), out2.item(), atol=1e-5)
         np.testing.assert_allclose(x.grad.numpy(), x2.grad.numpy(), atol=1e-5)
         np.testing.assert_allclose(

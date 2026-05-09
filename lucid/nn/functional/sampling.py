@@ -3,6 +3,8 @@ nn.functional sampling / interpolation / padding operations.
 """
 
 from typing import TYPE_CHECKING
+
+import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -259,8 +261,6 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
     source positions — this is what makes reflect/circular padding
     correctly differentiable.
     """
-    import lucid as _lucid
-
     k: int = len(indices_1d)
     target_shape: list[int] = [1] * x.ndim
     target_shape[dim] = k
@@ -284,8 +284,6 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
     gradient accumulation for reflect (where the same source element
     contributes to both the centre and the reflected copy).
     """
-    import lucid as _lucid
-
     if lo == 0 and hi == 0:
         return x
     size: int = x.shape[dim]
@@ -518,8 +516,6 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     Expects an ``(N, C, *spatial)`` tensor with ``C`` divisible by
     ``groups``.
     """
-    import lucid as _l
-
     if x.ndim < 2:
         raise ValueError(
             f"channel_shuffle: expected at least 2-D input (N, C, *), got "
@@ -538,7 +534,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     # flatten the two leading channel-related axes back into a single ``C``.
     reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
     perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
-    transposed = _l.permute(reshaped, *perm)
+    transposed = _lucid.permute(reshaped, *perm)
     return transposed.reshape(n, c, *spatial)
 
 
@@ -550,17 +546,15 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     diagonal) distances in row-major order — same convention as the
     reference framework's ``pdist``.
     """
-    import lucid as _l
-
     if x.ndim != 2:
         raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(x.shape)}")
     n = int(x.shape[0])
     if n < 2:
-        return _l.zeros(0, dtype=x.dtype, device=x.device)
-    full = _l.cdist(x, x, p=p)  # (N, N)
+        return _lucid.zeros(0, dtype=x.dtype, device=x.device)
+    full = _lucid.cdist(x, x, p=p)  # (N, N)
     # Pull out the strict upper triangle (i < j) in row-major order via the
     # index pair generator from ``triu_indices``.
-    pairs = _l.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
+    pairs = _lucid.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
-    return _l.gather(flat, flat_idx, dim=0)
+    return _lucid.gather(flat, flat_idx, dim=0)

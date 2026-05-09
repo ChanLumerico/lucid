@@ -4,6 +4,8 @@ All computation uses the C++ engine — no numpy.
 """
 
 from typing import Any, NamedTuple, TYPE_CHECKING
+
+import lucid
 from lucid._tensor.tensor import Tensor as _Tensor
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
@@ -162,8 +164,6 @@ def pad_sequence(
     and ``stack`` over the batch axis, which goes through proper
     differentiable ops.
     """
-    import lucid
-
     if not sequences:
         raise ValueError("pad_sequence: empty input list")
     T_max: int = max(int(s.shape[0]) for s in sequences)

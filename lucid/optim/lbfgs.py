@@ -1,10 +1,10 @@
-from lucid._tensor.tensor import Tensor
-from lucid._types import _OptimizerClosure
-
 """
 L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
 
+import lucid
+from lucid._tensor.tensor import Tensor
+from lucid._types import _OptimizerClosure
 from lucid.optim.optimizer import Optimizer
 
 
@@ -77,8 +77,6 @@ class LBFGS(Optimizer):
     # arrays are smaller and avoid pickling autograd plumbing).
 
     def _save_state(self) -> dict[int, dict[str, object]]:
-        import lucid
-
         snapshot: dict[str, object] = {}
         for k, v in self._lbfgs_state.items():
             if isinstance(v, Tensor):
@@ -94,7 +92,6 @@ class LBFGS(Optimizer):
         return {0: snapshot}
 
     def _load_state(self, state: dict[int, dict[str, object]]) -> None:
-        import lucid
         import numpy as np
 
         if 0 not in state:
@@ -117,8 +114,6 @@ class LBFGS(Optimizer):
     # ── helpers ───────────────────────────────────────────────────────────────
 
     def _gather_flat_grad(self) -> Tensor:
-        import lucid
-
         views = []
         for group in self.param_groups:
             for p in group["params"]:
@@ -129,16 +124,12 @@ class LBFGS(Optimizer):
         return lucid.cat(views)
 
     def _gather_flat_params(self) -> Tensor:
-        import lucid
-
         views = [
             p.detach().flatten() for group in self.param_groups for p in group["params"]
         ]
         return lucid.cat(views)
 
     def _add_to_params(self, alpha: float, update_flat: Tensor) -> None:
-        import lucid
-
         offset = 0
         for group in self.param_groups:
             for p in group["params"]:
@@ -148,7 +139,6 @@ class LBFGS(Optimizer):
                 offset += n
 
     def _two_loop_recursion(self, flat_grad: Tensor) -> Tensor:
-        import lucid
         import math
 
         old_dirs = self._lbfgs_state["old_dirs"]
@@ -202,7 +192,6 @@ class LBFGS(Optimizer):
         c2: float = 0.9,
         max_ls: int = 20,
     ) -> tuple[float, float, Tensor]:
-        import lucid
         import math
 
         alpha = lr
@@ -230,7 +219,6 @@ class LBFGS(Optimizer):
             closure: A callable that clears gradients, computes the loss, and
                      calls ``loss.backward()``.  Required for L-BFGS.
         """
-        import lucid
         import math
 
         if closure is None:

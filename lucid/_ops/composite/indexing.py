@@ -347,6 +347,11 @@ def index_put_(
     return input
 
 
+def argwhere(x: Tensor) -> Tensor:
+    """Return indices of non-zero elements as an (N, ndim) int64 tensor."""
+    return lucid.nonzero(x)
+
+
 __all__ = [
     "index_fill",
     "index_add",
@@ -356,4 +361,5 @@ __all__ = [
     "put",
     "index_put",
     "index_put_",
+    "argwhere",
 ]

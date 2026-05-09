@@ -258,7 +258,6 @@ _TENSOR_HEADER = """\
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from __future__ import annotations
 from typing import Iterator, Self, Sequence
 
 import numpy as np
@@ -333,8 +332,8 @@ class Tensor:
     def numpy(self) -> np.ndarray: ...
     def tolist(self) -> list[object] | int | float | bool: ...
     def contiguous(self) -> Self: ...
-    def unfold(self, dimension: int, size: int, step: int) -> "Tensor": ...
-    def scatter_add(self, dim: int, index: "Tensor", src: "Tensor") -> "Tensor": ...
+    def unfold(self, dimension: int, size: int, step: int) -> Tensor: ...
+    def scatter_add(self, dim: int, index: Tensor, src: Tensor) -> Tensor: ...
     @property
     def data(self) -> Self: ...
     def __len__(self) -> int: ...
@@ -439,7 +438,7 @@ class Tensor:
     def __setitem__(self: Tensor, idx: _IndexType, value: TensorOrScalar) -> None: ...
 
     # ── injected .to() and device/dtype casts (_to.py) ─────────────────
-    def to(self: Tensor, *args: _DType | _Device | str, **kwargs: object) -> Tensor: ...
+    def to(self, device: DeviceLike | None = None, dtype: DTypeLike | None = None) -> Tensor: ...
     def metal(self: Tensor) -> Tensor: ...
     def cpu(self: Tensor) -> Tensor: ...
     def float(self: Tensor) -> Tensor: ...
@@ -459,11 +458,8 @@ def _tensor_method_sig(entry) -> str:
     n = entry.n_tensor_args
 
     if n == -1:
-        return (
-            f"    def {name}(self, tensors: list[Tensor], *args: object) -> Tensor: ..."
-        )
+        return f"    def {name}(self, tensors: list[Tensor]) -> Tensor: ..."
 
-    # Extra kwargs for a cleaner signature
     extra = entry.extra_kwargs
 
     if n == 1 and not extra:
@@ -472,15 +468,17 @@ def _tensor_method_sig(entry) -> str:
     if n == 2 and not extra:
         return f"    def {name}(self, other: Tensor | float) -> Tensor: ..."
 
-    # Has extra kwargs — use *args fallback for simplicity
-    parts = ["self"]
+    # Has extra kwargs — emit explicit signature via _PARAM_TYPE_MAP lookup
+    # rather than *args/**kwargs (H9: banned in stubs).
+    parts = []
     if n == 2:
         parts.append("other: Tensor | float")
     if extra:
-        parts.append("*args: object")
-        parts.append("**kwargs: object")
-    args_str = ", ".join(parts)
-    return f"    def {name}(self, {args_str.lstrip('self, ')}) -> Tensor: ..."
+        for kw in (extra if isinstance(extra, (list, tuple)) else []):
+            ptype = _PARAM_TYPE_MAP.get(kw, "object")
+            parts.append(f"{kw}: {ptype} = ...")
+    args_str = (", " + ", ".join(parts)) if parts else ""
+    return f"    def {name}(self{args_str}) -> Tensor: ..."
 
 
 def gen_tensor_pyi() -> tuple[str, int]:
@@ -532,7 +530,6 @@ _INIT_HEADER = """\
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from __future__ import annotations
 from contextlib import AbstractContextManager
 from typing import Sequence
 
@@ -725,9 +722,9 @@ def logspace(
     steps: int,
     base: float = 10.0,
     *,
-    dtype: "DTypeLike" = None,
-    device: "DeviceLike" = None,
-) -> "Tensor": ...
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+) -> Tensor: ...
 
 # ── Tensor factories — random (random.py) ───────────────────────────────
 def manual_seed(seed: int) -> None: ...
@@ -1107,52 +1104,188 @@ def _stringify_annotation(ann) -> str:
 
 
 def _sig_from_callable(name: str, fn: object) -> str:
-    """Generate a stub line from a live callable via inspect.signature().
+    """Generate a stub line from a live callable via AST source parsing.
 
-    Falls back to a tensor-pass-through signature (``input: Tensor`` →
-    ``Tensor``) when the signature cannot be introspected — never to
-    ``Any``, which is forbidden in stubs.
+    Python 3.14 evaluates annotations lazily (PEP 649): accessing
+    ``__annotations__`` or calling ``inspect.signature()`` on a function
+    whose annotations reference TYPE_CHECKING-only names raises
+    ``NameError``.  We therefore parse the *source text* via ``ast`` —
+    which never evaluates anything — and emit annotation strings verbatim.
+
+    Falls back to a name-inferred signature (using ``_PARAM_TYPE_MAP``)
+    when source is unavailable (built-ins, C extensions, lambdas).  Never
+    emits ``*args`` / ``**kwargs`` — these are forbidden in stubs (H9).
     """
+    import ast
     import inspect
+    import textwrap
 
+    # ── Try AST-based extraction (preferred, annotation-safe) ────────────
     try:
-        sig = inspect.signature(fn, eval_str=False)  # type: ignore[arg-type]
+        raw_src = inspect.getsource(fn)
+        src = textwrap.dedent(raw_src)
+        tree = ast.parse(src)
     except Exception:
-        return f"def {name}(input: Tensor, /, *args: object, **kwargs: object) -> Tensor: ..."
+        tree = None
 
-    parts = []
-    for pname, param in sig.parameters.items():
-        ann = param.annotation
-        if ann is inspect.Parameter.empty:
-            ann_str = f": {_inferred_param_type(pname, param.kind)}"
-        else:
-            ann_str = f": {_simplify_annotation(ann)}"
-        if param.kind == inspect.Parameter.VAR_POSITIONAL:
-            parts.append(f"*{pname}{ann_str}")
-        elif param.kind == inspect.Parameter.VAR_KEYWORD:
-            parts.append(f"**{pname}{ann_str}")
-        elif param.kind == inspect.Parameter.KEYWORD_ONLY:
-            if not any(p.startswith("*,") for p in parts) and not any(
-                p.startswith("*") and not p.startswith("**") for p in parts
-            ):
-                parts.append("*")
-            default = param.default
-            if default is inspect.Parameter.empty:
-                parts.append(f"{pname}{ann_str}")
-            else:
-                parts.append(f"{pname}{ann_str} = ...")
-        else:
-            default = param.default
-            if default is inspect.Parameter.empty:
-                parts.append(f"{pname}{ann_str}")
-            else:
-                parts.append(f"{pname}{ann_str} = ...")
-    ret = sig.return_annotation
-    if ret is inspect.Parameter.empty:
-        ret_str = " -> Tensor"  # Most lucid free fns return Tensor.
-    else:
-        ret_str = f" -> {_simplify_annotation(ret)}"
-    return f"def {name}({', '.join(parts)}){ret_str}: ..."
+    if tree is not None:
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name != name:
+                continue
+            return _sig_from_ast(name, node)
+
+    # ── Fallback: code-object introspection (no annotation evaluation) ───
+    code = getattr(fn, "__code__", None)
+    if code is None:
+        # Absolute last resort for built-ins / C callables.
+        return f"def {name}(input: Tensor, /) -> Tensor: ..."
+
+    n_all = code.co_argcount
+    n_posonly = code.co_posonlyargcount
+    n_kwonly = code.co_kwonlyargcount
+    has_varargs = bool(code.co_flags & 0x04)
+    has_varkw = bool(code.co_flags & 0x08)
+
+    all_names = code.co_varnames
+    pos_kw_names = list(all_names[:n_all])
+    kwonly_start = n_all + (1 if has_varargs else 0)
+    kwonly_names = list(all_names[kwonly_start : kwonly_start + n_kwonly])
+
+    defaults: tuple[object, ...] = getattr(fn, "__defaults__", None) or ()
+    kwdefaults: dict[str, object] = getattr(fn, "__kwdefaults__", None) or {}
+
+    parts: list[str] = []
+    default_offset = n_all - len(defaults)
+
+    for i, pname in enumerate(pos_kw_names[:n_posonly]):
+        ptype = _PARAM_TYPE_MAP.get(pname, "object")
+        sfx = " = ..." if i >= default_offset else ""
+        parts.append(f"{pname}: {ptype}{sfx}")
+    if n_posonly:
+        parts.append("/")
+    for i, pname in enumerate(pos_kw_names[n_posonly:], n_posonly):
+        ptype = _PARAM_TYPE_MAP.get(pname, "object")
+        sfx = " = ..." if i >= default_offset else ""
+        parts.append(f"{pname}: {ptype}{sfx}")
+
+    # *args are genuinely variadic only if the source truly has them; the
+    # fallback code-object path treats them as unknown — skip (H9).
+    if has_varargs and not has_varkw and not kwonly_names:
+        varargs_name = all_names[n_all]
+        ptype = _PARAM_TYPE_MAP.get(varargs_name, "object")
+        parts.append(f"*{varargs_name}: {ptype}")
+    elif kwonly_names:
+        parts.append("*")
+
+    for pname in kwonly_names:
+        ptype = _PARAM_TYPE_MAP.get(pname, "object")
+        sfx = " = ..." if pname in kwdefaults else ""
+        parts.append(f"{pname}: {ptype}{sfx}")
+
+    # **kwargs: skip entirely per H9 (fallback path only).
+
+    ret = _RETURN_TYPE_MAP.get(name, "Tensor")
+    return f"def {name}({', '.join(parts)}) -> {ret}: ..."
+
+
+# Return-type override map for composite ops that don't return Tensor.
+_RETURN_TYPE_MAP: dict[str, str] = {
+    "allclose":      "bool",
+    "is_conj":       "bool",
+    "is_neg":        "bool",
+    "is_nonzero":    "bool",
+    "is_same_size":  "bool",
+    "is_storage":    "bool",
+    "can_cast":      "bool",
+    "numel":         "int",
+    "result_type":   "DTypeLike",
+    "std_mean":      "tuple[Tensor, Tensor]",
+    "var_mean":      "tuple[Tensor, Tensor]",
+    "frexp":         "tuple[Tensor, Tensor]",
+    "histogram":     "tuple[Tensor, Tensor]",
+    "histogram2d":   "tuple[Tensor, Tensor, Tensor]",
+    "histogramdd":   "tuple[Tensor, list[Tensor]]",
+    "atleast_1d":    "Tensor | tuple[Tensor, ...]",
+    "atleast_2d":    "Tensor | tuple[Tensor, ...]",
+    "atleast_3d":    "Tensor | tuple[Tensor, ...]",
+    "dsplit":        "list[Tensor]",
+    "hsplit":        "list[Tensor]",
+    "vsplit":        "list[Tensor]",
+    "tensor_split":  "list[Tensor]",
+    "column_stack":  "Tensor",
+    "row_stack":     "Tensor",
+    "dstack":        "Tensor",
+    "diff":          "Tensor",
+    "lerp":          "Tensor",
+}
+
+
+def _sig_from_ast(name: str, node: "ast.FunctionDef | ast.AsyncFunctionDef") -> str:  # type: ignore[name-defined]
+    """Emit a stub line from a parsed AST ``FunctionDef`` node.
+
+    Annotation nodes are converted to strings via ``ast.unparse`` (never
+    evaluated), so TYPE_CHECKING-only names work without triggering
+    ``NameError``.  Positional-only and keyword-only markers are preserved.
+    ``*args`` / ``**kwargs`` are omitted per H9 unless the parameter name
+    implies genuine variadic intent (e.g. ``*tensors``).
+    """
+    import ast
+
+    args = node.args
+
+    def _ann(ann_node: "ast.expr | None") -> str:
+        if ann_node is None:
+            return ""
+        return ast.unparse(ann_node)
+
+    parts: list[str] = []
+
+    # Positional-only (before the ``/`` marker)
+    n_posonly = len(args.posonlyargs)
+    all_pos = list(args.posonlyargs) + list(args.args)
+    n_pos_kw = len(args.args)
+    n_all = n_posonly + n_pos_kw
+    n_defaults = len(args.defaults)
+    default_offset = n_all - n_defaults
+
+    for i, arg in enumerate(all_pos):
+        ann = _ann(arg.annotation)
+        ptype = ann if ann else _PARAM_TYPE_MAP.get(arg.arg, "object")
+        sfx = " = ..." if i >= default_offset else ""
+        parts.append(f"{arg.arg}: {ptype}{sfx}")
+    if n_posonly:
+        parts.append("/")
+
+    # *args — only emit when genuinely variadic (e.g. ``*tensors: Tensor``).
+    # Per H9: ``*args: object`` is never emitted.
+    if args.vararg:
+        vname = args.vararg.arg
+        ann = _ann(args.vararg.annotation)
+        ptype = ann if ann else _PARAM_TYPE_MAP.get(vname, "object")
+        # Emit only when the annotation or name is Tensor-typed (truly variadic).
+        if ptype not in {"object", "Any"}:
+            parts.append(f"*{vname}: {ptype}")
+        elif args.kwonlyargs:
+            parts.append("*")
+    elif args.kwonlyargs:
+        parts.append("*")
+
+    # Keyword-only args
+    kw_defaults = args.kw_defaults  # list of default AST nodes (None = no default)
+    for i, arg in enumerate(args.kwonlyargs):
+        ann = _ann(arg.annotation)
+        ptype = ann if ann else _PARAM_TYPE_MAP.get(arg.arg, "object")
+        sfx = " = ..." if kw_defaults[i] is not None else ""
+        parts.append(f"{arg.arg}: {ptype}{sfx}")
+
+    # **kwargs — H9: omit entirely.
+
+    # Return type
+    ret = _ann(node.returns) if node.returns else _RETURN_TYPE_MAP.get(name, "Tensor")
+
+    return f"def {name}({', '.join(parts)}) -> {ret}: ..."
 
 
 def _inferred_param_type(name: str, kind) -> str:

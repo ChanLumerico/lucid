@@ -6,8 +6,8 @@ All functions operate in-place and return the tensor.
 import math
 from typing import TYPE_CHECKING
 
+import lucid as _lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import _impl_with_grad as _iwg
 
 if TYPE_CHECKING:
@@ -166,8 +166,6 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
     rest, the resulting 2-D matrix is made orthogonal, and the original
     shape is restored — matching the reference framework.
     """
-    import lucid as _lucid
-
     if tensor.ndim < 2:
         raise ValueError("orthogonal_() requires at least a 2D tensor")
     rows: int = int(tensor.shape[0])
@@ -201,8 +199,6 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
         raise ValueError("sparse_() requires a 2D tensor")
     if not 0.0 <= sparsity <= 1.0:
         raise ValueError(f"sparsity must be in [0, 1], got {sparsity!r}")
-
-    import lucid as _lucid
 
     rows: int = int(tensor.shape[0])
     cols: int = int(tensor.shape[1])
@@ -240,8 +236,6 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
         raise ValueError(
             f"out_channels ({out_ch}) must be divisible by groups ({groups})"
         )
-
-    import lucid as _lucid
 
     out_per_group: int = out_ch // groups
     min_dim: int = min(in_ch_per_group, out_per_group)
@@ -319,20 +313,44 @@ def _calculate_correct_fan(tensor: Tensor, mode: str) -> int:
     raise ValueError(f"Unknown mode: {mode!r}")
 
 
+# Non-inplace aliases (deprecated in the reference framework but still widely used).
+constant = constant_
+dirac = dirac_
+eye = eye_
+kaiming_normal = kaiming_normal_
+kaiming_uniform = kaiming_uniform_
+normal = normal_
+orthogonal = orthogonal_
+sparse = sparse_
+uniform = uniform_
+xavier_normal = xavier_normal_
+xavier_uniform = xavier_uniform_
+
 __all__ = [
     "calculate_gain",
     "constant_",
+    "constant",
     "dirac_",
+    "dirac",
     "eye_",
+    "eye",
     "kaiming_normal_",
+    "kaiming_normal",
     "kaiming_uniform_",
+    "kaiming_uniform",
     "normal_",
+    "normal",
     "ones_",
     "orthogonal_",
+    "orthogonal",
     "sparse_",
+    "sparse",
     "trunc_normal_",
     "uniform_",
+    "uniform",
     "xavier_normal_",
+    "xavier_normal",
     "xavier_uniform_",
+    "xavier_uniform",
     "zeros_",
 ]

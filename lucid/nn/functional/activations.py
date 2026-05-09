@@ -3,6 +3,8 @@ nn.functional activation functions.
 """
 
 from typing import TYPE_CHECKING
+
+import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -379,8 +381,6 @@ def hardtanh(
     """Element-wise ``clamp(x, min_val, max_val)`` — the standard
     reference framework's ``Hardtanh`` activation.  ``inplace`` is
     accepted for API compatibility and ignored."""
-    import lucid as _l
-
     return _l.clamp(x, min_val, max_val)
 
 
@@ -391,8 +391,6 @@ def logsigmoid(x: Tensor) -> Tensor:
 
 def softsign(x: Tensor) -> Tensor:
     """``x / (1 + |x|)``."""
-    import lucid as _l
-
     return x / (1.0 + _l.abs(x))
 
 
@@ -404,8 +402,6 @@ def threshold(
 ) -> Tensor:
     """``threshold(x, t, v) = x where x > t else v``.  ``inplace`` is
     accepted for API compatibility and ignored."""
-    import lucid as _l
-
     keep = x > threshold
     replacement = _l.full_like(x, float(value))
     return _l.where(keep, x, replacement)
@@ -427,8 +423,6 @@ def gumbel_softmax(
     Mirrors the reference framework's contract — used heavily in
     discrete-action RL and VQ training.
     """
-    import lucid as _l
-
     # Sample Gumbel noise: −log(−log U) with U ∈ (0, 1).  Clamp away
     # from the boundaries to avoid log(0).
     u: Tensor = _l.rand(
@@ -469,8 +463,6 @@ def rrelu(
 
     ``inplace`` is accepted for API compatibility and ignored.
     """
-    import lucid as _l
-
     if training:
         # Per-element uniform slope, only applied where x < 0.
         slope: Tensor = (
@@ -484,3 +476,61 @@ def rrelu(
         slope = _l.full_like(x, mid)
     neg_part: Tensor = slope * x
     return _l.where(x >= 0, x, neg_part)
+
+
+# ── Inplace variants ──────────────────────────────────────────────────────────
+# For ops whose engine already has a native inplace kernel, call it directly.
+# For the rest, apply the out-of-place version and copy the result back.
+
+
+def relu_(x: Tensor, inplace: bool = True) -> Tensor:
+    """In-place ReLU via the engine's native inplace kernel."""
+    return _wrap(_C_engine.relu_(_unwrap(x)))
+
+
+def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
+    """In-place ELU: applies ``elu(x, alpha)`` and writes back into ``x``."""
+    return x.copy_(elu(x, alpha))
+
+
+def selu_(x: Tensor, inplace: bool = True) -> Tensor:
+    """In-place SELU."""
+    return x.copy_(selu(x))
+
+
+def leaky_relu_(
+    x: Tensor, negative_slope: float = 0.01, inplace: bool = True
+) -> Tensor:
+    """In-place leaky ReLU."""
+    return x.copy_(leaky_relu(x, negative_slope))
+
+
+def hardtanh_(
+    x: Tensor,
+    min_val: float = -1.0,
+    max_val: float = 1.0,
+    inplace: bool = True,
+) -> Tensor:
+    """In-place hardtanh."""
+    return x.copy_(hardtanh(x, min_val, max_val))
+
+
+def threshold_(
+    x: Tensor,
+    threshold_val: float,
+    value: float,
+    inplace: bool = True,
+) -> Tensor:
+    """In-place threshold."""
+    return x.copy_(threshold(x, threshold_val, value))
+
+
+def rrelu_(
+    x: Tensor,
+    lower: float = 1.0 / 8,
+    upper: float = 1.0 / 3,
+    training: bool = False,
+    inplace: bool = True,
+) -> Tensor:
+    """In-place RReLU."""
+    return x.copy_(rrelu(x, lower, upper, training))

@@ -73,3 +73,50 @@ def clip_grad_value_(
         if p.grad is not None:
             g_impl = _unwrap(p.grad)
             p._impl.set_grad(_C_engine.clip(g_impl, -clip_value, clip_value))
+
+
+def get_total_norm(
+    parameters: Iterable["Parameter"],
+    norm_type: float = 2.0,
+    error_if_nonfinite: bool = False,
+    foreach: bool | None = None,
+) -> "Tensor":
+    """Compute the total gradient norm without clipping.
+
+    ``foreach`` is accepted for API compatibility but ignored — Lucid
+    processes parameters sequentially via the C++ engine.
+    """
+    params_with_grad = [p for p in parameters if p.grad is not None]
+    if not params_with_grad:
+        return zeros(1)
+
+    dev = params_with_grad[0]._impl.device
+    dt = params_with_grad[0]._impl.dtype
+
+    if norm_type == math.inf:
+        max_val = _C_engine.full([1], float("-inf"), dt, dev)
+        for p in params_with_grad:
+            g_impl = _unwrap(p.grad)
+            abs_g = _C_engine.abs(g_impl)
+            m = _C_engine.reshape(_C_engine.max(abs_g, [], False), [1])
+            mv = _C_engine.reshape(max_val, [1])
+            max_val = _C_engine.max(_C_engine.stack([mv, m], 0), [0], False)
+        total_norm = float(_wrap(max_val).item())
+    else:
+        acc = _C_engine.zeros([1], dt, dev)
+        for p in params_with_grad:
+            g_impl = _unwrap(p.grad)
+            pow_g = _C_engine.pow_scalar(_C_engine.abs(g_impl), norm_type)
+            s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])
+            acc = _C_engine.add(acc, s)
+        total_norm = float(_wrap(acc).item()) ** (1.0 / norm_type)
+
+    if error_if_nonfinite and (math.isnan(total_norm) or math.isinf(total_norm)):
+        raise RuntimeError(
+            f"The total norm of order {norm_type} for gradients is "
+            f"non-finite ({total_norm})."
+        )
+    return _wrap(_C_engine.full([1], total_norm, dt, dev))
+
+
+clip_grad_norm = clip_grad_norm_

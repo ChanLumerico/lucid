@@ -315,6 +315,7 @@ class Tensor[DT: dtype, DV: device]:
         ``pip install lucid[numpy]``.
         """
         from lucid._factories.converters import _require_numpy
+
         np = _require_numpy("Tensor.numpy()")
         raw = self._impl.data_as_python()
         return np.asarray(raw)

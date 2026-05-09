@@ -3,6 +3,8 @@ nn.functional normalization operations.
 """
 
 from typing import TYPE_CHECKING
+
+import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -163,8 +165,6 @@ def instance_norm(
     the same fallback the reference framework uses in eval mode with
     ``track_running_stats=True``.
     """
-    import lucid as _lucid
-
     if x.ndim < 3:
         raise ValueError(
             f"instance_norm: expected at least 3-D input (N, C, *spatial), "

@@ -4,6 +4,8 @@ Random tensor creation: rand, randn, randint, bernoulli, normal, manual_seed.
 
 import os
 from typing import TYPE_CHECKING
+
+import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
 from lucid._dtype import dtype, int64
@@ -66,8 +68,6 @@ def get_rng_state() -> Tensor:
     pair, so a longer "state vector" (which the reference framework uses
     for its mt19937 backend) is unnecessary here.
     """
-    import lucid as _lucid
-
     g = _active_default_gen()
     return _lucid.tensor([int(g.seed), int(g.counter)], dtype=int64)
 

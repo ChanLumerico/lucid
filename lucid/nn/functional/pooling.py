@@ -3,6 +3,8 @@ nn.functional pooling operations.
 """
 
 from typing import Callable, TYPE_CHECKING
+
+import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -37,8 +39,6 @@ def _adaptive_pool_python_avg(x: Tensor, output_size: tuple[int, ...]) -> Tensor
     via ``narrow`` + ``mean`` — each step is an engine op so the result
     stays on the original device with no host round-trip.
     """
-    import lucid as _lucid
-
     n_spatial: int = len(output_size)
     in_spatial: tuple[int, ...] = tuple(int(s) for s in x.shape[-n_spatial:])
     ndim: int = x.ndim
@@ -284,12 +284,10 @@ def _lp_pool(
     the ``p``-th root.  ``ceil_mode`` is forwarded to the underlying
     ``avg_pool*`` call where supported.
     """
-    import lucid as _l
-
     p = float(norm_type)
     if p <= 0.0:
         raise ValueError(f"lp_pool: norm_type must be > 0, got {p}")
-    abs_pow = _l.abs(x) ** p
+    abs_pow = _lucid.abs(x) ** p
     K = 1
     for k in _int_or_tuple(kernel_size, n):
         K *= int(k)
@@ -370,8 +368,6 @@ def _scatter_unpool(
     Implemented via ``scatter_add`` over a flattened spatial axis;
     ``scatter_add`` is differentiable (gradient flows back to ``x``).
     """
-    import lucid as _l
-
     if x.shape != indices.shape:
         raise ValueError(
             f"max_unpool: expected input and indices shapes to match, got "
@@ -382,7 +378,7 @@ def _scatter_unpool(
     for s in output_spatial:
         spatial_numel *= int(s)
     out_flat_shape = leading + [spatial_numel]
-    zeros = _l.zeros(*out_flat_shape, dtype=x.dtype, device=x.device)
+    zeros = _lucid.zeros(*out_flat_shape, dtype=x.dtype, device=x.device)
 
     # Flatten the trailing spatial dims of ``x`` and ``indices`` so that
     # ``scatter_add`` works on a single 1-D axis.

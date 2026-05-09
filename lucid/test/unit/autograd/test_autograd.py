@@ -101,16 +101,14 @@ class TestSecondOrder:
         # d²/dx² [x³] = 6x; at x=2 → 12.
         x = lucid.tensor([2.0], requires_grad=True)
         y = x * x * x
-        g1, = lucid.autograd.grad(y, x, create_graph=True)
-        g2, = lucid.autograd.grad(g1, x)
+        (g1,) = lucid.autograd.grad(y, x, create_graph=True)
+        (g2,) = lucid.autograd.grad(g1, x)
         assert abs(g2.item() - 12.0) < 1e-4
 
     def test_hessian_quartic(self) -> None:
         # f(x) = sum(x^4); H_ii = 12 x_i², off-diag 0.  At [1, 1] → diag(12, 12).
-        H = lucid.autograd.hessian(lambda x: (x ** 4).sum(), lucid.tensor([1.0, 1.0]))
-        np.testing.assert_allclose(
-            H.numpy(), [[12.0, 0.0], [0.0, 12.0]], atol=1e-3
-        )
+        H = lucid.autograd.hessian(lambda x: (x**4).sum(), lucid.tensor([1.0, 1.0]))
+        np.testing.assert_allclose(H.numpy(), [[12.0, 0.0], [0.0, 12.0]], atol=1e-3)
 
 
 class TestAnomalyToggle:
@@ -127,6 +125,7 @@ class TestAnomalyToggle:
 class TestAutogradGraph:
     def test_allow_mutation_on_saved_flag_toggles(self) -> None:
         from lucid._C import engine as _C_engine
+
         assert not _C_engine.is_mutation_on_saved_allowed()
         with lucid.autograd.graph.allow_mutation_on_saved_tensors():
             assert _C_engine.is_mutation_on_saved_allowed()
@@ -143,6 +142,7 @@ class TestAutogradGraph:
 class TestAutogradProfilerAlias:
     def test_alias_matches_lucid_profiler(self) -> None:
         import lucid.profiler as P
+
         assert lucid.autograd.profiler.profile is P.profile
         assert lucid.autograd.profiler.OpEvent is P.OpEvent
 

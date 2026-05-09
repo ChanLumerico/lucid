@@ -88,4 +88,26 @@ def count_nonzero(
     return counts.to(dtype=lucid.int64)
 
 
-__all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero"]
+def amax(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> Tensor:
+    """Maximum values along ``dim``, without returning indices."""
+    if dim is None:
+        return lucid.max(x)
+    return lucid.max(x, dim, keepdim)
+
+
+def amin(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> Tensor:
+    """Minimum values along ``dim``, without returning indices."""
+    if dim is None:
+        return lucid.min(x)
+    return lucid.min(x, dim, keepdim)
+
+
+__all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero", "amax", "amin"]

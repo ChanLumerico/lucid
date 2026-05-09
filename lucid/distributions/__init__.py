@@ -44,6 +44,14 @@ from lucid.distributions.transforms import (
     Transform,
     TransformedDistribution,
 )
+from lucid.distributions.extra import (
+    ContinuousBernoulli,
+    Gumbel,
+    InverseGamma,
+    Kumaraswamy,
+    Multinomial,
+)
+from lucid.distributions.matrix import LKJCholesky, Wishart
 from lucid.distributions.uniform import Uniform
 
 __all__ = [
@@ -78,11 +86,22 @@ __all__ = [
     "Poisson",
     "Binomial",
     "NegativeBinomial",
+    # extra univariate continuous
+    "Gumbel",
+    "InverseGamma",
+    "Kumaraswamy",
+    # discrete (extra)
+    "Multinomial",
+    # continuous [0,1]
+    "ContinuousBernoulli",
     # relaxed (Concrete) — differentiable approximations
     "RelaxedBernoulli",
     "RelaxedOneHotCategorical",
     # multivariate
     "MultivariateNormal",
+    # matrix-valued
+    "Wishart",
+    "LKJCholesky",
     # wrappers
     "Independent",
     "TransformedDistribution",

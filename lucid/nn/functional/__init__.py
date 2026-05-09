@@ -30,6 +30,13 @@ from lucid.nn.functional.activations import (
     threshold,
     rrelu,
     gumbel_softmax,
+    relu_,
+    elu_,
+    selu_,
+    leaky_relu_,
+    hardtanh_,
+    threshold_,
+    rrelu_,
 )
 from lucid.nn.functional.linear import linear, bilinear
 from lucid.nn.functional.conv import (

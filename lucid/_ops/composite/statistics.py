@@ -574,6 +574,38 @@ def histogram(
     return hist_t, edges_t
 
 
+def std_mean(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    correction: int = 1,
+    keepdim: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """Return ``(std, mean)`` along ``dim``."""
+    if dim is not None:
+        m = lucid.mean(x, dim, keepdim)
+        s = lucid.std(x, dim, keepdim, correction=correction)
+    else:
+        m = lucid.mean(x)
+        s = lucid.std(x)
+    return s, m
+
+
+def var_mean(
+    x: Tensor,
+    dim: int | Sequence[int] | None = None,
+    correction: int = 1,
+    keepdim: bool = False,
+) -> tuple[Tensor, Tensor]:
+    """Return ``(var, mean)`` along ``dim``."""
+    if dim is not None:
+        m = lucid.mean(x, dim, keepdim)
+        v = lucid.var(x, dim, keepdim, correction=correction)
+    else:
+        m = lucid.mean(x)
+        v = lucid.var(x)
+    return v, m
+
+
 __all__ = [
     "quantile",
     "nanquantile",
@@ -586,4 +618,6 @@ __all__ = [
     "histogramdd",
     "multinomial",
     "poisson",
+    "std_mean",
+    "var_mean",
 ]
