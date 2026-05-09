@@ -187,6 +187,7 @@ class Tensor[DT: dtype, DV: device]:
             self._impl.zero_grad()
         else:
             from lucid._dispatch import _unwrap
+
             self._impl.set_grad(_unwrap(v))
 
     @property
@@ -247,6 +248,7 @@ class Tensor[DT: dtype, DV: device]:
                 "Only tensors with requires_grad=True can have gradient hooks."
             )
         from lucid.autograd._hooks import _register_tensor_hook
+
         return _register_tensor_hook(self, hook)
 
     def backward(
@@ -316,6 +318,7 @@ class Tensor[DT: dtype, DV: device]:
         # Fire any tensor-level gradient hooks registered via register_hook().
         # Import lazily to avoid circular imports at module load time.
         from lucid.autograd._hooks import _dispatch_tensor_grad_hooks
+
         _dispatch_tensor_grad_hooks()
 
     def detach(self) -> Self:
@@ -628,6 +631,7 @@ class Tensor[DT: dtype, DV: device]:
         """
         if self.is_complex():
             from lucid._ops.composite import conj as _conj
+
             return _conj(self).mT  # type: ignore[return-value]
         return self.mT  # type: ignore[return-value]
 
@@ -642,14 +646,14 @@ class Tensor[DT: dtype, DV: device]:
         ``ShortTensor``, ``ByteTensor``.
         """
         _DTYPE_STR: dict[str, object] = {
-            "lucid.FloatTensor":  float32,
+            "lucid.FloatTensor": float32,
             "lucid.DoubleTensor": float64,
-            "lucid.HalfTensor":   float16,
-            "lucid.IntTensor":    int32,
-            "lucid.LongTensor":   int64,
-            "lucid.BoolTensor":   bool_,
-            "lucid.ShortTensor":  int16,
-            "lucid.ByteTensor":   int8,
+            "lucid.HalfTensor": float16,
+            "lucid.IntTensor": int32,
+            "lucid.LongTensor": int64,
+            "lucid.BoolTensor": bool_,
+            "lucid.ShortTensor": int16,
+            "lucid.ByteTensor": int8,
         }
         _DTYPE_TO_STR: dict[object, str] = {v: k for k, v in _DTYPE_STR.items()}
         if dtype is None:

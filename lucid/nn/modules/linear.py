@@ -9,7 +9,7 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 import lucid.nn.init as init
 from lucid._factories.creation import empty
-from lucid.nn.functional.linear import linear, bilinear
+from lucid.nn.functional.linear import linear, bilinear, fused_linear_relu, fused_linear_gelu
 from lucid._types import StateDict
 
 
@@ -86,6 +86,100 @@ class Identity(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return x
+
+
+class FusedLinear(Module):
+    """Linear layer with a fused activation (Phase 19 FusionPass).
+
+    ``y = activation(x @ weight.T + bias)``
+
+    In **inference mode** the computation is performed as a single
+    BLAS + Accelerate pass, bypassing the intermediate activation
+    tensor allocation.  In **training mode** it falls back to standard
+    unfused ops so gradients are computed correctly.
+
+    Parameters
+    ----------
+    in_features : int
+        Size of each input sample.
+    out_features : int
+        Size of each output sample.
+    activation : str
+        Fused activation function.  Supported values:
+
+        * ``'relu'`` (default) — uses ``_fused_linear_relu``
+        * ``'gelu'``           — uses ``_fused_linear_gelu`` (tanh approx)
+    bias : bool
+        If ``True`` (default), add a learnable bias.
+    device : optional
+        Device for initial parameters.
+    dtype : optional
+        Dtype for initial parameters.
+
+    Examples
+    --------
+    >>> m = nn.FusedLinear(64, 256, activation='relu')
+    >>> x = lucid.randn(4, 64)
+    >>> with lucid.no_grad():
+    ...     y = m(x)   # single-pass fused kernel on CPU
+    >>> y.shape
+    (4, 256)
+    """
+
+    _SUPPORTED = frozenset({"relu", "gelu"})
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        activation: str = "relu",
+        bias: bool = True,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+    ) -> None:
+        super().__init__()
+        if activation not in self._SUPPORTED:
+            raise ValueError(
+                f"FusedLinear: unsupported activation '{activation}'. "
+                f"Choose from {sorted(self._SUPPORTED)}."
+            )
+        self.in_features = in_features
+        self.out_features = out_features
+        self.activation = activation
+
+        import math as _math
+        import lucid.nn.init as _init
+
+        self.weight = Parameter(empty(out_features, in_features, dtype=dtype, device=device))
+        if bias:
+            self.bias: Parameter | None = Parameter(
+                empty(out_features, dtype=dtype, device=device)
+            )
+        else:
+            self.bias = None
+
+        _init.kaiming_uniform_(self.weight, a=_math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = _init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1.0 / _math.sqrt(fan_in) if fan_in > 0 else 0.0
+            _init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.bias is None:
+            # No fused kernel for bias=False — fall back to standard ops.
+            import lucid.nn.functional as F
+            act = F.relu if self.activation == "relu" else F.gelu
+            return act(linear(x, self.weight, None))
+
+        if self.activation == "relu":
+            return fused_linear_relu(x, self.weight, self.bias)
+        return fused_linear_gelu(x, self.weight, self.bias)
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_features={self.in_features}, out_features={self.out_features}, "
+            f"activation={self.activation!r}, bias={self.bias is not None}"
+        )
 
 
 class Bilinear(Module):

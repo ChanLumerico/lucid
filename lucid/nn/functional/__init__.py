@@ -38,7 +38,7 @@ from lucid.nn.functional.activations import (
     threshold_,
     rrelu_,
 )
-from lucid.nn.functional.linear import linear, bilinear
+from lucid.nn.functional.linear import linear, bilinear, fused_linear_relu, fused_linear_gelu
 from lucid.nn.functional.conv import (
     conv1d,
     conv2d,
@@ -161,6 +161,8 @@ __all__ = [
     # linear
     "linear",
     "bilinear",
+    "fused_linear_relu",
+    "fused_linear_gelu",
     # conv
     "conv1d",
     "conv2d",

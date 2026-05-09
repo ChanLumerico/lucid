@@ -77,6 +77,7 @@ class TestPromotion:
         out = a + b
         assert out.dtype == lucid.float32
         import numpy as np
+
         np.testing.assert_allclose(out.numpy(), [3.5])
 
     def test_explicit_cast_then_op(self, device: str) -> None:

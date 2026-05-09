@@ -71,9 +71,7 @@ class RemovableHandle:
         self.remove()
 
 
-def _register_tensor_hook(
-    tensor: "Tensor", hook: Callable
-) -> RemovableHandle:
+def _register_tensor_hook(tensor: "Tensor", hook: Callable) -> RemovableHandle:
     """Register *hook* on *tensor*'s gradient and return a removable handle.
 
     Called by :meth:`~lucid.Tensor.register_hook`.

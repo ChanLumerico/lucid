@@ -42,20 +42,18 @@ _Impl = _C_engine.TensorImpl
 _D = _C_engine.Dtype
 _ARITH_DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.Bool: (0, 1),
-    _D.I8:   (1, 8),
-    _D.I16:  (1, 16),
-    _D.I32:  (1, 32),
-    _D.I64:  (1, 64),
-    _D.F16:  (2, 16),
-    _D.F32:  (2, 32),
-    _D.F64:  (2, 64),
-    _D.C64:  (3, 64),
+    _D.I8: (1, 8),
+    _D.I16: (1, 16),
+    _D.I32: (1, 32),
+    _D.I64: (1, 64),
+    _D.F16: (2, 16),
+    _D.F32: (2, 32),
+    _D.F64: (2, 64),
+    _D.C64: (3, 64),
 }
 
 
-def _arith_result_dtype(
-    da: _C_engine.Dtype, db: _C_engine.Dtype
-) -> _C_engine.Dtype:
+def _arith_result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
     """Return the promoted dtype for an arithmetic binary op."""
     if da == db:
         return da
@@ -295,10 +293,7 @@ def _expand_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
     # If expanding to more dims, prepend 1s to src_shape (implicit broadcast).
     if ndim_dst > ndim_src:
         src_shape = [1] * (ndim_dst - ndim_src) + src_shape
-    resolved = [
-        src_shape[i] if d == -1 else d
-        for i, d in enumerate(raw)
-    ]
+    resolved = [src_shape[i] if d == -1 else d for i, d in enumerate(raw)]
     return _C_engine.expand(x_impl, resolved)
 
 

@@ -63,9 +63,7 @@ class TestFPadParity:
 class TestConvPaddingModeParity:
     """Conv2d padding_mode forward parity."""
 
-    def _run(
-        self, ref: Any, padding_mode: str
-    ) -> tuple[Any, Any]:
+    def _run(self, ref: Any, padding_mode: str) -> tuple[Any, Any]:
         import torch
         from lucid._C import engine as _C_engine
 

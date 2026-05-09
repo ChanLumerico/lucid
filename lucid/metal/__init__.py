@@ -152,9 +152,9 @@ def _init_dtype_map() -> None:
             float16: "f16",
             float32: "f32",
             float64: "f64",
-            int32:   "i32",
-            int64:   "i64",
-            bool_:   "i32",  # bools are 32-bit ints in MSL
+            int32: "i32",
+            int64: "i64",
+            bool_: "i32",  # bools are 32-bit ints in MSL
         }
     )
 

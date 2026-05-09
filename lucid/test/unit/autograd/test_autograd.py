@@ -153,9 +153,7 @@ class TestCustomFunction:
                 return lucid.relu(x)
 
             @staticmethod
-            def backward(
-                ctx: FunctionCtx, grad_output: lucid.Tensor
-            ) -> lucid.Tensor:
+            def backward(ctx: FunctionCtx, grad_output: lucid.Tensor) -> lucid.Tensor:
                 (x,) = ctx.saved_tensors
                 # (x > 0) is a bool tensor — promotion to float32 must happen
                 # transparently inside the * operator.
@@ -173,7 +171,9 @@ class TestCustomFunction:
 
         class Scale(Function):
             @staticmethod
-            def forward(ctx: FunctionCtx, x: lucid.Tensor, s: lucid.Tensor) -> lucid.Tensor:
+            def forward(
+                ctx: FunctionCtx, x: lucid.Tensor, s: lucid.Tensor
+            ) -> lucid.Tensor:
                 ctx.save_for_backward(x, s)
                 return x * s
 
@@ -302,9 +302,7 @@ class TestCheckpoint:
 
         y_direct = block(x.detach().requires_grad_(True))
         y_ckpt = checkpoint(block, x)
-        np.testing.assert_allclose(
-            y_ckpt.numpy(), y_direct.detach().numpy(), atol=1e-5
-        )
+        np.testing.assert_allclose(y_ckpt.numpy(), y_direct.detach().numpy(), atol=1e-5)
 
     def test_gradients_correct(self) -> None:
         """Gradients through checkpoint match direct backward."""

@@ -140,7 +140,9 @@ def _default_load_from_state_dict(
             # assign=True: replace the parameter/buffer object directly,
             # allowing shape and dtype changes (matches reference framework).
             needs_grad: bool = getattr(attr, "requires_grad", False)
-            new_impl: object = _C_engine.contiguous(src._impl).clone_with_grad(needs_grad)
+            new_impl: object = _C_engine.contiguous(src._impl).clone_with_grad(
+                needs_grad
+            )
             if name in module._parameters:
                 # Preserve Parameter wrapping.
                 new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)

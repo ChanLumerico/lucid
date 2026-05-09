@@ -113,9 +113,7 @@ def checkpoint(
 
             # Detach inputs so the re-run doesn't accumulate into their .grad
             # before we collect the fresh gradients below.
-            detached = tuple(
-                t.detach().requires_grad_(t.requires_grad) for t in inputs
-            )
+            detached = tuple(t.detach().requires_grad_(t.requires_grad) for t in inputs)
 
             # Re-run the forward segment to rebuild the local graph.
             with enable_grad():
@@ -124,9 +122,7 @@ def checkpoint(
             # Backward through the re-computed graph.
             output.backward(grad_output)
 
-            return tuple(
-                t.grad if t.requires_grad else None for t in detached
-            )
+            return tuple(t.grad if t.requires_grad else None for t in detached)
 
     return _CheckpointFn.apply(*args)
 

@@ -40,9 +40,9 @@ def _copy_weights_positional(src_module: Any, dst_module: nn.Module) -> None:
 
     src_params = list(src_module.parameters())
     dst_params = list(dst_module.parameters())
-    assert len(src_params) == len(dst_params), (
-        f"Parameter count mismatch: {len(src_params)} vs {len(dst_params)}"
-    )
+    assert len(src_params) == len(
+        dst_params
+    ), f"Parameter count mismatch: {len(src_params)} vs {len(dst_params)}"
     for src_p, dst_p in zip(src_params, dst_params):
         arr = src_p.detach().numpy().copy()
         dst_p._impl = _C_engine.TensorImpl(arr, _C_engine.Device.CPU, True)

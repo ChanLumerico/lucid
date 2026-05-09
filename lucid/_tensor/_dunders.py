@@ -22,20 +22,18 @@ if TYPE_CHECKING:
 _D = _C_engine.Dtype
 _DTYPE_KIND_WIDTH: dict[_C_engine.Dtype, tuple[int, int]] = {
     _D.Bool: (0, 1),
-    _D.I8:   (1, 8),
-    _D.I16:  (1, 16),
-    _D.I32:  (1, 32),
-    _D.I64:  (1, 64),
-    _D.F16:  (2, 16),
-    _D.F32:  (2, 32),
-    _D.F64:  (2, 64),
-    _D.C64:  (3, 64),
+    _D.I8: (1, 8),
+    _D.I16: (1, 16),
+    _D.I32: (1, 32),
+    _D.I64: (1, 64),
+    _D.F16: (2, 16),
+    _D.F32: (2, 32),
+    _D.F64: (2, 64),
+    _D.C64: (3, 64),
 }
 
 
-def _result_dtype(
-    da: _C_engine.Dtype, db: _C_engine.Dtype
-) -> _C_engine.Dtype:
+def _result_dtype(da: _C_engine.Dtype, db: _C_engine.Dtype) -> _C_engine.Dtype:
     """Return the type-promotion result dtype for two arithmetic operands."""
     if da == db:
         return da
