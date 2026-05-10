@@ -369,8 +369,10 @@ class Transformer(Module):
             device=device,
             dtype=dtype,
         )
-        self.encoder = TransformerEncoder(enc_layer, num_encoder_layers)
-        self.decoder = TransformerDecoder(dec_layer, num_decoder_layers)
+        enc_norm = LayerNorm(d_model, device=device, dtype=dtype)
+        dec_norm = LayerNorm(d_model, device=device, dtype=dtype)
+        self.encoder = TransformerEncoder(enc_layer, num_encoder_layers, norm=enc_norm)
+        self.decoder = TransformerDecoder(dec_layer, num_decoder_layers, norm=dec_norm)
         self.d_model = d_model
         self.nhead = nhead
 

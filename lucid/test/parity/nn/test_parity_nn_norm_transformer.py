@@ -399,3 +399,98 @@ class TestTransformerEncoderLayerParity:
         ref_out = ref_layer(ref.tensor(x_np.copy()))
         lucid_out = lucid_layer(lucid.tensor(x_np.copy()))
         assert_close(lucid_out, ref_out, atol=1e-4)
+
+
+# ── TransformerDecoderLayer ───────────────────────────────────────────────────
+
+
+@pytest.mark.parity
+class TestTransformerDecoderLayerParity:
+    def test_forward_eval(self, ref: Any) -> None:
+        D, H = 8, 2
+        rng = np.random.default_rng(19)
+        tgt_np = rng.standard_normal((4, 2, D)).astype(np.float32)
+        mem_np = rng.standard_normal((6, 2, D)).astype(np.float32)
+
+        ref_layer = ref.nn.TransformerDecoderLayer(D, H, dim_feedforward=16, dropout=0.0)
+        lucid_layer = nn.TransformerDecoderLayer(D, H, dim_feedforward=16, dropout=0.0)
+        ref_layer.eval()
+        lucid_layer.eval()
+        _copy_weights_positional(ref_layer, lucid_layer)
+
+        ref_out = ref_layer(ref.tensor(tgt_np.copy()), ref.tensor(mem_np.copy()))
+        lucid_out = lucid_layer(lucid.tensor(tgt_np.copy()), lucid.tensor(mem_np.copy()))
+        assert_close(lucid_out, ref_out, atol=1e-4)
+
+    def test_norm_first_eval(self, ref: Any) -> None:
+        D, H = 8, 2
+        rng = np.random.default_rng(20)
+        tgt_np = rng.standard_normal((3, 1, D)).astype(np.float32)
+        mem_np = rng.standard_normal((5, 1, D)).astype(np.float32)
+
+        ref_layer = ref.nn.TransformerDecoderLayer(
+            D, H, dim_feedforward=16, dropout=0.0, norm_first=True
+        )
+        lucid_layer = nn.TransformerDecoderLayer(
+            D, H, dim_feedforward=16, dropout=0.0, norm_first=True
+        )
+        ref_layer.eval()
+        lucid_layer.eval()
+        _copy_weights_positional(ref_layer, lucid_layer)
+
+        ref_out = ref_layer(ref.tensor(tgt_np.copy()), ref.tensor(mem_np.copy()))
+        lucid_out = lucid_layer(lucid.tensor(tgt_np.copy()), lucid.tensor(mem_np.copy()))
+        assert_close(lucid_out, ref_out, atol=1e-4)
+
+
+# ── TransformerDecoder ────────────────────────────────────────────────────────
+
+
+@pytest.mark.parity
+class TestTransformerDecoderParity:
+    def test_two_layer_eval(self, ref: Any) -> None:
+        D, H = 8, 2
+        rng = np.random.default_rng(21)
+        tgt_np = rng.standard_normal((4, 2, D)).astype(np.float32)
+        mem_np = rng.standard_normal((6, 2, D)).astype(np.float32)
+
+        ref_proto = ref.nn.TransformerDecoderLayer(D, H, dim_feedforward=16, dropout=0.0)
+        lucid_proto = nn.TransformerDecoderLayer(D, H, dim_feedforward=16, dropout=0.0)
+
+        ref_dec = ref.nn.TransformerDecoder(ref_proto, num_layers=2)
+        lucid_dec = nn.TransformerDecoder(lucid_proto, num_layers=2)
+        ref_dec.eval()
+        lucid_dec.eval()
+        _copy_weights_positional(ref_dec, lucid_dec)
+
+        ref_out = ref_dec(ref.tensor(tgt_np.copy()), ref.tensor(mem_np.copy()))
+        lucid_out = lucid_dec(lucid.tensor(tgt_np.copy()), lucid.tensor(mem_np.copy()))
+        assert_close(lucid_out, ref_out, atol=1e-4)
+
+
+# ── Transformer (full encoder-decoder) ───────────────────────────────────────
+
+
+@pytest.mark.parity
+class TestTransformerParity:
+    def test_forward_eval(self, ref: Any) -> None:
+        D, H = 8, 2
+        rng = np.random.default_rng(22)
+        src_np = rng.standard_normal((6, 2, D)).astype(np.float32)
+        tgt_np = rng.standard_normal((4, 2, D)).astype(np.float32)
+
+        ref_t = ref.nn.Transformer(
+            d_model=D, nhead=H, num_encoder_layers=2, num_decoder_layers=2,
+            dim_feedforward=16, dropout=0.0,
+        )
+        lucid_t = nn.Transformer(
+            d_model=D, nhead=H, num_encoder_layers=2, num_decoder_layers=2,
+            dim_feedforward=16, dropout=0.0,
+        )
+        ref_t.eval()
+        lucid_t.eval()
+        _copy_weights_positional(ref_t, lucid_t)
+
+        ref_out = ref_t(ref.tensor(src_np.copy()), ref.tensor(tgt_np.copy()))
+        lucid_out = lucid_t(lucid.tensor(src_np.copy()), lucid.tensor(tgt_np.copy()))
+        assert_close(lucid_out, ref_out, atol=1e-4)
