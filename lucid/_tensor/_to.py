@@ -61,14 +61,20 @@ def _inject_to(cls: type) -> None:
         impl = _C_engine.contiguous(self._impl)
         if target_dtype != impl.dtype:
             impl = _C_engine.astype(impl, target_dtype)
-        # Device transfer: contiguous already handles CPU tensors; re-wrap for target device.
+        # Device transfer — route through SharedStorage so memcpy count ≤ 1.
+        #   · SharedStorage → CPU/GPU : zero-copy relabel (transfer_storage)
+        #   · CPU/GPU → other device  : one-time promotion into shared DRAM
+        #                               (to_shared_storage), then zero-copy relabel
         if target_device != impl.device:
-            impl = impl.clone_with_grad(self._impl.requires_grad)
-            # Device transfer: create TensorImpl on new device by going through
-            # the from_cpu / to GPU path already exposed in the engine.
-            # For now delegate to data_as_python + re-upload (only cross-device).
-            raw = impl.data_as_python()
-            impl = _C_engine.TensorImpl(raw, target_device, self._impl.requires_grad)
+            rg = self._impl.requires_grad
+            if not impl.is_metal_shared:
+                # One memcpy: move data into a MTLResourceStorageModeShared
+                # buffer so subsequent transfers in either direction are free.
+                impl = _C_engine.to_shared_storage(impl)
+            # Zero-copy: MLX external array (GPU) or cpu_view alias (CPU).
+            impl = _C_engine.transfer_storage(impl, target_device)
+            if impl.requires_grad != rg:
+                impl = impl.clone_with_grad(rg)
         else:
             impl = impl.clone_with_grad(self._impl.requires_grad)
         return _wrap(impl)

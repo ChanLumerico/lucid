@@ -132,6 +132,17 @@ class Tensor[DT: dtype, DV: device]:
         return self._impl.device == _C_engine.Device.GPU
 
     @property
+    def is_shared(self) -> bool:
+        """True when backed by a Metal MTLResourceStorageModeShared buffer.
+
+        Shared-memory tensors live in Apple Silicon unified DRAM and are
+        simultaneously accessible from CPU and GPU without a memcpy.
+        Create them with ``lucid.metal.shared_tensor()`` or promote an
+        existing tensor with ``lucid.metal.to_shared()``.
+        """
+        return self._impl.is_metal_shared
+
+    @property
     def is_leaf(self) -> bool:
         return self._impl.is_leaf
 

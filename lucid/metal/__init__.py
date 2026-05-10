@@ -243,6 +243,103 @@ def run_kernel(
     return _wrap(out_impl)
 
 
+def shared_tensor(
+    shape: tuple[int, ...] | list[int],
+    dtype: object = None,
+    requires_grad: bool = False,
+) -> "lucid.Tensor":
+    """Allocate a zero-filled tensor in Metal shared memory (no memcpy ever).
+
+    The backing buffer is ``MTLResourceStorageModeShared`` — it is immediately
+    readable and writable from CPU, and transferable to GPU via ``.to("metal")``
+    with **zero memcpy** (the GPU reads the same physical pages).
+
+    Parameters
+    ----------
+    shape:
+        Desired shape of the tensor.
+    dtype:
+        Element dtype.  Defaults to ``lucid.float32``.
+    requires_grad:
+        Whether to track gradients.  Default is ``False``.
+
+    Returns
+    -------
+    Tensor
+        A ``device="cpu"`` tensor in shared Metal storage.
+
+    Examples
+    --------
+    >>> buf = lucid.metal.shared_tensor((1024,))
+    >>> buf.is_shared
+    True
+    >>> buf_gpu = buf.to("metal")   # zero-copy
+    """
+    import lucid as _lucid
+
+    if dtype is None:
+        dtype = _lucid.float32
+    from lucid._dtype import to_engine_dtype as _to_eng
+
+    impl = _C_engine.make_shared_tensor(list(shape), _to_eng(dtype), requires_grad)
+    return _wrap(impl)
+
+
+def to_shared(tensor: "lucid.Tensor") -> "lucid.Tensor":
+    """Promote a tensor to Metal shared memory (at most one memcpy).
+
+    If *tensor* is already in shared storage this is a no-op.  After calling
+    ``to_shared()``, both ``.to("metal")`` and ``.to("cpu")`` are zero-copy.
+
+    Parameters
+    ----------
+    tensor:
+        Source tensor on any device.
+
+    Returns
+    -------
+    Tensor
+        A tensor with ``is_shared == True`` on the same logical device as the
+        input.
+
+    Examples
+    --------
+    >>> x = lucid.randn(512, 512)
+    >>> xs = lucid.metal.to_shared(x)   # one memcpy into shared buffer
+    >>> xg = xs.to("metal")             # zero-copy
+    >>> xs.is_shared
+    True
+    """
+    impl = _unwrap(tensor)
+    if impl.is_metal_shared:
+        return tensor
+    return _wrap(_C_engine.to_shared_storage(impl))
+
+
+def is_shared(tensor: "lucid.Tensor") -> bool:
+    """Return ``True`` if *tensor* is backed by Metal shared memory.
+
+    Parameters
+    ----------
+    tensor:
+        Tensor to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when the underlying storage is
+        ``MTLResourceStorageModeShared``.
+
+    Examples
+    --------
+    >>> lucid.metal.is_shared(lucid.randn(4))
+    False
+    >>> lucid.metal.is_shared(lucid.metal.to_shared(lucid.randn(4)))
+    True
+    """
+    return _unwrap(tensor).is_metal_shared
+
+
 __all__ = [
     "is_available",
     "synchronize",
@@ -256,4 +353,7 @@ __all__ = [
     "MetalStream",
     "MetalEvent",
     "run_kernel",
+    "shared_tensor",
+    "to_shared",
+    "is_shared",
 ]
