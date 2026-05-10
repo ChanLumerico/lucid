@@ -16,6 +16,7 @@ both "shared" and "direct" columns converge there.
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lucid
@@ -25,10 +26,10 @@ from benchmarks._core import BenchResult, bench_cpu, metal_available
 # ── size presets ──────────────────────────────────────────────────────────────
 
 _SIZES: list[tuple[str, int]] = [
-    ("1 KB",   1 * 1024 // 4),         # 256 float32 elements
-    ("64 KB",  64 * 1024 // 4),        # 16 384 elements
-    ("1 MB",   1 * 1024 * 1024 // 4),  # 262 144 elements
-    ("64 MB",  64 * 1024 * 1024 // 4), # 16 777 216 elements
+    ("1 KB", 1 * 1024 // 4),  # 256 float32 elements
+    ("64 KB", 64 * 1024 // 4),  # 16 384 elements
+    ("1 MB", 1 * 1024 * 1024 // 4),  # 262 144 elements
+    ("64 MB", 64 * 1024 * 1024 // 4),  # 16 777 216 elements
 ]
 
 
@@ -55,8 +56,8 @@ def _bench_size(label: str, n: int, iters: int) -> dict[str, object]:
         ns = bench_cpu(_to_metal_direct, warmup=5, iters=iters)
         br = BenchResult(f"cpu_to_gpu_{label}", ns)
         r["cpu_to_gpu_mean_us"] = br.mean_us
-        r["cpu_to_gpu_p95_us"]  = br.p95_us
-        r["cpu_to_gpu_gbps"]    = _gbps(n, br.mean_us)
+        r["cpu_to_gpu_p95_us"] = br.p95_us
+        r["cpu_to_gpu_gbps"] = _gbps(n, br.mean_us)
 
         # ── Already-shared tensor → GPU (zero-copy path) ──────────────────
         # Promote once to SharedStorage (one-time cost, not measured here),
@@ -71,8 +72,8 @@ def _bench_size(label: str, n: int, iters: int) -> dict[str, object]:
         ns_s = bench_cpu(_to_metal_shared, warmup=5, iters=iters)
         br_s = BenchResult(f"cpu_to_gpu_shared_{label}", ns_s)
         r["shared_to_gpu_mean_us"] = br_s.mean_us
-        r["shared_to_gpu_p95_us"]  = br_s.p95_us
-        r["shared_to_gpu_gbps"]    = _gbps(n, br_s.mean_us)
+        r["shared_to_gpu_p95_us"] = br_s.p95_us
+        r["shared_to_gpu_gbps"] = _gbps(n, br_s.mean_us)
 
         # Speedup: direct (includes Metal allocation) vs shared (zero-copy).
         speedup = br.mean_us / max(br_s.mean_us, 0.001)
@@ -88,8 +89,8 @@ def _bench_size(label: str, n: int, iters: int) -> dict[str, object]:
         ns_c = bench_cpu(_to_cpu, warmup=5, iters=iters)
         br_c = BenchResult(f"gpu_to_cpu_{label}", ns_c)
         r["gpu_to_cpu_mean_us"] = br_c.mean_us
-        r["gpu_to_cpu_p95_us"]  = br_c.p95_us
-        r["gpu_to_cpu_gbps"]    = _gbps(n, br_c.mean_us)
+        r["gpu_to_cpu_p95_us"] = br_c.p95_us
+        r["gpu_to_cpu_gbps"] = _gbps(n, br_c.mean_us)
 
     return r
 
@@ -115,28 +116,33 @@ def run(verbose: bool = True) -> dict[str, object]:
 
         key = f"transfer/{label.replace(' ', '_')}"
         if "cpu_to_gpu_mean_us" in r:
-            out[f"{key}/cpu_to_gpu_mean_us"]    = r["cpu_to_gpu_mean_us"]
-            out[f"{key}/cpu_to_gpu_gbps"]       = r["cpu_to_gpu_gbps"]
+            out[f"{key}/cpu_to_gpu_mean_us"] = r["cpu_to_gpu_mean_us"]
+            out[f"{key}/cpu_to_gpu_gbps"] = r["cpu_to_gpu_gbps"]
             out[f"{key}/shared_to_gpu_mean_us"] = r["shared_to_gpu_mean_us"]
-            out[f"{key}/shared_to_gpu_gbps"]    = r["shared_to_gpu_gbps"]
-            out[f"{key}/gpu_to_cpu_mean_us"]    = r["gpu_to_cpu_mean_us"]
-            out[f"{key}/gpu_to_cpu_gbps"]       = r["gpu_to_cpu_gbps"]
+            out[f"{key}/shared_to_gpu_gbps"] = r["shared_to_gpu_gbps"]
+            out[f"{key}/gpu_to_cpu_mean_us"] = r["gpu_to_cpu_mean_us"]
+            out[f"{key}/gpu_to_cpu_gbps"] = r["gpu_to_cpu_gbps"]
 
-            rows_cpu_gpu.append((
-                label,
-                f"{r['cpu_to_gpu_mean_us']:.1f}",
-                f"{r['shared_to_gpu_mean_us']:.1f}",
-                f"{r['shared_speedup_x']:.2f}×",
-                f"{r['cpu_to_gpu_gbps']:.1f}",
-            ))
-            rows_gpu_cpu.append((
-                label,
-                f"{r['gpu_to_cpu_mean_us']:.1f}",
-                f"{r['gpu_to_cpu_gbps']:.1f}",
-            ))
+            rows_cpu_gpu.append(
+                (
+                    label,
+                    f"{r['cpu_to_gpu_mean_us']:.1f}",
+                    f"{r['shared_to_gpu_mean_us']:.1f}",
+                    f"{r['shared_speedup_x']:.2f}×",
+                    f"{r['cpu_to_gpu_gbps']:.1f}",
+                )
+            )
+            rows_gpu_cpu.append(
+                (
+                    label,
+                    f"{r['gpu_to_cpu_mean_us']:.1f}",
+                    f"{r['gpu_to_cpu_gbps']:.1f}",
+                )
+            )
 
     if verbose:
         from benchmarks._core import fmt_table
+
         print("\nCPU → GPU:")
         print(fmt_table(rows_cpu_gpu))
         print("\nGPU → CPU:")

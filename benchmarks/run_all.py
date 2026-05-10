@@ -69,7 +69,7 @@ def run_all(verbose: bool = True) -> dict[str, object]:
 def save_baseline(results: dict[str, object]) -> None:
     payload = {
         "commit": _git_sha(),
-        "date":   _now_iso(),
+        "date": _now_iso(),
         "results": results,
     }
     os.makedirs(os.path.dirname(_BASELINE_PATH), exist_ok=True)
@@ -96,10 +96,7 @@ def _is_latency_key(key: str) -> bool:
 
 def _is_throughput_key(key: str) -> bool:
     """Return True for keys where a lower value = regression (throughput/rate)."""
-    return any(
-        key.endswith(suf)
-        for suf in ("_gbps", "_samples_sec")
-    )
+    return any(key.endswith(suf) for suf in ("_gbps", "_samples_sec"))
 
 
 def check_regressions(
@@ -116,7 +113,9 @@ def check_regressions(
         if key not in baseline:
             continue
         base_val = baseline[key]
-        if not isinstance(cur_val, (int, float)) or not isinstance(base_val, (int, float)):
+        if not isinstance(cur_val, (int, float)) or not isinstance(
+            base_val, (int, float)
+        ):
             continue
         if base_val == 0:
             continue
@@ -152,7 +151,9 @@ def print_comparison(
         if key not in baseline:
             continue
         base_val = baseline[key]
-        if not isinstance(cur_val, (int, float)) or not isinstance(base_val, (int, float)):
+        if not isinstance(cur_val, (int, float)) or not isinstance(
+            base_val, (int, float)
+        ):
             continue
         if base_val == 0:
             continue
@@ -193,19 +194,25 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--save", action="store_true",
+        "--save",
+        action="store_true",
         help="Save results as the new baseline (baseline/baseline.json)",
     )
     parser.add_argument(
-        "--check", action="store_true",
+        "--check",
+        action="store_true",
         help="Compare results against the saved baseline and report regressions",
     )
     parser.add_argument(
-        "--threshold", type=float, default=_DEFAULT_THRESHOLD, metavar="PCT",
+        "--threshold",
+        type=float,
+        default=_DEFAULT_THRESHOLD,
+        metavar="PCT",
         help=f"Regression threshold in %% (default: {_DEFAULT_THRESHOLD})",
     )
     parser.add_argument(
-        "--quiet", action="store_true",
+        "--quiet",
+        action="store_true",
         help="Suppress per-suite tables (only print comparison/summary)",
     )
     args = parser.parse_args()
@@ -230,7 +237,7 @@ def main() -> None:
         with open(_BASELINE_PATH, encoding="utf-8") as f:
             payload = json.load(f)
         baseline_results = payload.get("results", {})
-        baseline_commit  = payload.get("commit", "unknown")
+        baseline_commit = payload.get("commit", "unknown")
         print(f"\n   Baseline commit: {baseline_commit}")
         regressions = print_comparison(results, baseline_results, args.threshold)
         if regressions:

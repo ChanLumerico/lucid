@@ -23,12 +23,12 @@ def _run_gen_pyi_to_tempdir() -> dict[str, str]:
 
     engine_content, _ = gen.gen_engine_pyi()
     tensor_content, _ = gen.gen_tensor_pyi()
-    init_content, _   = gen.gen_init_pyi()
+    init_content, _ = gen.gen_init_pyi()
 
     return {
-        "lucid/_C/engine.pyi":        engine_content,
-        "lucid/_tensor/tensor.pyi":   tensor_content,
-        "lucid/__init__.pyi":         init_content,
+        "lucid/_C/engine.pyi": engine_content,
+        "lucid/_tensor/tensor.pyi": tensor_content,
+        "lucid/__init__.pyi": init_content,
     }
 
 
@@ -52,13 +52,15 @@ def main() -> int:
         if committed == new_content:
             print(f"[check_stubs] OK       {rel_path}")
         else:
-            diff = list(difflib.unified_diff(
-                committed.splitlines(keepends=True),
-                new_content.splitlines(keepends=True),
-                fromfile=f"{rel_path} (committed)",
-                tofile=f"{rel_path} (generated)",
-                n=3,
-            ))
+            diff = list(
+                difflib.unified_diff(
+                    committed.splitlines(keepends=True),
+                    new_content.splitlines(keepends=True),
+                    fromfile=f"{rel_path} (committed)",
+                    tofile=f"{rel_path} (generated)",
+                    n=3,
+                )
+            )
             print(f"[check_stubs] STALE    {rel_path}")
             sys.stdout.writelines(diff[:40])
             if len(diff) > 40:
@@ -72,9 +74,13 @@ def main() -> int:
             f"    git add {' '.join(stale)}\n",
             file=sys.stderr,
         )
-        print("\n  Commit blocked. Run the following to fix, then re-stage and commit:\n")
+        print(
+            "\n  Commit blocked. Run the following to fix, then re-stage and commit:\n"
+        )
         print("    python tools/gen_pyi.py")
-        print(f"    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi")
+        print(
+            f"    git add lucid/_C/engine.pyi lucid/_tensor/tensor.pyi lucid/__init__.pyi"
+        )
         return 1
 
     print("[check_stubs] all stubs up to date.")

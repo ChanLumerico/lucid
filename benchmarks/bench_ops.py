@@ -9,6 +9,7 @@ For each op, measures:
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lucid
@@ -19,7 +20,6 @@ from benchmarks._core import (
     bench_gpu_mlx,
     metal_available,
 )
-
 
 # ── benchmark definitions ─────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ def _run_op_suite(n_elements: int = 10_000_000) -> list[dict[str, object]]:
 
     if has_gpu:
         import mlx.core as mx
+
         gpu_a = cpu_a.to("metal")
         gpu_b = cpu_b.to("metal")
         gpu_mat_a = cpu_mat_a.to("metal")
@@ -60,19 +61,21 @@ def _run_op_suite(n_elements: int = 10_000_000) -> list[dict[str, object]]:
         r: dict[str, object] = {"name": name}
         cpu_r = BenchResult(f"{name}_cpu", cpu_ns)
         cpu_r = BenchResult(f"{name}_cpu", cpu_ns)
-        r["cpu_mean_us"]   = cpu_r.mean_us
+        r["cpu_mean_us"] = cpu_r.mean_us
         r["cpu_median_us"] = cpu_r.median_us
-        r["cpu_p95_us"]    = cpu_r.p95_us
+        r["cpu_p95_us"] = cpu_r.p95_us
         if gpu_ns is not None:
             gpu_r = BenchResult(f"{name}_gpu", gpu_ns)
-            r["gpu_mean_us"]   = gpu_r.mean_us
+            r["gpu_mean_us"] = gpu_r.mean_us
             r["gpu_median_us"] = gpu_r.median_us
-            r["gpu_p95_us"]    = gpu_r.p95_us
+            r["gpu_p95_us"] = gpu_r.p95_us
         if mlx_ns is not None and gpu_ns is not None:
             mlx_r = BenchResult(f"{name}_mlx", mlx_ns)
             r["mlx_mean_us"] = mlx_r.mean_us
             # Overhead = (lucid_gpu - mlx) / mlx * 100
-            overhead = (gpu_r.mean_us - mlx_r.mean_us) / max(mlx_r.mean_us, 0.001) * 100.0
+            overhead = (
+                (gpu_r.mean_us - mlx_r.mean_us) / max(mlx_r.mean_us, 0.001) * 100.0
+            )
             r["layer_overhead_pct"] = round(overhead, 1)
         return r
 
@@ -80,7 +83,9 @@ def _run_op_suite(n_elements: int = 10_000_000) -> list[dict[str, object]]:
     cpu_ns = bench_cpu(lambda: lucid.relu(cpu_a))
     gpu_ns = bench_gpu_lucid(lambda: lucid.relu(gpu_a)) if has_gpu else None
     mlx_ns = bench_gpu_mlx(lambda: mx.maximum(mlx_a, 0.0)) if has_gpu else None
-    results.append(_make_entry(f"relu_{n_elements//1_000_000}M", cpu_ns, gpu_ns, mlx_ns))
+    results.append(
+        _make_entry(f"relu_{n_elements//1_000_000}M", cpu_ns, gpu_ns, mlx_ns)
+    )
 
     # ── add ───────────────────────────────────────────────────────────────────
     cpu_ns = bench_cpu(lambda: lucid.add(cpu_a, cpu_b))
@@ -108,8 +113,16 @@ def _run_op_suite(n_elements: int = 10_000_000) -> list[dict[str, object]]:
 
     # ── matmul 1024×1024 ──────────────────────────────────────────────────────
     cpu_ns = bench_cpu(lambda: lucid.matmul(cpu_mat_a, cpu_mat_b), iters=20)
-    gpu_ns = bench_gpu_lucid(lambda: lucid.matmul(gpu_mat_a, gpu_mat_b), iters=20) if has_gpu else None
-    mlx_ns = bench_gpu_mlx(lambda: mx.matmul(mlx_mat_a, mlx_mat_b), iters=20) if has_gpu else None
+    gpu_ns = (
+        bench_gpu_lucid(lambda: lucid.matmul(gpu_mat_a, gpu_mat_b), iters=20)
+        if has_gpu
+        else None
+    )
+    mlx_ns = (
+        bench_gpu_mlx(lambda: mx.matmul(mlx_mat_a, mlx_mat_b), iters=20)
+        if has_gpu
+        else None
+    )
     results.append(_make_entry(f"matmul_{mat_n}x{mat_n}", cpu_ns, gpu_ns, mlx_ns))
 
     return results
@@ -122,15 +135,15 @@ def run(verbose: bool = True) -> dict[str, object]:
     out: dict[str, object] = {}
     for r in raw:
         name = str(r["name"])
-        out[f"ops/{name}/cpu_mean_us"]   = r["cpu_mean_us"]
+        out[f"ops/{name}/cpu_mean_us"] = r["cpu_mean_us"]
         out[f"ops/{name}/cpu_median_us"] = r["cpu_median_us"]
-        out[f"ops/{name}/cpu_p95_us"]    = r["cpu_p95_us"]
+        out[f"ops/{name}/cpu_p95_us"] = r["cpu_p95_us"]
         if "gpu_mean_us" in r:
-            out[f"ops/{name}/gpu_mean_us"]   = r["gpu_mean_us"]
+            out[f"ops/{name}/gpu_mean_us"] = r["gpu_mean_us"]
             out[f"ops/{name}/gpu_median_us"] = r["gpu_median_us"]
-            out[f"ops/{name}/gpu_p95_us"]    = r["gpu_p95_us"]
+            out[f"ops/{name}/gpu_p95_us"] = r["gpu_p95_us"]
         if "mlx_mean_us" in r:
-            out[f"ops/{name}/mlx_mean_us"]       = r["mlx_mean_us"]
+            out[f"ops/{name}/mlx_mean_us"] = r["mlx_mean_us"]
             out[f"ops/{name}/layer_overhead_pct"] = r["layer_overhead_pct"]
     if verbose:
         _print_table(raw)
@@ -156,16 +169,21 @@ def _print_table(results: list[dict[str, object]]) -> None:
         if has_gpu:
             row += [
                 f"{r.get('gpu_mean_us', '-'):.1f}" if "gpu_mean_us" in r else "-",
-                f"{r.get('gpu_p95_us', '-'):.1f}"  if "gpu_p95_us"  in r else "-",
+                f"{r.get('gpu_p95_us', '-'):.1f}" if "gpu_p95_us" in r else "-",
             ]
         if has_mlx:
             row += [
-                f"{r.get('mlx_mean_us', '-'):.1f}"       if "mlx_mean_us"       in r else "-",
-                f"{r.get('layer_overhead_pct', '-'):+.1f}%" if "layer_overhead_pct" in r else "-",
+                f"{r.get('mlx_mean_us', '-'):.1f}" if "mlx_mean_us" in r else "-",
+                (
+                    f"{r.get('layer_overhead_pct', '-'):+.1f}%"
+                    if "layer_overhead_pct" in r
+                    else "-"
+                ),
             ]
         rows.append(tuple(row))
 
     from benchmarks._core import fmt_table
+
     print(fmt_table(rows))
 
 

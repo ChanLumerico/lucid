@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 # TYPE_CHECKING=True so that TYPE_CHECKING blocks are evaluated,
 # making type aliases like Tensor, Optimizer visible to autodoc.
 import typing
+
 typing.TYPE_CHECKING = True
 
 # ── Project info ──────────────────────────────────────────────────────────────
@@ -24,11 +25,11 @@ version = "3.0"
 # ── Extensions ────────────────────────────────────────────────────────────────
 
 extensions = [
-    "sphinx.ext.autodoc",        # Pull docstrings from source
-    "sphinx.ext.napoleon",       # Parse numpy-style docstrings
-    "sphinx.ext.viewcode",       # Add [source] links to API pages
-    "sphinx.ext.intersphinx",    # Cross-reference Python / NumPy docs
-    "sphinx.ext.autosummary",    # Auto-generate summary tables
+    "sphinx.ext.autodoc",  # Pull docstrings from source
+    "sphinx.ext.napoleon",  # Parse numpy-style docstrings
+    "sphinx.ext.viewcode",  # Add [source] links to API pages
+    "sphinx.ext.intersphinx",  # Cross-reference Python / NumPy docs
+    "sphinx.ext.autosummary",  # Auto-generate summary tables
 ]
 
 # ── autodoc ───────────────────────────────────────────────────────────────────
@@ -45,9 +46,9 @@ autodoc_default_options = {
     "exclude-members": "__weakref__, __dict__, __module__",
 }
 
-autodoc_typehints = "description"       # Render type hints in description
+autodoc_typehints = "description"  # Render type hints in description
 autodoc_typehints_description_target = "documented"
-autoclass_content = "both"              # Include both class & __init__ docstring
+autoclass_content = "both"  # Include both class & __init__ docstring
 autodoc_preserve_defaults = True
 
 # ── Napoleon (numpy-style docstrings) ────────────────────────────────────────
@@ -80,9 +81,13 @@ html_theme = "shibuya"
 html_theme_options = {
     "nav_links": [
         {"title": "API Reference", "url": "api/index"},
-        {"title": "GitHub", "url": "https://github.com/chanlee/lucid", "external": True},
+        {
+            "title": "GitHub",
+            "url": "https://github.com/chanlee/lucid",
+            "external": True,
+        },
     ],
-    "accent_color": "purple",      # Brand color
+    "accent_color": "purple",  # Brand color
     "github_url": "https://github.com/chanlee/lucid",
     "light_logo": "_static/logo-light.svg",
     "dark_logo": "_static/logo-dark.svg",

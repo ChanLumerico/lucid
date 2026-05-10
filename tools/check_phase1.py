@@ -12,14 +12,16 @@ sys.path.insert(0, str(ROOT))
 
 CHECKS = [
     # (import_path, attr_list)
-    ("lucid._C.engine", ["TensorImpl", "Dtype", "Device", "ABI_VERSION",
-                          "engine_backward"]),
+    (
+        "lucid._C.engine",
+        ["TensorImpl", "Dtype", "Device", "ABI_VERSION", "engine_backward"],
+    ),
     ("lucid._dispatch", ["_unwrap", "_wrap", "_impl_with_grad"]),
     ("lucid._tensor.tensor", ["Tensor"]),
     ("lucid._ops._registry", ["_REGISTRY", "OpEntry"]),
     ("lucid._factories.creation", ["zeros", "ones", "eye", "arange"]),
     ("lucid._factories.random", ["rand", "randn", "randint"]),
-    ("lucid.autograd._backward", []),          # importable
+    ("lucid.autograd._backward", []),  # importable
     ("lucid.nn.modules.linear", ["Linear"]),
     ("lucid.optim.sgd", ["SGD"]),
 ]
@@ -31,6 +33,7 @@ def main() -> int:
     for mod_path, attrs in CHECKS:
         try:
             import importlib
+
             mod = importlib.import_module(mod_path)
         except ImportError as exc:
             errors.append(f"  IMPORT FAILED: {mod_path} — {exc}")
@@ -45,7 +48,9 @@ def main() -> int:
             print(e)
         return 1
 
-    print(f"[check_phase1] all {len(CHECKS)} modules importable with required attributes.")
+    print(
+        f"[check_phase1] all {len(CHECKS)} modules importable with required attributes."
+    )
     return 0
 
 

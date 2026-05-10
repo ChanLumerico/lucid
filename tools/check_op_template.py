@@ -17,9 +17,9 @@ OP_DIRS = [
     ROOT / "lucid/_C/ops/bfunc",
 ]
 
-SCHEMA_PATTERN = re.compile(r'schema_v1\s*=')
-BACKWARD_PATTERN = re.compile(r'\bbackward\s*\(')
-BACKWARD_NODE_PATTERN = re.compile(r'struct\s+\w+Backward\s*[:{]')
+SCHEMA_PATTERN = re.compile(r"schema_v1\s*=")
+BACKWARD_PATTERN = re.compile(r"\bbackward\s*\(")
+BACKWARD_NODE_PATTERN = re.compile(r"struct\s+\w+Backward\s*[:{]")
 
 
 def main() -> int:
@@ -47,10 +47,13 @@ def main() -> int:
         return 1
 
     checked = sum(
-        1 for d in OP_DIRS
+        1
+        for d in OP_DIRS
         for h in d.glob("*.h")
         if not h.name.startswith("_")
-        and BACKWARD_NODE_PATTERN.search(h.read_text(encoding="utf-8", errors="replace"))
+        and BACKWARD_NODE_PATTERN.search(
+            h.read_text(encoding="utf-8", errors="replace")
+        )
     )
     print(f"[check_op_template] {checked} BackwardNode headers all conform.")
     return 0

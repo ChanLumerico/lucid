@@ -21,9 +21,9 @@ LUCID = ROOT / "lucid"
 # Each rule: (source_prefix, forbidden_prefixes)
 # A file whose module starts with source_prefix must not import any forbidden_prefix.
 RULES: list[tuple[str, tuple[str, ...]]] = [
-    ("lucid.autograd",  ("lucid.nn", "lucid.optim")),
-    ("lucid.optim",     ("lucid.nn",)),
-    ("lucid.linalg",    ("lucid.nn", "lucid.optim")),
+    ("lucid.autograd", ("lucid.nn", "lucid.optim")),
+    ("lucid.optim", ("lucid.nn",)),
+    ("lucid.linalg", ("lucid.nn", "lucid.optim")),
     # test utilities must not import test files (parity tests may import torch, that's OK)
 ]
 
@@ -86,25 +86,29 @@ def check() -> int:
 
         # Imports that are explicitly allowed even if they cross layer boundaries.
     # Format: frozenset of (source_prefix, import_module) pairs.
-    ALLOWED_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset({
-        # Optimizers legitimately need Parameter (it's a base type, not a module)
-        ("lucid.optim", "lucid.nn.parameter"),
-    })
+    ALLOWED_EXCEPTIONS: frozenset[tuple[str, str]] = frozenset(
+        {
+            # Optimizers legitimately need Parameter (it's a base type, not a module)
+            ("lucid.optim", "lucid.nn.parameter"),
+        }
+    )
 
     for src_prefix, forbidden in RULES:
-            if not (mod == src_prefix or mod.startswith(src_prefix + ".")):
-                continue
-            for imp in _get_runtime_imports(py_file):
-                for forbidden_prefix in forbidden:
-                    if not (imp == forbidden_prefix or imp.startswith(forbidden_prefix + ".")):
-                        continue
-                    # Check exceptions
-                    if (src_prefix, imp) in ALLOWED_EXCEPTIONS:
-                        continue
-                    violations.append(
-                        f"  {mod} → {imp}  "
-                        f"(forbidden: {src_prefix} must not import {forbidden_prefix})"
-                    )
+        if not (mod == src_prefix or mod.startswith(src_prefix + ".")):
+            continue
+        for imp in _get_runtime_imports(py_file):
+            for forbidden_prefix in forbidden:
+                if not (
+                    imp == forbidden_prefix or imp.startswith(forbidden_prefix + ".")
+                ):
+                    continue
+                # Check exceptions
+                if (src_prefix, imp) in ALLOWED_EXCEPTIONS:
+                    continue
+                violations.append(
+                    f"  {mod} → {imp}  "
+                    f"(forbidden: {src_prefix} must not import {forbidden_prefix})"
+                )
 
     if violations:
         print("[check_layers] Forbidden layer imports found:")

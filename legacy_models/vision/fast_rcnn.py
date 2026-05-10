@@ -6,7 +6,7 @@ import lucid.nn.functional as F
 
 from lucid._tensor import Tensor
 
-from lucid_legacy.models.utils import (
+from lucid.models.utils import (
     ROIAlign,
     SelectiveSearch,
     apply_deltas,
@@ -85,7 +85,7 @@ class FastRCNN(nn.Module):
         rois: Tensor | None = None,
         roi_idx: Tensor | None = None,
         *,
-        return_feats: bool = False
+        return_feats: bool = False,
     ) -> tuple[Tensor, ...]:
         B, _, H, W = images.shape
         if rois is None or roi_idx is None:

@@ -20,7 +20,9 @@ def main() -> int:
     for entry in _REGISTRY:
         fn = entry.engine_fn
         if not callable(fn):
-            errors.append(f"  NOT CALLABLE: registry entry {entry.name!r} has engine_fn={fn!r}")
+            errors.append(
+                f"  NOT CALLABLE: registry entry {entry.name!r} has engine_fn={fn!r}"
+            )
 
     # Check free_fn_name is callable from lucid._ops (the module that auto-generates them)
     import lucid._ops as _ops_module

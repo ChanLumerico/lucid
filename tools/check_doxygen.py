@@ -18,12 +18,17 @@ HEADERS_DIR = ROOT / "lucid/_C"
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--threshold", type=float, default=70.0,
-                        help="Minimum documentation coverage percentage (default: 70)")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=70.0,
+        help="Minimum documentation coverage percentage (default: 70)",
+    )
     args = parser.parse_args()
 
     headers = [
-        h for h in HEADERS_DIR.rglob("*.h")
+        h
+        for h in HEADERS_DIR.rglob("*.h")
         if "__pycache__" not in str(h) and "test/" not in str(h)
     ]
 
@@ -47,10 +52,14 @@ def main() -> int:
         return 0
 
     coverage = 100.0 * documented / total
-    print(f"[check_doxygen] Documentation coverage: {documented}/{total} = {coverage:.1f}%")
+    print(
+        f"[check_doxygen] Documentation coverage: {documented}/{total} = {coverage:.1f}%"
+    )
 
     if coverage < args.threshold:
-        print(f"[check_doxygen] BELOW THRESHOLD ({args.threshold}%). Undocumented headers:")
+        print(
+            f"[check_doxygen] BELOW THRESHOLD ({args.threshold}%). Undocumented headers:"
+        )
         for h in undocumented[:20]:
             print(f"  {h}")
         if len(undocumented) > 20:

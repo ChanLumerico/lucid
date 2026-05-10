@@ -9,7 +9,6 @@ import statistics
 import time
 from typing import Callable
 
-
 # ── defaults ──────────────────────────────────────────────────────────────────
 
 WARMUP_CPU: int = 10
@@ -48,11 +47,11 @@ class BenchResult:
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "mean_us":   round(self.mean_us,   3),
+            "mean_us": round(self.mean_us, 3),
             "median_us": round(self.median_us, 3),
-            "p95_us":    round(self.p95_us,    3),
-            "p99_us":    round(self.p99_us,    3),
-            "n_iter":    len(self._ns),
+            "p95_us": round(self.p95_us, 3),
+            "p99_us": round(self.p99_us, 3),
+            "n_iter": len(self._ns),
         }
 
     def __repr__(self) -> str:
@@ -148,6 +147,7 @@ def bench_gpu_mlx(
 def metal_available() -> bool:
     try:
         import lucid.metal as _m
+
         return _m.is_available()
     except Exception:
         return False
@@ -164,9 +164,11 @@ def fmt_table(rows: list[tuple[str, ...]]) -> str:
     sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
     lines = [sep]
     for i, row in enumerate(rows):
-        line = "|" + "|".join(f" {cell:<{widths[j]}} " for j, cell in enumerate(row)) + "|"
+        line = (
+            "|" + "|".join(f" {cell:<{widths[j]}} " for j, cell in enumerate(row)) + "|"
+        )
         lines.append(line)
-        if i == 0:          # header separator
+        if i == 0:  # header separator
             lines.append(sep)
     lines.append(sep)
     return "\n".join(lines)

@@ -13,6 +13,7 @@ Reports ms/step and samples/sec for batch sizes [64, 256, 1024].
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
@@ -20,7 +21,6 @@ import lucid
 import lucid.nn as nn
 import lucid.optim as optim
 from benchmarks._core import BenchResult, metal_available
-
 
 # ── model ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,7 @@ def _sync(tensor: lucid.Tensor) -> None:
     """Force GPU synchronisation for Metal tensors; no-op for CPU."""
     if tensor.is_metal:
         from lucid._C import engine as _C_engine
+
         _C_engine.eval_tensors([tensor._impl])
 
 
@@ -110,9 +111,9 @@ def _bench_device(device: str, batch_size: int, iters: int) -> dict[str, object]
         br = _bench_step(model, opt, x, y, loss_fn, warmup=3, iters=iters, mode=mode)
         mean_ms = br.mean_us / 1_000.0
         samples_per_sec = batch_size / (br.mean_us * 1e-6)
-        results[f"{mode}_mean_ms"]      = round(mean_ms, 3)
-        results[f"{mode}_p95_ms"]       = round(br.p95_us / 1_000.0, 3)
-        results[f"{mode}_samples_sec"]  = round(samples_per_sec, 1)
+        results[f"{mode}_mean_ms"] = round(mean_ms, 3)
+        results[f"{mode}_p95_ms"] = round(br.p95_us / 1_000.0, 3)
+        results[f"{mode}_samples_sec"] = round(samples_per_sec, 1)
     return results
 
 
@@ -130,23 +131,26 @@ def run(verbose: bool = True) -> dict[str, object]:
 
     for bs in batch_sizes:
         iters = iters_map[bs]
-        for device in (["cpu"] + (["metal"] if has_gpu else [])):
+        for device in ["cpu"] + (["metal"] if has_gpu else []):
             r = _bench_device(device, bs, iters)
             key = f"train/bs{bs}/{device}"
             for k, v in r.items():
                 out[f"{key}/{k}"] = v
 
-            rows.append((
-                str(bs),
-                device,
-                f"{r['forward_mean_ms']:.2f}",
-                f"{r['forward_backward_mean_ms']:.2f}",
-                f"{r['full_step_mean_ms']:.2f}",
-                f"{r['full_step_samples_sec']:.0f}",
-            ))
+            rows.append(
+                (
+                    str(bs),
+                    device,
+                    f"{r['forward_mean_ms']:.2f}",
+                    f"{r['forward_backward_mean_ms']:.2f}",
+                    f"{r['full_step_mean_ms']:.2f}",
+                    f"{r['full_step_samples_sec']:.0f}",
+                )
+            )
 
     if verbose:
         from benchmarks._core import fmt_table
+
         print(fmt_table(rows))
 
     return out

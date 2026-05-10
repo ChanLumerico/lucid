@@ -10,7 +10,12 @@ import lucid.nn.functional as F
 from lucid._tensor import Tensor
 from lucid import register_model
 
-from lucid_legacy.models.vision.resnet import resnet_18, resnet_34, resnet_50, resnet_101
+from lucid_legacy.models.vision.resnet import (
+    resnet_18,
+    resnet_34,
+    resnet_50,
+    resnet_101,
+)
 from lucid_legacy.models.base import PreTrainedModelMixin
 
 __all__ = [

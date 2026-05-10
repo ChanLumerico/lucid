@@ -125,7 +125,9 @@ class CMakeBuildExt(build_ext):
         _maybe_enable_ccache(cmake_args)
 
         subprocess.check_call([cmake, *cmake_args])
-        subprocess.check_call([cmake, "--build", str(build_temp), "--parallel", _build_jobs()])
+        subprocess.check_call(
+            [cmake, "--build", str(build_temp), "--parallel", _build_jobs()]
+        )
 
 
 _enforce_apple_silicon_only()

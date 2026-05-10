@@ -189,7 +189,9 @@ def _engine_fn_sig(name: str, fn: object) -> str:
     doc = getattr(fn, "__doc__", "") or ""
     first = doc.splitlines()[0] if doc else ""
     # pybind11 lines look like:  name(arg: Type [= dflt], ...) -> RetType
-    m = re.match(rf"^{re.escape(name)}\((?P<params>.*)\)\s*->\s*(?P<ret>.+?)\s*$", first)
+    m = re.match(
+        rf"^{re.escape(name)}\((?P<params>.*)\)\s*->\s*(?P<ret>.+?)\s*$", first
+    )
     if not m:
         return "(input: TensorImpl, /, *args: object, **kwargs: object) -> TensorImpl"
     params_raw = m.group("params").strip()
@@ -1195,33 +1197,33 @@ def _sig_from_callable(name: str, fn: object) -> str:
 
 # Return-type override map for composite ops that don't return Tensor.
 _RETURN_TYPE_MAP: dict[str, str] = {
-    "allclose":      "bool",
-    "is_conj":       "bool",
-    "is_neg":        "bool",
-    "is_nonzero":    "bool",
-    "is_same_size":  "bool",
-    "is_storage":    "bool",
-    "can_cast":      "bool",
-    "numel":         "int",
-    "result_type":   "DTypeLike",
-    "std_mean":      "tuple[Tensor, Tensor]",
-    "var_mean":      "tuple[Tensor, Tensor]",
-    "frexp":         "tuple[Tensor, Tensor]",
-    "histogram":     "tuple[Tensor, Tensor]",
-    "histogram2d":   "tuple[Tensor, Tensor, Tensor]",
-    "histogramdd":   "tuple[Tensor, list[Tensor]]",
-    "atleast_1d":    "Tensor | tuple[Tensor, ...]",
-    "atleast_2d":    "Tensor | tuple[Tensor, ...]",
-    "atleast_3d":    "Tensor | tuple[Tensor, ...]",
-    "dsplit":        "list[Tensor]",
-    "hsplit":        "list[Tensor]",
-    "vsplit":        "list[Tensor]",
-    "tensor_split":  "list[Tensor]",
-    "column_stack":  "Tensor",
-    "row_stack":     "Tensor",
-    "dstack":        "Tensor",
-    "diff":          "Tensor",
-    "lerp":          "Tensor",
+    "allclose": "bool",
+    "is_conj": "bool",
+    "is_neg": "bool",
+    "is_nonzero": "bool",
+    "is_same_size": "bool",
+    "is_storage": "bool",
+    "can_cast": "bool",
+    "numel": "int",
+    "result_type": "DTypeLike",
+    "std_mean": "tuple[Tensor, Tensor]",
+    "var_mean": "tuple[Tensor, Tensor]",
+    "frexp": "tuple[Tensor, Tensor]",
+    "histogram": "tuple[Tensor, Tensor]",
+    "histogram2d": "tuple[Tensor, Tensor, Tensor]",
+    "histogramdd": "tuple[Tensor, list[Tensor]]",
+    "atleast_1d": "Tensor | tuple[Tensor, ...]",
+    "atleast_2d": "Tensor | tuple[Tensor, ...]",
+    "atleast_3d": "Tensor | tuple[Tensor, ...]",
+    "dsplit": "list[Tensor]",
+    "hsplit": "list[Tensor]",
+    "vsplit": "list[Tensor]",
+    "tensor_split": "list[Tensor]",
+    "column_stack": "Tensor",
+    "row_stack": "Tensor",
+    "dstack": "Tensor",
+    "diff": "Tensor",
+    "lerp": "Tensor",
 }
 
 
@@ -1383,6 +1385,7 @@ def gen_init_pyi() -> tuple[str, int]:
 
     # ── nn.functional / linalg / method aliases ───────────────────────────────
     import lucid
+
     alias_groups = {
         "Tensor-method aliases": lucid._METHOD_ALIASES,  # type: ignore[attr-defined]
     }
@@ -1409,7 +1412,9 @@ def gen_init_pyi() -> tuple[str, int]:
     content += "\n".join(composite_lines) + "\n"
     content += "\n".join(alias_lines) + "\n"
 
-    total = count + len([l for l in composite_lines + alias_lines if l.startswith("def ")])
+    total = count + len(
+        [l for l in composite_lines + alias_lines if l.startswith("def ")]
+    )
     return content, total
 
 
