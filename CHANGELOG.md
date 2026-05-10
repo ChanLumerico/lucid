@@ -19,10 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Git hooks (.githooks/{post-commit,commit-msg}) for CHANGELOG hygiene
 
+- fractional_max_pool2d and fractional_max_pool3d
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
 - CHANGELOG.md — initial 3.0.0 release notes
+- mypy --strict baseline (0 errors) locked in mypy.ini
 
 ---
 
