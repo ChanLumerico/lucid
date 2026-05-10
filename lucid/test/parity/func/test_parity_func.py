@@ -451,3 +451,95 @@ class TestHessianParity:
         H_r = ref.func.hessian(f_r)(ref.tensor(x_np.copy()))
         # H[i,i] = 6*x[i]; off-diagonal = 0
         assert_close(H_l, H_r, atol=1e-2)
+
+
+# ── vmap(jacrev) / vmap(jacfwd) parity ───────────────────────────────────────
+
+
+@pytest.mark.parity
+class TestVmapJacrevParity:
+    """vmap(jacrev(fn)) — Stage 2 isolation correctness vs reference framework."""
+
+    def test_vector_output(self, ref: Any) -> None:
+        """Per-batch Jacobian shape and values match reference."""
+        rng = _rng(50)
+        x_np = rng.standard_normal((4, 3)).astype(np.float32)
+
+        f_l = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        f_r = lambda x: ref.stack([x.sum(), (x**2).sum()])
+
+        J_l = func.vmap(func.jacrev(f_l))(lucid.tensor(x_np.copy()))
+        J_r = ref.func.vmap(ref.func.jacrev(f_r))(ref.tensor(x_np.copy()))
+        assert_close(J_l, J_r, atol=1e-4)
+
+    def test_scalar_fn_matches_grad(self, ref: Any) -> None:
+        """vmap(jacrev(f)) == vmap(grad(f)) for scalar-output f."""
+        rng = _rng(51)
+        x_np = rng.standard_normal((5, 4)).astype(np.float32)
+
+        f_l = lambda x: (x**2).sum()
+        f_r = lambda x: (x**2).sum()
+
+        J_l = func.vmap(func.jacrev(f_l))(lucid.tensor(x_np.copy()))
+        g_l = func.vmap(func.grad(f_l))(lucid.tensor(x_np.copy()))
+        J_r = ref.func.vmap(ref.func.jacrev(f_r))(ref.tensor(x_np.copy()))
+
+        assert_close(J_l, J_r, atol=1e-4)
+        assert_close(J_l, g_l, atol=1e-5)
+
+    def test_non_trivial_fn(self, ref: Any) -> None:
+        """Jacobian of a mixed-feature function vs reference."""
+        rng = _rng(52)
+        x_np = rng.standard_normal((3, 4)).astype(np.float32)
+
+        f_l = lambda x: lucid.stack([
+            x[0] * x[1],
+            x[1] ** 2 + x[2],
+            x[3] - x[0],
+        ])
+        f_r = lambda x: ref.stack([
+            x[0] * x[1],
+            x[1] ** 2 + x[2],
+            x[3] - x[0],
+        ])
+
+        J_l = func.vmap(func.jacrev(f_l))(lucid.tensor(x_np.copy()))
+        J_r = ref.func.vmap(ref.func.jacrev(f_r))(ref.tensor(x_np.copy()))
+        assert_close(J_l, J_r, atol=1e-4)
+
+
+@pytest.mark.parity
+class TestVmapJacfwdParity:
+    """vmap(jacfwd(fn)) — forward-mode Jacobian, batched."""
+
+    def test_matches_jacrev(self, ref: Any) -> None:
+        """vmap(jacfwd(fn)) and vmap(jacrev(fn)) agree."""
+        rng = _rng(53)
+        x_np = rng.standard_normal((4, 3)).astype(np.float32)
+
+        f_l = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        f_r = lambda x: ref.stack([x.sum(), (x**2).sum()])
+
+        Jrev = func.vmap(func.jacrev(f_l))(lucid.tensor(x_np.copy()))
+        Jfwd = func.vmap(func.jacfwd(f_l))(lucid.tensor(x_np.copy()))
+        J_r = ref.func.vmap(ref.func.jacrev(f_r))(ref.tensor(x_np.copy()))
+
+        assert_close(Jfwd, J_r, atol=1e-4)
+        assert_close(Jrev, Jfwd, atol=1e-4)
+
+
+@pytest.mark.parity
+class TestVmapHessianParity:
+    """vmap(hessian(fn)) — batched second-order derivatives."""
+
+    def test_quadratic(self, ref: Any) -> None:
+        """Hessian of x² is 2I for each batch element."""
+        rng = _rng(54)
+        x_np = rng.standard_normal((3, 4)).astype(np.float32)
+
+        f_l = lambda x: (x**2).sum()
+        f_r = lambda x: (x**2).sum()
+
+        H_l = func.vmap(func.hessian(f_l))(lucid.tensor(x_np.copy()))
+        H_r = ref.func.vmap(ref.func.hessian(f_r))(ref.tensor(x_np.copy()))
+        assert_close(H_l, H_r, atol=1e-3)

@@ -162,3 +162,91 @@ class TestVmapGradCompose:
         manual_t = lucid.stack(manual, dim=0)
 
         assert lucid.allclose(per_sample, manual_t)
+
+
+# ── Stage 2: element-level isolation ─────────────────────────────────────────
+
+
+class TestVmapIsolation:
+    """vmap over transforms that require per-element isolation (jacrev/jacfwd/hessian).
+
+    Stage 1 (move-batch-dim + call-once) gives wrong shapes for these:
+      vmap(jacrev(fn)) → (B, out, B, in)  ← wrong
+    Stage 2 isolation gives:
+      vmap(jacrev(fn)) → (B, out, in)     ← correct
+    """
+
+    def test_vmap_jacrev_vector_output_shape(self) -> None:
+        """vmap(jacrev(fn)) shape is (B, out, in) for fn: R^n → R^m."""
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])  # R^3 → R^2
+        B, n = 4, 3
+        X = lucid.randn(B, n)
+        J = func.vmap(func.jacrev(f))(X)
+        assert list(J.shape) == [B, 2, n]
+
+    def test_vmap_jacrev_matches_manual(self) -> None:
+        """Each vmap(jacrev) element matches individually computed Jacobian."""
+        f = lambda x: lucid.stack([x[0] * x[1], x[1] ** 2])  # R^3 → R^2
+        B, n = 3, 3
+        X = lucid.randn(B, n)
+        jf = func.jacrev(f)
+
+        batched = func.vmap(jf)(X)
+        for b in range(B):
+            ref = jf(X[b])
+            assert lucid.allclose(batched[b], ref, atol=1e-5)
+
+    def test_vmap_jacrev_scalar_fn(self) -> None:
+        """vmap(jacrev(fn)) for scalar fn gives (B, n) — same as vmap(grad)."""
+        f = lambda x: (x**2).sum()
+        B, n = 4, 3
+        X = lucid.randn(B, n)
+        J = func.vmap(func.jacrev(f))(X)
+        g = func.vmap(func.grad(f))(X)
+        assert list(J.shape) == [B, n]
+        assert lucid.allclose(J, g, atol=1e-5)
+
+    def test_vmap_jacfwd_vector_output_shape(self) -> None:
+        """vmap(jacfwd(fn)) shape is (B, out, in) for fn: R^n → R^m."""
+        f = lambda x: lucid.stack([(x * 2).sum(), (x**2).sum()])
+        B, n = 3, 4
+        X = lucid.randn(B, n)
+        J = func.vmap(func.jacfwd(f))(X)
+        assert list(J.shape) == [B, 2, n]
+
+    def test_vmap_jacfwd_matches_jacrev(self) -> None:
+        """vmap(jacfwd) and vmap(jacrev) agree on same function."""
+        f = lambda x: lucid.stack([x.sum(), (x**3).sum()])
+        B, n = 3, 3
+        X = lucid.randn(B, n)
+        Jrev = func.vmap(func.jacrev(f))(X)
+        Jfwd = func.vmap(func.jacfwd(f))(X)
+        assert lucid.allclose(Jrev, Jfwd, atol=1e-4)
+
+    def test_vmap_hessian_shape(self) -> None:
+        """vmap(hessian(fn)) shape is (B, n, n) for scalar fn."""
+        f = lambda x: (x**2).sum()
+        B, n = 3, 4
+        X = lucid.randn(B, n)
+        H = func.vmap(func.hessian(f))(X)
+        assert list(H.shape) == [B, n, n]
+
+    def test_vmap_hessian_matches_manual(self) -> None:
+        """Each vmap(hessian) element matches individual hessian call."""
+        f = lambda x: (x**3).sum()
+        B, n = 3, 3
+        X = lucid.randn(B, n)
+        hf = func.hessian(f)
+
+        batched = func.vmap(hf)(X)
+        for b in range(B):
+            ref = hf(X[b])
+            assert lucid.allclose(batched[b], ref, atol=1e-4)
+
+    def test_vmap_jacrev_non_zero_in_dim(self) -> None:
+        """Isolation works when batch dim is not 0."""
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        B, n = 3, 4
+        X = lucid.randn(n, B)  # batch on dim 1
+        J = func.vmap(func.jacrev(f), in_dims=1)(X)
+        assert list(J.shape) == [B, 2, n]

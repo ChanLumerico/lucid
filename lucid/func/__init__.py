@@ -54,6 +54,21 @@ __all__ = [
 ]
 
 
+# ── isolation marker ─────────────────────────────────────────────────────────
+
+# Attribute set on functions returned by jacrev / jacfwd / hessian so that
+# vmap knows to use per-element isolation instead of the move-batch-dim path.
+# Those transforms materialise per-output backward passes that must not see
+# the batch dimension as part of the input — Stage 1 would give wrong shapes
+# like (B, out, B, in) instead of (B, out, in).
+_ISOLATION_ATTR = "_lucid_needs_vmap_isolation"
+
+
+def _mark_isolation(fn: Callable[..., object]) -> Callable[..., object]:
+    setattr(fn, _ISOLATION_ATTR, True)
+    return fn
+
+
 # ── internal helpers ──────────────────────────────────────────────────────────
 
 
@@ -153,6 +168,12 @@ def vmap(
         if batch_size is None:
             return func(*args, **kwargs)
 
+        # Transforms like jacrev / jacfwd / hessian build per-output backward
+        # passes that must not observe the batch dimension as an input axis.
+        # Route them through element-level isolation instead of Stage 1.
+        if getattr(func, _ISOLATION_ATTR, False):
+            return _isolated_vmap(func, args, kwargs, _in, out_dims, batch_size)
+
         if chunk_size is not None and batch_size > chunk_size:
             return _chunked_vmap(
                 func, args, kwargs, _in, out_dims, chunk_size, batch_size
@@ -224,6 +245,55 @@ def _chunked_vmap(
         ods: list[int] = [out_dims] * n if isinstance(out_dims, int) else list(out_dims)
         return tuple(lucid.cat([c[i] for c in chunks], dim=ods[i]) for i in range(n))
     return lucid.cat(chunks, dim=od_int)  # type: ignore[arg-type]
+
+
+def _isolated_vmap(
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    args: tuple[Tensor, ...],
+    kwargs: dict[str, object],
+    in_dims: list[int | None],
+    out_dims: int | tuple[int, ...],
+    batch_size: int,
+) -> Tensor | tuple[Tensor, ...]:
+    """Per-element isolation: call func(x[b]) for each b in 0..batch_size-1.
+
+    Unlike Stage 1 (move-batch-dim + call-once), each element is sliced out
+    before calling func, so transforms that materialise backward passes
+    (jacrev, jacfwd, hessian) cannot observe the batch axis as an input.
+
+    Output shapes are correct for composed transforms:
+      vmap(jacrev(fn))  → (B, out_numel, in_numel)   [Stage 1 gave (B,out,B,in)]
+      vmap(jacfwd(fn))  → (B, out_numel, in_numel)
+      vmap(hessian(fn)) → (B, n, n)
+    """
+    import lucid
+    from lucid._tensor.tensor import Tensor as _T
+
+    results: list[Tensor | tuple[Tensor, ...]] = []
+    for b in range(batch_size):
+        sliced: list[object] = []
+        for a, d in zip(args, in_dims):
+            if d is None or not isinstance(a, _T):
+                sliced.append(a)
+            else:
+                nd = len(a.shape)
+                bd = d if d >= 0 else nd + d
+                idx: list[int | slice] = [slice(None)] * nd
+                idx[bd] = b
+                sliced.append(a[tuple(idx)])
+        results.append(func(*sliced, **kwargs))
+
+    od_int: int = out_dims if isinstance(out_dims, int) else out_dims[0]
+    if isinstance(results[0], tuple):
+        n_out = len(results[0])
+        ods_i: list[int] = (
+            [out_dims] * n_out if isinstance(out_dims, int) else list(out_dims)
+        )
+        return tuple(
+            lucid.stack([r[i] for r in results], dim=ods_i[i])  # type: ignore[index,arg-type]
+            for i in range(n_out)
+        )
+    return lucid.stack(list(results), dim=od_int)  # type: ignore[arg-type]
 
 
 # ── grad ─────────────────────────────────────────────────────────────────────
@@ -716,7 +786,7 @@ def jacrev(
             return r, aux  # type: ignore[return-value]
         return r
 
-    return jac_fn
+    return _mark_isolation(jac_fn)  # type: ignore[return-value]
 
 
 # ── jacfwd ───────────────────────────────────────────────────────────────────
@@ -822,7 +892,7 @@ def jacfwd(
             return r, aux  # type: ignore[return-value]
         return r
 
-    return jac_fn
+    return _mark_isolation(jac_fn)  # type: ignore[return-value]
 
 
 # ── hessian ───────────────────────────────────────────────────────────────────
@@ -863,7 +933,7 @@ def hessian(
         )
         return result  # type: ignore[return-value]
 
-    return hessian_fn
+    return _mark_isolation(hessian_fn)  # type: ignore[return-value]
 
 
 def _splice(
