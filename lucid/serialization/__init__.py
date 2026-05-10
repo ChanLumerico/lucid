@@ -204,4 +204,162 @@ def _apply_map_location(
     return obj
 
 
-__all__ = ["save", "load"]
+def save_sharded(
+    obj: object,
+    path: str | bytes,
+    *,
+    shard_size_mb: float = 1024.0,
+    pickle_protocol: int = 4,
+) -> None:
+    """Save an object to a sharded checkpoint directory.
+
+    If *obj* is a ``dict`` (e.g. a Module ``state_dict()``) it is split into
+    multiple shard files so that each shard stays under *shard_size_mb* MiB.
+    A JSON index (``index.json``) records which keys live in which shard,
+    making the directory self-describing.
+
+    For non-dict objects the function falls back to a single-shard write that
+    is still compatible with ``load_sharded``.
+
+    Parameters
+    ----------
+    obj:
+        Object to save.  State dicts (``OrderedDict`` / ``dict`` of tensors)
+        are the primary use-case.
+    path:
+        Destination *directory*.  Created if it does not exist.
+    shard_size_mb:
+        Target maximum size per shard file in MiB.  Tensors that individually
+        exceed this limit are placed in their own shard.
+    pickle_protocol:
+        Pickle protocol forwarded to each per-shard ``save()`` call.
+    """
+    import json
+    import os
+
+    path_str = path.decode() if isinstance(path, bytes) else str(path)
+    os.makedirs(path_str, exist_ok=True)
+
+    if not isinstance(obj, dict):
+        fname = "shard-00000-of-00001.lucid"
+        save(obj, os.path.join(path_str, fname), pickle_protocol=pickle_protocol)
+        index: dict[str, object] = {
+            "_lucid_sharded": 1,
+            "shards": [{"file": fname, "keys": None}],
+        }
+        with open(os.path.join(path_str, "index.json"), "w", encoding="utf-8") as fp:
+            json.dump(index, fp, indent=2)
+        return
+
+    limit_bytes = int(shard_size_mb * 1024 * 1024)
+
+    # Bucket (key, value) pairs into shards without splitting any single tensor.
+    shards: list[dict[str, object]] = []
+    cur: dict[str, object] = {}
+    cur_bytes: int = 0
+
+    for k, v in obj.items():
+        v_sz = (v.numel() * v.element_size()) if isinstance(v, _T) else 0
+        # Flush current shard if adding this tensor would exceed the limit
+        # (but never emit an empty shard — always include at least one entry).
+        if cur and cur_bytes + v_sz > limit_bytes:
+            shards.append(cur)
+            cur = {}
+            cur_bytes = 0
+        cur[k] = v
+        cur_bytes += v_sz
+
+    if cur:
+        shards.append(cur)
+    if not shards:
+        shards = [{}]
+
+    n = len(shards)
+    index_shards: list[dict[str, object]] = []
+    for i, shard_dict in enumerate(shards):
+        fname = f"shard-{i:05d}-of-{n:05d}.lucid"
+        save(shard_dict, os.path.join(path_str, fname), pickle_protocol=pickle_protocol)
+        index_shards.append({"file": fname, "keys": list(shard_dict.keys())})
+
+    index = {"_lucid_sharded": 1, "shards": index_shards}
+    sd_meta = getattr(obj, "_metadata", None)
+    if sd_meta is not None:
+        try:
+            # _metadata is a plain dict[str, dict] — JSON-serializable.
+            index["_state_dict_metadata"] = sd_meta
+        except Exception:
+            pass
+
+    with open(os.path.join(path_str, "index.json"), "w", encoding="utf-8") as fp:
+        json.dump(index, fp, indent=2)
+
+
+def load_sharded(
+    path: str | bytes,
+    *,
+    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
+    weights_only: bool = True,
+) -> object:
+    """Load a sharded checkpoint saved with ``save_sharded``.
+
+    Reads ``index.json`` from *path*, then loads each shard file in order and
+    merges the results into a single ``OrderedDict``.  *map_location* and
+    *weights_only* are forwarded to every per-shard ``load()`` call.
+
+    Parameters
+    ----------
+    path:
+        Directory that contains ``index.json`` and the shard files.
+    map_location:
+        Device remapping forwarded to ``load()``.
+    weights_only:
+        If ``True`` (default) only tensor-safe types are deserialised.
+    """
+    import json
+    import os
+    from collections import OrderedDict
+
+    path_str = path.decode() if isinstance(path, bytes) else str(path)
+    index_path = os.path.join(path_str, "index.json")
+
+    with open(index_path, encoding="utf-8") as fp:
+        index = json.load(fp)
+
+    if not isinstance(index, dict) or index.get("_lucid_sharded") != 1:
+        raise RuntimeError(
+            f"{index_path!r} is not a valid Lucid sharded checkpoint index"
+        )
+
+    shards_meta: list[dict[str, object]] = index["shards"]
+
+    # Single non-dict shard (fallback path written for non-dict objects).
+    if len(shards_meta) == 1 and shards_meta[0].get("keys") is None:
+        fname = str(shards_meta[0]["file"])
+        return load(
+            os.path.join(path_str, fname),
+            map_location=map_location,
+            weights_only=weights_only,
+        )
+
+    result: OrderedDict[str, object] = OrderedDict()
+    for shard_meta in shards_meta:
+        fname = str(shard_meta["file"])
+        shard = load(
+            os.path.join(path_str, fname),
+            map_location=map_location,
+            weights_only=weights_only,
+        )
+        if isinstance(shard, dict):
+            result.update(shard)
+
+    sd_meta = index.get("_state_dict_metadata")
+    if sd_meta is not None and isinstance(sd_meta, dict):
+        try:
+            result._metadata = sd_meta  # type: ignore[attr-defined]
+        except AttributeError:
+            pass
+
+    return result
+
+
+__all__ = ["save", "load", "save_sharded", "load_sharded"]

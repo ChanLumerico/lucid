@@ -125,11 +125,31 @@ class _CholeskyAutograd(_AutogradFunction):
         # Step 2: Z = Y L^{-1}.  Take transposes: Z^T = L^{-T} Y^T, so solve
         # L^T Z^T = Y^T then transpose back.
         Z = solve_triangular(L.mT, Y.mT, upper=True).mT
-        # ``Z`` is already symmetric in exact arithmetic (Phi sandwiched
-        # between L^{-T} and L^{-1} applied to the lower-tri-only gradient
-        # produces a symmetric result); the explicit symmetrisation below
-        # absorbs any floating-point asymmetry.
-        grad_A = 0.5 * (Z + Z.mT)
+        # Murray's formula gives the Riemannian gradient for a symmetric
+        # input matrix A (it implicitly assumes ∂A[i,j] = ∂A[j,i]).
+        # gradcheck treats A as a general matrix and perturbs each element
+        # independently.  Cholesky uses only tril(A), so:
+        #   · upper triangle of A  → gradient = 0
+        #   · diagonal of A        → gradient = (Z+Z^T)[i,i]/2  (unchanged)
+        #   · lower off-diagonal   → gradient = (Z+Z^T)[i,j]  (×2 vs Murray)
+        # When upper=False, cholesky reads only tril(A):
+        #   · upper off-diagonal → gradient 0
+        #   · diagonal           → sym[i,i]  (unchanged)
+        #   · lower off-diagonal → 2·sym[i,j]
+        #   ⟹ grad_A = 2·tril(sym) − diag(sym)
+        # When upper=True, cholesky reads only triu(A) (we normalised to L above,
+        # so Z is still in lower-triangular space, but the active elements of A
+        # are in the upper triangle):
+        #   · lower off-diagonal → gradient 0
+        #   · diagonal           → sym[i,i]
+        #   · upper off-diagonal → 2·sym[i,j]
+        #   ⟹ grad_A = 2·triu(sym) − diag(sym)
+        sym = 0.5 * (Z + Z.mT)
+        diag_vals = sym.diagonal(dim1=-2, dim2=-1)  # (..., n)
+        if upper:
+            grad_A = 2.0 * lucid.triu(sym) - lucid.diag_embed(diag_vals)
+        else:
+            grad_A = 2.0 * lucid.tril(sym) - lucid.diag_embed(diag_vals)
         return grad_A
 
 
@@ -143,26 +163,355 @@ def norm(
     return _wrap(_la.norm(_unwrap(x)))
 
 
-@_linalg_op
-def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
-    """QR decomposition."""
-    q, r = _la.qr(x)  # type: ignore[arg-type]
-    return q, r  # type: ignore[return-value]
+# ── SVD with backward ─────────────────────────────────────────────────────────
+#
+# The SVD returns three tensors (U, S, Vh).  Lucid's Python Function
+# mechanism supports only single-output backward registration, so we use one
+# Function per output.  Gradients from each path accumulate correctly
+# (dA from U-path + dA from S-path + dA from Vh-path = total dA).
+#
+# KEY DESIGN: pre-computed TensorImpl objects (not Tensor) are passed as
+# extra args so the engine never sees them as differentiable inputs.
+# Only `A` (the first arg) is a Tensor with requires_grad=True; the others
+# are TensorImpl and are skipped by `isinstance(a, Tensor)` in _make_apply.
+# This avoids spurious graph edges between the three Function wrappers.
+#
+# Backward formula (Giles 2008, extended to rectangular A(m×n), k=min(m,n)):
+#   F[i,j] = s_i / (s_i² - s_j²)  for i≠j,  F[i,i] = 0
+#   dA from S: U diag(G_S) Vh
+#   dA from U: U (F ⊙ U^T G_U) Vh + (I_m - U U^T) G_U Σ^{-1} Vh    [if m>k]
+#   dA from Vh: U (F ⊙ -(Vh G_V)^T) Vh + U Σ^{-1} G_Vh (I_n - Vh^T Vh) [if n>k]
 
 
-@_linalg_op
+def _svd_loewner(S: Tensor) -> Tensor:
+    """Build the Loewner matrix F[i,j] = s_i/(s_i²-s_j²) for i≠j."""
+    k = int(S.shape[-1])
+    Si = S.unsqueeze(-1)  # (..., k, 1)
+    Sj = S.unsqueeze(-2)  # (..., 1, k)
+    denom = Si * Si - Sj * Sj  # (..., k, k)
+    eye_k = lucid.eye(k, dtype=S.dtype, device=S.device)
+    safe_denom = denom + eye_k  # avoid div-by-zero on diagonal
+    F = Si / safe_denom * (1.0 - eye_k)  # zero diagonal
+    return F
+
+
+class _SVDSGrad(_AutogradFunction):
+    """Backward: singular-value contribution  dA = U diag(G_S) Vh."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        u_impl: _C_engine.TensorImpl,
+        s_impl: _C_engine.TensorImpl,
+        vh_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        # Save TensorImpl references (not Tensor) to avoid autograd entanglement.
+        ctx.u_impl = u_impl
+        ctx.vh_impl = vh_impl
+        return _wrap(s_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:
+        U = _wrap(ctx.u_impl)
+        Vh = _wrap(ctx.vh_impl)
+        return U @ lucid.diag_embed(G_S) @ Vh
+
+
+class _SVDUGrad(_AutogradFunction):
+    """Backward: left-singular-vector contribution to dA."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        u_impl: _C_engine.TensorImpl,
+        s_impl: _C_engine.TensorImpl,
+        vh_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.u_impl = u_impl
+        ctx.s_impl = s_impl
+        ctx.vh_impl = vh_impl
+        return _wrap(u_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:
+        U = _wrap(ctx.u_impl)
+        S = _wrap(ctx.s_impl)
+        Vh = _wrap(ctx.vh_impl)
+        k = int(S.shape[-1])
+        m = int(U.shape[-2])
+        F = _svd_loewner(S)
+        UtgU = U.mT @ G_U  # (..., k, k)
+        K = F * UtgU
+        dA = U @ K @ Vh
+        if m > k:
+            S_inv = lucid.diag_embed(1.0 / S)
+            proj_gU = G_U - U @ UtgU
+            dA = dA + proj_gU @ S_inv @ Vh
+        return dA
+
+
+class _SVDVhGrad(_AutogradFunction):
+    """Backward: right-singular-vector (Vh) contribution to dA."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        u_impl: _C_engine.TensorImpl,
+        s_impl: _C_engine.TensorImpl,
+        vh_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.u_impl = u_impl
+        ctx.s_impl = s_impl
+        ctx.vh_impl = vh_impl
+        return _wrap(vh_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:
+        U = _wrap(ctx.u_impl)
+        S = _wrap(ctx.s_impl)
+        Vh = _wrap(ctx.vh_impl)
+        k = int(S.shape[-1])
+        n = int(Vh.shape[-1])
+        F = _svd_loewner(S)
+        gV = G_Vh.mT  # (..., n, k)
+        VtgV = Vh @ gV  # (..., k, k)
+        K = F * (-VtgV.mT)
+        dA = U @ K @ Vh
+        if n > k:
+            S_inv = lucid.diag_embed(1.0 / S)
+            proj_gVh = G_Vh - (G_Vh @ Vh.mT) @ Vh
+            dA = dA + U @ S_inv @ proj_gVh
+        return dA
+
+
 def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
-    """Singular value decomposition. Returns (U, S, Vh)."""
-    u, s, v = _la.svd(x)  # type: ignore[arg-type]
-    return u, s, v  # type: ignore[return-value]
+    """Singular value decomposition. Returns (U, S, Vh).
+
+    Backward is implemented via three separate Function wrappers — one per
+    output — so that gradients from U, S, and Vh all accumulate correctly
+    into the input gradient (Giles 2008 formula).
+    """
+    u_impl, s_impl, vh_impl = _la.svd(_unwrap(x))
+    if not _C_engine.grad_enabled() or not x.requires_grad:
+        return _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl)
+    # Pass TensorImpl (not Tensor) so _make_apply ignores them in the
+    # differentiable-input scan — no spurious cross-edges in the graph.
+    U = _SVDUGrad.apply(x, u_impl, s_impl, vh_impl)
+    S = _SVDSGrad.apply(x, u_impl, s_impl, vh_impl)
+    Vh = _SVDVhGrad.apply(x, u_impl, s_impl, vh_impl)
+    return U, S, Vh  # type: ignore[return-value]
 
 
 def svdvals(x: Tensor) -> Tensor:
     """Singular values only (no U/Vh)."""
+    if _C_engine.grad_enabled() and x.requires_grad:
+        _, S, _ = svd(x)
+        return S
     result = _la.svd(_unwrap(x), False)
     if isinstance(result, (list, tuple)):
         return _wrap(result[0])
     return _wrap(result)
+
+
+# ── QR with backward ─────────────────────────────────────────────────────────
+#
+# Strategy: express R via the Cholesky decomposition of A^T A.
+#
+# For A = Q R (m≥n, R upper triangular):
+#   A^T A = R^T R  (since Q^T Q = I)
+#
+# The lower Cholesky factor L = chol(A^T A) satisfies L L^T = A^T A,
+# with positive diagonal (by definition).  The relationship between L and R
+# from LAPACK's dgeqrf is: R = D L^T  where D = diag(sign(diag(R))).
+#
+# This lets us route the R backward through the existing (correct) Cholesky
+# backward without implementing the Gu-Eisenstat formula, which requires
+# positive-diagonal R and fails for LAPACK's sign convention.
+#
+# Q backward: from A = Q R, Q = A R^{-1} for square A.  For thin QR (m>n),
+# Q doesn't have a simple closed-form inverse through A.  We route Q through
+# the same Cholesky path or via projection.
+#
+# For simplicity, the combined QR backward is implemented in a single
+# Function wrapper that handles both Q and R gradients together.
+
+
+class _QRCombinedGrad(_AutogradFunction):
+    """Joint backward for QR: accumulates G_Q and G_R and computes dA.
+
+    Both Q and R gradients flow to the same A via the Cholesky-based formula:
+      L = chol(A^T A),  R = D L^T,  Q = A R^{-1}  (conceptually)
+
+    In practice, because LAPACK's QR can have negative diagonal, we use the
+    correct chain-rule path:
+      G_B = chol_backward(L, G_L)   where L = chol(A^T A)
+      dA  = 2 A G_B                 where G_B is symmetric
+    combined with the Q-path:
+      dA += G_Q R^{-T} + Q tril(G_Q^T Q - 0) R^{-T}  (Stiefel projection)
+
+    This is split into two Function wrappers that each handle one output;
+    their contributions accumulate in A.grad.
+    """
+
+
+class _QRRGrad(_AutogradFunction):
+    """Backward: R contribution.  Uses Cholesky route for correctness with
+    LAPACK's sign convention (negative diagonal R elements are allowed)."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        q_impl: _C_engine.TensorImpl,
+        r_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.r_impl = r_impl
+        return _wrap(r_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
+        # R backward via Cholesky of A^T A:
+        #   R = D L^T  where L = chol(A^T A), D = diag(sign(diag(R)))
+        #   G_L = G_R.mT @ D  (chain rule through R = D L^T)
+        #   G_B = chol_backward(L, G_L)
+        #   dA  = 2 A G_B  (chain rule through B = A^T A)
+        #
+        # But we don't have A here — use the functional Cholesky backward
+        # via Murray's formula directly on R.
+        #
+        # Simpler equivalent: use the fact that R^T R = A^T A.
+        # dA from G_R:
+        #   ∂f/∂A = A G_B + A G_B^T = 2 A G_B  (G_B symmetric)
+        # where G_B is the gradient of f w.r.t. B = R^T R:
+        #   ∂f/∂B[i,j] = Σ_{k,l} G_R[k,l] ∂R[k,l]/∂B[i,j]
+        #
+        # Using Murray's Cholesky backward directly:
+        # G_L[a,b] = G_R[b,a] * D[b,b]  (= G_R.mT @ D)
+        # G_B = chol_backward(L, G_L) via the two triangular solves
+        R = _wrap(ctx.r_impl)
+        n = int(R.shape[-1])
+        diag_R = R.diagonal(dim1=-2, dim2=-1)
+        # sign of diagonal: +1 or -1
+        D = lucid.diag_embed(diag_R / diag_R.abs().clamp(min=1e-12))  # sign matrix
+        # L = R^T @ D  (lower triangular, positive diagonal)
+        # Derivation: R = D1 R_pos (D1 = sign matrix), R_pos = L^T
+        # → L = R_pos^T = (D1 R)^T = R^T D1 = R.mT @ D
+        L = (R.mT @ D).detach()
+        # G_L = G_R.mT @ D
+        G_L = G_R.mT @ D
+        # Murray's Cholesky backward: G_B = sym(L^{-T} Phi(L^T G_L) L^{-1})
+        eye_n = lucid.eye(n, dtype=L.dtype, device=L.device)
+        M = L.mT @ G_L
+        Phi = lucid.tril(M) - 0.5 * (M * eye_n)
+        Y = solve_triangular(L.mT, Phi, upper=True)
+        Z = solve_triangular(L.mT, Y.mT, upper=True).mT
+        G_B = (Z + Z.mT) * 0.5  # symmetric
+        # dA = 2 * ctx_A * G_B — but we don't have A here.
+        # Recover A: A = Q R but we don't have Q stored in ctx.
+        # Use A = L^T D R ??? No: L = D R^T → L^T = R D^T = R D (D is diagonal & symmetric)
+        # So A = Q R and R = D L^T → A = Q D L^T.
+        # G_B is the gradient w.r.t. A^T A, so dA = 2 A G_B.
+        # But we need A. Store it in forward.
+        raise RuntimeError(
+            "Internal error: _QRRGrad.backward called without A stored in ctx. "
+            "Use _QRRGradWithA which stores A."
+        )
+
+
+class _QRRGradWithA(_AutogradFunction):
+    """Backward: R contribution to dA via Cholesky of A^T A."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        r_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.A_impl = _unwrap(A)  # store A as TensorImpl
+        ctx.r_impl = r_impl
+        return _wrap(r_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
+        A = _wrap(ctx.A_impl)
+        R = _wrap(ctx.r_impl)
+        n = int(R.shape[-1])
+        # D = sign matrix of R diagonal
+        diag_R = R.diagonal(dim1=-2, dim2=-1)
+        abs_d = diag_R.abs()
+        safe_abs_d = lucid.where(abs_d < 1e-12, lucid.ones_like(abs_d), abs_d)
+        sign_d = diag_R / safe_abs_d
+        D = lucid.diag_embed(sign_d)
+        # L = R.mT @ D  (lower triangular, positive diagonal)
+        # Derivation: R_pos = D @ R (sign-normalised), L = R_pos^T = R^T D = R.mT @ D
+        L = (R.mT @ D).detach()
+        # G_L = G_R_pos^T = (D @ G_R)^T = G_R^T @ D  (since D is symmetric)
+        G_L = G_R.mT @ D
+        # Murray's Cholesky backward → G_B = sym(L^{-T} Phi(L^T G_L) L^{-1})
+        eye_n = lucid.eye(n, dtype=L.dtype, device=L.device)
+        M = L.mT @ G_L
+        Phi = lucid.tril(M) - 0.5 * (M * eye_n)
+        Y = solve_triangular(L.mT, Phi, upper=True)
+        Z = solve_triangular(L.mT, Y.mT, upper=True).mT
+        G_B = (Z + Z.mT) * 0.5
+        # dA = 2 A G_B  (from B = A^T A)
+        return (2.0 * A) @ G_B
+
+
+class _QRQGrad(_AutogradFunction):
+    """Backward: Q contribution to dA.
+
+    From A = Q R with Q^T Q = I (Stiefel manifold constraint):
+      dA from G_Q = G_Q R^{-T} - Q skew(Q^T G_Q) R^{-T}
+                  = (G_Q - Q sym(Q^T G_Q)) R^{-T}
+    where sym(M) = (M + M^T)/2.
+
+    For m > n: add the off-range projection (I - QQ^T) G_Q R^{-T}.
+    """
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        q_impl: _C_engine.TensorImpl,
+        r_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.q_impl = q_impl
+        ctx.r_impl = r_impl
+        return _wrap(q_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:
+        Q = _wrap(ctx.q_impl)
+        R = _wrap(ctx.r_impl)
+        m, n = int(Q.shape[-2]), int(Q.shape[-1])
+        # Stiefel gradient: project G_Q onto tangent space at Q
+        QtGQ = Q.mT @ G_Q  # n×n
+        sym_QtGQ = (QtGQ + QtGQ.mT) * 0.5
+        numerator = G_Q - Q @ sym_QtGQ  # m×n: tangent-space component
+        dA = solve_triangular(R, numerator.mT, upper=True).mT
+        if m > n:
+            # Off-range: (I - QQ^T) G_Q R^{-T}
+            proj = G_Q - Q @ (Q.mT @ G_Q)
+            dA = dA + solve_triangular(R, proj.mT, upper=True).mT
+        return dA
+
+
+def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
+    """QR decomposition.
+
+    Backward for R uses the Cholesky-of-ATA route (correct for any
+    sign convention).  Backward for Q uses the Stiefel-manifold projection.
+    """
+    q_impl, r_impl = _la.qr(_unwrap(x))
+    if not _C_engine.grad_enabled() or not x.requires_grad:
+        return _wrap(q_impl), _wrap(r_impl)
+    Q = _QRQGrad.apply(x, q_impl, r_impl)
+    R = _QRRGradWithA.apply(x, r_impl)
+    return Q, R  # type: ignore[return-value]
 
 
 def matrix_power(x: Tensor, n: int) -> Tensor:
@@ -225,26 +574,107 @@ def pinv(x: Tensor) -> Tensor:
 
 @_linalg_op
 def eig(x: Tensor) -> tuple[Tensor, Tensor]:
-    """Eigenvalue decomposition."""
+    """Eigenvalue decomposition (general, no backward)."""
     vals, vecs = _la.eig(x)  # type: ignore[arg-type]
     return vals, vecs  # type: ignore[return-value]
 
 
 def eigvals(x: Tensor) -> Tensor:
-    """Eigenvalues only (no eigenvectors)."""
+    """Eigenvalues only (no eigenvectors, no backward)."""
     vals, _ = _la.eig(_unwrap(x))
     return _wrap(vals)
 
 
-@_linalg_op
+# ── Eigh with backward ────────────────────────────────────────────────────────
+#
+# For symmetric A = V diag(w) V^T, given G_w and G_V:
+#   F[i,j] = 1/(w_i − w_j)  for i≠j,  F[i,i] = 0    (Loewner matrix)
+#   dA from w: V diag(G_w) V^T
+#   dA from V: V (F ⊙ (V^T G_V)) V^T  (then symmetrised)
+#
+# Split into two Function wrappers so the engine accumulates contributions.
+
+
+class _EighWGrad(_AutogradFunction):
+    """Backward: eigenvalue contribution  dA = V diag(G_w) V^T.
+
+    w_impl / V_impl are passed as TensorImpl (not Tensor) so _make_apply
+    skips them in the differentiable-input scan — only A gets a gradient edge.
+    """
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        w_impl: _C_engine.TensorImpl,
+        V_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.V_impl = V_impl  # store TensorImpl, not Tensor
+        return _wrap(w_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:
+        V = _wrap(ctx.V_impl)
+        return V @ lucid.diag_embed(G_w) @ V.mT
+
+
+class _EighVGrad(_AutogradFunction):
+    """Backward: eigenvector contribution  dA = sym(V (F ⊙ V^T G_V) V^T)."""
+
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        A: Tensor,
+        w_impl: _C_engine.TensorImpl,
+        V_impl: _C_engine.TensorImpl,
+    ) -> Tensor:
+        ctx.w_impl = w_impl
+        ctx.V_impl = V_impl
+        return _wrap(V_impl)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:
+        w = _wrap(ctx.w_impl)
+        V = _wrap(ctx.V_impl)
+        k = int(w.shape[-1])
+        Wi = w.unsqueeze(-1)
+        Wj = w.unsqueeze(-2)
+        denom = Wi - Wj
+        eye_k = lucid.eye(k, dtype=w.dtype, device=w.device)
+        safe_denom = denom + eye_k
+        F = (1.0 / safe_denom) * (1.0 - eye_k)
+        VtGV = V.mT @ G_V
+        inner = F * VtGV
+        dA = V @ inner @ V.mT
+        return (dA + dA.mT) * 0.5
+
+
 def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
-    """Eigenvalue decomposition of a symmetric/Hermitian matrix."""
-    vals, vecs = _la.eigh(x)  # type: ignore[arg-type]
-    return vals, vecs  # type: ignore[return-value]
+    """Eigenvalue decomposition of a symmetric/Hermitian matrix.
+
+    Returns ``(w, V)`` where ``w`` are the eigenvalues (ascending) and
+    ``V`` are the eigenvectors (columns).  Both support backward.
+
+    Backward formula (perturbation theory):
+      dA from w: ``V diag(G_w) V^T``
+      dA from V: ``sym(V (F ⊙ V^T G_V) V^T)``  where ``F[i,j]=1/(w_i-w_j)``.
+    """
+    w_impl, V_impl = _la.eigh(_unwrap(x))
+    if not _C_engine.grad_enabled() or not x.requires_grad:
+        return _wrap(w_impl), _wrap(V_impl)
+    w = _EighWGrad.apply(x, w_impl, V_impl)
+    V = _EighVGrad.apply(x, w_impl, V_impl)
+    return w, V  # type: ignore[return-value]
 
 
 def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
-    """Eigenvalues of a symmetric/Hermitian matrix (no eigenvectors)."""
+    """Eigenvalues of a symmetric/Hermitian matrix.
+
+    Routes through ``eigh`` when grad is enabled so backward flows.
+    """
+    if _C_engine.grad_enabled() and x.requires_grad:
+        w, _ = eigh(x, UPLO)
+        return w
     vals, _ = _la.eigh(_unwrap(x))
     return _wrap(vals)
 

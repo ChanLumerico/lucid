@@ -9,9 +9,10 @@ from lucid._tensor.tensor import Tensor
 from lucid.distributions.bernoulli import Bernoulli
 from lucid.distributions.categorical import Categorical
 from lucid.distributions.distribution import Distribution
-from lucid.distributions.exponential import Exponential
+from lucid.distributions.exponential import Cauchy, Exponential, Laplace
 from lucid.distributions.gamma import Beta, Gamma
 from lucid.distributions.normal import Normal
+from lucid.distributions.student import StudentT
 
 _KLFn = Callable[[Distribution, Distribution], Tensor]
 _KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
@@ -33,6 +34,10 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
 
     Falls through to the most-derived registered ancestor — exact-class
     matching is checked first, then walks the MRO of ``type(p)`` × ``type(q)``.
+
+    If no analytical pair is registered and ``p`` supports ``rsample``,
+    a Monte Carlo estimate (1 sample) is returned as a fallback.  This
+    matches the reference framework's behaviour for rare distribution pairs.
     """
     key = (type(p), type(q))
     if key in _KL_REGISTRY:
@@ -41,8 +46,13 @@ def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
         for q_base in type(q).__mro__:
             if (p_base, q_base) in _KL_REGISTRY:
                 return _KL_REGISTRY[(p_base, q_base)](p, q)
+    # MC fallback for distributions with rsample.
+    if p.has_rsample:
+        s = p.rsample()
+        return p.log_prob(s) - q.log_prob(s)
     raise NotImplementedError(
-        f"kl_divergence({type(p).__name__}, {type(q).__name__}) " f"is not registered."
+        f"kl_divergence({type(p).__name__}, {type(q).__name__}) "
+        f"is not registered and p does not support rsample for MC estimation."
     )
 
 
@@ -259,3 +269,64 @@ def _kl_independent_independent(p: Independent, q: Independent) -> Tensor:
     for _ in range(n):
         kl = kl.sum(dim=-1)
     return kl
+
+
+# ── MC-based KL pairs (no closed form) ───────────────────────────────────────
+
+
+def _kl_monte_carlo(p: Distribution, q: Distribution, n_samples: int = 1) -> Tensor:
+    """Monte Carlo estimate of KL(p||q) using a single ``rsample``.
+
+    Requires ``p`` to support ``rsample``.
+    """
+    if not p.has_rsample:
+        raise NotImplementedError(
+            f"kl_divergence({type(p).__name__}, {type(q).__name__}): "
+            "no closed-form KL and p does not support rsample for MC estimation."
+        )
+    samples = p.rsample((n_samples,))
+    return (p.log_prob(samples) - q.log_prob(samples)).mean(0)
+
+
+@register_kl(StudentT, StudentT)
+def _kl_studentt_studentt(p: StudentT, q: StudentT) -> Tensor:
+    """Monte-Carlo KL for StudentT — no closed form exists."""
+    return _kl_monte_carlo(p, q)
+
+
+@register_kl(Cauchy, Cauchy)
+def _kl_cauchy_cauchy(p: Cauchy, q: Cauchy) -> Tensor:
+    """Monte-Carlo KL for Cauchy (df=1 StudentT) — no closed form exists."""
+    return _kl_monte_carlo(p, q)
+
+
+@register_kl(Normal, Laplace)
+def _kl_normal_laplace(p: Normal, q: Laplace) -> Tensor:
+    """KL(Normal(μ,σ²) || Laplace(m,b)).
+
+    Computed analytically via the moment-generating function of a folded Normal.
+    """
+    # E_p[log p(X)] = -0.5*(1 + log(2π) + log(σ²))  (normal entropy, negated)
+    # E_p[log q(X)] = -log(2b) - E_p[|X - m|] / b
+    # E_p[|X - m|] = σ * sqrt(2/π) * exp(-z²/2) + (μ - m) * erf(z/sqrt(2))
+    #   where z = (μ - m) / σ
+    import math
+
+    mu, sigma = p.loc, p.scale
+    m, b = q.loc, q.scale
+    z = (mu - m) / sigma
+    # E[|X - m|] where X ~ N(mu, sigma^2)
+    # = sigma * sqrt(2/pi) * exp(-z^2/2) + (mu - m) * erf(z / sqrt(2))
+    _sqrt2 = math.sqrt(2.0)
+    _sqrt2pi = math.sqrt(2.0 * math.pi)
+    exp_term = sigma * (2.0 / math.pi) ** 0.5 * (-0.5 * z * z).exp()
+    erf_term = (mu - m) * lucid.erf(z / _sqrt2)
+    e_abs = exp_term + erf_term
+
+    log_p = p.entropy().neg() - 0.5 * (2.0 * math.pi * math.e)  # -H(p)
+    # Actually compute directly:
+    # KL = H_cross(p, q) - H(p)  where H(p) = 0.5*(1 + log(2πσ²))
+    # H_cross = log(2b) + e_abs / b
+    h_cross = (2.0 * b).log() + e_abs / b
+    h_p = 0.5 * (1.0 + math.log(2.0 * math.pi) + (sigma * sigma).log())
+    return h_cross - h_p

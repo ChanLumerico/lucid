@@ -118,10 +118,10 @@ __all__ = [
     "rand_like", "randn_like", "manual_seed", "randperm",
     "Generator", "seed", "initial_seed", "get_rng_state", "set_rng_state",
     # ── ops — unary ───────────────────────────────────────────────────────
-    "abs", "neg", "sign",
+    "neg", "sign",
     "exp", "exp2", "log", "log2", "log10", "log1p",
     "sqrt", "square", "reciprocal", "rsqrt",
-    "floor", "ceil", "round", "trunc", "frac",
+    "floor", "ceil", "trunc", "frac",
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
@@ -129,7 +129,7 @@ __all__ = [
     "clip", "clamp",
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
-    "add", "sub", "mul", "div", "pow",
+    "add", "sub", "mul", "div",
     "matmul", "mm", "bmm", "tensordot", "kron",
     "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
     "maximum", "minimum",
@@ -139,9 +139,9 @@ __all__ = [
     "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
     "bitwise_left_shift", "bitwise_right_shift",
     # ── ops — reduction ───────────────────────────────────────────────────
-    "sum", "mean", "max", "min", "prod",
+    "mean", "prod",
     "argmax", "argmin", "cumsum", "cumprod",
-    "std", "var", "trace", "any", "all",
+    "std", "var", "trace",
     "logsumexp",
     # ── tensor manipulation ───────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
@@ -167,7 +167,7 @@ __all__ = [
     "subtract", "multiply", "divide", "true_divide", "rsub",
     "arccosh", "acosh", "arcsinh", "asinh", "arctanh", "atanh", "arctan2",
     "swapaxes", "swapdims", "moveaxis", "adjoint", "t",
-    "real", "imag", "complex", "angle", "polar",
+    "real", "imag", "angle", "polar",
     "view_as_real", "view_as_complex",
     "conj", "conj_physical", "resolve_conj", "resolve_neg",
     "result_type", "promote_types", "can_cast",
@@ -192,7 +192,7 @@ __all__ = [
     # ── type predicates ───────────────────────────────────────────────────
     "is_tensor", "is_floating_point", "is_complex", "is_signed",
     # ── serialization ─────────────────────────────────────────────────────
-    "save", "load",
+    "save", "load", "save_sharded", "load_sharded",
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "linalg", "fft", "signal", "special",
     "utils", "amp", "profiler", "einops",
@@ -275,7 +275,7 @@ _PREDICATE_NAMES: frozenset[str] = frozenset([
     "is_tensor", "is_floating_point", "is_complex", "is_signed",
 ])
 
-_SERIALIZATION_NAMES: frozenset[str] = frozenset(["save", "load"])
+_SERIALIZATION_NAMES: frozenset[str] = frozenset(["save", "load", "save_sharded", "load_sharded"])
 
 _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── core ML stack ─────────────────────────────────────────────────────
@@ -419,7 +419,12 @@ def _load_predicates() -> dict[str, object]:
 def _load_serialization() -> dict[str, object]:
     import lucid.serialization as _ser
 
-    return {"save": _ser.save, "load": _ser.load}
+    return {
+        "save": _ser.save,
+        "load": _ser.load,
+        "save_sharded": _ser.save_sharded,
+        "load_sharded": _ser.load_sharded,
+    }
 
 
 def _get_composite_names() -> frozenset[str]:

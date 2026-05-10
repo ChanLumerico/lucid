@@ -139,7 +139,9 @@ class TestFusedLinearModule:
         m_fus.weight._impl = _C_engine.TensorImpl(
             m_lin.weight.numpy().copy(), _C_engine.Device.CPU, True
         )
-        m_fus.bias._impl = _C_engine.TensorImpl(m_lin.bias.numpy().copy(), _C_engine.Device.CPU, True)
+        m_fus.bias._impl = _C_engine.TensorImpl(
+            m_lin.bias.numpy().copy(), _C_engine.Device.CPU, True
+        )
         x = lucid.randn(4, 8)
         with lucid.no_grad():
             y_lin = lucid.relu(m_lin(x))

@@ -8,6 +8,7 @@ the rejection-based Gamma sampler so gradient is detached on it).
 import math
 
 import lucid
+import lucid.autograd
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import as_tensor as _as_tensor
 from lucid.distributions._util import broadcast_pair as _broadcast_pair
@@ -24,6 +25,7 @@ class StudentT(Distribution):
 
     arg_constraints = {"df": positive, "loc": real, "scale": positive}
     support: Constraint | None = real
+    has_rsample: bool = True
 
     def __init__(
         self,
@@ -55,14 +57,23 @@ class StudentT(Distribution):
         # Defined for df > 2:  scale² · df / (df − 2).
         return self.scale * self.scale * self.df / (self.df - 2.0)
 
-    def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Reparameterised sample: gradient flows through the Normal variate.
+
+        ``T = loc + scale · z / sqrt(g / df)``  where  ``z ~ N(0,1)``
+        is differentiable and ``g ~ Chi²(df)`` is detached (standard
+        practice — the marginal gradient w.r.t. df is not tracked).
+        """
         from lucid.distributions.gamma import _sample_standard_gamma
 
         shape = self._extended_shape(sample_shape)
         z = lucid.randn(*shape, dtype=self.loc.dtype, device=self.loc.device)
-        # g ~ Chi²(df) = Gamma(df/2, 1/2)  ⇒  Gamma(df/2, 1) · 2.
-        gamma_std = _sample_standard_gamma(self.df * 0.5, sample_shape) * 2.0
+        gamma_std = _sample_standard_gamma(self.df * 0.5, sample_shape).detach() * 2.0
         return self.loc + self.scale * z * (self.df / gamma_std).sqrt()
+
+    def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        with lucid.autograd.no_grad():
+            return self.rsample(sample_shape)
 
     def log_prob(self, value: Tensor) -> Tensor:
         z = (value - self.loc) / self.scale
