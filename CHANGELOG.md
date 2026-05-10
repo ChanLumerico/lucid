@@ -49,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - models._registry.ModelFactory: Protocol with explicit __name__ + __call__ signature; _RegistryEntry.model_class + default_config fast-path fields
 
+- save_safetensors / load_safetensors: SafeTensors format support (optional pip install safetensors; clear ImportError if missing)
+
+- lucid.load() auto-detects .safetensors extension and delegates to load_safetensors()
+
+- PretrainedModel.save_pretrained(safe_serialization=True): saves model.safetensors instead of weights.lucid
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
