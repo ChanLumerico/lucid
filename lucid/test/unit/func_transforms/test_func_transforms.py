@@ -4,13 +4,12 @@ import pytest
 import lucid
 import lucid.func as func
 
-
 # ── func.grad ─────────────────────────────────────────────────────────────────
 
 
 class TestFuncGrad:
     def test_scalar_quadratic(self) -> None:
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         df = func.grad(f)
         x = lucid.tensor([1.0, 2.0, 3.0])
         g = df(x)
@@ -34,7 +33,7 @@ class TestFuncGrad:
         assert lucid.allclose(gy, x)
 
     def test_has_aux(self) -> None:
-        f = lambda x: ((x ** 2).sum(), x * 10)
+        f = lambda x: ((x**2).sum(), x * 10)
         df = func.grad(f, has_aux=True)
         x = lucid.tensor([1.0, 2.0])
         g, aux = df(x)
@@ -43,7 +42,7 @@ class TestFuncGrad:
 
     def test_second_derivative_via_hessian(self) -> None:
         """Second derivative via func.hessian (the correct composable path)."""
-        f = lambda x: (x ** 3).sum()
+        f = lambda x: (x**3).sum()
         H = func.hessian(f)(lucid.tensor([2.0]))
         # d²/dx²(x³) = 6x → at x=2: 12
         assert abs(float(H.item()) - 12.0) < 1e-2
@@ -54,7 +53,7 @@ class TestFuncGrad:
 
 class TestGradAndValue:
     def test_returns_grad_and_value(self) -> None:
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         gv = func.grad_and_value(f)
         x = lucid.tensor([1.0, 2.0, 3.0])
         g, v = gv(x)
@@ -67,7 +66,7 @@ class TestGradAndValue:
 
 class TestFuncVJP:
     def test_vjp_quadratic(self) -> None:
-        f = lambda x: x ** 2
+        f = lambda x: x**2
         x = lucid.tensor([1.0, 2.0, 3.0])
         y, vjp_fn = func.vjp(f, x)
         (g,) = vjp_fn(lucid.ones_like(y))
@@ -91,7 +90,7 @@ class TestFuncVJP:
         assert lucid.allclose(gy, x)
 
     def test_vjp_has_aux(self) -> None:
-        f = lambda x: (x ** 2, x * 3)
+        f = lambda x: (x**2, x * 3)
         x = lucid.tensor([1.0, 2.0])
         (y, aux), vjp_fn = func.vjp(f, x, has_aux=True)
         assert lucid.allclose(aux, x * 3)
@@ -105,7 +104,7 @@ class TestFuncVJP:
 class TestFuncJVP:
     def test_jvp_scalar_exact(self) -> None:
         """JVP of x²: d/dt (x+tv)² at t=0 = 2xv."""
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         x = lucid.tensor([1.0, 2.0, 3.0])
         v = lucid.ones(3)
         primals_out, tangents_out = func.jvp(f, (x,), (v,))
@@ -165,7 +164,7 @@ class TestJacRev:
         assert lucid.allclose(J, expected, atol=1e-4)
 
     def test_scalar_output_matches_grad(self) -> None:
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         x = lucid.tensor([1.0, 2.0, 3.0])
         J = func.jacrev(f)(x)
         df = func.grad(f)
@@ -200,7 +199,7 @@ class TestJacFwd:
 class TestHessian:
     def test_quadratic_hessian(self) -> None:
         """H of sum(x²) = 2I."""
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         x = lucid.tensor([1.0, 2.0])
         H = func.hessian(f)(x)
         assert list(H.shape) == [2, 2]

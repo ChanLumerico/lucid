@@ -148,9 +148,7 @@ def vmap(
             if batch_size is None:
                 batch_size = bs
             elif batch_size != bs:
-                raise ValueError(
-                    f"vmap: inconsistent batch sizes {batch_size} vs {bs}"
-                )
+                raise ValueError(f"vmap: inconsistent batch sizes {batch_size} vs {bs}")
 
         if batch_size is None:
             return func(*args, **kwargs)
@@ -223,13 +221,8 @@ def _chunked_vmap(
     od_int: int = out_dims if isinstance(out_dims, int) else out_dims[0]
     if isinstance(chunks[0], tuple):
         n = len(chunks[0])
-        ods: list[int] = (
-            [out_dims] * n if isinstance(out_dims, int) else list(out_dims)
-        )
-        return tuple(
-            lucid.cat([c[i] for c in chunks], dim=ods[i])
-            for i in range(n)
-        )
+        ods: list[int] = [out_dims] * n if isinstance(out_dims, int) else list(out_dims)
+        return tuple(lucid.cat([c[i] for c in chunks], dim=ods[i]) for i in range(n))
     return lucid.cat(chunks, dim=od_int)  # type: ignore[arg-type]
 
 
@@ -270,9 +263,7 @@ def grad(
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
     )
 
-    def grad_fn(
-        *args: Tensor, **kwargs: object
-    ) -> Tensor | tuple[Tensor | None, ...]:
+    def grad_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
         from lucid._tensor.tensor import Tensor as _T
         from lucid.autograd._grad_mode import enable_grad
         from lucid.autograd._backward import grad as _ag
@@ -431,9 +422,7 @@ def vjp(
         aux = None
 
     out_list: list[Tensor] = (
-        list(outputs)
-        if isinstance(outputs, (list, tuple))
-        else [outputs]
+        list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
     )
 
     def _vjp(
@@ -503,7 +492,9 @@ def jvp(
     for p, t in zip(primals, tangents):
         if isinstance(p, _T) and isinstance(t, _T):
             perturbed.append(
-                _wrap(_C_engine.add(_unwrap(p), _C_engine.mul(_unwrap(alpha), _unwrap(t))))
+                _wrap(
+                    _C_engine.add(_unwrap(p), _C_engine.mul(_unwrap(alpha), _unwrap(t)))
+                )
             )
         else:
             perturbed.append(p)
@@ -515,9 +506,7 @@ def jvp(
         primals_out = func(*primals)
 
     out_list: list[Tensor] = (
-        list(pert_out)
-        if isinstance(pert_out, (list, tuple))
-        else [pert_out]
+        list(pert_out) if isinstance(pert_out, (list, tuple)) else [pert_out]
     )
 
     jvp_parts: list[Tensor] = []
@@ -538,14 +527,27 @@ def jvp(
             ag = alpha.grad
             if ag is None:
                 if strict:
-                    raise ValueError("jvp: output does not depend on inputs (strict=True)")
-                jvp_parts.append(_wrap(_C_engine.zeros(out_shape if out_shape else [], dtype, dev)))
+                    raise ValueError(
+                        "jvp: output does not depend on inputs (strict=True)"
+                    )
+                jvp_parts.append(
+                    _wrap(_C_engine.zeros(out_shape if out_shape else [], dtype, dev))
+                )
             else:
-                jvp_parts.append(ag.detach())
+                # alpha may have shape (1,) due to lucid.tensor(0.0) semantics;
+                # reshape to match the actual output element shape.
+                jvp_parts.append(
+                    _wrap(
+                        _C_engine.reshape(
+                            _unwrap(ag.detach()), out_shape if out_shape else []
+                        )
+                    )
+                )
         else:
             # Vector output: O(out_numel) backward passes — one per element.
             # d(o[i]) / d(alpha) = JVP[i] for each i.
             from lucid._tensor.tensor import Tensor as _TT
+
             rows: list[Tensor] = []
             for row_i in range(out_numel):
                 alpha._impl.zero_grad()
@@ -566,7 +568,9 @@ def jvp(
                 else:
                     rows.append(ag.detach().flatten())
             jvp_impl = _C_engine.stack([_unwrap(r) for r in rows], 0)
-            jvp_parts.append(_wrap(_C_engine.reshape(jvp_impl, out_shape) if out_shape else jvp_impl))
+            jvp_parts.append(
+                _wrap(_C_engine.reshape(jvp_impl, out_shape) if out_shape else jvp_impl)
+            )
 
     if isinstance(pert_out, tuple):
         return tuple(primals_out), tuple(jvp_parts)
@@ -622,9 +626,7 @@ def jacrev(
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
     )
 
-    def jac_fn(
-        *args: Tensor, **kwargs: object
-    ) -> Tensor | tuple[Tensor | None, ...]:
+    def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _wrap, _unwrap
@@ -669,11 +671,14 @@ def jacrev(
             else:
                 seed = _C_engine.zeros([out_numel], _C_engine.F32, out_impl.device)
                 one = _C_engine.ones([1], _C_engine.F32, out_impl.device)
-                idx = _C_engine.full([1], float(row_idx), _C_engine.I32, out_impl.device)
+                idx = _C_engine.full(
+                    [1], float(row_idx), _C_engine.I32, out_impl.device
+                )
                 seed = _C_engine.scatter_add(seed, idx, one, 0)
                 if out_shape:
                     seed = _C_engine.reshape(seed, out_shape)
                 from lucid._tensor.tensor import Tensor as _TT
+
                 out_t.backward(gradient=_TT.__new_from_impl__(seed), retain_graph=True)
 
             for k, i in enumerate(_argnums):
@@ -685,7 +690,11 @@ def jacrev(
                         rows[k].append(_wrap(_C_engine.reshape(row_impl, [a.numel()])))
                     else:
                         rows[k].append(
-                            _wrap(_C_engine.zeros([a.numel()], _C_engine.F32, a._impl.device))
+                            _wrap(
+                                _C_engine.zeros(
+                                    [a.numel()], _C_engine.F32, a._impl.device
+                                )
+                            )
                         )
 
         results: list[Tensor | None] = []
@@ -694,7 +703,9 @@ def jacrev(
             if isinstance(a, _T) and rows[k]:
                 J = _C_engine.stack([_unwrap(r) for r in rows[k]], 0)
                 full_shape = out_shape + list(a.shape)
-                results.append(_wrap(_C_engine.reshape(J, full_shape) if full_shape else J))
+                results.append(
+                    _wrap(_C_engine.reshape(J, full_shape) if full_shape else J)
+                )
             else:
                 results.append(None)
 
@@ -727,9 +738,7 @@ def jacfwd(
         (argnums,) if isinstance(argnums, int) else tuple(argnums)
     )
 
-    def jac_fn(
-        *args: Tensor, **kwargs: object
-    ) -> Tensor | tuple[Tensor | None, ...]:
+    def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
         import lucid
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
@@ -772,6 +781,7 @@ def jacfwd(
                 idx = _C_engine.full([1], float(col), _C_engine.I32, dev)
                 t_flat = _C_engine.scatter_add(t_flat, idx, one, 0)
                 from lucid._tensor.tensor import Tensor as _TT
+
                 t = _TT.__new_from_impl__(
                     _C_engine.reshape(t_flat, x_shape) if x_shape else t_flat
                 )
@@ -784,7 +794,9 @@ def jacfwd(
                     elif isinstance(x2, _T):
                         tans.append(
                             _TT.__new_from_impl__(
-                                _C_engine.zeros(list(x2.shape) if x2.shape else [], dtype, dev)
+                                _C_engine.zeros(
+                                    list(x2.shape) if x2.shape else [], dtype, dev
+                                )
                             )
                         )
                     else:
@@ -843,9 +855,7 @@ def hessian(
         *args: Tensor, **kwargs: object
     ) -> Tensor | tuple[Tensor | None, ...]:
         selected: object = (
-            args[_argnums[0]]
-            if _scalar_argnum
-            else tuple(args[i] for i in _argnums)
+            args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
         )
         result = _hessian(
             lambda *sel: func(*_splice(args, _argnums, sel), **kwargs),

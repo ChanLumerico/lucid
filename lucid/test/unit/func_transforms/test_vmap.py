@@ -4,7 +4,6 @@ import pytest
 import lucid
 import lucid.func as func
 
-
 # ── basic vectorisation ───────────────────────────────────────────────────────
 
 
@@ -20,7 +19,7 @@ class TestVmapBasic:
 
     def test_scalar_output(self) -> None:
         """Each batch element produces a scalar; output is 1-D."""
-        f = lambda x: (x ** 2).sum(dim=-1)
+        f = lambda x: (x**2).sum(dim=-1)
         X = lucid.ones(4, 3)
         Y = func.vmap(f)(X)
         assert list(Y.shape) == [4]
@@ -116,7 +115,7 @@ class TestVmapChunk:
 
     def test_chunk_single_element(self) -> None:
         """chunk_size=1 processes each element separately."""
-        f = lambda x: (x ** 2).sum(dim=-1, keepdim=True)
+        f = lambda x: (x**2).sum(dim=-1, keepdim=True)
         X = lucid.randn(6, 3)
         Y = func.vmap(f, chunk_size=1)(X)
         assert list(Y.shape) == [6, 1]
@@ -128,7 +127,7 @@ class TestVmapChunk:
 class TestVmapGradCompose:
     def test_grad_inside_vmap(self) -> None:
         """vmap(grad(fn)) gives per-sample gradients."""
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         df = func.grad(f)
         X = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
         grads = func.vmap(df)(X)
@@ -149,7 +148,7 @@ class TestVmapGradCompose:
     def test_per_sample_grad_matches_manual(self) -> None:
         """Per-sample gradients match manually computed gradients."""
         X = lucid.tensor([[1.0, 0.0], [0.0, 2.0]])
-        f = lambda x: (x ** 2).sum()
+        f = lambda x: (x**2).sum()
         df = func.grad(f)
 
         per_sample = func.vmap(df)(X)
@@ -157,7 +156,7 @@ class TestVmapGradCompose:
         manual = []
         for i in range(X.shape[0]):
             xi = X[i].detach().requires_grad_(True)
-            loss = (xi ** 2).sum()
+            loss = (xi**2).sum()
             loss.backward()
             manual.append(xi.grad.detach())
         manual_t = lucid.stack(manual, dim=0)

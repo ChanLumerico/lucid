@@ -34,9 +34,7 @@ class TestWishartParity:
         lucid.manual_seed(0)
         w = D.Wishart(5.0, covariance_matrix=lucid.eye(3))
         # reference Wishart
-        ref_w = ref.distributions.Wishart(
-            ref.tensor(5.0), covariance_matrix=ref.eye(3)
-        )
+        ref_w = ref.distributions.Wishart(ref.tensor(5.0), covariance_matrix=ref.eye(3))
         # Use the same sample (via numpy seed)
         np.random.seed(0)
         sample_np = ref_w.sample().detach().cpu().numpy()
