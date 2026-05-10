@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# .githooks/post-commit — Lucid CHANGELOG suggestion.
+#
+# Fires AFTER a successful commit.  If the just-landed commit is user-facing
+# but [Unreleased] in CHANGELOG.md is empty (or only contains the placeholder),
+# prints a one-line nudge.  Never blocks anything — purely advisory.
+
+set -u
+
+# Honor opt-out (mirrors commit-msg).
+if [[ "${LUCID_SKIP_CHANGELOG_CHECK:-0}" == "1" ]]; then
+    exit 0
+fi
+
+SUBJECT="$(git log -1 --format=%s)"
+
+# Skip merges and fixups.
+case "${SUBJECT}" in
+    Merge\ * | merge\ * | fixup!\ * | squash!\ * | "Revert \""*) exit 0 ;;
+esac
+
+USER_FACING_RE='^(feat|fix|perf|refactor|revert|remove|deprec|sec)(\([^)]*\))?!?:[[:space:]]'
+if ! [[ "${SUBJECT}" =~ ${USER_FACING_RE} ]]; then
+    exit 0
+fi
+
+# Did this commit touch CHANGELOG.md?
+if git show --stat --name-only --format='' HEAD | grep -qx "CHANGELOG.md"; then
+    # Already updated — say thanks.
+    echo "  📝  CHANGELOG.md updated alongside this commit ✓" >&2
+    exit 0
+fi
+
+# Otherwise, nudge.
+cat <<EOF >&2
+
+  📝  Reminder: this commit looks user-facing but CHANGELOG.md was not updated.
+      Add an entry (will land in the NEXT commit):
+
+          python tools/changelog.py propose      # suggest from this commit
+          python tools/changelog.py add <cat> "..."
+
+      (Set LUCID_SKIP_CHANGELOG_CHECK=1 to silence.)
+
+EOF
+
+exit 0
