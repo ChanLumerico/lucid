@@ -55,6 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - PretrainedModel.save_pretrained(safe_serialization=True): saves model.safetensors instead of weights.lucid
 
+- lucid.models.vision.resnet: ResNet 18/34/50/101/152 backbone (task=base) + classifier (task=image-classification); 10 registry entries; AutoModel/AutoModelForImageClassification compatible
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -74,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - models._load_from_directory: no longer instantiates the model twice — uses model_class fast path when registered, else one factory call
 - models.AutoConfig.from_pretrained: returns default_config instantly when pre-registered, avoiding full model instantiation
 - models.load_from_pretrained_entry: validates entry.config.model_type == model.config.model_type before downloading weights
+- safetensors: 0-d tensors (BatchNorm num_batches_tracked) now round-trip correctly — saved as (1,) with metadata tag, squeezed back to () on load
 
 ---
 
