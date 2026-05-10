@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CHANGELOG.md — initial 3.0.0 release notes
 - mypy --strict baseline (0 errors) locked in mypy.ini
 
+### Fixed
+
+- H5/H7 Hard Rule violations in lucid.func + parity tests
+
 ---
 
 ## [3.0.0] — 2026-05-10
