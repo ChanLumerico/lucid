@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lucid
 import lucid.metal as metal
-from benchmarks._core import BenchResult, bench_cpu, metal_available
+from lucid.benchmarks._core import BenchResult, bench_cpu, metal_available
 
 # ── size presets ──────────────────────────────────────────────────────────────
 
@@ -141,7 +141,7 @@ def run(verbose: bool = True) -> dict[str, object]:
             )
 
     if verbose:
-        from benchmarks._core import fmt_table
+        from lucid.benchmarks._core import fmt_table
 
         print("\nCPU → GPU:")
         print(fmt_table(rows_cpu_gpu))

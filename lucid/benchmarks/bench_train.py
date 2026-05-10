@@ -20,7 +20,7 @@ import time
 import lucid
 import lucid.nn as nn
 import lucid.optim as optim
-from benchmarks._core import BenchResult, metal_available
+from lucid.benchmarks._core import BenchResult, metal_available
 
 # ── model ─────────────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ def run(verbose: bool = True) -> dict[str, object]:
             )
 
     if verbose:
-        from benchmarks._core import fmt_table
+        from lucid.benchmarks._core import fmt_table
 
         print(fmt_table(rows))
 

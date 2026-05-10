@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lucid
-from benchmarks._core import (
+from lucid.benchmarks._core import (
     BenchResult,
     bench_cpu,
     bench_gpu_lucid,
@@ -182,7 +182,7 @@ def _print_table(results: list[dict[str, object]]) -> None:
             ]
         rows.append(tuple(row))
 
-    from benchmarks._core import fmt_table
+    from lucid.benchmarks._core import fmt_table
 
     print(fmt_table(rows))
 

@@ -1,11 +1,11 @@
 """
-benchmarks/run_all.py — CLI orchestrator for the Lucid benchmark suite.
+lucid/benchmarks/run_all.py — CLI orchestrator for the Lucid benchmark suite.
 
 Usage:
-  python benchmarks/run_all.py                  # run + print table
-  python benchmarks/run_all.py --save           # run + save baseline.json
-  python benchmarks/run_all.py --check          # run + compare vs baseline
-  python benchmarks/run_all.py --check --threshold 5  # 5% regression limit
+  python lucid/benchmarks/run_all.py                  # run + print table
+  python lucid/benchmarks/run_all.py --save           # run + save baseline.json
+  python lucid/benchmarks/run_all.py --check          # run + compare vs baseline
+  python lucid/benchmarks/run_all.py --check --threshold 5  # 5% regression limit
 
 Exit codes:
   0  — all clear (or --save)
@@ -20,11 +20,9 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import bench_ops
-import bench_transfer
-import bench_train
+from lucid.benchmarks import bench_ops, bench_transfer, bench_train
 
 _BASELINE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "baseline", "baseline.json"
