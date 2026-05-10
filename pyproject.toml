@@ -47,6 +47,10 @@ docs = [
     "sphinxcontrib-mermaid>=0.9",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["lucid.test*", "lucid.benchmarks*"]
+
 [tool.setuptools.package-data]
 lucid = ["py.typed"]
 
