@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - optim.lr_scheduler parity test suite: 15 schedulers × 21 tests against reference framework
 
+- lucid/func/__init__.pyi: H9-compliant type stub for all 9 public functional transforms
+
+- TransformerDecoderLayer / TransformerDecoder / Transformer parity tests (4 new tests)
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -42,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CosineAnnealingWarmRestarts: reset T_cur/T_i before computing LR — restart epoch now correctly returns base_lr (not eta_min)
 - ReduceLROnPlateau: patience check changed >= → > to match reference (was reducing one epoch too early)
 - OneCycleLR: warmup end = total_steps*pct_start-1 (not floor); init_lr = max_lr/div_factor regardless of optimizer LR
+- nn.Transformer: add final LayerNorm to encoder and decoder by default — matches reference (was missing 4 parameters)
 
 ---
 
