@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid/__init__.pyi + gen_pyi.py: lucid.load() stub now includes weights_only parameter
 
+- models._registry.ModelFactory: Protocol with explicit __name__ + __call__ signature; _RegistryEntry.model_class + default_config fast-path fields
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -61,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ReduceLROnPlateau: patience check changed >= → > to match reference (was reducing one epoch too early)
 - OneCycleLR: warmup end = total_steps*pct_start-1 (not floor); init_lr = max_lr/div_factor regardless of optimizer LR
 - nn.Transformer: add final LayerNorm to encoder and decoder by default — matches reference (was missing 4 parameters)
+- models.ModelConfig.from_dict: unknown fields now warn+ignore instead of raising (forward-compatible checkpoint loading)
+- models.PretrainedModel: config_class default changed from ModelConfig to None — concrete subclasses that forget to set it now get a clear TypeError
+- models._load_from_directory: no longer instantiates the model twice — uses model_class fast path when registered, else one factory call
+- models.AutoConfig.from_pretrained: returns default_config instantly when pre-registered, avoiding full model instantiation
+- models.load_from_pretrained_entry: validates entry.config.model_type == model.config.model_type before downloading weights
 
 ---
 
