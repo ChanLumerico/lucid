@@ -890,7 +890,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def bitwise_left_shift(self, other: Tensor | _float) -> Tensor: ...",
         "    def bitwise_right_shift(self, other: Tensor | _float) -> Tensor: ...",
         "    def isclose(self, other: Tensor | _float, rtol: _float = 1e-5, atol: _float = 1e-8, equal_nan: _bool = False) -> Tensor: ...",
-        "    def scatter_add(self, dim: _int, index: Tensor, src: Tensor) -> Tensor: ...  # type: ignore[no-redef]",
+        "    def scatter_add(self, dim: _int, index: Tensor, src: Tensor) -> Tensor: ...",
         # Methods in _TENSOR_HEADER that also need explicit registry-quality sigs
         # (added to _PYTHON_ONLY_METHODS to stop the registry loop re-emitting them,
         # so we provide them here with proper _int/_float aliases).
@@ -975,9 +975,9 @@ double = float64
 short = int16
 long = int64
 
-float = float32  # type: ignore[assignment]
-int = int32  # type: ignore[assignment]
-bool = bool_  # type: ignore[assignment]
+float = float32
+int = int32
+bool = bool_
 
 # ── Device ────────────────────────────────────────────────────────────────────
 # (re-export from lucid._device)

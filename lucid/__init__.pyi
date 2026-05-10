@@ -60,9 +60,9 @@ double = float64
 short = int16
 long = int64
 
-float = float32  # type: ignore[assignment]
-int = int32  # type: ignore[assignment]
-bool = bool_  # type: ignore[assignment]
+float = float32
+int = int32
+bool = bool_
 
 # ── Device ────────────────────────────────────────────────────────────────────
 # (re-export from lucid._device)

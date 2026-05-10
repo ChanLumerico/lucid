@@ -59,15 +59,8 @@ class TransformerEncoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
-        return cast(
-            Tensor,
-            self.linear2(
-                cast(
-                    Tensor,
-                    self.dropout2(cast(Tensor, act(cast(Tensor, self.linear1(x))))),
-                )
-            ),
-        )
+        h = cast(Tensor, self.linear1(x))
+        return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
 
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
@@ -215,15 +208,8 @@ class TransformerDecoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
-        return cast(
-            Tensor,
-            self.linear2(
-                cast(
-                    Tensor,
-                    self.dropout2(cast(Tensor, act(cast(Tensor, self.linear1(x))))),
-                )
-            ),
-        )
+        h = cast(Tensor, self.linear1(x))
+        return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
 
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,

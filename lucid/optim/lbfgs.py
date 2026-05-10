@@ -100,7 +100,7 @@ class LBFGS(Optimizer):
 
         if 0 not in state:
             return
-        snapshot: dict[str, object] = state[0]  # type: ignore[assignment]
+        snapshot: dict[str, object] = state[0]
         for k in self._lbfgs_state:
             if k not in snapshot:
                 continue
@@ -187,7 +187,7 @@ class LBFGS(Optimizer):
 
     @staticmethod
     def _strong_wolfe(
-        f: Callable,
+        f: Callable[..., object],
         x_k: Tensor,
         d: Tensor,
         f_k: float,
@@ -206,7 +206,7 @@ class LBFGS(Optimizer):
 
         for _ in range(max_ls):
             x_new = lucid.add(x_k, lucid.mul(lucid.tensor(alpha), d))
-            f_new = float(f(x_new).item()) if callable(f) else f_k
+            f_new = float(cast(Tensor, f(x_new)).item()) if callable(f) else f_k
             break
 
         return alpha, f_k, g_k

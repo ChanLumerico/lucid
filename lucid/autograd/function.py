@@ -2,7 +2,7 @@
 autograd.Function: base class for custom differentiable operations.
 """
 
-from typing import Protocol
+from typing import Protocol, cast
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
@@ -83,9 +83,9 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
             if isinstance(output, Tensor):
                 _register(output, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
 
-        return output
+        return cast(Tensor | tuple[Tensor, ...], output)
 
-    return classmethod(apply)  # type: ignore[return-value]
+    return classmethod(apply)  # type: ignore[arg-type]
 
 
 class FunctionMeta(type):

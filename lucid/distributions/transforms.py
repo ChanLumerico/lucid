@@ -14,6 +14,7 @@ import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid._types import DTypeLike, DeviceLike
 from lucid.distributions._util import as_tensor as _as_tensor
 
 
@@ -65,7 +66,7 @@ class _InverseTransform(Transform):
         self._inv = base
 
     @property
-    def inv(self) -> Transform:  # type: ignore[override]
+    def inv(self) -> Transform:
         return self._base
 
     def _call(self, x: Tensor) -> Tensor:
@@ -225,7 +226,7 @@ class StickBreakingTransform(Transform):
         K: int = int(y.shape[-1])
         K_minus_1: int = K - 1
         # Cumulative tail sums: stick remaining before drawing y_k.
-        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)  # type: ignore[call-arg]
+        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)
         # remaining_before_k = 1 − Σ_{j<k} y_j  → shifted version.
         remaining: list[Tensor] = []
         ones: Tensor = lucid.ones_like(y.narrow(-1, 0, 1))
@@ -249,7 +250,7 @@ class StickBreakingTransform(Transform):
         z: Tensor = y.narrow(-1, 0, K_minus_1)
         # remaining-before for each k.
         remaining: list[Tensor] = []
-        cum: Tensor = z.cumsum(dim=-1)  # type: ignore[call-arg]
+        cum: Tensor = z.cumsum(dim=-1)
         ones: Tensor = lucid.ones_like(z.narrow(-1, 0, 1))
         remaining.append(ones)
         for k in range(1, K_minus_1):
@@ -314,12 +315,12 @@ class LowerCholeskyTransform(Transform):
         return (log_sig * diag_mask).sum(dim=(-2, -1))
 
 
-def _eye_mask(D: int, dtype, device) -> Tensor:
+def _eye_mask(D: int, dtype: DTypeLike, device: DeviceLike) -> Tensor:
     """``D×D`` identity mask as a Lucid tensor."""
     return lucid.eye(D, dtype=dtype, device=device)
 
 
-def _tril_mask(D: int, dtype, device) -> Tensor:
+def _tril_mask(D: int, dtype: DTypeLike, device: DeviceLike) -> Tensor:
     """``D×D`` lower-triangular indicator (1 on/below diag, 0 above)."""
     ones: Tensor = lucid.ones(D, D, dtype=dtype, device=device)
     return lucid.tril(ones)
@@ -499,8 +500,8 @@ class CorrCholeskyTransform(Transform):
         z: Tensor,
         batch: list[int],
         d: int,
-        dtype,
-        device,
+        dtype: DTypeLike,
+        device: DeviceLike,
     ) -> Tensor:
         """Build the Cholesky factor row by row from ``z`` (tanh-ed free params)."""
         row_tensors: list[Tensor] = []
@@ -713,7 +714,7 @@ class StackTransform(Transform):
         self.event_dim = max(t.event_dim for t in transforms)
 
     def _call(self, x: Tensor) -> Tensor:
-        slices = x.unbind(self.dim)  # type: ignore[attr-defined]
+        slices = x.unbind(self.dim)
         if len(slices) != len(self.transforms):
             raise ValueError(
                 f"StackTransform: got {len(slices)} slices but "
@@ -724,14 +725,14 @@ class StackTransform(Transform):
         )
 
     def _inverse(self, y: Tensor) -> Tensor:
-        slices = y.unbind(self.dim)  # type: ignore[attr-defined]
+        slices = y.unbind(self.dim)
         return lucid.stack(
             [t._inverse(s) for t, s in zip(self.transforms, slices)], dim=self.dim
         )
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        xs = x.unbind(self.dim)  # type: ignore[attr-defined]
-        ys = y.unbind(self.dim)  # type: ignore[attr-defined]
+        xs = x.unbind(self.dim)
+        ys = y.unbind(self.dim)
         ladjs = [
             t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys)
         ]

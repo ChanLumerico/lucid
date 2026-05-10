@@ -249,12 +249,12 @@ def bincount(
     length = max((max(vals) + 1 if vals else 0), minlength)
     if weights is not None:
         wflat = weights.reshape(-1)
-        result: list = [0.0] * length
+        result: list[object] = [0.0] * length
         for i, v in enumerate(vals):
             result[v] += float(wflat[i].item())
         return lucid.tensor(result, dtype=lucid.float64)
     else:
-        counts: list = [0] * length
+        counts: list[object] = [0] * length
         for v in vals:
             counts[v] += 1
         return lucid.tensor(counts, dtype=lucid.int64)
@@ -283,7 +283,7 @@ def multinomial(
         if replace:
             return random.choices(population, weights=probs_list, k=k)
         # Without replacement: repeated weighted choice, removing chosen item.
-        chosen: list = []
+        chosen: list[int] = []
         remaining = list(range(len(probs_list)))
         w = list(probs_list)
         for _ in range(k):
@@ -473,7 +473,9 @@ def histogramdd(
 
     # ``range`` shadows the Python builtin in this function's signature,
     # so capture the builtin once for use below.
-    py_range = __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range  # type: ignore[index, union-attr]
+    py_range = (
+        __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range
+    )
 
     if range is None:
         ranges: list[tuple[float, float]] = []
@@ -521,7 +523,9 @@ def histogram(
     """
     # ``range`` is a function parameter that shadows the Python
     # builtin — capture the builtin once for use below.
-    py_range = __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range  # type: ignore[index, union-attr]
+    py_range = (
+        __builtins__["range"] if isinstance(__builtins__, dict) else __builtins__.range
+    )
 
     flat = input.reshape(-1)
     n = int(flat.shape[0])
@@ -549,9 +553,9 @@ def histogram(
         w_list = [float(wflat[i].item()) for i in py_range(int(wflat.shape[0]))]
 
     if density:
-        counts: list = [0.0] * n_bins
+        counts: list[float] = [0.0] * n_bins
     else:
-        counts = [0] * n_bins
+        counts = [0.0] * n_bins
 
     for i, v in enumerate(vals):
         if v < lo or v > hi:

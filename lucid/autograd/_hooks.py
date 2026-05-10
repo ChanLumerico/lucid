@@ -25,7 +25,7 @@ preserved.
 """
 
 import weakref
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 # ── Registry ─────────────────────────────────────────────────────────────────
 
 # id(tensor) → (hooks_list, weakref_to_tensor)
-_TENSOR_HOOKS: dict[int, tuple[list[Callable], weakref.ref]] = {}
+_TENSOR_HOOKS: dict[int, tuple[list[Callable[..., object]], weakref.ref[object]]] = {}
 
 
 class RemovableHandle:
@@ -53,7 +53,9 @@ class RemovableHandle:
         # hook is removed here
     """
 
-    def __init__(self, hooks_list: list[Callable], hook: Callable) -> None:
+    def __init__(
+        self, hooks_list: list[Callable[..., object]], hook: Callable[..., object]
+    ) -> None:
         self._hooks_list = hooks_list
         self._hook = hook
 
@@ -71,14 +73,16 @@ class RemovableHandle:
         self.remove()
 
 
-def _register_tensor_hook(tensor: Tensor, hook: Callable) -> RemovableHandle:
+def _register_tensor_hook(
+    tensor: Tensor, hook: Callable[..., object]
+) -> RemovableHandle:
     """Register *hook* on *tensor*'s gradient and return a removable handle.
 
     Called by :meth:`~lucid.Tensor.register_hook`.
     """
     tid = id(tensor)
     if tid not in _TENSOR_HOOKS:
-        hooks_list: list[Callable] = []
+        hooks_list: list[Callable[..., object]] = []
 
         # Clean up the registry entry when the tensor is GC'd.
         def _finalizer(_tid: int = tid) -> None:
@@ -111,13 +115,14 @@ def _dispatch_tensor_grad_hooks() -> None:
         if not hooks:
             continue
 
+        t_tensor = cast(Tensor, t)
         # Retrieve the current gradient.
-        g_impl = t._impl.grad_as_impl()
+        g_impl = t_tensor._impl.grad_as_impl()
         if g_impl is None:
-            g_raw = t._impl.grad_as_python()
+            g_raw = t_tensor._impl.grad_as_python()
             if g_raw is None:
                 continue  # no grad for this tensor yet
-            g_impl = _C_engine.TensorImpl(g_raw, t._impl.device, False)
+            g_impl = _C_engine.TensorImpl(g_raw, t_tensor._impl.device, False)
 
         grad = _wrap(g_impl)
 
@@ -133,7 +138,7 @@ def _dispatch_tensor_grad_hooks() -> None:
                 grad = result
 
         # Write the (possibly modified) gradient back.
-        t._impl.set_grad(_unwrap(grad))
+        t_tensor._impl.set_grad(_unwrap(grad))
 
     for tid in stale:
         _TENSOR_HOOKS.pop(tid, None)

@@ -27,8 +27,8 @@ def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
 
     @functools.wraps(fn)
     def wrapper(*args: object, **kwargs: object) -> object:
-        ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type, return-value]
-        uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type, return-value]
+        ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type]
+        uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type]
         out = fn(*ua, **uk)
         if isinstance(out, tuple):
             return tuple(
@@ -296,7 +296,7 @@ def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     u_impl: _C_engine.TensorImpl
     s_impl: _C_engine.TensorImpl
     vh_impl: _C_engine.TensorImpl
-    u_impl, s_impl, vh_impl = _svd_result  # type: ignore[misc]  # svd returns tuple[TensorImpl, TensorImpl, TensorImpl] at runtime
+    u_impl, s_impl, vh_impl = _svd_result
     if not _C_engine.grad_enabled() or not x.requires_grad:
         return _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl)
     # Pass TensorImpl (not Tensor) so _make_apply ignores them in the
@@ -571,14 +571,14 @@ def pinv(x: Tensor) -> Tensor:
         # Square matrix → ``pinv ≡ inv`` for full-rank input. Falling back to
         # the engine pinv would lose autograd; ``inv`` keeps it.
         return cast(Tensor, inv(x))
-    return _wrap(_la.pinv(_unwrap(x)))  # type: ignore[arg-type, return-value]
+    return _wrap(_la.pinv(_unwrap(x)))
 
 
 @_linalg_op
 def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     """Eigenvalue decomposition (general, no backward)."""
-    vals, vecs = _la.eig(x)  # type: ignore[arg-type, return-value]
-    return vals, vecs  # type: ignore[return-value]
+    vals, vecs = _la.eig(_unwrap(x))
+    return _wrap(vals), _wrap(vecs)
 
 
 def eigvals(x: Tensor) -> Tensor:
@@ -690,8 +690,8 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     implicit unit diagonal) and ``pivots`` is an int32 tensor of 1-based
     pivot indices.  Matches ``the reference LU factor API``.
     """
-    lu, pivots = _la.lu_factor(A)  # type: ignore[arg-type, return-value]
-    return lu, pivots  # type: ignore[return-value]
+    lu, pivots = _la.lu_factor(_unwrap(A))
+    return _wrap(lu), _wrap(pivots)
 
 
 # ── Pure-Python compositions ───────────────────────────────────────────────────
@@ -757,8 +757,8 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
         return _wrap(_C_engine.div(smin, smax))
     return _wrap(
         _C_engine.mul(
-            _unwrap(cast(Tensor, norm(A, ord=p))),
-            _unwrap(cast(Tensor, norm(cast(Tensor, inv(A)), ord=p))),
+            _unwrap(norm(A, ord=p)),
+            _unwrap(norm(inv(A), ord=p)),  # type: ignore[arg-type]
         )
     )
 

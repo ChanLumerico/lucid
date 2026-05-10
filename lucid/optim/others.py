@@ -327,8 +327,8 @@ class SparseAdam(Optimizer):
         super().__init__(params, defaults)
         # Per-parameter moment state (TensorImpl, None before first step)
         self._step: list[int] = [0] * self._n_params()
-        self._exp_avg: list = [None] * self._n_params()
-        self._exp_avg_sq: list = [None] * self._n_params()
+        self._exp_avg: list[object] = [None] * self._n_params()
+        self._exp_avg_sq: list[object] = [None] * self._n_params()
 
     def _n_params(self) -> int:
         return sum(len(g["params"]) for g in self.param_groups)  # type: ignore[arg-type, misc]
@@ -369,10 +369,15 @@ class SparseAdam(Optimizer):
                     return _C_engine.mul(tensor, _C_engine.full(sh, scalar, dt, dv))
 
                 # m = b1 * m + (1 - b1) * g
-                m = _C_engine.add(_scale(m, b1), _scale(gi, 1.0 - b1))
+                m = _C_engine.add(
+                    _scale(cast(_C_engine.TensorImpl, m), b1),
+                    _scale(cast(_C_engine.TensorImpl, gi), 1.0 - b1),
+                )
                 # v = b2 * v + (1 - b2) * g^2
                 g_sq = _C_engine.mul(gi, gi)
-                v = _C_engine.add(_scale(v, b2), _scale(g_sq, 1.0 - b2))
+                v = _C_engine.add(
+                    _scale(cast(_C_engine.TensorImpl, v), b2), _scale(g_sq, 1.0 - b2)
+                )
 
                 self._exp_avg[flat_idx] = m
                 self._exp_avg_sq[flat_idx] = v

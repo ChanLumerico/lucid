@@ -83,7 +83,7 @@ class _CellNamingMixin:
 
     def _save_to_state_dict(
         self,
-        destination: dict,
+        destination: dict[str, object],
         prefix: str,
         keep_vars: bool,
     ) -> None:
@@ -104,7 +104,7 @@ class _CellNamingMixin:
 
     def _load_from_state_dict(
         self,
-        state_dict: dict,
+        state_dict: dict[str, object],
         prefix: str,
         local_metadata: dict[str, object],
         strict: bool,
@@ -125,9 +125,9 @@ class _CellNamingMixin:
                         continue
                     flat_key: str = f"{prefix}{pname}_l{layer}{suffix}"
                     legacy_key: str = f"{prefix}cell_l{layer}{suffix}.{pname}"
-                    src: Tensor | None = state_dict.get(flat_key)
+                    src: Tensor | None = cast(Tensor | None, state_dict.get(flat_key))
                     if src is None:
-                        src = state_dict.get(legacy_key)
+                        src = cast(Tensor | None, state_dict.get(legacy_key))
                     if src is None:
                         missing_keys.append(flat_key)
                         continue
@@ -138,12 +138,9 @@ class _CellNamingMixin:
                         )
                         continue
                     converted: Tensor = src.to(device=p.device, dtype=p.dtype)
-                    new_impl: _C_engine.TensorImpl = cast(
-                        _C_engine.TensorImpl,
-                        _C_engine.contiguous(converted._impl).clone_with_grad(
-                            p.requires_grad
-                        ),
-                    )
+                    new_impl: _C_engine.TensorImpl = _C_engine.contiguous(
+                        converted._impl
+                    ).clone_with_grad(p.requires_grad)
                     p._impl = new_impl
                     # Mark whichever key was actually consumed so the top
                     # level walker doesn't list it as unexpected.
@@ -372,9 +369,9 @@ class LSTM(Module):
             True,
             self.proj_size,
         )
-        out_impl = cast(_C_engine.TensorImpl, lstm_result[0])
-        h_impl = cast(_C_engine.TensorImpl, lstm_result[1])
-        c_impl = cast(_C_engine.TensorImpl, lstm_result[2])
+        out_impl: _C_engine.TensorImpl = lstm_result[0]
+        h_impl: _C_engine.TensorImpl = lstm_result[1]
+        c_impl: _C_engine.TensorImpl = lstm_result[2]
         return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
 
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
@@ -644,7 +641,7 @@ class GRUCell(Module):
 # ── Multi-step GRU ────────────────────────────────────────────────────────────
 
 
-class GRU(_CellNamingMixin, Module):
+class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
     """Multi-layer GRU.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
@@ -724,14 +721,14 @@ class GRU(_CellNamingMixin, Module):
                 dtype=x.dtype,
             )
 
-        h_n: list[Tensor] = []  # type: ignore[name-defined]
+        h_n: list[Tensor] = []
         inp = x
 
         for layer in range(self.num_layers):
             # ── forward direction ────────────────────────────────────────────
             cell_fwd: GRUCell = self._cell(layer, reverse=False)
             h_fwd: Tensor = hx[layer * num_dirs]  # (B, hidden)
-            fwd_out: list[Tensor] = []  # type: ignore[name-defined]
+            fwd_out: list[Tensor] = []
             for t in range(T):
                 h_fwd = cast("Tensor", cell_fwd(inp[t], h_fwd))
                 fwd_out.append(h_fwd)
@@ -741,7 +738,7 @@ class GRU(_CellNamingMixin, Module):
                 # ── reverse direction ────────────────────────────────────────
                 cell_rev = self._cell(layer, reverse=True)
                 h_rev: Tensor = hx[layer * num_dirs + 1]
-                rev_out: list[Tensor] = []  # type: ignore[name-defined]
+                rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     h_rev = cast("Tensor", cell_rev(inp[t], h_rev))
                     rev_out.append(h_rev)
@@ -774,7 +771,7 @@ class GRU(_CellNamingMixin, Module):
 # ── Multi-step RNN ────────────────────────────────────────────────────────────
 
 
-class RNN(_CellNamingMixin, Module):
+class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
     """Multi-layer Elman RNN.
 
     Returns ``(output, h_n)`` where ``h_n`` has shape
@@ -862,13 +859,13 @@ class RNN(_CellNamingMixin, Module):
                 dtype=x.dtype,
             )
 
-        h_n: list[Tensor] = []  # type: ignore[name-defined]
+        h_n: list[Tensor] = []
         inp = x
 
         for layer in range(self.num_layers):
             cell_fwd = self._cell(layer, reverse=False)
             h_fwd: Tensor = hx[layer * num_dirs]
-            fwd_out: list[Tensor] = []  # type: ignore[name-defined]
+            fwd_out: list[Tensor] = []
             for t in range(T):
                 h_fwd = cast("Tensor", cell_fwd(inp[t], h_fwd))
                 fwd_out.append(h_fwd)
@@ -877,7 +874,7 @@ class RNN(_CellNamingMixin, Module):
             if self.bidirectional:
                 cell_rev = self._cell(layer, reverse=True)
                 h_rev: Tensor = hx[layer * num_dirs + 1]
-                rev_out: list[Tensor] = []  # type: ignore[name-defined]
+                rev_out: list[Tensor] = []
                 for t in range(T - 1, -1, -1):
                     h_rev = cast("Tensor", cell_rev(inp[t], h_rev))
                     rev_out.append(h_rev)

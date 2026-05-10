@@ -3,7 +3,7 @@ nn.Module: base class for all neural network layers.
 """
 
 from collections import OrderedDict
-from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING
+from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from lucid.autograd.function import FunctionCtx
@@ -351,13 +351,13 @@ class Module:
     def __getattr__(self, name: str) -> Tensor | Parameter | Module:
         p = object.__getattribute__(self, "_parameters")
         if name in p:
-            return p[name]
+            return cast(Tensor | Parameter | Module, p[name])
         b = object.__getattribute__(self, "_buffers")
         if name in b:
-            return b[name]
+            return cast(Tensor | Parameter | Module, b[name])
         m = object.__getattribute__(self, "_modules")
         if name in m:
-            return m[name]
+            return cast(Tensor | Parameter | Module, m[name])
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
     def __delattr__(self, name: str) -> None:
@@ -552,7 +552,7 @@ class Module:
         if name in self._modules:
             del self._modules[name]
         if param is None:
-            self._parameters[name] = None  # type: ignore[assignment]
+            self._parameters[name] = None
         else:
             self._parameters[name] = param
 
@@ -592,7 +592,7 @@ class Module:
             del self._buffers[name]
             self._non_persistent_buffers.discard(name)
         if module is None:
-            self._modules[name] = None  # type: ignore[assignment]
+            self._modules[name] = None
         else:
             self._modules[name] = module
 
@@ -727,7 +727,7 @@ class Module:
         ``int``), or a string (``"float32"``, ``"float16"``, etc.).
         Delegates to :meth:`to`, which handles the conversion.
         """
-        return self.to(dst_type)  # type: ignore[arg-type]
+        return self.to(dst_type)
 
     def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""
@@ -1163,14 +1163,17 @@ class _ModuleInputBackwardHookFunction:
         class _InputHook(Function):
             @staticmethod
             def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
-                ctx.state = state  # type: ignore[attr-defined]  # FunctionCtx allows arbitrary ctx attributes at runtime
-                ctx.index = index  # type: ignore[attr-defined]
+                ctx.state = state
+                ctx.index = index
                 return x
 
             @staticmethod
             def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
-                return ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
-                    ctx.index, grad_input  # type: ignore[attr-defined]
+                return cast(
+                    Tensor,
+                    ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
+                        ctx.index, grad_input
+                    ),
                 )
 
         result = _InputHook.apply(x)
@@ -1188,15 +1191,15 @@ class _ModuleOutputBackwardHookFunction:
         class _OutputHook(Function):
             @staticmethod
             def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
-                ctx.state = state  # type: ignore[attr-defined]  # FunctionCtx allows arbitrary ctx attributes
-                ctx.index = index  # type: ignore[attr-defined]
+                ctx.state = state
+                ctx.index = index
                 return x
 
             @staticmethod
             def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
                 updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]
                 ctx.state.apply_full_backward_hooks_without_inputs()  # type: ignore[attr-defined]
-                return updated
+                return cast(Tensor, updated)
 
         result = _OutputHook.apply(output)
         assert isinstance(

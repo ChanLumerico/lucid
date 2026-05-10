@@ -2,7 +2,7 @@
 Gradient checkpointing: trade memory for recomputation during backward.
 """
 
-from typing import Callable
+from typing import Callable, cast
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.autograd._grad_mode import no_grad, enable_grad
@@ -20,9 +20,9 @@ def checkpoint(
     class CheckpointFunction(Function):
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
-            ctx.function = function  # type: ignore[attr-defined]  # stored in _extra dict
-            ctx.kwargs = kwargs  # type: ignore[attr-defined]
-            ctx.num_inputs = len(inputs)  # type: ignore[attr-defined]
+            ctx.function = function
+            ctx.kwargs = kwargs
+            ctx.num_inputs = len(inputs)
             ctx.save_for_backward(*inputs)
             with no_grad():
                 return function(*inputs, **kwargs)
@@ -35,8 +35,10 @@ def checkpoint(
             inputs_detached = [
                 s.detach().requires_grad_(s.requires_grad) for s in saved
             ]
-            fn: Callable[..., Tensor | tuple[Tensor, ...]] = ctx.function  # type: ignore[attr-defined, assignment]
-            kw: dict[str, object] = ctx.kwargs  # type: ignore[attr-defined, assignment]
+            fn: Callable[..., Tensor | tuple[Tensor, ...]] = cast(
+                Callable[..., Tensor | tuple[Tensor, ...]], ctx.function
+            )
+            kw: dict[str, object] = cast(dict[str, object], ctx.kwargs)
             with enable_grad():
                 output = fn(*inputs_detached, **kw)
 

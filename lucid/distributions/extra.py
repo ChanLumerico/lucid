@@ -360,7 +360,7 @@ class Multinomial(Distribution):
         draws: list[Tensor] = [cat.sample(sample_shape) for _ in range(n)]
         # Count each category k in {0, ..., K-1}.
         counts: list[Tensor] = [
-            sum((d == k).to(p.dtype) for d in draws)  # type: ignore[assignment, misc]
+            lucid.stack([(d == k).to(p.dtype) for d in draws]).sum(dim=0)
             for k in range(K)
         ]
         # Stack along last dim: (*sample_shape, *batch_shape, K)

@@ -24,7 +24,7 @@ In-place assignment:
                            (in-place, not tracked by autograd)
 """
 
-from typing import Sequence, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
@@ -115,14 +115,14 @@ def _select_slice(
 # ── basic indexing (int / slice / None / Ellipsis only) ───────────────────────
 
 
-def _expand_ellipsis(idx_tuple: tuple, ndim: int) -> list:
+def _expand_ellipsis(idx_tuple: tuple[object, ...], ndim: int) -> list[object]:
     """Replace `...` with `ndim - n_real` copies of `slice(None)`."""
     n_none = sum(1 for i in idx_tuple if i is None)
     n_ellipsis = sum(1 for i in idx_tuple if i is ...)
     n_real = len(idx_tuple) - n_none - n_ellipsis
     ellipsis_len = max(ndim - n_real, 0)
 
-    expanded: list = []
+    expanded: list[object] = []
     for i in idx_tuple:
         if i is ...:
             expanded.extend([slice(None)] * ellipsis_len)
@@ -132,7 +132,7 @@ def _expand_ellipsis(idx_tuple: tuple, ndim: int) -> list:
 
 
 def _apply_basic_index(
-    impl: _C_engine.TensorImpl, idx_list: list
+    impl: _C_engine.TensorImpl, idx_list: list[object]
 ) -> _C_engine.TensorImpl:
     """Apply a list of basic (int/slice/None) indices to impl."""
     dim = 0
@@ -270,7 +270,7 @@ def _coordinate_select(
 
 
 def _advanced_getitem(
-    impl: _C_engine.TensorImpl, idx_list: list
+    impl: _C_engine.TensorImpl, idx_list: list[object]
 ) -> _C_engine.TensorImpl:
     """
     idx_list has already had Ellipsis expanded.
@@ -280,15 +280,15 @@ def _advanced_getitem(
 
     # Phase 1: expand any bool Tensors to int index lists, replacing each
     # bool Tensor at position p with one or more int tensors.
-    expanded: list = []  # each entry is (int | slice | None | TensorImpl)
+    expanded: list[tuple[str, object]] = []
     for item in idx_list:
         if _is_bool_tensor(item):
-            int_idx_list = _bool_to_int_indices(_unwrap(item))
+            int_idx_list = _bool_to_int_indices(_unwrap(item))  # type: ignore[arg-type]
             # Each int index covers one dim; append consecutively
             for ii in int_idx_list:
                 expanded.append(("__tensor__", ii))
         elif _is_int_tensor(item):
-            expanded.append(("__tensor__", _to_i32(_unwrap(item))))
+            expanded.append(("__tensor__", _to_i32(_unwrap(item))))  # type: ignore[arg-type]
         elif item is None:
             expanded.append(("__none__", None))
         elif isinstance(item, int):
@@ -328,9 +328,9 @@ def _advanced_getitem(
             adv_start_dim += 1
         elif kind == "__int__":
             # Int removes a dim: adv_start_dim stays the same
-            result = _select_int(result, adv_start_dim, val)
+            result = _select_int(result, adv_start_dim, cast(int, val))
         elif kind == "__slice__":
-            result = _select_slice(result, adv_start_dim, val)
+            result = _select_slice(result, adv_start_dim, cast(slice, val))
             adv_start_dim += 1
 
     # Phase 4: process mid block.
@@ -341,13 +341,13 @@ def _advanced_getitem(
     # where result_local_dim is relative to adv_start_dim.
 
     # First pass: assign local dims, tracking int-removal.
-    mid_entries: list[tuple] = []  # (local_dim, kind, val)
+    mid_entries: list[tuple[int, str, object]] = []  # (local_dim, kind, val)
     local_dim = 0
     tensor_impls: list[_C_engine.TensorImpl] = []
     for kind, val in mid:
         if kind == "__tensor__":
             mid_entries.append((local_dim, "__tensor__", val))
-            tensor_impls.append(val)
+            tensor_impls.append(cast(_C_engine.TensorImpl, val))
             local_dim += 1
         elif kind == "__slice__":
             mid_entries.append((local_dim, "__slice__", val))
@@ -357,7 +357,7 @@ def _advanced_getitem(
             # int removes this dim; subsequent dims still increment local_dim
             # BUT: int selection happens in post-processing, not here.
             # For simplicity, int between tensor dims: apply now, don't track.
-            result = _select_int(result, adv_start_dim + local_dim, val)
+            result = _select_int(result, adv_start_dim + local_dim, cast(int, val))
             # After removing dim, subsequent local_dims shift down — but we've
             # already recorded the tensor positions above. This interleaved-int
             # case is rare; skip adjusting for now.
@@ -390,7 +390,7 @@ def _advanced_getitem(
         for ld, kind, val in basic_local_dims:
             if ld < tensor_local_dims[0]:
                 if kind == "__slice__":
-                    result = _select_slice(result, adv_start_dim + ld, val)
+                    result = _select_slice(result, adv_start_dim + ld, cast(slice, val))
                 elif kind == "__none__":
                     result = _C_engine.unsqueeze(result, adv_start_dim + ld)
         result = _fancy_select(
@@ -403,7 +403,7 @@ def _advanced_getitem(
             if ld > tensor_local_dims[0]:
                 effective_dim = post_base + (ld - tensor_local_dims[0] - 1) + offset
                 if kind == "__slice__":
-                    result = _select_slice(result, effective_dim, val)
+                    result = _select_slice(result, effective_dim, cast(slice, val))
                     offset += 1
                 elif kind == "__none__":
                     result = _C_engine.unsqueeze(result, effective_dim)
@@ -418,7 +418,7 @@ def _advanced_getitem(
         for ld, kind, val in basic_local_dims:
             effective = adv_start_dim + ld
             if kind == "__slice__":
-                result = _select_slice(result, effective, val)
+                result = _select_slice(result, effective, cast(slice, val))
             elif kind == "__none__":
                 result = _C_engine.unsqueeze(result, effective)
         # Move tensor dims to front if needed, apply, move back
@@ -472,7 +472,7 @@ def _advanced_getitem(
         cur_basic = n_bc
         for ld, kind, val in basic_local_dims:
             if kind == "__slice__":
-                result = _select_slice(result, cur_basic, val)
+                result = _select_slice(result, cur_basic, cast(slice, val))
                 cur_basic += 1
             elif kind == "__none__":
                 result = _C_engine.unsqueeze(result, cur_basic)
@@ -492,20 +492,20 @@ def _advanced_getitem(
             result = _C_engine.unsqueeze(result, cur_dim)
             cur_dim += 1
         elif kind == "__int__":
-            result = _select_int(result, cur_dim, val)
+            result = _select_int(result, cur_dim, cast(int, val))
         elif kind == "__slice__":
-            result = _select_slice(result, cur_dim, val)
+            result = _select_slice(result, cur_dim, cast(slice, val))
             cur_dim += 1
 
     return result
 
 
-def _broadcast_shape(shapes: list) -> list:
+def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
     """Compute numpy-style broadcast shape from a list of shape lists."""
     max_ndim = max(len(s) for s in shapes)
-    result = []
+    result: list[int] = []
     for d in range(max_ndim):
-        sizes = []
+        sizes: list[int] = []
         for s in shapes:
             offset = max_ndim - len(s)
             if d >= offset:
@@ -613,7 +613,7 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
             tensor_dim += 1
 
         elif hasattr(item, "_impl"):
-            item_impl = _unwrap(item)
+            item_impl = _unwrap(item)  # type: ignore[arg-type]
             if item_impl.dtype == _C_engine.Bool:
                 nz = _C_engine.nonzero(item_impl)  # (n_true, k)
                 k_dims = nz.shape[1] if len(nz.shape) > 1 else 1

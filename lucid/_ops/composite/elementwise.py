@@ -151,18 +151,14 @@ def signbit(x: Tensor) -> Tensor:
 def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     """``pow`` always done in F64 (matches the reference framework's ``float_power``)."""
     if _is_tensor(x):
-        x = cast("Tensor", x).to(dtype=lucid.float64)
+        x = x.to(dtype=lucid.float64)
     if _is_tensor(y):
-        y = cast("Tensor", y).to(dtype=lucid.float64)
+        y = y.to(dtype=lucid.float64)
     if not _is_tensor(x) and _is_tensor(y):
-        x = lucid.tensor(
-            float(cast(float, x)), dtype=lucid.float64, device=cast("Tensor", y).device
-        )
+        x = lucid.tensor(float(cast(float, x)), dtype=lucid.float64, device=y.device)
     if not _is_tensor(y) and _is_tensor(x):
-        y = lucid.tensor(
-            float(cast(float, y)), dtype=lucid.float64, device=cast("Tensor", x).device
-        )
-    return lucid.pow(cast("Tensor", x), cast("Tensor", y))
+        y = lucid.tensor(float(cast(float, y)), dtype=lucid.float64, device=x.device)
+    return lucid.pow(cast(Tensor, x), cast(Tensor, y))
 
 
 def fmax(a: Tensor, b: Tensor) -> Tensor:
@@ -201,7 +197,7 @@ def copysign(x: Tensor, y: Tensor) -> Tensor:
 def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
     """``input * 2 ** exponent`` element-wise (differentiable w.r.t. both)."""
     exp_t: Tensor = (
-        cast("Tensor", exponent)
+        exponent
         if _is_tensor(exponent)
         else lucid.tensor(cast(float, exponent), dtype=input.dtype, device=input.device)
     )

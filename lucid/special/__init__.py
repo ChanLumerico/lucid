@@ -34,7 +34,7 @@ Laguerre / Jacobi).
 """
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import lucid
 
@@ -406,7 +406,7 @@ def _ortho_poly(
     n: int,
     p0: Tensor,
     p1: Tensor,
-    advance,
+    advance: Callable[[Tensor, Tensor, int], Tensor],
 ) -> Tensor:
     """Generic orthogonal-polynomial recurrence driver.
 
@@ -572,7 +572,12 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
 # (mpmath / Boost.Math).
 
 
-def _split(x: Tensor, threshold: float, small_fn, large_fn) -> Tensor:
+def _split(
+    x: Tensor,
+    threshold: float,
+    small_fn: Callable[[Tensor], Tensor],
+    large_fn: Callable[[Tensor], Tensor],
+) -> Tensor:
     """``where(|x| <= threshold, small_fn(x), large_fn(x))`` evaluated
     safely on both branches by always running both.  Branches are
     expected to be regular (no NaN / inf) on their respective domains."""
