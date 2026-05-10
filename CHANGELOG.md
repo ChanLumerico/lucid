@@ -35,6 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - vmap Stage 2: element isolation for vmap(jacrev/jacfwd/hessian) — _ISOLATION_ATTR marker + _isolated_vmap per-element loop; fixes (B,out,B,in)→(B,out,in) shape
 
+- vmap: strategy='auto'|'isolated'|'vectorized' parameter for explicit dispatch control
+
+- vmap: randomness='error' now enforced — all random factories check _vmap_ctx thread-local state and raise RuntimeError immediately
+
+- vmap: chunk_size respected in isolation mode — partial stacking after each chunk bounds peak autograd-graph memory
+
+- linearize: linear_fn tagged with _ISOLATION_ATTR so vmap(lin) auto-uses isolation (correct per-tangent jvp dispatch)
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
