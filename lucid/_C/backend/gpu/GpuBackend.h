@@ -230,8 +230,13 @@ public:
     }
 
     Storage relu(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, dt, [](auto& x) {
-            return ::mlx::core::maximum(x, ::mlx::core::zeros_like(x));
+        // Use a scalar zero instead of zeros_like to avoid allocating a
+        // full-size zero tensor on the GPU.  zeros_like(x) pays an extra
+        // 40 MB allocation + fill kernel for a 10M-element float32 input;
+        // a scalar broadcasts inside the MLX kernel at zero allocation cost.
+        return mlx_unary(a, shape, dt, [dt](auto& x) {
+            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            return ::mlx::core::maximum(x, zero);
         });
     }
 
@@ -427,10 +432,11 @@ public:
                          double alpha) override {
         return mlx_binary(a, grad, shape, dt, [dt, alpha](auto& x, auto& g) {
             ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));   // scalar — no full-tensor alloc
             ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(dt));
             auto pos_mask = ::mlx::core::greater_equal(x, zero);
             auto neg_branch = ::mlx::core::multiply(alpha_arr, ::mlx::core::exp(x));
-            auto ones_arr = ::mlx::core::ones_like(x);
+            auto ones_arr = one;
             auto deriv = ::mlx::core::where(pos_mask, ones_arr, neg_branch);
             return ::mlx::core::multiply(deriv, g);
         });
