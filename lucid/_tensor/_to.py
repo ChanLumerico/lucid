@@ -61,18 +61,33 @@ def _inject_to(cls: type) -> None:
         impl = _C_engine.contiguous(self._impl)
         if target_dtype != impl.dtype:
             impl = _C_engine.astype(impl, target_dtype)
-        # Device transfer — route through SharedStorage so memcpy count ≤ 1.
-        #   · SharedStorage → CPU/GPU : zero-copy relabel (transfer_storage)
-        #   · CPU/GPU → other device  : one-time promotion into shared DRAM
-        #                               (to_shared_storage), then zero-copy relabel
+        # Device transfer — SharedStorage fast path vs. legacy Python-buffer path.
+        #
+        # Strategy:
+        #   · Already SharedStorage  → zero-copy relabel (0 memcpy, always optimal)
+        #   · Large tensor (≥ 64 KB) → promote to SharedStorage (1 memcpy via Metal),
+        #                               then zero-copy relabel — avoids Python overhead
+        #   · Small tensor (< 64 KB) → legacy data_as_python path; Metal allocation
+        #                               overhead would outweigh the savings here
+        #
+        # The threshold is empirical: Metal MTLBuffer allocation costs ~µs regardless
+        # of size, while data_as_python is near-zero cost for CPU tensors.  For GPU
+        # tensors (eval + memcpy) both paths pay ~1 memcpy so shared path wins above
+        # the threshold.
+        _SHARED_THRESHOLD: int = 64 * 1024  # 64 KB
         if target_device != impl.device:
             rg = self._impl.requires_grad
-            if not impl.is_metal_shared:
-                # One memcpy: move data into a MTLResourceStorageModeShared
-                # buffer so subsequent transfers in either direction are free.
-                impl = _C_engine.to_shared_storage(impl)
-            # Zero-copy: MLX external array (GPU) or cpu_view alias (CPU).
-            impl = _C_engine.transfer_storage(impl, target_device)
+            if impl.is_metal_shared:
+                # Already in shared DRAM — zero-copy relabel, no allocation needed.
+                impl = _C_engine.transfer_storage(impl, target_device)
+            elif impl.nbytes() >= _SHARED_THRESHOLD:
+                # Large tensor: pay 1 Metal allocation + 1 memcpy, avoid Python overhead.
+                shared = _C_engine.to_shared_storage(impl)
+                impl = _C_engine.transfer_storage(shared, target_device)
+            else:
+                # Small tensor: legacy path is cheaper (no Metal allocation overhead).
+                raw = impl.data_as_python()
+                impl = _C_engine.TensorImpl(raw, target_device, rg)
             if impl.requires_grad != rg:
                 impl = impl.clone_with_grad(rg)
         else:

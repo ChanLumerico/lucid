@@ -4,7 +4,6 @@
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from __future__ import annotations
 from typing import List, Optional, Sequence, SupportsInt
 
 class Dtype:

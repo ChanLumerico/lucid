@@ -247,7 +247,7 @@ def shared_tensor(
     shape: tuple[int, ...] | list[int],
     dtype: object = None,
     requires_grad: bool = False,
-) -> "lucid.Tensor":
+) -> lucid.Tensor:
     """Allocate a zero-filled tensor in Metal shared memory (no memcpy ever).
 
     The backing buffer is ``MTLResourceStorageModeShared`` — it is immediately
@@ -285,7 +285,7 @@ def shared_tensor(
     return _wrap(impl)
 
 
-def to_shared(tensor: "lucid.Tensor") -> "lucid.Tensor":
+def to_shared(tensor: lucid.Tensor) -> lucid.Tensor:
     """Promote a tensor to Metal shared memory (at most one memcpy).
 
     If *tensor* is already in shared storage this is a no-op.  After calling
@@ -316,7 +316,7 @@ def to_shared(tensor: "lucid.Tensor") -> "lucid.Tensor":
     return _wrap(_C_engine.to_shared_storage(impl))
 
 
-def is_shared(tensor: "lucid.Tensor") -> bool:
+def is_shared(tensor: lucid.Tensor) -> bool:
     """Return ``True`` if *tensor* is backed by Metal shared memory.
 
     Parameters
