@@ -83,6 +83,17 @@ def set_grad_enabled(mode: _bool) -> None: ...
 # ── Serialization ─────────────────────────────────────────────────────────────
 def save(obj: object, path: str) -> None: ...
 def load(path: str, weights_only: _bool = True) -> object: ...
+def save_safetensors(
+    state_dict: dict[str, Tensor],
+    path: str,
+    *,
+    metadata: dict[str, str] | None = None,
+) -> None: ...
+def load_safetensors(
+    path: str,
+    *,
+    device: str = "cpu",
+) -> dict[str, object]: ...
 
 # ── Subpackages ───────────────────────────────────────────────────────────────
 from lucid import nn as nn

@@ -69,11 +69,19 @@ def _load_from_directory(task: str, path: Path, *, strict: bool) -> PretrainedMo
     from lucid.models._registry import _REGISTRY, _RegistryEntry
 
     cfg_file = path / "config.json"
-    weights_file = path / "weights.lucid"
+    weights_st = path / "model.safetensors"
+    weights_lucid = path / "weights.lucid"
     if not cfg_file.exists():
         raise FileNotFoundError(f"config.json not found in {path}")
-    if not weights_file.exists():
-        raise FileNotFoundError(f"weights.lucid not found in {path}")
+    if weights_st.exists():
+        weights_file = weights_st
+    elif weights_lucid.exists():
+        weights_file = weights_lucid
+    else:
+        raise FileNotFoundError(
+            f"No weights file found in {path}. "
+            f"Expected 'model.safetensors' or 'weights.lucid'."
+        )
 
     with open(cfg_file, "r", encoding="utf-8") as f:
         cfg_dict = json.load(f)

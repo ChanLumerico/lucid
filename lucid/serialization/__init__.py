@@ -130,8 +130,15 @@ def load(
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
 ) -> object:
-    """Load an object saved with lucid.save()."""
+    """Load an object saved with :func:`save`.
+
+    Automatically delegates to :func:`load_safetensors` when *f* ends in
+    ``'.safetensors'``, provided the ``safetensors`` package is installed.
+    """
     if isinstance(f, (str, bytes)):
+        path_str = f.decode() if isinstance(f, bytes) else str(f)
+        if path_str.endswith(".safetensors"):
+            return load_safetensors(path_str)
         with open(f, "rb") as fp:
             data = fp.read()
     else:
@@ -362,4 +369,112 @@ def load_sharded(
     return result
 
 
-__all__ = ["save", "load", "save_sharded", "load_sharded"]
+def _require_safetensors() -> object:
+    """Import safetensors.numpy, raising a helpful error if not installed."""
+    try:
+        import safetensors.numpy as _st
+        return _st
+    except ImportError:
+        raise ImportError(
+            "The 'safetensors' package is required for this operation.\n"
+            "Install it with:  pip install safetensors"
+        ) from None
+
+
+def save_safetensors(
+    state_dict: dict[str, object],
+    path: str,
+    *,
+    metadata: dict[str, str] | None = None,
+) -> None:
+    """Save a state dict as a SafeTensors file (``.safetensors``).
+
+    SafeTensors is a safe, fast alternative to the default pickle-based
+    ``.lucid`` format — no arbitrary code execution is possible during load.
+
+    Requirements
+    ------------
+    ``pip install safetensors``  (optional dependency; not bundled with Lucid)
+
+    Parameters
+    ----------
+    state_dict:
+        Flat ``dict[str, Tensor]`` — the output of ``model.state_dict()``.
+        Only :class:`~lucid.Tensor` values are supported; nested dicts or
+        non-tensor entries will raise ``TypeError``.
+    path:
+        Destination file path.  By convention use a ``.safetensors`` suffix.
+    metadata:
+        Optional ``dict[str, str]`` stored in the file header (e.g.
+        ``{"model_type": "resnet", "lucid_version": "3.0"}``).
+
+    Notes
+    -----
+    - **bfloat16** is not supported via the numpy backend used here.
+      Save as float32 first: ``tensor.to(lucid.float32)`` if needed.
+    - Only flat (non-nested) state dicts are supported — the same shape
+      that ``Module.state_dict()`` produces.
+    """
+    _st = _require_safetensors()
+
+    np_tensors: dict[str, object] = {}
+    for name, value in state_dict.items():
+        if not isinstance(value, _T):
+            raise TypeError(
+                f"save_safetensors: state_dict[{name!r}] is "
+                f"{type(value).__name__}, expected Tensor"
+            )
+        if value.dtype._name == "bfloat16":
+            raise TypeError(
+                f"save_safetensors: tensor {name!r} has dtype bfloat16, "
+                "which is not supported by the numpy safetensors backend. "
+                "Cast to float32 first: tensor.to(lucid.float32)"
+            )
+        np_tensors[name] = value.numpy()
+
+    _st.save_file(np_tensors, path, metadata=metadata or {})  # type: ignore[attr-defined]
+
+
+def load_safetensors(
+    path: str,
+    *,
+    device: str = "cpu",
+) -> dict[str, object]:
+    """Load a SafeTensors checkpoint into a ``dict[str, Tensor]``.
+
+    Requirements
+    ------------
+    ``pip install safetensors``  (optional dependency; not bundled with Lucid)
+
+    Parameters
+    ----------
+    path:
+        Path to a ``.safetensors`` file.
+    device:
+        Target device for the loaded tensors: ``"cpu"`` (default) or
+        ``"metal"``.
+
+    Returns
+    -------
+    dict[str, Tensor]
+        A flat state dict that can be passed directly to
+        ``model.load_state_dict()``.
+    """
+    from lucid._factories.converters import from_numpy as _from_numpy
+
+    _st = _require_safetensors()
+    raw: dict[str, object] = _st.load_file(path)  # type: ignore[attr-defined]
+
+    result: dict[str, object] = {}
+    for name, arr in raw.items():
+        t = _from_numpy(arr)  # type: ignore[arg-type]
+        if device in ("metal", "gpu"):
+            t = t.to("metal")
+        result[name] = t
+    return result
+
+
+__all__ = [
+    "save", "load", "save_sharded", "load_sharded",
+    "save_safetensors", "load_safetensors",
+]

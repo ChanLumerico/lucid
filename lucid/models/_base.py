@@ -137,11 +137,20 @@ class PretrainedModel(nn.Module):
                 f"an existing directory"
             )
         config_file = path / "config.json"
-        weights_file = path / "weights.lucid"
+        weights_st = path / "model.safetensors"
+        weights_lucid = path / "weights.lucid"
         if not config_file.exists():
             raise FileNotFoundError(f"config.json not found in {path}")
-        if not weights_file.exists():
-            raise FileNotFoundError(f"weights.lucid not found in {path}")
+        # Prefer SafeTensors when present; fall back to .lucid format.
+        if weights_st.exists():
+            weights_file = weights_st
+        elif weights_lucid.exists():
+            weights_file = weights_lucid
+        else:
+            raise FileNotFoundError(
+                f"No weights file found in {path}. "
+                f"Expected 'model.safetensors' or 'weights.lucid'."
+            )
 
         if cls.config_class is None:
             raise TypeError(
@@ -152,17 +161,40 @@ class PretrainedModel(nn.Module):
         sd = _lucid.load(str(weights_file), weights_only=True)
         if not isinstance(sd, dict):
             raise TypeError(
-                f"weights.lucid did not contain a state_dict, "
+                f"Weights file did not contain a state_dict, "
                 f"got {type(sd).__name__}"
             )
         model.load_state_dict(sd, strict=strict)
         return model
 
-    def save_pretrained(self, path: str) -> None:
-        """Write ``config.json`` and ``weights.lucid`` to *path*."""
+    def save_pretrained(
+        self,
+        path: str,
+        *,
+        safe_serialization: bool = False,
+    ) -> None:
+        """Write ``config.json`` and weights to *path*.
+
+        Parameters
+        ----------
+        path:
+            Destination directory.  Created if it does not exist.
+        safe_serialization:
+            If ``True``, save weights as ``model.safetensors`` using the
+            SafeTensors format (requires ``pip install safetensors``).
+            If ``False`` (default), save as ``weights.lucid`` using Lucid's
+            native pickle-based format.
+        """
         os.makedirs(path, exist_ok=True)
         self.config.save(os.path.join(path, "config.json"))
-        _lucid.save(self.state_dict(), os.path.join(path, "weights.lucid"))
+        if safe_serialization:
+            _lucid.save_safetensors(
+                self.state_dict(),
+                os.path.join(path, "model.safetensors"),
+                metadata={"model_type": self.config.model_type},
+            )
+        else:
+            _lucid.save(self.state_dict(), os.path.join(path, "weights.lucid"))
 
     def num_parameters(self, *, only_trainable: bool = False) -> int:
         """Total parameter count (sum of all element counts)."""

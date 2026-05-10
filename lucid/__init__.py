@@ -193,6 +193,7 @@ __all__ = [
     "is_tensor", "is_floating_point", "is_complex", "is_signed",
     # ── serialization ─────────────────────────────────────────────────────
     "save", "load", "save_sharded", "load_sharded",
+    "save_safetensors", "load_safetensors",
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
     "utils", "amp", "profiler", "einops",
@@ -275,7 +276,10 @@ _PREDICATE_NAMES: frozenset[str] = frozenset([
     "is_tensor", "is_floating_point", "is_complex", "is_signed",
 ])
 
-_SERIALIZATION_NAMES: frozenset[str] = frozenset(["save", "load", "save_sharded", "load_sharded"])
+_SERIALIZATION_NAMES: frozenset[str] = frozenset([
+    "save", "load", "save_sharded", "load_sharded",
+    "save_safetensors", "load_safetensors",
+])
 
 _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── core ML stack ─────────────────────────────────────────────────────
@@ -424,6 +428,8 @@ def _load_serialization() -> dict[str, object]:
         "load": _ser.load,
         "save_sharded": _ser.save_sharded,
         "load_sharded": _ser.load_sharded,
+        "save_safetensors": _ser.save_safetensors,
+        "load_safetensors": _ser.load_safetensors,
     }
 
 
