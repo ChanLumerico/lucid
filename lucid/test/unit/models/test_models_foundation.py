@@ -134,9 +134,23 @@ class TestModelConfig:
         rebuilt = _DummyConfig.from_dict(d)
         assert rebuilt == cfg
 
-    def test_from_dict_rejects_unknown_field(self) -> None:
-        with pytest.raises(ValueError, match="unknown fields"):
-            _DummyConfig.from_dict({"in_features": 4, "bogus": 1})
+    def test_from_dict_warns_on_unknown_field(self) -> None:
+        # Unknown fields in the checkpoint (from a newer version of the config)
+        # should warn and be silently dropped — not raise — so old code can
+        # still load newer checkpoints that have gained extra fields.
+        with pytest.warns(UserWarning, match="unrecognised fields"):
+            cfg = _DummyConfig.from_dict({"in_features": 4, "bogus": 1})
+        assert cfg == _DummyConfig(in_features=4)
+
+    def test_from_dict_missing_required_field_raises(self) -> None:
+        # Missing *required* fields (no default) must still raise TypeError.
+        @dataclass(frozen=True)
+        class _RequiredFieldConfig(ModelConfig):
+            model_type: ClassVar[str] = "required_test"
+            required_field: int  # no default — must be present
+
+        with pytest.raises(TypeError):
+            _RequiredFieldConfig.from_dict({})
 
     def test_save_load_round_trip(self, tmp_path: Path) -> None:
         cfg = _DummyConfig(in_features=12)

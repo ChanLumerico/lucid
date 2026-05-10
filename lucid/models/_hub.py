@@ -94,7 +94,19 @@ def load_from_pretrained_entry(
     name: str,
     strict: bool = True,
 ) -> None:
-    """Helper for family factories: download via ``entry`` and load weights."""
+    """Download weights via *entry* and load them into *model*.
+
+    Validates that *entry.config* and *model.config* share the same
+    ``model_type`` so mis-matched factory / entry pairs are caught early
+    (e.g., passing a ResNet-50 entry to a ResNet-18 model).
+    """
+    if entry.config.model_type != model.config.model_type:
+        raise TypeError(
+            f"load_from_pretrained_entry: entry config model_type "
+            f"{entry.config.model_type!r} does not match model config "
+            f"model_type {model.config.model_type!r}. "
+            f"Check that the correct PretrainedEntry is paired with this model."
+        )
     weights_path = download(entry.url, entry.sha256, name=name)
     sd = _lucid.load(str(weights_path), weights_only=True)
     if not isinstance(sd, dict):

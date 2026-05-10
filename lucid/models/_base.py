@@ -2,6 +2,7 @@
 
 import json
 import os
+import warnings
 from abc import ABC
 from dataclasses import asdict, fields, is_dataclass
 from pathlib import Path
@@ -38,16 +39,23 @@ class ModelConfig(ABC):
         copy: dict[str, object] = dict(d)
         # ``model_type`` is a ClassVar — never a constructor arg.
         copy.pop("model_type", None)
-        # Filter unknown keys so older checkpoints survive new optional fields
-        # being added; raise loudly only on missing required ones.
         if not is_dataclass(cls):
             raise TypeError(f"{cls.__name__} must be a @dataclass")
         known = {f.name for f in fields(cls)}
         unknown = set(copy) - known
         if unknown:
-            raise ValueError(
-                f"{cls.__name__}.from_dict: unknown fields {sorted(unknown)}"
+            # Warn and skip unknown fields so checkpoints from a newer version
+            # of the config (with added fields) still load into older code.
+            # Only missing *required* fields (those without defaults) will cause
+            # an error — via the TypeError raised by cls(**copy) below.
+            warnings.warn(
+                f"{cls.__name__}.from_dict: ignoring unrecognised fields "
+                f"{sorted(unknown)} — checkpoint may be from a newer version.",
+                UserWarning,
+                stacklevel=2,
             )
+            for k in unknown:
+                del copy[k]
         return cls(**copy)
 
     def save(self, path: str) -> None:
@@ -66,28 +74,35 @@ class ModelConfig(ABC):
 
 
 class PretrainedModel(nn.Module):
-    """Base for models that round-trip through ``from_pretrained`` / ``save_pretrained``.
+    """Base for all models that support ``from_pretrained`` / ``save_pretrained``.
 
-    Contract for subclasses:
+    Contract for concrete subclasses:
 
-    - Set ``config_class`` (``ClassVar[type[ModelConfig]]``) to the matching
-      :class:`ModelConfig` subclass
-    - Define ``__init__(self, config: TConfig) -> None`` — single argument,
-      no extra kwargs.  All variant differences belong inside ``config``
-    - Implement ``forward(...) -> ModelOutput``
+    - Set ``config_class = MyConfig`` (ClassVar) — required, enforced at init.
+    - Define ``__init__(self, config: MyConfig) -> None`` with a single arg.
+      All variant differences (depth, width, …) belong inside the config.
+    - Implement ``forward(...) -> ModelOutput``.
     """
 
-    config_class: ClassVar[type[ModelConfig]] = ModelConfig
+    # None signals "not set"; __init__ will raise if a concrete subclass forgets.
+    config_class: ClassVar[type[ModelConfig] | None] = None
     base_model_prefix: ClassVar[str] = ""
 
     config: ModelConfig
 
     def __init__(self, config: ModelConfig) -> None:
         super().__init__()
-        if not isinstance(config, self.config_class):
+        cls = type(self)
+        if cls.config_class is None:
             raise TypeError(
-                f"{type(self).__name__} expects "
-                f"{self.config_class.__name__}, got {type(config).__name__}"
+                f"{cls.__name__} must set the 'config_class' ClassVar to its "
+                f"matching ModelConfig subclass (e.g. "
+                f"config_class: ClassVar[type[ResNetConfig]] = ResNetConfig)."
+            )
+        if not isinstance(config, cls.config_class):
+            raise TypeError(
+                f"{cls.__name__} expects {cls.config_class.__name__}, "
+                f"got {type(config).__name__}"
             )
         self.config = config
 
@@ -97,14 +112,12 @@ class PretrainedModel(nn.Module):
 
         Two modes:
 
-        1. Registered name (``"resnet_50"`` / ``"resnet-50"``) — looked up
-           in the global registry; the registered factory is invoked with
-           ``pretrained=True`` (which downloads weights via :mod:`_hub`).
-        2. Local directory containing ``config.json`` + ``weights.lucid``
-           — config is loaded via ``cls.config_class.load`` and weights
-           via :func:`lucid.load`.
+        1. Registered name (``"resnet_50"`` / ``"resnet-50"``) — looked up in
+           the global registry; the factory is called with ``pretrained=True``.
+        2. Local directory containing ``config.json`` + ``weights.lucid`` —
+           config is restored via ``cls.config_class.load``; weights via
+           :func:`lucid.load`.
         """
-        # Local imports avoid a circular dep (registry imports _base for typing).
         from lucid.models._registry import is_model, model_entrypoint
 
         if is_model(name_or_path):
@@ -120,7 +133,7 @@ class PretrainedModel(nn.Module):
         path = Path(name_or_path)
         if not path.is_dir():
             raise ValueError(
-                f"{name_or_path!r} is neither a registered model nor "
+                f"{name_or_path!r} is neither a registered model name nor "
                 f"an existing directory"
             )
         config_file = path / "config.json"
@@ -130,6 +143,10 @@ class PretrainedModel(nn.Module):
         if not weights_file.exists():
             raise FileNotFoundError(f"weights.lucid not found in {path}")
 
+        if cls.config_class is None:
+            raise TypeError(
+                f"{cls.__name__} must set config_class before calling from_pretrained"
+            )
         config = cls.config_class.load(str(config_file))
         model = cls(config)
         sd = _lucid.load(str(weights_file), weights_only=True)
@@ -142,13 +159,13 @@ class PretrainedModel(nn.Module):
         return model
 
     def save_pretrained(self, path: str) -> None:
-        """Write ``config.json`` and ``weights.lucid`` to a directory."""
+        """Write ``config.json`` and ``weights.lucid`` to *path*."""
         os.makedirs(path, exist_ok=True)
         self.config.save(os.path.join(path, "config.json"))
         _lucid.save(self.state_dict(), os.path.join(path, "weights.lucid"))
 
     def num_parameters(self, *, only_trainable: bool = False) -> int:
-        """Total parameter count (sum of element counts)."""
+        """Total parameter count (sum of all element counts)."""
         total: int = 0
         for p in self.parameters():
             if only_trainable and not p.requires_grad:

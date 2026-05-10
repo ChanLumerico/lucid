@@ -1,22 +1,40 @@
 """Task-tagged global model registry with name normalization."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from lucid.models._base import PretrainedModel
+    from lucid.models._base import ModelConfig, PretrainedModel
 
 
-_FactoryFn = Callable[..., "PretrainedModel"]
+class ModelFactory(Protocol):
+    """Protocol satisfied by every factory function passed to @register_model.
+
+    The ``pretrained`` flag controls whether to download and load weights.
+    ``**overrides`` allows callers to override config fields at creation time
+    (e.g. ``create_model("resnet_50", num_classes=10)``).
+    """
+
+    __name__: str  # every Python function has __name__; Protocol must declare it
+
+    def __call__(
+        self,
+        pretrained: bool = False,
+        **overrides: object,
+    ) -> PretrainedModel: ...
 
 
 @dataclass(frozen=True)
 class _RegistryEntry:
-    factory: _FactoryFn
+    factory: ModelFactory
     task: str
     family: str
     model_type: str
+    # Optional fast-path fields: when provided, Auto classes avoid calling the
+    # factory just to discover the class or default config.
+    model_class: type[PretrainedModel] | None = field(default=None)
+    default_config: ModelConfig | None = field(default=None)
 
 
 _REGISTRY: dict[str, _RegistryEntry] = {}
@@ -32,36 +50,56 @@ def register_model(
     task: str = "base",
     family: str | None = None,
     model_type: str | None = None,
-) -> Callable[[_FactoryFn], _FactoryFn]:
+    model_class: type[PretrainedModel] | None = None,
+    default_config: ModelConfig | None = None,
+) -> Callable[[ModelFactory], ModelFactory]:
     """Decorator that registers a factory function under its ``__name__``.
 
-    Args:
-        task: Task tag the Auto class will filter on (``"base"``,
-            ``"image-classification"``, ``"causal-lm"``, etc.)
-        family: Family identifier (e.g. ``"resnet"``); inferred from the
-            factory's parent module name if omitted.
-        model_type: ``ModelConfig.model_type`` value this factory produces;
-            defaults to ``family``.
+    Parameters
+    ----------
+    task:
+        Task tag used by Auto classes for typed dispatch
+        (``"base"``, ``"image-classification"``, ``"causal-lm"``, …).
+    family:
+        Architecture family (e.g. ``"resnet"``); inferred from the
+        factory's parent module name when omitted.
+    model_type:
+        ``ModelConfig.model_type`` this factory produces; defaults to
+        *family*.
+    model_class:
+        The concrete :class:`PretrainedModel` subclass this factory
+        returns.  When supplied, :class:`AutoModel` directory-loading
+        avoids a redundant factory call — recommended for all Phase 1+
+        registrations.
+    default_config:
+        The default :class:`ModelConfig` for this variant (i.e., the
+        config the factory uses when ``pretrained=False``).  When
+        supplied, :class:`AutoConfig` returns it instantly without
+        instantiating the model.
     """
 
-    def decorator(fn: _FactoryFn) -> _FactoryFn:
+    def decorator(fn: ModelFactory) -> ModelFactory:
         name = _normalize(fn.__name__)
         if name in _REGISTRY:
             raise ValueError(f"Model {name!r} already registered")
 
         if family is None:
             # Module path looks like ``lucid.models.vision.resnet.pretrained``;
-            # the parent (``resnet``) is the family.
+            # the second-to-last component is the family name.
             parts = fn.__module__.split(".")
             family_resolved = parts[-2] if len(parts) >= 2 else fn.__module__
         else:
             family_resolved = family
 
+        mt = model_type if model_type is not None else family_resolved
+
         _REGISTRY[name] = _RegistryEntry(
             factory=fn,
             task=task,
             family=family_resolved,
-            model_type=model_type if model_type is not None else family_resolved,
+            model_type=mt,
+            model_class=model_class,
+            default_config=default_config,
         )
         return fn
 
@@ -69,7 +107,7 @@ def register_model(
 
 
 def list_models(*, task: str | None = None, family: str | None = None) -> list[str]:
-    """All registered names, optionally filtered by task / family. Sorted."""
+    """All registered model names, optionally filtered. Sorted alphabetically."""
     out: list[str] = []
     for name, entry in _REGISTRY.items():
         if task is not None and entry.task != task:
@@ -84,8 +122,8 @@ def is_model(name: str) -> bool:
     return _normalize(name) in _REGISTRY
 
 
-def model_entrypoint(name: str) -> _FactoryFn:
-    """Return the registered factory for ``name`` (any task)."""
+def model_entrypoint(name: str) -> ModelFactory:
+    """Return the registered factory for *name* (any task)."""
     norm = _normalize(name)
     entry = _REGISTRY.get(norm)
     if entry is None:
@@ -95,8 +133,8 @@ def model_entrypoint(name: str) -> _FactoryFn:
 
 def create_model(
     name: str, *, pretrained: bool = False, **overrides: object
-) -> "PretrainedModel":
-    """timm-style entrypoint: look up name and call its factory."""
+) -> PretrainedModel:
+    """timm-style entry point: look up name and call its factory."""
     factory = model_entrypoint(name)
     return factory(pretrained=pretrained, **overrides)
 
@@ -118,9 +156,8 @@ def _registry_lookup(name: str, *, task: str) -> _RegistryEntry:
 def _unknown_model_message(name: str, candidates: list[str]) -> str:
     """Build an error message with up to 3 typo suggestions."""
     norm = _normalize(name)
-    candidate_list = candidates
     nearby = sorted(
-        ((_edit_distance(c, norm), c) for c in candidate_list),
+        ((_edit_distance(c, norm), c) for c in candidates),
         key=lambda t: t[0],
     )
     suggestions = [c for d, c in nearby[:3] if d <= 3]
