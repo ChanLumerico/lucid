@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.func parity test suite (25 tests) against reference framework for vmap / grad / vjp / jvp / jacrev / jacfwd / hessian / linearize
 
+- nn parity tests: LayerNorm, RMSNorm, GroupNorm, BatchNorm, InstanceNorm, LRN, MultiheadAttention, TransformerEncoderLayer (19 tests)
+
+- optim.lr_scheduler parity test suite: 15 schedulers × 21 tests against reference framework
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -35,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - H5/H7 Hard Rule violations in lucid.func + parity tests
 - lucid.func.jvp scalar output shape — alpha gradient was (1,) instead of () for scalar primal outputs
+- CosineAnnealingWarmRestarts: reset T_cur/T_i before computing LR — restart epoch now correctly returns base_lr (not eta_min)
+- ReduceLROnPlateau: patience check changed >= → > to match reference (was reducing one epoch too early)
+- OneCycleLR: warmup end = total_steps*pct_start-1 (not floor); init_lr = max_lr/div_factor regardless of optimizer LR
 
 ---
 
