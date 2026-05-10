@@ -1,10 +1,8 @@
 """Shape-manipulation ops — reshape / permute / cat / stack / split / pad / ..."""
 
 import numpy as np
-import pytest
 
 import lucid
-from lucid.test._helpers.compare import assert_close
 
 
 class TestReshape:

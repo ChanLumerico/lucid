@@ -4,7 +4,6 @@ nn.functional normalization operations.
 
 from typing import TYPE_CHECKING
 
-import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
@@ -64,7 +63,7 @@ def batch_norm(
     elif ndim == 3:
         return _wrap(_C_engine.nn.batch_norm1d(xi, w, b, eps))
     elif ndim == 4:
-        return _wrap(_C_engine.nn.batch_norm(xi, w, b, eps))
+        return _wrap(_C_engine.nn.batch_norm(xi, w, b, eps))  # type: ignore[call-arg, arg-type]
     elif ndim == 5:
         return _wrap(_C_engine.nn.batch_norm3d(xi, w, b, eps))
     else:
@@ -88,12 +87,12 @@ def layer_norm(
     from lucid._factories.creation import ones, zeros
 
     shape: tuple[int, ...] = tuple(normalized_shape)
-    w: object = (
+    w: _C_engine.TensorImpl = (
         _unwrap(weight)
         if weight is not None
         else _unwrap(ones(*shape, device=x.device, dtype=x.dtype))
     )
-    b: object = (
+    b: _C_engine.TensorImpl = (
         _unwrap(bias)
         if bias is not None
         else _unwrap(zeros(*shape, device=x.device, dtype=x.dtype))

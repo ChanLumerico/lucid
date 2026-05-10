@@ -5,7 +5,6 @@ Worker utilities for DataLoader multi-process data loading.
 import threading
 from dataclasses import dataclass
 from lucid.utils.data.dataset import Dataset
-from typing import TYPE_CHECKING
 
 # Thread-local storage: each worker process stores its WorkerInfo here.
 _worker_local = threading.local()

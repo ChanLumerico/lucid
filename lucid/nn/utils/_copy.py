@@ -7,7 +7,6 @@ between models that share the same architecture but live in different
 training contexts.
 """
 
-import lucid as _lucid
 from lucid.nn.module import Module
 
 

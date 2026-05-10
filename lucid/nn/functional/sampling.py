@@ -229,7 +229,7 @@ def embedding_bag(
         # Cast offsets to I32 if needed
         off_impl = _unwrap(offsets)
         if off_impl.dtype != _C_engine.I32:
-            off_impl = _C_engine.cast(off_impl, _C_engine.I32)
+            off_impl = _C_engine.cast(off_impl, _C_engine.I32)  # type: ignore[attr-defined]
         impl = _C_engine.nn.embedding_bag(
             w_impl, x_impl, off_impl, mode_int, pad_idx, include_last_offset
         )
@@ -268,7 +268,7 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
     idx_flat: Tensor = _lucid.tensor(
         indices_1d, dtype=_lucid.int32, device=x.device
     ).reshape(target_shape)
-    idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()
+    idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()  # type: ignore[attr-defined]
     return _lucid.gather(x, idx, dim)
 
 
@@ -353,10 +353,10 @@ def pad(
             f"unknown pad mode {mode!r}; expected one of {sorted(_PAD_MODES)}"
         )
     impl: object = _unwrap(x)
-    ndim: int = len(impl.shape)
+    ndim: int = len(impl.shape)  # type: ignore[attr-defined]
     pad_pairs: list[tuple[int, int]] = _flat_to_per_dim_pairs(padding, ndim)
     if mode == "constant":
-        return _wrap(_C_engine.pad(impl, pad_pairs, value))
+        return _wrap(_C_engine.pad(impl, pad_pairs, value))  # type: ignore[arg-type]
     # Non-constant: pad one dim at a time using existing ops.
     result: Tensor = x
     for d, (lo, hi) in enumerate(pad_pairs):
@@ -493,7 +493,7 @@ def multi_head_attention_forward(
         mha.train()
     else:
         mha.eval()
-    return mha(
+    return mha(  # type: ignore[return-value]
         query,
         key,
         value,
@@ -534,7 +534,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     # flatten the two leading channel-related axes back into a single ``C``.
     reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
     perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
-    transposed = _lucid.permute(reshaped, *perm)
+    transposed = _lucid.permute(reshaped, *perm)  # type: ignore[arg-type]
     return transposed.reshape(n, c, *spatial)
 
 
@@ -551,10 +551,10 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     n = int(x.shape[0])
     if n < 2:
         return _lucid.zeros(0, dtype=x.dtype, device=x.device)
-    full = _lucid.cdist(x, x, p=p)  # (N, N)
+    full = _lucid.cdist(x, x, p=p)  # type: ignore[arg-type]  # (N, N)
     # Pull out the strict upper triangle (i < j) in row-major order via the
     # index pair generator from ``triu_indices``.
-    pairs = _lucid.triu_indices(n, n, offset=1)  # shape (2, N·(N-1)/2)
+    pairs = _lucid.triu_indices(n, n, offset=1)  # type: ignore[arg-type]  # shape (2, N·(N-1)/2)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
     return _lucid.gather(flat, flat_idx, dim=0)

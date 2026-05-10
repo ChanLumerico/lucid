@@ -17,7 +17,7 @@ class Flatten(Module):
         self.start_dim = start_dim
         self.end_dim = end_dim
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
 
     def extra_repr(self) -> str:
@@ -32,7 +32,7 @@ class Unflatten(Module):
         self.dim = dim
         self.unflattened_size = unflattened_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         shape = list(x.shape)
         new_shape = (
             shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
@@ -63,7 +63,7 @@ class Unfold(Module):
         self.padding = padding
         self.stride = stride
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid.nn.functional.sampling import unfold as _unfold
 
         return _unfold(x, self.kernel_size, self.dilation, self.padding, self.stride)
@@ -109,7 +109,7 @@ class Fold(Module):
         self.padding = padding if isinstance(padding, tuple) else (padding, padding)
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid.nn.functional.sampling import fold as _fold
 
         oH, oW = self.output_size

@@ -77,7 +77,7 @@ class MetalStream:
 
     def __init__(self, priority: int = 0) -> None:
         self._priority = priority
-        self._stream = _mx.default_stream(_mx.gpu)
+        self._stream = _mx.default_stream(_mx.gpu)  # type: ignore[arg-type]
 
     def __enter__(self) -> MetalStream:
         return self
@@ -236,9 +236,9 @@ def run_kernel(
         function_name,
         impl_inputs,
         out_shape_list,
-        dtype_str,
-        grid_arr,
-        threads_arr,
+        dtype_str,  # type: ignore[arg-type]
+        grid_arr,  # type: ignore[arg-type]
+        threads_arr,  # type: ignore[arg-type]
     )
     return _wrap(out_impl)
 
@@ -281,7 +281,7 @@ def shared_tensor(
         dtype = _lucid.float32
     from lucid._dtype import to_engine_dtype as _to_eng
 
-    impl = _C_engine.make_shared_tensor(list(shape), _to_eng(dtype), requires_grad)
+    impl = _C_engine.make_shared_tensor(list(shape), _to_eng(dtype), requires_grad)  # type: ignore[arg-type]
     return _wrap(impl)
 
 

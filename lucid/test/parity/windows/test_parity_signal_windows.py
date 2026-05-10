@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-import numpy as np
 import pytest
 
 import lucid.signal.windows as W

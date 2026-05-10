@@ -4,8 +4,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
-from lucid.test._helpers.compare import assert_close, assert_equal_int
 
 # ── basic full-tensor reductions ────────────────────────────────────────
 

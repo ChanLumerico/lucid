@@ -8,7 +8,6 @@ multivariate distribution with diagonal covariance, e.g.
     Independent(base, 1)  # event_shape == (D,), batch_shape == (B,)
 """
 
-import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.distribution import Distribution
 

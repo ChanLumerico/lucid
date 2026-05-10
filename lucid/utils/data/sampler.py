@@ -4,7 +4,7 @@ from lucid.utils.data.dataset import Dataset
 Sampler classes for DataLoader.
 """
 
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator
 import random
 
 
@@ -59,7 +59,7 @@ class RandomSampler(Sampler):
         if self.replacement:
             import random as _r
 
-            rng = _r.Random(self.generator)
+            rng = _r.Random(self.generator)  # type: ignore[arg-type]
             yield from (rng.randrange(n) for _ in range(self.num_samples))
         else:
             perm = list(range(n))
@@ -104,7 +104,7 @@ class WeightedRandomSampler(Sampler):
     def __iter__(self) -> Iterator[int]:
         import random as _r
 
-        rng = _r.Random(self.generator)
+        rng = _r.Random(self.generator)  # type: ignore[arg-type]
         total = sum(self.weights)
         normalized = [w / total for w in self.weights]
         n = len(self.weights)
@@ -135,7 +135,7 @@ class BatchSampler(Sampler):
         self.batch_size = batch_size
         self.drop_last = drop_last
 
-    def __iter__(self) -> Iterator[list[int]]:
+    def __iter__(self) -> Iterator[list[int]]:  # type: ignore[override]
         batch: list[int] = []
         for idx in self.sampler:
             batch.append(idx)

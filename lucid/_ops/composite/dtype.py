@@ -39,9 +39,9 @@ def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
     da = a.dtype if _is_tensor(a) else None
     db = b.dtype if _is_tensor(b) else None
     if da is None and db is None:
-        return lucid.float32
+        return lucid.float32  # type: ignore[return-value]
     if da is None:
-        return db
+        return db  # type: ignore[return-value]
     if db is None:
         return da
     if da == db:

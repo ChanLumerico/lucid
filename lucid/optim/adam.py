@@ -2,10 +2,12 @@
 Adam and AdamW optimizers.
 """
 
+from typing import Iterable, cast
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
+from lucid.nn.parameter import Parameter
 from lucid.optim.optimizer import Optimizer
 
 
@@ -41,14 +43,14 @@ class Adam(Optimizer):
 
     def __init__(
         self,
-        params: object,
+        params: Iterable[Parameter] | Iterable[dict[str, object]],
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
         weight_decay: float = 0,
         amsgrad: bool = False,
     ) -> None:
-        defaults = dict(
+        defaults: dict[str, object] = dict(
             lr=lr,
             beta1=betas[0],
             beta2=betas[1],
@@ -59,15 +61,17 @@ class Adam(Optimizer):
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
+        from lucid.nn.parameter import Parameter as _P
+
+        params_list: list[_P] = group["params"]  # type: ignore[assignment]
         self._engine_optims.append(
             _C_engine.Adam(
-                [_unwrap(p) for p in group["params"]],
-                group["lr"],
-                group.get("beta1", 0.9),
-                group.get("beta2", 0.999),
-                group.get("eps", 1e-8),
-                group.get("weight_decay", 0.0),
-                group.get("amsgrad", False),
+                [_unwrap(p) for p in params_list],
+                cast(float, group["lr"]),
+                cast(float, group.get("beta1", 0.9)),
+                cast(float, group.get("beta2", 0.999)),
+                cast(float, group.get("eps", 1e-8)),
+                cast(float, group.get("weight_decay", 0.0)),
             )
         )
 
@@ -75,7 +79,7 @@ class Adam(Optimizer):
         """Perform a single Adam step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()
+            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() correct at runtime
         return loss
 
 
@@ -94,14 +98,14 @@ class AdamW(Optimizer):
 
     def __init__(
         self,
-        params: object,
+        params: Iterable[Parameter] | Iterable[dict[str, object]],
         lr: float = 1e-3,
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
         weight_decay: float = 1e-2,
         amsgrad: bool = False,
     ) -> None:
-        defaults = dict(
+        defaults: dict[str, object] = dict(
             lr=lr,
             beta1=betas[0],
             beta2=betas[1],
@@ -112,14 +116,17 @@ class AdamW(Optimizer):
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
+        from lucid.nn.parameter import Parameter as _P
+
+        params_list: list[_P] = group["params"]  # type: ignore[assignment]
         self._engine_optims.append(
             _C_engine.AdamW(
-                [_unwrap(p) for p in group["params"]],
-                group["lr"],
-                group.get("beta1", 0.9),
-                group.get("beta2", 0.999),
-                group.get("eps", 1e-8),
-                group.get("weight_decay", 1e-2),
+                [_unwrap(p) for p in params_list],
+                cast(float, group["lr"]),
+                cast(float, group.get("beta1", 0.9)),
+                cast(float, group.get("beta2", 0.999)),
+                cast(float, group.get("eps", 1e-8)),
+                cast(float, group.get("weight_decay", 1e-2)),
             )
         )
 
@@ -127,5 +134,5 @@ class AdamW(Optimizer):
         """Perform a single AdamW step."""
         loss: Tensor | None = closure() if closure is not None else None
         for optim in self._engine_optims:
-            optim.step()
+            optim.step()  # type: ignore[attr-defined]  # _EngineOptimizer.step() correct at runtime
         return loss

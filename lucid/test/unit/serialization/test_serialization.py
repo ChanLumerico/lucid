@@ -100,7 +100,6 @@ class TestStateDictV2:
 
     def test_load_state_dict_returns_incompatible_keys(self) -> None:
         import lucid.nn as nn
-        import lucid
 
         m = nn.Linear(3, 2)
         sd = m.state_dict()
@@ -130,7 +129,6 @@ class TestStateDictV2:
 
     def test_assign_true_copies_values(self) -> None:
         import lucid.nn as nn
-        import lucid
         import numpy as np
 
         src = nn.Linear(3, 2)

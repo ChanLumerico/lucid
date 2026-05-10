@@ -3,19 +3,32 @@ lucid.optim.lr_scheduler
 
 .. currentmodule:: lucid.optim.lr_scheduler
 
+Learning rate schedulers adjust the learning rate of an
+:class:`~lucid.optim.Optimizer` according to a pre-defined policy.
+
+Base class
+----------
+
+.. autoclass:: LRScheduler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Schedulers
+----------
+
 .. autoclass:: StepLR
-   :members:
-.. autoclass:: ExponentialLR
-   :members:
 .. autoclass:: MultiStepLR
-   :members:
+.. autoclass:: ConstantLR
+.. autoclass:: LinearLR
+.. autoclass:: ExponentialLR
+.. autoclass:: PolynomialLR
 .. autoclass:: CosineAnnealingLR
-   :members:
-.. autoclass:: LambdaLR
-   :members:
+.. autoclass:: CosineAnnealingWarmRestarts
 .. autoclass:: CyclicLR
-   :members:
+.. autoclass:: OneCycleLR
 .. autoclass:: ReduceLROnPlateau
-   :members:
-.. autoclass:: NoamScheduler
-   :members:
+.. autoclass:: LambdaLR
+.. autoclass:: MultiplicativeLR
+.. autoclass:: SequentialLR
+.. autoclass:: ChainedScheduler

@@ -10,8 +10,7 @@ without numpy installed.
 from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs, _parse_device, _unwrap
-from lucid._dtype import dtype, to_engine_dtype
+from lucid._dispatch import normalize_factory_kwargs
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -105,11 +104,11 @@ def _to_impl(
     # is missing, ``_require_numpy`` raises a guidance-rich ImportError.
     np = _require_numpy("lucid.tensor() with non-Tensor input")
 
-    numpy_input = isinstance(data, np.ndarray)
+    numpy_input = isinstance(data, np.ndarray)  # type: ignore[attr-defined]
 
     if not numpy_input:
         # Python list/scalar -> convert to numpy with default dtype (float32)
-        tmp = np.array(data)
+        tmp = np.array(data)  # type: ignore[attr-defined]
         if dtype is None:
             target_eng = _dtype_eng
         else:
@@ -118,13 +117,13 @@ def _to_impl(
         _dtype_eng = target_eng
     else:
         if dtype is not None:
-            arr = data.astype(_engine_dtype_to_np(_dtype_eng), copy=False)
+            arr = data.astype(_engine_dtype_to_np(_dtype_eng), copy=False)  # type: ignore[attr-defined]
         else:
             arr = data
-            _dtype_eng = _np_dtype_to_engine(arr.dtype)
+            _dtype_eng = _np_dtype_to_engine(arr.dtype)  # type: ignore[attr-defined]
 
-    arr = np.ascontiguousarray(arr)
-    with np.errstate(invalid="ignore", over="ignore"):
+    arr = np.ascontiguousarray(arr)  # type: ignore[attr-defined]
+    with np.errstate(invalid="ignore", over="ignore"):  # type: ignore[attr-defined]
         impl = _C_engine.TensorImpl(arr, _device_eng, _rg)
     return impl
 
@@ -206,7 +205,7 @@ def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
     ``pip install lucid[numpy]`` if missing.
     """
     np = _require_numpy("lucid.from_dlpack")
-    arr = np.from_dlpack(ext_tensor)
+    arr = np.from_dlpack(ext_tensor)  # type: ignore[attr-defined]
     return tensor(arr)
 
 

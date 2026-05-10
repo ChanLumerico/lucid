@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._helpers.compare import assert_equal_int
 
 # ── comparison ───────────────────────────────────────────────────────────
 

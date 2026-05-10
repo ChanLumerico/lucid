@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import skip_if_unsupported
 
 
 class TestDtypeObjects:

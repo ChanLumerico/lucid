@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Callable, ClassVar, Final, Self, Iterator, overload
+from typing import TYPE_CHECKING, Callable, ClassVar, Self, Iterator, overload
 
 if TYPE_CHECKING:
     import numpy as np
@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
     dtype,
+    dtype as _dtype_cls,
     _ENGINE_TO_DTYPE,
     bool_,
     int8,
@@ -18,7 +19,7 @@ from lucid._dtype import (
     bfloat16,
     complex64,
 )
-from lucid._device import device, _device_from_engine
+from lucid._device import device, device as _device_cls, _device_from_engine
 from lucid._dispatch import _wrap, _impl_with_grad
 from lucid._factories.creation import (
     zeros as _zeros,
@@ -29,26 +30,15 @@ from lucid._factories.creation import (
 from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 
 if TYPE_CHECKING:
-    from lucid.nn.module import Module
-    from lucid.nn.parameter import Parameter
     from lucid.autograd._hooks import RemovableHandle as _RemovableHandle
 
 
-class Tensor[DT: dtype, DV: device]:
+class Tensor:
     """Multi-dimensional array with automatic differentiation support.
 
     The central data structure of the Lucid framework. Wraps a C++ ``TensorImpl``
     via composition. Tensors live on either ``cpu`` (Apple Accelerate) or
     ``metal`` (Apple Metal GPU) devices.
-
-    Type Parameters
-    ---------------
-    DT : dtype
-        The element dtype of this tensor, e.g. ``lucid.float32``.
-        Use ``Tensor[float32, device]`` in type hints to communicate dtype.
-    DV : device
-        The device this tensor resides on, e.g. ``lucid.device("cpu")``.
-        Use ``Tensor[dtype, device("metal")]`` to communicate device.
 
     Parameters
     ----------
@@ -106,11 +96,11 @@ class Tensor[DT: dtype, DV: device]:
         return tuple(self._impl.shape)
 
     @property
-    def dtype(self) -> DT:
+    def dtype(self) -> dtype:
         return _ENGINE_TO_DTYPE[self._impl.dtype]  # type: ignore[return-value]
 
     @property
-    def device(self) -> DV:
+    def device(self) -> device:
         return _device_from_engine(self._impl.device)  # type: ignore[return-value]
 
     @property
@@ -491,8 +481,8 @@ class Tensor[DT: dtype, DV: device]:
     def new_empty(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
         """Return an uninitialized tensor with the given size, inheriting dtype/device."""
@@ -508,8 +498,8 @@ class Tensor[DT: dtype, DV: device]:
     def new_zeros(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
         """Return a zeros tensor with the given size, inheriting dtype/device."""
@@ -525,8 +515,8 @@ class Tensor[DT: dtype, DV: device]:
     def new_ones(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
         """Return an all-ones tensor with the given size, inheriting dtype/device."""
@@ -543,8 +533,8 @@ class Tensor[DT: dtype, DV: device]:
         self,
         size: tuple[int, ...],
         fill_value: float,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
         """Return a tensor filled with fill_value, inheriting dtype/device."""
@@ -561,8 +551,8 @@ class Tensor[DT: dtype, DV: device]:
     def new_tensor(
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
         """Return a new tensor from data, inheriting dtype/device."""

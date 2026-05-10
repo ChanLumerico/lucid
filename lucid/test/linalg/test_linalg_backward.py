@@ -9,7 +9,6 @@ estimates for all linalg ops that support differentiation:
 Uses lucid.autograd.gradcheck (eps=1e-5, atol=2e-3) throughout.
 """
 
-import pytest
 
 import lucid
 import lucid.linalg as LA

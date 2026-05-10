@@ -3,41 +3,55 @@ lucid.utils.data
 
 .. currentmodule:: lucid.utils.data
 
+Data loading and batching utilities.
+
 Datasets
 --------
 
 .. autoclass:: Dataset
    :members:
-.. autoclass:: IterableDataset
-   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. autoclass:: TensorDataset
    :members:
-.. autoclass:: ConcatDataset
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: IterableDataset
    :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. autoclass:: Subset
    :members:
-.. autofunction:: random_split
+   :undoc-members:
+   :show-inheritance:
 
 DataLoader
 ----------
 
 .. autoclass:: DataLoader
    :members:
-
-.. autofunction:: default_collate
+   :undoc-members:
+   :show-inheritance:
 
 Samplers
 --------
 
 .. autoclass:: Sampler
    :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. autoclass:: SequentialSampler
-   :members:
 .. autoclass:: RandomSampler
-   :members:
 .. autoclass:: SubsetRandomSampler
-   :members:
 .. autoclass:: WeightedRandomSampler
-   :members:
 .. autoclass:: BatchSampler
-   :members:
+
+Helpers
+-------
+
+.. autofunction:: default_collate
+.. autofunction:: random_split

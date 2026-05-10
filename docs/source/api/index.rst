@@ -12,10 +12,11 @@ API Reference
    nn.utils
    optim
    optim.lr_scheduler
-   utils.data
    linalg
+   fft
    einops
    amp
    profiler
    metal
    serialization
+   utils.data

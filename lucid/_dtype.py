@@ -74,7 +74,7 @@ _NAME_TO_DTYPE: dict[str, dtype] = {
 
 
 def to_engine_dtype(
-    d: dtype | _C_engine.Dtype | str | None,
+    d: dtype | type[dtype] | _C_engine.Dtype | str | None,
 ) -> _C_engine.Dtype:
     """Convert lucid dtype, engine Dtype, string name, or None → engine Dtype."""
     if d is None:
@@ -83,6 +83,13 @@ def to_engine_dtype(
         return d
     if isinstance(d, dtype):
         return d._engine
+    # dtype subclass or uninstantiated dtype class — e.g. lucid.float32 (already
+    # an instance), but also handle the rare case where a type object is passed.
+    if isinstance(d, type) and issubclass(d, dtype):
+        raise TypeError(
+            f"Pass a dtype instance, not the class {d!r}. "
+            "Example: lucid.float32, not lucid.dtype"
+        )
     if isinstance(d, str):
         name = d.lower()
         if name in _NAME_TO_DTYPE:
@@ -96,8 +103,12 @@ def to_engine_dtype(
 
 import dataclasses as _dc
 
+# Alias so that `dtype` (the class) is accessible inside finfo/iinfo even
+# after the dataclass field `dtype: str` shadows the outer name.
+_DtypeCls = dtype
 
-def _resolve_dtype_name(d: dtype | _C_engine.Dtype | str) -> str:  # type: ignore[name-defined]
+
+def _resolve_dtype_name(d: _DtypeCls | _C_engine.Dtype | str) -> str:
     """Map any dtype-like input to its canonical lucid dtype name.
 
     Used by ``finfo`` / ``iinfo`` to discriminate ``float16`` from
@@ -137,7 +148,7 @@ class finfo:
     resolution: float = 0.0
     dtype: str = ""
 
-    def __init__(self, dt: dtype | _C_engine.Dtype | str) -> None:  # type: ignore[name-defined]
+    def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
         # Resolve to a lucid dtype name first — bfloat16 and float16 share the
         # same engine enum (F16), so we can't distinguish them via the engine.
         name = _resolve_dtype_name(dt)
@@ -193,7 +204,7 @@ class iinfo:
     min: int = 0
     dtype: str = ""
 
-    def __init__(self, dt: dtype | _C_engine.Dtype | str) -> None:  # type: ignore[name-defined]
+    def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
         name = _resolve_dtype_name(dt)
         table: dict[str, tuple[int, int, int]] = {
             "int8": (8, -(2**7), 2**7 - 1),

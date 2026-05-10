@@ -5,9 +5,7 @@ Pure Python implementation — no engine changes required.
 """
 
 from typing import TYPE_CHECKING
-import math
 
-import lucid
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -85,7 +83,7 @@ class GradScaler:
         inv_scale = 1.0 / self._scale
         self._found_inf = False
         for group in optimizer.param_groups:
-            for p in group["params"]:
+            for p in group["params"]:  # type: ignore[attr-defined]
                 if p.grad is None:
                     continue
                 g_impl = _unwrap(p.grad)
@@ -118,11 +116,11 @@ class GradScaler:
             The return value of optimizer.step(), or None if step was skipped.
         """
         if not self._enabled:
-            return optimizer.step(*args, **kwargs)
+            return optimizer.step(*args, **kwargs)  # type: ignore[arg-type]
 
         self.unscale_(optimizer)
         if not self._found_inf:
-            return optimizer.step(*args, **kwargs)
+            return optimizer.step(*args, **kwargs)  # type: ignore[arg-type]
         return None
 
     def update(self, new_scale: float | None = None) -> None:

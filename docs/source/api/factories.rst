@@ -3,25 +3,35 @@ Tensor Creation
 
 .. currentmodule:: lucid
 
-Creation functions
-------------------
+Functions for constructing :class:`Tensor` objects from Python scalars,
+sequences, or by sampling from distributions.
+
+From data
+---------
 
 .. autofunction:: tensor
+.. autofunction:: from_numpy
+.. autofunction:: from_dlpack
+
+Constant / fill
+---------------
+
 .. autofunction:: zeros
 .. autofunction:: ones
-.. autofunction:: empty
 .. autofunction:: full
-.. autofunction:: eye
-.. autofunction:: arange
-.. autofunction:: linspace
-
-Like-functions
---------------
-
 .. autofunction:: zeros_like
 .. autofunction:: ones_like
-.. autofunction:: empty_like
 .. autofunction:: full_like
+.. autofunction:: empty
+.. autofunction:: empty_like
+
+Range / grid
+------------
+
+.. autofunction:: arange
+.. autofunction:: linspace
+.. autofunction:: logspace
+.. autofunction:: meshgrid
 
 Random
 ------
@@ -29,8 +39,6 @@ Random
 .. autofunction:: rand
 .. autofunction:: randn
 .. autofunction:: randint
-.. autofunction:: normal
-.. autofunction:: bernoulli
 .. autofunction:: rand_like
 .. autofunction:: randn_like
 .. autofunction:: manual_seed

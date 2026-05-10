@@ -1,7 +1,5 @@
 """``lucid.amp`` — autocast / GradScaler smoke."""
 
-import numpy as np
-import pytest
 
 import lucid
 

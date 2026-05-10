@@ -4,7 +4,6 @@ CorrCholeskyTransform, CumulativeDistributionTransform,
 StackTransform, CatTransform, StudentT.rsample, new KL pairs.
 """
 
-import math
 from typing import Any
 
 import pytest

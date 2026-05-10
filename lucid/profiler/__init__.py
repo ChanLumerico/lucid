@@ -20,7 +20,7 @@ from lucid._C import engine as _C_engine
 class OpEvent:
     """A single recorded operation event."""
 
-    def __init__(self, impl: object) -> None:
+    def __init__(self, impl: _C_engine.OpEvent) -> None:
         self._impl = impl
 
     @property
@@ -102,7 +102,7 @@ class ProfileSummary:
 class MemoryStats:
     """Memory usage snapshot."""
 
-    def __init__(self, impl: object) -> None:
+    def __init__(self, impl: _C_engine.MemoryStats) -> None:
         self._impl = impl
 
     @property

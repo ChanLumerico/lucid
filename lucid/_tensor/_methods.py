@@ -34,9 +34,9 @@ def _inject_methods(tensor_cls: type) -> None:
                 result = e.engine_fn(all_tensors, *args, **kwargs)
                 if e.returns_tensor:
                     if isinstance(result, (list, tuple)):
-                        return type(result)(_wrap(r) for r in result)
+                        return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                     return _wrap(result)
-                return result
+                return result  # type: ignore[return-value]
 
             method_list.__name__ = e.method_name or e.name
             return method_list
@@ -47,7 +47,7 @@ def _inject_methods(tensor_cls: type) -> None:
                 proc_args: list[object] = []
                 for i, a in enumerate(args):
                     if i < (e.n_tensor_args - 1) and isinstance(a, tensor_cls):
-                        proc_args.append(_unwrap(a))
+                        proc_args.append(_unwrap(a))  # type: ignore[arg-type]
                     else:
                         proc_args.append(a)
 
@@ -59,9 +59,9 @@ def _inject_methods(tensor_cls: type) -> None:
                     result = e.engine_fn(self._impl, *proc_args, **kwargs)
                     if e.returns_tensor:
                         if isinstance(result, (list, tuple)):
-                            return type(result)(_wrap(r) for r in result)
+                            return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                         return _wrap(result)
-                    return result
+                    return result  # type: ignore[return-value]
 
             method.__name__ = e.method_name or e.name
             return method

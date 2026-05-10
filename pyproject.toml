@@ -37,9 +37,14 @@ test = [
     # Install it separately when running parity / perf comparisons.
 ]
 docs = [
-    "sphinx>=7.2",
-    "shibuya",
-    "sphinx-autobuild",
+    "sphinx>=7.4",
+    "sphinx-autobuild>=2024.4",
+    "pydata-sphinx-theme>=0.15",
+    "breathe>=4.35",
+    "exhale>=0.3.7",
+    "myst-parser>=3.0",
+    "sphinx-design>=0.6",
+    "sphinxcontrib-mermaid>=0.9",
 ]
 
 [tool.setuptools.package-data]

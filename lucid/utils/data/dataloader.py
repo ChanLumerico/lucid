@@ -8,13 +8,12 @@ expected, but ``import lucid.utils.data`` itself stays numpy-free.
 
 import multiprocessing as _mp
 import random
-import threading
 from typing import Callable, Iterator
 
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
-from lucid._ops import stack
-from lucid.utils.data.dataset import Dataset, IterableDataset
+from lucid import stack
+from lucid.utils.data.dataset import Dataset
 from lucid.utils.data._worker import WorkerInfo, _set_worker_info
 from lucid.utils.data.sampler import (
     Sampler,
@@ -61,7 +60,7 @@ def default_convert(data: object) -> object:
     if isinstance(data, dict):
         return {k: default_convert(v) for k, v in data.items()}
     if isinstance(data, tuple) and hasattr(data, "_fields"):
-        return type(data)(*(default_convert(v) for v in data))
+        return type(data)(*(default_convert(v) for v in data))  # type: ignore[arg-type]
     if isinstance(data, (list, tuple)):
         converted = [default_convert(v) for v in data]
         return type(data)(converted) if isinstance(data, tuple) else converted
@@ -91,7 +90,7 @@ def collate(
     if collate_fn_map is not None:
         for t, fn in collate_fn_map.items():
             if isinstance(elem, t):
-                return fn(batch, collate_fn_map=collate_fn_map)
+                return fn(batch, collate_fn_map=collate_fn_map)  # type: ignore[return-value]
     return default_collate(batch)
 
 
@@ -102,13 +101,13 @@ def default_collate(
     elem = batch[0]
 
     if isinstance(elem, Tensor):
-        return stack(batch, 0)
+        return stack(batch, 0)  # type: ignore[arg-type]
 
     if _is_ndarray(elem):
         # User opted into a numpy bridge by handing us an ndarray.
         import numpy as np  # noqa: PLC0415 — lazy bridge import
 
-        return Tensor(np.stack(batch, axis=0))
+        return Tensor(np.stack(batch, axis=0))  # type: ignore[arg-type]
 
     if isinstance(elem, (int, float)):
         # Build a 1-D Tensor from a Python list — no numpy stack needed.
@@ -121,13 +120,13 @@ def default_collate(
         return {key: default_collate([d[key] for d in batch]) for key in elem}
 
     if isinstance(elem, tuple) and hasattr(elem, "_fields"):
-        return type(elem)(
+        return type(elem)(  # type: ignore[return-value]
             *(default_collate([d[i] for d in batch]) for i in range(len(elem)))
         )
 
     if isinstance(elem, (list, tuple)):
         collated = [default_collate([d[i] for d in batch]) for i in range(len(elem))]
-        return type(elem)(collated) if isinstance(elem, tuple) else collated
+        return type(elem)(collated) if isinstance(elem, tuple) else collated  # type: ignore[return-value]
 
     return batch
 
@@ -173,16 +172,16 @@ def _worker_loop(
         worker_init_fn(worker_id)
 
     while True:
-        msg = index_queue.get()
+        msg = index_queue.get()  # type: ignore[attr-defined]
         if msg is _SHUTDOWN:
             return
         seq_num, indices = msg
         try:
             batch = [dataset[i] for i in indices]
             result = collate_fn(batch)
-            result_queue.put((seq_num, result))
+            result_queue.put((seq_num, result))  # type: ignore[attr-defined]
         except Exception as exc:  # noqa: BLE001
-            result_queue.put((seq_num, exc))
+            result_queue.put((seq_num, exc))  # type: ignore[attr-defined]
 
 
 # ── single-process iterator ───────────────────────────────────────────────────
@@ -200,8 +199,8 @@ class _SingleProcessDataLoaderIter:
 
     def __next__(self) -> Tensor | tuple[Tensor, ...]:
         indices = next(self._iter)
-        batch = [self._dataset[i] for i in indices]
-        return self._collate_fn(batch)
+        batch = [self._dataset[i] for i in indices]  # type: ignore[attr-defined]
+        return self._collate_fn(batch)  # type: ignore[arg-type, return-value]
 
 
 # ── multi-process iterator ────────────────────────────────────────────────────
@@ -229,9 +228,9 @@ class _MultiProcessDataLoaderIter:
         if mp_ctx is None:
             ctx = _mp.get_context("spawn")
         elif isinstance(mp_ctx, str):
-            ctx = _mp.get_context(mp_ctx)
+            ctx = _mp.get_context(mp_ctx)  # type: ignore[assignment]
         else:
-            ctx = mp_ctx  # already a context object
+            ctx = mp_ctx  # type: ignore[assignment]
 
         # One index queue per worker to avoid contention.
         self._index_queues = [ctx.Queue() for _ in range(self._num_workers)]
@@ -243,7 +242,7 @@ class _MultiProcessDataLoaderIter:
         self._reorder: dict[int, Tensor | tuple[Tensor, ...]] = {}
 
         # Materialise the full batch list once per epoch.
-        self._batches: list[list[int]] = list(loader.batch_sampler)
+        self._batches: list[list[int]] = list(loader.batch_sampler)  # type: ignore[arg-type]
         self._n_batches: int = len(self._batches)
 
         base_seed = random.randint(0, 2**31)
@@ -306,7 +305,7 @@ class _MultiProcessDataLoaderIter:
         get_kwargs = {"timeout": self._timeout} if self._timeout > 0 else {}
         while self._rcvd_idx not in self._reorder:
             try:
-                seq, result = self._result_queue.get(**get_kwargs)
+                seq, result = self._result_queue.get(**get_kwargs)  # type: ignore[attr-defined]
             except Exception:  # queue.Empty on timeout
                 self._shutdown_workers()
                 raise RuntimeError(
@@ -447,7 +446,7 @@ class DataLoader:
             else:
                 # Reset counters for a new epoch while workers stay alive.
                 it = self._persistent_iter
-                it._batches = list(self.batch_sampler)
+                it._batches = list(self.batch_sampler)  # type: ignore[arg-type]
                 it._n_batches = len(it._batches)
                 it._send_idx = 0
                 it._rcvd_idx = 0

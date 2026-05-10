@@ -384,7 +384,7 @@ def _scatter_unpool(
     # ``scatter_add`` works on a single 1-D axis.
     x_flat_shape = leading + [
         (
-            int(x.shape[-n_spatial:].numel())
+            int(x.shape[-n_spatial:].numel())  # type: ignore[attr-defined]
             if hasattr(x.shape[-n_spatial:], "numel")
             else 1
         )

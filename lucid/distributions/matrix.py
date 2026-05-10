@@ -20,7 +20,7 @@ from lucid.distributions.constraints import (
     positive_definite,
 )
 from lucid.distributions.distribution import Distribution
-from lucid.distributions.gamma import Beta, Gamma, _sample_standard_gamma
+from lucid.distributions.gamma import Beta, _sample_standard_gamma
 
 # ── Wishart ───────────────────────────────────────────────────────────────────
 
@@ -72,7 +72,7 @@ class Wishart(Distribution):
             self.scale_tril = _la.cholesky(cov)
         else:  # precision_matrix
             prec = _as_tensor(precision_matrix)  # type: ignore[arg-type]
-            self.scale_tril = _la.cholesky(_la.inv(prec))
+            self.scale_tril = _la.cholesky(_la.inv(prec))  # type: ignore[arg-type]
 
         self.df = _as_tensor(df)
         dim: int = int(self.scale_tril.shape[-1])
@@ -135,7 +135,7 @@ class Wishart(Distribution):
 
         # ── off-diagonal: standard normals ──────────────────────────────────
         Z = lucid.randn(*sample_shape, d, d, dtype=dt, device=dev)
-        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), k=-1)
+        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), k=-1)  # type: ignore[arg-type]
         Z_lower = Z * lower_mask  # strictly lower triangular
 
         # ── assemble A ──────────────────────────────────────────────────────
@@ -269,7 +269,7 @@ class LKJCholesky(Distribution):
         full_shape = self._extended_shape(sample_shape)  # (*s, *b, d, d)
         u_normal = lucid.randn(*full_shape, dtype=dtype, device=dev)
         # Zero strictly upper triangle (keep only lower triangle with k=-1)
-        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dtype, device=dev), k=-1)
+        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dtype, device=dev), k=-1)  # type: ignore[arg-type]
         u_normal = u_normal * lower_mask
 
         # Normalise rows to lie on the unit hypersphere (ignoring row 0 which

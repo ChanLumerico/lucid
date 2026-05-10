@@ -143,7 +143,6 @@ class TestGRUParity:
 class TestRegisterHookParity:
     def test_hook_grad_matches(self, ref: Any) -> None:
         """register_hook fires with the correct gradient (matches reference)."""
-        import torch
 
         np.random.seed(5)
         x_np = np.array([1.0, 2.0, 3.0], dtype=np.float32)
@@ -164,7 +163,6 @@ class TestRegisterHookParity:
 
     def test_hook_can_scale_grad(self, ref: Any) -> None:
         """Hook that halves the gradient produces same x.grad as reference."""
-        import torch
 
         x_np = np.array([1.0, 2.0, 3.0], dtype=np.float32)
 
@@ -186,7 +184,6 @@ class TestRegisterHookParity:
 class TestCheckpointParity:
     def test_output_parity(self, ref: Any) -> None:
         """checkpoint output matches direct forward."""
-        import torch
         from lucid.autograd import checkpoint
 
         lucid.manual_seed(0)
@@ -206,7 +203,6 @@ class TestCheckpointParity:
 
     def test_grad_parity(self, ref: Any) -> None:
         """checkpoint gradients match direct backward."""
-        import torch
         from lucid.autograd import checkpoint
 
         W = lucid.tensor([[2.0, 0.0], [0.0, 1.0]], requires_grad=True)

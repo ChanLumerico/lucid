@@ -19,11 +19,11 @@ def get_default_dtype() -> dtype:
     return _default_dtype
 
 
-def set_default_device(d: dtype | str) -> None:
+def set_default_device(d: _dev | str) -> None:
     """Set the default device used by factory functions."""
     global _default_device_str
     with _lock:
-        _default_device_str = d if isinstance(d, str) else d.type  # type: ignore[union-attr]
+        _default_device_str = d if isinstance(d, str) else d.type
 
 
 def get_default_device() -> str:

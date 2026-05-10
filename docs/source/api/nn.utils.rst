@@ -3,18 +3,36 @@ lucid.nn.utils
 
 .. currentmodule:: lucid.nn.utils
 
+Utilities for inspecting and manipulating :class:`~lucid.nn.Module`
+parameters and gradients.
+
 Gradient clipping
 -----------------
 
 .. autofunction:: clip_grad_norm_
 .. autofunction:: clip_grad_value_
 
-RNN utilities
--------------
+Parameter utilities
+-------------------
 
-.. autoclass:: PackedSequence
-   :members:
+.. autofunction:: parameters_to_vector
+.. autofunction:: vector_to_parameters
 
-.. autofunction:: pack_padded_sequence
-.. autofunction:: pad_packed_sequence
-.. autofunction:: pad_sequence
+Weight initialisation
+---------------------
+
+.. currentmodule:: lucid.nn.init
+
+.. autofunction:: uniform_
+.. autofunction:: normal_
+.. autofunction:: constant_
+.. autofunction:: ones_
+.. autofunction:: zeros_
+.. autofunction:: eye_
+.. autofunction:: xavier_uniform_
+.. autofunction:: xavier_normal_
+.. autofunction:: kaiming_uniform_
+.. autofunction:: kaiming_normal_
+.. autofunction:: orthogonal_
+.. autofunction:: trunc_normal_
+.. autofunction:: calculate_gain

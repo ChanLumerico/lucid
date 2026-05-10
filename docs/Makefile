@@ -1,20 +1,29 @@
-SPHINXOPTS    ?=
-SPHINXBUILD   ?= sphinx-build
-SOURCEDIR     = source
-BUILDDIR      = _build
+SPHINXOPTS  ?=
+SPHINXBUILD  = sphinx-build
+SOURCEDIR    = source
+BUILDDIR     = _build
 
-.PHONY: help html clean livehtml
+.PHONY: help html livehtml clean linkcheck
 
 help:
-	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+	@$(SPHINXBUILD) -M help $(SOURCEDIR) $(BUILDDIR) $(SPHINXOPTS) $(O)
 
 html:
-	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
-	@echo "Build finished. Open docs/_build/html/index.html"
-
-clean:
-	@rm -rf $(BUILDDIR)
+	@$(SPHINXBUILD) -b html $(SOURCEDIR) $(BUILDDIR)/html $(SPHINXOPTS)
+	@echo ""
+	@echo "Build finished: file://$(abspath $(BUILDDIR)/html/index.html)"
 
 livehtml:
-	sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS) $(O) \
-		--watch ../../lucid --open-browser
+	sphinx-autobuild \
+	    $(SOURCEDIR) $(BUILDDIR)/html $(SPHINXOPTS) \
+	    --ignore "*.pyc" \
+	    --ignore "_build" \
+	    --watch ../../lucid \
+	    --open-browser
+
+linkcheck:
+	@$(SPHINXBUILD) -b linkcheck $(SOURCEDIR) $(BUILDDIR)/linkcheck $(SPHINXOPTS)
+
+clean:
+	rm -rf $(BUILDDIR)
+	@echo "Build directory cleaned."

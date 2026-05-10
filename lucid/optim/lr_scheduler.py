@@ -19,7 +19,7 @@ class _LRScheduler:
         )  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.verbose = verbose
-        self.base_lrs = [g["lr"] for g in optimizer.param_groups]
+        self.base_lrs: list[float] = [float(g["lr"]) for g in optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
         self._last_lr: list[float] = list(self.base_lrs)
 
     def step(self) -> None:
@@ -40,7 +40,7 @@ class _LRScheduler:
 
     def get_last_lr(self) -> list[float]:
         """Return the last computed LR per group (optimizer's current LR)."""
-        return [g["lr"] for g in self.optimizer.param_groups]
+        return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
 
     def print_lr(self, is_verbose: bool, epoch: int, lrs: list[float]) -> None:
         """Print the current learning rates if verbose is enabled."""
@@ -68,7 +68,7 @@ class StepLR(_LRScheduler):
 
     def get_lr(self) -> list[float]:
         if self.last_epoch == 0 or self.last_epoch % self.step_size != 0:
-            return [g["lr"] for g in self.optimizer.param_groups]
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -108,7 +108,7 @@ class MultiStepLR(_LRScheduler):
 
     def get_lr(self) -> list[float]:
         if self.last_epoch not in self.milestones:
-            return [g["lr"] for g in self.optimizer.param_groups]
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
         return [lr * self.gamma for lr in self.get_last_lr()]
 
 
@@ -274,7 +274,7 @@ class MultiplicativeLR(_LRScheduler):
 
     def get_lr(self) -> list[float]:
         if self.last_epoch == 0:
-            return [g["lr"] for g in self.optimizer.param_groups]
+            return [float(g["lr"]) for g in self.optimizer.param_groups]  # type: ignore[arg-type]  # lr is float at runtime
         factor = self.lr_lambda(self.last_epoch)
         return [g["lr"] * factor for g in self.optimizer.param_groups]
 

@@ -40,7 +40,6 @@ class Uniform(Distribution):
 
     @property
     def support(self) -> Constraint:  # type: ignore[override]
-        from lucid.distributions.constraints import _Interval
 
         # Bounds may be tensors — fall back to a generic real constraint
         # rather than building an _Interval out of tensor bounds (which

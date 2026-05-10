@@ -8,225 +8,165 @@ Base classes
 
 .. autoclass:: Module
    :members:
-   :special-members: __call__
+   :undoc-members:
+   :show-inheritance:
 
 .. autoclass:: Parameter
    :members:
-
-Containers
-----------
-
-.. autoclass:: Sequential
-   :members:
-.. autoclass:: ModuleList
-   :members:
-.. autoclass:: ModuleDict
-   :members:
-.. autoclass:: ParameterList
-   :members:
-.. autoclass:: ParameterDict
-   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Linear layers
 -------------
 
 .. autoclass:: Linear
-   :members:
 .. autoclass:: Bilinear
-   :members:
-.. autoclass:: Identity
-   :members:
+.. autoclass:: LazyLinear
 
 Convolutional layers
 --------------------
 
 .. autoclass:: Conv1d
-   :members:
 .. autoclass:: Conv2d
-   :members:
 .. autoclass:: Conv3d
-   :members:
 .. autoclass:: ConvTranspose1d
-   :members:
 .. autoclass:: ConvTranspose2d
-   :members:
 .. autoclass:: ConvTranspose3d
-   :members:
-
-Recurrent layers
-----------------
-
-.. autoclass:: LSTM
-   :members:
-.. autoclass:: GRU
-   :members:
-.. autoclass:: RNN
-   :members:
-.. autoclass:: LSTMCell
-   :members:
-.. autoclass:: GRUCell
-   :members:
-.. autoclass:: RNNCell
-   :members:
-
-Transformer layers
-------------------
-
-.. autoclass:: Transformer
-   :members:
-.. autoclass:: TransformerEncoder
-   :members:
-.. autoclass:: TransformerEncoderLayer
-   :members:
-.. autoclass:: TransformerDecoder
-   :members:
-.. autoclass:: TransformerDecoderLayer
-   :members:
-.. autoclass:: MultiheadAttention
-   :members:
-
-Normalization layers
---------------------
-
-.. autoclass:: LayerNorm
-   :members:
-.. autoclass:: BatchNorm1d
-   :members:
-.. autoclass:: BatchNorm2d
-   :members:
-.. autoclass:: BatchNorm3d
-   :members:
-.. autoclass:: GroupNorm
-   :members:
-.. autoclass:: RMSNorm
-   :members:
-.. autoclass:: InstanceNorm1d
-   :members:
-.. autoclass:: InstanceNorm2d
-   :members:
-.. autoclass:: InstanceNorm3d
-   :members:
-
-Activation functions
---------------------
-
-.. autoclass:: ReLU
-   :members:
-.. autoclass:: LeakyReLU
-   :members:
-.. autoclass:: ELU
-   :members:
-.. autoclass:: GELU
-   :members:
-.. autoclass:: SiLU
-   :members:
-.. autoclass:: PReLU
-   :members:
-.. autoclass:: Sigmoid
-   :members:
-.. autoclass:: Tanh
-   :members:
-.. autoclass:: Softmax
-   :members:
-.. autoclass:: LogSoftmax
-   :members:
-.. autoclass:: Hardtanh
-   :members:
-.. autoclass:: GLU
-   :members:
 
 Pooling layers
 --------------
 
 .. autoclass:: MaxPool1d
-   :members:
 .. autoclass:: MaxPool2d
-   :members:
+.. autoclass:: MaxPool3d
 .. autoclass:: AvgPool1d
-   :members:
 .. autoclass:: AvgPool2d
-   :members:
-.. autoclass:: AdaptiveAvgPool1d
-   :members:
-.. autoclass:: AdaptiveAvgPool2d
-   :members:
+.. autoclass:: AvgPool3d
+.. autoclass:: AdaptiveMaxPool1d
 .. autoclass:: AdaptiveMaxPool2d
-   :members:
+.. autoclass:: AdaptiveAvgPool1d
+.. autoclass:: AdaptiveAvgPool2d
+
+Normalization layers
+--------------------
+
+.. autoclass:: BatchNorm1d
+.. autoclass:: BatchNorm2d
+.. autoclass:: BatchNorm3d
+.. autoclass:: LayerNorm
+.. autoclass:: GroupNorm
+.. autoclass:: InstanceNorm1d
+.. autoclass:: InstanceNorm2d
+.. autoclass:: InstanceNorm3d
+.. autoclass:: RMSNorm
+
+Recurrent layers
+----------------
+
+.. autoclass:: RNN
+.. autoclass:: LSTM
+.. autoclass:: GRU
+
+Attention
+---------
+
+.. autoclass:: MultiheadAttention
+
+Transformer
+-----------
+
+.. autoclass:: Transformer
+.. autoclass:: TransformerEncoder
+.. autoclass:: TransformerDecoder
+.. autoclass:: TransformerEncoderLayer
+.. autoclass:: TransformerDecoderLayer
+
+Activation layers
+-----------------
+
+.. autoclass:: ReLU
+.. autoclass:: LeakyReLU
+.. autoclass:: PReLU
+.. autoclass:: ELU
+.. autoclass:: GELU
+.. autoclass:: SiLU
+.. autoclass:: Mish
+.. autoclass:: Sigmoid
+.. autoclass:: Tanh
+.. autoclass:: Softmax
+.. autoclass:: LogSoftmax
+.. autoclass:: Softplus
+.. autoclass:: Hardswish
+.. autoclass:: Hardsigmoid
 
 Dropout layers
 --------------
 
 .. autoclass:: Dropout
-   :members:
+.. autoclass:: Dropout1d
 .. autoclass:: Dropout2d
-   :members:
+.. autoclass:: Dropout3d
 .. autoclass:: AlphaDropout
-   :members:
-
-Padding layers
---------------
-
-.. autoclass:: ZeroPad2d
-   :members:
-.. autoclass:: ConstantPad1d
-   :members:
-.. autoclass:: ConstantPad2d
-   :members:
-.. autoclass:: ConstantPad3d
-   :members:
-.. autoclass:: ReflectionPad1d
-   :members:
-.. autoclass:: ReflectionPad2d
-   :members:
-.. autoclass:: ReplicationPad1d
-   :members:
-.. autoclass:: ReplicationPad2d
-   :members:
-
-Upsampling
-----------
-
-.. autoclass:: Upsample
-   :members:
-.. autoclass:: PixelShuffle
-   :members:
-.. autoclass:: PixelUnshuffle
-   :members:
 
 Sparse layers
 -------------
 
 .. autoclass:: Embedding
-   :members:
+.. autoclass:: EmbeddingBag
 
-Reshape layers
+Padding layers
 --------------
 
+.. autoclass:: ZeroPad1d
+.. autoclass:: ZeroPad2d
+.. autoclass:: ZeroPad3d
+.. autoclass:: ConstantPad1d
+.. autoclass:: ConstantPad2d
+.. autoclass:: ConstantPad3d
+.. autoclass:: ReflectionPad1d
+.. autoclass:: ReflectionPad2d
+.. autoclass:: ReplicationPad1d
+.. autoclass:: ReplicationPad2d
+
+Upsampling
+----------
+
+.. autoclass:: Upsample
+
+Flatten / unflatten
+-------------------
+
 .. autoclass:: Flatten
-   :members:
 .. autoclass:: Unflatten
-   :members:
+
+Container modules
+-----------------
+
+.. autoclass:: Sequential
+.. autoclass:: ModuleList
+.. autoclass:: ModuleDict
+.. autoclass:: ParameterList
+.. autoclass:: ParameterDict
 
 Loss functions
 --------------
 
 .. autoclass:: MSELoss
-   :members:
 .. autoclass:: L1Loss
-   :members:
-.. autoclass:: CrossEntropyLoss
-   :members:
-.. autoclass:: NLLLoss
-   :members:
-.. autoclass:: BCELoss
-   :members:
-.. autoclass:: BCEWithLogitsLoss
-   :members:
+.. autoclass:: SmoothL1Loss
 .. autoclass:: HuberLoss
-   :members:
+.. autoclass:: CrossEntropyLoss
+.. autoclass:: NLLLoss
+.. autoclass:: BCELoss
+.. autoclass:: BCEWithLogitsLoss
+.. autoclass:: KLDivLoss
+.. autoclass:: CTCLoss
+.. autoclass:: TripletMarginLoss
+.. autoclass:: CosineEmbeddingLoss
+.. autoclass:: MarginRankingLoss
 
-Initialisation
---------------
+Hooks
+-----
 
-.. automodule:: lucid.nn.init
-   :members:
+.. autofunction:: register_module_forward_hook
+.. autofunction:: register_module_backward_hook

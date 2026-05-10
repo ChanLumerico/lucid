@@ -50,7 +50,7 @@ class _SafeUnpickler(pickle.Unpickler):
         )
 
     def persistent_load(self, pid: object) -> object:
-        return _LucidUnpickler.persistent_load(self, pid)
+        return _LucidUnpickler.persistent_load(self, pid)  # type: ignore[arg-type]
 
 
 # ── Pickler / Unpickler ───────────────────────────────────────────────────────

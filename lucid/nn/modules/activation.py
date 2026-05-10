@@ -45,7 +45,7 @@ class ReLU(Module):
         super().__init__()
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return relu(x, self.inplace)
 
     def extra_repr(self) -> str:
@@ -60,7 +60,7 @@ class LeakyReLU(Module):
         self.negative_slope = negative_slope
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return leaky_relu(x, self.negative_slope, self.inplace)
 
     def extra_repr(self) -> str:
@@ -75,7 +75,7 @@ class ELU(Module):
         self.alpha = alpha
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return elu(x, self.alpha, self.inplace)
 
     def extra_repr(self) -> str:
@@ -89,7 +89,7 @@ class SELU(Module):
         super().__init__()
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return selu(x, self.inplace)
 
 
@@ -100,7 +100,7 @@ class GELU(Module):
         super().__init__()
         self.approximate = approximate
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return gelu(x, self.approximate)
 
     def extra_repr(self) -> str:
@@ -113,14 +113,14 @@ class SiLU(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return silu(x)
 
 
 class Mish(Module):
     """Mish activation."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return mish(x)
 
 
@@ -137,7 +137,7 @@ class Softplus(Module):
         self.beta = beta
         self.threshold = threshold
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return softplus(x, self.beta, self.threshold)
 
     def extra_repr(self) -> str:
@@ -149,28 +149,28 @@ class Softplus(Module):
 class Hardswish(Module):
     """Hard Swish activation."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return hardswish(x)
 
 
 class Hardsigmoid(Module):
     """Hard sigmoid activation."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return hardsigmoid(x)
 
 
 class Sigmoid(Module):
     """Sigmoid activation."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return sigmoid(x)
 
 
 class Tanh(Module):
     """Hyperbolic tangent."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return tanh(x)
 
 
@@ -181,7 +181,7 @@ class Softmax(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return softmax(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -195,7 +195,7 @@ class LogSoftmax(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return log_softmax(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -211,7 +211,7 @@ class Softmax2d(Module):
     is always second-to-last (matches the reference framework).
     """
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if x.ndim != 4:
             raise ValueError(
                 f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={x.ndim}"
@@ -239,7 +239,7 @@ class RReLU(Module):
         self.upper = upper
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return rrelu(
             x, self.lower, self.upper, training=self.training, inplace=self.inplace
         )
@@ -254,7 +254,7 @@ class ReLU6(Module):
     def __init__(self, inplace: bool = False) -> None:
         super().__init__()
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return relu6(x)
 
 
@@ -274,7 +274,7 @@ class PReLU(Module):
             full((num_parameters,), init, dtype=dtype, device=device)
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return prelu(x, self.weight)
 
     def extra_repr(self) -> str:
@@ -289,7 +289,7 @@ class Threshold(Module):
         self.threshold = threshold
         self.value = value
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         impl = _unwrap(x)
         fill = _C_engine.full(impl.shape, self.value, impl.dtype, impl.device)
         thresh = _C_engine.full(impl.shape, self.threshold, impl.dtype, impl.device)
@@ -310,7 +310,7 @@ class Hardtanh(Module):
         self.min_val = min_val
         self.max_val = max_val
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         impl = _unwrap(x)
         return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
 
@@ -321,14 +321,14 @@ class Hardtanh(Module):
 class LogSigmoid(Module):
     """Log-sigmoid: log(sigmoid(x))."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(x))))
 
 
 class Softsign(Module):
     """Softsign: x / (1 + |x|)."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         impl = _unwrap(x)
         denom = _C_engine.add(
             _C_engine.full(impl.shape, 1.0, impl.dtype, impl.device),
@@ -344,7 +344,7 @@ class Softmin(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return softmin(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -358,7 +358,7 @@ class GLU(Module):
         super().__init__()
         self.dim = dim
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return glu(x, self.dim)
 
     def extra_repr(self) -> str:
@@ -372,7 +372,7 @@ class CELU(Module):
         super().__init__()
         self.alpha = alpha
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return celu(x, self.alpha)
 
     def extra_repr(self) -> str:
@@ -386,7 +386,7 @@ class Hardshrink(Module):
         super().__init__()
         self.lambd = lambd
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return hardshrink(x, self.lambd)
 
     def extra_repr(self) -> str:
@@ -396,7 +396,7 @@ class Hardshrink(Module):
 class Tanhshrink(Module):
     """Tanhshrink: x - tanh(x)."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return tanhshrink(x)
 
 
@@ -407,7 +407,7 @@ class Softshrink(Module):
         super().__init__()
         self.lambd = lambd
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return softshrink(x, self.lambd)
 
     def extra_repr(self) -> str:
@@ -429,7 +429,7 @@ class CosineSimilarity(Module):
         self.dim = dim
         self.eps = eps
 
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return cosine_similarity(x1, x2, dim=self.dim, eps=self.eps)
 
     def extra_repr(self) -> str:
@@ -451,7 +451,7 @@ class PairwiseDistance(Module):
         self.eps = eps
         self.keepdim = keepdim
 
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pairwise_distance(x1, x2, p=self.p, eps=self.eps, keepdim=self.keepdim)
 
     def extra_repr(self) -> str:

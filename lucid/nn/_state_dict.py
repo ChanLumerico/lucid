@@ -145,10 +145,10 @@ def _default_load_from_state_dict(
             )
             if name in module._parameters:
                 # Preserve Parameter wrapping.
-                new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)
+                new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)  # type: ignore[arg-type]
                 module._parameters[name] = new_param
             else:
-                module._buffers[name] = _wrap(new_impl)
+                module._buffers[name] = _wrap(new_impl)  # type: ignore[arg-type]
         else:
             if tuple(src.shape) != tuple(attr.shape):
                 error_msgs.append(

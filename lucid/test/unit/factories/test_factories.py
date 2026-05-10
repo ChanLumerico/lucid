@@ -1,7 +1,6 @@
 """Tensor factory functions — value, shape, dtype, device coverage."""
 
 import numpy as np
-import pytest
 
 import lucid
 from lucid.test._fixtures.devices import skip_if_unsupported

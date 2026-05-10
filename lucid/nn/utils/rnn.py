@@ -3,13 +3,13 @@ RNN sequence packing utilities.
 All computation uses the C++ engine — no numpy.
 """
 
-from typing import Any, NamedTuple, TYPE_CHECKING
+from typing import Any, NamedTuple, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor as _Tensor
+from lucid._tensor.tensor import Tensor  # public alias for NamedTuple field annotations
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
-from lucid._ops import cat
+from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__init__ but not re-exported with __all__
 
 
 class PackedSequence(NamedTuple):
@@ -36,7 +36,7 @@ def pack_padded_sequence(
     # Extract lengths as a plain Python list of ints (small metadata, not tensor math).
     if hasattr(lengths, "_impl"):
         # Lucid Tensor: download via data_as_python (interop boundary — no computation)
-        raw = lengths._impl.data_as_python()
+        raw: Any = lengths._impl.data_as_python()
         lengths_list: list[int] = [int(raw.flat[i]) for i in range(len(raw.flat))]
     else:
         lengths_list = [int(v) for v in lengths]
@@ -58,7 +58,8 @@ def pack_padded_sequence(
     # Reorder input along batch dim using engine gather.
     if not enforce_sorted:
         # Build sorted-index TensorImpl from Python list (interop boundary — metadata only).
-        si_impl_i32 = _C_engine.astype(_Tensor(sorted_idx)._impl, _C_engine.I32)
+        _sorted_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+        si_impl_i32 = _C_engine.astype(_sorted_t._impl, _C_engine.I32)
         bcast_shape = [1, B] + [1] * (input.ndim - 2)
         full_shape = list(input.shape)
         idx_rs = _C_engine.reshape(si_impl_i32, bcast_shape)
@@ -80,9 +81,9 @@ def pack_padded_sequence(
 
     # Build int tensors for batch_sizes, sorted_indices, unsorted_indices.
     # These are metadata (tiny 1-D integer arrays) — construct via Tensor([...]) interop.
-    bs_t = _Tensor(batch_sizes_list)
-    si_t = _Tensor(sorted_idx)
-    ui_t = _Tensor(unsorted_idx)
+    bs_t = _Tensor(batch_sizes_list)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+    si_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+    ui_t = _Tensor(unsorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
 
     return PackedSequence(data_tensor, bs_t, si_t, ui_t)
 
@@ -96,7 +97,7 @@ def pad_packed_sequence(
     """Unpack a PackedSequence to a padded tensor."""
     data = sequence.data
     # batch_sizes is a small 1-D int tensor — extract as Python list (metadata).
-    bs_raw = sequence.batch_sizes._impl.data_as_python()
+    bs_raw: Any = sequence.batch_sizes._impl.data_as_python()
     batch_sizes_list = [int(bs_raw.flat[i]) for i in range(len(bs_raw.flat))]
 
     T = len(batch_sizes_list)
@@ -131,9 +132,9 @@ def pad_packed_sequence(
 
     if sequence.unsorted_indices is not None:
         # Reorder batch dim by unsorted_indices.
-        ui_raw = sequence.unsorted_indices._impl.data_as_python()
+        ui_raw: Any = sequence.unsorted_indices._impl.data_as_python()
         ui_list = [int(ui_raw.flat[i]) for i in range(len(ui_raw.flat))]
-        ui_t = _Tensor(ui_list)
+        ui_t = _Tensor(cast(list[object], ui_list))
         ui_impl_i32 = _C_engine.astype(ui_t._impl, _C_engine.I32)
         full_shape = list(out_t.shape)
         bcast_shape = [1, B] + [1] * (out_t.ndim - 2)
@@ -145,7 +146,7 @@ def pad_packed_sequence(
     if batch_first:
         out_t = out_t.permute(1, 0, *range(2, out_t.ndim))
 
-    len_t = _Tensor(lengths_list)
+    len_t = _Tensor(cast(list[object], lengths_list))
     return out_t, len_t
 
 

@@ -2,7 +2,6 @@
 Sparse / embedding modules.
 """
 
-import math
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
@@ -91,11 +90,11 @@ class Embedding(Module):
         # so requires_grad / parameter identity are preserved.
         new_w: Tensor = _lucid.index_fill(
             self.weight,
-            0,
+            0,  # type: ignore[arg-type]
             _lucid.tensor(
-                [int(self.padding_idx)], dtype=_lucid.int64, device=self.weight.device
+                [int(self.padding_idx)], dtype=_lucid.int64, device=self.weight.device  # type: ignore[arg-type]
             ),
-            0.0,
+            0.0,  # type: ignore[arg-type]
         )
         self.weight._impl = new_w._impl
 
@@ -111,13 +110,13 @@ class Embedding(Module):
             norms = (w.abs() ** float(self.norm_type)).sum(dim=1) ** (
                 1.0 / float(self.norm_type)
             )
-        scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)
+        scale_raw: Tensor = float(self.max_norm) / (norms + 1e-7)  # type: ignore[arg-type]
         ones: Tensor = _lucid.ones_like(scale_raw)
         scale: Tensor = scale_raw.minimum(ones).unsqueeze(-1)
         new_w: Tensor = w * scale
         self.weight._impl = new_w._impl
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.max_norm is not None:
             self._renorm_weight_inplace()
         return embedding(x, self.weight, self.padding_idx)
@@ -165,7 +164,7 @@ class EmbeddingBag(Module):
         )
         init.normal_(self.weight)
 
-    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
+    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid.nn.functional.sampling import embedding_bag as _eb
 
         _mode_map = {"sum": "sum", "mean": "mean", "max": "max"}

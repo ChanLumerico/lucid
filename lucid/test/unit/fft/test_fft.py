@@ -1,7 +1,6 @@
 """``lucid.fft`` — DFT / Hermitian / shift / freq."""
 
 import numpy as np
-import pytest
 
 import lucid
 

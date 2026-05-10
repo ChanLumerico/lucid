@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import lucid
-from lucid.test._helpers.compare import assert_close
 
 
 def _spd(seed: int = 0) -> lucid.Tensor:

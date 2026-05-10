@@ -5,6 +5,7 @@ miscellaneous fillers (``rot90``, ``vander``, ``take_along_dim``).
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._types import DTypeLike, DeviceLike
 from lucid._ops.composite._shared import _swap_dims
 
 if TYPE_CHECKING:
@@ -27,7 +28,9 @@ def moveaxis(
     source: int | Sequence[int],
     destination: int | Sequence[int],
 ) -> Tensor:
-    return lucid.movedim(x, source, destination)
+    _src = list(source) if not isinstance(source, int) else source
+    _dst = list(destination) if not isinstance(destination, int) else destination
+    return lucid.movedim(x, _src, _dst)  # type: ignore[arg-type]
 
 
 def adjoint(x: Tensor) -> Tensor:
@@ -119,14 +122,14 @@ def _split_along(
         sizes = [base + 1] * extra + [base] * (k - extra)
         return lucid.split(x, sizes, dim)
     indices = list(indices_or_sections)
-    sizes: list[int] = []
+    split_sizes: list[int] = []
     prev = 0
     for idx in indices:
-        sizes.append(idx - prev)
+        split_sizes.append(idx - prev)
         prev = idx
-    sizes.append(x.shape[dim] - prev)
-    sizes = [s for s in sizes if s >= 0]
-    return lucid.split(x, sizes, dim)
+    split_sizes.append(x.shape[dim] - prev)
+    split_sizes = [s for s in split_sizes if s >= 0]
+    return lucid.split(x, split_sizes, dim)
 
 
 def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
@@ -169,8 +172,8 @@ def tril_indices(
     col: int | None = None,
     offset: int = 0,
     *,
-    dtype: object = None,
-    device: object = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Indices of the lower-triangular part of an ``(row, col)`` matrix.
 
@@ -187,7 +190,7 @@ def tril_indices(
             if j - i <= offset:
                 rows.append(i)
                 cols.append(j)
-    out_dtype = dtype if dtype is not None else lucid.int64
+    out_dtype: DTypeLike = dtype if dtype is not None else lucid.int64
     return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
 
 
@@ -196,8 +199,8 @@ def triu_indices(
     col: int | None = None,
     offset: int = 0,
     *,
-    dtype: object = None,
-    device: object = None,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
 ) -> Tensor:
     """Indices of the upper-triangular part of an ``(row, col)`` matrix.
 
@@ -213,7 +216,7 @@ def triu_indices(
             if j - i >= offset:
                 rows.append(i)
                 cols.append(j)
-    out_dtype = dtype if dtype is not None else lucid.int64
+    out_dtype: DTypeLike = dtype if dtype is not None else lucid.int64
     return lucid.tensor([rows, cols], dtype=out_dtype, device=device)
 
 
@@ -251,10 +254,10 @@ def rot90(x: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     if k == 0:
         return x
     if k == 1:
-        return _swap_dims(lucid.flip(x, [d1]), d0, d1)
+        return _swap_dims(lucid.flip(x, [d1]), d0, d1)  # type: ignore[list-item]
     if k == 2:
-        return lucid.flip(x, list(dims))
-    return _swap_dims(lucid.flip(x, [d0]), d0, d1)
+        return lucid.flip(x, list(dims))  # type: ignore[arg-type]
+    return _swap_dims(lucid.flip(x, [d0]), d0, d1)  # type: ignore[list-item]
 
 
 __all__ = [

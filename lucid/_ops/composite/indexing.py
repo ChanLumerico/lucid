@@ -250,7 +250,8 @@ def index_put(
             lucid._tensor.tensor.broadcast_shapes(  # type: ignore[attr-defined]
                 common_shape, tuple(idx.shape)
             )
-            if hasattr(lucid._tensor.tensor, "broadcast_shapes")
+            if hasattr(lucid._tensor, "tensor")  # type: ignore[attr-defined]
+            and hasattr(lucid._tensor.tensor, "broadcast_shapes")  # type: ignore[attr-defined]
             else common_shape
         )
 

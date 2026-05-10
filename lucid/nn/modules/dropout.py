@@ -29,7 +29,7 @@ class Dropout(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:
@@ -54,7 +54,7 @@ class Dropout1d(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # The engine's ``dropoutnd`` kernel handles 3-D / 4-D / 5-D inputs by
         # building the mask along the channel axis, so the same call works
         # here as for ``Dropout2d``.
@@ -81,7 +81,7 @@ class Dropout2d(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return dropout2d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
@@ -100,7 +100,7 @@ class AlphaDropout(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
 
     def extra_repr(self) -> str:
@@ -119,7 +119,7 @@ class Dropout3d(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid.nn.functional.dropout import dropout3d
 
         return dropout3d(x, self.p, self.training)
@@ -146,7 +146,7 @@ class FeatureAlphaDropout(Module):
         self.p = p
         self.inplace = inplace
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return feature_alpha_dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:

@@ -9,7 +9,6 @@ correctness is the same on either device.
 import math
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.distributions as D

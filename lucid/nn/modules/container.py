@@ -10,7 +10,7 @@ from collections.abc import (
     Mapping,
     ValuesView,
 )
-from typing import Iterator, overload
+from typing import Iterator, cast, overload
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._tensor.tensor import Tensor
@@ -24,25 +24,28 @@ class Sequential(Module):
     @overload
     def __init__(self, arg: OrderedDict[str, Module]) -> None: ...
 
-    def __init__(self, *args: Module) -> None:
+    def __init__(self, *args: Module | OrderedDict[str, Module]) -> None:  # type: ignore[misc]
         super().__init__()
         if len(args) == 1 and isinstance(args[0], OrderedDict):
             for key, module in args[0].items():
                 self.add_module(key, module)
         else:
-            for idx, module in enumerate(args):
+            for idx, module in enumerate(args):  # type: ignore[assignment]
                 self.add_module(str(idx), module)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         for m in self._modules.values():
-            x = m(x)
+            assert m is not None
+            x = cast(Tensor, m(x))
         return x
 
     def __getitem__(self, idx: int | slice) -> Module | Sequential:
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
-            return Sequential(OrderedDict((k, self._modules[k]) for k in keys[idx]))
-        return self._modules[keys[idx]]
+            return Sequential(
+                OrderedDict((k, cast(Module, self._modules[k])) for k in keys[idx])
+            )
+        return cast(Module, self._modules[keys[idx]])
 
     def __setitem__(self, idx: int, module: Module) -> None:
         keys = list(self._modules.keys())
@@ -61,7 +64,9 @@ class Sequential(Module):
         return len(self._modules)
 
     def __iter__(self) -> Iterator[Module]:
-        yield from self._modules.values()
+        for m in self._modules.values():
+            assert m is not None
+            yield m
 
     def append(self, module: Module) -> Sequential:
         self.add_module(str(len(self._modules)), module)
@@ -103,8 +108,8 @@ class ModuleList(Module):
     def __getitem__(self, idx: int | slice) -> Module | ModuleList:
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
-            return ModuleList([self._modules[k] for k in keys[idx]])
-        return self._modules[keys[idx]]
+            return ModuleList([cast(Module, self._modules[k]) for k in keys[idx]])
+        return cast(Module, self._modules[keys[idx]])
 
     def __setitem__(self, idx: int, module: Module) -> None:
         keys = list(self._modules.keys())
@@ -123,7 +128,9 @@ class ModuleList(Module):
         return len(self._modules)
 
     def __iter__(self) -> Iterator[Module]:
-        yield from self._modules.values()
+        for m in self._modules.values():
+            assert m is not None
+            yield m
 
     def append(self, module: Module) -> ModuleList:
         self.add_module(str(len(self._modules)), module)
@@ -152,7 +159,7 @@ class ModuleList(Module):
         for i, module in enumerate(items):
             self.add_module(str(i), module)
 
-    def forward(self, *args: object) -> Tensor:
+    def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         raise NotImplementedError("ModuleList has no forward; iterate manually.")
 
 
@@ -166,7 +173,7 @@ class ModuleDict(Module):
                 self.add_module(k, m)
 
     def __getitem__(self, key: str) -> Module:
-        return self._modules[key]
+        return cast(Module, self._modules[key])
 
     def __setitem__(self, key: str, module: Module) -> None:
         self.add_module(key, module)
@@ -187,16 +194,16 @@ class ModuleDict(Module):
         return self._modules.keys()
 
     def items(self) -> ItemsView[str, Module]:
-        return self._modules.items()
+        return cast(ItemsView[str, Module], self._modules.items())
 
     def values(self) -> ValuesView[Module]:
-        return self._modules.values()
+        return cast(ValuesView[Module], self._modules.values())
 
     def get(self, key: str, default: Module | None = None) -> Module | None:
         return self._modules.get(key, default)
 
     def pop(self, key: str) -> Module:
-        return self._modules.pop(key)
+        return cast(Module, self._modules.pop(key))
 
     def clear(self) -> None:
         self._modules.clear()
@@ -209,7 +216,7 @@ class ModuleDict(Module):
             self.add_module(key, module)
         return self
 
-    def forward(self, *args: object) -> Tensor:
+    def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         raise NotImplementedError("ModuleDict has no forward; use indexing.")
 
 
@@ -264,7 +271,7 @@ class ParameterList(Module):
         for i, param in enumerate(items):
             self.register_parameter(str(i), param)
 
-    def forward(self, *args: object) -> Tensor:
+    def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         raise NotImplementedError(
             "ParameterList has no forward(); it is a container for Parameters only. "
             "Access individual parameters via indexing: self.params[i]"
@@ -304,10 +311,10 @@ class ParameterDict(Module):
         return self._parameters.keys()
 
     def items(self) -> ItemsView[str, Parameter]:
-        return self._parameters.items()
+        return cast(ItemsView[str, Parameter], self._parameters.items())
 
     def values(self) -> ValuesView[Parameter]:
-        return self._parameters.values()
+        return cast(ValuesView[Parameter], self._parameters.values())
 
     def get(self, key: str, default: Parameter | None = None) -> Parameter | None:
         return self._parameters.get(key, default)
@@ -328,7 +335,7 @@ class ParameterDict(Module):
             self.register_parameter(key, param)
         return self
 
-    def forward(self, *args: object) -> Tensor:
+    def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         raise NotImplementedError(
             "ParameterDict has no forward(); it is a container for Parameters only. "
             "Access individual parameters via key: self.params['key']"

@@ -3,6 +3,7 @@ type, mirroring the reference framework's ``register_kl`` mechanism.
 """
 
 from collections.abc import Callable
+from typing import TypeVar
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -17,13 +18,15 @@ from lucid.distributions.student import StudentT
 _KLFn = Callable[[Distribution, Distribution], Tensor]
 _KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
 
+_F = TypeVar("_F", bound=Callable[..., Tensor])
 
-def register_kl(p_cls: type, q_cls: type) -> Callable[[_KLFn], _KLFn]:
+
+def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
     """Decorator that registers a closed-form ``KL(p || q)`` for the
     pair ``(p_cls, q_cls)``.  Mirrors the reference framework's API."""
 
-    def _decorator(fn: _KLFn) -> _KLFn:
-        _KL_REGISTRY[(p_cls, q_cls)] = fn
+    def _decorator(fn: _F) -> _F:
+        _KL_REGISTRY[(p_cls, q_cls)] = fn  # type: ignore[arg-type]  # callable covariance
         return fn
 
     return _decorator
@@ -156,7 +159,6 @@ def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
 
 
 from lucid.distributions.multivariate import MultivariateNormal
-from lucid.distributions.exponential import Laplace
 from lucid.distributions.continuous_extra import HalfNormal
 from lucid.distributions.normal import LogNormal
 from lucid.distributions.uniform import Uniform

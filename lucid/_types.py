@@ -38,6 +38,7 @@ from lucid._device import device as _Device
 if TYPE_CHECKING:
     import numpy as np  # typing-only — no runtime import.
     from lucid._tensor.tensor import Tensor
+    from lucid._C import engine as _C_engine  # for DeviceLike / DTypeLike widening
 
 
 # ── TypeVars ──────────────────────────────────────────────────────────────────
@@ -60,11 +61,13 @@ _P = ParamSpec("_P")
 # Scalar numeric types — valid operands alongside Tensor in arithmetic.
 type Scalar = int | float | bool
 
-# Device specifier: an actual device object, a string name ('cpu'/'metal'), or None.
-type DeviceLike = _Device | str | None
+# Device specifier: Python device object, C++ Device enum, string ('cpu'/'metal'), or None.
+# The C++ engine type is accepted by _parse_device at runtime; widening here avoids
+# spurious mypy errors when internal code passes tensor._impl.device directly.
+type DeviceLike = _Device | _C_engine.Device | str | None
 
-# DType specifier: an actual dtype object or None (→ use the global default).
-type DTypeLike = _DType | None
+# DType specifier: Python dtype object, dtype class, C++ Dtype enum, or None.
+type DTypeLike = _DType | type[_DType] | _C_engine.Dtype | None
 
 # Shape / size specifier used in factory functions and reshape.
 type ShapeLike = int | tuple[int, ...]

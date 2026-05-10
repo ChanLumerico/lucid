@@ -31,45 +31,52 @@ import sys
 from datetime import date
 from pathlib import Path
 
-
 # ── paths / constants ────────────────────────────────────────────────────────
 
-ROOT      = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 CHANGELOG = ROOT / "CHANGELOG.md"
 
 CATEGORIES: dict[str, str] = {
-    "added":         "Added",
-    "changed":       "Changed",
-    "deprecated":    "Deprecated",
-    "removed":       "Removed",
-    "fixed":         "Fixed",
-    "security":      "Security",
-    "performance":   "Performance",
-    "tooling":       "Tooling",
+    "added": "Added",
+    "changed": "Changed",
+    "deprecated": "Deprecated",
+    "removed": "Removed",
+    "fixed": "Fixed",
+    "security": "Security",
+    "performance": "Performance",
+    "tooling": "Tooling",
     "documentation": "Documentation",
 }
 
 # Conventional-commit prefix → CHANGELOG category.
 PREFIX_MAP: dict[str, str] = {
-    "feat":     "added",
-    "fix":      "fixed",
-    "perf":     "performance",
+    "feat": "added",
+    "fix": "fixed",
+    "perf": "performance",
     "refactor": "changed",
-    "revert":   "changed",
-    "remove":   "removed",
-    "deprec":   "deprecated",
-    "sec":      "security",
-    "docs":     "documentation",
-    "test":     "tooling",
-    "chore":    "tooling",
-    "build":    "tooling",
-    "ci":       "tooling",
-    "style":    "tooling",
+    "revert": "changed",
+    "remove": "removed",
+    "deprec": "deprecated",
+    "sec": "security",
+    "docs": "documentation",
+    "test": "tooling",
+    "chore": "tooling",
+    "build": "tooling",
+    "ci": "tooling",
+    "style": "tooling",
 }
 
 # Commit-prefix patterns we DO require a CHANGELOG entry for in --strict mode.
-USER_FACING_PREFIXES = {"feat", "fix", "perf", "refactor", "revert", "remove",
-                        "deprec", "sec"}
+USER_FACING_PREFIXES = {
+    "feat",
+    "fix",
+    "perf",
+    "refactor",
+    "revert",
+    "remove",
+    "deprec",
+    "sec",
+}
 
 # `check` only looks at commits since the most recent version section.
 RELEASE_HEADER_RE = re.compile(r"^## \[(\d+\.\d+\.\d+)\]")
@@ -91,7 +98,11 @@ def _write(text: str) -> None:
 def _git(*args: str) -> str:
     """Run git in the repo root and return stdout (rstripped)."""
     result = subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=False,
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if result.returncode != 0:
         sys.exit(f"❌  git {' '.join(args)} failed:\n{result.stderr}")
@@ -154,18 +165,19 @@ def _ensure_unreleased(text: str) -> tuple[str, int, int]:
 
 def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
     if category not in CATEGORIES:
-        sys.exit(f"❌  unknown category {category!r} (allowed: "
-                 f"{', '.join(CATEGORIES)})")
+        sys.exit(
+            f"❌  unknown category {category!r} (allowed: " f"{', '.join(CATEGORIES)})"
+        )
     text = _read()
     text, h_idx, e_idx = _ensure_unreleased(text)
     lines = text.splitlines(keepends=True)
     # Body of the Unreleased section, EXCLUDING the trailing separator/blanks.
     body_lines = lines[h_idx + 1 : e_idx]
-    body       = "".join(body_lines)
+    body = "".join(body_lines)
 
-    cat_label  = CATEGORIES[category]
+    cat_label = CATEGORIES[category]
     cat_header = f"### {cat_label}"
-    bullet     = f"- {message.strip()}\n"
+    bullet = f"- {message.strip()}\n"
 
     # Strip the placeholder if present (and any leading/trailing blank lines
     # that surrounded it).
@@ -174,7 +186,7 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
         # Remove the entire "### Added\n\n- _Pending..._\n" block if that's all
         # there is under it; otherwise just drop the placeholder line.
         lines2 = body.splitlines(keepends=True)
-        kept   = []
+        kept = []
         for line in lines2:
             if line.strip() == placeholder:
                 continue
@@ -186,7 +198,7 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
         sec_lines = body.splitlines(keepends=True)
         new_lines = []
         in_target = False
-        appended  = False
+        appended = False
         for k, line in enumerate(sec_lines):
             stripped = line.rstrip("\n")
             if stripped == cat_header:
@@ -218,7 +230,9 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
     sep = "\n---\n\n"
     new_section = lines[h_idx] + new_body.rstrip("\n") + "\n" + sep
 
-    new_text = "".join(lines[:h_idx]) + new_section + "".join(lines[e_idx:]).lstrip("\n")
+    new_text = (
+        "".join(lines[:h_idx]) + new_section + "".join(lines[e_idx:]).lstrip("\n")
+    )
     # Ensure there is no leftover stray separator immediately after our newly
     # emitted one (can happen if the original file already had its own).
     new_text = re.sub(r"\n---\n\n(?:\n*---\n\n)+", "\n---\n\n", new_text)
@@ -236,15 +250,15 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
 def _propose() -> None:
     """Read HEAD commit, suggest a category + message, ask for confirmation."""
     subject = _git("log", "-1", "--format=%s")
-    body    = _git("log", "-1", "--format=%b")
-    prefix  = _commit_prefix(subject)
+    body = _git("log", "-1", "--format=%b")
+    prefix = _commit_prefix(subject)
     if prefix is None:
         print(f"  ⚠️   Commit subject has no conventional prefix: {subject!r}")
         print("       Skip — use `add <category> <message>` manually.")
         return
     category = _category_for_prefix(prefix)
     # Strip the conventional prefix from the message.
-    message  = re.sub(r"^[a-z]+(?:\([^)]*\))?!?:\s*", "", subject)
+    message = re.sub(r"^[a-z]+(?:\([^)]*\))?!?:\s*", "", subject)
     print(f"  HEAD: {subject}")
     print(f"  → category: {category}  ({CATEGORIES[category]})")
     print(f"  → message : {message}")
@@ -277,8 +291,8 @@ def _release(version: str) -> None:
     lines = text.splitlines(keepends=True)
 
     # Body of the Unreleased section (excluding its header).
-    body_lines = lines[h_idx + 1:e_idx]
-    body       = "".join(body_lines).strip()
+    body_lines = lines[h_idx + 1 : e_idx]
+    body = "".join(body_lines).strip()
 
     # Replace [Unreleased] with [version] - date, prepend new empty Unreleased.
     today = date.today().isoformat()
@@ -311,8 +325,11 @@ def _release(version: str) -> None:
 def _update_compare_links(text: str, version: str) -> str:
     """Update or insert the [Unreleased] / [version] compare URLs at the bottom."""
     # Try to find the existing [Unreleased] link to extract repo URL.
-    m = re.search(r"^\[Unreleased\]:\s*(https?://[^\s/]+/[^/]+/[^/]+)/compare/",
-                  text, re.MULTILINE)
+    m = re.search(
+        r"^\[Unreleased\]:\s*(https?://[^\s/]+/[^/]+/[^/]+)/compare/",
+        text,
+        re.MULTILINE,
+    )
     if not m:
         # Could not infer repo URL; skip silently.
         return text
@@ -320,13 +337,15 @@ def _update_compare_links(text: str, version: str) -> str:
 
     # Build new tail.
     new_unreleased_link = f"[Unreleased]: {repo}/compare/v{version}...HEAD"
-    new_version_link    = f"[{version}]: {repo}/releases/tag/v{version}"
+    new_version_link = f"[{version}]: {repo}/releases/tag/v{version}"
 
     # Replace the old [Unreleased]: line with both new lines.
     text = re.sub(
         r"^\[Unreleased\]:\s*.*$",
         new_unreleased_link + "\n" + new_version_link,
-        text, count=1, flags=re.MULTILINE,
+        text,
+        count=1,
+        flags=re.MULTILINE,
     )
     return text
 
@@ -347,7 +366,7 @@ def _check(strict: bool) -> None:
     text = _read()
     text2, h_idx, e_idx = _ensure_unreleased(text)
     lines = text2.splitlines(keepends=True)
-    body  = "".join(lines[h_idx + 1:e_idx])
+    body = "".join(lines[h_idx + 1 : e_idx])
     has_real_entry = "_Pending the next release._" not in body and bool(
         re.search(r"^\s*-\s+\S", body, re.MULTILINE)
     )
@@ -360,10 +379,14 @@ def _check(strict: bool) -> None:
     tag = f"v{last_version}"
     # Use the tag if it exists, otherwise fall back to the merge-base of the
     # release-section line (best-effort: don't fail if tag is missing).
-    have_tag = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", tag],
-        cwd=ROOT, capture_output=True,
-    ).returncode == 0
+    have_tag = (
+        subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", tag],
+            cwd=ROOT,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
     rev_range = f"{tag}..HEAD" if have_tag else "HEAD~50..HEAD"
 
     log = _git("log", "--format=%s", rev_range)
@@ -374,17 +397,21 @@ def _check(strict: bool) -> None:
             new_user_facing.append(subject)
 
     if new_user_facing and not has_real_entry:
-        msg = (f"⚠️   {len(new_user_facing)} user-facing commit(s) since "
-               f"v{last_version} but [Unreleased] is empty:\n  "
-               + "\n  ".join(new_user_facing[:10]))
+        msg = (
+            f"⚠️   {len(new_user_facing)} user-facing commit(s) since "
+            f"v{last_version} but [Unreleased] is empty:\n  "
+            + "\n  ".join(new_user_facing[:10])
+        )
         if strict:
             sys.exit("❌  " + msg)
         print(msg)
         return
 
-    print(f"  ✅  CHANGELOG OK "
-          f"({len(new_user_facing)} user-facing commit(s) since v{last_version}, "
-          f"[Unreleased] {'has entries' if has_real_entry else 'is empty'})")
+    print(
+        f"  ✅  CHANGELOG OK "
+        f"({len(new_user_facing)} user-facing commit(s) since v{last_version}, "
+        f"[Unreleased] {'has entries' if has_real_entry else 'is empty'})"
+    )
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -400,21 +427,26 @@ def main() -> None:
 
     p_add = sub.add_parser("add", help="add a bullet to [Unreleased]")
     p_add.add_argument("category", choices=list(CATEGORIES))
-    p_add.add_argument("message",  nargs="+",
-                       help="bullet text (multiple words OK)")
+    p_add.add_argument("message", nargs="+", help="bullet text (multiple words OK)")
 
-    sub.add_parser("propose",
-                   help="propose an [Unreleased] entry from the latest commit")
+    sub.add_parser(
+        "propose", help="propose an [Unreleased] entry from the latest commit"
+    )
 
-    p_rel = sub.add_parser("release",
-                           help="promote [Unreleased] to a dated version section")
+    p_rel = sub.add_parser(
+        "release", help="promote [Unreleased] to a dated version section"
+    )
     p_rel.add_argument("version", help="semver string, e.g. 3.0.1")
 
     p_chk = sub.add_parser(
-        "check", help="verify CHANGELOG is consistent with git history",
+        "check",
+        help="verify CHANGELOG is consistent with git history",
     )
-    p_chk.add_argument("--strict", action="store_true",
-                       help="fail (exit 1) if user-facing commits are missing")
+    p_chk.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail (exit 1) if user-facing commits are missing",
+    )
 
     args = p.parse_args()
 

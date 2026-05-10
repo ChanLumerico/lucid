@@ -41,7 +41,7 @@ class Categorical(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         self._num_events = shape[-1]

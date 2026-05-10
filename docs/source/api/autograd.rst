@@ -1,36 +1,33 @@
 lucid.autograd
 ==============
 
-.. currentmodule:: lucid.autograd
+.. currentmodule:: lucid
 
-Gradient computation
---------------------
+Lucid uses dynamic reverse-mode automatic differentiation.  Every
+:class:`Tensor` with ``requires_grad=True`` records operations in a
+computation graph; calling ``.backward()`` traverses that graph to
+accumulate gradients.
 
-.. autofunction:: backward
-.. autofunction:: grad
+Context managers
+----------------
 
-Gradient mode
--------------
-
-.. autoclass:: no_grad
-   :members:
-.. autoclass:: enable_grad
-   :members:
+.. autofunction:: no_grad
+.. autofunction:: enable_grad
 .. autofunction:: set_grad_enabled
-.. autofunction:: is_grad_enabled
-.. autofunction:: inference_mode
 
 Custom functions
 ----------------
 
+.. currentmodule:: lucid.autograd
+
 .. autoclass:: Function
-   :members:
+   :members: forward, backward, apply
+   :undoc-members:
+   :show-inheritance:
 
-.. autoclass:: FunctionCtx
-   :members:
+Gradient utilities
+------------------
 
-Gradient checking
------------------
-
-.. automodule:: lucid.autograd.gradcheck
-   :members:
+.. autofunction:: lucid.autograd.grad
+.. autofunction:: lucid.autograd.checkpoint
+.. autofunction:: lucid.autograd.detect_anomaly

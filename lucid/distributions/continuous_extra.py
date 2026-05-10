@@ -14,7 +14,6 @@ from lucid.distributions._util import as_tensor as _as_tensor
 from lucid.distributions._util import broadcast_pair as _broadcast_pair
 from lucid.distributions.constraints import (
     Constraint,
-    greater_than,
     nonnegative,
     positive,
 )

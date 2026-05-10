@@ -87,8 +87,9 @@ def fuse_conv_bn_eval(conv: object, bn: object) -> object:
     new_weight = weight * scale_view
 
     # bias: start from (-running_mean) if conv had no bias.
+    old_bias: Tensor
     if fused.bias is not None:
-        old_bias = fused.bias.detach()
+        old_bias = fused.bias.detach()  # type: ignore[assignment]
     else:
         old_bias = _lucid.zeros(out_channels, dtype=weight.dtype, device=weight.device)
     new_bias = (old_bias - running_mean) * scale
@@ -100,7 +101,7 @@ def fuse_conv_bn_eval(conv: object, bn: object) -> object:
         Parameter,
     )  # noqa: PLC0415 — avoid cycle at module load
 
-    fused.weight = Parameter(new_weight)
+    fused.weight = Parameter(new_weight)  # type: ignore[assignment]
     if fused.bias is None:
         fused.bias = Parameter(new_bias)
     else:
@@ -165,7 +166,7 @@ def fuse_linear_bn_eval(linear: object, bn: object) -> object:
 
     conv_b = fused.bias.detach() if fused.bias is not None else None
     new_w, new_b = fuse_conv_bn_weights(
-        fused.weight.detach(), conv_b, rm, rv, eps, gamma, beta
+        fused.weight.detach(), conv_b, rm, rv, eps, gamma, beta  # type: ignore[arg-type]
     )
     fused.weight = Parameter(new_w)
     fused.bias = Parameter(new_b)

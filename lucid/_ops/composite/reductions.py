@@ -18,7 +18,8 @@ def nansum(
     safe = lucid.where(lucid.isnan(x), lucid.full_like(x, 0.0), x)
     if dim is None:
         return lucid.sum(safe)
-    return lucid.sum(safe, dim, keepdim)
+    _dim = list(dim) if not isinstance(dim, int) else dim
+    return lucid.sum(safe, _dim, keepdim)
 
 
 def nanmean(
@@ -33,7 +34,8 @@ def nanmean(
     not_nan = lucid.where(mask, lucid.full_like(x, 0.0), lucid.full_like(x, 1.0))
     if dim is None:
         return lucid.sum(safe) / lucid.sum(not_nan)
-    return lucid.sum(safe, dim, keepdim) / lucid.sum(not_nan, dim, keepdim)
+    _dim = list(dim) if not isinstance(dim, int) else dim
+    return lucid.sum(safe, _dim, keepdim) / lucid.sum(not_nan, _dim, keepdim)
 
 
 def nanmedian(
@@ -84,7 +86,8 @@ def count_nonzero(
     one_f = lucid.ones_like(x, dtype=lucid.float32)
     zero_f = lucid.zeros_like(x, dtype=lucid.float32)
     mask = lucid.where(x != lucid.zeros_like(x), one_f, zero_f)
-    counts = lucid.sum(mask) if dim is None else lucid.sum(mask, dim, False)
+    _dim2 = list(dim) if dim is not None and not isinstance(dim, int) else dim
+    counts = lucid.sum(mask) if _dim2 is None else lucid.sum(mask, _dim2, False)
     return counts.to(dtype=lucid.int64)
 
 
@@ -96,7 +99,8 @@ def amax(
     """Maximum values along ``dim``, without returning indices."""
     if dim is None:
         return lucid.max(x)
-    return lucid.max(x, dim, keepdim)
+    _dim = list(dim) if not isinstance(dim, int) else dim
+    return lucid.max(x, _dim, keepdim)
 
 
 def amin(
@@ -107,7 +111,8 @@ def amin(
     """Minimum values along ``dim``, without returning indices."""
     if dim is None:
         return lucid.min(x)
-    return lucid.min(x, dim, keepdim)
+    _dim = list(dim) if not isinstance(dim, int) else dim
+    return lucid.min(x, _dim, keepdim)
 
 
 __all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero", "amax", "amin"]

@@ -13,7 +13,7 @@ Three subgroups:
 
 import math
 import math as _math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -117,7 +117,7 @@ def sinc(x: Tensor) -> Tensor:
 def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
     """Heaviside step: 0 for x<0, 1 for x>0, ``values`` for x==0."""
     if not _is_tensor(values):
-        values = lucid.full_like(x, float(values))
+        values = lucid.full_like(x, float(cast(float, values)))
     return lucid.where(
         x == 0.0,
         values,
@@ -128,9 +128,9 @@ def heaviside(x: Tensor, values: Tensor | Scalar) -> Tensor:
 def xlogy(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     """``x * log(y)``, with the convention 0 * log(0) = 0."""
     if not _is_tensor(x):
-        x = lucid.tensor(float(x))
+        x = lucid.tensor(float(cast(float, x)))
     if not _is_tensor(y):
-        y = lucid.tensor(float(y))
+        y = lucid.tensor(float(cast(float, y)))
     safe_y = lucid.where(y == 0.0, lucid.full_like(y, 1.0), y)
     out = x * lucid.log(safe_y)
     return lucid.where(x == 0.0, lucid.full_like(out, 0.0), out)
@@ -151,14 +151,18 @@ def signbit(x: Tensor) -> Tensor:
 def float_power(x: Tensor | Scalar, y: Tensor | Scalar) -> Tensor:
     """``pow`` always done in F64 (matches the reference framework's ``float_power``)."""
     if _is_tensor(x):
-        x = x.to(dtype=lucid.float64)
+        x = cast("Tensor", x).to(dtype=lucid.float64)
     if _is_tensor(y):
-        y = y.to(dtype=lucid.float64)
+        y = cast("Tensor", y).to(dtype=lucid.float64)
     if not _is_tensor(x) and _is_tensor(y):
-        x = lucid.tensor(float(x), dtype=lucid.float64, device=y.device)
+        x = lucid.tensor(
+            float(cast(float, x)), dtype=lucid.float64, device=cast("Tensor", y).device
+        )
     if not _is_tensor(y) and _is_tensor(x):
-        y = lucid.tensor(float(y), dtype=lucid.float64, device=x.device)
-    return lucid.pow(x, y)
+        y = lucid.tensor(
+            float(cast(float, y)), dtype=lucid.float64, device=cast("Tensor", x).device
+        )
+    return lucid.pow(cast("Tensor", x), cast("Tensor", y))
 
 
 def fmax(a: Tensor, b: Tensor) -> Tensor:
@@ -196,7 +200,12 @@ def copysign(x: Tensor, y: Tensor) -> Tensor:
 
 def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
     """``input * 2 ** exponent`` element-wise (differentiable w.r.t. both)."""
-    return input * lucid.exp(exponent * math.log(2.0))
+    exp_t: Tensor = (
+        cast("Tensor", exponent)
+        if _is_tensor(exponent)
+        else lucid.tensor(cast(float, exponent), dtype=input.dtype, device=input.device)
+    )
+    return input * lucid.exp(exp_t * math.log(2.0))
 
 
 def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
@@ -397,21 +406,21 @@ def diag_embed(
     eye_n = lucid.eye(n, dtype=x.dtype, device=x.device)
     if col_off > 0:
         eye_n = lucid.cat(
-            [lucid.zeros([n, col_off], dtype=x.dtype, device=x.device), eye_n], dim=1
+            [lucid.zeros((n, col_off), dtype=x.dtype, device=x.device), eye_n], dim=1
         )
     right = size - n - col_off
     if right > 0:
         eye_n = lucid.cat(
-            [eye_n, lucid.zeros([n, right], dtype=x.dtype, device=x.device)], dim=1
+            [eye_n, lucid.zeros((n, right), dtype=x.dtype, device=x.device)], dim=1
         )
     if row_off > 0:
         eye_n = lucid.cat(
-            [lucid.zeros([row_off, size], dtype=x.dtype, device=x.device), eye_n], dim=0
+            [lucid.zeros((row_off, size), dtype=x.dtype, device=x.device), eye_n], dim=0
         )
     bot = size - n - row_off
     if bot > 0:
         eye_n = lucid.cat(
-            [eye_n, lucid.zeros([bot, size], dtype=x.dtype, device=x.device)], dim=0
+            [eye_n, lucid.zeros((bot, size), dtype=x.dtype, device=x.device)], dim=0
         )
     # eye_n is now (size, size) with the diagonal at (row_off+i, col_off+i).
 
@@ -424,10 +433,10 @@ def diag_embed(
     else:
         # Expand x to (..., size) with zeros at padded positions.
         pad_before = lucid.zeros(
-            batch_shape + [row_off], dtype=x.dtype, device=x.device
+            tuple(batch_shape + [row_off]), dtype=x.dtype, device=x.device
         )
         pad_after = lucid.zeros(
-            batch_shape + [size - n - row_off], dtype=x.dtype, device=x.device
+            tuple(batch_shape + [size - n - row_off]), dtype=x.dtype, device=x.device
         )
         x_pad = lucid.cat([pad_before, x, pad_after], dim=-1)  # (..., size)
         diag_view = eye_n.reshape([1] * len(batch_shape) + [size, size])

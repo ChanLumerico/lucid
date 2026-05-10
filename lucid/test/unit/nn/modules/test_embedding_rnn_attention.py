@@ -1,7 +1,6 @@
 """Embedding / RNN / containers / shape modules / padding / transformer."""
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.nn as nn

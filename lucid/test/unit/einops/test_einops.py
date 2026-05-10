@@ -1,7 +1,6 @@
 """``lucid.einops`` — rearrange / reduce / repeat."""
 
 import numpy as np
-import pytest
 
 import lucid
 

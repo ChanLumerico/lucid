@@ -79,7 +79,7 @@ class Linear(Module):
             bound = 1.0 / math.sqrt(fan_in) if fan_in > 0 else 0.0
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
@@ -89,7 +89,7 @@ class Linear(Module):
 class Identity(Module):
     """Pass-through layer that returns its input unchanged."""
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return x
 
 
@@ -171,7 +171,7 @@ class FusedLinear(Module):
             bound = 1.0 / _math.sqrt(fan_in) if fan_in > 0 else 0.0
             _init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.bias is None:
             # No fused kernel for bias=False — fall back to standard ops.
             import lucid.nn.functional as F
@@ -223,7 +223,7 @@ class Bilinear(Module):
         if self.bias is not None:
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return bilinear(x1, x2, self.weight, self.bias)
 
     def extra_repr(self) -> str:
@@ -275,7 +275,7 @@ class LazyLinear(Module):
                 empty(self.out_features, dtype=self._dtype, device=self._device)
             )
         else:
-            self.bias = None
+            self.bias = None  # type: ignore[assignment]
         bound = 1.0 / math.sqrt(in_features)
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
@@ -345,7 +345,7 @@ class LazyLinear(Module):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(x.shape[-1])
         return linear(x, self.weight, self.bias)  # type: ignore[arg-type]

@@ -14,7 +14,6 @@ single-parametrization registration, ``is_parametrized`` introspection, and
 leaf parameter.
 """
 
-import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
@@ -41,7 +40,7 @@ class ParametrizationContainer(Module):
 
     def forward(self, *args: object, **kwargs: object) -> Tensor:
         # Apply the transformation to the cached ``original`` weight.
-        return self.parametrization(self.original)
+        return self.parametrization(self.original)  # type: ignore[return-value]
 
 
 def register_parametrization(
@@ -94,17 +93,17 @@ def register_parametrization(
         cont: ParametrizationContainer = getattr(mod, _PARAM_HOOK_ATTR)[tensor_name]
         object.__setattr__(mod, tensor_name, cont())
 
-    handle = module.register_forward_pre_hook(_pre_hook)
+    handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
     # Stash the hook handle on the container so ``remove_parametrizations``
     # can detach it later.
     container._hook_handle = handle  # type: ignore[attr-defined]
 
     # Materialise the derived tensor immediately so attribute access works
     # before any forward call.
-    object.__setattr__(module, tensor_name, container())
+    object.__setattr__(module, tensor_name, container())  # type: ignore[assignment]
 
     if not unsafe:
-        produced: Tensor = container()
+        produced: Tensor = container()  # type: ignore[assignment]
         if tuple(produced.shape) != tuple(weight.shape):
             raise RuntimeError(
                 f"parametrisation produced shape {tuple(produced.shape)} but "
@@ -141,10 +140,10 @@ def remove_parametrizations(
         raise ValueError(f"no parametrisation registered on '{tensor_name}'")
     container: ParametrizationContainer = container_dict.pop(tensor_name)
     handle = container._hook_handle  # type: ignore[attr-defined]
-    handle.remove()
+    handle.remove()  # type: ignore[union-attr]
 
     final_value: Tensor = (
-        container() if leave_parametrized else container.original.detach()
+        container() if leave_parametrized else container.original.detach()  # type: ignore[assignment]
     )
 
     # Drop the cached non-leaf attribute so ``register_parameter`` succeeds.

@@ -2,9 +2,13 @@
 L-BFGS optimizer (Limited-memory Broyden–Fletcher–Goldfarb–Shanno).
 """
 
+from collections.abc import Iterable
+from typing import Callable, cast
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
+from lucid.nn.parameter import Parameter
 from lucid.optim.optimizer import Optimizer
 
 
@@ -31,7 +35,7 @@ class LBFGS(Optimizer):
 
     def __init__(
         self,
-        params: object,
+        params: Iterable[Parameter] | Iterable[dict[str, object]],
         lr: float = 1.0,
         max_iter: int = 20,
         max_eval: int = 25,
@@ -40,7 +44,7 @@ class LBFGS(Optimizer):
         history_size: int = 100,
         line_search_fn: str | None = "strong_wolfe",
     ) -> None:
-        defaults = dict(
+        defaults: dict[str, object] = dict(
             lr=lr,
             max_iter=max_iter,
             max_eval=max_eval,
@@ -116,7 +120,7 @@ class LBFGS(Optimizer):
     def _gather_flat_grad(self) -> Tensor:
         views = []
         for group in self.param_groups:
-            for p in group["params"]:
+            for p in cast(list[Tensor], group["params"]):
                 if p.grad is None:
                     views.append(lucid.zeros(p.numel()))
                 else:
@@ -125,25 +129,26 @@ class LBFGS(Optimizer):
 
     def _gather_flat_params(self) -> Tensor:
         views = [
-            p.detach().flatten() for group in self.param_groups for p in group["params"]
+            p.detach().flatten()
+            for group in self.param_groups
+            for p in cast(list[Tensor], group["params"])
         ]
         return lucid.cat(views)
 
     def _add_to_params(self, alpha: float, update_flat: Tensor) -> None:
         offset = 0
         for group in self.param_groups:
-            for p in group["params"]:
+            for p in cast(list[Tensor], group["params"]):
                 n = p._impl.numel()
-                chunk = update_flat[offset : offset + n].reshape(p._impl.shape)
+                chunk = lucid.reshape(update_flat[offset : offset + n], list(p._impl.shape))  # type: ignore[arg-type]
                 p._impl = lucid.add(p, lucid.mul(lucid.tensor(alpha), chunk))._impl
                 offset += n
 
     def _two_loop_recursion(self, flat_grad: Tensor) -> Tensor:
-        import math
 
-        old_dirs = self._lbfgs_state["old_dirs"]
-        old_stps = self._lbfgs_state["old_stps"]
-        H_diag = self._lbfgs_state["H_diag"]
+        old_dirs = cast(list[Tensor], self._lbfgs_state["old_dirs"])
+        old_stps = cast(list[Tensor], self._lbfgs_state["old_stps"])
+        H_diag = cast(float, self._lbfgs_state["H_diag"])
 
         num_old = len(old_dirs)
         if num_old == 0:
@@ -192,7 +197,6 @@ class LBFGS(Optimizer):
         c2: float = 0.9,
         max_ls: int = 20,
     ) -> tuple[float, float, Tensor]:
-        import math
 
         alpha = lr
         alpha_lo = 0.0
@@ -207,9 +211,9 @@ class LBFGS(Optimizer):
 
         return alpha, f_k, g_k
 
-    def zero_grad(self) -> None:
+    def zero_grad(self, set_to_none: bool = True) -> None:
         for group in self.param_groups:
-            for p in group["params"]:
+            for p in cast(list[Tensor], group["params"]):
                 p.grad = None
 
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -219,18 +223,17 @@ class LBFGS(Optimizer):
             closure: A callable that clears gradients, computes the loss, and
                      calls ``loss.backward()``.  Required for L-BFGS.
         """
-        import math
 
         if closure is None:
             raise ValueError("L-BFGS requires a closure that reevaluates the model")
 
         group = self.param_groups[0]
-        lr = group["lr"]
-        max_iter = group["max_iter"]
-        max_eval = group["max_eval"]
-        tol_grad = group["tolerance_grad"]
-        tol_change = group["tolerance_change"]
-        history_size = group["history_size"]
+        lr = cast(float, group["lr"])
+        max_iter = cast(int, group["max_iter"])
+        max_eval = cast(int, group["max_eval"])
+        tol_grad = cast(float, group["tolerance_grad"])
+        tol_change = cast(float, group["tolerance_change"])
+        history_size = cast(int, group["history_size"])
         ls_fn = group["line_search_fn"]
 
         st = self._lbfgs_state
@@ -290,11 +293,13 @@ class LBFGS(Optimizer):
 
         ys = float(lucid.linalg.dot(y.flatten(), s.flatten()).item())
         if ys > 1e-10:
-            if len(st["old_dirs"]) >= history_size:
-                st["old_dirs"].pop(0)
-                st["old_stps"].pop(0)
-            st["old_dirs"].append(y)
-            st["old_stps"].append(s)
+            old_dirs_list = cast(list[Tensor], st["old_dirs"])
+            old_stps_list = cast(list[Tensor], st["old_stps"])
+            if len(old_dirs_list) >= history_size:
+                old_dirs_list.pop(0)
+                old_stps_list.pop(0)
+            old_dirs_list.append(y)
+            old_stps_list.append(s)
             yy = float(lucid.linalg.dot(y.flatten(), y.flatten()).item())
             st["H_diag"] = ys / max(yy, 1e-10)
 

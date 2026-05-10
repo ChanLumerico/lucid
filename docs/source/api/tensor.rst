@@ -3,87 +3,15 @@ lucid.Tensor
 
 .. currentmodule:: lucid
 
+The :class:`Tensor` class is the central data structure in Lucid — a
+multi-dimensional array that lives on either the CPU (Accelerate backend)
+or the Metal GPU (MLX backend).  Every forward computation and gradient
+is represented as a ``Tensor``.
+
 .. autoclass:: Tensor
    :members:
-   :undoc-members: False
+   :undoc-members:
    :show-inheritance:
-
-   .. rubric:: Shape & dtype
-
-   .. autosummary::
-
-      Tensor.shape
-      Tensor.dtype
-      Tensor.device
-      Tensor.ndim
-      Tensor.numel
-      Tensor.nbytes
-      Tensor.element_size
-      Tensor.size
-
-   .. rubric:: Autograd
-
-   .. autosummary::
-
-      Tensor.requires_grad
-      Tensor.grad
-      Tensor.grad_fn
-      Tensor.is_leaf
-      Tensor.backward
-      Tensor.detach
-      Tensor.requires_grad_
-      Tensor.retain_grad
-
-   .. rubric:: Conversion
-
-   .. autosummary::
-
-      Tensor.item
-      Tensor.numpy
-      Tensor.tolist
-      Tensor.to
-      Tensor.cpu
-      Tensor.metal
-      Tensor.float
-      Tensor.half
-      Tensor.double
-
-   .. rubric:: Shape manipulation
-
-   .. autosummary::
-
-      Tensor.T
-      Tensor.mT
-      Tensor.reshape
-      Tensor.view
-      Tensor.permute
-      Tensor.squeeze
-      Tensor.unsqueeze
-      Tensor.flatten
-      Tensor.expand
-      Tensor.repeat
-      Tensor.contiguous
-      Tensor.clone
-
-   .. rubric:: Convenience methods
-
-   .. autosummary::
-
-      Tensor.fill_
-      Tensor.zero_
-      Tensor.copy_
-      Tensor.flip
-      Tensor.bmm
-      Tensor.addmm
-      Tensor.lerp
-      Tensor.diff
-      Tensor.index_select
-      Tensor.masked_select
-      Tensor.expand_as
-      Tensor.view_as
-      Tensor.type_as
-      Tensor.new_zeros
-      Tensor.new_ones
-      Tensor.new_full
-      Tensor.new_empty
-      Tensor.new_tensor
+   :special-members: __init__, __add__, __sub__, __mul__, __truediv__,
+                     __neg__, __pow__, __matmul__, __getitem__, __setitem__,
+                     __len__, __repr__, __iter__

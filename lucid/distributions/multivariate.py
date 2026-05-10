@@ -50,7 +50,7 @@ class MultivariateNormal(Distribution):
             assert precision_matrix is not None
             # P = Lᵀ⁻¹ · L⁻¹  ⇒  L = (chol(P)⁻ᵀ).
             l_p = lucid.linalg.cholesky(precision_matrix)
-            self.scale_tril = lucid.linalg.inv(l_p).mT
+            self.scale_tril = lucid.linalg.inv(l_p).mT  # type: ignore[attr-defined]
 
         D = int(self.loc.shape[-1])
         self._D = D

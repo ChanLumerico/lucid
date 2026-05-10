@@ -1,7 +1,6 @@
 """nn.Linear / nn.Bilinear / nn.Conv* / nn.ConvTranspose* modules."""
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.nn as nn
@@ -81,7 +80,6 @@ class TestConvBiasFalse:
     def _check_bias_false_matches_zero_bias(
         self, ctor, x_shape: tuple[int, ...]
     ) -> None:
-        import numpy as np
 
         np.random.seed(0)
         x_np = np.random.randn(*x_shape).astype(np.float32)
@@ -102,8 +100,6 @@ class TestConvBiasFalse:
         x2 = lucid.tensor(x_np.copy(), requires_grad=True)
         out2 = m_zero(x2).sum()
         out2.backward()
-
-        import numpy as np
 
         np.testing.assert_allclose(out.item(), out2.item(), atol=1e-5)
         np.testing.assert_allclose(x.grad.numpy(), x2.grad.numpy(), atol=1e-5)

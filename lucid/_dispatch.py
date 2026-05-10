@@ -33,8 +33,8 @@ def _wrap_or_none(
 
 
 def normalize_factory_kwargs(
-    dt: dtype | _C_engine.Dtype | str | None = None,
-    dev: device | str | None = None,
+    dt: dtype | type[dtype] | _C_engine.Dtype | str | None = None,
+    dev: device | _C_engine.Device | str | None = None,
     requires_grad: bool = False,
 ) -> tuple[_C_engine.Dtype, _C_engine.Device, bool]:
     """Resolve dtype/device to engine enums, applying defaults."""

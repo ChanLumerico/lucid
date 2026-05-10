@@ -1,6 +1,5 @@
 """Reference parity for distributions — log_prob + closed-form KL."""
 
-import math
 from typing import Any
 
 import numpy as np
@@ -8,7 +7,6 @@ import pytest
 
 import lucid
 import lucid.distributions as D
-from lucid.test._helpers.compare import assert_close
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

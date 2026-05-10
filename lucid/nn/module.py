@@ -17,8 +17,6 @@ from lucid.nn.hooks import (
     _GLOBAL_BACKWARD_PRE_HOOKS,
     _GLOBAL_FORWARD_HOOKS,
     _GLOBAL_FORWARD_PRE_HOOKS,
-    _GLOBAL_LOAD_STATE_DICT_POST_HOOKS,
-    _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS,
     RemovableHandle,
 )
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
@@ -70,6 +68,19 @@ class Module:
     """
 
     training: bool
+    _parameters: OrderedDict[str, Parameter | None]
+    _buffers: OrderedDict[str, Tensor | None]
+    _modules: OrderedDict[str, "Module | None"]
+    _non_persistent_buffers: set[str]
+    _forward_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _forward_hooks: OrderedDict[int, Callable[..., object]]
+    _forward_pre_hooks_with_kwargs: set[int]
+    _forward_hooks_with_kwargs: set[int]
+    _forward_hooks_always_called: set[int]
+    _backward_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _backward_hooks: OrderedDict[int, Callable[..., object]]
+    _load_state_dict_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _load_state_dict_post_hooks: OrderedDict[int, Callable[..., object]]
 
     def __init__(self) -> None:
         object.__setattr__(self, "_parameters", OrderedDict())
@@ -176,7 +187,7 @@ class Module:
             hook_out = hook(self, args, kwargs, output)
         else:
             hook_out = hook(self, args, output)
-        return output if hook_out is None else hook_out
+        return output if hook_out is None else hook_out  # type: ignore[return-value]  # hook returns object; runtime guarantees _ModuleOutput
 
     def _call_always_forward_hooks(
         self,
@@ -225,7 +236,7 @@ class Module:
                     state.input_tensor_indices.append(idx)
             if not entries:
                 return args, state
-            wrapped_impls = _C_engine._wrap_module_backward_inputs(
+            wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]  # optional C++ extension method, guarded by hasattr above
                 state.C_engine_state, entries
             )
             wrapped_args = list(args)
@@ -287,7 +298,7 @@ class Module:
                     output_idx += 1
             if not entries:
                 return output
-            wrapped_impls = _C_engine._wrap_module_backward_outputs(
+            wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
                 state.C_engine_state, entries, n_outputs
             )
             wrapped_output = list(output)
@@ -300,9 +311,11 @@ class Module:
         state.n_outputs = 1
         if not output.requires_grad:
             return output
-        wrapped_impl = _C_engine._wrap_module_backward_outputs(
+        wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
             state.C_engine_state, [(0, _unwrap(output))], 1
-        )[0]
+        )[
+            0
+        ]
         return _wrap(wrapped_impl)
 
     def __setattr__(self, name: str, value: object) -> None:
@@ -391,6 +404,8 @@ class Module:
                 yield (f"{prefix}.{name}" if prefix else name), p
         if recurse:
             for mname, m in self._modules.items():
+                if m is None:
+                    continue
                 subprefix = f"{prefix}.{mname}" if prefix else mname
                 for full_name, p in m.named_parameters(
                     subprefix, recurse=True, remove_duplicate=False
@@ -423,6 +438,8 @@ class Module:
                 yield (f"{prefix}.{name}" if prefix else name), b
         if recurse:
             for mname, m in self._modules.items():
+                if m is None:
+                    continue
                 subprefix = f"{prefix}.{mname}" if prefix else mname
                 for full_name, b in m.named_buffers(
                     subprefix, recurse=True, remove_duplicate=False
@@ -486,7 +503,12 @@ class Module:
                 raise AttributeError(
                     f"'{type(mod).__name__}' has no submodule '{part}'"
                 )
-            mod = mod._modules[part]
+            next_mod = mod._modules[part]
+            if next_mod is None:
+                raise AttributeError(
+                    f"'{type(mod).__name__}' submodule '{part}' is None"
+                )
+            mod = next_mod
         return mod
 
     def get_parameter(self, target: str) -> Parameter:
@@ -662,7 +684,7 @@ class Module:
             ):
                 # Integer / bool buffer — leave dtype alone.
                 return t
-            return t.to(*args, **kwargs)
+            return t.to(*args, **kwargs)  # type: ignore[arg-type]  # Module.to() accepts *object/**object; Tensor.to() has specific types — safe at runtime
 
         return self._apply(_convert)
 
@@ -819,7 +841,7 @@ class Module:
                 destination[f"{prefix}{name}"] = b if keep_vars else b.detach()
         extra = self.get_extra_state()
         if extra is not None:
-            destination[f"{prefix}_extra_state"] = extra
+            destination[f"{prefix}_extra_state"] = extra  # type: ignore[assignment]  # extra_state is object; caller accepts Tensor | object in practice
 
     def _load_from_state_dict(
         self,
@@ -895,7 +917,7 @@ class Module:
         """
         key = _next_hook_id()
         self._load_state_dict_pre_hooks[key] = hook
-        return RemovableHandle(self._load_state_dict_pre_hooks, key)
+        return RemovableHandle(self._load_state_dict_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
     def register_load_state_dict_post_hook(
         self,
@@ -907,7 +929,7 @@ class Module:
         """
         key = _next_hook_id()
         self._load_state_dict_post_hooks[key] = hook
-        return RemovableHandle(self._load_state_dict_post_hooks, key)
+        return RemovableHandle(self._load_state_dict_post_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
     # ── hooks ─────────────────────────────────────────────────────────────
 
@@ -926,7 +948,9 @@ class Module:
         if prepend:
             self._forward_pre_hooks.move_to_end(key, last=False)
         return RemovableHandle(
-            self._forward_pre_hooks, key, (self._forward_pre_hooks_with_kwargs,)
+            self._forward_pre_hooks,  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+            key,
+            (self._forward_pre_hooks_with_kwargs,),
         )
 
     def register_forward_hook(
@@ -947,7 +971,7 @@ class Module:
         if prepend:
             self._forward_hooks.move_to_end(key, last=False)
         return RemovableHandle(
-            self._forward_hooks,
+            self._forward_hooks,  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
             key,
             (self._forward_hooks_with_kwargs, self._forward_hooks_always_called),
         )
@@ -963,7 +987,7 @@ class Module:
         self._backward_pre_hooks[key] = hook
         if prepend:
             self._backward_pre_hooks.move_to_end(key, last=False)
-        return RemovableHandle(self._backward_pre_hooks, key)
+        return RemovableHandle(self._backward_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
     def register_full_backward_hook(
         self,
@@ -976,7 +1000,7 @@ class Module:
         self._backward_hooks[key] = hook
         if prepend:
             self._backward_hooks.move_to_end(key, last=False)
-        return RemovableHandle(self._backward_hooks, key)
+        return RemovableHandle(self._backward_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
     def register_backward_hook(self, hook: _BackwardHook) -> RemovableHandle:
         """Deprecated alias for register_full_backward_hook."""
@@ -1138,18 +1162,22 @@ class _ModuleInputBackwardHookFunction:
 
         class _InputHook(Function):
             @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
-                ctx.state = state
-                ctx.index = index
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
+                ctx.state = state  # type: ignore[attr-defined]  # FunctionCtx allows arbitrary ctx attributes at runtime
+                ctx.index = index  # type: ignore[attr-defined]
                 return x
 
             @staticmethod
-            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:
-                return ctx.state.apply_full_backward_hooks_for_input(
-                    ctx.index, grad_input
+            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                return ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
+                    ctx.index, grad_input  # type: ignore[attr-defined]
                 )
 
-        return _InputHook.apply(x)
+        result = _InputHook.apply(x)
+        assert isinstance(
+            result, Tensor
+        )  # Function.apply returns object but forward() returns Tensor
+        return result
 
 
 class _ModuleOutputBackwardHookFunction:
@@ -1159,15 +1187,19 @@ class _ModuleOutputBackwardHookFunction:
 
         class _OutputHook(Function):
             @staticmethod
-            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:
-                ctx.state = state
-                ctx.index = index
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                ctx.state = state  # type: ignore[attr-defined]  # FunctionCtx allows arbitrary ctx attributes
+                ctx.index = index  # type: ignore[attr-defined]
                 return x
 
             @staticmethod
-            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:
-                updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)
-                ctx.state.apply_full_backward_hooks_without_inputs()
+            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]
+                ctx.state.apply_full_backward_hooks_without_inputs()  # type: ignore[attr-defined]
                 return updated
 
-        return _OutputHook.apply(output)
+        result = _OutputHook.apply(output)
+        assert isinstance(
+            result, Tensor
+        )  # Function.apply returns object but forward() returns Tensor
+        return result

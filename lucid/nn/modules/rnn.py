@@ -3,20 +3,20 @@ Recurrent modules: LSTM, GRU, RNN.
 """
 
 import math
-from typing import TYPE_CHECKING
+from collections import OrderedDict
+from typing import TYPE_CHECKING, cast
 
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import empty, zeros
-from lucid._factories.random import rand
 import lucid as _lucid
 import lucid.nn.init as init
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.functional.linear import linear
 from lucid.nn.functional.activations import tanh, relu, sigmoid
-from lucid._ops import stack
+from lucid import stack
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -75,6 +75,12 @@ class _CellNamingMixin:
     # already serialised their parameters under flattened keys.
     _state_dict_skip_recursion: bool = True
 
+    # Declared here so mypy knows _CellNamingMixin subclasses always have
+    # these attributes (they are set in each concrete __init__).
+    num_layers: int
+    bidirectional: bool
+    _modules: OrderedDict[str, Module | None]
+
     def _save_to_state_dict(
         self,
         destination: dict,
@@ -88,7 +94,7 @@ class _CellNamingMixin:
         for layer in range(self.num_layers):
             for direction in range(2 if self.bidirectional else 1):
                 suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
                 for pname in _CELL_PARAM_NAMES:
                     p = cell._parameters.get(pname)
                     if p is None:
@@ -107,13 +113,12 @@ class _CellNamingMixin:
         error_msgs: list[str],
     ) -> None:
         from lucid._C import engine as _C_engine
-        from lucid._dispatch import _wrap
         from lucid._tensor.tensor import Tensor
 
         for layer in range(self.num_layers):
             for direction in range(2 if self.bidirectional else 1):
                 suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
                 for pname in _CELL_PARAM_NAMES:
                     p = cell._parameters.get(pname)
                     if p is None:
@@ -133,9 +138,12 @@ class _CellNamingMixin:
                         )
                         continue
                     converted: Tensor = src.to(device=p.device, dtype=p.dtype)
-                    new_impl: object = _C_engine.contiguous(
-                        converted._impl
-                    ).clone_with_grad(p.requires_grad)
+                    new_impl: _C_engine.TensorImpl = cast(
+                        _C_engine.TensorImpl,
+                        _C_engine.contiguous(converted._impl).clone_with_grad(
+                            p.requires_grad
+                        ),
+                    )
                     p._impl = new_impl
                     # Mark whichever key was actually consumed so the top
                     # level walker doesn't list it as unexpected.
@@ -156,7 +164,7 @@ class _CellNamingMixin:
         for layer in range(self.num_layers):
             for direction in range(2 if self.bidirectional else 1):
                 suffix: str = "_reverse" if direction == 1 else ""
-                cell: Module = self._modules[f"cell_l{layer}{suffix}"]
+                cell: Module = cast(Module, self._modules[f"cell_l{layer}{suffix}"])
                 for pname in _CELL_PARAM_NAMES:
                     if cell._parameters.get(pname) is not None:
                         keys.append(f"{prefix}{pname}_l{layer}{suffix}")
@@ -312,7 +320,7 @@ class LSTM(Module):
         target_shape[0] = T
         bcast_shape: list[int] = [int(s) for s in x.shape]
         idx: Tensor = (
-            rev_1d.reshape(target_shape).broadcast_to(bcast_shape).contiguous()
+            rev_1d.reshape(target_shape).broadcast_to(tuple(bcast_shape)).contiguous()
         )
         return _lucid.gather(x, idx, 0)
 
@@ -327,12 +335,20 @@ class LSTM(Module):
         """Run one ``lstm_forward`` engine call for a single layer / direction."""
         suffix: str = "_reverse" if direction == 1 else ""
         weights: list[object] = []
-        weights.append(_unwrap(self._parameters[f"weight_ih_l{layer}{suffix}"]))
-        weights.append(_unwrap(self._parameters[f"weight_hh_l{layer}{suffix}"]))
+        p_wih = self._parameters[f"weight_ih_l{layer}{suffix}"]
+        p_whh = self._parameters[f"weight_hh_l{layer}{suffix}"]
+        assert p_wih is not None
+        assert p_whh is not None
+        weights.append(_unwrap(p_wih))
+        weights.append(_unwrap(p_whh))
         gate_size: int = 4 * self.hidden_size
         if self.bias:
-            weights.append(_unwrap(self._parameters[f"bias_ih_l{layer}{suffix}"]))
-            weights.append(_unwrap(self._parameters[f"bias_hh_l{layer}{suffix}"]))
+            p_bih = self._parameters[f"bias_ih_l{layer}{suffix}"]
+            p_bhh = self._parameters[f"bias_hh_l{layer}{suffix}"]
+            assert p_bih is not None
+            assert p_bhh is not None
+            weights.append(_unwrap(p_bih))
+            weights.append(_unwrap(p_bhh))
         else:
             dev = _unwrap(layer_input).device
             # Engine zero buffer — same dtype as the tensors we'll concat with.
@@ -340,13 +356,15 @@ class LSTM(Module):
             weights.append(zero_b)
             weights.append(zero_b)
         if self.proj_size > 0:
-            weights.append(_unwrap(self._parameters[f"weight_hr_l{layer}{suffix}"]))
+            p_hr = self._parameters[f"weight_hr_l{layer}{suffix}"]
+            assert p_hr is not None
+            weights.append(_unwrap(p_hr))
 
-        out_impl, h_impl, c_impl = _C_engine.nn.lstm_forward(
+        lstm_result = _C_engine.nn.lstm_forward(
             _unwrap(layer_input),
             _unwrap(h0_layer),
             _unwrap(c0_layer),
-            weights,
+            cast(list[_C_engine.TensorImpl], weights),
             self.hidden_size,
             1,  # single-layer engine call
             False,  # batch_first handled by us
@@ -354,9 +372,12 @@ class LSTM(Module):
             True,
             self.proj_size,
         )
+        out_impl = cast(_C_engine.TensorImpl, lstm_result[0])
+        h_impl = cast(_C_engine.TensorImpl, lstm_result[1])
+        c_impl = cast(_C_engine.TensorImpl, lstm_result[2])
         return _wrap(out_impl), _wrap(h_impl), _wrap(c_impl)
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         hx: tuple[Tensor, Tensor] | None = None,
@@ -487,7 +508,7 @@ class RNNCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -539,7 +560,7 @@ class LSTMCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         hx: tuple[Tensor, Tensor] | None = None,
@@ -604,7 +625,7 @@ class GRUCell(Module):
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         hs = self.hidden_size
@@ -681,7 +702,7 @@ class GRU(_CellNamingMixin, Module):
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
         return None
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         hx: Tensor | None = None,
@@ -709,20 +730,20 @@ class GRU(_CellNamingMixin, Module):
         for layer in range(self.num_layers):
             # ── forward direction ────────────────────────────────────────────
             cell_fwd: GRUCell = self._cell(layer, reverse=False)
-            h_fwd = hx[layer * num_dirs]  # (B, hidden)
+            h_fwd: Tensor = hx[layer * num_dirs]  # (B, hidden)
             fwd_out: list[Tensor] = []  # type: ignore[name-defined]
             for t in range(T):
-                h_fwd = cell_fwd(inp[t], h_fwd)
+                h_fwd = cast("Tensor", cell_fwd(inp[t], h_fwd))
                 fwd_out.append(h_fwd)
             h_n.append(h_fwd)
 
             if self.bidirectional:
                 # ── reverse direction ────────────────────────────────────────
                 cell_rev = self._cell(layer, reverse=True)
-                h_rev = hx[layer * num_dirs + 1]
+                h_rev: Tensor = hx[layer * num_dirs + 1]
                 rev_out: list[Tensor] = []  # type: ignore[name-defined]
                 for t in range(T - 1, -1, -1):
-                    h_rev = cell_rev(inp[t], h_rev)
+                    h_rev = cast("Tensor", cell_rev(inp[t], h_rev))
                     rev_out.append(h_rev)
                 rev_out.reverse()
                 h_n.append(h_rev)
@@ -819,7 +840,7 @@ class RNN(_CellNamingMixin, Module):
         """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
         return None
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         hx: Tensor | None = None,
@@ -846,19 +867,19 @@ class RNN(_CellNamingMixin, Module):
 
         for layer in range(self.num_layers):
             cell_fwd = self._cell(layer, reverse=False)
-            h_fwd = hx[layer * num_dirs]
+            h_fwd: Tensor = hx[layer * num_dirs]
             fwd_out: list[Tensor] = []  # type: ignore[name-defined]
             for t in range(T):
-                h_fwd = cell_fwd(inp[t], h_fwd)
+                h_fwd = cast("Tensor", cell_fwd(inp[t], h_fwd))
                 fwd_out.append(h_fwd)
             h_n.append(h_fwd)
 
             if self.bidirectional:
                 cell_rev = self._cell(layer, reverse=True)
-                h_rev = hx[layer * num_dirs + 1]
+                h_rev: Tensor = hx[layer * num_dirs + 1]
                 rev_out: list[Tensor] = []  # type: ignore[name-defined]
                 for t in range(T - 1, -1, -1):
-                    h_rev = cell_rev(inp[t], h_rev)
+                    h_rev = cast("Tensor", cell_rev(inp[t], h_rev))
                     rev_out.append(h_rev)
                 rev_out.reverse()
                 h_n.append(h_rev)

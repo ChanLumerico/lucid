@@ -9,7 +9,6 @@ Tagged ``@pytest.mark.perf`` so they're opt-in via ``-m perf``.
 """
 
 import tracemalloc
-from pathlib import Path
 
 import numpy as np
 import pytest

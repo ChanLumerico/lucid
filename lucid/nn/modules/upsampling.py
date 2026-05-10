@@ -32,7 +32,7 @@ class Upsample(Module):
         self.mode = mode
         self.align_corners = align_corners
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return interpolate(
             x,
             size=self.size,
@@ -97,7 +97,7 @@ class PixelShuffle(Module):
         super().__init__()
         self.upscale_factor = upscale_factor
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r = self.upscale_factor
         n, c_r2, h, w = x.shape
         c = c_r2 // (r * r)
@@ -121,7 +121,7 @@ class PixelUnshuffle(Module):
         super().__init__()
         self.downscale_factor = downscale_factor
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         r = self.downscale_factor
         n, c, h_r, w_r = x.shape
         h, w = h_r // r, w_r // r
@@ -146,7 +146,7 @@ class ChannelShuffle(Module):
         super().__init__()
         self.groups = groups
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return channel_shuffle(x, groups=self.groups)
 
     def extra_repr(self) -> str:

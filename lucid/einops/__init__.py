@@ -91,7 +91,7 @@ def einsum(equation: str, *operands: Tensor) -> Tensor:
         (2, 4)
     """
     impl_list = [_unwrap(t) for t in operands]
-    return _wrap(_C_einops.einsum(equation, impl_list))
+    return _wrap(_C_einops.einsum(equation, impl_list))  # type: ignore[arg-type]
 
 
 __all__ = ["rearrange", "reduce", "repeat", "einsum"]

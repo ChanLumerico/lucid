@@ -138,7 +138,7 @@ def random_split(
 
     indices = list(range(n))
     if generator is not None:
-        rng = _random.Random(generator)
+        rng = _random.Random(generator)  # type: ignore[arg-type]
         rng.shuffle(indices)
     else:
         _random.shuffle(indices)
@@ -211,7 +211,7 @@ class StackDataset(Dataset):
     def __len__(self) -> int:
         return self._n
 
-    def __getitem__(self, idx: int) -> tuple[object, ...] | dict[str, object]:
+    def __getitem__(self, idx: int) -> tuple[object, ...] | dict[str, object]:  # type: ignore[override]
         items: tuple[object, ...] = tuple(d[idx] for d in self.datasets)
         if self._keys is not None:
             return dict(zip(self._keys, items))

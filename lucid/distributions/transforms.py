@@ -225,7 +225,7 @@ class StickBreakingTransform(Transform):
         K: int = int(y.shape[-1])
         K_minus_1: int = K - 1
         # Cumulative tail sums: stick remaining before drawing y_k.
-        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)
+        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)  # type: ignore[call-arg]
         # remaining_before_k = 1 − Σ_{j<k} y_j  → shifted version.
         remaining: list[Tensor] = []
         ones: Tensor = lucid.ones_like(y.narrow(-1, 0, 1))
@@ -249,7 +249,7 @@ class StickBreakingTransform(Transform):
         z: Tensor = y.narrow(-1, 0, K_minus_1)
         # remaining-before for each k.
         remaining: list[Tensor] = []
-        cum: Tensor = z.cumsum(dim=-1)
+        cum: Tensor = z.cumsum(dim=-1)  # type: ignore[call-arg]
         ones: Tensor = lucid.ones_like(z.narrow(-1, 0, 1))
         remaining.append(ones)
         for k in range(1, K_minus_1):
@@ -713,7 +713,7 @@ class StackTransform(Transform):
         self.event_dim = max(t.event_dim for t in transforms)
 
     def _call(self, x: Tensor) -> Tensor:
-        slices = x.unbind(self.dim)
+        slices = x.unbind(self.dim)  # type: ignore[attr-defined]
         if len(slices) != len(self.transforms):
             raise ValueError(
                 f"StackTransform: got {len(slices)} slices but "
@@ -724,14 +724,14 @@ class StackTransform(Transform):
         )
 
     def _inverse(self, y: Tensor) -> Tensor:
-        slices = y.unbind(self.dim)
+        slices = y.unbind(self.dim)  # type: ignore[attr-defined]
         return lucid.stack(
             [t._inverse(s) for t, s in zip(self.transforms, slices)], dim=self.dim
         )
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        xs = x.unbind(self.dim)
-        ys = y.unbind(self.dim)
+        xs = x.unbind(self.dim)  # type: ignore[attr-defined]
+        ys = y.unbind(self.dim)  # type: ignore[attr-defined]
         ladjs = [
             t.log_abs_det_jacobian(xi, yi) for t, xi, yi in zip(self.transforms, xs, ys)
         ]

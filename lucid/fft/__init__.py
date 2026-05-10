@@ -24,7 +24,7 @@ restricted to the original input size for ``r``/``ir`` variants.
 """
 
 import math
-from typing import Sequence, TYPE_CHECKING
+from typing import Sequence, TYPE_CHECKING, cast
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -176,7 +176,7 @@ def _scale(x: Tensor, s: float) -> Tensor:
 
 class _FftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -195,11 +195,11 @@ class _FftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # grad_x = ifft(grad_out, dual(norm)) restricted to the input axis sizes.
-        dual = _dual_norm(ctx.norm)
-        g = _engine_ifftn(grad_out, ctx.s, ctx.axes)
-        scale = _scale_after_ifft(ctx.N, dual)
+        dual = _dual_norm(cast(str, ctx.norm))
+        g = _engine_ifftn(grad_out, cast(list[int], ctx.s), cast(list[int], ctx.axes))
+        scale = _scale_after_ifft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)
         return g
@@ -207,7 +207,7 @@ class _FftnAutograd(_AutogradFunction):
 
 class _IfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -226,10 +226,10 @@ class _IfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
-        dual = _dual_norm(ctx.norm)
-        g = _engine_fftn(grad_out, ctx.s, ctx.axes)
-        scale = _scale_after_fft(ctx.N, dual)
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        dual = _dual_norm(cast(str, ctx.norm))
+        g = _engine_fftn(grad_out, cast(list[int], ctx.s), cast(list[int], ctx.axes))
+        scale = _scale_after_fft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)
         return g
@@ -237,7 +237,7 @@ class _IfftnAutograd(_AutogradFunction):
 
 class _RfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -257,12 +257,14 @@ class _RfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # rfft backward: the dual transform is irfft restricted to the original
         # full real length along each transformed axis.
-        dual = _dual_norm(ctx.norm)
-        g = _engine_irfftn(grad_out, ctx.in_sizes, ctx.axes)
-        scale = _scale_after_ifft(ctx.N, dual)
+        dual = _dual_norm(cast(str, ctx.norm))
+        g = _engine_irfftn(
+            grad_out, cast(list[int], ctx.in_sizes), cast(list[int], ctx.axes)
+        )
+        scale = _scale_after_ifft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)
         return g
@@ -270,7 +272,7 @@ class _RfftnAutograd(_AutogradFunction):
 
 class _IrfftnAutograd(_AutogradFunction):
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         x: Tensor,
         s: list[int],
@@ -290,12 +292,14 @@ class _IrfftnAutograd(_AutogradFunction):
         return out
 
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # irfft backward: rfft of the real grad with the same size along the
         # last transformed axis, dual normalisation.
-        dual = _dual_norm(ctx.norm)
-        g = _engine_rfftn(grad_out, ctx.out_sizes, ctx.axes)
-        scale = _scale_after_fft(ctx.N, dual)
+        dual = _dual_norm(cast(str, ctx.norm))
+        g = _engine_rfftn(
+            grad_out, cast(list[int], ctx.out_sizes), cast(list[int], ctx.axes)
+        )
+        scale = _scale_after_fft(cast(int, ctx.N), dual)
         if scale != 1.0:
             g = _scale(g, scale)
         return g
@@ -318,7 +322,7 @@ def fftn(
     _validate_axes_and_s(axes, s_list, "fftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
-    return _FftnAutograd.apply(input, s_list, axes, norm_v, N)
+    return cast("Tensor", _FftnAutograd.apply(input, s_list, axes, norm_v, N))
 
 
 def ifftn(
@@ -335,7 +339,7 @@ def ifftn(
     _validate_axes_and_s(axes, s_list, "ifftn")
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     N = _transform_size(s_list, in_sizes)
-    return _IfftnAutograd.apply(input, s_list, axes, norm_v, N)
+    return cast("Tensor", _IfftnAutograd.apply(input, s_list, axes, norm_v, N))
 
 
 def fft(
@@ -390,7 +394,9 @@ def rfftn(
     in_sizes = _input_sizes_along_axes(input.shape, axes)
     full_sizes: list[int] = list(s_list) if s_list else list(in_sizes)
     N = _transform_size(s_list, in_sizes)
-    return _RfftnAutograd.apply(input, s_list, axes, norm_v, N, full_sizes)
+    return cast(
+        "Tensor", _RfftnAutograd.apply(input, s_list, axes, norm_v, N, full_sizes)
+    )
 
 
 def irfftn(
@@ -415,7 +421,9 @@ def irfftn(
     N = 1
     for v in out_sizes:
         N *= int(v)
-    return _IrfftnAutograd.apply(input, s_list, axes, norm_v, N, out_sizes)
+    return cast(
+        "Tensor", _IrfftnAutograd.apply(input, s_list, axes, norm_v, N, out_sizes)
+    )
 
 
 def rfft(
@@ -556,7 +564,7 @@ def fftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     rank = input.ndim
     dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
     shifts = [int(input.shape[a]) // 2 for a in dims]
-    return lucid.roll(input, shifts=shifts, dims=dims)
+    return lucid.roll(input, shifts=shifts, dims=dims)  # type: ignore[arg-type]
 
 
 def ifftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
@@ -564,7 +572,7 @@ def ifftshift(input: Tensor, dim: int | Sequence[int] | None = None) -> Tensor:
     rank = input.ndim
     dims = _normalise_axes(_as_axis_list(dim, rank, default_all=True), rank)
     shifts = [-(int(input.shape[a]) // 2) for a in dims]
-    return lucid.roll(input, shifts=shifts, dims=dims)
+    return lucid.roll(input, shifts=shifts, dims=dims)  # type: ignore[arg-type]
 
 
 __all__ = [

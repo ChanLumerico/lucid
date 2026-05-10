@@ -1,10 +1,8 @@
 """Indexing / scatter / gather ops."""
 
 import numpy as np
-import pytest
 
 import lucid
-from lucid.test._helpers.compare import assert_close, assert_equal_int
 
 
 class TestGather:

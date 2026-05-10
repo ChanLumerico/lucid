@@ -6,7 +6,7 @@ via scatter_add, computing forward passes through the engine, and comparing
 analytical gradients from backward() with the numerical Jacobian columns.
 """
 
-from typing import Callable, Sequence
+from typing import Callable, Sequence, cast
 
 import lucid
 from lucid._C import engine as _C_engine
@@ -55,7 +55,8 @@ def gradcheck(
 
     # ── Analytical gradients ─────────────────────────────────────────────────
     inputs_clone = [_clone_leaf(t) for t in inputs]
-    out = func(*inputs_clone)
+    out_raw = func(*inputs_clone)
+    out: Tensor = out_raw if isinstance(out_raw, Tensor) else out_raw[0]
     if _unwrap(out).numel() != 1:
         raise ValueError(
             f"gradcheck requires a scalar-valued function "
@@ -123,8 +124,10 @@ def gradcheck(
                         result.append(_wrap(other_f64))
                 return result
 
-            f_plus = float(func(*_make_inputs_f64(+1.0)).item())
-            f_minus = float(func(*_make_inputs_f64(-1.0)).item())
+            f_plus_out = func(*_make_inputs_f64(+1.0))
+            f_minus_out = func(*_make_inputs_f64(-1.0))
+            f_plus = float(cast(Tensor, f_plus_out).item())
+            f_minus = float(cast(Tensor, f_minus_out).item())
             grad_values.append((f_plus - f_minus) / (2.0 * eps))
 
         # Build numerical gradient tensor from Python list (interop boundary).
@@ -224,14 +227,21 @@ def gradgradcheck(
             else:
                 leaves.append(a)  # non-tensor passthrough
         out = func(*leaves)
-        scalar: Tensor = (
-            out.sum() if isinstance(out, Tensor) else sum(o.sum() for o in out)
-        )
+        if isinstance(out, Tensor):
+            scalar: Tensor = out.sum()
+        else:
+            parts = [o.sum() for o in out]
+            scalar = parts[0]
+            for p in parts[1:]:
+                scalar = scalar + p
         tensor_leaves = [a for a in leaves if isinstance(a, Tensor)]
         grads = lucid.autograd.grad(
             scalar, tensor_leaves, create_graph=True, retain_graph=True
         )
-        return sum(g.sum() for g in grads)
+        result: Tensor = cast(Tensor, grads[0]).sum()
+        for g in grads[1:]:
+            result = result + cast(Tensor, g).sum()
+        return result
 
     return gradcheck(
         _scalar_grad_fn,

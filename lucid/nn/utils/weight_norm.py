@@ -82,7 +82,7 @@ def weight_norm(module: Module, name: str = "weight", dim: int = 0) -> Module:
         v: Parameter = getattr(mod, name + "_v")
         object.__setattr__(mod, name, _compute_weight(g, v, dim))
 
-    handle = module.register_forward_pre_hook(_pre_hook)
+    handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
 
     # Track the registration so remove_weight_norm can find it.
     hooks: dict[str, Any] = getattr(module, _WN_HOOK_ATTR, {})

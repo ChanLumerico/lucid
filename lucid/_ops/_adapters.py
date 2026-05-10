@@ -21,7 +21,7 @@ Helpers ``_to_axes`` and ``_bessel_correct`` are shared across the reduction
 adapters and live at the top of the module.
 """
 
-from typing import Callable, Sequence, TYPE_CHECKING
+from typing import Callable, Sequence, TYPE_CHECKING, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
@@ -109,7 +109,7 @@ def _to_axes(dim: int | Sequence[int] | None) -> list[int]:
         return []
     if isinstance(dim, (list, tuple)):
         return [int(d) for d in dim]
-    return [int(dim)]
+    return [int(cast(int, dim))]
 
 
 def _bessel_correct(
@@ -339,7 +339,7 @@ def _squeeze_adapter(
                 ndim -= 1
         return result
     ndim = len(x_impl.shape)
-    d = int(dim)
+    d = int(cast(int, dim))
     nd = d if d >= 0 else ndim + d
     # Silently no-op on non-unit dim (matches reference behaviour).
     if nd < 0 or nd >= ndim or int(x_impl.shape[nd]) != 1:
@@ -457,7 +457,7 @@ def _logsumexp_adapter(
     elif isinstance(dim, (list, tuple)):
         axes = [int(d) for d in dim]
     else:
-        axes = [int(dim)]
+        axes = [int(cast(int, dim))]
     return _C_engine.logsumexp(a_impl, axes, bool(keepdim))
 
 
@@ -537,15 +537,16 @@ def _tensordot_adapter(
 ) -> _Impl:
     """tensordot — accept int / nested-list / pair-of-lists ``dims``."""
     if _axes_b is not None:
-        axes_a = [int(d) for d in dims]  # type: ignore[union-attr]
+        axes_a = [int(d) for d in cast(Sequence[int], dims)]
         axes_b = [int(d) for d in _axes_b]
     elif isinstance(dims, int):
         ra = len(a_impl.shape)
         axes_a = list(range(ra - int(dims), ra))
         axes_b = list(range(int(dims)))
     else:
-        axes_a = [int(d) for d in dims[0]]  # type: ignore[index]
-        axes_b = [int(d) for d in dims[1]]  # type: ignore[index]
+        _dims_seq = cast(Sequence[Sequence[int]], dims)
+        axes_a = [int(d) for d in _dims_seq[0]]
+        axes_b = [int(d) for d in _dims_seq[1]]
     return _C_engine.tensordot(a_impl, b_impl, axes_a, axes_b)
 
 

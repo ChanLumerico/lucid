@@ -255,10 +255,12 @@ def _make_free_fn(name: str) -> object:
                 return _fn_list
 
             def _fn(*args: object, **kwargs: object) -> object:
+                from lucid._C import engine as _C_engine  # noqa: PLC0415
+
                 proc: list[object] = []
                 for i, a in enumerate(args):
                     if i < e.n_tensor_args and hasattr(a, "_impl"):
-                        proc.append(_unwrap(a))
+                        proc.append(_unwrap(a))  # type: ignore[arg-type]
                     else:
                         proc.append(a)
                 result = e.engine_fn(*proc, **kwargs)

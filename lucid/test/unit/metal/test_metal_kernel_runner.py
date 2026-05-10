@@ -1,7 +1,6 @@
 """Unit tests for lucid.metal.run_kernel (Phase 18 MetalKernelRunner)."""
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.metal as metal

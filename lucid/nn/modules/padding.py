@@ -14,11 +14,11 @@ class _ConstantPadNd(Module):
     def __init__(self, padding: int | tuple[int, ...], value: float) -> None:
         super().__init__()
         self.padding = (
-            padding if isinstance(padding, tuple) else _make_tuple(padding, self._dims)
+            padding if isinstance(padding, tuple) else _make_tuple(padding, self._dims)  # type: ignore[arg-type]
         )
         self.value = value
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="constant", value=self.value)
 
     def extra_repr(self) -> str:
@@ -97,7 +97,7 @@ class ReflectionPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
@@ -111,7 +111,7 @@ class ReflectionPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
@@ -127,7 +127,7 @@ class ReplicationPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
@@ -141,7 +141,7 @@ class ReplicationPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
@@ -155,7 +155,7 @@ class ReplicationPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
@@ -169,7 +169,7 @@ class ReflectionPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
@@ -185,7 +185,7 @@ class CircularPad1d(Module):
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:
@@ -199,7 +199,7 @@ class CircularPad2d(Module):
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:
@@ -213,7 +213,7 @@ class CircularPad3d(Module):
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:

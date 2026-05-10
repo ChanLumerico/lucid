@@ -17,7 +17,6 @@ import lucid.distributions as D
 import lucid.linalg as LA
 import lucid.nn as nn
 import lucid.nn.utils as nnu
-from lucid.test._helpers.compare import assert_close
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

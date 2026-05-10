@@ -8,29 +8,20 @@ Base class
 
 .. autoclass:: Optimizer
    :members:
+   :undoc-members:
+   :show-inheritance:
 
 Optimizers
 ----------
 
 .. autoclass:: SGD
-   :members:
 .. autoclass:: Adam
-   :members:
 .. autoclass:: AdamW
-   :members:
-.. autoclass:: RMSprop
-   :members:
-.. autoclass:: Adagrad
-   :members:
 .. autoclass:: Adadelta
-   :members:
-.. autoclass:: Adamax
-   :members:
-.. autoclass:: RAdam
-   :members:
-.. autoclass:: NAdam
-   :members:
+.. autoclass:: Adagrad
+.. autoclass:: RMSprop
 .. autoclass:: ASGD
-   :members:
-.. autoclass:: Rprop
-   :members:
+.. autoclass:: NAdam
+.. autoclass:: RAdam
+.. autoclass:: Adamax
+.. autoclass:: LBFGS

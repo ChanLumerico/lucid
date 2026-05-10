@@ -1,19 +1,55 @@
-lucid.metal
+Metal (GPU)
 ===========
 
-.. currentmodule:: lucid.metal
+.. currentmodule:: lucid
 
-.. autofunction:: is_available
+Lucid's GPU backend uses Apple's Metal Performance Shaders (MPS) layer
+via the MLX library. Operations dispatched to ``"metal"`` are evaluated
+lazily — no computation runs until :func:`lucid.eval` (or an implicit
+sync point such as ``.item()`` or ``.numpy()``) is called.
+
+Device API
+----------
+
+.. autoclass:: device
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autofunction:: eval
+
+Metal synchronisation
+---------------------
+
 .. autofunction:: synchronize
-.. autofunction:: empty_cache
-.. autofunction:: manual_seed
-.. autofunction:: memory_allocated
-.. autofunction:: max_memory_allocated
+.. autofunction:: is_available
+
+Memory utilities
+----------------
+
+.. autofunction:: metal_memory_allocated
+.. autofunction:: metal_max_memory_allocated
 .. autofunction:: reset_peak_memory_stats
-.. autofunction:: get_device_name
 
-.. autoclass:: MetalStream
-   :members:
+Stream API
+----------
 
-.. autoclass:: MetalEvent
+.. autoclass:: Stream
    :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autofunction:: current_stream
+.. autofunction:: default_stream
+
+Example
+-------
+
+.. code-block:: python
+
+   import lucid
+
+   x = lucid.randn(1024, 1024, device="metal")
+   y = x @ x.T
+   lucid.eval(y)         # flush lazy Metal graph
+   print(y.shape)        # (1024, 1024)

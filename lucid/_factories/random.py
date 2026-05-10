@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _wrap, _impl_with_grad
-from lucid._dtype import dtype, int64
+from lucid._dtype import int64
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -88,12 +88,12 @@ def set_rng_state(state: Tensor) -> None:
     # Build a fresh generator at the captured (seed, counter) pair — Philox is
     # counter-based so this exactly recovers the prior sampling stream.
     g = _C_engine.Generator(s_seed)
-    g.counter = s_counter
+    g.counter = s_counter  # type: ignore[misc]
     _default_generator = g
     # Mirror to the C++ singleton.
     cg = _C_engine.default_generator()
     cg.set_seed(s_seed)
-    cg.counter = s_counter
+    cg.counter = s_counter  # type: ignore[misc]
 
 
 def _get_gen(

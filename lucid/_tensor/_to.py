@@ -3,7 +3,7 @@ Tensor.to() and device/dtype shortcut methods.
 Injected into Tensor by _inject_to() after class definition.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype_cls, to_engine_dtype
 from lucid._dtype import float16, float32, float64, int32, int64, bool_
@@ -20,7 +20,11 @@ _builtin_bool = bool  # save before any local shadowing
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
 
-    def to(self: Tensor, *args: _DType | _Device | str, **kwargs: object) -> Tensor:
+    def to(
+        self: Tensor,
+        *args: _dtype_cls | _device_cls | _C_engine.Device | str,
+        **kwargs: object,
+    ) -> Tensor:
         """
         Move and/or cast tensor.
 
@@ -37,8 +41,9 @@ def _inject_to(cls: type) -> None:
 
         for a in args:
             if isinstance(a, cls):
-                target_device = a._impl.device
-                target_dtype = a._impl.dtype
+                t = cast(Tensor, a)
+                target_device = t._impl.device
+                target_dtype = t._impl.dtype
             elif isinstance(a, _C_engine.Device):
                 target_device = a
             elif isinstance(a, _dtype_cls):
@@ -49,9 +54,16 @@ def _inject_to(cls: type) -> None:
                 target_device = _parse_device(a)
 
         if "device" in kwargs:
-            target_device = _parse_device(kwargs["device"])
+            target_device = _parse_device(
+                cast(_device_cls | _C_engine.Device | str, kwargs["device"])
+            )
         if "dtype" in kwargs:
-            target_dtype = to_engine_dtype(kwargs["dtype"])
+            target_dtype = to_engine_dtype(
+                cast(
+                    _dtype_cls | type[_dtype_cls] | _C_engine.Dtype | str | None,
+                    kwargs["dtype"],
+                )
+            )
 
         same = target_device == self._impl.device and target_dtype == self._impl.dtype
         if same and not copy:

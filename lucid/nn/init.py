@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
-from lucid._tensor.tensor import _impl_with_grad as _iwg
+from lucid._tensor.tensor import _impl_with_grad as _iwg  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
     """Replace tensor's impl with src_impl, preserving requires_grad."""
     rg = tensor._impl.requires_grad
-    impl = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[attr-defined]
+    impl = _C_engine.reshape(src_impl, list(tensor.shape))  # type: ignore[arg-type]
     tensor._impl = _iwg(impl, rg)
     return tensor
 

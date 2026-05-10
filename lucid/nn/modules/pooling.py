@@ -49,7 +49,7 @@ class MaxPool1d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return max_pool1d(
             x,
             self.kernel_size,
@@ -90,7 +90,7 @@ class MaxPool2d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return max_pool2d(
             x,
             self.kernel_size,
@@ -126,7 +126,7 @@ class AvgPool1d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return avg_pool1d(
             x,
             self.kernel_size,
@@ -158,7 +158,7 @@ class AvgPool2d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return avg_pool2d(
             x,
             self.kernel_size,
@@ -179,7 +179,7 @@ class AdaptiveAvgPool1d(Module):
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_avg_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -193,7 +193,7 @@ class AdaptiveAvgPool2d(Module):
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_avg_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -211,7 +211,7 @@ class AdaptiveMaxPool2d(Module):
             )
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_max_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -241,7 +241,7 @@ class MaxPool3d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return max_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
@@ -270,7 +270,7 @@ class AvgPool3d(Module):
         self.ceil_mode = ceil_mode
         self.count_include_pad = count_include_pad
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return avg_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
@@ -284,7 +284,7 @@ class AdaptiveAvgPool3d(Module):
         super().__init__()
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_avg_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -304,7 +304,7 @@ class AdaptiveMaxPool1d(Module):
             )
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_max_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -322,7 +322,7 @@ class AdaptiveMaxPool3d(Module):
             )
         self.output_size = output_size
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return adaptive_max_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:
@@ -348,7 +348,7 @@ class LPPool1d(Module):
         self.stride = stride if stride is not None else kernel_size
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -393,7 +393,7 @@ class LPPool2d(Module):
             self.sh, self.sw = (stride, stride) if isinstance(stride, int) else stride
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -438,7 +438,7 @@ class LPPool3d(Module):
         self.stride = stride if stride is not None else kernel_size
         self.ceil_mode = ceil_mode
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid.nn.functional.pooling import lp_pool3d
 
         return lp_pool3d(
@@ -484,7 +484,7 @@ class MaxUnpool1d(_MaxUnpoolNd):
     """Inverse of :class:`MaxPool1d`.  Scatters values back into a sparse
     tensor at the indices saved by the forward pool."""
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         indices: Tensor,
@@ -493,9 +493,9 @@ class MaxUnpool1d(_MaxUnpoolNd):
         return max_unpool1d(
             x,
             indices,
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            padding=self.padding,
+            kernel_size=self.kernel_size,  # type: ignore[arg-type]
+            stride=self.stride,  # type: ignore[arg-type]
+            padding=self.padding,  # type: ignore[arg-type]
             output_size=output_size,
         )
 
@@ -503,7 +503,7 @@ class MaxUnpool1d(_MaxUnpoolNd):
 class MaxUnpool2d(_MaxUnpoolNd):
     """Inverse of :class:`MaxPool2d`."""
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         indices: Tensor,
@@ -512,9 +512,9 @@ class MaxUnpool2d(_MaxUnpoolNd):
         return max_unpool2d(
             x,
             indices,
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            padding=self.padding,
+            kernel_size=self.kernel_size,  # type: ignore[arg-type]
+            stride=self.stride,  # type: ignore[arg-type]
+            padding=self.padding,  # type: ignore[arg-type]
             output_size=output_size,
         )
 
@@ -522,7 +522,7 @@ class MaxUnpool2d(_MaxUnpoolNd):
 class MaxUnpool3d(_MaxUnpoolNd):
     """Inverse of :class:`MaxPool3d`."""
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         x: Tensor,
         indices: Tensor,
@@ -531,9 +531,9 @@ class MaxUnpool3d(_MaxUnpoolNd):
         return max_unpool3d(
             x,
             indices,
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            padding=self.padding,
+            kernel_size=self.kernel_size,  # type: ignore[arg-type]
+            stride=self.stride,  # type: ignore[arg-type]
+            padding=self.padding,  # type: ignore[arg-type]
             output_size=output_size,
         )
 
@@ -560,7 +560,7 @@ class FractionalMaxPool2d(Module):
         self.output_ratio = output_ratio
         self.return_indices = return_indices
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return fractional_max_pool2d(
             x,
             kernel_size=self.kernel_size,
@@ -587,7 +587,7 @@ class FractionalMaxPool3d(Module):
         self.output_ratio = output_ratio
         self.return_indices = return_indices
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return fractional_max_pool3d(
             x,
             kernel_size=self.kernel_size,

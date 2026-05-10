@@ -6,7 +6,6 @@ expected reject rate is well under 5 % per sample, so 8 rounds drives
 the residual probability of any unsampled cell below ``2 ** −60``.
 """
 
-import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -16,7 +15,7 @@ from lucid.distributions.constraints import (
     simplex,
     unit_interval,
 )
-from lucid.distributions.distribution import Distribution, ExponentialFamily
+from lucid.distributions.distribution import ExponentialFamily
 
 _MAX_GAMMA_RETRIES: int = 8
 

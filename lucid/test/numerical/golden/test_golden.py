@@ -12,10 +12,9 @@ on first encounter.
 """
 
 import numpy as np
-import pytest
 
 import lucid
-from lucid.test._helpers.golden import golden_path, load_golden, save_golden
+from lucid.test._helpers.golden import golden_path, save_golden
 
 
 def _bootstrap(name: str, key: str, value: np.ndarray) -> np.ndarray:

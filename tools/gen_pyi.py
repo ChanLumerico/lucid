@@ -44,7 +44,7 @@ _ENGINE_HEADER = """\
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from typing import List, Optional, Sequence, SupportsInt
+from typing import List, Optional, Sequence, SupportsFloat, SupportsInt
 
 class Dtype:
     F16: Dtype
@@ -80,18 +80,38 @@ class TensorImpl:
     def is_leaf(self) -> bool: ...
     @property
     def is_metal_shared(self) -> bool: ...
+    @property
+    def grad_fn(self) -> Node | None: ...
     def numel(self) -> int: ...
     def data_as_python(self) -> object: ...
     def grad_as_python(self) -> object: ...
+    def grad_as_impl(self) -> TensorImpl | None: ...
+    def grad_to_tensor(self) -> TensorImpl | None: ...
+    def set_grad(self, grad: TensorImpl) -> None: ...
     def zero_grad(self) -> None: ...
     def is_contiguous(self) -> bool: ...
     def bump_version(self) -> None: ...
+    def clone_with_grad(self, requires_grad: bool = ...) -> TensorImpl: ...
+    def copy_from(self, other: TensorImpl) -> None: ...
+    def to_string(self, precision: int, threshold: int, edgeitems: int) -> str: ...
+    def eval(self) -> None: ...
+    def item(self) -> float | int | bool: ...
+    def retain_grad_(self) -> None: ...
+    def to_bytes(self) -> bytes: ...
+    @classmethod
+    def from_bytes(cls, data: bytes, shape: List[int], dtype: Dtype, device: Device, requires_grad: bool) -> TensorImpl: ...
     def __init__(self, data: object, device: Device, requires_grad: bool) -> None: ...
 
 class Node: ...
 
 class Generator:
     def __init__(self, seed: int) -> None: ...
+    def set_seed(self, seed: int) -> None: ...
+    @property
+    def seed(self) -> int: ...
+    @property
+    def counter(self) -> int: ...
+    def next_uniform_float(self) -> float: ...
 
 class OpSchema:
     name: str
@@ -101,8 +121,147 @@ class OpSchema:
     input_arity: int
     output_arity: int
 
+class OpEvent:
+    name: str
+    time_ns: int
+    shape: List[int]
+    flops: int
+    memory_delta_bytes: int
+
+class MemoryStats:
+    current_bytes: int
+    peak_bytes: int
+    alloc_count: int
+    free_count: int
+
+class Profiler:
+    def __init__(self) -> None: ...
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    @property
+    def events(self) -> List[OpEvent]: ...
+    def reset(self) -> None: ...
+    def clear(self) -> None: ...
+
+class _nn_namespace:
+    # Stub for the ``_C_engine.nn`` sub-namespace (C++ nn ops).
+    @staticmethod
+    def linear(x: TensorImpl, w: TensorImpl, b: TensorImpl | None) -> TensorImpl: ...
+    @staticmethod
+    def bilinear_layer(x1: TensorImpl, x2: TensorImpl, w: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def conv1d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride: int, padding: int, dilation: int, groups: int) -> TensorImpl: ...
+    @staticmethod
+    def conv2d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride_h: int, stride_w: int, pad_h: int, pad_w: int, dil_h: int, dil_w: int, groups: int) -> TensorImpl: ...
+    @staticmethod
+    def conv3d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride_d: int, stride_h: int, stride_w: int, pad_d: int, pad_h: int, pad_w: int, dil_d: int, dil_h: int, dil_w: int, groups: int) -> TensorImpl: ...
+    @staticmethod
+    def conv_transpose1d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride: int, pad: int, opad: int) -> TensorImpl: ...
+    @staticmethod
+    def conv_transpose2d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride_h: int, stride_w: int, pad_h: int, pad_w: int, opad_h: int, opad_w: int) -> TensorImpl: ...
+    @staticmethod
+    def conv_transpose3d(x: TensorImpl, w: TensorImpl, b: TensorImpl | None, stride_d: int, stride_h: int, stride_w: int, pad_d: int, pad_h: int, pad_w: int, opad_d: int, opad_h: int, opad_w: int) -> TensorImpl: ...
+    @staticmethod
+    def max_pool1d(x: TensorImpl, k: int, s: int, p: int) -> TensorImpl: ...
+    @staticmethod
+    def max_pool2d(x: TensorImpl, kh: int, kw: int, sh: int, sw: int, ph: int, pw: int) -> TensorImpl: ...
+    @staticmethod
+    def max_pool3d(x: TensorImpl, kd: int, kh: int, kw: int, sd: int, sh: int, sw: int, pd: int, ph: int, pw: int) -> TensorImpl: ...
+    @staticmethod
+    def avg_pool1d(x: TensorImpl, k: int, s: int, p: int) -> TensorImpl: ...
+    @staticmethod
+    def avg_pool2d(x: TensorImpl, kh: int, kw: int, sh: int, sw: int, ph: int, pw: int) -> TensorImpl: ...
+    @staticmethod
+    def avg_pool3d(x: TensorImpl, kd: int, kh: int, kw: int, sd: int, sh: int, sw: int, pd: int, ph: int, pw: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_avg_pool1d(x: TensorImpl, sz: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_avg_pool2d(x: TensorImpl, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_avg_pool3d(x: TensorImpl, od: int, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_max_pool1d(x: TensorImpl, sz: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_max_pool2d(x: TensorImpl, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def adaptive_max_pool3d(x: TensorImpl, od: int, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def batch_norm(x: TensorImpl, w: TensorImpl, b: TensorImpl, rm: TensorImpl, rv: TensorImpl, training: bool, momentum: float, eps: float) -> TensorImpl: ...
+    @staticmethod
+    def batch_norm1d(x: TensorImpl, w: TensorImpl, b: TensorImpl, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def batch_norm3d(x: TensorImpl, w: TensorImpl, b: TensorImpl, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def batch_norm_eval(x: TensorImpl, rm: TensorImpl, rv: TensorImpl, w: TensorImpl, b: TensorImpl, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def layer_norm(x: TensorImpl, w: TensorImpl, b: TensorImpl, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def group_norm(x: TensorImpl, w: TensorImpl, b: TensorImpl, num_groups: int, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def rms_norm(x: TensorImpl, w: TensorImpl, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def lp_normalize(x: TensorImpl, ord: float, dim: int, eps: float = ...) -> TensorImpl: ...
+    @staticmethod
+    def embedding(w: TensorImpl, x: TensorImpl, pad: int) -> TensorImpl: ...
+    @staticmethod
+    def embedding_bag(w: TensorImpl, x: TensorImpl, offsets: TensorImpl, mode: int, padding_idx: int, include_last_offset: bool) -> TensorImpl: ...
+    @staticmethod
+    def one_hot(x: TensorImpl, num_classes: int) -> TensorImpl: ...
+    @staticmethod
+    def dropout(x: TensorImpl, p: float, training: bool) -> TensorImpl: ...
+    @staticmethod
+    def dropoutnd(x: TensorImpl, p: float, training: bool) -> TensorImpl: ...
+    @staticmethod
+    def alpha_dropout(x: TensorImpl, p: float, training: bool) -> TensorImpl: ...
+    @staticmethod
+    def scaled_dot_product_attention(q: TensorImpl, k: TensorImpl, v: TensorImpl, mask: TensorImpl | None, scale: float, is_causal: bool) -> TensorImpl: ...
+    @staticmethod
+    def lstm_forward(x: TensorImpl, h0: TensorImpl, c0: TensorImpl, weights: list[TensorImpl], hidden_size: int, num_layers: int, batch_first: bool, bidirectional: bool, training: bool, proj_size: int) -> tuple[TensorImpl, TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def mse_loss(input: TensorImpl, target: TensorImpl, reduction: int) -> TensorImpl: ...
+    @staticmethod
+    def huber_loss(input: TensorImpl, target: TensorImpl, delta: float, reduction: int) -> TensorImpl: ...
+    @staticmethod
+    def ctc_loss(input: TensorImpl, targets: TensorImpl, input_lengths: TensorImpl, target_lengths: TensorImpl, blank: int, zero_infinity: bool) -> TensorImpl: ...
+    @staticmethod
+    def fold(x: TensorImpl, output_size: list[int], kernel_size: list[int], stride: list[int], padding: list[int], dilation: list[int]) -> TensorImpl: ...
+    @staticmethod
+    def unfold(x: TensorImpl, kernel: list[int], stride: list[int], pad: list[int], dilation: list[int]) -> TensorImpl: ...
+    @staticmethod
+    def grid_sample(x: TensorImpl, grid: TensorImpl, align_corners: bool) -> TensorImpl: ...
+    @staticmethod
+    def affine_grid(theta: TensorImpl, N: int, H: int, W: int, align_corners: bool) -> TensorImpl: ...
+    @staticmethod
+    def interpolate_nearest_2d(x: TensorImpl, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def interpolate_nearest_3d(x: TensorImpl, od: int, oh: int, ow: int) -> TensorImpl: ...
+    @staticmethod
+    def interpolate_bilinear(x: TensorImpl, oh: int, ow: int, align_corners: bool) -> TensorImpl: ...
+    @staticmethod
+    def interpolate_trilinear(x: TensorImpl, od: int, oh: int, ow: int, align_corners: bool) -> TensorImpl: ...
+
+nn: _nn_namespace
+
 class AutocastGuard:
     def __init__(self, dtype: Dtype) -> None: ...
+    def __enter__(self) -> AutocastGuard: ...
+    def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None: ...
+
+# Module-level Dtype aliases (same objects as Dtype.F32 etc.)
+F16: Dtype
+F32: Dtype
+F64: Dtype
+BF16: Dtype
+I8: Dtype
+I16: Dtype
+I32: Dtype
+I64: Dtype
+Bool: Dtype
+C64: Dtype
+
+# Module-level Device aliases
+CPU: Device
+GPU: Device
 
 ABI_VERSION: int
 
@@ -119,6 +278,126 @@ def is_grad_enabled() -> bool: ...
 
 # ---- Ops (introspected from built engine) -----------------------------------
 
+"""
+
+
+_ENGINE_FOOTER = """
+# ── C++ optimizer classes ──────────────────────────────────────────────────
+class _EngineOptimizer:
+    \"\"\"Base for all C++ engine optimizer classes.\"\"\"
+    def step(self) -> None: ...
+    def zero_grad(self) -> None: ...
+
+class Adam(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., beta1: float = ..., beta2: float = ..., eps: float = ..., weight_decay: float = ...) -> None: ...
+
+class AdamW(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., beta1: float = ..., beta2: float = ..., eps: float = ..., weight_decay: float = ...) -> None: ...
+
+class SGD(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., momentum: float = ..., dampening: float = ..., weight_decay: float = ...) -> None: ...
+
+class RMSprop(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., alpha: float = ..., eps: float = ..., weight_decay: float = ..., momentum: float = ..., centered: bool = ...) -> None: ...
+
+class Adagrad(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., eps: float = ..., weight_decay: float = ..., initial_accumulator_value: float = ...) -> None: ...
+
+class Adadelta(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., rho: float = ..., eps: float = ..., weight_decay: float = ...) -> None: ...
+
+class Adamax(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., beta1: float = ..., beta2: float = ..., eps: float = ..., weight_decay: float = ...) -> None: ...
+
+class RAdam(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., beta1: float = ..., beta2: float = ..., eps: float = ..., weight_decay: float = ...) -> None: ...
+
+class NAdam(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., beta1: float = ..., beta2: float = ..., eps: float = ..., weight_decay: float = ..., momentum_decay: float = ...) -> None: ...
+
+class ASGD(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., lambd: float = ..., alpha: float = ..., t0: float = ..., weight_decay: float = ...) -> None: ...
+
+class Rprop(_EngineOptimizer):
+    def __init__(self, params: list[TensorImpl], lr: float = ..., eta_minus: float = ..., eta_plus: float = ..., step_min: float = ..., step_max: float = ...) -> None: ...
+
+# ── _C_engine.linalg sub-namespace ────────────────────────────────────────
+class _linalg_namespace:
+    \"\"\"Stub for the ``_C_engine.linalg`` sub-namespace (C++ linalg ops).\"\"\"
+    @staticmethod
+    def norm(a: TensorImpl, ord: float = ..., dim: list[int] = ..., keepdims: bool = ...) -> TensorImpl: ...
+    @staticmethod
+    def det(a: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def inv(a: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def pinv(a: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def solve(a: TensorImpl, b: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def qr(a: TensorImpl) -> tuple[TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def svd(a: TensorImpl, compute_uv: bool = ...) -> tuple[TensorImpl, TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def eig(a: TensorImpl) -> tuple[TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def eigh(a: TensorImpl) -> tuple[TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def cholesky(a: TensorImpl, upper: bool = ...) -> TensorImpl: ...
+    @staticmethod
+    def lu_factor(a: TensorImpl) -> tuple[TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def lu_solve(b: TensorImpl, lu: TensorImpl, piv: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def lstsq(a: TensorImpl, b: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def solve_triangular(a: TensorImpl, b: TensorImpl, upper: bool, unitriangular: bool = ...) -> TensorImpl: ...
+    @staticmethod
+    def householder_product(a: TensorImpl, tau: TensorImpl) -> TensorImpl: ...
+    @staticmethod
+    def ldl_factor(a: TensorImpl) -> tuple[TensorImpl, TensorImpl]: ...
+    @staticmethod
+    def foo(a: TensorImpl) -> TensorImpl: ...
+
+linalg: _linalg_namespace
+
+# ── einops sub-namespace ──────────────────────────────────────────────────────
+
+class _einops_namespace:
+    @staticmethod
+    def rearrange(a: TensorImpl, pattern: str, axes_lengths: dict[str, int]) -> TensorImpl: ...
+    @staticmethod
+    def reduce(a: TensorImpl, pattern: str, reduction: str, axes_lengths: dict[str, int]) -> TensorImpl: ...
+    @staticmethod
+    def repeat(a: TensorImpl, pattern: str, axes_lengths: dict[str, int]) -> TensorImpl: ...
+    @staticmethod
+    def einsum(pattern: str, *tensors: TensorImpl) -> TensorImpl: ...
+
+einops: _einops_namespace
+
+# ── Fused kernels & Metal runner ─────────────────────────────────────────────
+
+def _fused_linear_relu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...
+def _fused_linear_gelu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...
+def _run_metal_kernel(source: str, kernel_name: str, inputs: list[TensorImpl], output_shape: list[int], output_dtype: Dtype, threads_per_grid: list[int], threads_per_group: list[int]) -> TensorImpl: ...
+
+# ── Custom autograd (Python-defined Function) ─────────────────────────────────
+
+class FunctionCtx:
+    def save_for_backward(self, *tensors: TensorImpl) -> None: ...
+    def saved_tensors(self) -> tuple[TensorImpl, ...]: ...
+    def __setattr__(self, key: str, value: object) -> None: ...
+    def __getattr__(self, key: str) -> object: ...
+
+class _PythonBackwardNode:
+    ctx: FunctionCtx
+    backward_fn: object
+
+def _register_python_backward_node(
+    output: TensorImpl,
+    node: _PythonBackwardNode,
+    inputs: list[TensorImpl],
+) -> None: ...
 """
 
 
@@ -168,9 +447,20 @@ def gen_engine_pyi() -> str:
         else:
             lines.append(f"def {name}{sig_str}: ...")
 
+    # Apply per-function overrides for signatures that the C++ docstring
+    # doesn't capture correctly (e.g. Optional arguments not reflected).
+    _SIG_OVERRIDES: dict[str, str] = {
+        "set_current_profiler": "(profiler: Profiler | None) -> None",
+    }
+    for i, line in enumerate(lines):
+        for fn_name, override_sig in _SIG_OVERRIDES.items():
+            if line.startswith(f"def {fn_name}"):
+                lines[i] = f"def {fn_name}{override_sig}: ..."
+                break
+
     # Count for summary
     count = len(names)
-    return _ENGINE_HEADER + "\n".join(lines) + "\n", count
+    return _ENGINE_HEADER + "\n".join(lines) + _ENGINE_FOOTER, count
 
 
 def _engine_fn_sig(name: str, fn: object) -> str:
@@ -261,24 +551,35 @@ _TENSOR_HEADER = """\
 # --------------------------------------------------------------------- #
 # fmt: off
 
-from typing import Iterator, Self, Sequence
+from typing import Iterator, Self, Sequence, overload
+import builtins
 
 import numpy as np
 
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype
-from lucid._device import device
-from lucid._types import DeviceLike, DTypeLike, DimLike, ShapeLike, Scalar
+from lucid._dtype import dtype as _dtype_cls
+from lucid._device import device as _device_cls
+from lucid._types import DeviceLike, DTypeLike, DimLike, ShapeLike, Scalar, TensorOrScalar, _IndexType  # noqa: F401
+
+# Aliases for builtins that get shadowed by same-named Tensor methods below.
+_float = builtins.float
+_int = builtins.int
+_bool = builtins.bool
 
 class Tensor:
 
     # ── directly defined ────────────────────────────────────────────────
+    _impl: _C_engine.TensorImpl  # raw impl — mutable by _apply() in nn.Module
+
+    @classmethod
+    def __new_from_impl__(cls, impl: _C_engine.TensorImpl) -> Self: ...
+
     def __init__(
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
         *,
-        dtype: dtype | _C_engine.Dtype | str | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | _C_engine.Dtype | str | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> None: ...
     @property
@@ -286,9 +587,9 @@ class Tensor:
     @property
     def shape(self) -> tuple[int, ...]: ...
     @property
-    def dtype(self) -> DT: ...
+    def dtype(self) -> _dtype_cls: ...
     @property
-    def device(self) -> DV: ...
+    def device(self) -> _device_cls: ...
     @property
     def ndim(self) -> int: ...
     @property
@@ -311,7 +612,6 @@ class Tensor:
     def size(self, dim: int) -> int: ...
     @overload
     def size(self, dim: None = ...) -> tuple[int, ...]: ...
-    def size(self, dim: int | None = None) -> int | tuple[int, ...]: ...
     def is_contiguous(self) -> bool: ...
     @property
     def grad(self) -> Self | None: ...
@@ -338,7 +638,6 @@ class Tensor:
     def tolist(self) -> list[object] | int | float | bool: ...
     def contiguous(self) -> Self: ...
     def unfold(self, dimension: int, size: int, step: int) -> Tensor: ...
-    def scatter_add(self, dim: int, index: Tensor, src: Tensor) -> Tensor: ...
     @property
     def data(self) -> Self: ...
     def __len__(self) -> int: ...
@@ -349,37 +648,37 @@ class Tensor:
     def new_empty(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self: ...
     def new_zeros(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self: ...
     def new_ones(
         self,
         *size: int,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self: ...
     def new_full(
         self,
         size: tuple[int, ...],
         fill_value: float,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self: ...
     def new_tensor(
         self,
         data: np.ndarray | list[object] | int | float | bool | Tensor,
-        dtype: dtype | None = None,
-        device: device | str | None = None,
+        dtype: _dtype_cls | None = None,
+        device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self: ...
     def element_size(self) -> int: ...
@@ -390,7 +689,7 @@ class Tensor:
     def share_memory_(self) -> Self: ...
     def fill_(self, value: float) -> Self: ...
     def copy_(self, other: Self) -> Self: ...
-    def flip(self, dims: int | list[int]) -> Self: ...
+    def flip(self, dims: int | list[int] | Sequence[int]) -> Self: ...
     def fliplr(self) -> Self: ...
     def flipud(self) -> Self: ...
     def index_select(self, dim: int, index: Self) -> Self: ...
@@ -404,54 +703,54 @@ class Tensor:
     def addmm(
         self, mat1: Self, mat2: Self, beta: float = 1.0, alpha: float = 1.0
     ) -> Self: ...
-    def bmm(self, mat2: Self) -> Self: ...
+    def bmm(self, mat2: Self) -> Tensor: ...
     def zero_(self) -> Self: ...
 
     # ── injected dunders (_dunders.py) ──────────────────────────────────
-    def __add__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __radd__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __iadd__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __sub__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __rsub__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __isub__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __rmul__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __imul__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __truediv__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __rtruediv__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __itruediv__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __floordiv__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __rfloordiv__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __pow__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __rpow__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __ipow__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __matmul__(self: Tensor, other: Tensor) -> Tensor: ...
-    def __rmatmul__(self: Tensor, other: Tensor) -> Tensor: ...
-    def __neg__(self: Tensor) -> Tensor: ...
-    def __abs__(self: Tensor) -> Tensor: ...
-    def __invert__(self: Tensor) -> Tensor: ...
-    def __and__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __or__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __xor__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __eq__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __ne__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __lt__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __le__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __gt__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __ge__(self: Tensor, other: TensorOrScalar) -> Tensor: ...
-    def __getitem__(self: Tensor, idx: _IndexType) -> Tensor: ...
-    def __setitem__(self: Tensor, idx: _IndexType, value: TensorOrScalar) -> None: ...
+    def __add__(self, other: TensorOrScalar) -> Tensor: ...
+    def __radd__(self, other: TensorOrScalar) -> Tensor: ...
+    def __iadd__(self, other: TensorOrScalar) -> Tensor: ...
+    def __sub__(self, other: TensorOrScalar) -> Tensor: ...
+    def __rsub__(self, other: TensorOrScalar) -> Tensor: ...
+    def __isub__(self, other: TensorOrScalar) -> Tensor: ...
+    def __mul__(self, other: TensorOrScalar) -> Tensor: ...
+    def __rmul__(self, other: TensorOrScalar) -> Tensor: ...
+    def __imul__(self, other: TensorOrScalar) -> Tensor: ...
+    def __truediv__(self, other: TensorOrScalar) -> Tensor: ...
+    def __rtruediv__(self, other: TensorOrScalar) -> Tensor: ...
+    def __itruediv__(self, other: TensorOrScalar) -> Tensor: ...
+    def __floordiv__(self, other: TensorOrScalar) -> Tensor: ...
+    def __rfloordiv__(self, other: TensorOrScalar) -> Tensor: ...
+    def __pow__(self, other: TensorOrScalar) -> Tensor: ...
+    def __rpow__(self, other: TensorOrScalar) -> Tensor: ...
+    def __ipow__(self, other: TensorOrScalar) -> Tensor: ...
+    def __matmul__(self, other: Tensor) -> Tensor: ...
+    def __rmatmul__(self, other: Tensor) -> Tensor: ...
+    def __neg__(self) -> Tensor: ...
+    def __abs__(self) -> Tensor: ...
+    def __invert__(self) -> Tensor: ...
+    def __and__(self, other: TensorOrScalar) -> Tensor: ...
+    def __or__(self, other: TensorOrScalar) -> Tensor: ...
+    def __xor__(self, other: TensorOrScalar) -> Tensor: ...
+    def __eq__(self, other: object) -> Tensor: ...  # type: ignore[override]  # Tensor equality returns Tensor not bool
+    def __ne__(self, other: object) -> Tensor: ...  # type: ignore[override]  # Tensor inequality returns Tensor not bool
+    def __lt__(self, other: TensorOrScalar) -> Tensor: ...
+    def __le__(self, other: TensorOrScalar) -> Tensor: ...
+    def __gt__(self, other: TensorOrScalar) -> Tensor: ...
+    def __ge__(self, other: TensorOrScalar) -> Tensor: ...
+    def __getitem__(self, idx: _IndexType) -> Tensor: ...
+    def __setitem__(self, idx: _IndexType, value: TensorOrScalar) -> None: ...
 
     # ── injected .to() and device/dtype casts (_to.py) ─────────────────
-    def to(self, device: DeviceLike | None = None, dtype: DTypeLike | None = None) -> Tensor: ...
-    def metal(self: Tensor) -> Tensor: ...
-    def cpu(self: Tensor) -> Tensor: ...
-    def float(self: Tensor) -> Tensor: ...
-    def double(self: Tensor) -> Tensor: ...
-    def half(self: Tensor) -> Tensor: ...
-    def int(self: Tensor) -> Tensor: ...
-    def long(self: Tensor) -> Tensor: ...
-    def bool(self: Tensor) -> Tensor: ...
+    def to(self, device: DeviceLike | DTypeLike | Tensor | None = None, dtype: DTypeLike | None = None, *, copy: _bool = False) -> Tensor: ...
+    def metal(self) -> Tensor: ...
+    def cpu(self) -> Tensor: ...
+    def float(self) -> Tensor: ...
+    def double(self) -> Tensor: ...
+    def half(self) -> Tensor: ...
+    def int(self) -> Tensor: ...
+    def long(self) -> Tensor: ...
+    def bool(self) -> Tensor: ...
 
     # ── registry-injected ops (_registry.py) ────────────────────────────
 """
@@ -471,13 +770,13 @@ def _tensor_method_sig(entry) -> str:
         return f"    def {name}(self) -> Tensor: ..."
 
     if n == 2 and not extra:
-        return f"    def {name}(self, other: Tensor | float) -> Tensor: ..."
+        return f"    def {name}(self, other: Tensor | _float) -> Tensor: ..."
 
     # Has extra kwargs — emit explicit signature via _PARAM_TYPE_MAP lookup
     # rather than *args/**kwargs (H9: banned in stubs).
     parts = []
     if n == 2:
-        parts.append("other: Tensor | float")
+        parts.append("other: Tensor | _float")
     if extra:
         for kw in (extra if isinstance(extra, (list, tuple)) else []):
             ptype = _PARAM_TYPE_MAP.get(kw, "object")
@@ -489,35 +788,120 @@ def _tensor_method_sig(entry) -> str:
 def gen_tensor_pyi() -> tuple[str, int]:
     from lucid._ops._registry import _REGISTRY
 
+    # Methods that have explicit, hand-crafted signatures in ``python_only``
+    # below — skip the simplified registry stubs to avoid duplicate definitions.
+    _PYTHON_ONLY_METHODS: frozenset[str] = frozenset(
+        {
+            # Reduction / statistical ops (hand-crafted with DimLike)
+            "sum", "mean", "prod", "max", "min", "var", "std",
+            "argmax", "argmin",
+            "cumsum", "cumprod", "cummax", "cummin",
+            # Shape / layout ops
+            "squeeze", "unsqueeze",
+            "gather", "sort", "argsort", "topk",
+            "softmax", "log_softmax",
+            "clip", "clamp",
+            "repeat", "repeat_interleave",
+            "split", "any", "all", "t", "view",
+            "narrow", "scatter", "kthvalue", "movedim",
+            "unflatten", "histc",
+            # Comparison / bitwise (hand-crafted to use _float)
+            "eq", "ne", "lt", "le", "gt", "ge",
+            "bitwise_and", "bitwise_or", "bitwise_xor",
+            "bitwise_left_shift", "bitwise_right_shift",
+            "isclose",
+            "scatter_add",
+            # Methods already in _TENSOR_HEADER — must not be re-emitted by
+            # the registry loop or they would produce [no-redef] duplicates.
+            "bmm", "broadcast_to", "chunk", "contiguous", "detach",
+            "diagonal", "erf", "erfinv", "expand", "expand_dims",
+            "flatten", "flip", "fliplr", "flipud",
+            "index_select", "isfinite", "isinf", "isnan",
+            "masked_fill", "masked_select", "nan_to_num", "nonzero",
+            "pad", "permute", "ravel", "reshape", "roll", "rsqrt",
+            "squeeze_all", "swapaxes", "tile", "trace",
+            "transpose", "tril", "triu", "unbind",
+            # Additional TENSOR_HEADER methods that registry also has
+            "clone", "detach", "lerp", "where", "diff", "bmm",
+            "zero_", "fill_", "copy_",
+        }
+    )
+
     lines = []
     count = 0
     for entry in _REGISTRY:
         mn = entry.method_name
         if mn is None or mn.startswith("__"):
             continue
+        if mn in _PYTHON_ONLY_METHODS:
+            continue
         lines.append(_tensor_method_sig(entry))
         count += 1
 
-    # Also add the Python-only methods that override registry (from _methods.py)
+    # Also add the Python-only methods that override registry (from _methods.py).
+    # Uses _int / _bool / DimLike aliases — defined in the stub header above.
     python_only = [
-        "    def view(self, *shape: int | tuple[int, ...]) -> Tensor: ...",
-        "    def t(self) -> Tensor: ...",
-        "    def sum(self, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "    def mean(self, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def prod(self, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def max(self, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def min(self, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def var(self, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "    def std(self, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "    def argmax(self, dim: int | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def argmin(self, dim: int | None = None, keepdim: bool = False) -> Tensor: ...",
-        "    def squeeze(self, dim: int | list[int] | None = None) -> Tensor: ...",
-        "    def repeat(self, *sizes: int) -> Tensor: ...",
-        "    def repeat_interleave(self, repeats: int, dim: int | None = None) -> Tensor: ...",
-        "    def split(self, split_size_or_sections: int | list[int], dim: int = 0) -> list[Tensor]: ...",
-        "    def log_softmax(self, axis: int = -1) -> Tensor: ...",
+        "    def sum(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "    def mean(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def prod(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def max(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def min(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def var(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "    def std(self, dim: DimLike = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "    def argmax(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def argmin(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def cumsum(self, dim: _int | None = None) -> Tensor: ...",
+        "    def cumprod(self, dim: _int | None = None) -> Tensor: ...",
+        "    def cummax(self, dim: _int | None = None) -> Tensor: ...",
+        "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
+        "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
+        "    def unsqueeze(self, dim: DimLike = None) -> Tensor: ...",
+        "    def gather(self, other: Tensor | _float, dim: DimLike = None) -> Tensor: ...",
+        "    def sort(self, dim: DimLike = None, descending: _bool = False) -> Tensor: ...",
+        "    def argsort(self, dim: DimLike = None, descending: _bool = False) -> Tensor: ...",
+        "    def topk(self, k: _int, dim: DimLike = None, largest: _bool = True) -> Tensor: ...",
+        "    def softmax(self, axis: _int = -1) -> Tensor: ...",
+        "    def log_softmax(self, axis: _int = -1) -> Tensor: ...",
+        "    def clip(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
+        "    def clamp(self, min: Scalar | None = None, max: Scalar | None = None) -> Tensor: ...",
+        "    def repeat(self, *sizes: _int) -> Tensor: ...",
+        "    def repeat_interleave(self, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "    def split(self, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "    def any(self) -> Tensor: ...",
         "    def all(self) -> Tensor: ...",
+        "    def t(self) -> Tensor: ...",
+        "    def view(self, *shape: _int | tuple[_int, ...]) -> Tensor: ...",
+        "    def narrow(self, dim: _int, start: _int, length: _int) -> Tensor: ...",
+        "    def scatter(self, dim: _int, index: Tensor, src: Tensor | _float, reduce: str | None = None) -> Tensor: ...",
+        "    def kthvalue(self, k: _int, dim: _int = -1, keepdim: _bool = False) -> Tensor: ...",
+        "    def movedim(self, source: _int | Sequence[_int], destination: _int | Sequence[_int]) -> Tensor: ...",
+        "    def flatten(self, start: _int = 0, end: _int = -1) -> Tensor: ...",
+        "    def unflatten(self, dim: _int, sizes: Sequence[_int]) -> Tensor: ...",
+        "    def histc(self, bins: _int = 100, min: _float = 0.0, max: _float = 0.0) -> Tensor: ...",
+        "    def eq(self, other: Tensor | _float) -> Tensor: ...",
+        "    def ne(self, other: Tensor | _float) -> Tensor: ...",
+        "    def lt(self, other: Tensor | _float) -> Tensor: ...",
+        "    def le(self, other: Tensor | _float) -> Tensor: ...",
+        "    def gt(self, other: Tensor | _float) -> Tensor: ...",
+        "    def ge(self, other: Tensor | _float) -> Tensor: ...",
+        "    def bitwise_and(self, other: Tensor | _float) -> Tensor: ...",
+        "    def bitwise_or(self, other: Tensor | _float) -> Tensor: ...",
+        "    def bitwise_xor(self, other: Tensor | _float) -> Tensor: ...",
+        "    def bitwise_left_shift(self, other: Tensor | _float) -> Tensor: ...",
+        "    def bitwise_right_shift(self, other: Tensor | _float) -> Tensor: ...",
+        "    def isclose(self, other: Tensor | _float, rtol: _float = 1e-5, atol: _float = 1e-8, equal_nan: _bool = False) -> Tensor: ...",
+        "    def scatter_add(self, dim: _int, index: Tensor, src: Tensor) -> Tensor: ...  # type: ignore[no-redef]",
+        # Methods in _TENSOR_HEADER that also need explicit registry-quality sigs
+        # (added to _PYTHON_ONLY_METHODS to stop the registry loop re-emitting them,
+        # so we provide them here with proper _int/_float aliases).
+        "    def reshape(self, *shape: _int | Sequence[_int]) -> Tensor: ...",
+        "    def permute(self, *dims: _int | Sequence[_int]) -> Tensor: ...",
+        "    def expand(self, *sizes: _int | Sequence[_int]) -> Tensor: ...",
+        "    def diagonal(self, offset: _int = 0, dim1: _int = 0, dim2: _int = 1) -> Tensor: ...",
+        "    def swapaxes(self, axis0: _int, axis1: _int) -> Tensor: ...",
+        "    def broadcast_to(self, shape: Sequence[_int]) -> Tensor: ...",
+        "    def unbind(self, axis: _int = 0) -> tuple[Tensor, ...]: ...",
+        "    def rsqrt(self) -> Tensor: ...",
     ]
 
     content = _TENSOR_HEADER + "\n".join(lines) + "\n\n"
@@ -537,6 +921,11 @@ _INIT_HEADER = """\
 
 from contextlib import AbstractContextManager
 from typing import Sequence
+import builtins
+
+_float = builtins.float
+_int = builtins.int
+_bool = builtins.bool
 
 import numpy as np
 
@@ -603,8 +992,8 @@ def get_default_device() -> device: ...
 def no_grad() -> AbstractContextManager[None]: ...
 def enable_grad() -> AbstractContextManager[None]: ...
 def inference_mode() -> AbstractContextManager[None]: ...
-def is_grad_enabled() -> bool: ...
-def set_grad_enabled(mode: bool) -> None: ...
+def is_grad_enabled() -> _bool: ...
+def set_grad_enabled(mode: _bool) -> None: ...
 
 # ── Serialization ─────────────────────────────────────────────────────────────
 def save(obj: object, path: str) -> None: ...
@@ -625,10 +1014,10 @@ from lucid import test as test
 from lucid import dtypes as dtypes
 
 # ── Type predicates ───────────────────────────────────────────────────────────
-def is_tensor(obj: object) -> bool: ...
-def is_floating_point(t: Tensor) -> bool: ...
-def is_complex(t: Tensor) -> bool: ...
-def is_signed(t: Tensor) -> bool: ...
+def is_tensor(obj: object) -> _bool: ...
+def is_floating_point(t: Tensor) -> _bool: ...
+def is_complex(t: Tensor) -> _bool: ...
+def is_signed(t: Tensor) -> _bool: ...
 
 # ── Tensor constructors (lucid.tensor / as_tensor / from_numpy) ──────────────
 def tensor(
@@ -636,7 +1025,7 @@ def tensor(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def as_tensor(
     data: object,
@@ -648,51 +1037,51 @@ def from_numpy(arr: np.ndarray) -> Tensor: ...
 
 # ── Tensor factories — deterministic (creation.py) ───────────────────────
 def zeros(
-    *size: int | tuple[int, ...],
+    *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def ones(
-    *size: int | tuple[int, ...],
+    *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def empty(
-    *size: int | tuple[int, ...],
+    *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def full(
-    size: int | list[int] | tuple[int, ...],
-    fill_value: float,
+    size: _int | list[_int] | tuple[_int, ...],
+    fill_value: _float,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def eye(
-    n: int,
-    m: int | None = None,
+    n: _int,
+    m: _int | None = None,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def arange(
-    start: float,
-    end: float | None = None,
-    step: float = 1,
+    start: _float,
+    end: _float | None = None,
+    step: _float = 1,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor: ...
 def linspace(
-    start: float,
-    end: float,
-    steps: int,
+    start: _float,
+    end: _float,
+    steps: _int,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
@@ -702,78 +1091,78 @@ def zeros_like(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def ones_like(
     t: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def empty_like(
     t: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def full_like(
-    t: Tensor, fill_value: float, *, dtype: DTypeLike = None, device: DeviceLike = None
+    t: Tensor, fill_value: _float, *, dtype: DTypeLike = None, device: DeviceLike = None
 ) -> Tensor: ...
 def logspace(
-    start: float,
-    end: float,
-    steps: int,
-    base: float = 10.0,
+    start: _float,
+    end: _float,
+    steps: _int,
+    base: _float = 10.0,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor: ...
 
 # ── Tensor factories — random (random.py) ───────────────────────────────
-def manual_seed(seed: int) -> None: ...
+def manual_seed(seed: _int) -> None: ...
 def rand(
-    *size: int | tuple[int, ...],
+    *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def randn(
-    *size: int | tuple[int, ...],
+    *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def randint(
-    low: int,
-    high: int,
-    size: list[int] | tuple[int, ...],
+    low: _int,
+    high: _int,
+    size: list[_int] | tuple[_int, ...],
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def bernoulli(
-    p: float,
+    p: _float,
     *,
-    size: list[int] | tuple[int, ...] | None = None,
+    size: list[_int] | tuple[_int, ...] | None = None,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def normal(
-    mean: float = 0.0,
-    std: float = 1.0,
+    mean: _float = 0.0,
+    std: _float = 1.0,
     *,
-    size: list[int] | tuple[int, ...],
+    size: list[_int] | tuple[_int, ...],
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def rand_like(
@@ -781,14 +1170,14 @@ def rand_like(
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 def randn_like(
     t: Tensor,
     *,
     dtype: DTypeLike = None,
     device: DeviceLike = None,
-    requires_grad: bool = False,
+    requires_grad: _bool = False,
 ) -> Tensor: ...
 
 # ── Math ops (registry-generated) ───────────────────────────────────────
@@ -944,8 +1333,8 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "hi_b": "float",
     "ranges": "Sequence[tuple[float, float]]",
     "step": "float",
-    "start": "float",
-    "end": "float",
+    "start": "_int",
+    "end": "_int",
     "steps": "int",
     "p": "float",
     "ord": "int | float | str",
@@ -1089,8 +1478,11 @@ def _stringify_annotation(ann) -> str:
     raw = raw.replace("<class '", "").replace("'>", "")
     raw = raw.replace("typing.", "")
     raw = raw.replace("lucid._tensor.tensor.Tensor", "Tensor")
+    raw = raw.replace("lucid._C.engine.TensorImpl", "Tensor")
+    raw = raw.replace("lucid._C._engine.TensorImpl", "Tensor")
     raw = raw.replace("lucid._dtype.dtype", "dtype")
     raw = raw.replace("lucid._device.device", "device")
+    raw = raw.replace("_DType", "dtype")
     raw = raw.replace("NoneType", "None")
     # Strip the ``ForwardRef('Name', owner=<function … at 0xADDR>)``
     # debug repr that leaks into stubs when ``Format.FORWARDREF`` parses an
@@ -1330,33 +1722,45 @@ def gen_init_pyi() -> tuple[str, int]:
     import inspect
     from lucid._ops._registry import _REGISTRY
 
+    # Names whose signatures are hand-crafted in the ``overrides`` list below.
+    # Exclude them from the registry loop so the correct stub wins (registry
+    # introspection yields pybind11 TensorImpl signatures, not Tensor).
+    _OVERRIDE_NAMES: frozenset[str] = frozenset({
+        "sum", "mean", "prod", "max", "min", "var", "std",
+        "argmax", "argmin", "squeeze",
+        "repeat", "repeat_interleave", "split",
+        "tensordot", "meshgrid",
+    })
+
     seen: set[str] = set()
     lines = []
     count = 0
     for entry in _REGISTRY:
         fn = entry.free_fn_name
-        if fn is None or fn in seen:
+        if fn is None or fn in seen or fn in _OVERRIDE_NAMES:
             continue
         seen.add(fn)
         lines.append(_free_fn_sig(entry))
         count += 1
 
-    # Also include reference-compatible overrides defined directly in _ops/__init__.py
+    # Also include reference-compatible overrides defined directly in _ops/__init__.py.
+    # Uses _int / _bool aliases (defined at top of _INIT_HEADER) to avoid shadowing
+    # by lucid's own int / bool dtype aliases.
     overrides = [
-        "def sum(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "def mean(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def prod(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def max(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def min(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def var(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "def std(x: Tensor, dim: int | list[int] | None = None, keepdim: bool = False, *, correction: int = 1) -> Tensor: ...",
-        "def argmax(x: Tensor, dim: int | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def argmin(x: Tensor, dim: int | None = None, keepdim: bool = False) -> Tensor: ...",
-        "def squeeze(x: Tensor, dim: int | list[int] | None = None) -> Tensor: ...",
-        "def repeat(x: Tensor, repeats: int, dim: int | None = None) -> Tensor: ...",
-        "def repeat_interleave(x: Tensor, repeats: int, dim: int | None = None) -> Tensor: ...",
-        "def split(x: Tensor, split_size_or_sections: int | list[int], dim: int = 0) -> list[Tensor]: ...",
-        "def tensordot(a: Tensor, b: Tensor, dims: int | list[list[int]] = 2) -> Tensor: ...",
+        "def sum(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "def mean(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def prod(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def max(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def min(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def var(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "def std(x: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, correction: _int = 1) -> Tensor: ...",
+        "def argmax(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def argmin(x: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def squeeze(x: Tensor, dim: _int | list[_int] | None = None) -> Tensor: ...",
+        "def repeat(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "def repeat_interleave(x: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "def split(x: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
+        "def tensordot(a: Tensor, b: Tensor, dims: _int | list[list[_int]] = 2) -> Tensor: ...",
         "def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]: ...",
     ]
 
@@ -1411,6 +1815,9 @@ def gen_init_pyi() -> tuple[str, int]:
     content += "\n".join(overrides) + "\n"
     content += "\n".join(composite_lines) + "\n"
     content += "\n".join(alias_lines) + "\n"
+    # _DType is a private alias (= dtype) used in source annotations but not
+    # exported in __init__.pyi — replace with the public ``dtype`` name.
+    content = content.replace("_DType", "dtype")
 
     total = count + len(
         [l for l in composite_lines + alias_lines if l.startswith("def ")]

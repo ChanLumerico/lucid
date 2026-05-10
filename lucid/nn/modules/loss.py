@@ -37,7 +37,7 @@ class MSELoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return mse_loss(x, target, self.reduction)
 
     def extra_repr(self) -> str:
@@ -51,7 +51,7 @@ class L1Loss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return l1_loss(x, target, self.reduction)
 
     def extra_repr(self) -> str:
@@ -74,7 +74,7 @@ class CrossEntropyLoss(Module):
         self.reduction = reduction
         self.label_smoothing = label_smoothing
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return cross_entropy(
             x,
             target,
@@ -112,7 +112,7 @@ class NLLLoss(Module):
         self.ignore_index: int = ignore_index
         self.reduction: str = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return nll_loss(
             x,
             target,
@@ -146,7 +146,7 @@ class BCELoss(Module):
         self.weight: Tensor | None = weight
         self.reduction: str = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return binary_cross_entropy(
             x, target, weight=self.weight, reduction=self.reduction
         )
@@ -177,7 +177,7 @@ class BCEWithLogitsLoss(Module):
         self.reduction: str = reduction
         self.pos_weight: Tensor | None = pos_weight
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return binary_cross_entropy_with_logits(
             x,
             target,
@@ -198,7 +198,7 @@ class HuberLoss(Module):
         self.reduction = reduction
         self.delta = delta
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return huber_loss(x, target, self.delta, self.reduction)
 
     def extra_repr(self) -> str:
@@ -213,7 +213,7 @@ class SmoothL1Loss(Module):
         self.reduction = reduction
         self.beta = beta
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return smooth_l1_loss(x, target, beta=self.beta, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -228,7 +228,7 @@ class KLDivLoss(Module):
         self.reduction = reduction
         self.log_target = log_target
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return kl_div(x, target, reduction=self.reduction, log_target=self.log_target)
 
     def extra_repr(self) -> str:
@@ -253,7 +253,7 @@ class TripletMarginLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return triplet_margin_loss(
             anchor,
             positive,
@@ -277,7 +277,7 @@ class CosineEmbeddingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return cosine_embedding_loss(
             x1, x2, y, margin=self.margin, reduction=self.reduction
         )
@@ -294,7 +294,7 @@ class MarginRankingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
+    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return margin_ranking_loss(
             x1, x2, y, margin=self.margin, reduction=self.reduction
         )
@@ -311,7 +311,7 @@ class HingeEmbeddingLoss(Module):
         self.margin = margin
         self.reduction = reduction
 
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+    def forward(self, x: Tensor, y: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return hinge_embedding_loss(x, y, margin=self.margin, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -334,7 +334,7 @@ class PoissonNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return poisson_nll_loss(
             x,
             target,
@@ -362,7 +362,7 @@ class GaussianNLLLoss(Module):
         self.eps = eps
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor, var: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return gaussian_nll_loss(
             x, target, var, full=self.full, eps=self.eps, reduction=self.reduction
         )
@@ -385,7 +385,7 @@ class CTCLoss(Module):
         self.reduction = reduction
         self.zero_infinity = zero_infinity
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         log_probs: Tensor,
         targets: Tensor,
@@ -422,7 +422,7 @@ class MultiMarginLoss(Module):
         self.weight = weight
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return multi_margin_loss(
             x,
             target,
@@ -443,7 +443,7 @@ class MultilabelMarginLoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return multilabel_margin_loss(x, target, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -470,7 +470,7 @@ class SoftMarginLoss(Module):
         super().__init__()
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return soft_margin_loss(x, target, reduction=self.reduction)
 
     def extra_repr(self) -> str:
@@ -486,7 +486,7 @@ class MultiLabelSoftMarginLoss(Module):
         self.weight = weight
         self.reduction = reduction
 
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, x: Tensor, target: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return multilabel_soft_margin_loss(
             x, target, weight=self.weight, reduction=self.reduction
         )
@@ -524,7 +524,7 @@ class TripletMarginWithDistanceLoss(Module):
         self.swap = swap
         self.reduction = reduction
 
-    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:
+    def forward(self, anchor: Tensor, positive: Tensor, negative: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # Delegate to the functional implementation so the F. and nn.
         # surfaces stay byte-equivalent.
         from lucid.nn.functional.loss import triplet_margin_with_distance_loss

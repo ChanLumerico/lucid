@@ -138,7 +138,7 @@ def spectral_norm(
         normalised: Tensor = w_orig / sigma
         object.__setattr__(mod, name, normalised)
 
-    handle = module.register_forward_pre_hook(_pre_hook)
+    handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
 
     hooks: dict[str, object] = getattr(module, _SN_HOOK_ATTR, {})
     hooks[name] = (handle, dim)
@@ -156,8 +156,8 @@ def remove_spectral_norm(module: Module, name: str = "weight") -> Module:
     hooks: dict[str, object] = getattr(module, _SN_HOOK_ATTR, {})
     if name not in hooks:
         raise ValueError(f"spectral_norm not registered on '{name}'")
-    handle, _dim = hooks.pop(name)
-    handle.remove()
+    handle, _dim = hooks.pop(name)  # type: ignore[misc]
+    handle.remove()  # type: ignore[has-type]
 
     w_orig: Parameter = getattr(module, name + "_orig")
     materialised: Tensor = w_orig.detach()

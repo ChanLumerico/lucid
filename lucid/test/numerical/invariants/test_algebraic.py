@@ -7,7 +7,6 @@ the quickest signal that an op miscompiles.
 """
 
 import numpy as np
-import pytest
 
 import lucid
 from lucid.test._helpers.compare import assert_close

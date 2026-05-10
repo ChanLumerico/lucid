@@ -3,14 +3,12 @@ lucid.linalg: linear algebra operations.
 """
 
 import functools
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, cast
 
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+from lucid._tensor.tensor import Tensor
 
 _la = _C_engine.linalg
 
@@ -29,8 +27,8 @@ def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
 
     @functools.wraps(fn)
     def wrapper(*args: object, **kwargs: object) -> object:
-        ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type]
-        uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type]
+        ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type, return-value]
+        uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type, return-value]
         out = fn(*ua, **uk)
         if isinstance(out, tuple):
             return tuple(
@@ -49,19 +47,19 @@ def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
 @_linalg_op
 def inv(x: Tensor) -> Tensor:
     """Matrix inverse."""
-    return _la.inv(x)  # type: ignore[arg-type]
+    return _la.inv(x)  # type: ignore[arg-type, return-value]
 
 
 @_linalg_op
 def det(x: Tensor) -> Tensor:
     """Matrix determinant."""
-    return _la.det(x)  # type: ignore[arg-type]
+    return _la.det(x)  # type: ignore[arg-type, return-value]
 
 
 @_linalg_op
 def solve(A: Tensor, b: Tensor) -> Tensor:
     """Solve linear system Ax = b."""
-    return _la.solve(A, b)  # type: ignore[arg-type]
+    return _la.solve(A, b)  # type: ignore[arg-type, return-value]
 
 
 def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
@@ -76,7 +74,7 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
     computed in Python on top of ``solve_triangular``, ``matmul``, ``tril``
     and ``eye`` — all of which are themselves differentiable.
     """
-    return _CholeskyAutograd.apply(x, upper)  # type: ignore[no-any-return]
+    return cast(Tensor, _CholeskyAutograd.apply(x, upper))
 
 
 from lucid.autograd.function import Function as _AutogradFunction
@@ -89,16 +87,16 @@ class _CholeskyAutograd(_AutogradFunction):
     gradient via Murray (2016)."""
 
     @staticmethod
-    def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:
+    def forward(ctx: FunctionCtx, x: Tensor, upper: bool) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         out = _wrap(_la.cholesky(_unwrap(x), upper))
         ctx.save_for_backward(out)
         ctx.upper = bool(upper)
         return out
 
     @staticmethod
-    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:
+    def backward(ctx: FunctionCtx, grad_out: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         (factor,) = ctx.saved_tensors  # L (upper=False) or U (upper=True)
-        upper: bool = ctx.upper
+        upper: bool = cast(bool, ctx.upper)
 
         # Normalise to lower-triangular form L; gradient w.r.t. that L.
         if upper:
@@ -199,7 +197,7 @@ class _SVDSGrad(_AutogradFunction):
     """Backward: singular-value contribution  dA = U diag(G_S) Vh."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -212,9 +210,9 @@ class _SVDSGrad(_AutogradFunction):
         return _wrap(s_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:
-        U = _wrap(ctx.u_impl)
-        Vh = _wrap(ctx.vh_impl)
+    def backward(ctx: FunctionCtx, G_S: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         return U @ lucid.diag_embed(G_S) @ Vh
 
 
@@ -222,7 +220,7 @@ class _SVDUGrad(_AutogradFunction):
     """Backward: left-singular-vector contribution to dA."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -235,10 +233,10 @@ class _SVDUGrad(_AutogradFunction):
         return _wrap(u_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:
-        U = _wrap(ctx.u_impl)
-        S = _wrap(ctx.s_impl)
-        Vh = _wrap(ctx.vh_impl)
+    def backward(ctx: FunctionCtx, G_U: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        S = _wrap(ctx.s_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         k = int(S.shape[-1])
         m = int(U.shape[-2])
         F = _svd_loewner(S)
@@ -256,7 +254,7 @@ class _SVDVhGrad(_AutogradFunction):
     """Backward: right-singular-vector (Vh) contribution to dA."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         u_impl: _C_engine.TensorImpl,
@@ -269,10 +267,10 @@ class _SVDVhGrad(_AutogradFunction):
         return _wrap(vh_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:
-        U = _wrap(ctx.u_impl)
-        S = _wrap(ctx.s_impl)
-        Vh = _wrap(ctx.vh_impl)
+    def backward(ctx: FunctionCtx, G_Vh: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        U = _wrap(ctx.u_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        S = _wrap(ctx.s_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        Vh = _wrap(ctx.vh_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         k = int(S.shape[-1])
         n = int(Vh.shape[-1])
         F = _svd_loewner(S)
@@ -294,7 +292,11 @@ def svd(x: Tensor, full_matrices: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     output — so that gradients from U, S, and Vh all accumulate correctly
     into the input gradient (Giles 2008 formula).
     """
-    u_impl, s_impl, vh_impl = _la.svd(_unwrap(x))
+    _svd_result = _la.svd(_unwrap(x))
+    u_impl: _C_engine.TensorImpl
+    s_impl: _C_engine.TensorImpl
+    vh_impl: _C_engine.TensorImpl
+    u_impl, s_impl, vh_impl = _svd_result  # type: ignore[misc]  # svd returns tuple[TensorImpl, TensorImpl, TensorImpl] at runtime
     if not _C_engine.grad_enabled() or not x.requires_grad:
         return _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl)
     # Pass TensorImpl (not Tensor) so _make_apply ignores them in the
@@ -362,7 +364,7 @@ class _QRRGrad(_AutogradFunction):
     LAPACK's sign convention (negative diagonal R elements are allowed)."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         q_impl: _C_engine.TensorImpl,
@@ -372,7 +374,7 @@ class _QRRGrad(_AutogradFunction):
         return _wrap(r_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # R backward via Cholesky of A^T A:
         #   R = D L^T  where L = chol(A^T A), D = diag(sign(diag(R)))
         #   G_L = G_R.mT @ D  (chain rule through R = D L^T)
@@ -391,7 +393,7 @@ class _QRRGrad(_AutogradFunction):
         # Using Murray's Cholesky backward directly:
         # G_L[a,b] = G_R[b,a] * D[b,b]  (= G_R.mT @ D)
         # G_B = chol_backward(L, G_L) via the two triangular solves
-        R = _wrap(ctx.r_impl)
+        R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         n = int(R.shape[-1])
         diag_R = R.diagonal(dim1=-2, dim2=-1)
         # sign of diagonal: +1 or -1
@@ -425,7 +427,7 @@ class _QRRGradWithA(_AutogradFunction):
     """Backward: R contribution to dA via Cholesky of A^T A."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         r_impl: _C_engine.TensorImpl,
@@ -435,9 +437,9 @@ class _QRRGradWithA(_AutogradFunction):
         return _wrap(r_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
-        A = _wrap(ctx.A_impl)
-        R = _wrap(ctx.r_impl)
+    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        A = _wrap(ctx.A_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         n = int(R.shape[-1])
         # D = sign matrix of R diagonal
         diag_R = R.diagonal(dim1=-2, dim2=-1)
@@ -473,7 +475,7 @@ class _QRQGrad(_AutogradFunction):
     """
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         q_impl: _C_engine.TensorImpl,
@@ -484,9 +486,9 @@ class _QRQGrad(_AutogradFunction):
         return _wrap(q_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:
-        Q = _wrap(ctx.q_impl)
-        R = _wrap(ctx.r_impl)
+    def backward(ctx: FunctionCtx, G_Q: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        Q = _wrap(ctx.q_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         m, n = int(Q.shape[-2]), int(Q.shape[-1])
         # Stiefel gradient: project G_Q onto tangent space at Q
         QtGQ = Q.mT @ G_Q  # n×n
@@ -535,9 +537,9 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
         eye_2d: Tensor = lucid.eye(int(sh[-1]), dtype=x.dtype)
         if len(sh) == 2:
             return eye_2d
-        return lucid.broadcast_to(eye_2d, list(sh))
+        return lucid.broadcast_to(eye_2d, tuple(sh))
 
-    base: Tensor = inv(x) if n < 0 else x
+    base: Tensor = cast(Tensor, inv(x)) if n < 0 else x
     exponent: int = -n if n < 0 else n
     if exponent == 1:
         return base
@@ -568,14 +570,14 @@ def pinv(x: Tensor) -> Tensor:
     if len(sh) >= 2 and sh[-1] == sh[-2]:
         # Square matrix → ``pinv ≡ inv`` for full-rank input. Falling back to
         # the engine pinv would lose autograd; ``inv`` keeps it.
-        return inv(x)
-    return _wrap(_la.pinv(_unwrap(x)))  # type: ignore[arg-type]
+        return cast(Tensor, inv(x))
+    return _wrap(_la.pinv(_unwrap(x)))  # type: ignore[arg-type, return-value]
 
 
 @_linalg_op
 def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     """Eigenvalue decomposition (general, no backward)."""
-    vals, vecs = _la.eig(x)  # type: ignore[arg-type]
+    vals, vecs = _la.eig(x)  # type: ignore[arg-type, return-value]
     return vals, vecs  # type: ignore[return-value]
 
 
@@ -603,7 +605,7 @@ class _EighWGrad(_AutogradFunction):
     """
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         w_impl: _C_engine.TensorImpl,
@@ -613,8 +615,8 @@ class _EighWGrad(_AutogradFunction):
         return _wrap(w_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:
-        V = _wrap(ctx.V_impl)
+    def backward(ctx: FunctionCtx, G_w: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        V = _wrap(ctx.V_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         return V @ lucid.diag_embed(G_w) @ V.mT
 
 
@@ -622,7 +624,7 @@ class _EighVGrad(_AutogradFunction):
     """Backward: eigenvector contribution  dA = sym(V (F ⊙ V^T G_V) V^T)."""
 
     @staticmethod
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         ctx: FunctionCtx,
         A: Tensor,
         w_impl: _C_engine.TensorImpl,
@@ -633,9 +635,9 @@ class _EighVGrad(_AutogradFunction):
         return _wrap(V_impl)
 
     @staticmethod
-    def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:
-        w = _wrap(ctx.w_impl)
-        V = _wrap(ctx.V_impl)
+    def backward(ctx: FunctionCtx, G_V: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        w = _wrap(ctx.w_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
+        V = _wrap(ctx.V_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
         k = int(w.shape[-1])
         Wi = w.unsqueeze(-1)
         Wj = w.unsqueeze(-2)
@@ -688,7 +690,7 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     implicit unit diagonal) and ``pivots`` is an int32 tensor of 1-based
     pivot indices.  Matches ``the reference LU factor API``.
     """
-    lu, pivots = _la.lu_factor(A)  # type: ignore[arg-type]
+    lu, pivots = _la.lu_factor(A)  # type: ignore[arg-type, return-value]
     return lu, pivots  # type: ignore[return-value]
 
 
@@ -700,7 +702,7 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
 
     Returns ``(sign, logabsdet)`` such that ``det(A) == sign * exp(logabsdet)``.
     """
-    d = det(A)
+    d = cast(Tensor, det(A))
     sign = _wrap(_C_engine.sign(_unwrap(d)))
     logabsdet = _wrap(_C_engine.log(_C_engine.abs(_unwrap(d))))
     return sign, logabsdet
@@ -753,7 +755,12 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
         smax = _C_engine.max(S_impl, [-1], False)
         smin = _C_engine.min(S_impl, [-1], False)
         return _wrap(_C_engine.div(smin, smax))
-    return _wrap(_C_engine.mul(_unwrap(norm(A, ord=p)), _unwrap(norm(inv(A), ord=p))))
+    return _wrap(
+        _C_engine.mul(
+            _unwrap(cast(Tensor, norm(A, ord=p))),
+            _unwrap(cast(Tensor, norm(cast(Tensor, inv(A)), ord=p))),
+        )
+    )
 
 
 def multi_dot(tensors: list[Tensor]) -> Tensor:
@@ -1094,7 +1101,7 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     singular; ``Ainv`` is then a zero placeholder.
     """
     try:
-        return inv(A), _info_zero(A)
+        return cast(Tensor, inv(A)), _info_zero(A)
     except Exception:
         if check_errors:
             raise
@@ -1120,7 +1127,7 @@ def solve_ex(
     if not left:
         raise NotImplementedError("solve_ex: only left=True is supported")
     try:
-        return solve(A, B), _info_zero(A)
+        return cast(Tensor, solve(A, B)), _info_zero(A)
     except Exception:
         if check_errors:
             raise
@@ -1154,7 +1161,8 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
         raise ValueError(f"lu requires a square matrix in the last two dims, got {sh}")
     n = int(sh[-1])
 
-    LU, pivots = lu_factor(A)
+    _lu_result = cast(tuple["Tensor", "Tensor"], lu_factor(A))
+    LU, pivots = _lu_result
 
     # Split the packed LU into L (unit-lower) and U (upper).
     eye_n = lucid.eye(n, dtype=A.dtype, device=A.device)
@@ -1174,8 +1182,8 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
 def _build_permutation_matrix(
     pivots: Tensor,
     n: int,
-    dtype: object,
-    device: object,
+    dtype: lucid.dtype | type[lucid.dtype] | _C_engine.Dtype | None,
+    device: lucid.device | _C_engine.Device | str | None,
 ) -> Tensor:
     """Convert LAPACK's 1-based pivot vector to an explicit (n × n) P
     matrix such that ``A = P · L · U`` (LAPACK's contract is
@@ -1347,7 +1355,7 @@ def diagonal(
     matrix in a batched ``A``.  Same engine kernel as ``lucid.diagonal``;
     the linalg variant differs only by the kwarg-only / matrix-aware
     defaults (``dim1=-2``, ``dim2=-1``)."""
-    return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)
+    return lucid.diagonal(A, offset=offset, dim1=dim1, dim2=dim2)  # type: ignore[arg-type]
 
 
 __all__ = [

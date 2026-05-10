@@ -12,7 +12,6 @@ sampling math, so the same Lucid Philox stream applies.
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import as_tensor as _as_tensor
-from lucid.distributions._util import broadcast_pair as _broadcast_pair
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -59,7 +58,7 @@ class RelaxedBernoulli(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
@@ -137,7 +136,7 @@ class RelaxedOneHotCategorical(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         self._num_events = shape[-1]
@@ -172,7 +171,7 @@ class RelaxedOneHotCategorical(Distribution):
         l: Tensor = self._logits
         tau: Tensor = self.temperature
         log_y: Tensor = value.log()
-        log_z: Tensor = lucid.logsumexp(l - tau * log_y, dim=-1)
+        log_z: Tensor = lucid.logsumexp(l - tau * log_y, dim=-1)  # type: ignore[arg-type]
         return (
             float(_lgamma_int(K))
             + (K - 1.0) * tau.log()

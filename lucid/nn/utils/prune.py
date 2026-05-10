@@ -55,7 +55,7 @@ def _install_mask(module: Module, name: str, mask: Tensor) -> Module:
         m: Tensor = getattr(mod, name + "_mask")
         object.__setattr__(mod, name, w * m)
 
-    handle = module.register_forward_pre_hook(_pre_hook)
+    handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
     hooks: dict[str, object] = getattr(module, _PRUNE_HOOK_ATTR, {})
     hooks[name] = handle
     object.__setattr__(module, _PRUNE_HOOK_ATTR, hooks)
@@ -123,7 +123,7 @@ def l1_unstructured(
     # right argument.  The bare comparison op doesn't broadcast a 0-d
     # tensor against a multi-D one, so materialise the threshold as a
     # ``full_like`` tensor that already shares the weight's shape.
-    threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())
+    threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())  # type: ignore[arg-type]
     threshold_t: Tensor = lucid.full_like(abs_w, threshold_scalar)
     keep: Tensor = abs_w > threshold_t
     mask: Tensor = lucid.where(keep, lucid.ones_like(weight), lucid.zeros_like(weight))
@@ -141,7 +141,7 @@ def remove(module: Module, name: str = "weight") -> Module:
     if name not in hooks:
         raise ValueError(f"prune not registered on '{name}'")
     handle = hooks.pop(name)
-    handle.remove()
+    handle.remove()  # type: ignore[attr-defined]
 
     w_orig: Parameter = getattr(module, name + "_orig")
     mask: Tensor = getattr(module, name + "_mask")

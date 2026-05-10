@@ -31,6 +31,7 @@ def clip_grad_norm_(
     if norm_type == math.inf:
         max_val = _C_engine.full([1], float("-inf"), dt, dev)
         for p in params_with_grad:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             abs_g = _C_engine.abs(g_impl)
             m = _C_engine.reshape(_C_engine.max(abs_g, [], False), [1])
@@ -40,6 +41,7 @@ def clip_grad_norm_(
     else:
         acc = _C_engine.zeros([1], dt, dev)
         for p in params_with_grad:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             pow_g = _C_engine.pow_scalar(_C_engine.abs(g_impl), norm_type)
             s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])
@@ -55,6 +57,7 @@ def clip_grad_norm_(
     clip_coef = max_norm / (total_norm + 1e-6)
     if clip_coef < 1.0:
         for p in params_with_grad:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             coef = _C_engine.full(
                 list(g_impl.shape), clip_coef, g_impl.dtype, g_impl.device
@@ -71,6 +74,7 @@ def clip_grad_value_(
     """Clip each gradient element to [-clip_value, clip_value] in-place."""
     for p in parameters:
         if p.grad is not None:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             p._impl.set_grad(_C_engine.clip(g_impl, -clip_value, clip_value))
 
@@ -96,6 +100,7 @@ def get_total_norm(
     if norm_type == math.inf:
         max_val = _C_engine.full([1], float("-inf"), dt, dev)
         for p in params_with_grad:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             abs_g = _C_engine.abs(g_impl)
             m = _C_engine.reshape(_C_engine.max(abs_g, [], False), [1])
@@ -105,6 +110,7 @@ def get_total_norm(
     else:
         acc = _C_engine.zeros([1], dt, dev)
         for p in params_with_grad:
+            assert p.grad is not None
             g_impl = _unwrap(p.grad)
             pow_g = _C_engine.pow_scalar(_C_engine.abs(g_impl), norm_type)
             s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])

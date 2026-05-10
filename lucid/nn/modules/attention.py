@@ -3,13 +3,13 @@ Multi-head attention module.
 """
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
-from lucid._factories.creation import empty, zeros
-from lucid._dispatch import _unwrap, _wrap
+from lucid._factories.creation import empty
+from lucid._dispatch import _wrap
 from lucid._C import engine as _C_engine
 import lucid as _lucid
 import lucid.nn.init as init
@@ -28,9 +28,10 @@ def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     (-inf where True, 0 where False).  Already-float masks pass through."""
     if mask.dtype is _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
-        zero_t: Tensor = _lucid.zeros(mask.shape, dtype=float_dtype, device=mask.device)
+        _dtype = cast(DTypeLike, float_dtype)
+        zero_t: Tensor = _lucid.zeros(mask.shape, dtype=_dtype, device=mask.device)
         ninf_t: Tensor = _lucid.full(
-            mask.shape, _NEG_INF, dtype=float_dtype, device=mask.device
+            mask.shape, _NEG_INF, dtype=_dtype, device=mask.device
         )
         return _lucid.where(mask, ninf_t, zero_t)
     return mask
@@ -153,6 +154,8 @@ class MultiheadAttention(Module):
             init.xavier_uniform_(self.in_proj_weight)
         if self.q_proj_weight is not None:
             init.xavier_uniform_(self.q_proj_weight)
+            assert self.k_proj_weight is not None
+            assert self.v_proj_weight is not None
             init.xavier_uniform_(self.k_proj_weight)
             init.xavier_uniform_(self.v_proj_weight)
         init.xavier_uniform_(self.out_proj_weight)
@@ -162,6 +165,7 @@ class MultiheadAttention(Module):
             init.zeros_(self.out_proj_bias)
         if self.bias_k is not None:
             init.xavier_normal_(self.bias_k)
+            assert self.bias_v is not None
             init.xavier_normal_(self.bias_v)
 
     # ── reference-checkpoint loading: accept ``out_proj.weight`` / ``out_proj.bias``
@@ -274,7 +278,7 @@ class MultiheadAttention(Module):
 
         return merged
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         query: Tensor,
         key: Tensor,
@@ -298,6 +302,7 @@ class MultiheadAttention(Module):
 
         # ── add_bias_kv: prepend learnable bias rows to K / V ───────────
         if self.bias_k is not None:
+            assert self.bias_v is not None
             bk: Tensor = self.bias_k.expand(B, 1, self.embed_dim)
             bv: Tensor = self.bias_v.expand(B, 1, self.embed_dim)
             k = _lucid.cat([k, bk], 1)
@@ -332,12 +337,10 @@ class MultiheadAttention(Module):
         # the manual softmax path and would silently desync.  Whenever
         # weights are needed, or a mask is involved, fall back to the
         # explicit Q·K^T → softmax path.
+        attn_weights: Tensor | None
         if need_weights or merged_mask is not None:
-            attn_out, attn_weights = self._attn_with_weights(
-                qh, kh, vh, merged_mask, is_causal
-            )
-            if not need_weights:
-                attn_weights = None
+            attn_out, _aw = self._attn_with_weights(qh, kh, vh, merged_mask, is_causal)
+            attn_weights = _aw if need_weights else None
         else:
             attn_out = scaled_dot_product_attention(
                 qh,

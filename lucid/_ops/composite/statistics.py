@@ -582,8 +582,9 @@ def std_mean(
 ) -> tuple[Tensor, Tensor]:
     """Return ``(std, mean)`` along ``dim``."""
     if dim is not None:
-        m = lucid.mean(x, dim, keepdim)
-        s = lucid.std(x, dim, keepdim, correction=correction)
+        _dim = list(dim) if not isinstance(dim, int) else dim
+        m = lucid.mean(x, _dim, keepdim)
+        s = lucid.std(x, _dim, keepdim, correction=correction)
     else:
         m = lucid.mean(x)
         s = lucid.std(x)
@@ -598,8 +599,9 @@ def var_mean(
 ) -> tuple[Tensor, Tensor]:
     """Return ``(var, mean)`` along ``dim``."""
     if dim is not None:
-        m = lucid.mean(x, dim, keepdim)
-        v = lucid.var(x, dim, keepdim, correction=correction)
+        _dim = list(dim) if not isinstance(dim, int) else dim
+        m = lucid.mean(x, _dim, keepdim)
+        v = lucid.var(x, _dim, keepdim, correction=correction)
     else:
         m = lucid.mean(x)
         v = lucid.var(x)

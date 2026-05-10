@@ -3,7 +3,7 @@ Transformer modules: TransformerEncoderLayer, TransformerEncoder,
 TransformerDecoderLayer, TransformerDecoder, Transformer.
 """
 
-import math
+from typing import cast
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -59,9 +59,17 @@ class TransformerEncoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
-        return self.linear2(self.dropout2(act(self.linear1(x))))
+        return cast(
+            Tensor,
+            self.linear2(
+                cast(
+                    Tensor,
+                    self.dropout2(cast(Tensor, act(cast(Tensor, self.linear1(x))))),
+                )
+            ),
+        )
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
         src_mask: Tensor | None = None,
@@ -69,7 +77,7 @@ class TransformerEncoderLayer(Module):
         is_causal: bool = False,
     ) -> Tensor:
         if self.norm_first:
-            normed: Tensor = self.norm1(src)
+            normed: Tensor = cast(Tensor, self.norm1(src))
             src2, _ = self.self_attn(
                 normed,
                 normed,
@@ -79,8 +87,10 @@ class TransformerEncoderLayer(Module):
                 need_weights=False,
                 is_causal=is_causal,
             )
-            src = src + self.dropout1(src2)
-            src = src + self.dropout3(self._ff(self.norm2(src)))
+            src = src + cast(Tensor, self.dropout1(src2))
+            src = src + cast(
+                Tensor, self.dropout3(self._ff(cast(Tensor, self.norm2(src))))
+            )
         else:
             src2, _ = self.self_attn(
                 src,
@@ -91,8 +101,10 @@ class TransformerEncoderLayer(Module):
                 need_weights=False,
                 is_causal=is_causal,
             )
-            src = self.norm1(src + self.dropout1(src2))
-            src = self.norm2(src + self.dropout3(self._ff(src)))
+            src = cast(Tensor, self.norm1(src + cast(Tensor, self.dropout1(src2))))
+            src = cast(
+                Tensor, self.norm2(src + cast(Tensor, self.dropout3(self._ff(src))))
+            )
         return src
 
     def extra_repr(self) -> str:
@@ -131,7 +143,7 @@ class TransformerEncoder(Module):
             self.add_module("norm", norm)
         self.num_layers = num_layers
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
         mask: Tensor | None = None,
@@ -139,11 +151,12 @@ class TransformerEncoder(Module):
     ) -> Tensor:
         output = src
         for layer in self.layers:
-            output = layer(
-                output, src_mask=mask, src_key_padding_mask=src_key_padding_mask
+            output = cast(
+                Tensor,
+                layer(output, src_mask=mask, src_key_padding_mask=src_key_padding_mask),
             )
         if self.norm is not None:
-            output = self.norm(output)
+            output = cast(Tensor, self.norm(output))
         return output
 
     def extra_repr(self) -> str:
@@ -202,9 +215,17 @@ class TransformerDecoderLayer(Module):
 
     def _ff(self, x: Tensor) -> Tensor:
         act = gelu if self.activation == "gelu" else relu
-        return self.linear2(self.dropout2(act(self.linear1(x))))
+        return cast(
+            Tensor,
+            self.linear2(
+                cast(
+                    Tensor,
+                    self.dropout2(cast(Tensor, act(cast(Tensor, self.linear1(x))))),
+                )
+            ),
+        )
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         tgt: Tensor,
         memory: Tensor,
@@ -216,7 +237,7 @@ class TransformerDecoderLayer(Module):
         memory_is_causal: bool = False,
     ) -> Tensor:
         if self.norm_first:
-            normed: Tensor = self.norm1(tgt)
+            normed: Tensor = cast(Tensor, self.norm1(tgt))
             tgt2, _ = self.self_attn(
                 normed,
                 normed,
@@ -226,9 +247,9 @@ class TransformerDecoderLayer(Module):
                 need_weights=False,
                 is_causal=tgt_is_causal,
             )
-            tgt = tgt + self.dropout1(tgt2)
+            tgt = tgt + cast(Tensor, self.dropout1(tgt2))
             tgt2, _ = self.multihead_attn(
-                self.norm2(tgt),
+                cast(Tensor, self.norm2(tgt)),
                 memory,
                 memory,
                 attn_mask=memory_mask,
@@ -236,8 +257,10 @@ class TransformerDecoderLayer(Module):
                 need_weights=False,
                 is_causal=memory_is_causal,
             )
-            tgt = tgt + self.dropout3(tgt2)
-            tgt = tgt + self.dropout4(self._ff(self.norm3(tgt)))
+            tgt = tgt + cast(Tensor, self.dropout3(tgt2))
+            tgt = tgt + cast(
+                Tensor, self.dropout4(self._ff(cast(Tensor, self.norm3(tgt))))
+            )
         else:
             tgt2, _ = self.self_attn(
                 tgt,
@@ -248,7 +271,7 @@ class TransformerDecoderLayer(Module):
                 need_weights=False,
                 is_causal=tgt_is_causal,
             )
-            tgt = self.norm1(tgt + self.dropout1(tgt2))
+            tgt = cast(Tensor, self.norm1(tgt + cast(Tensor, self.dropout1(tgt2))))
             tgt2, _ = self.multihead_attn(
                 tgt,
                 memory,
@@ -258,8 +281,10 @@ class TransformerDecoderLayer(Module):
                 need_weights=False,
                 is_causal=memory_is_causal,
             )
-            tgt = self.norm2(tgt + self.dropout3(tgt2))
-            tgt = self.norm3(tgt + self.dropout4(self._ff(tgt)))
+            tgt = cast(Tensor, self.norm2(tgt + cast(Tensor, self.dropout3(tgt2))))
+            tgt = cast(
+                Tensor, self.norm3(tgt + cast(Tensor, self.dropout4(self._ff(tgt))))
+            )
         return tgt
 
     def extra_repr(self) -> str:
@@ -298,7 +323,7 @@ class TransformerDecoder(Module):
             self.add_module("norm", norm)
         self.num_layers = num_layers
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         tgt: Tensor,
         memory: Tensor,
@@ -309,9 +334,12 @@ class TransformerDecoder(Module):
     ) -> Tensor:
         output = tgt
         for layer in self.layers:
-            output = layer(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
+            output = cast(
+                Tensor,
+                layer(output, memory, tgt_mask=tgt_mask, memory_mask=memory_mask),
+            )
         if self.norm is not None:
-            output = self.norm(output)
+            output = cast(Tensor, self.norm(output))
         return output
 
     def extra_repr(self) -> str:
@@ -360,21 +388,25 @@ class Transformer(Module):
         self.d_model = d_model
         self.nhead = nhead
 
-    def forward(
+    def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
         src: Tensor,
         tgt: Tensor,
-        src_mask: Tensor = None,
+        src_mask: Tensor | None = None,
         tgt_mask: Tensor | None = None,
         memory_mask: Tensor | None = None,
-        src_key_padding_mask: Tensor = None,
+        src_key_padding_mask: Tensor | None = None,
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
     ) -> Tensor:
-        memory = self.encoder(
-            src, mask=src_mask, src_key_padding_mask=src_key_padding_mask
+        memory = cast(
+            Tensor,
+            self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask),
         )
-        return self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask)
+        return cast(
+            Tensor,
+            self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask),
+        )
 
     def extra_repr(self) -> str:
         return f"d_model={self.d_model}, nhead={self.nhead}"

@@ -1,6 +1,5 @@
 """Discrete ``Bernoulli`` and ``Geometric``."""
 
-import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -46,7 +45,7 @@ class Bernoulli(ExponentialFamily):
             self.probs = _as_tensor(probs)
             self._is_logits = False
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
         shape = (
             tuple(self.probs.shape) if not self._is_logits else tuple(self.logits.shape)
@@ -114,7 +113,7 @@ class Geometric(Distribution):
         if probs is not None:
             self.probs = _as_tensor(probs)
         else:
-            self.probs = _logits_to_probs(_as_tensor(logits))
+            self.probs = _logits_to_probs(_as_tensor(logits))  # type: ignore[arg-type]
         super().__init__(
             batch_shape=tuple(self.probs.shape),
             event_shape=(),

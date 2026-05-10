@@ -215,7 +215,7 @@ class Conv1d(Module):
             return (lo,), (hi,)
         return (self.padding,), (self.padding,)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -308,7 +308,7 @@ class Conv2d(Module):
             return (lo_h, lo_w), (hi_h, hi_w)
         return self.padding, self.padding
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -410,7 +410,7 @@ class Conv3d(Module):
             return (lo_d, lo_h, lo_w), (hi_d, hi_h, hi_w)
         return self.padding, self.padding
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -483,7 +483,7 @@ class ConvTranspose1d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return conv_transpose1d(
             x,
             self.weight,
@@ -547,7 +547,7 @@ class ConvTranspose2d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return conv_transpose2d(
             x,
             self.weight,
@@ -617,7 +617,7 @@ class ConvTranspose3d(Module):
             bound = 1.0 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return conv_transpose3d(
             x,
             self.weight,
@@ -672,7 +672,7 @@ class LazyConv1d(Conv1d):
         dtype: DTypeLike = None,
     ) -> None:
         Module.__init__(self)
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: int = kernel_size
         self.stride: int = stride
@@ -759,7 +759,7 @@ class LazyConv1d(Conv1d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv1d.forward(self, x)
@@ -792,7 +792,7 @@ class LazyConv2d(Conv2d):
         dtype: DTypeLike = None,
     ) -> None:
         Module.__init__(self)
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: tuple[int, int] = _pair(kernel_size)
         self.stride: tuple[int, int] = _pair(stride)
@@ -881,7 +881,7 @@ class LazyConv2d(Conv2d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv2d.forward(self, x)
@@ -914,7 +914,7 @@ class LazyConv3d(Conv3d):
         dtype: DTypeLike = None,
     ) -> None:
         Module.__init__(self)
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
         self.stride: tuple[int, int, int] = _triple(stride)
@@ -1004,7 +1004,7 @@ class LazyConv3d(Conv3d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv3d.forward(self, x)
@@ -1044,7 +1044,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
     ) -> None:
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose1d")
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: int = kernel_size
         self.stride: int = stride
@@ -1119,7 +1119,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose1d.forward(self, x)
@@ -1150,7 +1150,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
     ) -> None:
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose2d")
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: tuple[int, int] = _pair(kernel_size)
         self.stride: tuple[int, int] = _pair(stride)
@@ -1227,7 +1227,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose2d.forward(self, x)
@@ -1258,7 +1258,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
     ) -> None:
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose3d")
-        self.in_channels: int | None = None
+        self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
         self.kernel_size: tuple[int, int, int] = _triple(kernel_size)
         self.stride: tuple[int, int, int] = _triple(stride)
@@ -1336,7 +1336,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose3d.forward(self, x)

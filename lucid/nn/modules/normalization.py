@@ -8,7 +8,6 @@ from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._factories.creation import ones, zeros
 import lucid as _lucid
-import lucid.nn.init as init
 from lucid.nn.functional.normalization import (
     layer_norm,
     rms_norm,
@@ -64,7 +63,7 @@ class LayerNorm(Module):
             self.weight = None
             self.bias = None
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return layer_norm(
             x, list(self.normalized_shape), self.weight, self.bias, self.eps
         )
@@ -95,7 +94,7 @@ class RMSNorm(Module):
             ones(*self.normalized_shape, dtype=dtype, device=device)
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
     def extra_repr(self) -> str:
@@ -130,7 +129,7 @@ class GroupNorm(Module):
             self.weight = None
             self.bias = None
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
@@ -154,7 +153,7 @@ class _BatchNormBase(Module):
 
     # Version 2 introduces `num_batches_tracked`.  Checkpoints saved with
     # version < 2 (or no metadata) are migrated by `_load_from_state_dict`.
-    _version: int = 2
+    _version: int = 2  # type: ignore[misc]
 
     def __init__(
         self,
@@ -237,7 +236,7 @@ class _BatchNormBase(Module):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         # Update running stats before the forward when training with
         # tracking enabled.  Detach to avoid linking the buffer into the
         # autograd graph; buffers are never differentiated through.
@@ -286,13 +285,13 @@ class _BatchNormBase(Module):
 
             # Increment the count first (matches reference framework order).
             self._buffers["num_batches_tracked"] = (
-                self._buffers["num_batches_tracked"] + 1
+                self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
             ).detach()
 
             eff: float
             if self.momentum is None:
                 # Cumulative moving average: equal weight on every batch.
-                eff = 1.0 / float(self._buffers["num_batches_tracked"].item())
+                eff = 1.0 / float(self._buffers["num_batches_tracked"].item())  # type: ignore[union-attr]
             else:
                 eff = float(self.momentum)
 
@@ -386,7 +385,7 @@ class _InstanceNormBase(Module):
                 f"got ndim={x.ndim}"
             )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         self._check_input_dim(x)
         # eval mode + track_running_stats=True ⇒ use running stats path.
         use_input_stats: bool = self.training or not self.track_running_stats
@@ -472,7 +471,7 @@ class LocalResponseNorm(Module):
         self.beta = beta
         self.k = k
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -558,7 +557,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
     ) -> None:
         # Skip _BatchNormBase.__init__ — we don't have num_features yet.
         Module.__init__(self)
-        self.num_features: int | None = None
+        self.num_features: int | None = None  # type: ignore[assignment]
         self.eps: float = eps
         self.momentum: float | None = momentum
         self.affine: bool = affine
@@ -646,7 +645,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.num_features is None:
             self._initialize(int(x.shape[1]))
         return _BatchNormBase.forward(self, x)
@@ -696,7 +695,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         dtype: DTypeLike = None,
     ) -> None:
         Module.__init__(self)
-        self.num_features: int | None = None
+        self.num_features: int | None = None  # type: ignore[assignment]
         self.eps: float = eps
         self.momentum: float = momentum
         self.affine: bool = affine
@@ -762,7 +761,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
             error_msgs,
         )
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.num_features is None:
             self._initialize(int(x.shape[1]))
         return _InstanceNormBase.forward(self, x)

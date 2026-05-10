@@ -36,20 +36,22 @@ def jacobian(
     from lucid._C import engine as _C_engine
 
     scalar_input = not isinstance(inputs, (list, tuple))
-    if scalar_input:
-        inputs = (inputs,)
+    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     # Make sure inputs require grad
     inputs_rg = []
-    for x in inputs:
+    for x in inputs_t:
         if not x.requires_grad:
             x = x.requires_grad_(True)  # type: ignore[assignment]
         inputs_rg.append(x)
 
     # Run forward
-    outputs = func(*inputs_rg)
-    if not isinstance(outputs, (list, tuple)):
-        outputs = [outputs]
+    _raw_outputs = func(*inputs_rg)
+    outputs: list[Tensor] | tuple[Tensor, ...]
+    if not isinstance(_raw_outputs, (list, tuple)):
+        outputs = [_raw_outputs]
+    else:
+        outputs = _raw_outputs  # type: ignore[assignment]
 
     # Flatten each output: record (tensor, numel)
     from lucid._tensor.tensor import Tensor as _T
@@ -61,7 +63,7 @@ def jacobian(
         x_numel = x.numel()
         out_total = sum(n for _, n in out_flat_list)
         # Accumulate Jacobian rows as a list of 1-D tensors, then stack.
-        J_rows: list[object] = []
+        J_rows: list[_C_engine.TensorImpl] = []
 
         for out_t, out_numel in out_flat_list:
             out_shape = list(out_t.shape) if out_t.shape else []
@@ -126,15 +128,13 @@ def hessian(
     """
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
-    from lucid.autograd._backward import grad as _grad
 
     scalar_input = not isinstance(inputs, (list, tuple))
-    if scalar_input:
-        inputs = (inputs,)
+    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     # Make sure inputs require grad
     inputs_rg = []
-    for x in inputs:
+    for x in inputs_t:
         if not x.requires_grad:
             x = x.requires_grad_(True)  # type: ignore[assignment]
         inputs_rg.append(x)
@@ -148,7 +148,7 @@ def hessian(
         ni = xi.numel()
         for j, xj in enumerate(inputs_rg):
             nj = xj.numel()
-            H_rows: list[object] = []
+            H_rows: list[_C_engine.TensorImpl] = []
 
             for k in range(ni):
                 xi._impl.zero_grad()
@@ -219,15 +219,13 @@ def vjp(
     from lucid.autograd._backward import grad as _grad
 
     scalar_input = not isinstance(inputs, (list, tuple))
-    if scalar_input:
-        inputs = (inputs,)
+    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     scalar_v = not isinstance(v, (list, tuple))
-    if scalar_v:
-        v = (v,)
+    v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
 
     inputs_rg = []
-    for x in inputs:
+    for x in inputs_t:
         if not x.requires_grad:
             x = x.requires_grad_(True)  # type: ignore[assignment]
         inputs_rg.append(x)
@@ -240,7 +238,7 @@ def vjp(
 
     # Align v shapes to match output shapes (e.g. scalar() vs (1,))
     aligned_v = []
-    for vi, oi in zip(v, outputs_list):
+    for vi, oi in zip(v_t, outputs_list):
         out_shape = tuple(oi.shape) if oi.shape else ()
         v_shape = tuple(vi.shape) if vi.shape else ()
         if out_shape != v_shape and vi.numel() == 1:
@@ -289,18 +287,15 @@ def jvp(
         primals_out = func(*inputs),
         tangents_out = J @ v  (shape = output shape).
     """
-    from lucid.autograd._backward import grad as _grad
 
     scalar_input = not isinstance(inputs, (list, tuple))
-    if scalar_input:
-        inputs = (inputs,)
+    inputs_t: tuple[Tensor, ...] = (inputs,) if scalar_input else tuple(inputs)  # type: ignore[assignment]
 
     scalar_v = not isinstance(v, (list, tuple))
-    if scalar_v:
-        v = (v,)
+    v_t: tuple[Tensor, ...] = (v,) if scalar_v else tuple(v)  # type: ignore[assignment]
 
     inputs_rg = []
-    for x in inputs:
+    for x in inputs_t:
         if not x.requires_grad:
             x = x.requires_grad_(True)  # type: ignore[assignment]
         inputs_rg.append(x)
@@ -326,7 +321,7 @@ def jvp(
     # Finite-difference JVP: (f(x + eps*v) - f(x - eps*v)) / (2*eps)
     inputs_fwd = []
     inputs_bwd = []
-    for x, vi in zip(inputs_rg, v):
+    for x, vi in zip(inputs_rg, v_t):
         xf = _wrap(
             _C_engine.add(
                 _unwrap(x),

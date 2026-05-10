@@ -6,7 +6,6 @@ All three are pure-Lucid composites — sampling reuses
 closed-form via lgamma.
 """
 
-import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -108,7 +107,7 @@ class Binomial(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         # Broadcast total_count against probs/logits.
@@ -228,7 +227,7 @@ class NegativeBinomial(Distribution):
             self._is_logits = False
             shape = tuple(self.probs.shape)
         else:
-            self.logits = _as_tensor(logits)
+            self.logits = _as_tensor(logits)  # type: ignore[arg-type]
             self._is_logits = True
             shape = tuple(self.logits.shape)
         super().__init__(

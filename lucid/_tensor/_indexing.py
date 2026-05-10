@@ -24,12 +24,11 @@ In-place assignment:
                            (in-place, not tracked by autograd)
 """
 
-import math
 from typing import Sequence, TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap, _unwrap
-from lucid._dtype import bool_ as _bool_dtype, int32 as _int32_dtype
+from lucid._dtype import bool_ as _bool_dtype
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -694,7 +693,7 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
     flat_t = _C_engine.reshape(t._impl, [total])
 
     # Prepare value: broadcast to grid_shape then flatten
-    val_impl = _unwrap(value)
+    val_impl = _unwrap(value)  # type: ignore[arg-type]
     val_shape = list(val_impl.shape)
     if val_shape != grid_shape:
         n_miss = ndim - len(val_shape)

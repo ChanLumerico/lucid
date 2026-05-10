@@ -5,7 +5,6 @@ Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_li
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs, _unwrap, _wrap, _impl_with_grad
-from lucid._dtype import dtype
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -16,7 +15,7 @@ def _size_to_list(*size: int | tuple[int, ...]) -> list[int]:
     """Normalize size args: zeros(2,3) or zeros((2,3)) → [2, 3]."""
     if len(size) == 1 and isinstance(size[0], (list, tuple)):
         return list(size[0])
-    return list(size)
+    return list(size)  # type: ignore[arg-type]
 
 
 def zeros(
@@ -245,7 +244,7 @@ def full_like(
     """
     out: Tensor = _wrap(_C_engine.full_like(_unwrap(t), fill_value, False))
     if dtype is not None and dtype is not t.dtype:
-        out = out.astype(dtype)
+        out = out.astype(dtype)  # type: ignore[attr-defined]
     if device is not None and str(device) != str(t.device):
         out = out.to(device)
     return out

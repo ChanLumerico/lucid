@@ -5,7 +5,7 @@ autocast context manager for automatic mixed precision.
 import functools
 from typing import Callable, TypeVar
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype, float16, float32, to_engine_dtype
+from lucid._dtype import dtype, float16, to_engine_dtype
 
 _F = TypeVar("_F", bound=Callable[..., object])
 
@@ -55,7 +55,7 @@ class autocast:
             return
         if self._prev_active and self._prev_dtype is not None:
             # Restore the previous AMP dtype (e.g. nested autocast blocks).
-            prev_guard = _C_engine.AutocastGuard(self._prev_dtype)
+            prev_guard = _C_engine.AutocastGuard(self._prev_dtype)  # type: ignore[arg-type]
             prev_guard.__enter__()
         elif not self._prev_active:
             # AMP was off before this context.  The engine has no disable_amp()

@@ -15,10 +15,12 @@ Conventions used by every composite:
   ``transpose`` reverses *all* dims, not just two.
 """
 
+from typing import TypeGuard
+
 from lucid._tensor.tensor import Tensor
 
 
-def _is_tensor(x: object) -> bool:
+def _is_tensor(x: object) -> TypeGuard[Tensor]:
     return isinstance(x, Tensor)
 
 

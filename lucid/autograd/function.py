@@ -2,11 +2,25 @@
 autograd.Function: base class for custom differentiable operations.
 """
 
-from typing import TYPE_CHECKING
+from typing import Protocol
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._tensor.tensor import Tensor
 from lucid.autograd._python_node import _register
+
+
+class _FunctionClass(Protocol):
+    """Protocol describing a Function subclass (has forward/backward classmethods)."""
+
+    @classmethod
+    def forward(
+        cls, ctx: object, *args: object, **kwargs: object
+    ) -> Tensor | tuple[Tensor, ...]: ...
+
+    @classmethod
+    def backward(
+        cls, ctx: object, *grad_outputs: Tensor
+    ) -> Tensor | tuple[Tensor | None, ...] | list[Tensor | None]: ...
 
 
 class FunctionCtx:
@@ -53,7 +67,7 @@ class FunctionCtx:
         raise AttributeError(f"FunctionCtx has no attribute '{name}'")
 
 
-def _make_apply(cls: type) -> classmethod:
+def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
     def apply(
         klass: type, *args: Tensor, **kwargs: object
     ) -> Tensor | tuple[Tensor, ...]:
@@ -62,12 +76,12 @@ def _make_apply(cls: type) -> classmethod:
             isinstance(a, Tensor) and a.requires_grad for a in args
         )
 
-        output = klass.forward(ctx, *args, **kwargs)
+        output = klass.forward(ctx, *args, **kwargs)  # type: ignore[attr-defined]
 
         if _C_engine.grad_enabled() and any(ctx.needs_input_grad):
             tensor_inputs = [a for a in args if isinstance(a, Tensor)]
             if isinstance(output, Tensor):
-                _register(output, klass, ctx, tensor_inputs)
+                _register(output, klass, ctx, tensor_inputs)  # type: ignore[arg-type]
 
         return output
 

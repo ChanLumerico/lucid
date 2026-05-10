@@ -1,6 +1,5 @@
 """nn.* activation modules — they wrap functional equivalents."""
 
-import math
 
 import numpy as np
 import pytest

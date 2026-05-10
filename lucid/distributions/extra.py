@@ -360,7 +360,7 @@ class Multinomial(Distribution):
         draws: list[Tensor] = [cat.sample(sample_shape) for _ in range(n)]
         # Count each category k in {0, ..., K-1}.
         counts: list[Tensor] = [
-            sum((d == k).to(p.dtype) for d in draws)  # type: ignore[assignment]
+            sum((d == k).to(p.dtype) for d in draws)  # type: ignore[assignment, misc]
             for k in range(K)
         ]
         # Stack along last dim: (*sample_shape, *batch_shape, K)
@@ -463,7 +463,7 @@ class ContinuousBernoulli(Distribution):
         # E[X^2] = C(p)*(1-p)*(exp(l)*(l^2-2l+2) - 2) / l^3 — complex to derive;
         # numerically stable shortcut: Var = mean*(1-mean) + ... is not closed-form.
         # Use: Var = E[X^2] - E[X]^2 where E[X^2] from the normaliser.
-        # Simpler direct formula (follows PyTorch):
+        # Simpler direct formula (closed-form shortcut):
         # Var = mean - mean^2 - mean*(2p-1)/(2*atanh(1-2p)) ... equally complex.
         # Implement via the second moment integral result:
         # E[X^2] = p/(2p-1) + p*(p-1)/(l*(2p-1)) where l = logit(p)
@@ -476,7 +476,7 @@ class ContinuousBernoulli(Distribution):
         sq_mean_stable: Tensor = mean_val + mean_val * (-u) / safe_l
         sq_mean_near: Tensor = lucid.full_like(p, 1.0 / 3.0)
         sq_mean: Tensor = lucid.where(abs_u < eps, sq_mean_near, sq_mean_stable)
-        return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)
+        return lucid.clamp(sq_mean - mean_val * mean_val, min=0.0)  # type: ignore[call-arg]
 
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Reparameterised sample via the closed-form icdf."""

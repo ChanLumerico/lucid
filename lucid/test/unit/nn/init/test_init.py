@@ -1,7 +1,6 @@
 """nn.init — initializer functions."""
 
 import numpy as np
-import pytest
 
 import lucid
 import lucid.nn.init as init

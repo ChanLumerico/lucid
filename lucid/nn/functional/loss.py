@@ -34,7 +34,9 @@ def mse_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
 def l1_loss(x: Tensor, target: Tensor, reduction: str = "mean") -> Tensor:
     """Mean absolute error loss."""
     _validate_reduction(reduction)
-    diff: object = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
+    diff: _C_engine.TensorImpl = _C_engine.abs(
+        _C_engine.sub(_unwrap(x), _unwrap(target))
+    )
     if reduction == "mean":
         return _wrap(_C_engine.mean(diff, [], False))
     if reduction == "sum":
@@ -277,12 +279,12 @@ def kl_div(
     # `x` is log_q (log of predicted probability) per the standard contract.
     # When log_target=False, target is the raw probability p; when True it
     # is log(p).  Loss elementwise = target * (log(target) - log_q).
-    xi: object = _unwrap(x)
-    ti: object = _unwrap(target)
+    xi: _C_engine.TensorImpl = _unwrap(x)
+    ti: _C_engine.TensorImpl = _unwrap(target)
     if log_target:
         # log_target=True → target itself is log(p); use exp(t) as the weight.
-        diff: object = _C_engine.sub(ti, xi)
-        kl: object = _C_engine.mul(_C_engine.exp(ti), diff)
+        diff: _C_engine.TensorImpl = _C_engine.sub(ti, xi)
+        kl: _C_engine.TensorImpl = _C_engine.mul(_C_engine.exp(ti), diff)
     else:
         # Standard: target * (log(target) − x).
         diff = _C_engine.sub(_C_engine.log(ti), xi)
@@ -292,7 +294,7 @@ def kl_div(
     if reduction == "sum":
         return _wrap(_C_engine.sum(kl, [], False))
     if reduction == "batchmean":
-        total: object = _C_engine.sum(kl, [], False)
+        total: _C_engine.TensorImpl = _C_engine.sum(kl, [], False)
         batch_size: int = int(x.shape[0])
         return _wrap(total) / batch_size
     return _wrap(kl)
@@ -523,9 +525,9 @@ def ctc_loss(
         tgt_impl = _C_engine.reshape(tgt_impl, [-1])
 
     # Ensure integer dtype for lengths and targets.
-    def _to_i32(impl: object) -> object:
+    def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
         if getattr(impl, "dtype", None) != _C_engine.I32:
-            return _C_engine.cast(impl, _C_engine.I32)
+            return _C_engine.astype(impl, _C_engine.I32)
         return impl
 
     tgt_impl = _to_i32(tgt_impl)
