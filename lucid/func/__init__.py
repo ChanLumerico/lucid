@@ -1,4 +1,4 @@
-"""``lucid.func`` — functional transforms (torch.func-compatible API).
+"""``lucid.func`` — functional transforms (reference-framework func-compatible API).
 
 Provides composable, higher-order transformations over Lucid functions:
 
@@ -69,7 +69,7 @@ def _normalise_in_dims(
     return dims
 
 
-def _move_to_front(x: "Tensor", dim: int) -> "Tensor":
+def _move_to_front(x: Tensor, dim: int) -> Tensor:
     import lucid
 
     ndim = len(x.shape)
@@ -79,7 +79,7 @@ def _move_to_front(x: "Tensor", dim: int) -> "Tensor":
     return lucid.moveaxis(x, d, 0)  # type: ignore[arg-type]
 
 
-def _move_from_front(x: "Tensor", dim: int) -> "Tensor":
+def _move_from_front(x: Tensor, dim: int) -> Tensor:
     import lucid
 
     if dim == 0:
@@ -91,13 +91,13 @@ def _move_from_front(x: "Tensor", dim: int) -> "Tensor":
 
 
 def vmap(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     in_dims: int | tuple[int | None, ...] = 0,
     out_dims: int | tuple[int, ...] = 0,
     randomness: str = "error",
     *,
     chunk_size: int | None = None,
-) -> Callable[..., "Tensor | tuple[Tensor, ...]"]:
+) -> Callable[..., Tensor | tuple[Tensor, ...]]:
     """Vectorise *func* over a batch dimension using C++ vmapped dispatch.
 
     Parameters
@@ -128,9 +128,9 @@ def vmap(
     from lucid._tensor.tensor import Tensor as _T
 
     def vectorized(
-        *args: "Tensor",
+        *args: Tensor,
         **kwargs: object,
-    ) -> "Tensor | tuple[Tensor, ...]":
+    ) -> Tensor | tuple[Tensor, ...]:
         _in = _normalise_in_dims(in_dims, len(args))
 
         # Validate and find batch_size
@@ -194,18 +194,18 @@ def vmap(
 
 
 def _chunked_vmap(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    args: tuple["Tensor", ...],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    args: tuple[Tensor, ...],
     kwargs: dict[str, object],
     in_dims: list[int | None],
     out_dims: int | tuple[int, ...],
     chunk_size: int,
     batch_size: int,
-) -> "Tensor | tuple[Tensor, ...]":
+) -> Tensor | tuple[Tensor, ...]:
     import lucid
     from lucid._tensor.tensor import Tensor as _T
 
-    chunks: list["Tensor | tuple[Tensor, ...]"] = []
+    chunks: list[Tensor | tuple[Tensor, ...]] = []
     for start in range(0, batch_size, chunk_size):
         end = min(start + chunk_size, batch_size)
         cargs: list[object] = []
@@ -237,14 +237,14 @@ def _chunked_vmap(
 
 
 def grad(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> Callable[..., "Tensor | tuple[Tensor | None, ...]"]:
+) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
     """Return a function that computes the gradient of *func*.
 
     Unlike :func:`lucid.autograd.grad` (which takes tensors), this follows
-    the ``torch.func`` / JAX convention: it takes a *function* and returns
+    the functional-transform convention (e.g. JAX 's `jax.grad`` or the reference framework's ``func``): it takes a *function* and returns
     a *function*.
 
     Parameters
@@ -271,8 +271,8 @@ def grad(
     )
 
     def grad_fn(
-        *args: "Tensor", **kwargs: object
-    ) -> "Tensor | tuple[Tensor | None, ...]":
+        *args: Tensor, **kwargs: object
+    ) -> Tensor | tuple[Tensor | None, ...]:
         from lucid._tensor.tensor import Tensor as _T
         from lucid.autograd._grad_mode import enable_grad
         from lucid.autograd._backward import grad as _ag
@@ -291,7 +291,7 @@ def grad(
                 raise ValueError(
                     "lucid.func.grad: has_aux=True requires func to return (loss, aux)"
                 )
-            loss: "Tensor" = output[0]
+            loss: Tensor = output[0]
             aux: object = output[1] if len(output) == 2 else output[1:]
         else:
             loss = output
@@ -304,7 +304,7 @@ def grad(
             create_graph=False,
             allow_unused=True,
         )
-        g: "Tensor | None | tuple[Tensor | None, ...]" = (
+        g: Tensor | None | tuple[Tensor | None, ...] = (
             grads[0] if len(_argnums) == 1 else tuple(grads)
         )
         if has_aux:
@@ -318,10 +318,10 @@ def grad(
 
 
 def grad_and_value(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> "Callable[..., tuple[Tensor | tuple[Tensor | None, ...], Tensor]]":
+) -> Callable[..., tuple[Tensor | tuple[Tensor | None, ...], Tensor]]:
     """Like :func:`grad` but also returns the primal output.
 
     The returned function yields ``(gradients, value)``.
@@ -331,8 +331,8 @@ def grad_and_value(
     )
 
     def gv_fn(
-        *args: "Tensor", **kwargs: object
-    ) -> "tuple[Tensor | tuple[Tensor | None, ...], Tensor]":
+        *args: Tensor, **kwargs: object
+    ) -> tuple[Tensor | tuple[Tensor | None, ...], Tensor]:
         from lucid._tensor.tensor import Tensor as _T
         from lucid.autograd._grad_mode import enable_grad
         from lucid.autograd._backward import grad as _ag
@@ -352,7 +352,7 @@ def grad_and_value(
                     "lucid.func.grad_and_value: has_aux=True requires func to "
                     "return (loss, aux)"
                 )
-            loss: "Tensor" = output[0]
+            loss: Tensor = output[0]
             aux: object = output[1] if len(output) == 2 else output[1:]
         else:
             loss = output
@@ -365,7 +365,7 @@ def grad_and_value(
             create_graph=False,
             allow_unused=True,
         )
-        g: "Tensor | None | tuple[Tensor | None, ...]" = (
+        g: Tensor | None | tuple[Tensor | None, ...] = (
             grads[0] if len(_argnums) == 1 else tuple(grads)
         )
         if has_aux:
@@ -379,11 +379,11 @@ def grad_and_value(
 
 
 def vjp(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    *primals: "Tensor",
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    *primals: Tensor,
     has_aux: bool = False,
-) -> "tuple[Tensor | tuple[Tensor, ...], Callable[..., tuple[Tensor | None, ...]]]":
-    """Vector-Jacobian product — ``torch.func``-style API.
+) -> tuple[Tensor | tuple[Tensor, ...], Callable[..., tuple[Tensor | None, ...]]]:
+    """Vector-Jacobian product — functional-style API (reference-framework func-compatible).
 
     Returns ``(outputs, vjp_fn)`` where *vjp_fn* maps cotangents to input
     gradients.
@@ -410,7 +410,7 @@ def vjp(
     from lucid.autograd._grad_mode import enable_grad
     from lucid.autograd._backward import grad as _ag
 
-    primals_rg: list["Tensor"] = []
+    primals_rg: list[Tensor] = []
     for p in primals:
         if isinstance(p, _T) and not p.requires_grad:
             p = p.detach().requires_grad_(True)
@@ -424,22 +424,22 @@ def vjp(
             raise ValueError(
                 "lucid.func.vjp: has_aux=True requires func to return (output, aux)"
             )
-        outputs: "Tensor | tuple[Tensor, ...]" = raw_out[0]
+        outputs: Tensor | tuple[Tensor, ...] = raw_out[0]
         aux: object = raw_out[1] if len(raw_out) == 2 else raw_out[1:]
     else:
         outputs = raw_out
         aux = None
 
-    out_list: list["Tensor"] = (
+    out_list: list[Tensor] = (
         list(outputs)
         if isinstance(outputs, (list, tuple))
         else [outputs]
     )
 
     def _vjp(
-        *cotangents: "Tensor",
-    ) -> "tuple[Tensor | None, ...]":
-        cots: list["Tensor | None"] = (
+        *cotangents: Tensor,
+    ) -> tuple[Tensor | None, ...]:
+        cots: list[Tensor | None] = (
             list(cotangents) if cotangents else [None] * len(out_list)
         )
         return tuple(
@@ -462,11 +462,11 @@ def vjp(
 
 
 def jvp(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    primals: tuple["Tensor", ...],
-    tangents: tuple["Tensor", ...],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    primals: tuple[Tensor, ...],
+    tangents: tuple[Tensor, ...],
     strict: bool = False,
-) -> "tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]":
+) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
     """Jacobian-vector product via exact double-backward (α-perturbation trick).
 
     Uses a scalar perturbation variable α so that
@@ -499,7 +499,7 @@ def jvp(
     # x_pert(α) = primal + α * tangent → d(out)/dα = J(primal) @ tangent
     alpha = lucid.tensor(0.0).requires_grad_(True)
 
-    perturbed: list["Tensor"] = []
+    perturbed: list[Tensor] = []
     for p, t in zip(primals, tangents):
         if isinstance(p, _T) and isinstance(t, _T):
             perturbed.append(
@@ -514,13 +514,13 @@ def jvp(
     with lucid.no_grad():
         primals_out = func(*primals)
 
-    out_list: list["Tensor"] = (
+    out_list: list[Tensor] = (
         list(pert_out)
         if isinstance(pert_out, (list, tuple))
         else [pert_out]
     )
 
-    jvp_parts: list["Tensor"] = []
+    jvp_parts: list[Tensor] = []
     for o in out_list:
         o_impl = _unwrap(o)
         out_numel = 1
@@ -546,7 +546,7 @@ def jvp(
             # Vector output: O(out_numel) backward passes — one per element.
             # d(o[i]) / d(alpha) = JVP[i] for each i.
             from lucid._tensor.tensor import Tensor as _TT
-            rows: list["Tensor"] = []
+            rows: list[Tensor] = []
             for row_i in range(out_numel):
                 alpha._impl.zero_grad()
                 seed_impl = _C_engine.zeros([out_numel], dtype, dev)
@@ -577,9 +577,9 @@ def jvp(
 
 
 def linearize(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
-    *primals: "Tensor",
-) -> "tuple[Tensor | tuple[Tensor, ...], Callable[..., Tensor | tuple[Tensor, ...]]]":
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    *primals: Tensor,
+) -> tuple[Tensor | tuple[Tensor, ...], Callable[..., Tensor | tuple[Tensor, ...]]]:
     """Linearise *func* at *primals*, returning ``(output, linear_fn)``.
 
     *linear_fn* maps tangents to the JVP: equivalent to the first-order
@@ -588,8 +588,8 @@ def linearize(
     primals_out, _ = vjp(func, *primals)
 
     def linear_fn(
-        *tangents: "Tensor",
-    ) -> "Tensor | tuple[Tensor, ...]":
+        *tangents: Tensor,
+    ) -> Tensor | tuple[Tensor, ...]:
         _, tangents_out = jvp(func, primals, tangents)
         return tangents_out
 
@@ -600,12 +600,12 @@ def linearize(
 
 
 def jacrev(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
     *,
     chunk_size: int | None = None,
-) -> Callable[..., "Tensor | tuple[Tensor | None, ...]"]:
+) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
     """Reverse-mode Jacobian.
 
     Assembles the full Jacobian matrix row by row via backward passes.
@@ -623,8 +623,8 @@ def jacrev(
     )
 
     def jac_fn(
-        *args: "Tensor", **kwargs: object
-    ) -> "Tensor | tuple[Tensor | None, ...]":
+        *args: Tensor, **kwargs: object
+    ) -> Tensor | tuple[Tensor | None, ...]:
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _wrap, _unwrap
@@ -644,7 +644,7 @@ def jacrev(
                 raise ValueError(
                     "lucid.func.jacrev: has_aux=True requires func to return (output, aux)"
                 )
-            out_t: "Tensor" = output[0]
+            out_t: Tensor = output[0]
             aux: object = output[1] if len(output) == 2 else output[1:]
         else:
             out_t = output  # type: ignore[assignment]
@@ -656,7 +656,7 @@ def jacrev(
             out_numel *= s
         out_shape = list(out_impl.shape)
 
-        rows: list[list["Tensor"]] = [[] for _ in _argnums]
+        rows: list[list[Tensor]] = [[] for _ in _argnums]
 
         for row_idx in range(out_numel):
             for k, i in enumerate(_argnums):
@@ -688,7 +688,7 @@ def jacrev(
                             _wrap(_C_engine.zeros([a.numel()], _C_engine.F32, a._impl.device))
                         )
 
-        results: list["Tensor | None"] = []
+        results: list[Tensor | None] = []
         for k, i in enumerate(_argnums):
             a = args_list[i]
             if isinstance(a, _T) and rows[k]:
@@ -698,7 +698,7 @@ def jacrev(
             else:
                 results.append(None)
 
-        r: "Tensor | tuple[Tensor | None, ...]" = (
+        r: Tensor | tuple[Tensor | None, ...] = (
             results[0] if len(_argnums) == 1 else tuple(results)  # type: ignore[assignment]
         )
         if has_aux:
@@ -712,12 +712,12 @@ def jacrev(
 
 
 def jacfwd(
-    func: Callable[..., "Tensor | tuple[Tensor, ...]"],
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
     *,
     randomness: str = "error",
-) -> Callable[..., "Tensor | tuple[Tensor | None, ...]"]:
+) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
     """Forward-mode Jacobian via :func:`jvp`.
 
     Computes the Jacobian column by column.  For functions with many outputs
@@ -728,8 +728,8 @@ def jacfwd(
     )
 
     def jac_fn(
-        *args: "Tensor", **kwargs: object
-    ) -> "Tensor | tuple[Tensor | None, ...]":
+        *args: Tensor, **kwargs: object
+    ) -> Tensor | tuple[Tensor | None, ...]:
         import lucid
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
@@ -747,7 +747,7 @@ def jacfwd(
                 raise ValueError(
                     "lucid.func.jacfwd: has_aux=True requires func to return (output, aux)"
                 )
-            sample_out: "Tensor" = ref_out[0]
+            sample_out: Tensor = ref_out[0]
             aux: object = ref_out[1] if len(ref_out) == 2 else ref_out[1:]
         else:
             sample_out = ref_out  # type: ignore[assignment]
@@ -755,7 +755,7 @@ def jacfwd(
 
         out_shape = list(sample_out.shape) if isinstance(sample_out, _T) else []
 
-        cols: list[list["Tensor"]] = [[] for _ in _argnums]
+        cols: list[list[Tensor]] = [[] for _ in _argnums]
 
         for k, (argn, x) in enumerate(zip(_argnums, primals_sel)):
             if not isinstance(x, _T):
@@ -777,7 +777,7 @@ def jacfwd(
                 )
 
                 # Build full tangent tuple (zero for all other argnums)
-                tans: list["Tensor"] = []
+                tans: list[Tensor] = []
                 for argn2, x2 in zip(_argnums, primals_sel):
                     if argn2 == argn:
                         tans.append(t)
@@ -791,10 +791,10 @@ def jacfwd(
                         tans.append(t)  # fallback
 
                 _, jvp_col = jvp(func, primals_sel, tuple(tans))
-                jc: "Tensor" = jvp_col if not isinstance(jvp_col, tuple) else jvp_col[0]
+                jc: Tensor = jvp_col if not isinstance(jvp_col, tuple) else jvp_col[0]
                 cols[k].append(_wrap(_C_engine.reshape(_unwrap(jc), [jc.numel()])))
 
-        results: list["Tensor | None"] = []
+        results: list[Tensor | None] = []
         for k, x in enumerate(primals_sel):
             if not isinstance(x, _T) or not cols[k]:
                 results.append(None)
@@ -803,7 +803,7 @@ def jacfwd(
             full_shape = out_shape + list(x.shape)
             results.append(_wrap(_C_engine.reshape(J, full_shape) if full_shape else J))
 
-        r: "Tensor | tuple[Tensor | None, ...]" = (
+        r: Tensor | tuple[Tensor | None, ...] = (
             results[0] if len(_argnums) == 1 else tuple(results)  # type: ignore[assignment]
         )
         if has_aux:
@@ -817,9 +817,9 @@ def jacfwd(
 
 
 def hessian(
-    func: Callable[..., "Tensor"],
+    func: Callable[..., Tensor],
     argnums: int | tuple[int, ...] = 0,
-) -> Callable[..., "Tensor | tuple[Tensor | None, ...]"]:
+) -> Callable[..., Tensor | tuple[Tensor | None, ...]]:
     """Hessian of a scalar-valued function.
 
     Delegates to :func:`lucid.autograd.hessian` which uses the correct
@@ -840,8 +840,8 @@ def hessian(
     )
 
     def hessian_fn(
-        *args: "Tensor", **kwargs: object
-    ) -> "Tensor | tuple[Tensor | None, ...]":
+        *args: Tensor, **kwargs: object
+    ) -> Tensor | tuple[Tensor | None, ...]:
         selected: object = (
             args[_argnums[0]]
             if _scalar_argnum

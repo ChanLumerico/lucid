@@ -63,8 +63,6 @@ class TestLSTMParity:
         **kwargs: Any,
     ) -> tuple[Any, Any, Any, Any]:
         """Return (lucid_out, ref_out, lucid_h, ref_h)."""
-        import torch
-
         ref_lstm = ref.nn.LSTM(inp, hidden, **kwargs)
         l_lstm = nn.LSTM(inp, hidden, **kwargs)
 
@@ -73,7 +71,7 @@ class TestLSTMParity:
 
         rng = np.random.default_rng(0)
         x_np = rng.standard_normal((seq, batch, inp)).astype(np.float32)
-        ref_out, (ref_h, ref_c) = ref_lstm(torch.tensor(x_np))
+        ref_out, (ref_h, ref_c) = ref_lstm(ref.tensor(x_np))
         l_out, (l_h, l_c) = l_lstm(lucid.tensor(x_np.copy()))
         return l_out, ref_out, (l_h, l_c), (ref_h, ref_c)
 
@@ -114,14 +112,12 @@ class TestLSTMParity:
 @pytest.mark.parity
 class TestGRUParity:
     def _run(self, ref: Any, **kwargs: Any) -> tuple[Any, Any]:
-        import torch
-
         ref_gru = ref.nn.GRU(4, 6, **kwargs)
         l_gru = nn.GRU(4, 6, **kwargs)
         _copy_weights_positional(ref_gru, l_gru)
 
         x_np = np.random.default_rng(1).standard_normal((5, 2, 4)).astype(np.float32)
-        ref_out, ref_h = ref_gru(torch.tensor(x_np))
+        ref_out, ref_h = ref_gru(ref.tensor(x_np))
         l_out, l_h = l_gru(lucid.tensor(x_np.copy()))
         return (l_out, l_h), (ref_out, ref_h)
 

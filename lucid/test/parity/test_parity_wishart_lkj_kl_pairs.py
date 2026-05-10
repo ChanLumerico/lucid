@@ -34,10 +34,8 @@ class TestWishartParity:
         lucid.manual_seed(0)
         w = D.Wishart(5.0, covariance_matrix=lucid.eye(3))
         # reference Wishart
-        import torch
-
         ref_w = ref.distributions.Wishart(
-            torch.tensor(5.0), covariance_matrix=torch.eye(3)
+            ref.tensor(5.0), covariance_matrix=ref.eye(3)
         )
         # Use the same sample (via numpy seed)
         np.random.seed(0)
@@ -199,13 +197,11 @@ class TestNewKLPairsParity:
         )
         lucid_kl = self._kl(p_lucid, q_lucid)
 
-        import torch
-
         p_ref = ref.distributions.Independent(
-            ref.distributions.Normal(torch.zeros(3), torch.ones(3)), 1
+            ref.distributions.Normal(ref.zeros(3), ref.ones(3)), 1
         )
         q_ref = ref.distributions.Independent(
-            ref.distributions.Normal(torch.tensor([0.5, 0.5, 0.5]), torch.ones(3)), 1
+            ref.distributions.Normal(ref.tensor([0.5, 0.5, 0.5]), ref.ones(3)), 1
         )
         ref_kl = _ref_kl(ref, p_ref, q_ref)
         assert abs(lucid_kl - ref_kl) < 1e-4

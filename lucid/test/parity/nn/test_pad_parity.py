@@ -64,7 +64,6 @@ class TestConvPaddingModeParity:
     """Conv2d padding_mode forward parity."""
 
     def _run(self, ref: Any, padding_mode: str) -> tuple[Any, Any]:
-        import torch
         from lucid._C import engine as _C_engine
 
         np.random.seed(42)
@@ -82,11 +81,11 @@ class TestConvPaddingModeParity:
         l_conv.bias._impl = _C_engine.TensorImpl(
             b_np.copy(), _C_engine.Device.CPU, True
         )
-        r_conv.weight.data = torch.tensor(w_np.copy())
-        r_conv.bias.data = torch.tensor(b_np.copy())
+        r_conv.weight.data = ref.tensor(w_np.copy())
+        r_conv.bias.data = ref.tensor(b_np.copy())
 
         l_y = l_conv(lucid.tensor(x_np.copy()))
-        r_y = r_conv(torch.tensor(x_np.copy()))
+        r_y = r_conv(ref.tensor(x_np.copy()))
         return l_y, r_y
 
     @pytest.mark.parametrize(
