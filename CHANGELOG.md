@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - TransformerDecoderLayer / TransformerDecoder / Transformer parity tests (4 new tests)
 
+- vmap Stage 2: element isolation for vmap(jacrev/jacfwd/hessian) — _ISOLATION_ATTR marker + _isolated_vmap per-element loop; fixes (B,out,B,in)→(B,out,in) shape
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
