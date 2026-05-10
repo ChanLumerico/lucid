@@ -13,7 +13,7 @@ from typing import Callable
 # ── defaults ──────────────────────────────────────────────────────────────────
 
 WARMUP_CPU: int = 10
-WARMUP_GPU: int = 5
+WARMUP_GPU: int = 10
 ITERS_CPU: int = 200
 ITERS_GPU: int = 50
 
@@ -92,13 +92,17 @@ def bench_gpu_lucid(
 
     ``fn`` must return a single Tensor (not a tuple).
     Timing includes kernel dispatch + GPU synchronisation.
+
+    Uses ``eval_gpu(impl)`` — the single-tensor fast path — rather than
+    ``eval_tensors([impl])`` to avoid Python list creation overhead (~25 µs)
+    that would skew the comparison against raw ``mx.eval(arr)``.
     """
     from lucid._C import engine as _C_engine
 
     def _run() -> None:
         out = fn()
         impl = getattr(out, "_impl", out)
-        _C_engine.eval_tensors([impl])
+        _C_engine.eval_gpu(impl)
 
     for _ in range(warmup):
         _run()

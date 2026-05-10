@@ -342,6 +342,24 @@ void register_tensor_impl(py::module_& m) {
         py::arg("tensors"),
         "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
         "CPU tensors are silently ignored.  No-op when all tensors are on CPU.");
+
+    // eval_gpu(impl) — evaluate a single GPU TensorImpl in-place.
+    // Faster than eval_tensors([impl]) for the single-tensor case because it
+    // avoids Python list creation and the pybind11 vector conversion overhead
+    // (~25 µs on hot paths).  Used by the benchmark's timing loop and by any
+    // code that needs to force GPU computation for a single intermediate tensor.
+    m.def(
+        "eval_gpu",
+        [](const std::shared_ptr<TensorImpl>& t) {
+            if (!t || t->device() != Device::GPU)
+                return;
+            const auto& gs = std::get<GpuStorage>(t->storage());
+            if (gs.arr)
+                gs.arr->eval();
+        },
+        py::arg("tensor"),
+        "Force evaluation of a single GPU tensor (no-op for CPU tensors).\n"
+        "Faster than eval_tensors([t]) for the single-tensor hot path.");
 }
 
 }  // namespace lucid::bindings
