@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.func module: vmap, grad, grad_and_value, vjp, jvp, jacrev, jacfwd, hessian, linearize
 
+- lucid.func parity test suite (25 tests) against reference framework for vmap / grad / vjp / jvp / jacrev / jacfwd / hessian / linearize
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - H5/H7 Hard Rule violations in lucid.func + parity tests
+- lucid.func.jvp scalar output shape — alpha gradient was (1,) instead of () for scalar primal outputs
 
 ---
 
