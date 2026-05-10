@@ -250,3 +250,131 @@ class TestVmapIsolation:
         X = lucid.randn(n, B)  # batch on dim 1
         J = func.vmap(func.jacrev(f), in_dims=1)(X)
         assert list(J.shape) == [B, 2, n]
+
+
+# ── randomness enforcement ────────────────────────────────────────────────────
+
+
+class TestVmapRandomness:
+    """randomness='error' raises; 'different' allows random ops."""
+
+    def test_error_mode_raises_on_randn(self) -> None:
+        f = lambda x: x + lucid.randn(*x.shape)
+        with pytest.raises(RuntimeError, match="random op"):
+            func.vmap(f, randomness="error")(lucid.ones(4, 3))
+
+    def test_error_mode_raises_on_rand(self) -> None:
+        f = lambda x: x * lucid.rand(*x.shape)
+        with pytest.raises(RuntimeError, match="random op"):
+            func.vmap(f, randomness="error")(lucid.ones(3, 2))
+
+    def test_different_mode_allows_randn(self) -> None:
+        f = lambda x: x + lucid.randn(*x.shape)
+        out = func.vmap(f, randomness="different")(lucid.zeros(4, 3))
+        assert list(out.shape) == [4, 3]
+
+    def test_error_is_default(self) -> None:
+        f = lambda x: x + lucid.randn(*x.shape)
+        with pytest.raises(RuntimeError):
+            func.vmap(f)(lucid.ones(2, 2))
+
+    def test_no_random_op_passes_error_mode(self) -> None:
+        f = lambda x: x * 2.0
+        out = func.vmap(f, randomness="error")(lucid.ones(3, 4))
+        assert list(out.shape) == [3, 4]
+
+    def test_nested_vmap_inner_overrides_outer(self) -> None:
+        # inner vmap with randomness='different' pushes 'different' onto the
+        # thread-local stack, overriding the outer 'error' guard. Innermost
+        # randomness setting wins — correct RAII semantics.
+        f = lambda x: x + lucid.randn(*x.shape)
+        inner = func.vmap(f, randomness="different")
+        out = func.vmap(inner, randomness="error")(lucid.ones(2, 3, 4))
+        assert list(out.shape) == [2, 3, 4]
+
+
+# ── strategy parameter ────────────────────────────────────────────────────────
+
+
+class TestVmapStrategy:
+    """strategy='auto'|'isolated'|'vectorized' dispatch control."""
+
+    def test_invalid_strategy_raises(self) -> None:
+        with pytest.raises(ValueError, match="strategy"):
+            func.vmap(lambda x: x, strategy="bad")
+
+    def test_isolated_gives_correct_jacrev_shape(self) -> None:
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        J = func.vmap(func.jacrev(f), strategy="isolated")(lucid.randn(4, 3))
+        assert list(J.shape) == [4, 2, 3]
+
+    def test_vectorized_strategy_for_plain_fn(self) -> None:
+        f = lambda x: x * 2.0
+        X = lucid.arange(12.0).reshape(4, 3)
+        out_vec = func.vmap(f, strategy="vectorized")(X)
+        out_auto = func.vmap(f, strategy="auto")(X)
+        assert lucid.allclose(out_vec, out_auto)
+
+    def test_isolated_strategy_explicit_for_user_fn(self) -> None:
+        """User can force isolation for any function, e.g. custom vjp wrappers."""
+        results = []
+
+        def f(x: lucid.Tensor) -> lucid.Tensor:
+            out, vjp_fn = func.vjp(lambda z: (z**2).sum(), x)
+            g = vjp_fn(lucid.ones_like(out))[0]
+            assert g is not None
+            return g
+
+        X = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])
+        per_sample = func.vmap(f, strategy="isolated")(X)
+        assert list(per_sample.shape) == [2, 2]
+        expected = X * 2.0
+        assert lucid.allclose(per_sample, expected, atol=1e-5)
+
+
+# ── chunk_size in isolation mode ──────────────────────────────────────────────
+
+
+class TestVmapChunkIsolation:
+    """chunk_size bounds intermediate memory in isolation mode."""
+
+    def test_chunk_matches_full_isolation(self) -> None:
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        jf = func.jacrev(f)
+        X = lucid.randn(8, 3)
+        full = func.vmap(jf)(X)
+        chunked = func.vmap(jf, chunk_size=3)(X)
+        assert lucid.allclose(full, chunked, atol=1e-5)
+
+    def test_chunk_size_1_matches_full(self) -> None:
+        f = lambda x: (x**3).sum()
+        jf = func.jacrev(f)
+        X = lucid.randn(5, 4)
+        full = func.vmap(jf)(X)
+        chunk1 = func.vmap(jf, chunk_size=1)(X)
+        assert lucid.allclose(full, chunk1, atol=1e-5)
+
+
+# ── linearize linear_fn isolation ─────────────────────────────────────────────
+
+
+class TestVmapLinearize:
+    """vmap(linear_fn) from linearize uses element isolation automatically."""
+
+    def test_linear_fn_vmap_shape(self) -> None:
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        x0 = lucid.tensor([1.0, 2.0, 3.0])
+        _, lin = func.linearize(f, x0)
+        B, n = 4, 3
+        tangents = lucid.randn(B, n)
+        jvp_batch = func.vmap(lin)(tangents)
+        assert list(jvp_batch.shape) == [B, 2]
+
+    def test_linear_fn_matches_manual_jvp(self) -> None:
+        f = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        x0 = lucid.tensor([1.0, 0.0, -1.0])
+        _, lin = func.linearize(f, x0)
+        t = lucid.tensor([1.0, 0.0, 0.0])
+        _, jvp_manual = func.jvp(f, (x0,), (t,))
+        lin_out = lin(t)
+        assert lucid.allclose(lin_out, jvp_manual, atol=1e-5)

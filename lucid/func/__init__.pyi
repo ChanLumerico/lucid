@@ -17,6 +17,7 @@ def vmap(
     randomness: str = ...,
     *,
     chunk_size: int | None = ...,
+    strategy: str = ...,
 ) -> Callable[..., Tensor | tuple[Tensor, ...]]: ...
 
 # ── grad / grad_and_value ─────────────────────────────────────────────────────

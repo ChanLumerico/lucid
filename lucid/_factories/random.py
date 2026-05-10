@@ -4,6 +4,7 @@ Random tensor creation: rand, randn, randint, bernoulli, normal, manual_seed.
 
 import os
 from typing import TYPE_CHECKING
+from lucid._vmap_ctx import check_random_allowed as _check_random
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -110,6 +111,7 @@ def rand(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with uniform random values in [0, 1)."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
     impl = _C_engine.rand(shape, _dt, _dev, _get_gen(generator))
@@ -124,6 +126,7 @@ def randn(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with standard normal random values."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = _size_to_list(*size)
     impl = _C_engine.randn(shape, _dt, _dev, _get_gen(generator))
@@ -141,6 +144,7 @@ def randint(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with random integers in [low, high)."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
         dtype if dtype is not None else int64, device
     )
@@ -159,6 +163,7 @@ def bernoulli(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor of Bernoulli samples with probability p."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size) if size is not None else [1]
     impl = _C_engine.bernoulli(shape, p, _dt, _dev, _get_gen(generator))
@@ -176,6 +181,7 @@ def normal(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
     """Return a tensor filled with normal random values."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     shape = list(size)
     impl = _C_engine.normal(shape, mean, std, _dt, _dev, _get_gen(generator))
@@ -190,6 +196,7 @@ def rand_like(
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a uniform random tensor with the same shape/dtype/device as t."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
@@ -206,6 +213,7 @@ def randn_like(
     requires_grad: bool = False,
 ) -> Tensor:
     """Return a normal random tensor with the same shape/dtype/device as t."""
+    _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(
         dtype if dtype is not None else t.dtype,
         device if device is not None else t.device,
@@ -232,6 +240,7 @@ def randperm(
     a uniformly random permutation.  Output is int64 by default to match
     the standard reference framework.
     """
+    _check_random()
     if n < 0:
         raise ValueError(f"randperm requires n >= 0, got {n}")
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)

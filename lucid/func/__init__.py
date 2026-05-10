@@ -37,6 +37,7 @@ Limitations
 """
 
 from typing import Callable, TYPE_CHECKING
+from lucid._vmap_ctx import _RandomnessGuard as _RandGuard
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -112,8 +113,9 @@ def vmap(
     randomness: str = "error",
     *,
     chunk_size: int | None = None,
+    strategy: str = "auto",
 ) -> Callable[..., Tensor | tuple[Tensor, ...]]:
-    """Vectorise *func* over a batch dimension using C++ vmapped dispatch.
+    """Vectorise *func* over a batch dimension.
 
     Parameters
     ----------
@@ -126,20 +128,52 @@ def vmap(
     out_dims:
         Where to place the batch dimension in the output(s).
     randomness:
-        ``'error'`` (default) raises if *func* calls a random op.
-        ``'different'`` / ``'same'`` allow random ops.
+        ``'error'`` (default) raises if *func* calls any random op
+        (``lucid.randn``, ``lucid.rand``, etc.).
+        ``'different'`` or ``'same'`` allow random ops; in both modes
+        the default generator advances freely (``'same'`` semantics
+        are not separately enforced yet).
     chunk_size:
         Process the batch in chunks of this size to bound peak memory.
+        Applies in both *vectorized* and *isolated* strategy modes.
+    strategy:
+        Dispatch strategy.
+
+        ``'auto'`` (default): use *isolated* mode when *func* is tagged
+        with the ``_lucid_needs_vmap_isolation`` attribute (set
+        automatically by :func:`jacrev`, :func:`jacfwd`, :func:`hessian`,
+        and the ``linear_fn`` returned by :func:`linearize`); fall back to
+        *vectorized* mode otherwise.
+
+        ``'isolated'``: always run per-element isolation — calls
+        ``func(x[b])`` for every batch index *b* and stacks the results.
+        Required for user functions that internally compose ``vjp`` or
+        other autograd transforms over non-separable functions.
+
+        ``'vectorized'``: always use Stage 1 (move-batch-dim + call-once).
+        Fastest, but incorrect for transforms that materialise full
+        Jacobians or per-output backward passes.
 
     Examples
     --------
     Per-sample gradients via ``vmap(grad(fn))``::
 
-        f   = lambda x: (x ** 2).sum()
-        df  = lucid.func.grad(f)
-        X   = lucid.randn(32, 4)
-        grads = lucid.func.vmap(df)(X)   # (32, 4) — one gradient per sample
+        f     = lambda x: (x ** 2).sum()
+        df    = lucid.func.grad(f)
+        X     = lucid.randn(32, 4)
+        grads = lucid.func.vmap(df)(X)          # (32, 4)
+
+    Per-sample Jacobians via ``vmap(jacrev(fn))`` (Stage 2 isolation)::
+
+        f   = lambda x: lucid.stack([x.sum(), (x**2).sum()])
+        J   = lucid.func.vmap(lucid.func.jacrev(f))(X)  # (32, 2, 4)
     """
+    if strategy not in ("auto", "isolated", "vectorized"):
+        raise ValueError(
+            f"vmap: strategy must be 'auto', 'isolated', or 'vectorized'; "
+            f"got {strategy!r}"
+        )
+
     from lucid._tensor.tensor import Tensor as _T
 
     def vectorized(
@@ -148,7 +182,7 @@ def vmap(
     ) -> Tensor | tuple[Tensor, ...]:
         _in = _normalise_in_dims(in_dims, len(args))
 
-        # Validate and find batch_size
+        # ── validate inputs and find batch_size ───────────────────────
         batch_size: int | None = None
         for a, d in zip(args, _in):
             if d is None or not isinstance(a, _T):
@@ -163,51 +197,59 @@ def vmap(
             if batch_size is None:
                 batch_size = bs
             elif batch_size != bs:
-                raise ValueError(f"vmap: inconsistent batch sizes {batch_size} vs {bs}")
+                raise ValueError(
+                    f"vmap: inconsistent batch sizes {batch_size} vs {bs}"
+                )
 
-        if batch_size is None:
-            return func(*args, **kwargs)
+        # No batching — propagate randomness context then call directly.
+        with _RandGuard(randomness):
+            if batch_size is None:
+                return func(*args, **kwargs)
 
-        # Transforms like jacrev / jacfwd / hessian build per-output backward
-        # passes that must not observe the batch dimension as an input axis.
-        # Route them through element-level isolation instead of Stage 1.
-        if getattr(func, _ISOLATION_ATTR, False):
-            return _isolated_vmap(func, args, kwargs, _in, out_dims, batch_size)
-
-        if chunk_size is not None and batch_size > chunk_size:
-            return _chunked_vmap(
-                func, args, kwargs, _in, out_dims, chunk_size, batch_size
+            # ── dispatch: isolated vs vectorized ──────────────────────
+            _isolate = strategy == "isolated" or (
+                strategy == "auto"
+                and getattr(func, _ISOLATION_ATTR, False)
             )
 
-        # Move all batch dims to front (dim 0)
-        moved: list[object] = []
-        for a, d in zip(args, _in):
-            if d is None or not isinstance(a, _T):
-                moved.append(a)
-            else:
-                moved.append(_move_to_front(a, d))
+            if _isolate:
+                return _isolated_vmap(
+                    func, args, kwargs, _in, out_dims, batch_size, chunk_size
+                )
 
-        # ── C++ vmapped dispatch ──────────────────────────────────────
-        # Call func ONCE with fully-batched (B, ...) tensors.
-        # Each C++ engine op processes the entire batch in one call:
-        #   GPU  → MLX Metal kernel dispatched over all B elements
-        #   CPU  → Accelerate BLAS sgemm/vDSP over the batched array
-        output = func(*moved, **kwargs)
+            if chunk_size is not None and batch_size > chunk_size:
+                return _chunked_vmap(
+                    func, args, kwargs, _in, out_dims, chunk_size, batch_size
+                )
 
-        # Move output batch dim from 0 to out_dims
-        if isinstance(output, tuple):
-            _od: list[int] = (
-                [out_dims] * len(output)
-                if isinstance(out_dims, int)
-                else list(out_dims)
-            )
-            return tuple(
-                _move_from_front(o, od) if isinstance(o, _T) else o
-                for o, od in zip(output, _od)
-            )
-        if isinstance(output, _T) and isinstance(out_dims, int) and out_dims != 0:
-            return _move_from_front(output, out_dims)
-        return output
+            # ── Stage 1: move-batch-dim + call-once ──────────────────
+            # Move all batch dims to front (dim 0).
+            moved: list[object] = []
+            for a, d in zip(args, _in):
+                if d is None or not isinstance(a, _T):
+                    moved.append(a)
+                else:
+                    moved.append(_move_to_front(a, d))
+
+            # One C++ call with fully-batched (B, ...) tensors:
+            #   GPU → MLX Metal kernel over all B elements in parallel
+            #   CPU → Accelerate BLAS sgemm/vDSP over the batched array
+            output = func(*moved, **kwargs)
+
+            # Move output batch dim from 0 → out_dims.
+            if isinstance(output, tuple):
+                _od: list[int] = (
+                    [out_dims] * len(output)
+                    if isinstance(out_dims, int)
+                    else list(out_dims)
+                )
+                return tuple(
+                    _move_from_front(o, od) if isinstance(o, _T) else o
+                    for o, od in zip(output, _od)
+                )
+            if isinstance(output, _T) and isinstance(out_dims, int) and out_dims != 0:
+                return _move_from_front(output, out_dims)
+            return output
 
     return vectorized
 
@@ -254,23 +296,21 @@ def _isolated_vmap(
     in_dims: list[int | None],
     out_dims: int | tuple[int, ...],
     batch_size: int,
+    chunk_size: int | None = None,
 ) -> Tensor | tuple[Tensor, ...]:
-    """Per-element isolation: call func(x[b]) for each b in 0..batch_size-1.
+    """Per-element isolation: call func(x[b]) for b in 0..batch_size-1.
 
     Unlike Stage 1 (move-batch-dim + call-once), each element is sliced out
-    before calling func, so transforms that materialise backward passes
-    (jacrev, jacfwd, hessian) cannot observe the batch axis as an input.
+    independently before calling func, so transforms that materialise backward
+    passes (jacrev, jacfwd, hessian) cannot observe the batch axis as input.
 
-    Output shapes are correct for composed transforms:
-      vmap(jacrev(fn))  → (B, out_numel, in_numel)   [Stage 1 gave (B,out,B,in)]
-      vmap(jacfwd(fn))  → (B, out_numel, in_numel)
-      vmap(hessian(fn)) → (B, n, n)
+    When *chunk_size* is given, results are partially stacked after each chunk
+    to free intermediate autograd-graph memory before the next chunk starts.
     """
     import lucid
     from lucid._tensor.tensor import Tensor as _T
 
-    results: list[Tensor | tuple[Tensor, ...]] = []
-    for b in range(batch_size):
+    def _run_element(b: int) -> Tensor | tuple[Tensor, ...]:
         sliced: list[object] = []
         for a, d in zip(args, in_dims):
             if d is None or not isinstance(a, _T):
@@ -281,19 +321,46 @@ def _isolated_vmap(
                 idx: list[int | slice] = [slice(None)] * nd
                 idx[bd] = b
                 sliced.append(a[tuple(idx)])
-        results.append(func(*sliced, **kwargs))
+        return func(*sliced, **kwargs)
 
-    od_int: int = out_dims if isinstance(out_dims, int) else out_dims[0]
-    if isinstance(results[0], tuple):
-        n_out = len(results[0])
-        ods_i: list[int] = (
-            [out_dims] * n_out if isinstance(out_dims, int) else list(out_dims)
-        )
-        return tuple(
-            lucid.stack([r[i] for r in results], dim=ods_i[i])  # type: ignore[index,arg-type]
-            for i in range(n_out)
-        )
-    return lucid.stack(list(results), dim=od_int)  # type: ignore[arg-type]
+    def _stack(items: list[Tensor | tuple[Tensor, ...]]) -> Tensor | tuple[Tensor, ...]:
+        od_i: int = out_dims if isinstance(out_dims, int) else out_dims[0]
+        if isinstance(items[0], tuple):
+            n_o = len(items[0])
+            ods_l: list[int] = (
+                [out_dims] * n_o if isinstance(out_dims, int) else list(out_dims)
+            )
+            return tuple(
+                lucid.stack([r[i] for r in items], dim=ods_l[i])  # type: ignore[index,arg-type]
+                for i in range(n_o)
+            )
+        return lucid.stack(list(items), dim=od_i)  # type: ignore[arg-type]
+
+    def _cat(parts: list[Tensor | tuple[Tensor, ...]]) -> Tensor | tuple[Tensor, ...]:
+        od_i = out_dims if isinstance(out_dims, int) else out_dims[0]
+        if isinstance(parts[0], tuple):
+            n_o = len(parts[0])
+            ods_c: list[int] = (
+                [out_dims] * n_o if isinstance(out_dims, int) else list(out_dims)
+            )
+            return tuple(
+                lucid.cat([p[i] for p in parts], dim=ods_c[i])  # type: ignore[index,arg-type]
+                for i in range(n_o)
+            )
+        return lucid.cat(list(parts), dim=od_i)  # type: ignore[arg-type]
+
+    if chunk_size is not None and batch_size > chunk_size:
+        # Process B elements in chunks; partially stack after each chunk to
+        # release intermediate autograd-graph memory before the next chunk.
+        parts: list[Tensor | tuple[Tensor, ...]] = []
+        for start in range(0, batch_size, chunk_size):
+            end = min(start + chunk_size, batch_size)
+            chunk_res = [_run_element(b) for b in range(start, end)]
+            parts.append(_stack(chunk_res))
+        return _cat(parts)
+
+    results = [_run_element(b) for b in range(batch_size)]
+    return _stack(results)
 
 
 # ── grad ─────────────────────────────────────────────────────────────────────
@@ -667,6 +734,10 @@ def linearize(
         _, tangents_out = jvp(func, primals, tangents)
         return tangents_out
 
+    # linear_fn closes over fixed primals and maps tangents through jvp.
+    # When vmapped with strategy='auto', isolation ensures each tangent
+    # vector is passed individually so jvp sees the right (n,) shape.
+    setattr(linear_fn, _ISOLATION_ATTR, True)
     return primals_out, linear_fn
 
 
