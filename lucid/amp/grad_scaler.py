@@ -6,7 +6,6 @@ Pure Python implementation — no engine changes required.
 
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.optim.optimizer import Optimizer

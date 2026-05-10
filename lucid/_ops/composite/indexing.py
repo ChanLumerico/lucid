@@ -344,7 +344,7 @@ def index_put_(
     the returned tensor as a new node.
     """
     new_t: Tensor = index_put(input, indices, values, accumulate=accumulate)
-    input._impl = new_t._impl  # type: ignore[attr-defined]
+    input._impl = new_t._impl
     return input
 
 

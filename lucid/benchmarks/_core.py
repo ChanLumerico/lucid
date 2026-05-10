@@ -101,7 +101,7 @@ def bench_gpu_lucid(
     def _run() -> None:
         out = fn()
         impl = getattr(out, "_impl", out)
-        _C_engine.eval_gpu(impl)
+        _C_engine.eval_gpu(impl)  # type: ignore[arg-type]
 
     for _ in range(warmup):
         _run()

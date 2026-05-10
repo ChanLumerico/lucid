@@ -11,7 +11,7 @@ numpy ``str(arr.dtype)`` it used in v1/v2.
 import io
 import pickle
 import warnings
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, cast
 
 from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
@@ -42,7 +42,7 @@ class _SafeUnpickler(pickle.Unpickler):
     def find_class(self, module: str, name: str) -> type:
         full = f"{module}.{name}"
         if full in _SAFE_CLASSES:
-            return super().find_class(module, name)
+            return cast(type, super().find_class(module, name))
         raise pickle.UnpicklingError(
             f"weights_only=True: refusing to deserialize {full!r}. "
             "Pass weights_only=False to allow arbitrary objects "
@@ -108,7 +108,7 @@ def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -
     round-trip and re-attached on ``load()``.
     """
     sd_metadata: object | None = getattr(obj, "_metadata", None)
-    container: dict = {"_lucid_format": 2, "obj": obj}
+    container: dict[str, object] = {"_lucid_format": 2, "obj": obj}
     if sd_metadata is not None:
         container["_state_dict_metadata"] = sd_metadata
 
@@ -121,7 +121,7 @@ def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -
         with open(f, "wb") as fp:
             fp.write(data)
     else:
-        f.write(data)  # type: ignore[union-attr]
+        f.write(data)
 
 
 def load(
@@ -135,7 +135,7 @@ def load(
         with open(f, "rb") as fp:
             data = fp.read()
     else:
-        data = f.read()  # type: ignore[union-attr]
+        data = f.read()
 
     buf = io.BytesIO(data)
 
@@ -194,7 +194,7 @@ def _apply_map_location(
             device_str = "metal" if obj.is_metal else "cpu"
             target = map_location.get(device_str, device_str)
             return obj.to(target)
-        return obj.to(map_location)  # type: ignore[arg-type]
+        return obj.to(map_location)
 
     if isinstance(obj, dict):
         return {k: _apply_map_location(v, map_location) for k, v in obj.items()}

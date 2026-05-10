@@ -2,7 +2,7 @@
 Optimizer base class.
 """
 
-from typing import Iterable
+from typing import Iterable, cast
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import _OptimizerClosure
@@ -30,7 +30,7 @@ class Optimizer:
             ) -> Tensor | None:
                 result = _orig(self, closure)
                 self._metal_eval_params()
-                return result
+                return cast(Tensor | None, result)
 
             _step_with_eval.__name__ = "step"
             _step_with_eval.__doc__ = _orig.__doc__
@@ -62,9 +62,9 @@ class Optimizer:
             and len(params) > 0
             and isinstance(params[0], dict)
         ):
-            param_groups: list[dict[str, object]] = list(params)  # type: ignore[arg-type]
+            param_groups: list[dict[str, object]] = list(params)
         else:
-            param_groups = [{"params": list(params)}]  # type: ignore[arg-type]
+            param_groups = [{"params": list(params)}]
 
         self.param_groups: list[dict[str, object]] = []
         self._engine_optims: list[object] = []
@@ -203,7 +203,7 @@ class Optimizer:
             by_name: dict[str, list[object | None]] = {}
             step_count: int = 0
             for slot, p in enumerate(params):
-                snapshot: dict[str, object] = state.get(flat_idx + slot, {})  # type: ignore[arg-type]
+                snapshot: dict[str, object] = state.get(flat_idx + slot, {})
                 for k, v in snapshot.items():
                     if k == "step":
                         step_count = max(step_count, int(v))  # type: ignore[call-overload]  # v is int at runtime

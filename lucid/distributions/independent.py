@@ -46,7 +46,7 @@ class Independent(Distribution):
         return self.base_dist.has_rsample
 
     @property
-    def support(self):  # type: ignore[override]
+    def support(self) -> object:  # type: ignore[override]
         return self.base_dist.support
 
     @property

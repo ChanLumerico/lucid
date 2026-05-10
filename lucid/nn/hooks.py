@@ -41,7 +41,9 @@ class RemovableHandle:
         key: int,
         extra_sets: tuple[set[int], ...] = (),
     ) -> None:
-        self._hooks: dict[int, object] = hooks  # type: ignore[assignment]  # covariant dict usage: we only pop/read, never write incompatible types
+        self._hooks: dict[int, object] = (
+            hooks  # covariant dict usage: we only pop/read, never write incompatible types
+        )
         self._key = key
         self._extra_sets = extra_sets
 

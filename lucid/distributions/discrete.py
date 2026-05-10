@@ -6,7 +6,6 @@ All three are pure-Lucid composites — sampling reuses
 closed-form via lgamma.
 """
 
-
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import as_tensor as _as_tensor

@@ -92,3 +92,126 @@ class TestTripletWithDistance:
         assert (
             abs(F.triplet_margin_with_distance_loss(a, p, n, margin=1.0).item()) < 1e-6
         )
+
+
+class TestFractionalPool:
+    def test_frac_pool2d_output_size_shape(self) -> None:
+        x = lucid.ones(2, 3, 8, 8)
+        out = F.fractional_max_pool2d(x, kernel_size=2, output_size=4)
+        assert tuple(out.shape) == (2, 3, 4, 4)
+
+    def test_frac_pool2d_output_ratio_shape(self) -> None:
+        x = lucid.ones(1, 2, 8, 8)
+        out = F.fractional_max_pool2d(x, kernel_size=2, output_ratio=0.5)
+        assert tuple(out.shape) == (1, 2, 4, 4)
+
+    def test_frac_pool2d_deterministic_value(self) -> None:
+        # sample=0 → alpha=2 → starts=[0, 2] for both H and W
+        # x = arange(16) reshaped to (1,1,4,4):
+        #   [[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]]
+        # pool[0,0]=max(0,1,4,5)=5  pool[0,1]=max(2,3,6,7)=7
+        # pool[1,0]=max(8,9,12,13)=13  pool[1,1]=max(10,11,14,15)=15
+        x = lucid.arange(16, dtype=lucid.float32).reshape(1, 1, 4, 4)
+        samples = lucid.zeros(1, 1, 2)
+        out = F.fractional_max_pool2d(
+            x, kernel_size=2, output_size=2, _random_samples=samples
+        )
+        np.testing.assert_allclose(
+            out.numpy().flatten(), [5.0, 7.0, 13.0, 15.0], atol=1e-6
+        )
+
+    def test_frac_pool2d_return_indices_shape(self) -> None:
+        x = lucid.randn(1, 1, 6, 6)
+        out, idx = F.fractional_max_pool2d(  # type: ignore[misc]
+            x, kernel_size=2, output_size=3, return_indices=True
+        )
+        assert tuple(out.shape) == (1, 1, 3, 3)
+        assert tuple(idx.shape) == (1, 1, 3, 3)
+
+    def test_frac_pool2d_indices_in_valid_range(self) -> None:
+        x = lucid.randn(1, 2, 6, 6)
+        _, idx = F.fractional_max_pool2d(  # type: ignore[misc]
+            x, kernel_size=2, output_size=3, return_indices=True
+        )
+        flat = idx.numpy().flatten()
+        assert int(flat.min()) >= 0
+        assert int(flat.max()) < 6 * 6
+
+    def test_frac_pool2d_indices_point_to_max(self) -> None:
+        # Verify each returned index actually points to the max of its window.
+        x = lucid.randn(1, 1, 4, 4)
+        samples = lucid.zeros(1, 1, 2)  # deterministic: starts=[0,2]
+        out, idx = F.fractional_max_pool2d(  # type: ignore[misc]
+            x,
+            kernel_size=2,
+            output_size=2,
+            return_indices=True,
+            _random_samples=samples,
+        )
+        x_np = x.numpy()[0, 0]  # (4, 4)
+        out_np = out.numpy()[0, 0]  # (2, 2)
+        idx_np = idx.numpy()[0, 0]  # (2, 2)
+        for i in range(2):
+            for j in range(2):
+                flat = int(idx_np[i, j])
+                r, c = flat // 4, flat % 4
+                np.testing.assert_allclose(x_np[r, c], out_np[i, j], atol=1e-6)
+
+    def test_frac_pool2d_backward(self) -> None:
+        x = lucid.randn(1, 1, 4, 4, requires_grad=True)
+        out = F.fractional_max_pool2d(x, kernel_size=2, output_size=2)
+        out.sum().backward()
+        assert x.grad is not None
+        assert tuple(x.grad.shape) == (1, 1, 4, 4)
+
+    def test_frac_pool2d_grad_sums_to_one_per_channel(self) -> None:
+        # Each input element is the max of at most one window, so the
+        # gradient of sum(output) w.r.t. x must sum to oH * oW.
+        x = lucid.randn(1, 1, 4, 4, requires_grad=True)
+        out = F.fractional_max_pool2d(x, kernel_size=2, output_size=2)
+        out.sum().backward()
+        assert x.grad is not None
+        total = float(x.grad.numpy().sum())
+        assert abs(total - 4.0) < 1e-5  # 2*2 output cells, each contributes 1
+
+    def test_frac_pool2d_error_both_size_and_ratio(self) -> None:
+        import pytest as _pytest
+
+        x = lucid.ones(1, 1, 4, 4)
+        with _pytest.raises(ValueError):
+            F.fractional_max_pool2d(x, kernel_size=2, output_size=2, output_ratio=0.5)
+
+    def test_frac_pool2d_error_neither_size_nor_ratio(self) -> None:
+        import pytest as _pytest
+
+        x = lucid.ones(1, 1, 4, 4)
+        with _pytest.raises(ValueError):
+            F.fractional_max_pool2d(x, kernel_size=2)
+
+    def test_frac_pool3d_output_size_shape(self) -> None:
+        x = lucid.ones(1, 2, 8, 8, 8)
+        out = F.fractional_max_pool3d(x, kernel_size=2, output_size=4)
+        assert tuple(out.shape) == (1, 2, 4, 4, 4)
+
+    def test_frac_pool3d_output_ratio_shape(self) -> None:
+        x = lucid.ones(1, 1, 8, 8, 8)
+        out = F.fractional_max_pool3d(x, kernel_size=2, output_ratio=0.5)
+        assert tuple(out.shape) == (1, 1, 4, 4, 4)
+
+    def test_frac_pool3d_return_indices_shape_and_range(self) -> None:
+        x = lucid.randn(1, 1, 6, 6, 6)
+        out, idx = F.fractional_max_pool3d(  # type: ignore[misc]
+            x, kernel_size=2, output_size=3, return_indices=True
+        )
+        assert tuple(out.shape) == (1, 1, 3, 3, 3)
+        assert tuple(idx.shape) == (1, 1, 3, 3, 3)
+        flat = idx.numpy().flatten()
+        assert int(flat.min()) >= 0
+        assert int(flat.max()) < 6 * 6 * 6
+
+    def test_frac_pool3d_backward(self) -> None:
+        x = lucid.randn(1, 1, 4, 4, 4, requires_grad=True)
+        out = F.fractional_max_pool3d(x, kernel_size=2, output_size=2)
+        out.sum().backward()
+        assert x.grad is not None
+        assert tuple(x.grad.shape) == (1, 1, 4, 4, 4)

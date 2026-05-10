@@ -1,6 +1,5 @@
 """Discrete ``Bernoulli`` and ``Geometric``."""
 
-
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions.constraints import (

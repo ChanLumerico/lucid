@@ -9,7 +9,7 @@ directly and isn't an engine op — is special-cased below.
 Called once at module import time by ``tensor.py``.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import _REGISTRY, OpEntry
@@ -36,7 +36,7 @@ def _inject_methods(tensor_cls: type) -> None:
                     if isinstance(result, (list, tuple)):
                         return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                     return _wrap(result)
-                return result  # type: ignore[return-value]
+                return cast(Tensor, result)
 
             method_list.__name__ = e.method_name or e.name
             return method_list
@@ -61,7 +61,7 @@ def _inject_methods(tensor_cls: type) -> None:
                         if isinstance(result, (list, tuple)):
                             return type(result)(_wrap(r) for r in result)  # type: ignore[return-value]
                         return _wrap(result)
-                    return result  # type: ignore[return-value]
+                    return cast(Tensor, result)
 
             method.__name__ = e.method_name or e.name
             return method

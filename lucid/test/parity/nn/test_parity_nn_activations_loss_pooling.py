@@ -96,3 +96,60 @@ class TestPoolingParity:
         l = F.avg_pool2d(lucid.tensor(x.copy()), kernel_size=2)
         r = ref.nn.functional.avg_pool2d(ref.tensor(x.copy()), kernel_size=2)
         assert_close(l, r, atol=1e-6)
+
+    def test_fractional_max_pool2d(self, ref: Any) -> None:
+        np.random.seed(42)
+        x = np.random.standard_normal(size=(2, 3, 8, 8)).astype(np.float32)
+        samples = np.random.uniform(0.0, 1.0, size=(2, 3, 2)).astype(np.float32)
+        lucid_out = F.fractional_max_pool2d(
+            lucid.tensor(x.copy()),
+            kernel_size=2,
+            output_size=4,
+            _random_samples=lucid.tensor(samples.copy()),
+        )
+        ref_out = ref.nn.functional.fractional_max_pool2d(
+            ref.tensor(x.copy()),
+            kernel_size=2,
+            output_size=4,
+            _random_samples=ref.tensor(samples.copy()),
+        )
+        assert_close(lucid_out, ref_out, atol=1e-5)
+
+    def test_fractional_max_pool2d_return_indices(self, ref: Any) -> None:
+        np.random.seed(7)
+        x = np.random.standard_normal(size=(1, 2, 6, 6)).astype(np.float32)
+        samples = np.random.uniform(0.0, 1.0, size=(1, 2, 2)).astype(np.float32)
+        l_out, l_idx = F.fractional_max_pool2d(  # type: ignore[misc]
+            lucid.tensor(x.copy()),
+            kernel_size=2,
+            output_size=3,
+            return_indices=True,
+            _random_samples=lucid.tensor(samples.copy()),
+        )
+        r_result = ref.nn.functional.fractional_max_pool2d(
+            ref.tensor(x.copy()),
+            kernel_size=2,
+            output_size=3,
+            return_indices=True,
+            _random_samples=ref.tensor(samples.copy()),
+        )
+        assert_close(l_out, r_result[0], atol=1e-5)
+        np.testing.assert_array_equal(l_idx.numpy(), r_result[1].numpy())
+
+    def test_fractional_max_pool3d(self, ref: Any) -> None:
+        np.random.seed(13)
+        x = np.random.standard_normal(size=(1, 2, 8, 8, 8)).astype(np.float32)
+        samples = np.random.uniform(0.0, 1.0, size=(1, 2, 3)).astype(np.float32)
+        lucid_out = F.fractional_max_pool3d(
+            lucid.tensor(x.copy()),
+            kernel_size=2,
+            output_size=4,
+            _random_samples=lucid.tensor(samples.copy()),
+        )
+        ref_out = ref.nn.functional.fractional_max_pool3d(
+            ref.tensor(x.copy()),
+            kernel_size=2,
+            output_size=4,
+            _random_samples=ref.tensor(samples.copy()),
+        )
+        assert_close(lucid_out, ref_out, atol=1e-5)

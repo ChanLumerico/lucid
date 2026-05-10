@@ -96,11 +96,11 @@ def register_parametrization(
     handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
     # Stash the hook handle on the container so ``remove_parametrizations``
     # can detach it later.
-    container._hook_handle = handle  # type: ignore[attr-defined]
+    container._hook_handle = handle
 
     # Materialise the derived tensor immediately so attribute access works
     # before any forward call.
-    object.__setattr__(module, tensor_name, container())  # type: ignore[assignment]
+    object.__setattr__(module, tensor_name, container())
 
     if not unsafe:
         produced: Tensor = container()  # type: ignore[assignment]
@@ -139,7 +139,7 @@ def remove_parametrizations(
     if tensor_name not in container_dict:
         raise ValueError(f"no parametrisation registered on '{tensor_name}'")
     container: ParametrizationContainer = container_dict.pop(tensor_name)
-    handle = container._hook_handle  # type: ignore[attr-defined]
+    handle = container._hook_handle
     handle.remove()  # type: ignore[union-attr]
 
     final_value: Tensor = (

@@ -31,7 +31,7 @@ _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
 }
 
 
-def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:  # type: ignore[type-arg]
+def _np_dtype_to_engine(np_dtype: np.dtype) -> _C_engine.Dtype:
     name = np_dtype.name
     if name in _NP_TO_ENGINE_DTYPE:
         return _NP_TO_ENGINE_DTYPE[name]
@@ -167,7 +167,7 @@ def as_tensor(
     return tensor(data, dtype=dtype, device=device)
 
 
-def from_numpy(arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
+def from_numpy(arr: np.ndarray) -> Tensor:
     """Create a CPU tensor from a NumPy array with automatic dtype mapping."""
     return tensor(arr)
 
@@ -193,7 +193,7 @@ def from_numpy(arr: np.ndarray) -> Tensor:  # type: ignore[type-arg]
 # ``pip install lucid[numpy]`` when numpy is absent.
 
 
-def from_dlpack(ext_tensor: object) -> Tensor:  # type: ignore[type-arg]
+def from_dlpack(ext_tensor: object) -> Tensor:
     """Construct a Lucid tensor from any object exposing the DLPack
     protocol (``__dlpack__``) or from a raw PyCapsule.
 

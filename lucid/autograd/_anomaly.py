@@ -49,7 +49,7 @@ class detect_anomaly:
         @functools.wraps(fn)  # type: ignore[arg-type]
         def wrapper(*args: object, **kwargs: object) -> object:
             with self.__class__(self.check_nan):
-                return fn(*args, **kwargs)  # type: ignore[operator]
+                return fn(*args, **kwargs)
 
         return wrapper
 

@@ -3,7 +3,7 @@ type, mirroring the reference framework's ``register_kl`` mechanism.
 """
 
 from collections.abc import Callable
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -26,7 +26,7 @@ def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
     pair ``(p_cls, q_cls)``.  Mirrors the reference framework's API."""
 
     def _decorator(fn: _F) -> _F:
-        _KL_REGISTRY[(p_cls, q_cls)] = fn  # type: ignore[arg-type]  # callable covariance
+        _KL_REGISTRY[(p_cls, q_cls)] = fn
         return fn
 
     return _decorator
@@ -213,13 +213,13 @@ def _kl_laplace_laplace(p: Laplace, q: Laplace) -> Tensor:
 @register_kl(HalfNormal, HalfNormal)
 def _kl_halfnormal_halfnormal(p: HalfNormal, q: HalfNormal) -> Tensor:
     # HalfNormal(σ) = |Normal(0, σ)|; KL reduces to the underlying Normals.
-    return _kl_normal_normal(p._base, q._base)  # type: ignore[attr-defined]
+    return _kl_normal_normal(p._base, q._base)
 
 
 @register_kl(LogNormal, LogNormal)
 def _kl_lognormal_lognormal(p: LogNormal, q: LogNormal) -> Tensor:
     # LogNormal(μ, σ²) = exp(Normal(μ, σ²)); KL equals KL of the underlying.
-    return _kl_normal_normal(p._base, q._base)  # type: ignore[attr-defined]
+    return _kl_normal_normal(p._base, q._base)
 
 
 @register_kl(Gumbel, Gumbel)
@@ -331,4 +331,4 @@ def _kl_normal_laplace(p: Normal, q: Laplace) -> Tensor:
     # H_cross = log(2b) + e_abs / b
     h_cross = (2.0 * b).log() + e_abs / b
     h_p = 0.5 * (1.0 + math.log(2.0 * math.pi) + (sigma * sigma).log())
-    return h_cross - h_p
+    return cast(Tensor, h_cross - h_p)

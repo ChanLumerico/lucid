@@ -268,7 +268,7 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
     idx_flat: Tensor = _lucid.tensor(
         indices_1d, dtype=_lucid.int32, device=x.device
     ).reshape(target_shape)
-    idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()  # type: ignore[attr-defined]
+    idx: Tensor = idx_flat.broadcast_to(bcast_shape).contiguous()
     return _lucid.gather(x, idx, dim)
 
 

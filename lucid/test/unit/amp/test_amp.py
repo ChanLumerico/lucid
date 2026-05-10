@@ -1,6 +1,5 @@
 """``lucid.amp`` — autocast / GradScaler smoke."""
 
-
 import lucid
 
 

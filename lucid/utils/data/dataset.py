@@ -122,10 +122,10 @@ def random_split(
     n = len(dataset)
 
     if all(isinstance(x, float) for x in lengths):
-        total = sum(lengths)  # type: ignore[arg-type]
+        total = sum(lengths)
         if abs(total - 1.0) > 1e-6:
             raise ValueError("Fraction lengths must sum to 1.0")
-        int_lengths = [round(x * n) for x in lengths]  # type: ignore[arg-type]
+        int_lengths = [round(x * n) for x in lengths]
         # Fix rounding error on last element
         int_lengths[-1] = n - sum(int_lengths[:-1])
         lengths = int_lengths

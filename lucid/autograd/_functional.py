@@ -42,7 +42,7 @@ def jacobian(
     inputs_rg = []
     for x in inputs_t:
         if not x.requires_grad:
-            x = x.requires_grad_(True)  # type: ignore[assignment]
+            x = x.requires_grad_(True)
         inputs_rg.append(x)
 
     # Run forward
@@ -51,7 +51,7 @@ def jacobian(
     if not isinstance(_raw_outputs, (list, tuple)):
         outputs = [_raw_outputs]
     else:
-        outputs = _raw_outputs  # type: ignore[assignment]
+        outputs = _raw_outputs
 
     # Flatten each output: record (tensor, numel)
     from lucid._tensor.tensor import Tensor as _T
@@ -136,7 +136,7 @@ def hessian(
     inputs_rg = []
     for x in inputs_t:
         if not x.requires_grad:
-            x = x.requires_grad_(True)  # type: ignore[assignment]
+            x = x.requires_grad_(True)
         inputs_rg.append(x)
 
     from lucid._tensor.tensor import Tensor as _T
@@ -227,7 +227,7 @@ def vjp(
     inputs_rg = []
     for x in inputs_t:
         if not x.requires_grad:
-            x = x.requires_grad_(True)  # type: ignore[assignment]
+            x = x.requires_grad_(True)
         inputs_rg.append(x)
 
     outputs = func(*inputs_rg)
@@ -297,7 +297,7 @@ def jvp(
     inputs_rg = []
     for x in inputs_t:
         if not x.requires_grad:
-            x = x.requires_grad_(True)  # type: ignore[assignment]
+            x = x.requires_grad_(True)
         inputs_rg.append(x)
 
     # Forward pass with create_graph=True to allow higher-order differentation
@@ -362,7 +362,7 @@ def jvp(
             )
             for f, b in zip(out_fwd, out_bwd)
         )
-        return primals_out, tangents  # type: ignore[return-value]
+        return primals_out, tangents
     else:
         tangent = _wrap(
             _C_engine.div(

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype, to_engine_dtype, _ENGINE_TO_DTYPE  # noqa: F401
 from lucid._device import device, _device_from_engine  # noqa: F401
@@ -14,7 +14,7 @@ def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
         return t
     impl = getattr(t, "_impl", None)
     if impl is not None and isinstance(impl, _C_engine.TensorImpl):
-        return impl
+        return cast(_C_engine.TensorImpl, impl)
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")
 
 

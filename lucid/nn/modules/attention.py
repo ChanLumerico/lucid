@@ -26,7 +26,7 @@ _NEG_INF: float = float("-inf")
 def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
-    if mask.dtype is _lucid.bool_:
+    if mask.dtype == _lucid.bool_:
         # mask: True ⇒ -inf, False ⇒ 0
         _dtype = cast(DTypeLike, float_dtype)
         zero_t: Tensor = _lucid.zeros(mask.shape, dtype=_dtype, device=mask.device)
@@ -171,7 +171,7 @@ class MultiheadAttention(Module):
     # ── reference-checkpoint loading: accept ``out_proj.weight`` / ``out_proj.bias``
     def _load_from_state_dict(
         self,
-        state_dict: dict,
+        state_dict: dict[str, Tensor],
         prefix: str,
         local_metadata: dict[str, object],
         strict: bool,

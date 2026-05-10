@@ -486,7 +486,7 @@ def _repeat_method_adapter(x_impl: _Impl, *sizes: int | Sequence[int]) -> _Impl:
     if len(sizes) == 1 and isinstance(sizes[0], (list, tuple)):
         reps = list(sizes[0])
     else:
-        reps = list(sizes)  # type: ignore[arg-type]
+        reps = list(sizes)
     return _C_engine.tile(x_impl, [int(r) for r in reps])
 
 

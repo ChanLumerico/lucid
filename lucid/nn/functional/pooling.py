@@ -456,6 +456,28 @@ def max_unpool3d(
     return _scatter_unpool(x, indices, spatial, n_spatial=3)
 
 
+def _frac_pool_starts(
+    size: int, kernel: int, out_size: int, sample: float
+) -> list[int]:
+    """Fractional window start positions for one spatial dimension (Graham 2014 §3).
+
+    ``alpha = (size - kernel) / (out_size - 1)``
+    ``start[i] = floor((i + sample) * alpha) - floor(sample * alpha)``
+    Last index always clamps to ``size - kernel`` to avoid out-of-bounds.
+    """
+    if out_size == 1:
+        return [size - kernel]
+    alpha = (size - kernel) / (out_size - 1)
+    base = int(sample * alpha)
+    starts: list[int] = []
+    for i in range(out_size):
+        if i == out_size - 1:
+            starts.append(size - kernel)
+        else:
+            starts.append(int((i + sample) * alpha) - base)
+    return starts
+
+
 def fractional_max_pool2d(
     x: Tensor,
     kernel_size: int | tuple[int, int],
@@ -464,18 +486,96 @@ def fractional_max_pool2d(
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
 ) -> Tensor:
-    """Fractional max-pool 2-D (Graham 2014).
+    """Fractional max-pooling over a 2-D spatial input (Graham 2014).
 
-    Not yet implemented — fractional pooling needs a per-batch random
-    window-position generator.  Filed as a follow-up to keep this layer
-    consistent with the rest of the pooling surface (which currently
-    reaches the engine via fixed-stride kernels).
+    Implemented as a pure-Python composite: no engine change needed.
+    For each (batch, channel) pair, random pool boundaries are drawn
+    from ``_random_samples`` (shape ``(N, C, 2)``), then each output
+    cell takes the max over the corresponding input window.  Gradients
+    flow through ``Tensor.max()`` which already has a registered backward.
+
+    When ``return_indices=True``, returns ``(output, indices)`` where
+    ``indices`` holds the flat ``H × W`` position of each pooled maximum.
     """
-    raise NotImplementedError(
-        "fractional_max_pool2d is not yet wired.  Track parity gap §2 — the "
-        "implementation needs the engine's pool kernels to emit per-window "
-        "indices, which they don't currently do."
+    if x.ndim != 4:
+        raise ValueError(
+            f"fractional_max_pool2d expects 4-D input (N, C, H, W), "
+            f"got shape {tuple(x.shape)}"
+        )
+    kH, kW = _int_or_tuple(kernel_size, 2)
+    N, C, H, W = (
+        int(x.shape[0]),
+        int(x.shape[1]),
+        int(x.shape[2]),
+        int(x.shape[3]),
     )
+
+    if output_size is not None and output_ratio is not None:
+        raise ValueError(
+            "fractional_max_pool2d: specify output_size or output_ratio, not both"
+        )
+    if output_size is not None:
+        oH, oW = _int_or_tuple(output_size, 2)
+    elif output_ratio is not None:
+        rH, rW = (
+            (output_ratio, output_ratio)
+            if isinstance(output_ratio, float)
+            else (float(output_ratio[0]), float(output_ratio[1]))
+        )
+        oH, oW = max(1, int(H * rH)), max(1, int(W * rW))
+    else:
+        raise ValueError(
+            "fractional_max_pool2d: one of output_size or output_ratio must be given"
+        )
+
+    if _random_samples is None:
+        _random_samples = _lucid.rand(N, C, 2, dtype=_lucid.float32, device=x.device)
+
+    batch_out: list[Tensor] = []
+    batch_idx: list[Tensor] = []
+
+    for n in range(N):
+        chan_out: list[Tensor] = []
+        chan_idx: list[Tensor] = []
+
+        for c in range(C):
+            sh = float(_random_samples[n, c, 0].item())
+            sw = float(_random_samples[n, c, 1].item())
+            h_starts = _frac_pool_starts(H, kH, oH, sh)
+            w_starts = _frac_pool_starts(W, kW, oW, sw)
+
+            plane_out: list[Tensor] = []
+            plane_idx: list[Tensor] = []
+
+            for hs in h_starts:
+                row_out: list[Tensor] = []
+                row_idx: list[Tensor] = []
+                for ws in w_starts:
+                    patch = x[n, c, hs : hs + kH, ws : ws + kW].reshape(-1)
+                    row_out.append(patch.max().unsqueeze(0))
+                    if return_indices:
+                        li = int(patch.argmax().item())
+                        lr, lc = divmod(li, kW)
+                        flat = (hs + lr) * W + (ws + lc)
+                        row_idx.append(
+                            _lucid.tensor([flat], dtype=_lucid.int64, device=x.device)
+                        )
+                plane_out.append(_lucid.cat(row_out))  # (oW,)
+                if return_indices:
+                    plane_idx.append(_lucid.cat(row_idx))
+
+            chan_out.append(_lucid.stack(plane_out))  # (oH, oW)
+            if return_indices:
+                chan_idx.append(_lucid.stack(plane_idx))
+
+        batch_out.append(_lucid.stack(chan_out))  # (C, oH, oW)
+        if return_indices:
+            batch_idx.append(_lucid.stack(chan_idx))
+
+    out = _lucid.stack(batch_out)  # (N, C, oH, oW)
+    if return_indices:
+        return out, _lucid.stack(batch_idx)  # type: ignore[return-value]
+    return out
 
 
 def fractional_max_pool3d(
@@ -486,8 +586,107 @@ def fractional_max_pool3d(
     return_indices: bool = False,
     _random_samples: Tensor | None = None,
 ) -> Tensor:
-    """Fractional max-pool 3-D — see :func:`fractional_max_pool2d`."""
-    raise NotImplementedError(
-        "fractional_max_pool3d is not yet wired.  Same blocker as the 2-D "
-        "form — engine pool kernels need a return-indices path."
+    """Fractional max-pooling over a 3-D spatial input (Graham 2014).
+
+    Extends :func:`fractional_max_pool2d` by one depth dimension.
+    ``_random_samples`` has shape ``(N, C, 3)`` — one sample per spatial axis.
+    When ``return_indices=True``, returns ``(output, indices)`` where
+    ``indices`` holds the flat ``D × H × W`` position of each max.
+    """
+    if x.ndim != 5:
+        raise ValueError(
+            f"fractional_max_pool3d expects 5-D input (N, C, D, H, W), "
+            f"got shape {tuple(x.shape)}"
+        )
+    kD, kH, kW = _int_or_tuple(kernel_size, 3)
+    N, C, D, H, W = (
+        int(x.shape[0]),
+        int(x.shape[1]),
+        int(x.shape[2]),
+        int(x.shape[3]),
+        int(x.shape[4]),
     )
+
+    if output_size is not None and output_ratio is not None:
+        raise ValueError(
+            "fractional_max_pool3d: specify output_size or output_ratio, not both"
+        )
+    if output_size is not None:
+        oD, oH, oW = _int_or_tuple(output_size, 3)
+    elif output_ratio is not None:
+        if isinstance(output_ratio, float):
+            rD = rH = rW = output_ratio
+        else:
+            rD = float(output_ratio[0])
+            rH = float(output_ratio[1])
+            rW = float(output_ratio[2])
+        oD = max(1, int(D * rD))
+        oH = max(1, int(H * rH))
+        oW = max(1, int(W * rW))
+    else:
+        raise ValueError(
+            "fractional_max_pool3d: one of output_size or output_ratio must be given"
+        )
+
+    if _random_samples is None:
+        _random_samples = _lucid.rand(N, C, 3, dtype=_lucid.float32, device=x.device)
+
+    batch_out: list[Tensor] = []
+    batch_idx: list[Tensor] = []
+
+    for n in range(N):
+        chan_out: list[Tensor] = []
+        chan_idx: list[Tensor] = []
+
+        for c in range(C):
+            sd = float(_random_samples[n, c, 0].item())
+            sh = float(_random_samples[n, c, 1].item())
+            sw = float(_random_samples[n, c, 2].item())
+            d_starts = _frac_pool_starts(D, kD, oD, sd)
+            h_starts = _frac_pool_starts(H, kH, oH, sh)
+            w_starts = _frac_pool_starts(W, kW, oW, sw)
+
+            vol_out: list[Tensor] = []
+            vol_idx: list[Tensor] = []
+
+            for ds in d_starts:
+                plane_out: list[Tensor] = []
+                plane_idx: list[Tensor] = []
+                for hs in h_starts:
+                    row_out: list[Tensor] = []
+                    row_idx: list[Tensor] = []
+                    for ws in w_starts:
+                        patch = x[
+                            n, c, ds : ds + kD, hs : hs + kH, ws : ws + kW
+                        ].reshape(-1)
+                        row_out.append(patch.max().unsqueeze(0))
+                        if return_indices:
+                            li = int(patch.argmax().item())
+                            ld = li // (kH * kW)
+                            lr = (li % (kH * kW)) // kW
+                            lc = li % kW
+                            flat = ((ds + ld) * H + (hs + lr)) * W + (ws + lc)
+                            row_idx.append(
+                                _lucid.tensor(
+                                    [flat], dtype=_lucid.int64, device=x.device
+                                )
+                            )
+                    plane_out.append(_lucid.cat(row_out))  # (oW,)
+                    if return_indices:
+                        plane_idx.append(_lucid.cat(row_idx))
+                vol_out.append(_lucid.stack(plane_out))  # (oH, oW)
+                if return_indices:
+                    vol_idx.append(_lucid.stack(plane_idx))
+
+            chan_out.append(_lucid.stack(vol_out))  # (oD, oH, oW)
+            if return_indices:
+                chan_idx.append(_lucid.stack(vol_idx))
+
+        batch_out.append(_lucid.stack(chan_out))  # (C, oD, oH, oW)
+        if return_indices:
+            batch_idx.append(_lucid.stack(chan_idx))
+
+    out = _lucid.stack(batch_out)  # (N, C, oD, oH, oW)
+    if return_indices:
+        return out, _lucid.stack(batch_idx)  # type: ignore[return-value]
+    return out

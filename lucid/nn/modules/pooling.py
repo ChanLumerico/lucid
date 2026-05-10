@@ -539,12 +539,12 @@ class MaxUnpool3d(_MaxUnpoolNd):
 
 
 class FractionalMaxPool2d(Module):
-    """Fractional max-pooling over a 2-D spatial input.
+    """Fractional max-pooling over a 2-D spatial input (Graham 2014).
 
-    Stub matching the reference framework's surface — the engine has no
-    return-indices random-pool path yet, so calls raise
-    :class:`NotImplementedError`.  Wired here so model code that
-    *imports* the module loads cleanly.
+    Implemented as a pure-Python composite: for each (batch, channel)
+    pair, random fractional boundaries are drawn from ``_random_samples``
+    and each output cell takes the max over the corresponding window.
+    Gradients flow through ``Tensor.max()`` automatically.
     """
 
     def __init__(
@@ -571,8 +571,10 @@ class FractionalMaxPool2d(Module):
 
 
 class FractionalMaxPool3d(Module):
-    """Fractional max-pooling over a 3-D spatial input — stub (see
-    :class:`FractionalMaxPool2d`)."""
+    """Fractional max-pooling over a 3-D spatial input (Graham 2014).
+
+    Extends :class:`FractionalMaxPool2d` by one depth dimension.
+    """
 
     def __init__(
         self,

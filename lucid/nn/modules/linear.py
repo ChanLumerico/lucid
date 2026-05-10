@@ -348,7 +348,7 @@ class LazyLinear(Module):
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
         if self.weight is None:
             self._initialize(x.shape[-1])
-        return linear(x, self.weight, self.bias)  # type: ignore[arg-type]
+        return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
         return (

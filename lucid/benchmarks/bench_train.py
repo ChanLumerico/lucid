@@ -17,6 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
+from typing import cast
 import lucid
 import lucid.nn as nn
 import lucid.optim as optim
@@ -33,11 +34,11 @@ class _MLP(nn.Module):
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 10)
 
-    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-        x = lucid.relu(self.fc1(x))
-        x = lucid.relu(self.fc2(x))
-        x = lucid.relu(self.fc3(x))
-        return self.fc4(x)
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
+        x = lucid.relu(cast(lucid.Tensor, self.fc1(x)))
+        x = lucid.relu(cast(lucid.Tensor, self.fc2(x)))
+        x = lucid.relu(cast(lucid.Tensor, self.fc3(x)))
+        return cast(lucid.Tensor, self.fc4(x))
 
 
 # ── timing helpers ────────────────────────────────────────────────────────────
@@ -66,9 +67,9 @@ def _bench_step(
     mode: "forward" | "forward_backward" | "full_step"
     """
     for _ in range(warmup):
-        out = model(x)
+        out = cast(lucid.Tensor, model(x))
         if mode in ("forward_backward", "full_step"):
-            loss = loss_fn(out, y)
+            loss = cast(lucid.Tensor, loss_fn(out, y))
             loss.backward()
         if mode == "full_step":
             opt.step()
@@ -78,9 +79,9 @@ def _bench_step(
     times: list[int] = []
     for _ in range(iters):
         t0 = time.perf_counter_ns()
-        out = model(x)
+        out = cast(lucid.Tensor, model(x))
         if mode in ("forward_backward", "full_step"):
-            loss = loss_fn(out, y)
+            loss = cast(lucid.Tensor, loss_fn(out, y))
             loss.backward()
         if mode == "full_step":
             opt.step()

@@ -96,7 +96,7 @@ class HasShape(Protocol):
 class SupportsNumpyConversion(Protocol):
     """Structural protocol: anything convertible to a :class:`numpy.ndarray`."""
 
-    def numpy(self) -> np.ndarray: ...  # type: ignore[type-arg]
+    def numpy(self) -> np.ndarray: ...
 
 
 @runtime_checkable

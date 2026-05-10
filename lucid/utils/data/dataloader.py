@@ -120,7 +120,7 @@ def default_collate(
         return {key: default_collate([d[key] for d in batch]) for key in elem}
 
     if isinstance(elem, tuple) and hasattr(elem, "_fields"):
-        return type(elem)(  # type: ignore[return-value]
+        return type(elem)(
             *(default_collate([d[i] for d in batch]) for i in range(len(elem)))
         )
 
@@ -140,8 +140,8 @@ def _worker_loop(
     dataset: Dataset,
     index_queue: object,
     result_queue: object,
-    collate_fn: Callable,
-    worker_init_fn: Callable | None,
+    collate_fn: Callable[..., object],
+    worker_init_fn: Callable[..., object] | None,
     seed: int,
 ) -> None:
     """Worker process: pull index batches, fetch data, push collated results."""
@@ -381,10 +381,10 @@ class DataLoader:
         sampler: Sampler | None = None,
         batch_sampler: Sampler | None = None,
         num_workers: int = 0,
-        collate_fn: Callable | None = None,
+        collate_fn: Callable[..., object] | None = None,
         drop_last: bool = False,
         timeout: float = 0.0,
-        worker_init_fn: Callable | None = None,
+        worker_init_fn: Callable[..., object] | None = None,
         multiprocessing_context: object = None,
         generator: object = None,
         prefetch_factor: int | None = None,
