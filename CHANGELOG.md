@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - linearize: linear_fn tagged with _ISOLATION_ATTR so vmap(lin) auto-uses isolation (correct per-tangent jvp dispatch)
 
+- lucid.models Phase 0: foundation infrastructure — ModelConfig/PretrainedModel/ModelOutput/Registry/Auto/Hub/Mixins (30 tests, mypy --strict clean)
+
+- lucid/__init__.pyi + gen_pyi.py: lucid.load() stub now includes weights_only parameter
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
