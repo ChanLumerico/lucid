@@ -241,10 +241,7 @@ class TestRegistry:
                 return _DummyBackbone(_DummyConfig())
 
     def test_typo_suggestion_in_error(self) -> None:
-        @register_model(family="dummy")
-        def resnet_50(pretrained: bool = False) -> _DummyBackbone:
-            return _DummyBackbone(_DummyConfig())
-
+        # resnet_50 is already registered; confirm the typo suggestion fires.
         with pytest.raises(ValueError, match="resnet_50"):
             create_model("resnet50")  # missing underscore → suggestion
 
@@ -259,10 +256,8 @@ class TestRegistry:
         ) -> _DummyForClassification:
             return _DummyForClassification(_DummyConfig())
 
-        assert list_models(task="base") == ["dummy_a"]
-        assert list_models(task="image-classification") == [
-            "dummy_a_for_classification"
-        ]
+        assert "dummy_a" in list_models(task="base")
+        assert "dummy_a_for_classification" in list_models(task="image-classification")
         assert list_models(family="dummy") == sorted(
             ["dummy_a", "dummy_a_for_classification"]
         )

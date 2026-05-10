@@ -418,6 +418,7 @@ def save_safetensors(
     _st = _require_safetensors()
 
     np_tensors: dict[str, object] = {}
+    scalar_keys: list[str] = []
     for name, value in state_dict.items():
         if not isinstance(value, _T):
             raise TypeError(
@@ -430,9 +431,17 @@ def save_safetensors(
                 "which is not supported by the numpy safetensors backend. "
                 "Cast to float32 first: tensor.to(lucid.float32)"
             )
-        np_tensors[name] = value.numpy()
+        arr = value.numpy()
+        if arr.ndim == 0:
+            # SafeTensors does not support 0-d tensors; promote to (1,) and tag.
+            arr = arr.reshape((1,))
+            scalar_keys.append(name)
+        np_tensors[name] = arr
 
-    _st.save_file(np_tensors, path, metadata=metadata or {})  # type: ignore[attr-defined]
+    combined_meta: dict[str, str] = dict(metadata) if metadata else {}
+    if scalar_keys:
+        combined_meta["__lucid_scalar_keys__"] = ",".join(scalar_keys)
+    _st.save_file(np_tensors, path, metadata=combined_meta)  # type: ignore[attr-defined]
 
 
 def load_safetensors(
@@ -460,17 +469,28 @@ def load_safetensors(
         A flat state dict that can be passed directly to
         ``model.load_state_dict()``.
     """
+    from safetensors import safe_open as _safe_open
     from lucid._factories.converters import from_numpy as _from_numpy
 
-    _st = _require_safetensors()
-    raw: dict[str, object] = _st.load_file(path)  # type: ignore[attr-defined]
+    _require_safetensors()
+
+    import lucid as _lucid
 
     result: dict[str, object] = {}
-    for name, arr in raw.items():
-        t = _from_numpy(arr)  # type: ignore[arg-type]
-        if device in ("metal", "gpu"):
-            t = t.to("metal")
-        result[name] = t
+    with _safe_open(path, framework="np") as _f:  # type: ignore[no-untyped-call]
+        meta: dict[str, str] = _f.metadata() or {}
+        scalar_keys: set[str] = set(
+            meta.get("__lucid_scalar_keys__", "").split(",")
+        ) - {""}
+        for name in _f.keys():
+            arr = _f.get_tensor(name)
+            t = _from_numpy(arr)
+            if name in scalar_keys:
+                # from_numpy can't produce 0-d tensors; squeeze (1,) → ()
+                t = _lucid.squeeze(t)
+            if device in ("metal", "gpu"):
+                t = t.to("metal")
+            result[name] = t
     return result
 
 

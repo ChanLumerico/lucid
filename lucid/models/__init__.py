@@ -42,6 +42,23 @@ from lucid.models._registry import (
     register_model,
 )
 
+# Vision families — importing triggers @register_model decorators
+from lucid.models.vision.resnet import (  # noqa: E402
+    ResNet,
+    ResNetConfig,
+    ResNetForImageClassification,
+    resnet_18,
+    resnet_18_cls,
+    resnet_34,
+    resnet_34_cls,
+    resnet_50,
+    resnet_50_cls,
+    resnet_101,
+    resnet_101_cls,
+    resnet_152,
+    resnet_152_cls,
+)
+
 __all__ = [
     # Auto
     "AutoConfig",
@@ -78,4 +95,18 @@ __all__ = [
     "list_models",
     "model_entrypoint",
     "register_model",
+    # Vision — ResNet
+    "ResNet",
+    "ResNetConfig",
+    "ResNetForImageClassification",
+    "resnet_18",
+    "resnet_18_cls",
+    "resnet_34",
+    "resnet_34_cls",
+    "resnet_50",
+    "resnet_50_cls",
+    "resnet_101",
+    "resnet_101_cls",
+    "resnet_152",
+    "resnet_152_cls",
 ]
