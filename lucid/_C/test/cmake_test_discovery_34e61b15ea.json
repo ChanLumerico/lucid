@@ -1,5 +1,5 @@
 {
-  "tests": 105,
+  "tests": 108,
   "name": "AllTests",
   "testsuites": [
     {
@@ -115,6 +115,27 @@
           "name": "DtypeF64",
           "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/backend\/test_cpu_backend.cpp",
           "line": 61
+        }
+      ]
+    },
+    {
+      "name": "Concurrency",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "AllocatorMultiThreadedHammer",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_concurrency.cpp",
+          "line": 40
+        },
+        {
+          "name": "MemoryTrackerCountersStable",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_concurrency.cpp",
+          "line": 68
+        },
+        {
+          "name": "GeneratorMutexSerializesUpdates",
+          "file": "\/Users\/chanlee\/Desktop\/Programming\/Python\/lucid\/lucid\/_C\/test\/core\/test_concurrency.cpp",
+          "line": 96
         }
       ]
     },
