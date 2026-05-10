@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fractional_max_pool2d and fractional_max_pool3d
 
+- lucid.func module: vmap, grad, grad_and_value, vjp, jvp, jacrev, jacfwd, hessian, linearize
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
