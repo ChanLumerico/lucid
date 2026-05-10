@@ -228,7 +228,7 @@ class ReduceLROnPlateau:
             self._num_bad_epochs = 0
         else:
             self._num_bad_epochs += 1
-            if self._num_bad_epochs >= self.patience:
+            if self._num_bad_epochs > self.patience:
                 for group in self.optimizer.param_groups:
                     new_lr = max(group["lr"] * self.factor, self.min_lr)
                     group["lr"] = new_lr
@@ -377,10 +377,10 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         self.last_epoch += 1
         self._step_count += 1
         self._T_cur += 1
-        values = self.get_lr()  # compute before reset so T_cur==T_i yields eta_min
         if self._T_cur >= self._T_i:
-            self._T_cur = 0
+            self._T_cur -= self._T_i
             self._T_i *= self.T_mult
+        values = self.get_lr()
         for group, lr in zip(self.optimizer.param_groups, values):
             group["lr"] = lr
         self._last_lr = list(values)
@@ -435,17 +435,18 @@ class OneCycleLR(_LRScheduler):
         )
         t = self.last_epoch
         T = self.total_steps
-        warmup_steps = int(T * self.pct_start)
+        warmup_end = T * self.pct_start - 1.0  # end step of warmup phase (inclusive)
+        cooldown_end = float(T - 1)
+        init_lr = self.max_lr / self.div_factor
+        min_lr = init_lr / self.final_div_factor
         results = []
-        for base_lr in self.base_lrs:
-            init_lr = base_lr / self.div_factor
-            min_lr = init_lr / self.final_div_factor
-            if t <= warmup_steps:
-                lr = anneal(init_lr, self.max_lr, t / max(1, warmup_steps))
+        for _ in self.base_lrs:
+            if t <= warmup_end:
+                pct = t / max(1.0, warmup_end)
+                lr = anneal(init_lr, self.max_lr, pct)
             else:
-                lr = anneal(
-                    self.max_lr, min_lr, (t - warmup_steps) / max(1, T - warmup_steps)
-                )
+                pct = (t - warmup_end) / max(1.0, cooldown_end - warmup_end)
+                lr = anneal(self.max_lr, min_lr, pct)
             results.append(lr)
         return results
 
