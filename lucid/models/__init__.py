@@ -67,6 +67,13 @@ from lucid.models.vision.mobilenet import (
     mobilenet_v1_050, mobilenet_v1_050_cls,
     mobilenet_v1_025, mobilenet_v1_025_cls,
 )
+# 2022 — ConvNeXt (Liu et al.)
+from lucid.models.vision.convnext import (
+    ConvNeXtConfig, ConvNeXt, ConvNeXtForImageClassification,
+    convnext_t, convnext_t_cls, convnext_s, convnext_s_cls,
+    convnext_b, convnext_b_cls, convnext_l, convnext_l_cls,
+    convnext_xl, convnext_xl_cls,
+)
 # 2021 — Swin Transformer (Liu et al.)
 from lucid.models.vision.swin import (
     SwinConfig, SwinTransformer, SwinTransformerForImageClassification,
@@ -136,6 +143,11 @@ __all__ = [
     "mobilenet_v1_075", "mobilenet_v1_075_cls",
     "mobilenet_v1_050", "mobilenet_v1_050_cls",
     "mobilenet_v1_025", "mobilenet_v1_025_cls",
+    # ── Vision (2022) ConvNeXt ────────────────────────────────────────────────
+    "ConvNeXtConfig", "ConvNeXt", "ConvNeXtForImageClassification",
+    "convnext_t", "convnext_t_cls", "convnext_s", "convnext_s_cls",
+    "convnext_b", "convnext_b_cls", "convnext_l", "convnext_l_cls",
+    "convnext_xl", "convnext_xl_cls",
     # ── Vision (2021) Swin Transformer ───────────────────────────────────────
     "SwinConfig", "SwinTransformer", "SwinTransformerForImageClassification",
     "swin_t", "swin_t_cls", "swin_s", "swin_s_cls",

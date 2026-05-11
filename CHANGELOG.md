@@ -75,6 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.swin: Swin Transformer T/S/B/L (Liu et al., 2021) — shifted-window self-attention, hierarchical feature maps; Swin-T 28,288,354 params reference-exact; 8 registry entries
 
+- lucid.models.vision.convnext: ConvNeXt T/S/B/L/XL (Liu et al., 2022) — patchify stem, DWConv-7×7 + inverted-bottleneck MLP, layer scale; ConvNeXt-T 28,589,128 params reference-exact; 10 registry entries
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
