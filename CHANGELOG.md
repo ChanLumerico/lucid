@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.convnext: ConvNeXt T/S/B/L/XL (Liu et al., 2022) — patchify stem, DWConv-7×7 + inverted-bottleneck MLP, layer scale; ConvNeXt-T 28,589,128 params reference-exact; 10 registry entries
 
+- 20 new vision model families: ZFNet, Inception v3/v4/ResNet, Xception, ResNeXt, SENet, SKNet, MobileNet v2/v3/v4, ResNeSt, CSPNet, CoAtNet, CvT, CrossViT, PVT, EfficientFormer, MaxViT, InceptionNeXt (156 total registered variants)
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -97,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - models.AutoConfig.from_pretrained: returns default_config instantly when pre-registered, avoiding full model instantiation
 - models.load_from_pretrained_entry: validates entry.config.model_type == model.config.model_type before downloading weights
 - safetensors: 0-d tensors (BatchNorm num_batches_tracked) now round-trip correctly — saved as (1,) with metadata tag, squeezed back to () on load
+- MaxViT _MaxViTBlock: pad spatial dims to window_size multiple before grid/window partition to handle non-divisible resolutions (e.g. 28×28 with ws=7)
 
 ---
 
