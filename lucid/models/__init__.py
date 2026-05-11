@@ -67,6 +67,12 @@ from lucid.models.vision.mobilenet import (
     mobilenet_v1_050, mobilenet_v1_050_cls,
     mobilenet_v1_025, mobilenet_v1_025_cls,
 )
+# 2021 — Swin Transformer (Liu et al.)
+from lucid.models.vision.swin import (
+    SwinConfig, SwinTransformer, SwinTransformerForImageClassification,
+    swin_t, swin_t_cls, swin_s, swin_s_cls,
+    swin_b, swin_b_cls, swin_l, swin_l_cls,
+)
 # 2020 — ViT (Dosovitskiy et al.)
 from lucid.models.vision.vit import (
     ViTConfig, ViT, ViTForImageClassification,
@@ -130,6 +136,10 @@ __all__ = [
     "mobilenet_v1_075", "mobilenet_v1_075_cls",
     "mobilenet_v1_050", "mobilenet_v1_050_cls",
     "mobilenet_v1_025", "mobilenet_v1_025_cls",
+    # ── Vision (2021) Swin Transformer ───────────────────────────────────────
+    "SwinConfig", "SwinTransformer", "SwinTransformerForImageClassification",
+    "swin_t", "swin_t_cls", "swin_s", "swin_s_cls",
+    "swin_b", "swin_b_cls", "swin_l", "swin_l_cls",
     # ── Vision (2020) ViT ────────────────────────────────────────────────────
     "ViTConfig", "ViT", "ViTForImageClassification",
     "vit_b_16", "vit_b_16_cls", "vit_b_32", "vit_b_32_cls",
