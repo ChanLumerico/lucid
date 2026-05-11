@@ -6,14 +6,14 @@ from lucid.models.vision.inception_next._model import (
     InceptionNeXtForImageClassification,
 )
 from lucid.models.vision.inception_next._pretrained import (
-    inception_next_t,
-    inception_next_t_cls,
+    inception_next_tiny,
+    inception_next_tiny_cls,
 )
 
 __all__ = [
     "InceptionNeXtConfig",
     "InceptionNeXt",
     "InceptionNeXtForImageClassification",
-    "inception_next_t",
-    "inception_next_t_cls",
+    "inception_next_tiny",
+    "inception_next_tiny_cls",
 ]

@@ -14,7 +14,7 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.inception_next_t_cls,
+        M.inception_next_tiny_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

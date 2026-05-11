@@ -29,7 +29,7 @@ def _c(cfg: ViTConfig, kw: dict[str, object]) -> ViTForImageClassification:
     model_class=ViT,
     default_config=_CFG_B16,
 )
-def vit_b_16(pretrained: bool = False, **overrides: object) -> ViT:
+def vit_base_16(pretrained: bool = False, **overrides: object) -> ViT:
     """ViT-B/16 backbone (Dosovitskiy et al., 2020)."""
     return _b(_CFG_B16, overrides)
 
@@ -41,7 +41,7 @@ def vit_b_16(pretrained: bool = False, **overrides: object) -> ViT:
     model_class=ViT,
     default_config=_CFG_B32,
 )
-def vit_b_32(pretrained: bool = False, **overrides: object) -> ViT:
+def vit_base_32(pretrained: bool = False, **overrides: object) -> ViT:
     return _b(_CFG_B32, overrides)
 
 
@@ -52,7 +52,7 @@ def vit_b_32(pretrained: bool = False, **overrides: object) -> ViT:
     model_class=ViT,
     default_config=_CFG_L16,
 )
-def vit_l_16(pretrained: bool = False, **overrides: object) -> ViT:
+def vit_large_16(pretrained: bool = False, **overrides: object) -> ViT:
     return _b(_CFG_L16, overrides)
 
 
@@ -63,7 +63,7 @@ def vit_l_16(pretrained: bool = False, **overrides: object) -> ViT:
     model_class=ViT,
     default_config=_CFG_L32,
 )
-def vit_l_32(pretrained: bool = False, **overrides: object) -> ViT:
+def vit_large_32(pretrained: bool = False, **overrides: object) -> ViT:
     return _b(_CFG_L32, overrides)
 
 
@@ -74,7 +74,7 @@ def vit_l_32(pretrained: bool = False, **overrides: object) -> ViT:
     model_class=ViT,
     default_config=_CFG_H14,
 )
-def vit_h_14(pretrained: bool = False, **overrides: object) -> ViT:
+def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
     return _b(_CFG_H14, overrides)
 
 
@@ -88,7 +88,7 @@ def vit_h_14(pretrained: bool = False, **overrides: object) -> ViT:
     model_class=ViTForImageClassification,
     default_config=_CFG_B16,
 )
-def vit_b_16_cls(
+def vit_base_16_cls(
     pretrained: bool = False, **overrides: object
 ) -> ViTForImageClassification:
     return _c(_CFG_B16, overrides)
@@ -101,7 +101,7 @@ def vit_b_16_cls(
     model_class=ViTForImageClassification,
     default_config=_CFG_B32,
 )
-def vit_b_32_cls(
+def vit_base_32_cls(
     pretrained: bool = False, **overrides: object
 ) -> ViTForImageClassification:
     return _c(_CFG_B32, overrides)
@@ -114,7 +114,7 @@ def vit_b_32_cls(
     model_class=ViTForImageClassification,
     default_config=_CFG_L16,
 )
-def vit_l_16_cls(
+def vit_large_16_cls(
     pretrained: bool = False, **overrides: object
 ) -> ViTForImageClassification:
     return _c(_CFG_L16, overrides)
@@ -127,7 +127,7 @@ def vit_l_16_cls(
     model_class=ViTForImageClassification,
     default_config=_CFG_L32,
 )
-def vit_l_32_cls(
+def vit_large_32_cls(
     pretrained: bool = False, **overrides: object
 ) -> ViTForImageClassification:
     return _c(_CFG_L32, overrides)
@@ -140,7 +140,7 @@ def vit_l_32_cls(
     model_class=ViTForImageClassification,
     default_config=_CFG_H14,
 )
-def vit_h_14_cls(
+def vit_huge_14_cls(
     pretrained: bool = False, **overrides: object
 ) -> ViTForImageClassification:
     return _c(_CFG_H14, overrides)

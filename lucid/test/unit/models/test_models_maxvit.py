@@ -9,8 +9,8 @@ from lucid.models.vision.maxvit import (
     MaxViTConfig,
     MaxViT,
     MaxViTForImageClassification,
-    maxvit_t,
-    maxvit_t_cls,
+    maxvit_tiny,
+    maxvit_tiny_cls,
 )
 
 
@@ -42,7 +42,7 @@ class TestMaxViTConfig(unittest.TestCase):
 class TestMaxViTBackbone(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = maxvit_t()
+        self.model = maxvit_tiny()
         self.model.eval()
 
     def test_feature_info(self) -> None:
@@ -72,7 +72,7 @@ class TestMaxViTBackbone(unittest.TestCase):
 class TestMaxViTClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = maxvit_t_cls()
+        self.model = maxvit_tiny_cls()
         self.model.eval()
 
     def test_logits_shape_1000(self) -> None:
@@ -102,15 +102,15 @@ class TestMaxViTRegistry(unittest.TestCase):
 
     def test_variants_registered(self) -> None:
         names = models.list_models(family="maxvit")
-        self.assertIn("maxvit_t", names)
-        self.assertIn("maxvit_t_cls", names)
+        self.assertIn("maxvit_tiny", names)
+        self.assertIn("maxvit_tiny_cls", names)
 
     def test_create_model(self) -> None:
-        m = models.create_model("maxvit_t")
+        m = models.create_model("maxvit_tiny")
         self.assertIsInstance(m, MaxViT)
 
     def test_auto_config(self) -> None:
-        cfg = models.AutoConfig.from_pretrained("maxvit_t")
+        cfg = models.AutoConfig.from_pretrained("maxvit_tiny")
         self.assertIsInstance(cfg, MaxViTConfig)
         self.assertIsInstance(cfg.window_size, int)
 
@@ -118,7 +118,7 @@ class TestMaxViTRegistry(unittest.TestCase):
 class TestMaxViTSerialization(unittest.TestCase):
 
     def test_native_round_trip(self) -> None:
-        m = maxvit_t_cls()
+        m = maxvit_tiny_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits

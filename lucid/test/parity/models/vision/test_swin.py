@@ -16,10 +16,10 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.swin_t_cls,
-        M.swin_s_cls,
-        M.swin_b_cls,
-        M.swin_l_cls,
+        M.swin_tiny_cls,
+        M.swin_small_cls,
+        M.swin_base_cls,
+        M.swin_large_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

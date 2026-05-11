@@ -9,10 +9,10 @@ from lucid.models.vision.convnext import (
     ConvNeXt,
     ConvNeXtConfig,
     ConvNeXtForImageClassification,
-    convnext_t,
-    convnext_t_cls,
-    convnext_s_cls,
-    convnext_b_cls,
+    convnext_tiny,
+    convnext_tiny_cls,
+    convnext_small_cls,
+    convnext_base_cls,
 )
 
 
@@ -47,27 +47,27 @@ class TestConvNeXtParamCounts(unittest.TestCase):
 
     def test_tiny_classifier(self) -> None:
         # Reference-exact: 28,589,128
-        self.assertEqual(convnext_t_cls().num_parameters(), 28_589_128)
+        self.assertEqual(convnext_tiny_cls().num_parameters(), 28_589_128)
 
     def test_small_classifier(self) -> None:
-        self.assertEqual(convnext_s_cls().num_parameters(), 50_223_688)
+        self.assertEqual(convnext_small_cls().num_parameters(), 50_223_688)
 
     def test_base_classifier(self) -> None:
-        self.assertEqual(convnext_b_cls().num_parameters(), 88_591_464)
+        self.assertEqual(convnext_base_cls().num_parameters(), 88_591_464)
 
     def test_larger_has_more_params(self) -> None:
         self.assertGreater(
-            convnext_s_cls().num_parameters(), convnext_t_cls().num_parameters()
+            convnext_small_cls().num_parameters(), convnext_tiny_cls().num_parameters()
         )
         self.assertGreater(
-            convnext_b_cls().num_parameters(), convnext_s_cls().num_parameters()
+            convnext_base_cls().num_parameters(), convnext_small_cls().num_parameters()
         )
 
 
 class TestConvNeXtBackbone(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = convnext_t()
+        self.model = convnext_tiny()
         self.model.eval()
 
     def test_feature_info_4_stages(self) -> None:
@@ -93,7 +93,7 @@ class TestConvNeXtBackbone(unittest.TestCase):
 class TestConvNeXtClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = convnext_t_cls()
+        self.model = convnext_tiny_cls()
         self.model.eval()
 
     def test_logits_shape_1000(self) -> None:
@@ -131,19 +131,19 @@ class TestConvNeXtRegistry(unittest.TestCase):
             self.assertIn(f"convnext_{size}_cls", names)
 
     def test_auto_config(self) -> None:
-        cfg = models.AutoConfig.from_pretrained("convnext_t")
+        cfg = models.AutoConfig.from_pretrained("convnext_tiny")
         self.assertIsInstance(cfg, ConvNeXtConfig)
         self.assertEqual(cfg.depths, (3, 3, 9, 3))
 
     def test_create_model(self) -> None:
-        m = models.create_model("convnext_t")
+        m = models.create_model("convnext_tiny")
         self.assertIsInstance(m, ConvNeXt)
 
 
 class TestConvNeXtSerialization(unittest.TestCase):
 
     def test_native_round_trip(self) -> None:
-        m = convnext_t_cls()
+        m = convnext_tiny_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits
@@ -155,7 +155,7 @@ class TestConvNeXtSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
     def test_safetensors_round_trip(self) -> None:
-        m = convnext_t_cls()
+        m = convnext_tiny_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits

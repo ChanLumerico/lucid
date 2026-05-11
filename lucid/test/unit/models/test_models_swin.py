@@ -9,16 +9,16 @@ from lucid.models.vision.swin import (
     SwinConfig,
     SwinTransformer,
     SwinTransformerForImageClassification,
-    swin_t,
-    swin_t_cls,
-    swin_s_cls,
-    swin_b_cls,
+    swin_tiny,
+    swin_tiny_cls,
+    swin_small_cls,
+    swin_base_cls,
 )
 
 
 class TestSwinConfig(unittest.TestCase):
 
-    def test_defaults_swin_t(self) -> None:
+    def test_defaults_swin_tiny(self) -> None:
         cfg = SwinConfig()
         self.assertEqual(cfg.model_type, "swin")
         self.assertEqual(cfg.embed_dim, 96)
@@ -47,25 +47,29 @@ class TestSwinConfig(unittest.TestCase):
 
 class TestSwinParamCounts(unittest.TestCase):
 
-    def test_swin_t_classifier(self) -> None:
+    def test_swin_tiny_classifier(self) -> None:
         # Reference-exact: 28,288,354
-        self.assertEqual(swin_t_cls().num_parameters(), 28_288_354)
+        self.assertEqual(swin_tiny_cls().num_parameters(), 28_288_354)
 
-    def test_swin_s_classifier(self) -> None:
-        self.assertEqual(swin_s_cls().num_parameters(), 49_606_258)
+    def test_swin_small_classifier(self) -> None:
+        self.assertEqual(swin_small_cls().num_parameters(), 49_606_258)
 
-    def test_swin_b_classifier(self) -> None:
-        self.assertEqual(swin_b_cls().num_parameters(), 87_768_224)
+    def test_swin_base_classifier(self) -> None:
+        self.assertEqual(swin_base_cls().num_parameters(), 87_768_224)
 
     def test_larger_has_more_params(self) -> None:
-        self.assertGreater(swin_s_cls().num_parameters(), swin_t_cls().num_parameters())
-        self.assertGreater(swin_b_cls().num_parameters(), swin_s_cls().num_parameters())
+        self.assertGreater(
+            swin_small_cls().num_parameters(), swin_tiny_cls().num_parameters()
+        )
+        self.assertGreater(
+            swin_base_cls().num_parameters(), swin_small_cls().num_parameters()
+        )
 
 
 class TestSwinBackbone(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = swin_t()
+        self.model = swin_tiny()
         self.model.eval()
 
     def test_feature_info_4_stages(self) -> None:
@@ -90,7 +94,7 @@ class TestSwinBackbone(unittest.TestCase):
 class TestSwinClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = swin_t_cls()
+        self.model = swin_tiny_cls()
         self.model.eval()
 
     def test_logits_shape_1000(self) -> None:
@@ -128,19 +132,19 @@ class TestSwinRegistry(unittest.TestCase):
             self.assertIn(f"swin_{size}_cls", names)
 
     def test_auto_config(self) -> None:
-        cfg = models.AutoConfig.from_pretrained("swin_t")
+        cfg = models.AutoConfig.from_pretrained("swin_tiny")
         self.assertIsInstance(cfg, SwinConfig)
         self.assertEqual(cfg.embed_dim, 96)
 
     def test_create_model(self) -> None:
-        m = models.create_model("swin_t")
+        m = models.create_model("swin_tiny")
         self.assertIsInstance(m, SwinTransformer)
 
 
 class TestSwinSerialization(unittest.TestCase):
 
     def test_native_round_trip(self) -> None:
-        m = swin_t_cls()
+        m = swin_tiny_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits
@@ -152,7 +156,7 @@ class TestSwinSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
     def test_safetensors_round_trip(self) -> None:
-        m = swin_t_cls()
+        m = swin_tiny_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits

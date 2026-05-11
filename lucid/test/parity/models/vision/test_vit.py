@@ -18,11 +18,11 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.vit_b_16_cls,
-        M.vit_b_32_cls,
-        M.vit_l_16_cls,
-        M.vit_l_32_cls,
-        M.vit_h_14_cls,
+        M.vit_base_16_cls,
+        M.vit_base_32_cls,
+        M.vit_large_16_cls,
+        M.vit_large_32_cls,
+        M.vit_huge_14_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

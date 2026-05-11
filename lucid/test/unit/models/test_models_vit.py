@@ -9,12 +9,12 @@ from lucid.models.vision.vit import (
     ViT,
     ViTConfig,
     ViTForImageClassification,
-    vit_b_16,
-    vit_b_16_cls,
-    vit_b_32,
-    vit_b_32_cls,
-    vit_l_16,
-    vit_l_16_cls,
+    vit_base_16,
+    vit_base_16_cls,
+    vit_base_32,
+    vit_base_32_cls,
+    vit_large_16,
+    vit_large_16_cls,
 )
 
 
@@ -51,26 +51,26 @@ class TestViTParamCounts(unittest.TestCase):
 
     def test_b16_classifier(self) -> None:
         # Reference-exact: 86,567,656
-        self.assertEqual(vit_b_16_cls().num_parameters(), 86_567_656)
+        self.assertEqual(vit_base_16_cls().num_parameters(), 86_567_656)
 
     def test_b32_classifier(self) -> None:
         # Fewer patches → fewer pos embedding params
-        self.assertEqual(vit_b_32_cls().num_parameters(), 88_224_232)
+        self.assertEqual(vit_base_32_cls().num_parameters(), 88_224_232)
 
     def test_l16_classifier(self) -> None:
-        self.assertEqual(vit_l_16_cls().num_parameters(), 304_326_632)
+        self.assertEqual(vit_large_16_cls().num_parameters(), 304_326_632)
 
     def test_larger_variants_more_params(self) -> None:
         self.assertGreater(
-            vit_l_16().num_parameters(),
-            vit_b_16().num_parameters(),
+            vit_large_16().num_parameters(),
+            vit_base_16().num_parameters(),
         )
 
 
 class TestViTBackbone(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = vit_b_16()
+        self.model = vit_base_16()
         self.model.eval()
 
     def test_feature_info_single_stage(self) -> None:
@@ -95,7 +95,7 @@ class TestViTBackbone(unittest.TestCase):
         self.assertEqual(out.last_hidden_state.shape, (1, 1, 768))
 
     def test_b32_different_sequence_length(self) -> None:
-        m = vit_b_32()
+        m = vit_base_32()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         # B/32 has 7×7=49 patches vs B/16's 14×14=196 patches
@@ -103,7 +103,7 @@ class TestViTBackbone(unittest.TestCase):
         self.assertEqual(feat.shape, (1, 768))  # CLS dim same
 
     def test_l16_larger_dim(self) -> None:
-        m = vit_l_16()
+        m = vit_large_16()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         feat = m.forward_features(x)
@@ -113,7 +113,7 @@ class TestViTBackbone(unittest.TestCase):
 class TestViTClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.model = vit_b_16_cls()
+        self.model = vit_base_16_cls()
         self.model.eval()
 
     def test_logits_shape_1000(self) -> None:
@@ -154,29 +154,35 @@ class TestViTRegistry(unittest.TestCase):
 
     def test_all_variants_present(self) -> None:
         names = models.list_models(family="vit")
-        for v in ["vit_b_16", "vit_b_32", "vit_l_16", "vit_l_32", "vit_h_14"]:
+        for v in [
+            "vit_base_16",
+            "vit_base_32",
+            "vit_large_16",
+            "vit_large_32",
+            "vit_huge_14",
+        ]:
             self.assertIn(v, names)
             self.assertIn(f"{v}_cls", names)
 
     def test_auto_config_b16(self) -> None:
-        cfg = models.AutoConfig.from_pretrained("vit_b_16")
+        cfg = models.AutoConfig.from_pretrained("vit_base_16")
         self.assertIsInstance(cfg, ViTConfig)
         self.assertEqual(cfg.patch_size, 16)
         self.assertEqual(cfg.dim, 768)
 
     def test_create_model(self) -> None:
-        m = models.create_model("vit_b_16")
+        m = models.create_model("vit_base_16")
         self.assertIsInstance(m, ViT)
 
     def test_auto_model_for_classification(self) -> None:
-        m = models.AutoModelForImageClassification.from_pretrained("vit_b_16_cls")
+        m = models.AutoModelForImageClassification.from_pretrained("vit_base_16_cls")
         self.assertIsInstance(m, ViTForImageClassification)
 
 
 class TestViTSerialization(unittest.TestCase):
 
     def test_native_round_trip(self) -> None:
-        m = vit_b_16_cls()
+        m = vit_base_16_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits
@@ -188,7 +194,7 @@ class TestViTSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
     def test_safetensors_round_trip(self) -> None:
-        m = vit_b_16_cls()
+        m = vit_base_16_cls()
         m.eval()
         x = lucid.randn(1, 3, 224, 224)
         before = m(x).logits

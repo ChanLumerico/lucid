@@ -441,36 +441,36 @@ SPECS: list[ParitySpec] = [
     # ── ViT ───────────────────────────────────────────────────────────────────
     # head: head.weight (auto-remapped)
     # Transformer accumulation → slightly looser tolerance
-    ParitySpec(M.vit_b_16_cls, "vit_base_patch16_224", tier="slow", atol=5e-3),
-    ParitySpec(M.vit_b_32_cls, "vit_base_patch32_224", tier="slow", atol=5e-3),
-    ParitySpec(M.vit_l_16_cls, "vit_large_patch16_224", tier="heavy", atol=5e-3),
-    ParitySpec(M.vit_l_32_cls, "vit_large_patch32_224", tier="heavy", atol=5e-3),
-    ParitySpec(M.vit_h_14_cls, None, tier="heavy"),  # 632 M — no timm parity
+    ParitySpec(M.vit_base_16_cls, "vit_base_patch16_224", tier="slow", atol=5e-3),
+    ParitySpec(M.vit_base_32_cls, "vit_base_patch32_224", tier="slow", atol=5e-3),
+    ParitySpec(M.vit_large_16_cls, "vit_large_patch16_224", tier="heavy", atol=5e-3),
+    ParitySpec(M.vit_large_32_cls, "vit_large_patch32_224", tier="heavy", atol=5e-3),
+    ParitySpec(M.vit_huge_14_cls, None, tier="heavy"),  # 632 M — no timm parity
     # ── Swin Transformer ──────────────────────────────────────────────────────
     # Lucid: stages.X  vs  timm: layers.X  → key_transform handles this.
     # Relative position bias accumulation → looser tolerance (atol=2e-2).
     ParitySpec(
-        M.swin_t_cls,
+        M.swin_tiny_cls,
         "swin_tiny_patch4_window7_224",
         atol=2e-2,
         key_transform=_swin_key_transform,
     ),
     ParitySpec(
-        M.swin_s_cls,
+        M.swin_small_cls,
         "swin_small_patch4_window7_224",
         atol=2e-2,
         tier="slow",
         key_transform=_swin_key_transform,
     ),
     ParitySpec(
-        M.swin_b_cls,
+        M.swin_base_cls,
         "swin_base_patch4_window7_224",
         atol=2e-2,
         tier="heavy",
         key_transform=_swin_key_transform,
     ),
     ParitySpec(
-        M.swin_l_cls,
+        M.swin_large_cls,
         "swin_large_patch4_window7_224",
         atol=2e-2,
         tier="heavy",
@@ -480,29 +480,29 @@ SPECS: list[ParitySpec] = [
     # Lucid: stem.conv.N / stem.norm / stages.X.Y
     # timm:  stem.N      / stem.1    / stages.X.blocks.Y
     ParitySpec(
-        M.convnext_t_cls, "convnext_tiny", key_transform=_convnext_key_transform
+        M.convnext_tiny_cls, "convnext_tiny", key_transform=_convnext_key_transform
     ),
     ParitySpec(
-        M.convnext_s_cls,
+        M.convnext_small_cls,
         "convnext_small",
         tier="slow",
         key_transform=_convnext_key_transform,
     ),
     ParitySpec(
-        M.convnext_b_cls,
+        M.convnext_base_cls,
         "convnext_base",
         tier="slow",
         key_transform=_convnext_key_transform,
     ),
     ParitySpec(
-        M.convnext_l_cls,
+        M.convnext_large_cls,
         "convnext_large",
         tier="heavy",
         key_transform=_convnext_key_transform,
     ),
     ParitySpec(
-        M.convnext_xl_cls,
-        "convnext_xlarge",
+        M.convnext_xlarge_cls,
+        "convnext_xlargearge",
         tier="heavy",
         key_transform=_convnext_key_transform,
     ),
@@ -541,14 +541,14 @@ SPECS: list[ParitySpec] = [
     # ── MaxViT ───────────────────────────────────────────────────────────────
     # 100% key coverage — attribute names match timm's maxvit_tiny_tf_224 exactly.
     # Relative position bias accumulation → atol=2e-2.
-    ParitySpec(M.maxvit_t_cls, "maxvit_tiny_tf_224", tier="slow", atol=2e-2),
-    ParitySpec(M.maxvit_s_cls, "maxvit_small_tf_224", tier="slow", atol=2e-2),
-    ParitySpec(M.maxvit_b_cls, "maxvit_base_tf_224", tier="slow", atol=2e-2),
-    ParitySpec(M.maxvit_l_cls, "maxvit_large_tf_224", tier="slow", atol=2e-2),
-    ParitySpec(M.maxvit_xl_cls, None, tier="slow"),
+    ParitySpec(M.maxvit_tiny_cls, "maxvit_tiny_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_small_cls, "maxvit_small_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_base_cls, "maxvit_base_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_large_cls, "maxvit_large_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_xlarge_cls, None, tier="slow"),
     # ── InceptionNeXt ────────────────────────────────────────────────────────
     # 100% named key coverage — no key_transform or positional fallback needed.
-    ParitySpec(M.inception_next_t_cls, "inception_next_tiny", tier="slow"),
+    ParitySpec(M.inception_next_tiny_cls, "inception_next_tiny", tier="slow"),
 ]
 
 

@@ -74,24 +74,24 @@ from lucid.models.vision.mobilenet import (
 # 2022 — ConvNeXt (Liu et al.)
 from lucid.models.vision.convnext import (
     ConvNeXtConfig, ConvNeXt, ConvNeXtForImageClassification,
-    convnext_t, convnext_t_cls, convnext_s, convnext_s_cls,
-    convnext_b, convnext_b_cls, convnext_l, convnext_l_cls,
-    convnext_xl, convnext_xl_cls,
+    convnext_tiny, convnext_tiny_cls, convnext_small, convnext_small_cls,
+    convnext_base, convnext_base_cls, convnext_large, convnext_large_cls,
+    convnext_xlarge, convnext_xlarge_cls,
 )
 # 2021 — Swin Transformer (Liu et al.)
 from lucid.models.vision.swin import (
     SwinConfig, SwinTransformer, SwinTransformerForImageClassification,
-    swin_t, swin_t_cls, swin_s, swin_s_cls,
-    swin_b, swin_b_cls, swin_l, swin_l_cls,
+    swin_tiny, swin_tiny_cls, swin_small, swin_small_cls,
+    swin_base, swin_base_cls, swin_large, swin_large_cls,
 )
 # 2020 — ViT (Dosovitskiy et al.)
 from lucid.models.vision.vit import (
     ViTConfig, ViT, ViTForImageClassification,
-    vit_b_16, vit_b_16_cls,
-    vit_b_32, vit_b_32_cls,
-    vit_l_16, vit_l_16_cls,
-    vit_l_32, vit_l_32_cls,
-    vit_h_14, vit_h_14_cls,
+    vit_base_16, vit_base_16_cls,
+    vit_base_32, vit_base_32_cls,
+    vit_large_16, vit_large_16_cls,
+    vit_large_32, vit_large_32_cls,
+    vit_huge_14, vit_huge_14_cls,
 )
 # 2019 — EfficientNet (Tan & Le)
 from lucid.models.vision.efficientnet import (
@@ -233,16 +233,16 @@ from lucid.models.vision.efficientformer import (
 # 2022 — MaxViT (Tu et al.)
 from lucid.models.vision.maxvit import (
     MaxViTConfig, MaxViT, MaxViTForImageClassification,
-    maxvit_t, maxvit_t_cls,
-    maxvit_s, maxvit_s_cls,
-    maxvit_b, maxvit_b_cls,
-    maxvit_l, maxvit_l_cls,
-    maxvit_xl, maxvit_xl_cls,
+    maxvit_tiny, maxvit_tiny_cls,
+    maxvit_small, maxvit_small_cls,
+    maxvit_base, maxvit_base_cls,
+    maxvit_large, maxvit_large_cls,
+    maxvit_xlarge, maxvit_xlarge_cls,
 )
 # 2023 — InceptionNeXt (Yu et al.)
 from lucid.models.vision.inception_next import (
     InceptionNeXtConfig, InceptionNeXt, InceptionNeXtForImageClassification,
-    inception_next_t, inception_next_t_cls,
+    inception_next_tiny, inception_next_tiny_cls,
 )
 
 __all__ = [
@@ -290,18 +290,18 @@ __all__ = [
     "mobilenet_v1_025", "mobilenet_v1_025_cls",
     # ── Vision (2022) ConvNeXt ────────────────────────────────────────────────
     "ConvNeXtConfig", "ConvNeXt", "ConvNeXtForImageClassification",
-    "convnext_t", "convnext_t_cls", "convnext_s", "convnext_s_cls",
-    "convnext_b", "convnext_b_cls", "convnext_l", "convnext_l_cls",
-    "convnext_xl", "convnext_xl_cls",
+    "convnext_tiny", "convnext_tiny_cls", "convnext_small", "convnext_small_cls",
+    "convnext_base", "convnext_base_cls", "convnext_large", "convnext_large_cls",
+    "convnext_xlarge", "convnext_xlarge_cls",
     # ── Vision (2021) Swin Transformer ───────────────────────────────────────
     "SwinConfig", "SwinTransformer", "SwinTransformerForImageClassification",
-    "swin_t", "swin_t_cls", "swin_s", "swin_s_cls",
-    "swin_b", "swin_b_cls", "swin_l", "swin_l_cls",
+    "swin_tiny", "swin_tiny_cls", "swin_small", "swin_small_cls",
+    "swin_base", "swin_base_cls", "swin_large", "swin_large_cls",
     # ── Vision (2020) ViT ────────────────────────────────────────────────────
     "ViTConfig", "ViT", "ViTForImageClassification",
-    "vit_b_16", "vit_b_16_cls", "vit_b_32", "vit_b_32_cls",
-    "vit_l_16", "vit_l_16_cls", "vit_l_32", "vit_l_32_cls",
-    "vit_h_14", "vit_h_14_cls",
+    "vit_base_16", "vit_base_16_cls", "vit_base_32", "vit_base_32_cls",
+    "vit_large_16", "vit_large_16_cls", "vit_large_32", "vit_large_32_cls",
+    "vit_huge_14", "vit_huge_14_cls",
     # ── Vision (2019) EfficientNet ────────────────────────────────────────────
     "EfficientNetConfig", "EfficientNet", "EfficientNetForImageClassification",
     "efficientnet_b0", "efficientnet_b0_cls", "efficientnet_b1", "efficientnet_b1_cls",
@@ -384,10 +384,10 @@ __all__ = [
     "efficientformer_l7", "efficientformer_l7_cls",
     # ── Vision (2022) MaxViT ─────────────────────────────────────────────────
     "MaxViTConfig", "MaxViT", "MaxViTForImageClassification",
-    "maxvit_t", "maxvit_t_cls",
-    "maxvit_s", "maxvit_s_cls", "maxvit_b", "maxvit_b_cls",
-    "maxvit_l", "maxvit_l_cls", "maxvit_xl", "maxvit_xl_cls",
+    "maxvit_tiny", "maxvit_tiny_cls",
+    "maxvit_small", "maxvit_small_cls", "maxvit_base", "maxvit_base_cls",
+    "maxvit_large", "maxvit_large_cls", "maxvit_xlarge", "maxvit_xlarge_cls",
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
-    "inception_next_t", "inception_next_t_cls",
+    "inception_next_tiny", "inception_next_tiny_cls",
 ]

@@ -65,7 +65,7 @@ def _c(cfg: MaxViTConfig, kw: dict[str, object]) -> MaxViTForImageClassification
     model_class=MaxViT,
     default_config=_CFG_T,
 )
-def maxvit_t(pretrained: bool = False, **overrides: object) -> MaxViT:
+def maxvit_tiny(pretrained: bool = False, **overrides: object) -> MaxViT:
     """MaxViT-Tiny backbone (Tu et al., 2022)."""
     return _b(_CFG_T, overrides)
 
@@ -77,7 +77,7 @@ def maxvit_t(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_class=MaxViT,
     default_config=_CFG_S,
 )
-def maxvit_s(pretrained: bool = False, **overrides: object) -> MaxViT:
+def maxvit_small(pretrained: bool = False, **overrides: object) -> MaxViT:
     """MaxViT-Small backbone (Tu et al., 2022), ~55.8M params."""
     return _b(_CFG_S, overrides)
 
@@ -89,7 +89,7 @@ def maxvit_s(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_class=MaxViT,
     default_config=_CFG_B,
 )
-def maxvit_b(pretrained: bool = False, **overrides: object) -> MaxViT:
+def maxvit_base(pretrained: bool = False, **overrides: object) -> MaxViT:
     """MaxViT-Base backbone (Tu et al., 2022), ~96.6M params."""
     return _b(_CFG_B, overrides)
 
@@ -101,7 +101,7 @@ def maxvit_b(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_class=MaxViT,
     default_config=_CFG_L,
 )
-def maxvit_l(pretrained: bool = False, **overrides: object) -> MaxViT:
+def maxvit_large(pretrained: bool = False, **overrides: object) -> MaxViT:
     """MaxViT-Large backbone (Tu et al., 2022), ~171.2M params."""
     return _b(_CFG_L, overrides)
 
@@ -113,7 +113,7 @@ def maxvit_l(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_class=MaxViT,
     default_config=_CFG_XL,
 )
-def maxvit_xl(pretrained: bool = False, **overrides: object) -> MaxViT:
+def maxvit_xlarge(pretrained: bool = False, **overrides: object) -> MaxViT:
     """MaxViT-XLarge backbone (Tu et al., 2022), ~383.7M params."""
     return _b(_CFG_XL, overrides)
 
@@ -128,7 +128,7 @@ def maxvit_xl(pretrained: bool = False, **overrides: object) -> MaxViT:
     model_class=MaxViTForImageClassification,
     default_config=_CFG_T,
 )
-def maxvit_t_cls(
+def maxvit_tiny_cls(
     pretrained: bool = False, **overrides: object
 ) -> MaxViTForImageClassification:
     """MaxViT-Tiny image classifier (Tu et al., 2022)."""
@@ -142,7 +142,7 @@ def maxvit_t_cls(
     model_class=MaxViTForImageClassification,
     default_config=_CFG_S,
 )
-def maxvit_s_cls(
+def maxvit_small_cls(
     pretrained: bool = False, **overrides: object
 ) -> MaxViTForImageClassification:
     """MaxViT-Small image classifier (Tu et al., 2022), ~55.8M params."""
@@ -156,7 +156,7 @@ def maxvit_s_cls(
     model_class=MaxViTForImageClassification,
     default_config=_CFG_B,
 )
-def maxvit_b_cls(
+def maxvit_base_cls(
     pretrained: bool = False, **overrides: object
 ) -> MaxViTForImageClassification:
     """MaxViT-Base image classifier (Tu et al., 2022), ~96.6M params."""
@@ -170,7 +170,7 @@ def maxvit_b_cls(
     model_class=MaxViTForImageClassification,
     default_config=_CFG_L,
 )
-def maxvit_l_cls(
+def maxvit_large_cls(
     pretrained: bool = False, **overrides: object
 ) -> MaxViTForImageClassification:
     """MaxViT-Large image classifier (Tu et al., 2022), ~171.2M params."""
@@ -184,7 +184,7 @@ def maxvit_l_cls(
     model_class=MaxViTForImageClassification,
     default_config=_CFG_XL,
 )
-def maxvit_xl_cls(
+def maxvit_xlarge_cls(
     pretrained: bool = False, **overrides: object
 ) -> MaxViTForImageClassification:
     """MaxViT-XLarge image classifier (Tu et al., 2022), ~383.7M params."""

@@ -36,7 +36,7 @@ def _c(
     model_class=InceptionNeXt,
     default_config=_CFG_T,
 )
-def inception_next_t(pretrained: bool = False, **overrides: object) -> InceptionNeXt:
+def inception_next_tiny(pretrained: bool = False, **overrides: object) -> InceptionNeXt:
     """InceptionNeXt-T backbone (Yu et al., 2023)."""
     return _b(_CFG_T, overrides)
 
@@ -51,7 +51,7 @@ def inception_next_t(pretrained: bool = False, **overrides: object) -> Inception
     model_class=InceptionNeXtForImageClassification,
     default_config=_CFG_T,
 )
-def inception_next_t_cls(
+def inception_next_tiny_cls(
     pretrained: bool = False, **overrides: object
 ) -> InceptionNeXtForImageClassification:
     """InceptionNeXt-T image classifier (Yu et al., 2023)."""

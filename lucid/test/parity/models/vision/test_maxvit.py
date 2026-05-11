@@ -14,11 +14,11 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
-        M.maxvit_t_cls,
-        M.maxvit_s_cls,
-        M.maxvit_b_cls,
-        M.maxvit_l_cls,
-        M.maxvit_xl_cls,
+        M.maxvit_tiny_cls,
+        M.maxvit_small_cls,
+        M.maxvit_base_cls,
+        M.maxvit_large_cls,
+        M.maxvit_xlarge_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

@@ -33,7 +33,7 @@ def _c(cfg: SwinConfig, kw: dict[str, object]) -> SwinTransformerForImageClassif
     model_class=SwinTransformer,
     default_config=_CFG_T,
 )
-def swin_t(pretrained: bool = False, **overrides: object) -> SwinTransformer:
+def swin_tiny(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     """Swin-T backbone (Liu et al., 2021)."""
     return _b(_CFG_T, overrides)
 
@@ -45,7 +45,7 @@ def swin_t(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     model_class=SwinTransformer,
     default_config=_CFG_S,
 )
-def swin_s(pretrained: bool = False, **overrides: object) -> SwinTransformer:
+def swin_small(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     return _b(_CFG_S, overrides)
 
 
@@ -56,7 +56,7 @@ def swin_s(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     model_class=SwinTransformer,
     default_config=_CFG_B,
 )
-def swin_b(pretrained: bool = False, **overrides: object) -> SwinTransformer:
+def swin_base(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     return _b(_CFG_B, overrides)
 
 
@@ -67,7 +67,7 @@ def swin_b(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     model_class=SwinTransformer,
     default_config=_CFG_L,
 )
-def swin_l(pretrained: bool = False, **overrides: object) -> SwinTransformer:
+def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     return _b(_CFG_L, overrides)
 
 
@@ -81,7 +81,7 @@ def swin_l(pretrained: bool = False, **overrides: object) -> SwinTransformer:
     model_class=SwinTransformerForImageClassification,
     default_config=_CFG_T,
 )
-def swin_t_cls(
+def swin_tiny_cls(
     pretrained: bool = False, **overrides: object
 ) -> SwinTransformerForImageClassification:
     return _c(_CFG_T, overrides)
@@ -94,7 +94,7 @@ def swin_t_cls(
     model_class=SwinTransformerForImageClassification,
     default_config=_CFG_S,
 )
-def swin_s_cls(
+def swin_small_cls(
     pretrained: bool = False, **overrides: object
 ) -> SwinTransformerForImageClassification:
     return _c(_CFG_S, overrides)
@@ -107,7 +107,7 @@ def swin_s_cls(
     model_class=SwinTransformerForImageClassification,
     default_config=_CFG_B,
 )
-def swin_b_cls(
+def swin_base_cls(
     pretrained: bool = False, **overrides: object
 ) -> SwinTransformerForImageClassification:
     return _c(_CFG_B, overrides)
@@ -120,7 +120,7 @@ def swin_b_cls(
     model_class=SwinTransformerForImageClassification,
     default_config=_CFG_L,
 )
-def swin_l_cls(
+def swin_large_cls(
     pretrained: bool = False, **overrides: object
 ) -> SwinTransformerForImageClassification:
     return _c(_CFG_L, overrides)

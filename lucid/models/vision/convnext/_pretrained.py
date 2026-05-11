@@ -31,7 +31,7 @@ def _c(cfg: ConvNeXtConfig, kw: dict[str, object]) -> ConvNeXtForImageClassifica
     model_class=ConvNeXt,
     default_config=_CFG_T,
 )
-def convnext_t(pretrained: bool = False, **overrides: object) -> ConvNeXt:
+def convnext_tiny(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     """ConvNeXt-T backbone (Liu et al., 2022)."""
     return _b(_CFG_T, overrides)
 
@@ -43,7 +43,7 @@ def convnext_t(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_class=ConvNeXt,
     default_config=_CFG_S,
 )
-def convnext_s(pretrained: bool = False, **overrides: object) -> ConvNeXt:
+def convnext_small(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     return _b(_CFG_S, overrides)
 
 
@@ -54,7 +54,7 @@ def convnext_s(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_class=ConvNeXt,
     default_config=_CFG_B,
 )
-def convnext_b(pretrained: bool = False, **overrides: object) -> ConvNeXt:
+def convnext_base(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     return _b(_CFG_B, overrides)
 
 
@@ -65,7 +65,7 @@ def convnext_b(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_class=ConvNeXt,
     default_config=_CFG_L,
 )
-def convnext_l(pretrained: bool = False, **overrides: object) -> ConvNeXt:
+def convnext_large(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     return _b(_CFG_L, overrides)
 
 
@@ -76,7 +76,7 @@ def convnext_l(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_class=ConvNeXt,
     default_config=_CFG_XL,
 )
-def convnext_xl(pretrained: bool = False, **overrides: object) -> ConvNeXt:
+def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     return _b(_CFG_XL, overrides)
 
 
@@ -90,7 +90,7 @@ def convnext_xl(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_T,
 )
-def convnext_t_cls(
+def convnext_tiny_cls(
     pretrained: bool = False, **overrides: object
 ) -> ConvNeXtForImageClassification:
     return _c(_CFG_T, overrides)
@@ -103,7 +103,7 @@ def convnext_t_cls(
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_S,
 )
-def convnext_s_cls(
+def convnext_small_cls(
     pretrained: bool = False, **overrides: object
 ) -> ConvNeXtForImageClassification:
     return _c(_CFG_S, overrides)
@@ -116,7 +116,7 @@ def convnext_s_cls(
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_B,
 )
-def convnext_b_cls(
+def convnext_base_cls(
     pretrained: bool = False, **overrides: object
 ) -> ConvNeXtForImageClassification:
     return _c(_CFG_B, overrides)
@@ -129,7 +129,7 @@ def convnext_b_cls(
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_L,
 )
-def convnext_l_cls(
+def convnext_large_cls(
     pretrained: bool = False, **overrides: object
 ) -> ConvNeXtForImageClassification:
     return _c(_CFG_L, overrides)
@@ -142,7 +142,7 @@ def convnext_l_cls(
     model_class=ConvNeXtForImageClassification,
     default_config=_CFG_XL,
 )
-def convnext_xl_cls(
+def convnext_xlarge_cls(
     pretrained: bool = False, **overrides: object
 ) -> ConvNeXtForImageClassification:
     return _c(_CFG_XL, overrides)
