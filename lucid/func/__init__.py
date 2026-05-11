@@ -197,9 +197,7 @@ def vmap(
             if batch_size is None:
                 batch_size = bs
             elif batch_size != bs:
-                raise ValueError(
-                    f"vmap: inconsistent batch sizes {batch_size} vs {bs}"
-                )
+                raise ValueError(f"vmap: inconsistent batch sizes {batch_size} vs {bs}")
 
         # No batching — propagate randomness context then call directly.
         with _RandGuard(randomness):
@@ -208,8 +206,7 @@ def vmap(
 
             # ── dispatch: isolated vs vectorized ──────────────────────
             _isolate = strategy == "isolated" or (
-                strategy == "auto"
-                and getattr(func, _ISOLATION_ATTR, False)
+                strategy == "auto" and getattr(func, _ISOLATION_ATTR, False)
             )
 
             if _isolate:

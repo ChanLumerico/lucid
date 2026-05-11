@@ -25,6 +25,7 @@ class TestAlexNetConfig(unittest.TestCase):
 
     def test_json_round_trip(self) -> None:
         import json, os
+
         cfg = AlexNetConfig(num_classes=100, dropout=0.3)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -69,6 +70,7 @@ class TestAlexNetBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(2, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)
@@ -113,7 +115,9 @@ class TestAlexNetRegistry(unittest.TestCase):
         self.assertIn("alexnet_cls", names)
 
     def test_family_filter(self) -> None:
-        self.assertEqual(models.list_models(family="alexnet"), ["alexnet", "alexnet_cls"])
+        self.assertEqual(
+            models.list_models(family="alexnet"), ["alexnet", "alexnet_cls"]
+        )
 
     def test_auto_config(self) -> None:
         cfg = models.AutoConfig.from_pretrained("alexnet")

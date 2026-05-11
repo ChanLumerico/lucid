@@ -3,19 +3,27 @@
 Paper: "Xception: Deep Learning with Depthwise Separable Convolutions"
 
 Architecture overview (299×299 input):
-    Entry flow:
-        Conv 3×3-s2 (32) → Conv 3×3 (64) → ReLU
-        Block1: 2× SepConv(128) + skip → MaxPool-s2   (147→74)
-        Block2: 2× SepConv(256) + skip → MaxPool-s2   (74→37)
-        Block3: 2× SepConv(728) + skip → MaxPool-s2   (37→18? -- see note)
-    Middle flow (8×):
-        3× SepConv(728) + residual
-    Exit flow:
-        SepConv(728) + SepConv(1024) + skip → MaxPool-s2
-        SepConv(1536) → SepConv(2048)
-        AdaptiveAvgPool(1×1) → Dropout → FC
+    Stem:
+        conv1 + bn1 → ReLU  (Conv 3×3-s2, 32 ch)
+        conv2 + bn2 → ReLU  (Conv 3×3, 64 ch)
+    Entry flow (3 blocks — block1, block2, block3):
+        blockN.rep  — Sequential of ReLU/SepConv/BN ops
+        blockN.skip — 1×1 Conv (channel projection)
+        blockN.skipbn — BN on skip
+    Middle flow (8 blocks — block4…block11):
+        blockN.rep  — Sequential of 3× (ReLU+SepConv+BN)
+    Exit flow (block12 + conv3/bn3 + conv4/bn4):
+        block12.rep  — Sequential (SepConv(728)+SepConv(1024)+MaxPool)
+        block12.skip / skipbn
+        conv3 + bn3  → ReLU  (SepConv 1536)
+        conv4 + bn4  → ReLU  (SepConv 2048)
+    Head:
+        AdaptiveAvgPool(1×1) → Dropout → fc
 
-SepConv = Depthwise Conv2d → Pointwise Conv2d (1×1), each followed by BN+ReLU.
+SepConv sub-module attribute names (timm layout):
+    conv1  — depthwise Conv2d (groups=in_ch)
+    pointwise — pointwise Conv2d (1×1)
+    (BN stored separately in the parent Sequential, not inside _SepConv)
 """
 
 from dataclasses import dataclass
@@ -30,25 +38,26 @@ from lucid.models._output import BaseModelOutput
 from lucid.models.vision.xception._config import XceptionConfig
 
 # ---------------------------------------------------------------------------
-# SepConv: Depthwise + Pointwise Conv, BN, ReLU
+# Low-level SepConv primitive matching timm attribute names
 # ---------------------------------------------------------------------------
 
 
-class _SepConv(nn.Module):
-    """Depthwise separable convolution: depthwise → pointwise, BN, ReLU."""
+class _SepConvOp(nn.Module):
+    """Depthwise + pointwise conv (no BN, no activation).
+
+    Attribute names match timm legacy_xception layout:
+      self.conv1      — depthwise Conv2d (groups=in_channels)
+      self.pointwise  — pointwise Conv2d (1×1)
+    """
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
-        *,
         stride: int = 1,
-        activate_first: bool = True,
     ) -> None:
         super().__init__()
-        self.activate_first = activate_first
-        # Depthwise conv (groups=in_channels)
-        self.dw = nn.Conv2d(
+        self.conv1 = nn.Conv2d(
             in_channels,
             in_channels,
             3,
@@ -57,97 +66,185 @@ class _SepConv(nn.Module):
             groups=in_channels,
             bias=False,
         )
-        # Pointwise conv (1×1)
-        self.pw = nn.Conv2d(in_channels, out_channels, 1, bias=False)
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        if self.activate_first:
-            x = F.relu(x)
-        x = cast(Tensor, self.dw(x))
-        x = cast(Tensor, self.pw(x))
-        return cast(Tensor, self.bn(x))
+        x = cast(Tensor, self.conv1(x))
+        return cast(Tensor, self.pointwise(x))
 
 
 # ---------------------------------------------------------------------------
-# Entry flow block
+# Entry flow block (block1 / block2 / block3)
 # ---------------------------------------------------------------------------
 
 
-class _EntryFlowBlock(nn.Module):
-    """Entry flow block: 2× SepConv + residual skip + MaxPool stride=2."""
+def _make_entry_block(
+    in_channels: int,
+    out_channels: int,
+    *,
+    activate_first: bool,
+) -> nn.Module:
+    """Return a block matching timm entry-flow key layout.
 
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        *,
-        activate_first: bool = True,
-    ) -> None:
+    timm key layout for block1 (activate_first=False):
+      rep.0.conv1/pointwise  — SepConv1 depthwise/pointwise
+      rep.1.*                — BN after SepConv1
+      rep.2                  — ReLU  (no params, index 2)
+      rep.3.conv1/pointwise  — SepConv2
+      rep.4.*                — BN after SepConv2
+      rep.5                  — MaxPool2d
+      skip                   — 1×1 Conv (channel projection)
+      skipbn                 — BN on skip
+
+    timm key layout for block2/block3 (activate_first=True):
+      rep.0                  — ReLU  (no params, index 0)
+      rep.1.conv1/pointwise  — SepConv1
+      rep.2.*                — BN
+      rep.3                  — ReLU
+      rep.4.conv1/pointwise  — SepConv2
+      rep.5.*                — BN
+      rep.6                  — MaxPool2d
+    """
+
+    class _EntryBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            ops: list[nn.Module] = []
+            if activate_first:
+                ops.append(nn.ReLU(inplace=True))
+            # SepConv 1
+            ops.append(_SepConvOp(in_channels, out_channels))
+            ops.append(nn.BatchNorm2d(out_channels))
+            ops.append(nn.ReLU(inplace=True))
+            # SepConv 2
+            ops.append(_SepConvOp(out_channels, out_channels))
+            ops.append(nn.BatchNorm2d(out_channels))
+            ops.append(nn.MaxPool2d(3, stride=2, padding=1))
+            self.rep = nn.Sequential(*ops)
+            self.skip = nn.Conv2d(in_channels, out_channels, 1, stride=2, bias=False)
+            self.skipbn = nn.BatchNorm2d(out_channels)
+
+        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+            residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
+            return cast(Tensor, self.rep(x)) + residual
+
+    return _EntryBlock()
+
+
+# ---------------------------------------------------------------------------
+# Middle flow block (block4 … block11)
+# ---------------------------------------------------------------------------
+
+
+def _make_middle_block(channels: int) -> nn.Module:
+    """Return a block matching timm middle-flow key layout.
+
+    timm key layout (example: block4):
+      block4.rep.1.conv1  block4.rep.1.pointwise  block4.rep.2.*  — SepConv1
+      block4.rep.4.conv1  block4.rep.4.pointwise  block4.rep.5.*  — SepConv2
+      block4.rep.7.conv1  block4.rep.7.pointwise  block4.rep.8.*  — SepConv3
+
+    The `rep` Sequential indices:
+      0 — ReLU
+      1 — _SepConvOp
+      2 — BN
+      3 — ReLU
+      4 — _SepConvOp
+      5 — BN
+      6 — ReLU
+      7 — _SepConvOp
+      8 — BN
+    """
+
+    class _MiddleBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.rep = nn.Sequential(
+                nn.ReLU(inplace=True),
+                _SepConvOp(channels, channels),
+                nn.BatchNorm2d(channels),
+                nn.ReLU(inplace=True),
+                _SepConvOp(channels, channels),
+                nn.BatchNorm2d(channels),
+                nn.ReLU(inplace=True),
+                _SepConvOp(channels, channels),
+                nn.BatchNorm2d(channels),
+            )
+
+        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+            return cast(Tensor, self.rep(x)) + x
+
+    return _MiddleBlock()
+
+
+# ---------------------------------------------------------------------------
+# Exit flow block (block12)
+# ---------------------------------------------------------------------------
+
+
+def _make_exit_block() -> nn.Module:
+    """Return a block matching timm exit-flow key layout.
+
+    timm key layout (block12):
+      block12.rep.1.conv1  block12.rep.1.pointwise  block12.rep.2.*  — SepConv(728)
+      block12.rep.4.conv1  block12.rep.4.pointwise  block12.rep.5.*  — SepConv(1024)
+      block12.skip         — 1×1 Conv 728→1024, stride=2
+      block12.skipbn       — BN(1024)
+
+    The `rep` Sequential indices:
+      0 — ReLU
+      1 — _SepConvOp(728, 728)
+      2 — BN(728)
+      3 — ReLU
+      4 — _SepConvOp(728, 1024)
+      5 — BN(1024)
+      6 — MaxPool2d(3, stride=2, padding=1)
+    """
+
+    class _ExitBlock(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.rep = nn.Sequential(
+                nn.ReLU(inplace=True),
+                _SepConvOp(728, 728),
+                nn.BatchNorm2d(728),
+                nn.ReLU(inplace=True),
+                _SepConvOp(728, 1024),
+                nn.BatchNorm2d(1024),
+                nn.MaxPool2d(3, stride=2, padding=1),
+            )
+            self.skip = nn.Conv2d(728, 1024, 1, stride=2, bias=False)
+            self.skipbn = nn.BatchNorm2d(1024)
+
+        def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+            residual = cast(Tensor, self.skipbn(cast(Tensor, self.skip(x))))
+            return cast(Tensor, self.rep(x)) + residual
+
+    return _ExitBlock()
+
+
+# ---------------------------------------------------------------------------
+# SepConv used in exit conv3/conv4 (wraps _SepConvOp + BN; called separately)
+# ---------------------------------------------------------------------------
+
+
+class _ExitSepConv(nn.Module):
+    """Exit-flow final SepConv (conv3/conv4): dw+pw, no activation.
+
+    BN stored separately as bn3/bn4 on the parent model (timm layout).
+    Attribute names inside: conv1 (dw), pointwise (pw).
+    """
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
         super().__init__()
-        self.sep1 = _SepConv(in_channels, out_channels, activate_first=activate_first)
-        self.sep2 = _SepConv(out_channels, out_channels)
-        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
-        # Residual 1×1 projection (matches spatial stride and channel dim)
-        self.skip = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, 1, stride=2, bias=False),
-            nn.BatchNorm2d(out_channels),
+        self.conv1 = nn.Conv2d(
+            in_channels, in_channels, 3, padding=1, groups=in_channels, bias=False
         )
+        self.pointwise = nn.Conv2d(in_channels, out_channels, 1, bias=False)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        residual = cast(Tensor, self.skip(x))
-        x = cast(Tensor, self.sep1(x))
-        x = cast(Tensor, self.sep2(x))
-        x = cast(Tensor, self.pool(x))
-        return x + residual
-
-
-# ---------------------------------------------------------------------------
-# Middle flow block
-# ---------------------------------------------------------------------------
-
-
-class _MiddleFlowBlock(nn.Module):
-    """Middle flow block: 3× SepConv(728) + residual."""
-
-    def __init__(self, channels: int) -> None:
-        super().__init__()
-        self.sep1 = _SepConv(channels, channels)
-        self.sep2 = _SepConv(channels, channels)
-        self.sep3 = _SepConv(channels, channels)
-
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        residual = x
-        x = cast(Tensor, self.sep1(x))
-        x = cast(Tensor, self.sep2(x))
-        x = cast(Tensor, self.sep3(x))
-        return x + residual
-
-
-# ---------------------------------------------------------------------------
-# Exit flow block
-# ---------------------------------------------------------------------------
-
-
-class _ExitFlowBlock(nn.Module):
-    """Exit flow: SepConv(728) + SepConv(1024) + residual skip → MaxPool stride=2."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.sep1 = _SepConv(728, 728)
-        self.sep2 = _SepConv(728, 1024)
-        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
-        self.skip = nn.Sequential(
-            nn.Conv2d(728, 1024, 1, stride=2, bias=False),
-            nn.BatchNorm2d(1024),
-        )
-
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        residual = cast(Tensor, self.skip(x))
-        x = cast(Tensor, self.sep1(x))
-        x = cast(Tensor, self.sep2(x))
-        x = cast(Tensor, self.pool(x))
-        return x + residual
+        x = cast(Tensor, self.conv1(x))
+        return cast(Tensor, self.pointwise(x))
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +261,73 @@ class XceptionOutput:
 
 
 # ---------------------------------------------------------------------------
+# Shared forward helper
+# ---------------------------------------------------------------------------
+
+
+def _xception_forward_features(model: nn.Module, x: Tensor) -> Tensor:
+    """Common feature-extraction path for Xception backbone and classifier."""
+    # Stem
+    x = F.relu(cast(Tensor, model.bn1(cast(Tensor, model.conv1(x)))))  # type: ignore[union-attr]
+    x = F.relu(cast(Tensor, model.bn2(cast(Tensor, model.conv2(x)))))  # type: ignore[union-attr]
+
+    # Entry flow
+    x = cast(Tensor, model.block1(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block2(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block3(x))  # type: ignore[union-attr]
+
+    # Middle flow
+    x = cast(Tensor, model.block4(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block5(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block6(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block7(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block8(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block9(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block10(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block11(x))  # type: ignore[union-attr]
+
+    # Exit flow
+    x = cast(Tensor, model.block12(x))  # type: ignore[union-attr]
+    x = F.relu(cast(Tensor, model.bn3(cast(Tensor, model.conv3(x)))))  # type: ignore[union-attr]
+    x = F.relu(cast(Tensor, model.bn4(cast(Tensor, model.conv4(x)))))  # type: ignore[union-attr]
+
+    return cast(Tensor, model.avgpool(x))  # type: ignore[union-attr]
+
+
+def _build_xception_body(ic: int) -> dict[str, nn.Module]:
+    """Return a dict of named sub-modules matching timm legacy_xception layout."""
+    return {
+        # Stem (timm: conv1.weight, bn1.*, conv2.weight, bn2.*)
+        "conv1": nn.Conv2d(ic, 32, 3, stride=2, padding=1, bias=False),
+        "bn1": nn.BatchNorm2d(32),
+        "conv2": nn.Conv2d(32, 64, 3, padding=1, bias=False),
+        "bn2": nn.BatchNorm2d(64),
+        # Entry flow
+        "block1": _make_entry_block(64, 128, activate_first=False),
+        "block2": _make_entry_block(128, 256, activate_first=True),
+        "block3": _make_entry_block(256, 728, activate_first=True),
+        # Middle flow (8 blocks: block4–block11)
+        "block4": _make_middle_block(728),
+        "block5": _make_middle_block(728),
+        "block6": _make_middle_block(728),
+        "block7": _make_middle_block(728),
+        "block8": _make_middle_block(728),
+        "block9": _make_middle_block(728),
+        "block10": _make_middle_block(728),
+        "block11": _make_middle_block(728),
+        # Exit flow block
+        "block12": _make_exit_block(),
+        # Exit SepConvs (named conv3/conv4 with bn3/bn4 at model level)
+        "conv3": _ExitSepConv(1024, 1536),
+        "bn3": nn.BatchNorm2d(1536),
+        "conv4": _ExitSepConv(1536, 2048),
+        "bn4": nn.BatchNorm2d(2048),
+        # Pooling
+        "avgpool": nn.AdaptiveAvgPool2d((1, 1)),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Xception backbone (task="base")
 # ---------------------------------------------------------------------------
 
@@ -176,35 +340,8 @@ class Xception(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: XceptionConfig) -> None:
         super().__init__(config)
-        ic = config.in_channels
-
-        # Entry flow stem: Conv 3×3-s2 (32) → Conv 3×3 (64)
-        self.stem_conv1 = nn.Conv2d(ic, 32, 3, stride=2, padding=1, bias=False)
-        self.stem_bn1 = nn.BatchNorm2d(32)
-        self.stem_conv2 = nn.Conv2d(32, 64, 3, padding=1, bias=False)
-        self.stem_bn2 = nn.BatchNorm2d(64)
-
-        # Entry flow blocks (3 blocks)
-        self.entry_block1 = _EntryFlowBlock(64, 128, activate_first=False)
-        self.entry_block2 = _EntryFlowBlock(128, 256)
-        self.entry_block3 = _EntryFlowBlock(256, 728)
-
-        # Middle flow (8 blocks)
-        self.middle_block0 = _MiddleFlowBlock(728)
-        self.middle_block1 = _MiddleFlowBlock(728)
-        self.middle_block2 = _MiddleFlowBlock(728)
-        self.middle_block3 = _MiddleFlowBlock(728)
-        self.middle_block4 = _MiddleFlowBlock(728)
-        self.middle_block5 = _MiddleFlowBlock(728)
-        self.middle_block6 = _MiddleFlowBlock(728)
-        self.middle_block7 = _MiddleFlowBlock(728)
-
-        # Exit flow
-        self.exit_block = _ExitFlowBlock()
-        self.exit_sep1 = _SepConv(1024, 1536, activate_first=False)
-        self.exit_sep2 = _SepConv(1536, 2048, activate_first=False)
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        for name, module in _build_xception_body(config.in_channels).items():
+            setattr(self, name, module)
 
         self._feature_info = [
             FeatureInfo(stage=1, num_channels=128, reduction=4),
@@ -218,31 +355,7 @@ class Xception(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        # Stem
-        x = F.relu(cast(Tensor, self.stem_bn1(cast(Tensor, self.stem_conv1(x)))))
-        x = F.relu(cast(Tensor, self.stem_bn2(cast(Tensor, self.stem_conv2(x)))))
-
-        # Entry flow
-        x = cast(Tensor, self.entry_block1(x))
-        x = cast(Tensor, self.entry_block2(x))
-        x = cast(Tensor, self.entry_block3(x))
-
-        # Middle flow
-        x = cast(Tensor, self.middle_block0(x))
-        x = cast(Tensor, self.middle_block1(x))
-        x = cast(Tensor, self.middle_block2(x))
-        x = cast(Tensor, self.middle_block3(x))
-        x = cast(Tensor, self.middle_block4(x))
-        x = cast(Tensor, self.middle_block5(x))
-        x = cast(Tensor, self.middle_block6(x))
-        x = cast(Tensor, self.middle_block7(x))
-
-        # Exit flow
-        x = cast(Tensor, self.exit_block(x))
-        x = F.relu(cast(Tensor, self.exit_sep1(x)))
-        x = F.relu(cast(Tensor, self.exit_sep2(x)))
-
-        return cast(Tensor, self.avgpool(x))
+        return _xception_forward_features(self, x)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
@@ -261,35 +374,8 @@ class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: XceptionConfig) -> None:
         super().__init__(config)
-        ic = config.in_channels
-
-        # Entry flow stem
-        self.stem_conv1 = nn.Conv2d(ic, 32, 3, stride=2, padding=1, bias=False)
-        self.stem_bn1 = nn.BatchNorm2d(32)
-        self.stem_conv2 = nn.Conv2d(32, 64, 3, padding=1, bias=False)
-        self.stem_bn2 = nn.BatchNorm2d(64)
-
-        # Entry flow blocks
-        self.entry_block1 = _EntryFlowBlock(64, 128, activate_first=False)
-        self.entry_block2 = _EntryFlowBlock(128, 256)
-        self.entry_block3 = _EntryFlowBlock(256, 728)
-
-        # Middle flow
-        self.middle_block0 = _MiddleFlowBlock(728)
-        self.middle_block1 = _MiddleFlowBlock(728)
-        self.middle_block2 = _MiddleFlowBlock(728)
-        self.middle_block3 = _MiddleFlowBlock(728)
-        self.middle_block4 = _MiddleFlowBlock(728)
-        self.middle_block5 = _MiddleFlowBlock(728)
-        self.middle_block6 = _MiddleFlowBlock(728)
-        self.middle_block7 = _MiddleFlowBlock(728)
-
-        # Exit flow
-        self.exit_block = _ExitFlowBlock()
-        self.exit_sep1 = _SepConv(1024, 1536, activate_first=False)
-        self.exit_sep2 = _SepConv(1536, 2048, activate_first=False)
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        for name, module in _build_xception_body(config.in_channels).items():
+            setattr(self, name, module)
         self._build_classifier(2048, config.num_classes, dropout=config.dropout)
 
     def forward(  # type: ignore[override]
@@ -297,31 +383,7 @@ class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x: Tensor,
         labels: Tensor | None = None,
     ) -> XceptionOutput:
-        # Stem
-        x = F.relu(cast(Tensor, self.stem_bn1(cast(Tensor, self.stem_conv1(x)))))
-        x = F.relu(cast(Tensor, self.stem_bn2(cast(Tensor, self.stem_conv2(x)))))
-
-        # Entry flow
-        x = cast(Tensor, self.entry_block1(x))
-        x = cast(Tensor, self.entry_block2(x))
-        x = cast(Tensor, self.entry_block3(x))
-
-        # Middle flow
-        x = cast(Tensor, self.middle_block0(x))
-        x = cast(Tensor, self.middle_block1(x))
-        x = cast(Tensor, self.middle_block2(x))
-        x = cast(Tensor, self.middle_block3(x))
-        x = cast(Tensor, self.middle_block4(x))
-        x = cast(Tensor, self.middle_block5(x))
-        x = cast(Tensor, self.middle_block6(x))
-        x = cast(Tensor, self.middle_block7(x))
-
-        # Exit flow
-        x = cast(Tensor, self.exit_block(x))
-        x = F.relu(cast(Tensor, self.exit_sep1(x)))
-        x = F.relu(cast(Tensor, self.exit_sep2(x)))
-
-        x = cast(Tensor, self.avgpool(x))
+        x = _xception_forward_features(self, x)
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
 

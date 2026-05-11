@@ -14,11 +14,19 @@ Key differences from PVT v1:
      resolutions.
 
 Architecture (PVT v2-B1 / our 'pvt_tiny' default, 224 input):
-  Stage 1: OverlapPatchEmbed(k=7,s=4) → (56×56, 64),  2 × Block(heads=1, sr=8)
-  Stage 2: OverlapPatchEmbed(k=3,s=2) → (28×28, 128), 2 × Block(heads=2, sr=4)
-  Stage 3: OverlapPatchEmbed(k=3,s=2) → (14×14, 320), 2 × Block(heads=5, sr=2)
-  Stage 4: OverlapPatchEmbed(k=3,s=2) → (7×7,  512),  2 × Block(heads=8, sr=1)
+  patch_embed: OverlapPatchEmbed(k=7,s=4) — top-level, used by stage 0
+  Stage 0: blocks (heads=1, sr=8) + norm   — no downsample; uses top-level patch_embed
+  Stage 1: downsample(k=3,s=2) + blocks (heads=2, sr=4) + norm
+  Stage 2: downsample(k=3,s=2) + blocks (heads=5, sr=2) + norm
+  Stage 3: downsample(k=3,s=2) + blocks (heads=8, sr=1) + norm
   Head   : global avg-pool → FC(512, num_classes)
+
+timm key layout (pvt_v2_b1):
+  patch_embed.proj.*  patch_embed.norm.*          — top-level
+  stages.0.blocks.N.*  stages.0.norm.*            — stage 0 (no downsample)
+  stages.1.downsample.proj/norm  stages.1.blocks.N.*  stages.1.norm.*
+  ...
+  head.weight  head.bias
 """
 
 from typing import ClassVar, cast
@@ -33,7 +41,7 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.pvt._config import PVTConfig
 
 # ---------------------------------------------------------------------------
-# Overlapping patch embedding
+# Overlapping patch embedding (also used as "downsample" for stages 1-3)
 # ---------------------------------------------------------------------------
 
 
@@ -181,12 +189,18 @@ class _PVTBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# One PVT stage
+# One PVT stage (blocks + norm only; downsample handled outside)
 # ---------------------------------------------------------------------------
 
 
 class _PVTStage(nn.Module):
-    """One PVT v2 stage = OverlapPatchEmbed + N × Block + LayerNorm."""
+    """One PVT v2 stage = optional downsample + N × Block + LayerNorm.
+
+    For stage 0, there is no ``downsample`` sub-module — the patch embedding
+    lives at top-level on the model (``self.patch_embed``).
+    For stages 1-3, the patch embedding is stored as ``self.downsample`` to
+    match the timm key layout (``stages.N.downsample.proj/norm``).
+    """
 
     def __init__(
         self,
@@ -198,24 +212,35 @@ class _PVTStage(nn.Module):
         num_heads: int,
         sr_ratio: int,
         mlp_ratio: float,
+        is_first: bool,
     ) -> None:
         super().__init__()
-        self.patch_embed = _OverlapPatchEmbed(in_ch, embed_dim, patch_size, stride)
+        # Stage 0: patch_embed lives on the model, not inside the stage.
+        # Stages 1-3: patch_embed stored as downsample (timm key layout).
+        if not is_first:
+            self.downsample = _OverlapPatchEmbed(in_ch, embed_dim, patch_size, stride)
         self.blocks = nn.ModuleList(
             [_PVTBlock(embed_dim, num_heads, sr_ratio, mlp_ratio) for _ in range(depth)]
         )
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
-        # x: (B, C_in, H_in, W_in) — spatial feature map from previous stage
-        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
+    def forward_tokens(self, tokens: Tensor, H: int, W: int) -> tuple[Tensor, int, int]:
+        """Run blocks + norm on pre-embedded tokens (B, N, C)."""
         for blk in self.blocks:
             tokens = cast(Tensor, blk(tokens, H, W))  # type: ignore[arg-type]
         tokens = cast(Tensor, self.norm(tokens))
-        # Reshape back to (B, C, H, W) for next stage's patch embed
         B, _, C = tokens.shape
         x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
         return x_out, H, W
+
+    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
+        # x is a spatial map (B, C_in, H_in, W_in).
+        # For stage 0 this should NOT be called directly — call forward_tokens.
+        # For stages 1-3, downsample first, then run blocks.
+        tokens, H, W = cast(
+            tuple[Tensor, int, int], self.downsample(x)  # type: ignore[attr-defined]
+        )
+        return self.forward_tokens(tokens, H, W)
 
 
 # ---------------------------------------------------------------------------
@@ -223,28 +248,55 @@ class _PVTStage(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_pvt(cfg: PVTConfig) -> tuple[nn.ModuleList, list[FeatureInfo], int]:
+def _build_pvt(cfg: PVTConfig) -> tuple[
+    _OverlapPatchEmbed,  # top-level patch_embed (stage 0)
+    nn.ModuleList,  # stages (0-indexed)
+    list[FeatureInfo],
+    int,  # final embed dim
+]:
+    """Build PVT v2 stages matching timm pvt_v2_bN key layout.
+
+    timm layout:
+      patch_embed  — top-level; handles stage-0 spatial downsampling
+      stages.0     — blocks + norm only (no downsample submodule)
+      stages.1-3   — downsample + blocks + norm
+    """
     stages: list[nn.Module] = []
     fi: list[FeatureInfo] = []
 
     in_ch = cfg.in_channels
     reduction = 1
 
+    # Build top-level patch_embed for stage 0
+    patch_embed = _OverlapPatchEmbed(in_ch, cfg.embed_dims[0], patch_size=7, stride=4)
+    reduction *= 4
+
     for i, (dim, depth, heads, sr, mlp_r) in enumerate(
         zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios, cfg.mlp_ratios)
     ):
-        # Stage 0: kernel=7, stride=4 (4x downsample)
-        # Subsequent stages: kernel=3, stride=2 (2x downsample)
-        patch_size = 7 if i == 0 else 3
-        stride = 4 if i == 0 else 2
-        reduction *= stride
+        is_first = i == 0
+        # patch_size/stride used by downsample in stages 1-3
+        patch_size = 3
+        stride = 2
+        if not is_first:
+            reduction *= stride
         stages.append(
-            _PVTStage(in_ch, dim, patch_size, stride, depth, heads, sr, mlp_r)
+            _PVTStage(
+                in_ch=in_ch,
+                embed_dim=dim,
+                patch_size=patch_size,
+                stride=stride,
+                depth=depth,
+                num_heads=heads,
+                sr_ratio=sr,
+                mlp_ratio=mlp_r,
+                is_first=is_first,
+            )
         )
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
         in_ch = dim
 
-    return nn.ModuleList(stages), fi, cfg.embed_dims[-1]
+    return patch_embed, nn.ModuleList(stages), fi, cfg.embed_dims[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -260,8 +312,7 @@ class PVT(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: PVTConfig) -> None:
         super().__init__(config)
-        stages, fi, out_dim = _build_pvt(config)
-        self.stages = stages
+        self.patch_embed, self.stages, fi, out_dim = _build_pvt(config)
         self._feature_info = fi
         self._out_dim = out_dim
 
@@ -270,10 +321,17 @@ class PVT(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        for stage in self.stages:
-            x, _, _ = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W) — global average pool to (B, C)
-        return x.flatten(2).mean(dim=2)
+        # Stage 0: use top-level patch_embed then stage blocks
+        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
+        x_spatial, H, W = cast(
+            tuple[Tensor, int, int],
+            self.stages[0].forward_tokens(tokens, H, W),  # type: ignore[union-attr]
+        )
+        # Stages 1-3: each stage calls its own downsample internally
+        for stage in list(self.stages)[1:]:
+            x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))
+        # x_spatial: (B, C, H, W) — global average pool to (B, C)
+        return x_spatial.flatten(2).mean(dim=2)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
@@ -293,9 +351,7 @@ class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: PVTConfig) -> None:
         super().__init__(config)
-        stages, _, out_dim = _build_pvt(config)
-        self.stages = stages
-        self.norm = nn.LayerNorm(out_dim)
+        self.patch_embed, self.stages, _, out_dim = _build_pvt(config)
         self._build_classifier(out_dim, config.num_classes)
 
     def forward(  # type: ignore[override]
@@ -303,12 +359,18 @@ class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        for stage in self.stages:
-            x, _, _ = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W) — mean pool to (B, C)
-        x = x.flatten(2).mean(dim=2)
-        x = cast(Tensor, self.norm(x))
-        logits = cast(Tensor, self.classifier(x))
+        # Stage 0: use top-level patch_embed then stage blocks
+        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
+        x_spatial, H, W = cast(
+            tuple[Tensor, int, int],
+            self.stages[0].forward_tokens(tokens, H, W),  # type: ignore[union-attr]
+        )
+        # Stages 1-3
+        for stage in list(self.stages)[1:]:
+            x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))
+        # x_spatial: (B, C, H, W) — mean pool to (B, C)
+        x_vec = x_spatial.flatten(2).mean(dim=2)
+        logits = cast(Tensor, self.classifier(x_vec))
 
         loss: Tensor | None = None
         if labels is not None:

@@ -27,6 +27,7 @@ class TestMobileNetV1Config(unittest.TestCase):
 
     def test_json_round_trip(self) -> None:
         import json, os
+
         cfg = MobileNetV1Config(width_mult=0.75, num_classes=100)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -78,6 +79,7 @@ class TestMobileNetV1Backbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

@@ -43,12 +43,14 @@ def _collect_lrs(scheduler: Any, steps: int) -> list[float]:
     return lrs
 
 
-def _assert_lr_sequence(lucid_lrs: list[float], ref_lrs: list[float], atol: float = 1e-6) -> None:
+def _assert_lr_sequence(
+    lucid_lrs: list[float], ref_lrs: list[float], atol: float = 1e-6
+) -> None:
     assert len(lucid_lrs) == len(ref_lrs)
     for i, (l, r) in enumerate(zip(lucid_lrs, ref_lrs)):
-        assert abs(l - r) < atol, (
-            f"step {i}: lucid={l:.8f} ref={r:.8f} diff={abs(l - r):.2e}"
-        )
+        assert (
+            abs(l - r) < atol
+        ), f"step {i}: lucid={l:.8f} ref={r:.8f} diff={abs(l - r):.2e}"
 
 
 # ── StepLR ────────────────────────────────────────────────────────────────────
@@ -58,15 +60,23 @@ def _assert_lr_sequence(lucid_lrs: list[float], ref_lrs: list[float], atol: floa
 class TestStepLRParity:
     def test_basic(self, ref: Any) -> None:
         lr0 = 0.1
-        lucid_sched = optim.lr_scheduler.StepLR(_dummy_lucid_optimizer(lr0), step_size=3, gamma=0.5)
-        ref_sched = ref.optim.lr_scheduler.StepLR(_dummy_ref_optimizer(lr0, ref), step_size=3, gamma=0.5)
+        lucid_sched = optim.lr_scheduler.StepLR(
+            _dummy_lucid_optimizer(lr0), step_size=3, gamma=0.5
+        )
+        ref_sched = ref.optim.lr_scheduler.StepLR(
+            _dummy_ref_optimizer(lr0, ref), step_size=3, gamma=0.5
+        )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 12), _collect_lrs(ref_sched, 12))
 
     def test_gamma_0_1(self, ref: Any) -> None:
         lr0 = 1.0
-        lucid_sched = optim.lr_scheduler.StepLR(_dummy_lucid_optimizer(lr0), step_size=5)
-        ref_sched = ref.optim.lr_scheduler.StepLR(_dummy_ref_optimizer(lr0, ref), step_size=5)
+        lucid_sched = optim.lr_scheduler.StepLR(
+            _dummy_lucid_optimizer(lr0), step_size=5
+        )
+        ref_sched = ref.optim.lr_scheduler.StepLR(
+            _dummy_ref_optimizer(lr0, ref), step_size=5
+        )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 15), _collect_lrs(ref_sched, 15))
 
@@ -78,8 +88,12 @@ class TestStepLRParity:
 class TestExponentialLRParity:
     def test_basic(self, ref: Any) -> None:
         lr0 = 0.1
-        lucid_sched = optim.lr_scheduler.ExponentialLR(_dummy_lucid_optimizer(lr0), gamma=0.9)
-        ref_sched = ref.optim.lr_scheduler.ExponentialLR(_dummy_ref_optimizer(lr0, ref), gamma=0.9)
+        lucid_sched = optim.lr_scheduler.ExponentialLR(
+            _dummy_lucid_optimizer(lr0), gamma=0.9
+        )
+        ref_sched = ref.optim.lr_scheduler.ExponentialLR(
+            _dummy_ref_optimizer(lr0, ref), gamma=0.9
+        )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 20), _collect_lrs(ref_sched, 20))
 
@@ -174,7 +188,10 @@ class TestLinearLRParity:
             _dummy_lucid_optimizer(lr0), start_factor=0.2, end_factor=1.0, total_iters=5
         )
         ref_sched = ref.optim.lr_scheduler.LinearLR(
-            _dummy_ref_optimizer(lr0, ref), start_factor=0.2, end_factor=1.0, total_iters=5
+            _dummy_ref_optimizer(lr0, ref),
+            start_factor=0.2,
+            end_factor=1.0,
+            total_iters=5,
         )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 8), _collect_lrs(ref_sched, 8))
@@ -234,8 +251,12 @@ class TestLambdaLRParity:
         lr0 = 0.1
         fn = lambda epoch: epoch / 10 if epoch < 10 else 1.0  # noqa: E731
 
-        lucid_sched = optim.lr_scheduler.LambdaLR(_dummy_lucid_optimizer(lr0), lr_lambda=fn)
-        ref_sched = ref.optim.lr_scheduler.LambdaLR(_dummy_ref_optimizer(lr0, ref), lr_lambda=fn)
+        lucid_sched = optim.lr_scheduler.LambdaLR(
+            _dummy_lucid_optimizer(lr0), lr_lambda=fn
+        )
+        ref_sched = ref.optim.lr_scheduler.LambdaLR(
+            _dummy_ref_optimizer(lr0, ref), lr_lambda=fn
+        )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 15), _collect_lrs(ref_sched, 15))
 
@@ -267,10 +288,18 @@ class TestCyclicLRParity:
     def test_triangular(self, ref: Any) -> None:
         lr0 = 0.01
         lucid_sched = optim.lr_scheduler.CyclicLR(
-            _dummy_lucid_optimizer(lr0), base_lr=0.01, max_lr=0.1, step_size_up=5, mode="triangular"
+            _dummy_lucid_optimizer(lr0),
+            base_lr=0.01,
+            max_lr=0.1,
+            step_size_up=5,
+            mode="triangular",
         )
         ref_sched = ref.optim.lr_scheduler.CyclicLR(
-            _dummy_ref_optimizer(lr0, ref), base_lr=0.01, max_lr=0.1, step_size_up=5, mode="triangular"
+            _dummy_ref_optimizer(lr0, ref),
+            base_lr=0.01,
+            max_lr=0.1,
+            step_size_up=5,
+            mode="triangular",
         )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 20), _collect_lrs(ref_sched, 20))
@@ -278,10 +307,18 @@ class TestCyclicLRParity:
     def test_triangular2(self, ref: Any) -> None:
         lr0 = 0.01
         lucid_sched = optim.lr_scheduler.CyclicLR(
-            _dummy_lucid_optimizer(lr0), base_lr=0.01, max_lr=0.1, step_size_up=4, mode="triangular2"
+            _dummy_lucid_optimizer(lr0),
+            base_lr=0.01,
+            max_lr=0.1,
+            step_size_up=4,
+            mode="triangular2",
         )
         ref_sched = ref.optim.lr_scheduler.CyclicLR(
-            _dummy_ref_optimizer(lr0, ref), base_lr=0.01, max_lr=0.1, step_size_up=4, mode="triangular2"
+            _dummy_ref_optimizer(lr0, ref),
+            base_lr=0.01,
+            max_lr=0.1,
+            step_size_up=4,
+            mode="triangular2",
         )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 16), _collect_lrs(ref_sched, 16))
@@ -414,13 +451,17 @@ class TestChainedSchedulerParity:
         lucid_opt = _dummy_lucid_optimizer(lr0)
         ref_opt = _dummy_ref_optimizer(lr0, ref)
 
-        lucid_sched = optim.lr_scheduler.ChainedScheduler([
-            optim.lr_scheduler.ExponentialLR(lucid_opt, gamma=0.95),
-            optim.lr_scheduler.StepLR(lucid_opt, step_size=5, gamma=0.5),
-        ])
-        ref_sched = ref.optim.lr_scheduler.ChainedScheduler([
-            ref.optim.lr_scheduler.ExponentialLR(ref_opt, gamma=0.95),
-            ref.optim.lr_scheduler.StepLR(ref_opt, step_size=5, gamma=0.5),
-        ])
+        lucid_sched = optim.lr_scheduler.ChainedScheduler(
+            [
+                optim.lr_scheduler.ExponentialLR(lucid_opt, gamma=0.95),
+                optim.lr_scheduler.StepLR(lucid_opt, step_size=5, gamma=0.5),
+            ]
+        )
+        ref_sched = ref.optim.lr_scheduler.ChainedScheduler(
+            [
+                ref.optim.lr_scheduler.ExponentialLR(ref_opt, gamma=0.95),
+                ref.optim.lr_scheduler.StepLR(ref_opt, step_size=5, gamma=0.5),
+            ]
+        )
 
         _assert_lr_sequence(_collect_lrs(lucid_sched, 15), _collect_lrs(ref_sched, 15))

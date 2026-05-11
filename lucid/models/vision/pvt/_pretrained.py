@@ -10,7 +10,7 @@ _CFG_TINY = PVTConfig(
     depths=(2, 2, 2, 2),
     num_heads=(1, 2, 5, 8),
     sr_ratios=(8, 4, 2, 1),
-    mlp_ratios=(8.0, 8.0, 4.0, 4.0),   # PVT v2-B1 per-stage ratios
+    mlp_ratios=(8.0, 8.0, 4.0, 4.0),  # PVT v2-B1 per-stage ratios
 )
 
 

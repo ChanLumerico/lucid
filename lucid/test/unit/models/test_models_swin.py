@@ -6,8 +6,13 @@ import unittest
 import lucid
 import lucid.models as models
 from lucid.models.vision.swin import (
-    SwinConfig, SwinTransformer, SwinTransformerForImageClassification,
-    swin_t, swin_t_cls, swin_s_cls, swin_b_cls,
+    SwinConfig,
+    SwinTransformer,
+    SwinTransformerForImageClassification,
+    swin_t,
+    swin_t_cls,
+    swin_s_cls,
+    swin_b_cls,
 )
 
 
@@ -23,6 +28,7 @@ class TestSwinConfig(unittest.TestCase):
 
     def test_tuple_coercion(self) -> None:
         import json, os
+
         cfg = SwinConfig(embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -74,6 +80,7 @@ class TestSwinBackbone(unittest.TestCase):
 
     def test_forward_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

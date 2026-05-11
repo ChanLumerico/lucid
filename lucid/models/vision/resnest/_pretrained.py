@@ -8,7 +8,7 @@ from lucid.models.vision.resnest._model import (
 )
 
 _CFG_50 = ResNeStConfig(layers=(3, 4, 6, 3), radix=2)
-_CFG_101 = ResNeStConfig(layers=(3, 4, 23, 3), radix=2)
+_CFG_101 = ResNeStConfig(layers=(3, 4, 23, 3), radix=2, stem_width=64)
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────

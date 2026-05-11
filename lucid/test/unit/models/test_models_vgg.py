@@ -9,8 +9,12 @@ from lucid.models.vision.vgg import (
     VGG,
     VGGConfig,
     VGGForImageClassification,
-    vgg_11, vgg_13, vgg_16, vgg_19,
-    vgg_16_cls, vgg_16_bn_cls,
+    vgg_11,
+    vgg_13,
+    vgg_16,
+    vgg_19,
+    vgg_16_cls,
+    vgg_16_bn_cls,
 )
 
 
@@ -24,6 +28,7 @@ class TestVGGConfig(unittest.TestCase):
 
     def test_arch_tuple_coercion(self) -> None:
         import json, os
+
         cfg = VGGConfig(arch=(1, 1, 2, 2, 2))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -81,6 +86,7 @@ class TestVGGBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)
@@ -129,8 +135,16 @@ class TestVGGRegistry(unittest.TestCase):
         self.assertEqual(len(vgg_models), 16)
 
     def test_backbone_variants(self) -> None:
-        for name in ["vgg_11", "vgg_13", "vgg_16", "vgg_19",
-                     "vgg_11_bn", "vgg_13_bn", "vgg_16_bn", "vgg_19_bn"]:
+        for name in [
+            "vgg_11",
+            "vgg_13",
+            "vgg_16",
+            "vgg_19",
+            "vgg_11_bn",
+            "vgg_13_bn",
+            "vgg_16_bn",
+            "vgg_19_bn",
+        ]:
             self.assertIn(name, models.list_models())
 
     def test_auto_config_vgg16(self) -> None:

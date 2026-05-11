@@ -6,10 +6,15 @@ import unittest
 import lucid
 import lucid.models as models
 from lucid.models.vision.vit import (
-    ViT, ViTConfig, ViTForImageClassification,
-    vit_b_16, vit_b_16_cls,
-    vit_b_32, vit_b_32_cls,
-    vit_l_16, vit_l_16_cls,
+    ViT,
+    ViTConfig,
+    ViTForImageClassification,
+    vit_b_16,
+    vit_b_16_cls,
+    vit_b_32,
+    vit_b_32_cls,
+    vit_l_16,
+    vit_l_16_cls,
 )
 
 
@@ -26,6 +31,7 @@ class TestViTConfig(unittest.TestCase):
 
     def test_json_round_trip(self) -> None:
         import json, os
+
         cfg = ViTConfig(patch_size=32, dim=1024, depth=24, num_heads=16)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -81,6 +87,7 @@ class TestViTBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

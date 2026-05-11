@@ -9,7 +9,6 @@ so it is safe to import from anywhere without circular-import risk.
 import threading
 from types import TracebackType
 
-
 _local: threading.local = threading.local()
 
 

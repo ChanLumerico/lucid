@@ -362,19 +362,47 @@ def _make_layer(
 # ---------------------------------------------------------------------------
 
 
-def _make_deep_stem(in_channels: int, stem_width: int) -> nn.Sequential:
-    """Three-convolution deep stem: in→stem_width→stem_width→2×stem_width."""
-    return nn.Sequential(
-        nn.Conv2d(in_channels, stem_width, 3, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(stem_width),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(stem_width, stem_width, 3, stride=1, padding=1, bias=False),
-        nn.BatchNorm2d(stem_width),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(stem_width, stem_width * 2, 3, stride=1, padding=1, bias=False),
-        nn.BatchNorm2d(stem_width * 2),
-        nn.ReLU(inplace=True),
-    )
+def _make_stem(
+    in_channels: int, stem_width: int, deep_stem: bool
+) -> tuple[nn.Sequential, nn.BatchNorm2d, int]:
+    """Build the ResNeSt stem components to match timm key layout.
+
+    Returns ``(conv1, bn1, stem_out_channels)`` where:
+      - ``conv1``: Sequential whose indexed sub-modules match timm positions
+      - ``bn1``: final BN (top-level on the model, not inside conv1)
+      - ``stem_out_channels``: channels exiting the stem
+
+    timm deep-stem layout (resnest50d)::
+
+        conv1.0  Conv(in→sw, k=3, s=2)
+        conv1.1  BN(sw)
+        conv1.3  Conv(sw→sw, k=3, s=1)
+        conv1.4  BN(sw)
+        conv1.6  Conv(sw→2sw, k=3, s=1)
+        bn1      BN(2sw)          ← top-level model attribute
+
+    timm flat-stem layout::
+
+        conv1.0  Conv(in→2sw, k=7, s=2)
+        bn1      BN(2sw)          ← top-level model attribute
+    """
+    out = stem_width * 2
+    if deep_stem:
+        conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, stem_width, 3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(stem_width),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(stem_width, stem_width, 3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(stem_width),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(stem_width, out, 3, stride=1, padding=1, bias=False),
+        )
+    else:
+        conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out, 7, stride=2, padding=3, bias=False),
+        )
+    bn1 = nn.BatchNorm2d(out)
+    return conv1, bn1, out
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +410,8 @@ def _make_deep_stem(in_channels: int, stem_width: int) -> nn.Sequential:
 # ---------------------------------------------------------------------------
 
 
-def _build_resnest(config: ResNeStConfig) -> tuple[
-    nn.Sequential,  # stem
-    nn.MaxPool2d,  # pool
+def _build_resnest_body(config: ResNeStConfig) -> tuple[
+    nn.MaxPool2d,  # maxpool
     nn.Sequential,  # layer1
     nn.Sequential,  # layer2
     nn.Sequential,  # layer3
@@ -392,17 +419,8 @@ def _build_resnest(config: ResNeStConfig) -> tuple[
     list[FeatureInfo],
     int,  # out_channels after layer4
 ]:
-    stem_width = config.stem_width
-    stem_out = stem_width * 2  # 32*2 = 64 for default config
-
-    if config.deep_stem:
-        stem = _make_deep_stem(config.in_channels, stem_width)
-    else:
-        stem = nn.Sequential(
-            nn.Conv2d(config.in_channels, stem_out, 7, stride=2, padding=3, bias=False),
-            nn.BatchNorm2d(stem_out),
-            nn.ReLU(inplace=True),
-        )
+    """Build ResNeSt stages (excluding stem) to share between backbone and classifier."""
+    stem_out = config.stem_width * 2
 
     pool = nn.MaxPool2d(3, stride=2, padding=1)
 
@@ -467,7 +485,7 @@ def _build_resnest(config: ResNeStConfig) -> tuple[
     )
     fi.append(FeatureInfo(stage=4, num_channels=widths[3] * 4, reduction=32))
 
-    return stem, pool, layer1, layer2, layer3, layer4, fi, cur
+    return pool, layer1, layer2, layer3, layer4, fi, cur
 
 
 # ---------------------------------------------------------------------------
@@ -483,8 +501,12 @@ class ResNeSt(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: ResNeStConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, fi, _ = _build_resnest(config)
-        self.stem = stem
+        # Stem stored as top-level conv1/bn1 to match timm key layout
+        self.conv1, self.bn1, _ = _make_stem(
+            config.in_channels, config.stem_width, config.deep_stem
+        )
+        self.act1 = nn.ReLU(inplace=True)
+        pool, l1, l2, l3, l4, fi, _ = _build_resnest_body(config)
         self.maxpool = pool
         self.layer1 = l1
         self.layer2 = l2
@@ -497,7 +519,8 @@ class ResNeSt(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = cast(Tensor, self.conv1(x))
+        x = cast(Tensor, self.act1(cast(Tensor, self.bn1(x))))
         x = cast(Tensor, self.maxpool(x))
         x = cast(Tensor, self.layer1(x))
         x = cast(Tensor, self.layer2(x))
@@ -522,8 +545,12 @@ class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: ResNeStConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, _, out_ch = _build_resnest(config)
-        self.stem = stem
+        # Stem stored as top-level conv1/bn1 to match timm key layout
+        self.conv1, self.bn1, _ = _make_stem(
+            config.in_channels, config.stem_width, config.deep_stem
+        )
+        self.act1 = nn.ReLU(inplace=True)
+        pool, l1, l2, l3, l4, _, out_ch = _build_resnest_body(config)
         self.maxpool = pool
         self.layer1 = l1
         self.layer2 = l2
@@ -537,7 +564,8 @@ class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = cast(Tensor, self.conv1(x))
+        x = cast(Tensor, self.act1(cast(Tensor, self.bn1(x))))
         x = cast(Tensor, self.maxpool(x))
         x = cast(Tensor, self.layer1(x))
         x = cast(Tensor, self.layer2(x))

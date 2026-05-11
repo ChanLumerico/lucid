@@ -5,21 +5,28 @@ Paper: "InceptionNeXt: When Inception Meets ConvNeXt"
 Key ideas:
   1. ConvNeXt's large 7×7 DWConv is decomposed into parallel branches
      (Inception-style) to reduce computation while maintaining receptive field.
-  2. Four branches on channel splits:
-       - Identity (dim//4 channels, no-op)
-       - 3×3 DWConv (dim//4 channels)
-       - 1×K + K×1 band DWConv (dim//4 channels, K=11)
-       - 3×3 DWConv for remaining channels (high-frequency branch)
-  3. Concatenation of branches replaces the single DWConv in ConvNeXt block.
-  4. Same patchify stem, LN-based downsampling, and LayerScale as ConvNeXt.
+  2. The token_mixer decomposes into three depthwise conv branches plus an
+     identity passthrough (branch_ratio=0.125 channels per named branch).
+  3. Block uses BatchNorm2d (not LayerNorm) and 1×1 Conv2d MLP (not Linear),
+     operating entirely in NCHW space — matches timm's MetaNeXtBlock.
+  4. Same patchify stem (Conv2d + BN2d), downsampling (BN + stride-2 Conv2d),
+     and MlpClassifierHead (fc1 → GELU → LN → fc2) as timm's InceptionNeXt.
 
-Architecture (InceptionNeXt-T, dims=(96,192,384,768)):
-  Stem     : Conv2d(4×4, stride=4) → LN               → (56×56, 96)
-  Stage 1  : 3 × InceptionNeXtBlock(96)  → LN-Down(2×) → (28×28, 192)
-  Stage 2  : 3 × InceptionNeXtBlock(192) → LN-Down(2×) → (14×14, 384)
-  Stage 3  : 9 × InceptionNeXtBlock(384) → LN-Down(2×) → (7×7,  768)
-  Stage 4  : 3 × InceptionNeXtBlock(768)               → (7×7,  768)
-  Head     : AdaptiveAvgPool(1×1) → LN → FC
+State-dict naming matches timm inception_next_tiny / small / base exactly:
+  stem.0.*            Conv2d
+  stem.1.*            BatchNorm2d
+  stages.N.downsample.0.*   BatchNorm2d  (absent for stage 0 — Identity)
+  stages.N.downsample.1.*   Conv2d
+  stages.N.blocks.M.gamma
+  stages.N.blocks.M.token_mixer.dwconv_hw.*   3×3 DWConv
+  stages.N.blocks.M.token_mixer.dwconv_w.*    1×K DWConv
+  stages.N.blocks.M.token_mixer.dwconv_h.*    K×1 DWConv
+  stages.N.blocks.M.norm.*   BatchNorm2d
+  stages.N.blocks.M.mlp.fc1.*   Conv2d 1×1
+  stages.N.blocks.M.mlp.fc2.*   Conv2d 1×1
+  head.fc1.*    Linear (expand by mlp_ratio=3)
+  head.norm.*   LayerNorm
+  head.fc2.*    Linear (→ num_classes)
 """
 
 from typing import ClassVar, cast
@@ -29,127 +36,164 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
+from lucid.models._mixins import BackboneMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.inception_next._config import InceptionNeXtConfig
 
 # ---------------------------------------------------------------------------
-# InceptionDWConv2d — multi-branch depthwise conv
+# InceptionDWConv2d — token_mixer (named to match timm)
 # ---------------------------------------------------------------------------
 
 
 class _InceptionDWConv2d(nn.Module):
-    """Decomposed DWConv with 4 parallel branches operating on channel splits.
+    """Three-branch depthwise conv mixer operating on channel splits.
 
-    Matches timm's ``InceptionDWConv2d`` with ``branch_ratio=0.125``:
-      gc = int(dim * 0.125)  (channels per small branch)
-      branch 0: identity, dim - 3*gc channels (majority passthrough)
-      branch 1: 3×3 DWConv on gc channels
-      branch 2: 1×K DWConv → K×1 DWConv on gc channels (band conv)
-      branch 3: 3×3 DWConv on gc channels (high-frequency)
-    All outputs concatenated to recover ``dim`` channels.
+    timm branch_ratio=0.125: gc = int(dim * 0.125) per named branch.
+    Branches:
+      identity passthrough  : dim - 3*gc channels
+      dwconv_hw (3×3)       : gc channels
+      dwconv_w  (1×K)       : gc channels  (band width)
+      dwconv_h  (K×1)       : gc channels  (band height)
     """
 
     def __init__(
         self, dim: int, band_kernel: int = 11, branch_ratio: float = 0.125
     ) -> None:
         super().__init__()
-        gc = int(dim * branch_ratio)  # channels per small branch
+        gc = int(dim * branch_ratio)
         self.gc = gc
-        self.identity_chs = dim - 3 * gc  # majority passthrough
+        self.identity_chs = dim - 3 * gc
 
-        # branch 1: 3×3 DWConv
-        self.dw3x3 = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
-
-        # branch 2: 1×K → K×1 (sequential band conv)
         pad = band_kernel // 2
-        self.dw_h = nn.Conv2d(gc, gc, (1, band_kernel), padding=(0, pad), groups=gc)
-        self.dw_v = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
-
-        # branch 3: 3×3 DWConv on gc channels
-        self.dw3x3_b = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
+        # Named exactly as timm's InceptionDWConv2d
+        self.dwconv_hw = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
+        self.dwconv_w = nn.Conv2d(gc, gc, (1, band_kernel), padding=(0, pad), groups=gc)
+        self.dwconv_h = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         id_chs = self.identity_chs
         gc = self.gc
-        # Split along channel dim: identity | dw3x3 | band | dw3x3_b
-        x0 = x[:, :id_chs, :, :]  # identity passthrough
-        x1 = x[:, id_chs : id_chs + gc, :, :]  # 3×3 DWConv
-        x2 = x[:, id_chs + gc : id_chs + 2 * gc, :, :]  # band conv
-        x3 = x[:, id_chs + 2 * gc :, :, :]  # high-freq 3×3
+        x0 = x[:, :id_chs, :, :]
+        x1 = x[:, id_chs : id_chs + gc, :, :]
+        x2 = x[:, id_chs + gc : id_chs + 2 * gc, :, :]
+        x3 = x[:, id_chs + 2 * gc :, :, :]
 
         y0 = x0
-        y1 = cast(Tensor, self.dw3x3(x1))
-        y2 = cast(Tensor, self.dw_v(cast(Tensor, self.dw_h(x2))))
-        y3 = cast(Tensor, self.dw3x3_b(x3))
-
+        y1 = cast(Tensor, self.dwconv_hw(x1))
+        y2 = cast(Tensor, self.dwconv_w(x2))
+        y3 = cast(Tensor, self.dwconv_h(x3))
         return lucid.cat([y0, y1, y2, y3], dim=1)
 
 
 # ---------------------------------------------------------------------------
-# InceptionNeXt block (ConvNeXt block with InceptionDWConv2d)
+# ConvMlp — 1×1 Conv2d MLP matching timm's ConvMlp
 # ---------------------------------------------------------------------------
 
 
-class _InceptionNeXtBlock(nn.Module):
-    """ConvNeXt-style block with InceptionDWConv2d replacing the 7×7 DWConv."""
+class _ConvMlp(nn.Module):
+    """1×1 Conv2d MLP: fc1 → GELU → fc2 (NCHW, no norm inside)."""
+
+    def __init__(self, dim: int, mlp_ratio: int) -> None:
+        super().__init__()
+        hidden = dim * mlp_ratio
+        self.fc1 = nn.Conv2d(dim, hidden, 1)
+        self.fc2 = nn.Conv2d(hidden, dim, 1)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = F.gelu(cast(Tensor, self.fc1(x)))
+        return cast(Tensor, self.fc2(x))
+
+
+# ---------------------------------------------------------------------------
+# MetaNeXtBlock — ConvNeXt-style block with InceptionDWConv2d token_mixer
+# ---------------------------------------------------------------------------
+
+
+class _MetaNeXtBlock(nn.Module):
+    """timm MetaNeXtBlock: token_mixer (NCHW) → BN → ConvMlp → LayerScale."""
 
     def __init__(
-        self, dim: int, band_kernel: int, layer_scale_init: float = 1e-6
+        self,
+        dim: int,
+        band_kernel: int,
+        mlp_ratio: int,
+        layer_scale_init: float = 1e-6,
     ) -> None:
         super().__init__()
-        self.dwconv = _InceptionDWConv2d(dim, band_kernel)
-        self.norm = nn.LayerNorm(dim)
-        self.fc1 = nn.Linear(dim, 4 * dim)
-        self.fc2 = nn.Linear(4 * dim, dim)
+        self.token_mixer = _InceptionDWConv2d(dim, band_kernel)
+        self.norm = nn.BatchNorm2d(dim)
+        self.mlp = _ConvMlp(dim, mlp_ratio)
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
-        x = cast(Tensor, self.dwconv(x))  # (B, C, H, W)
-        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
+        x = cast(Tensor, self.token_mixer(x))
         x = cast(Tensor, self.norm(x))
-        x = F.gelu(cast(Tensor, self.fc1(x)))
-        x = cast(Tensor, self.fc2(x))
-        x = x * self.gamma  # layer scale
-        x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
+        x = cast(Tensor, self.mlp(x))
+        x = x * self.gamma.reshape(-1, 1, 1)
         return shortcut + x
 
 
 # ---------------------------------------------------------------------------
-# Downsampling (same as ConvNeXt: LN + stride-2 conv)
+# Stage — holds downsample + blocks (matches timm's MetaNeXtStage)
 # ---------------------------------------------------------------------------
 
 
-class _Downsample(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
+class _Stage(nn.Module):
+    """One InceptionNeXt stage: optional downsample + sequential blocks."""
+
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        depth: int,
+        band_kernel: int,
+        mlp_ratio: int,
+        *,
+        downsample: bool,
+    ) -> None:
         super().__init__()
-        self.norm = nn.LayerNorm(in_dim)
-        self.conv = nn.Conv2d(in_dim, out_dim, 2, stride=2)
+        if downsample:
+            # timm: Sequential(BN2d(in_dim), Conv2d(in_dim→out_dim, 2, stride=2))
+            self.downsample: nn.Module = nn.Sequential(
+                nn.BatchNorm2d(in_dim),
+                nn.Conv2d(in_dim, out_dim, 2, stride=2),
+            )
+        else:
+            self.downsample = nn.Identity()
+
+        self.blocks = nn.Sequential(
+            *[_MetaNeXtBlock(out_dim, band_kernel, mlp_ratio) for _ in range(depth)]
+        )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x.permute(0, 2, 3, 1)
-        x = cast(Tensor, self.norm(x))
-        x = x.permute(0, 3, 1, 2)
-        return cast(Tensor, self.conv(x))
+        x = cast(Tensor, self.downsample(x))
+        return cast(Tensor, self.blocks(x))
 
 
 # ---------------------------------------------------------------------------
-# Stem + norm wrapper (same as ConvNeXt)
+# MlpClassifierHead — head.fc1 / head.norm / head.fc2 (matches timm)
 # ---------------------------------------------------------------------------
 
 
-class _StemWithNorm(nn.Module):
-    def __init__(self, dim: int, in_channels: int) -> None:
+class _MlpClassifierHead(nn.Module):
+    """timm MlpClassifierHead: GlobalAvgPool → fc1 → GELU → norm → fc2."""
+
+    def __init__(self, in_features: int, num_classes: int, mlp_ratio: int = 3) -> None:
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, dim, 4, stride=4)
-        self.norm = nn.LayerNorm(dim)
+        hidden = in_features * mlp_ratio
+        self.fc1 = nn.Linear(in_features, hidden)
+        # timm uses eps=1e-6 for the head LayerNorm
+        self.norm = nn.LayerNorm(hidden, eps=1e-6)
+        self.fc2 = nn.Linear(hidden, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(x))
-        x = x.permute(0, 2, 3, 1)
+        # x: (B, C, H, W) — apply global avg pool, then mlp
+        x = x.mean(dim=(2, 3))  # (B, C)
+        x = cast(Tensor, self.fc1(x))
+        x = F.gelu(x)
         x = cast(Tensor, self.norm(x))
-        return x.permute(0, 3, 1, 2)
+        return cast(Tensor, self.fc2(x))
 
 
 # ---------------------------------------------------------------------------
@@ -158,41 +202,38 @@ class _StemWithNorm(nn.Module):
 
 
 def _build_inception_next(cfg: InceptionNeXtConfig) -> tuple[
-    _StemWithNorm,
+    nn.Sequential,
     nn.ModuleList,
-    nn.ModuleList,
-    nn.LayerNorm,
     list[FeatureInfo],
     int,
 ]:
-    stem = _StemWithNorm(cfg.dims[0], cfg.in_channels)
+    # stem.0 = Conv2d, stem.1 = BN2d
+    stem = nn.Sequential(
+        nn.Conv2d(cfg.in_channels, cfg.dims[0], 4, stride=4),
+        nn.BatchNorm2d(cfg.dims[0]),
+    )
 
     stages: list[nn.Module] = []
-    downsamplers: list[nn.Module] = []
     fi: list[FeatureInfo] = []
     reduction = 4
 
+    mlp_ratios = cfg.mlp_ratios
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
-        stage = nn.Sequential(
-            *[_InceptionNeXtBlock(dim, cfg.band_kernel) for _ in range(depth)]
+        in_dim = cfg.dims[i - 1] if i > 0 else dim
+        stage = _Stage(
+            in_dim=in_dim,
+            out_dim=dim,
+            depth=depth,
+            band_kernel=cfg.band_kernel,
+            mlp_ratio=mlp_ratios[i],
+            downsample=(i > 0),
         )
         stages.append(stage)
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
-
-        if i < len(cfg.depths) - 1:
-            next_dim = cfg.dims[i + 1]
-            downsamplers.append(_Downsample(dim, next_dim))
+        if i > 0:
             reduction *= 2
 
-    head_norm = nn.LayerNorm(cfg.dims[-1])
-    return (
-        stem,
-        nn.ModuleList(stages),
-        nn.ModuleList(downsamplers),
-        head_norm,
-        fi,
-        cfg.dims[-1],
-    )
+    return stem, nn.ModuleList(stages), fi, cfg.dims[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -208,14 +249,11 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: InceptionNeXtConfig) -> None:
         super().__init__(config)
-        stem, stages, downs, hn, fi, out_dim = _build_inception_next(config)
+        stem, stages, fi, out_dim = _build_inception_next(config)
         self.stem = stem
         self.stages = stages
-        self.downsamplers = downs
-        self.head_norm = hn
         self._feature_info = fi
         self._out_dim = out_dim
-        self.avgpool = nn.AdaptiveAvgPool2d(1)
 
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -223,15 +261,9 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 
     def forward_features(self, x: Tensor) -> Tensor:
         x = cast(Tensor, self.stem(x))
-        for i, stage in enumerate(self.stages):
+        for stage in self.stages:
             x = cast(Tensor, stage(x))
-            if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
-        x = cast(Tensor, self.avgpool(x)).flatten(1)
-        # head norm in channel-last
-        x = x.unsqueeze(-1).unsqueeze(-1).permute(0, 2, 3, 1)
-        x = cast(Tensor, self.head_norm(x))
-        return x.flatten(1)
+        return x.mean(dim=(2, 3))  # (B, C)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
@@ -243,21 +275,18 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 
 
-class InceptionNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """InceptionNeXt with AdaptiveAvgPool + LN + FC classifier."""
+class InceptionNeXtForImageClassification(PretrainedModel):
+    """InceptionNeXt with MlpClassifierHead (fc1 → GELU → LN → fc2)."""
 
     config_class: ClassVar[type[InceptionNeXtConfig]] = InceptionNeXtConfig
     base_model_prefix: ClassVar[str] = "inception_next"
 
     def __init__(self, config: InceptionNeXtConfig) -> None:
         super().__init__(config)
-        stem, stages, downs, hn, _, out_dim = _build_inception_next(config)
+        stem, stages, _, out_dim = _build_inception_next(config)
         self.stem = stem
         self.stages = stages
-        self.downsamplers = downs
-        self.head_norm = hn
-        self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self._build_classifier(out_dim, config.num_classes)
+        self.head = _MlpClassifierHead(out_dim, config.num_classes)
 
     def forward(  # type: ignore[override]
         self,
@@ -265,15 +294,9 @@ class InceptionNeXtForImageClassification(PretrainedModel, ClassificationHeadMix
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = cast(Tensor, self.stem(x))
-        for i, stage in enumerate(self.stages):
+        for stage in self.stages:
             x = cast(Tensor, stage(x))
-            if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
-        x = cast(Tensor, self.avgpool(x)).flatten(1)
-        x = x.unsqueeze(-1).unsqueeze(-1).permute(0, 2, 3, 1)
-        x = cast(Tensor, self.head_norm(x))
-        x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = cast(Tensor, self.head(x))
 
         loss: Tensor | None = None
         if labels is not None:

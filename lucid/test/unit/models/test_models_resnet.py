@@ -32,6 +32,7 @@ class TestResNetConfig(unittest.TestCase):
 
     def test_json_round_trip_coerces_tuples(self) -> None:
         import json, tempfile, os
+
         cfg = ResNetConfig(block_type="basic", layers=(2, 2, 2, 2))
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             path = f.name
@@ -105,6 +106,7 @@ class TestResNetBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 64, 64)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)
@@ -120,9 +122,7 @@ class TestResNetBackbone(unittest.TestCase):
 class TestResNetClassifier(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.cfg = ResNetConfig(
-            block_type="basic", layers=(2, 2, 2, 2), num_classes=10
-        )
+        self.cfg = ResNetConfig(block_type="basic", layers=(2, 2, 2, 2), num_classes=10)
         self.model = ResNetForImageClassification(self.cfg)
         self.model.eval()
 
@@ -225,6 +225,7 @@ class TestResNetSerialization(unittest.TestCase):
 
     def test_config_saved_as_json(self) -> None:
         import json, os
+
         m = resnet_50_cls()
         with tempfile.TemporaryDirectory() as tmp:
             m.save_pretrained(tmp)

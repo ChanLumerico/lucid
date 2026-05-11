@@ -1,8 +1,10 @@
 """SENet backbone and classification head (Hu et al., 2017).
 
 Paper: "Squeeze-and-Excitation Networks"
-SE block: AdaptiveAvgPool2d(1) → FC(C→C//r) → ReLU → FC(C//r→C) → Sigmoid
+SE block: AdaptiveAvgPool2d(1) → Conv2d(C→rd_C,1×1) → ReLU
+          → Conv2d(rd_C→C,1×1) → Sigmoid
 The SE output is multiplied channel-wise with the block's feature map.
+rd_channels = make_divisible(C / 16, divisor=8).
 """
 
 from typing import ClassVar, cast
@@ -16,30 +18,42 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.senet._config import SENetConfig
 
 # ---------------------------------------------------------------------------
-# Squeeze-Excitation block
+# Helper — make_divisible(v, divisor)
+# ---------------------------------------------------------------------------
+
+
+def _make_divisible(v: float, divisor: int) -> int:
+    """Round *v* up to the nearest multiple of *divisor*, at least *divisor*."""
+    return max(divisor, int(v + divisor / 2) // divisor * divisor)
+
+
+# ---------------------------------------------------------------------------
+# Squeeze-Excitation block (timm-accurate)
 # ---------------------------------------------------------------------------
 
 
 class _SEBlock(nn.Module):
-    """Channel-wise squeeze-and-excitation gate."""
+    """Channel-wise squeeze-and-excitation gate — matches timm's SqueezeExcite.
+
+    Uses Conv2d fc1/fc2 (kernel 1×1, bias=True) so the gate operates entirely
+    in 4-D space without any flatten/reshape.
+    rd_channels = make_divisible(channels / 16, divisor=8).
+    """
 
     def __init__(self, channels: int, reduction: int = 16) -> None:
         super().__init__()
-        reduced = max(1, channels // reduction)
+        rd_channels = _make_divisible(channels / reduction, divisor=8)
         self.pool = nn.AdaptiveAvgPool2d(1)
-        self.fc1 = nn.Linear(channels, reduced, bias=True)
-        self.fc2 = nn.Linear(reduced, channels, bias=True)
+        self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=True)
+        self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=True)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        b, c = x.shape[0], x.shape[1]
-        # Squeeze
+        # Squeeze: (B, C, H, W) → (B, C, 1, 1)
         s = cast(Tensor, self.pool(x))
-        s = s.reshape(b, c)
-        # Excite
+        # Excite: Conv2d operates on 4-D directly
         s = F.relu(cast(Tensor, self.fc1(s)))
         s = F.sigmoid(cast(Tensor, self.fc2(s)))
-        # Scale: reshape to (B, C, 1, 1) for broadcast
-        s = s.reshape(b, c, 1, 1)
+        # Broadcast-multiply (B, C, 1, 1) × (B, C, H, W)
         return x * s
 
 
@@ -185,7 +199,8 @@ def _make_layer(
 def _build_body(
     config: SENetConfig,
 ) -> tuple[
-    nn.Sequential,
+    nn.Conv2d,
+    nn.BatchNorm2d,
     nn.MaxPool2d,
     nn.Sequential,
     nn.Sequential,
@@ -193,19 +208,22 @@ def _build_body(
     nn.Sequential,
     list[FeatureInfo],
 ]:
+    """Build all sub-modules for an SE-ResNet body.
+
+    Returns individual stem components (conv1, bn1) rather than a fused
+    Sequential, so state-dict keys match timm's seresnet naming:
+    ``conv1.weight``, ``bn1.*``, ``layer1.*``, …, ``layer4.*``.
+    """
     block_cls: _BlockType = (
         _SEBasicBlock if config.block_type == "basic" else _SEBottleneck
     )
     stem_channels = 64
     hidden_sizes = (64, 128, 256, 512)
 
-    stem = nn.Sequential(
-        nn.Conv2d(
-            config.in_channels, stem_channels, 7, stride=2, padding=3, bias=False
-        ),
-        nn.BatchNorm2d(stem_channels),
-        nn.ReLU(inplace=True),
+    conv1 = nn.Conv2d(
+        config.in_channels, stem_channels, 7, stride=2, padding=3, bias=False
     )
+    bn1 = nn.BatchNorm2d(stem_channels)
     pool = nn.MaxPool2d(3, stride=2, padding=1)
 
     cur = stem_channels
@@ -229,7 +247,7 @@ def _build_body(
         FeatureInfo(stage=3, num_channels=hidden_sizes[2] * exp, reduction=16),
         FeatureInfo(stage=4, num_channels=hidden_sizes[3] * exp, reduction=32),
     ]
-    return stem, pool, layer1, layer2, layer3, layer4, feature_info
+    return conv1, bn1, pool, layer1, layer2, layer3, layer4, feature_info
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +260,9 @@ class SENet(PretrainedModel, BackboneMixin):
 
     Output: ``BaseModelOutput`` with ``last_hidden_state`` of shape
     ``(B, C, H/32, W/32)`` from stage-4.
+
+    State-dict keys follow timm's seresnet layout:
+    ``conv1.*``, ``bn1.*``, ``layer1.*`` … ``layer4.*``.
     """
 
     config_class: ClassVar[type[SENetConfig]] = SENetConfig
@@ -249,8 +270,9 @@ class SENet(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: SENetConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, fi = _build_body(config)
-        self.stem = stem
+        conv1, bn1, pool, l1, l2, l3, l4, fi = _build_body(config)
+        self.conv1 = conv1
+        self.bn1 = bn1
         self.maxpool = pool
         self.layer1 = l1
         self.layer2 = l2
@@ -263,7 +285,7 @@ class SENet(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         x = cast(Tensor, self.maxpool(x))
         x = cast(Tensor, self.layer1(x))
         x = cast(Tensor, self.layer2(x))
@@ -281,15 +303,20 @@ class SENet(PretrainedModel, BackboneMixin):
 
 
 class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """SE-ResNet with global average pooling + linear classification head."""
+    """SE-ResNet with global average pooling + linear classification head.
+
+    State-dict keys follow timm's seresnet layout:
+    ``conv1.*``, ``bn1.*``, ``layer1.*`` … ``layer4.*``, ``fc.*``.
+    """
 
     config_class: ClassVar[type[SENetConfig]] = SENetConfig
     base_model_prefix: ClassVar[str] = "senet"
 
     def __init__(self, config: SENetConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, _ = _build_body(config)
-        self.stem = stem
+        conv1, bn1, pool, l1, l2, l3, l4, _ = _build_body(config)
+        self.conv1 = conv1
+        self.bn1 = bn1
         self.maxpool = pool
         self.layer1 = l1
         self.layer2 = l2
@@ -301,14 +328,14 @@ class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         )
         final_channels = 512 * block_cls.expansion
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self._build_classifier(final_channels, config.num_classes)
+        self.fc = nn.Linear(final_channels, config.num_classes)
 
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         x = cast(Tensor, self.maxpool(x))
         x = cast(Tensor, self.layer1(x))
         x = cast(Tensor, self.layer2(x))
@@ -316,7 +343,7 @@ class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x = cast(Tensor, self.layer4(x))
         x = cast(Tensor, self.avgpool(x))
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = cast(Tensor, self.fc(x))
 
         loss: Tensor | None = None
         if labels is not None:

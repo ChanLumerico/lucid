@@ -33,7 +33,11 @@ class InceptionNeXtConfig(ModelConfig):
     depths: tuple[int, ...] = (3, 3, 9, 3)
     dims: tuple[int, ...] = (96, 192, 384, 768)
     band_kernel: int = 11
+    # Per-stage MLP expansion ratios.  When None, defaults to (4, 4, 4, 3) which
+    # matches timm inception_next_tiny / small / base (final stage uses 3×).
+    mlp_ratios: tuple[int, ...] = (4, 4, 4, 3)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "dims", tuple(self.dims))
+        object.__setattr__(self, "mlp_ratios", tuple(self.mlp_ratios))

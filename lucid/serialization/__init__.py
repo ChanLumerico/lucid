@@ -373,6 +373,7 @@ def _require_safetensors() -> object:
     """Import safetensors.numpy, raising a helpful error if not installed."""
     try:
         import safetensors.numpy as _st
+
         return _st
     except ImportError:
         raise ImportError(
@@ -495,6 +496,10 @@ def load_safetensors(
 
 
 __all__ = [
-    "save", "load", "save_sharded", "load_sharded",
-    "save_safetensors", "load_safetensors",
+    "save",
+    "load",
+    "save_sharded",
+    "load_sharded",
+    "save_safetensors",
+    "load_safetensors",
 ]

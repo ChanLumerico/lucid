@@ -35,10 +35,10 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.swin._config import SwinConfig
 
-
 # ---------------------------------------------------------------------------
 # Patch embedding (non-overlapping, stride = patch_size)
 # ---------------------------------------------------------------------------
+
 
 class _PatchEmbed(nn.Module):
     def __init__(self, in_ch: int, patch_size: int, embed_dim: int) -> None:
@@ -46,12 +46,10 @@ class _PatchEmbed(nn.Module):
         self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=patch_size)
         self.norm = nn.LayerNorm(embed_dim)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
-        x = cast(Tensor, self.proj(x))          # (B, C, H, W)
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.proj(x))  # (B, C, H, W)
         B, C, H, W = x.shape
-        x = x.permute(0, 2, 3, 1)              # (B, H, W, C)
+        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
         return x
 
@@ -60,29 +58,29 @@ class _PatchEmbed(nn.Module):
 # Patch merging (spatial 2× downsampling + channel 2× expansion)
 # ---------------------------------------------------------------------------
 
+
 class _PatchMerge(nn.Module):
     def __init__(self, dim: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(4 * dim)
         self.proj = nn.Linear(4 * dim, 2 * dim, bias=False)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, H, W, C)
         B, H, W, C = x.shape
         x0 = x[:, 0::2, 0::2, :]
         x1 = x[:, 1::2, 0::2, :]
         x2 = x[:, 0::2, 1::2, :]
         x3 = x[:, 1::2, 1::2, :]
-        x = lucid.cat([x0, x1, x2, x3], dim=-1)   # (B, H/2, W/2, 4C)
+        x = lucid.cat([x0, x1, x2, x3], dim=-1)  # (B, H/2, W/2, 4C)
         x = cast(Tensor, self.norm(x))
-        return cast(Tensor, self.proj(x))           # (B, H/2, W/2, 2C)
+        return cast(Tensor, self.proj(x))  # (B, H/2, W/2, 2C)
 
 
 # ---------------------------------------------------------------------------
 # Window partition / reverse helpers
 # ---------------------------------------------------------------------------
+
 
 def _window_partition(x: Tensor, ws: int) -> tuple[Tensor, int, int]:
     """Split (B, H, W, C) into (num_windows*B, ws, ws, C)."""
@@ -106,6 +104,7 @@ def _window_reverse(windows: Tensor, ws: int, nH: int, nW: int) -> Tensor:
 # Window Multi-Head Self-Attention with relative position bias
 # ---------------------------------------------------------------------------
 
+
 class _WindowAttention(nn.Module):
     """Local window attention with learnable relative position bias."""
 
@@ -121,10 +120,10 @@ class _WindowAttention(nn.Module):
         self.ws = window_size
         self.num_heads = num_heads
         head_dim = dim // num_heads
-        self.scale = head_dim ** -0.5
+        self.scale = head_dim**-0.5
 
-        self.qkv   = nn.Linear(dim, dim * 3, bias=True)
-        self.proj  = nn.Linear(dim, dim)
+        self.qkv = nn.Linear(dim, dim * 3, bias=True)
+        self.proj = nn.Linear(dim, dim)
         self.attn_drop = nn.Dropout(p=attn_drop)
 
         # Relative position bias table: (2W-1)^2 × num_heads
@@ -135,10 +134,12 @@ class _WindowAttention(nn.Module):
         # Pre-compute relative position index as int64 (no in-place ops)
         coords_1d = lucid.arange(window_size).to(lucid.int64)
         gy, gx = lucid.meshgrid(coords_1d, coords_1d, indexing="ij")  # (ws, ws)
-        flat_y, flat_x = gy.flatten(), gx.flatten()                    # (ws^2,)
-        rel_y = flat_y.unsqueeze(1) - flat_y.unsqueeze(0) + (window_size - 1)  # (ws^2, ws^2)
+        flat_y, flat_x = gy.flatten(), gx.flatten()  # (ws^2,)
+        rel_y = (
+            flat_y.unsqueeze(1) - flat_y.unsqueeze(0) + (window_size - 1)
+        )  # (ws^2, ws^2)
         rel_x = flat_x.unsqueeze(1) - flat_x.unsqueeze(0) + (window_size - 1)
-        rel_idx = rel_y * (2 * window_size - 1) + rel_x               # (ws^2, ws^2)
+        rel_idx = rel_y * (2 * window_size - 1) + rel_x  # (ws^2, ws^2)
         self.rel_pos_idx: Tensor
         object.__setattr__(self, "rel_pos_idx", rel_idx)
 
@@ -147,7 +148,7 @@ class _WindowAttention(nn.Module):
         x: Tensor,
         mask: Tensor | None = None,
     ) -> Tensor:
-        B_, N, C = x.shape                                       # B_ = num_windows*B
+        B_, N, C = x.shape  # B_ = num_windows*B
         qkv = cast(Tensor, self.qkv(x))
         qkv = qkv.reshape(B_, N, 3, self.num_heads, C // self.num_heads)
         qkv = qkv.permute(2, 0, 3, 1, 4)
@@ -157,9 +158,12 @@ class _WindowAttention(nn.Module):
 
         # Relative position bias
         idx = self.rel_pos_idx.reshape(-1)
-        bias = self.rel_pos_bias[idx].reshape(
-            self.ws * self.ws, self.ws * self.ws, self.num_heads
-        ).permute(2, 0, 1).unsqueeze(0)
+        bias = (
+            self.rel_pos_bias[idx]
+            .reshape(self.ws * self.ws, self.ws * self.ws, self.num_heads)
+            .permute(2, 0, 1)
+            .unsqueeze(0)
+        )
         attn = attn + bias
 
         if mask is not None:
@@ -180,6 +184,7 @@ class _WindowAttention(nn.Module):
 # Swin Transformer block
 # ---------------------------------------------------------------------------
 
+
 class _SwinBlock(nn.Module):
     """One Swin Transformer block (regular or shifted window)."""
 
@@ -199,10 +204,10 @@ class _SwinBlock(nn.Module):
         self.shift_size = window_size // 2 if shift else 0
 
         self.norm1 = nn.LayerNorm(dim)
-        self.attn  = _WindowAttention(dim, window_size, num_heads, attn_drop)
+        self.attn = _WindowAttention(dim, window_size, num_heads, attn_drop)
         self.norm2 = nn.LayerNorm(dim)
-        mlp_dim    = int(dim * mlp_ratio)
-        self.mlp   = nn.Sequential(
+        mlp_dim = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(
             nn.Linear(dim, mlp_dim),
             nn.GELU(),
             nn.Dropout(p=dropout),
@@ -223,16 +228,16 @@ class _SwinBlock(nn.Module):
             for sw in slices_w:
                 img_mask[0, sh, sw, 0] = cnt
                 cnt += 1
-        mask_windows, nH, nW = _window_partition(img_mask, ws)        # (nW, ws, ws, 1)
-        mask_windows = mask_windows.reshape(-1, ws * ws)               # (nW, ws^2)
-        mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)   # (nW, ws^2, ws^2)
+        mask_windows, nH, nW = _window_partition(img_mask, ws)  # (nW, ws, ws, 1)
+        mask_windows = mask_windows.reshape(-1, ws * ws)  # (nW, ws^2)
+        mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)  # (nW, ws^2, ws^2)
         # Replace non-zero with -100
-        mask = lucid.where(mask != 0, lucid.full(mask.shape, -100.0), lucid.zeros(mask.shape))
+        mask = lucid.where(
+            mask != 0, lucid.full(mask.shape, -100.0), lucid.zeros(mask.shape)
+        )
         return mask
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, H, W, C = x.shape
         shortcut = x
         x = cast(Tensor, self.norm1(x))
@@ -262,6 +267,7 @@ class _SwinBlock(nn.Module):
 # Swin stage (sequence of blocks + optional patch merge)
 # ---------------------------------------------------------------------------
 
+
 class _SwinStage(nn.Module):
     def __init__(
         self,
@@ -275,21 +281,23 @@ class _SwinStage(nn.Module):
         downsample: bool,
     ) -> None:
         super().__init__()
-        self.blocks = nn.ModuleList([
-            _SwinBlock(
-                dim, num_heads, window_size,
-                shift=(i % 2 == 1),
-                mlp_ratio=mlp_ratio,
-                dropout=dropout,
-                attn_drop=attn_drop,
-            )
-            for i in range(depth)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                _SwinBlock(
+                    dim,
+                    num_heads,
+                    window_size,
+                    shift=(i % 2 == 1),
+                    mlp_ratio=mlp_ratio,
+                    dropout=dropout,
+                    attn_drop=attn_drop,
+                )
+                for i in range(depth)
+            ]
+        )
         self.downsample: nn.Module | None = _PatchMerge(dim) if downsample else None
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         if self.downsample is not None:
@@ -301,9 +309,10 @@ class _SwinStage(nn.Module):
 # Shared trunk builder
 # ---------------------------------------------------------------------------
 
-def _build_swin(cfg: SwinConfig) -> tuple[
-    _PatchEmbed, nn.ModuleList, nn.LayerNorm, list[FeatureInfo], int
-]:
+
+def _build_swin(
+    cfg: SwinConfig,
+) -> tuple[_PatchEmbed, nn.ModuleList, nn.LayerNorm, list[FeatureInfo], int]:
     patch_embed = _PatchEmbed(cfg.in_channels, cfg.patch_size, cfg.embed_dim)
 
     stages: list[nn.Module] = []
@@ -312,12 +321,19 @@ def _build_swin(cfg: SwinConfig) -> tuple[
     reduction = cfg.patch_size
 
     for i, (depth, heads) in enumerate(zip(cfg.depths, cfg.num_heads)):
-        downsample = (i < len(cfg.depths) - 1)
-        stages.append(_SwinStage(
-            dim, depth, heads, cfg.window_size,
-            cfg.mlp_ratio, cfg.dropout, cfg.attention_dropout,
-            downsample,
-        ))
+        downsample = i < len(cfg.depths) - 1
+        stages.append(
+            _SwinStage(
+                dim,
+                depth,
+                heads,
+                cfg.window_size,
+                cfg.mlp_ratio,
+                cfg.dropout,
+                cfg.attention_dropout,
+                downsample,
+            )
+        )
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
         if downsample:
             reduction *= 2
@@ -331,6 +347,7 @@ def _build_swin(cfg: SwinConfig) -> tuple[
 # Swin Transformer backbone  (task="base")
 # ---------------------------------------------------------------------------
 
+
 class SwinTransformer(PretrainedModel, BackboneMixin):
     """Swin Transformer feature extractor — outputs (B, C) global avg-pooled feature."""
 
@@ -341,30 +358,28 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
         super().__init__(config)
         pe, stages, norm, fi, out_dim = _build_swin(config)
         self.patch_embed = pe
-        self.stages      = stages
-        self.norm        = norm
+        self.stages = stages
+        self.norm = norm
         self._feature_info = fi
-        self._out_dim    = out_dim
-        self.avgpool     = nn.AdaptiveAvgPool2d(1)
+        self._out_dim = out_dim
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
 
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.patch_embed(x))   # (B, H/p, W/p, C)
+        x = cast(Tensor, self.patch_embed(x))  # (B, H/p, W/p, C)
         for stage in self.stages:
             x = cast(Tensor, stage(x))
-        x = cast(Tensor, self.norm(x))   # (B, H', W', C)
+        x = cast(Tensor, self.norm(x))  # (B, H', W', C)
         # Global average pool: permute to (B, C, H', W') → avgpool → flatten
         B, H, W, C = x.shape
-        x = x.permute(0, 3, 1, 2)       # (B, C, H', W')
+        x = x.permute(0, 3, 1, 2)  # (B, C, H', W')
         x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
         return x
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -372,6 +387,7 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 # Swin Transformer for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class SwinTransformerForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """Swin Transformer with global average pool + FC classification head."""
@@ -383,9 +399,9 @@ class SwinTransformerForImageClassification(PretrainedModel, ClassificationHeadM
         super().__init__(config)
         pe, stages, norm, _, out_dim = _build_swin(config)
         self.patch_embed = pe
-        self.stages      = stages
-        self.norm        = norm
-        self.avgpool     = nn.AdaptiveAvgPool2d(1)
+        self.stages = stages
+        self.norm = norm
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._build_classifier(out_dim, config.num_classes)
 
     def forward(  # type: ignore[override]

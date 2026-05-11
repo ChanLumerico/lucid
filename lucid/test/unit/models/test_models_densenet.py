@@ -27,6 +27,7 @@ class TestDenseNetConfig(unittest.TestCase):
 
     def test_tuple_coercion(self) -> None:
         import json, os
+
         cfg = DenseNetConfig(block_config=(6, 12, 32, 32))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -58,7 +59,9 @@ class TestDenseNetParamCounts(unittest.TestCase):
         self.assertEqual(densenet_201().num_parameters(), 18_092_928)
 
     def test_densenet264_has_more_params(self) -> None:
-        self.assertGreater(densenet_264().num_parameters(), densenet_201().num_parameters())
+        self.assertGreater(
+            densenet_264().num_parameters(), densenet_201().num_parameters()
+        )
 
 
 class TestDenseNetBackbone(unittest.TestCase):
@@ -79,6 +82,7 @@ class TestDenseNetBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(2, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)
@@ -115,7 +119,9 @@ class TestDenseNetClassifier(unittest.TestCase):
         self.assertEqual(out.loss.shape, ())
 
     def test_custom_classes_and_dropout(self) -> None:
-        cfg = DenseNetConfig(block_config=(6, 12, 24, 16), num_classes=10, dropout_rate=0.2)
+        cfg = DenseNetConfig(
+            block_config=(6, 12, 24, 16), num_classes=10, dropout_rate=0.2
+        )
         m = DenseNetForImageClassification(cfg)
         m.eval()
         x = lucid.randn(1, 3, 224, 224)

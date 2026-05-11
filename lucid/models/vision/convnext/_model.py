@@ -36,10 +36,10 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.convnext._config import ConvNeXtConfig
 
-
 # ---------------------------------------------------------------------------
 # ConvNeXt block
 # ---------------------------------------------------------------------------
+
 
 class _ConvNeXtBlock(nn.Module):
     """Depthwise 7×7 + inverted-bottleneck MLP + layer scale."""
@@ -47,22 +47,20 @@ class _ConvNeXtBlock(nn.Module):
     def __init__(self, dim: int, layer_scale_init: float) -> None:
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, 7, padding=3, groups=dim)
-        self.norm   = nn.LayerNorm(dim)
-        self.fc1    = nn.Linear(dim, 4 * dim)
-        self.fc2    = nn.Linear(4 * dim, dim)
-        self.gamma  = nn.Parameter(lucid.full((dim,), layer_scale_init))
+        self.norm = nn.LayerNorm(dim)
+        self.fc1 = nn.Linear(dim, 4 * dim)
+        self.fc2 = nn.Linear(4 * dim, dim)
+        self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
-        x = cast(Tensor, self.dwconv(x))          # (B, C, H, W)
-        x = x.permute(0, 2, 3, 1)                 # (B, H, W, C)
+        x = cast(Tensor, self.dwconv(x))  # (B, C, H, W)
+        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
         x = F.gelu(cast(Tensor, self.fc1(x)))
         x = cast(Tensor, self.fc2(x))
-        x = x * self.gamma                         # layer scale
-        x = x.permute(0, 3, 1, 2)                 # (B, C, H, W)
+        x = x * self.gamma  # layer scale
+        x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
         return shortcut + x
 
 
@@ -70,15 +68,14 @@ class _ConvNeXtBlock(nn.Module):
 # Downsampling between stages
 # ---------------------------------------------------------------------------
 
+
 class _Downsample(nn.Module):
     def __init__(self, in_dim: int, out_dim: int) -> None:
         super().__init__()
         self.norm = nn.LayerNorm(in_dim)
         self.conv = nn.Conv2d(in_dim, out_dim, 2, stride=2)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, C, H, W) → norm in channel-last → back → strided conv
         x = x.permute(0, 2, 3, 1)
         x = cast(Tensor, self.norm(x))
@@ -90,13 +87,14 @@ class _Downsample(nn.Module):
 # Shared trunk builder
 # ---------------------------------------------------------------------------
 
+
 def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
-    _StemWithNorm,      # stem
-    nn.ModuleList,      # stages
-    nn.ModuleList,      # downsamplers (len = num_stages - 1)
-    nn.LayerNorm,       # head norm
+    _StemWithNorm,  # stem
+    nn.ModuleList,  # stages
+    nn.ModuleList,  # downsamplers (len = num_stages - 1)
+    nn.LayerNorm,  # head norm
     list[FeatureInfo],
-    int,                # final channels
+    int,  # final channels
 ]:
     # Patchify stem
     stem = nn.Sequential(
@@ -111,10 +109,9 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
     reduction = 4
 
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
-        stage = nn.Sequential(*[
-            _ConvNeXtBlock(dim, cfg.layer_scale_init)
-            for _ in range(depth)
-        ])
+        stage = nn.Sequential(
+            *[_ConvNeXtBlock(dim, cfg.layer_scale_init) for _ in range(depth)]
+        )
         stages.append(stage)
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
 
@@ -128,7 +125,14 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
     # Wrap stem + stem_norm together
     full_stem = _StemWithNorm(stem, stem_norm)
 
-    return full_stem, nn.ModuleList(stages), nn.ModuleList(downsamplers), head_norm, fi, cfg.dims[-1]
+    return (
+        full_stem,
+        nn.ModuleList(stages),
+        nn.ModuleList(downsamplers),
+        head_norm,
+        fi,
+        cfg.dims[-1],
+    )
 
 
 class _StemWithNorm(nn.Module):
@@ -137,18 +141,17 @@ class _StemWithNorm(nn.Module):
         self.conv = conv
         self.norm = norm
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
-        x = cast(Tensor, self.conv(x))             # (B, C, H, W)
-        x = x.permute(0, 2, 3, 1)                 # (B, H, W, C)
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.conv(x))  # (B, C, H, W)
+        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
-        return x.permute(0, 3, 1, 2)              # (B, C, H, W)
+        return x.permute(0, 3, 1, 2)  # (B, C, H, W)
 
 
 # ---------------------------------------------------------------------------
 # ConvNeXt backbone  (task="base")
 # ---------------------------------------------------------------------------
+
 
 class ConvNeXt(PretrainedModel, BackboneMixin):
     """ConvNeXt feature extractor — global-average-pooled final-stage features."""
@@ -161,12 +164,12 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
     def __init__(self, config: ConvNeXtConfig) -> None:
         super().__init__(config)
         stem, stages, downs, hn, fi, out_dim = _build_convnext(config)
-        self.stem         = stem
-        self.stages       = stages
+        self.stem = stem
+        self.stages = stages
         self.downsamplers = downs
-        self.head_norm    = hn
+        self.head_norm = hn
         self._feature_info = fi
-        self.avgpool      = nn.AdaptiveAvgPool2d(1)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
 
     @property
     def feature_info(self) -> list[FeatureInfo]:
@@ -178,16 +181,14 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
             x = cast(Tensor, stage(x))
             if i < len(self.downsamplers):
                 x = cast(Tensor, self.downsamplers[i](x))
-        x = cast(Tensor, self.avgpool(x)).flatten(1)   # (B, C)
-        x = x.unsqueeze(-1).unsqueeze(-1)              # keep (B,C,1,1) for consistency
+        x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
+        x = x.unsqueeze(-1).unsqueeze(-1)  # keep (B,C,1,1) for consistency
         # Apply head norm in channel-last
         x = x.permute(0, 2, 3, 1)
         x = cast(Tensor, self.head_norm(x))
-        return x.permute(0, 3, 1, 2).flatten(1)        # (B, C)
+        return x.permute(0, 3, 1, 2).flatten(1)  # (B, C)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
         return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
 
@@ -195,6 +196,7 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
 # ---------------------------------------------------------------------------
 # ConvNeXt for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """ConvNeXt with AdaptiveAvgPool + LN + FC classifier."""
@@ -207,11 +209,11 @@ class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
     def __init__(self, config: ConvNeXtConfig) -> None:
         super().__init__(config)
         stem, stages, downs, hn, _, out_dim = _build_convnext(config)
-        self.stem         = stem
-        self.stages       = stages
+        self.stem = stem
+        self.stages = stages
         self.downsamplers = downs
-        self.head_norm    = hn
-        self.avgpool      = nn.AdaptiveAvgPool2d(1)
+        self.head_norm = hn
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
         self._build_classifier(out_dim, config.num_classes)
 
     def forward(  # type: ignore[override]

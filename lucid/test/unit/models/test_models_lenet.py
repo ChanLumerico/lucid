@@ -33,6 +33,7 @@ class TestLeNetConfig(unittest.TestCase):
 
     def test_json_round_trip(self) -> None:
         import json, os
+
         cfg = LeNetConfig(num_classes=100, in_channels=3)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -90,6 +91,7 @@ class TestLeNetBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(2, 1, 32, 32)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

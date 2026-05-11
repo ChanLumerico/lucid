@@ -28,6 +28,7 @@ class TestEfficientNetConfig(unittest.TestCase):
 
     def test_json_round_trip(self) -> None:
         import json, os
+
         cfg = EfficientNetConfig(width_mult=1.4, depth_mult=1.8, dropout=0.4)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -77,6 +78,7 @@ class TestEfficientNetBackbone(unittest.TestCase):
 
     def test_forward_returns_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

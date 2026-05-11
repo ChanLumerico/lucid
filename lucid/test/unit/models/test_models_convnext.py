@@ -6,8 +6,13 @@ import unittest
 import lucid
 import lucid.models as models
 from lucid.models.vision.convnext import (
-    ConvNeXt, ConvNeXtConfig, ConvNeXtForImageClassification,
-    convnext_t, convnext_t_cls, convnext_s_cls, convnext_b_cls,
+    ConvNeXt,
+    ConvNeXtConfig,
+    ConvNeXtForImageClassification,
+    convnext_t,
+    convnext_t_cls,
+    convnext_s_cls,
+    convnext_b_cls,
 )
 
 
@@ -22,6 +27,7 @@ class TestConvNeXtConfig(unittest.TestCase):
 
     def test_tuple_coercion(self) -> None:
         import json, os
+
         cfg = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(128, 256, 512, 1024))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             path = f.name
@@ -50,8 +56,12 @@ class TestConvNeXtParamCounts(unittest.TestCase):
         self.assertEqual(convnext_b_cls().num_parameters(), 88_591_464)
 
     def test_larger_has_more_params(self) -> None:
-        self.assertGreater(convnext_s_cls().num_parameters(), convnext_t_cls().num_parameters())
-        self.assertGreater(convnext_b_cls().num_parameters(), convnext_s_cls().num_parameters())
+        self.assertGreater(
+            convnext_s_cls().num_parameters(), convnext_t_cls().num_parameters()
+        )
+        self.assertGreater(
+            convnext_b_cls().num_parameters(), convnext_s_cls().num_parameters()
+        )
 
 
 class TestConvNeXtBackbone(unittest.TestCase):
@@ -73,6 +83,7 @@ class TestConvNeXtBackbone(unittest.TestCase):
 
     def test_forward_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         x = lucid.randn(1, 3, 224, 224)
         out = self.model(x)
         self.assertIsInstance(out, BaseModelOutput)

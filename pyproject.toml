@@ -37,14 +37,18 @@ test = [
     # Install it separately when running parity / perf comparisons.
 ]
 docs = [
-    "sphinx>=7.4",
+    # Sphinx 9.x has a circular-import regression with Python 3.14.
+    # Pin to 8.x until the upstream fix lands.
+    "sphinx>=7.4,<9",
     "sphinx-autobuild>=2024.4",
     "pydata-sphinx-theme>=0.15",
     "breathe>=4.35",
     "exhale>=0.3.7",
-    "myst-parser>=3.0",
+    "myst-parser>=3.0,<5",
     "sphinx-design>=0.6",
     "sphinxcontrib-mermaid>=0.9",
+    "sphinx-copybutton>=0.5",
+    "sphinx-notfound-page>=1.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -66,4 +70,4 @@ markers = [
     "stability: numerical-edge / extreme-value coverage (inf / nan / subnormal)",
     "f64_only:  float64-only path; skipped when only f32 is available",
 ]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not heavy'"

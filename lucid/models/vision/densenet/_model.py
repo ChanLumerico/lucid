@@ -19,6 +19,14 @@ Each DenseLayer (bottleneck variant):
 
 Transition block:
     BN → ReLU → Conv1×1(½ in_channels) → AvgPool2×2-s2
+
+State-dict key structure mirrors timm densenet121:
+    features.conv0.*            ← stem Conv2d
+    features.norm0.*            ← stem BN
+    features.denseblock1.denselayer1.norm1/conv1/norm2/conv2.*
+    features.transition1.norm/conv.*
+    features.norm5.*            ← final BN
+    classifier.weight/bias
 """
 
 from typing import ClassVar, cast
@@ -65,12 +73,16 @@ class _DenseLayer(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Dense block
+# Dense block  — children named  denselayer1, denselayer2, …  (1-indexed)
 # ---------------------------------------------------------------------------
 
 
 class _DenseBlock(nn.Module):
-    """N stacked _DenseLayers; each layer receives all previous outputs."""
+    """N stacked _DenseLayers; each layer receives all previous outputs.
+
+    Children are registered as ``denselayer1``, ``denselayer2``, … so that
+    the state-dict mirrors timm's key scheme.
+    """
 
     def __init__(
         self,
@@ -81,26 +93,23 @@ class _DenseBlock(nn.Module):
         dropout_rate: float,
     ) -> None:
         super().__init__()
-        layers: list[nn.Module] = []
         for i in range(num_layers):
-            layers.append(
-                _DenseLayer(
-                    num_input_features + i * growth_rate,
-                    growth_rate,
-                    bn_size,
-                    dropout_rate,
-                )
+            layer = _DenseLayer(
+                num_input_features + i * growth_rate,
+                growth_rate,
+                bn_size,
+                dropout_rate,
             )
-        self.layers = nn.ModuleList(layers)
+            self.add_module(f"denselayer{i + 1}", layer)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        for layer in self.layers:
-            x = cast(Tensor, layer(x))
+        for module in self.children():
+            x = cast(Tensor, module(x))
         return x
 
 
 # ---------------------------------------------------------------------------
-# Transition block
+# Transition block  — attributes: norm, conv, pool
 # ---------------------------------------------------------------------------
 
 
@@ -119,50 +128,84 @@ class _Transition(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Shared builder: stem + blocks + transitions
+# Features container — mirrors timm's ``features`` attribute
+#
+#   features.conv0        ← stem Conv2d (no bias)
+#   features.norm0        ← stem BN
+#   features.relu0        ← stem ReLU   (no params, but part of stem)
+#   features.pool0        ← stem MaxPool (no params)
+#   features.denseblock1  ← block 1
+#   features.transition1  ← transition after block 1
+#   features.denseblock2
+#   features.transition2
+#   features.denseblock3
+#   features.transition3
+#   features.denseblock4  ← last block (no transition)
+#   features.norm5        ← final BN
 # ---------------------------------------------------------------------------
 
 
-def _build_densenet(
-    cfg: DenseNetConfig,
-) -> tuple[nn.Sequential, nn.ModuleList, nn.ModuleList, nn.BatchNorm2d, int]:
-    """Returns (stem, blocks, transitions, final_norm, num_features).
+class _Features(nn.Module):
+    """Flat-attribute container whose state-dict key prefix is ``features``."""
 
-    ``transitions`` has len(blocks) - 1 elements (no transition after last block).
-    """
-    stem = nn.Sequential(
-        nn.Conv2d(
+    def __init__(
+        self,
+        cfg: DenseNetConfig,
+    ) -> None:
+        super().__init__()
+        # --- stem ---
+        self.conv0 = nn.Conv2d(
             cfg.in_channels, cfg.num_init_features, 7, stride=2, padding=3, bias=False
-        ),
-        nn.BatchNorm2d(cfg.num_init_features),
-        nn.ReLU(inplace=True),
-        nn.MaxPool2d(3, stride=2, padding=1),
-    )
-
-    blocks: list[nn.Module] = []
-    transitions: list[nn.Module] = []
-    num_features = cfg.num_init_features
-
-    for i, num_layers in enumerate(cfg.block_config):
-        block = _DenseBlock(
-            num_layers, num_features, cfg.growth_rate, cfg.bn_size, cfg.dropout_rate
         )
-        blocks.append(block)
-        num_features += num_layers * cfg.growth_rate
+        self.norm0 = nn.BatchNorm2d(cfg.num_init_features)
+        self.relu0 = nn.ReLU(inplace=True)
+        self.pool0 = nn.MaxPool2d(3, stride=2, padding=1)
 
-        if i < len(cfg.block_config) - 1:
-            out_features = num_features // 2
-            transitions.append(_Transition(num_features, out_features))
-            num_features = out_features
+        # --- dense blocks + transitions ---
+        num_features = cfg.num_init_features
+        num_blocks = len(cfg.block_config)
+        for idx, num_layers in enumerate(cfg.block_config):
+            block = _DenseBlock(
+                num_layers, num_features, cfg.growth_rate, cfg.bn_size, cfg.dropout_rate
+            )
+            self.add_module(f"denseblock{idx + 1}", block)
+            num_features += num_layers * cfg.growth_rate
 
-    final_norm = nn.BatchNorm2d(num_features)
-    return (
-        stem,
-        nn.ModuleList(blocks),
-        nn.ModuleList(transitions),
-        final_norm,
-        num_features,
-    )
+            if idx < num_blocks - 1:
+                out_features = num_features // 2
+                transition = _Transition(num_features, out_features)
+                self.add_module(f"transition{idx + 1}", transition)
+                num_features = out_features
+
+        # --- final BN ---
+        self.norm5 = nn.BatchNorm2d(num_features)
+        self._num_features = num_features
+
+    @property
+    def num_features(self) -> int:
+        return self._num_features
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(
+            Tensor,
+            self.pool0(
+                cast(
+                    Tensor,
+                    self.relu0(cast(Tensor, self.norm0(cast(Tensor, self.conv0(x))))),
+                )
+            ),
+        )
+        # iterate dense blocks and transitions in registration order
+        transition_idx = 1
+        for name, module in self.named_children():
+            if name.startswith("denseblock"):
+                x = cast(Tensor, module(x))
+            elif name.startswith("transition"):
+                x = cast(Tensor, module(x))
+                transition_idx += 1
+        # final BN + ReLU (caller applies ReLU after pool)
+        x = cast(Tensor, self.norm5(x))
+        return x
 
 
 # ---------------------------------------------------------------------------
@@ -182,13 +225,8 @@ class DenseNet(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: DenseNetConfig) -> None:
         super().__init__(config)
-        stem, blocks, transitions, norm, num_features = _build_densenet(config)
-        self.stem = stem
-        self.blocks = blocks
-        self.transitions = transitions
-        self.final_norm = norm
+        self.features = _Features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self._num_features = num_features
 
         # feature_info: one entry per block (after each dense block)
         fi: list[FeatureInfo] = []
@@ -207,12 +245,7 @@ class DenseNet(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
-        for i, block in enumerate(self.blocks):
-            x = cast(Tensor, block(x))
-            if i < len(self.transitions):
-                x = cast(Tensor, self.transitions[i](x))
-        x = F.relu(cast(Tensor, self.final_norm(x)))
+        x = F.relu(cast(Tensor, self.features(x)))
         return cast(Tensor, self.avgpool(x))
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -232,25 +265,16 @@ class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: DenseNetConfig) -> None:
         super().__init__(config)
-        stem, blocks, transitions, norm, num_features = _build_densenet(config)
-        self.stem = stem
-        self.blocks = blocks
-        self.transitions = transitions
-        self.final_norm = norm
+        self.features = _Features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self._build_classifier(num_features, config.num_classes)
+        self._build_classifier(self.features.num_features, config.num_classes)
 
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
-        for i, block in enumerate(self.blocks):
-            x = cast(Tensor, block(x))
-            if i < len(self.transitions):
-                x = cast(Tensor, self.transitions[i](x))
-        x = F.relu(cast(Tensor, self.final_norm(x)))
+        x = F.relu(cast(Tensor, self.features(x)))
         x = cast(Tensor, self.avgpool(x))
         x = x.flatten(1)
         logits = cast(Tensor, self.classifier(x))
