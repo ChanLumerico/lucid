@@ -1,6 +1,7 @@
-"""MobileNet v4 parity tests (Conv-Small).
+"""MobileNet v4 parity tests (Conv-Small / Conv-Medium / Conv-Large).
 
-Self-consistency only — no stable timm equivalent."""
+Self-consistency only — no stable timm equivalent.
+Small — default tier.  Medium / Large — slow tier."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +16,8 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.mobilenet_v4_conv_small_cls,
+        M.mobilenet_v4_conv_medium_cls,
+        M.mobilenet_v4_conv_large_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

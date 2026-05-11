@@ -1,6 +1,7 @@
-"""CvT parity tests (CvT-13).
+"""CvT parity tests (CvT-13 / CvT-21 / CvT-W24).
 
-Self-consistency only — no stable timm equivalent with identical arch."""
+Self-consistency only — no stable timm equivalent with identical arch.
+13 — default tier.  21 / W24 — slow tier."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +16,8 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.cvt_13_cls,
+        M.cvt_21_cls,
+        M.cvt_w24_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

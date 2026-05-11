@@ -22,6 +22,7 @@ class ResNetConfig(ModelConfig):
     layers: tuple[int, ...] = (3, 4, 6, 3)
     stem_channels: int = 64
     hidden_sizes: tuple[int, ...] = (64, 128, 256, 512)
+    bottleneck_width_mult: int = 1
     dropout: float = 0.0
     zero_init_residual: bool = False
 

@@ -50,6 +50,10 @@ from lucid.models.vision.resnet import (
     resnet_50, resnet_50_cls,
     resnet_101, resnet_101_cls,
     resnet_152, resnet_152_cls,
+    resnet_200, resnet_200_cls,
+    resnet_269, resnet_269_cls,
+    wide_resnet_50, wide_resnet_50_cls,
+    wide_resnet_101, wide_resnet_101_cls,
 )
 # 2016 — DenseNet (Huang et al.)
 from lucid.models.vision.densenet import (
@@ -146,6 +150,8 @@ from lucid.models.vision.senet import (
 # 2019 — SKNet (Li et al.)
 from lucid.models.vision.sknet import (
     SKNetConfig, SKNet, SKNetForImageClassification,
+    sk_resnet_18, sk_resnet_18_cls,
+    sk_resnet_34, sk_resnet_34_cls,
     sk_resnet_50, sk_resnet_50_cls,
     sk_resnet_101, sk_resnet_101_cls,
     sk_resnext_50_32x4d, sk_resnext_50_32x4d_cls,
@@ -166,12 +172,18 @@ from lucid.models.vision.mobilenet_v3 import (
 from lucid.models.vision.mobilenet_v4 import (
     MobileNetV4Config, MobileNetV4, MobileNetV4ForImageClassification,
     mobilenet_v4_conv_small, mobilenet_v4_conv_small_cls,
+    mobilenet_v4_conv_medium, mobilenet_v4_conv_medium_cls,
+    mobilenet_v4_conv_large, mobilenet_v4_conv_large_cls,
 )
 # 2020 — ResNeSt (Zhang et al.)
 from lucid.models.vision.resnest import (
     ResNeStConfig, ResNeSt, ResNeStForImageClassification,
+    resnest_14, resnest_14_cls,
+    resnest_26, resnest_26_cls,
     resnest_50, resnest_50_cls,
     resnest_101, resnest_101_cls,
+    resnest_200, resnest_200_cls,
+    resnest_269, resnest_269_cls,
 )
 # 2019 — CSPNet (Wang et al.)
 from lucid.models.vision.cspnet import (
@@ -187,26 +199,45 @@ from lucid.models.vision.coatnet import (
 from lucid.models.vision.cvt import (
     CvTConfig, CvT, CvTForImageClassification,
     cvt_13, cvt_13_cls,
+    cvt_21, cvt_21_cls,
+    cvt_w24, cvt_w24_cls,
 )
 # 2021 — CrossViT (Chen et al.)
 from lucid.models.vision.crossvit import (
     CrossViTConfig, CrossViT, CrossViTForImageClassification,
     crossvit_9, crossvit_9_cls,
+    crossvit_tiny, crossvit_tiny_cls,
+    crossvit_small, crossvit_small_cls,
+    crossvit_base, crossvit_base_cls,
+    crossvit_15, crossvit_15_cls,
+    crossvit_18, crossvit_18_cls,
 )
 # 2021 — PVT (Wang et al.)
 from lucid.models.vision.pvt import (
     PVTConfig, PVT, PVTForImageClassification,
+    pvt_v2_b0, pvt_v2_b0_cls,
+    pvt_v2_b1, pvt_v2_b1_cls,
+    pvt_v2_b2, pvt_v2_b2_cls,
+    pvt_v2_b3, pvt_v2_b3_cls,
+    pvt_v2_b4, pvt_v2_b4_cls,
+    pvt_v2_b5, pvt_v2_b5_cls,
     pvt_tiny, pvt_tiny_cls,
 )
 # 2022 — EfficientFormer (Li et al.)
 from lucid.models.vision.efficientformer import (
     EfficientFormerConfig, EfficientFormer, EfficientFormerForImageClassification,
     efficientformer_l1, efficientformer_l1_cls,
+    efficientformer_l3, efficientformer_l3_cls,
+    efficientformer_l7, efficientformer_l7_cls,
 )
 # 2022 — MaxViT (Tu et al.)
 from lucid.models.vision.maxvit import (
     MaxViTConfig, MaxViT, MaxViTForImageClassification,
     maxvit_t, maxvit_t_cls,
+    maxvit_s, maxvit_s_cls,
+    maxvit_b, maxvit_b_cls,
+    maxvit_l, maxvit_l_cls,
+    maxvit_xl, maxvit_xl_cls,
 )
 # 2023 — InceptionNeXt (Yu et al.)
 from lucid.models.vision.inception_next import (
@@ -245,6 +276,8 @@ __all__ = [
     "ResNetConfig", "ResNet", "ResNetForImageClassification",
     "resnet_18", "resnet_18_cls", "resnet_34", "resnet_34_cls",
     "resnet_50", "resnet_50_cls", "resnet_101", "resnet_101_cls", "resnet_152", "resnet_152_cls",
+    "resnet_200", "resnet_200_cls", "resnet_269", "resnet_269_cls",
+    "wide_resnet_50", "wide_resnet_50_cls", "wide_resnet_101", "wide_resnet_101_cls",
     # ── Vision (2016) DenseNet ────────────────────────────────────────────────
     "DenseNetConfig", "DenseNet", "DenseNetForImageClassification",
     "densenet_121", "densenet_121_cls", "densenet_169", "densenet_169_cls",
@@ -303,6 +336,7 @@ __all__ = [
     "se_resnet_152", "se_resnet_152_cls",
     # ── Vision (2019) SKNet ───────────────────────────────────────────────────
     "SKNetConfig", "SKNet", "SKNetForImageClassification",
+    "sk_resnet_18", "sk_resnet_18_cls", "sk_resnet_34", "sk_resnet_34_cls",
     "sk_resnet_50", "sk_resnet_50_cls", "sk_resnet_101", "sk_resnet_101_cls",
     "sk_resnext_50_32x4d", "sk_resnext_50_32x4d_cls",
     # ── Vision (2018) MobileNet v2 ────────────────────────────────────────────
@@ -315,9 +349,13 @@ __all__ = [
     # ── Vision (2024) MobileNet v4 ────────────────────────────────────────────
     "MobileNetV4Config", "MobileNetV4", "MobileNetV4ForImageClassification",
     "mobilenet_v4_conv_small", "mobilenet_v4_conv_small_cls",
+    "mobilenet_v4_conv_medium", "mobilenet_v4_conv_medium_cls",
+    "mobilenet_v4_conv_large", "mobilenet_v4_conv_large_cls",
     # ── Vision (2020) ResNeSt ────────────────────────────────────────────────
     "ResNeStConfig", "ResNeSt", "ResNeStForImageClassification",
+    "resnest_14", "resnest_14_cls", "resnest_26", "resnest_26_cls",
     "resnest_50", "resnest_50_cls", "resnest_101", "resnest_101_cls",
+    "resnest_200", "resnest_200_cls", "resnest_269", "resnest_269_cls",
     # ── Vision (2019) CSPNet ─────────────────────────────────────────────────
     "CSPNetConfig", "CSPNet", "CSPNetForImageClassification",
     "cspresnet_50", "cspresnet_50_cls",
@@ -326,19 +364,29 @@ __all__ = [
     "coatnet_0", "coatnet_0_cls",
     # ── Vision (2021) CvT ────────────────────────────────────────────────────
     "CvTConfig", "CvT", "CvTForImageClassification",
-    "cvt_13", "cvt_13_cls",
+    "cvt_13", "cvt_13_cls", "cvt_21", "cvt_21_cls", "cvt_w24", "cvt_w24_cls",
     # ── Vision (2021) CrossViT ───────────────────────────────────────────────
     "CrossViTConfig", "CrossViT", "CrossViTForImageClassification",
     "crossvit_9", "crossvit_9_cls",
+    "crossvit_tiny", "crossvit_tiny_cls", "crossvit_small", "crossvit_small_cls",
+    "crossvit_base", "crossvit_base_cls", "crossvit_15", "crossvit_15_cls",
+    "crossvit_18", "crossvit_18_cls",
     # ── Vision (2021) PVT ────────────────────────────────────────────────────
     "PVTConfig", "PVT", "PVTForImageClassification",
+    "pvt_v2_b0", "pvt_v2_b0_cls", "pvt_v2_b1", "pvt_v2_b1_cls",
+    "pvt_v2_b2", "pvt_v2_b2_cls", "pvt_v2_b3", "pvt_v2_b3_cls",
+    "pvt_v2_b4", "pvt_v2_b4_cls", "pvt_v2_b5", "pvt_v2_b5_cls",
     "pvt_tiny", "pvt_tiny_cls",
     # ── Vision (2022) EfficientFormer ────────────────────────────────────────
     "EfficientFormerConfig", "EfficientFormer", "EfficientFormerForImageClassification",
     "efficientformer_l1", "efficientformer_l1_cls",
+    "efficientformer_l3", "efficientformer_l3_cls",
+    "efficientformer_l7", "efficientformer_l7_cls",
     # ── Vision (2022) MaxViT ─────────────────────────────────────────────────
     "MaxViTConfig", "MaxViT", "MaxViTForImageClassification",
     "maxvit_t", "maxvit_t_cls",
+    "maxvit_s", "maxvit_s_cls", "maxvit_b", "maxvit_b_cls",
+    "maxvit_l", "maxvit_l_cls", "maxvit_xl", "maxvit_xl_cls",
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
     "inception_next_t", "inception_next_t_cls",

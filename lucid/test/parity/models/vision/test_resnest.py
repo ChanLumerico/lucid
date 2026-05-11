@@ -1,6 +1,8 @@
-"""ResNeSt parity tests (50d / 101e vs timm).
+"""ResNeSt parity tests (14 / 26 / 50d / 101e / 200 / 269).
 
-Slow tier.  SplitAttn parameter layout differs from timm — expected to skip."""
+14 / 26 — self-consistency (no timm exact match).
+50d / 101e — timm parity (slow tier).
+200 / 269 — self-consistency (slow tier)."""
 
 import pytest
 import lucid.models as M
@@ -14,8 +16,12 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
+        M.resnest_14_cls,
+        M.resnest_26_cls,
         M.resnest_50_cls,
         M.resnest_101_cls,
+        M.resnest_200_cls,
+        M.resnest_269_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

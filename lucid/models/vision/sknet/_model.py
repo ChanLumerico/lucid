@@ -218,6 +218,69 @@ class _SelectiveKernel(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# SelectiveKernelBasic (expansion=1, for SK-ResNet-18/34)
+# ---------------------------------------------------------------------------
+
+
+class _SelectiveKernelBasic(nn.Module):
+    """SK 3×3 → SK 3×3 basic block (expansion=1) for shallow SK-ResNets.
+
+    Both 3×3 convolutions are replaced by SelectiveKernel units (two-branch
+    parallel 3×3 convolutions with channel attention), giving a full SK
+    treatment of the ResNet-18/34 basic block.
+    """
+
+    expansion: int = 1
+
+    def __init__(
+        self,
+        inplanes: int,
+        planes: int,
+        stride: int = 1,
+        downsample: nn.Module | None = None,
+        cardinality: int = 1,
+        base_width: int = 64,
+        split_input: bool = False,
+        rd_ratio: float = 1.0 / 16,
+        rd_divisor: int = 8,
+    ) -> None:
+        super().__init__()
+        width = int(math.floor(planes * (base_width / 64)) * cardinality)
+
+        self.conv1 = _SelectiveKernel(
+            inplanes,
+            width,
+            stride=stride,
+            groups=cardinality,
+            split_input=split_input,
+            rd_ratio=rd_ratio,
+            rd_divisor=rd_divisor,
+        )
+        self.conv2 = _SelectiveKernel(
+            width,
+            planes * self.expansion,
+            groups=cardinality,
+            split_input=split_input,
+            rd_ratio=rd_ratio,
+            rd_divisor=rd_divisor,
+        )
+        self.act = nn.ReLU(inplace=True)
+        self.downsample = downsample
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        identity = x
+
+        out = cast(Tensor, self.conv1(x))
+        out = cast(Tensor, self.conv2(out))
+
+        if self.downsample is not None:
+            identity = cast(Tensor, self.downsample(x))
+
+        out = out + identity
+        return cast(Tensor, self.act(out))
+
+
+# ---------------------------------------------------------------------------
 # SelectiveKernelBottleneck
 # ---------------------------------------------------------------------------
 
@@ -289,10 +352,16 @@ def _make_stage(
     split_input: bool,
     rd_ratio: float,
     rd_divisor: int,
+    block_type: str = "bottleneck",
 ) -> tuple[nn.Sequential, int]:
-    """Build one ResNet stage of SK bottleneck blocks."""
-    width = int(math.floor(planes * (base_width / 64)) * cardinality)
-    outplanes = planes * _SelectiveKernelBottleneck.expansion
+    """Build one ResNet stage of SK blocks (bottleneck or basic)."""
+    block_cls: type[_SelectiveKernelBottleneck] | type[_SelectiveKernelBasic]
+    if block_type == "basic":
+        block_cls = _SelectiveKernelBasic
+    else:
+        block_cls = _SelectiveKernelBottleneck
+
+    outplanes = planes * block_cls.expansion
 
     downsample: nn.Module | None = None
     if stride != 1 or inplanes != outplanes:
@@ -310,7 +379,7 @@ def _make_stage(
     )
 
     blocks: list[nn.Module] = [
-        _SelectiveKernelBottleneck(
+        block_cls(
             inplanes,
             planes,
             stride=stride,
@@ -320,7 +389,7 @@ def _make_stage(
     ]
     for _ in range(1, num_blocks):
         blocks.append(
-            _SelectiveKernelBottleneck(
+            block_cls(
                 outplanes,
                 planes,
                 **block_kwargs,  # type: ignore[arg-type]
@@ -360,6 +429,7 @@ def _build_body(
         split_input=config.split_input,
         rd_ratio=config.rd_ratio,
         rd_divisor=config.rd_divisor,
+        block_type=config.block_type,
     )
 
     cur = 64
@@ -449,7 +519,12 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.layer3 = l3
         self.layer4 = l4
 
-        final_channels = 512 * _SelectiveKernelBottleneck.expansion  # 2048
+        expansion = (
+            _SelectiveKernelBasic.expansion
+            if config.block_type == "basic"
+            else _SelectiveKernelBottleneck.expansion
+        )
+        final_channels = 512 * expansion  # 512 (basic) or 2048 (bottleneck)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(final_channels, config.num_classes)
 

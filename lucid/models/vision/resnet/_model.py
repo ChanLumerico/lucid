@@ -54,7 +54,11 @@ class _BasicBlock(nn.Module):
 
 
 class _Bottleneck(nn.Module):
-    """1×1 → 3×3 → 1×1 bottleneck — used in ResNet-50/101/152."""
+    """1×1 → 3×3 → 1×1 bottleneck — used in ResNet-50/101/152.
+
+    ``width_mult`` scales the inner (3×3) channels without changing the output
+    channel count, implementing the Wide ResNet width multiplier.
+    """
 
     expansion: int = 4
 
@@ -64,19 +68,19 @@ class _Bottleneck(nn.Module):
         out_channels: int,
         stride: int = 1,
         downsample: nn.Module | None = None,
+        width_mult: int = 1,
     ) -> None:
         super().__init__()
-        # out_channels is the bottleneck width; final width is out_channels * 4
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(
-            out_channels, out_channels, 3, stride=stride, padding=1, bias=False
-        )
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.conv3 = nn.Conv2d(
-            out_channels, out_channels * self.expansion, 1, bias=False
-        )
-        self.bn3 = nn.BatchNorm2d(out_channels * self.expansion)
+        # out_channels is the bottleneck base width; inner width is scaled by
+        # width_mult; final output width is out_channels * expansion.
+        inner = out_channels * width_mult
+        final = out_channels * self.expansion
+        self.conv1 = nn.Conv2d(in_channels, inner, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(inner)
+        self.conv2 = nn.Conv2d(inner, inner, 3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(inner)
+        self.conv3 = nn.Conv2d(inner, final, 1, bias=False)
+        self.bn3 = nn.BatchNorm2d(final)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -110,6 +114,7 @@ def _make_layer(
     out_channels: int,
     num_blocks: int,
     stride: int = 1,
+    width_mult: int = 1,
 ) -> tuple[nn.Sequential, int]:
     """Build one ResNet stage. Returns (layer, new_in_channels)."""
     expansion = block_cls.expansion
@@ -122,9 +127,20 @@ def _make_layer(
             nn.BatchNorm2d(final_channels),
         )
 
-    layers: list[nn.Module] = [block_cls(in_channels, out_channels, stride, downsample)]
+    def _make_block(
+        inc: int, outc: int, s: int = 1, ds: nn.Module | None = None
+    ) -> nn.Module:
+        if block_cls is _Bottleneck:
+            return _Bottleneck(
+                inc, outc, stride=s, downsample=ds, width_mult=width_mult
+            )
+        return _BasicBlock(inc, outc, stride=s, downsample=ds)
+
+    layers: list[nn.Module] = [
+        _make_block(in_channels, out_channels, stride, downsample)
+    ]
     for _ in range(1, num_blocks):
-        layers.append(block_cls(final_channels, out_channels))
+        layers.append(_make_block(final_channels, out_channels))
 
     return nn.Sequential(*layers), final_channels
 
@@ -153,11 +169,18 @@ def _build_body(
     )
     pool = nn.MaxPool2d(3, stride=2, padding=1)
 
+    wm = config.bottleneck_width_mult
     cur = sc
-    layer1, cur = _make_layer(block_cls, cur, hs[0], config.layers[0])
-    layer2, cur = _make_layer(block_cls, cur, hs[1], config.layers[1], stride=2)
-    layer3, cur = _make_layer(block_cls, cur, hs[2], config.layers[2], stride=2)
-    layer4, cur = _make_layer(block_cls, cur, hs[3], config.layers[3], stride=2)
+    layer1, cur = _make_layer(block_cls, cur, hs[0], config.layers[0], width_mult=wm)
+    layer2, cur = _make_layer(
+        block_cls, cur, hs[1], config.layers[1], stride=2, width_mult=wm
+    )
+    layer3, cur = _make_layer(
+        block_cls, cur, hs[2], config.layers[2], stride=2, width_mult=wm
+    )
+    layer4, cur = _make_layer(
+        block_cls, cur, hs[3], config.layers[3], stride=2, width_mult=wm
+    )
 
     exp = block_cls.expansion
     feature_info = [

@@ -1,6 +1,6 @@
-"""MaxViT parity tests (MaxViT-T vs timm maxvit_tiny_tf_224).
+"""MaxViT parity tests (T / S / B / L vs timm maxvit_*_tf_224; XL self-consistency).
 
-Slow tier.  100%% key mismatch — a key_transform is needed."""
+All slow tier.  100% named key coverage."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +15,10 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.maxvit_t_cls,
+        M.maxvit_s_cls,
+        M.maxvit_b_cls,
+        M.maxvit_l_cls,
+        M.maxvit_xl_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

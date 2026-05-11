@@ -1,6 +1,7 @@
-"""EfficientFormer parity tests (L1).
+"""EfficientFormer parity tests (L1 / L3 / L7).
 
-Self-consistency only — no stable timm equivalent."""
+Self-consistency only — no stable timm equivalent.
+L1 — default tier.  L3 / L7 — slow tier."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +16,8 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.efficientformer_l1_cls,
+        M.efficientformer_l3_cls,
+        M.efficientformer_l7_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

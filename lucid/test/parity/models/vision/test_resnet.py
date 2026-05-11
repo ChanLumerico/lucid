@@ -1,6 +1,6 @@
-"""ResNet parity tests (18 / 34 / 50 / 101 / 152 vs timm resnet*).
+"""ResNet parity tests (18 / 34 / 50 / 101 / 152 / 200 / 269 / Wide-50 / Wide-101).
 
-18 / 34 — default tier.  50 / 101 / 152 — slow tier."""
+18 / 34 — default tier.  50 / 101 / 152 / 200 / 269 / Wide — slow tier."""
 
 import pytest
 import lucid.models as M
@@ -19,6 +19,10 @@ _FACTORIES = frozenset(
         M.resnet_50_cls,
         M.resnet_101_cls,
         M.resnet_152_cls,
+        M.resnet_200_cls,
+        M.resnet_269_cls,
+        M.wide_resnet_50_cls,
+        M.wide_resnet_101_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

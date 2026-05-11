@@ -13,6 +13,18 @@ _CFG_L1 = EfficientFormerConfig(
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
 )
 
+_CFG_L3 = EfficientFormerConfig(
+    depths=(4, 4, 12, 6),
+    embed_dims=(64, 128, 320, 512),
+    mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+)
+
+_CFG_L7 = EfficientFormerConfig(
+    depths=(6, 6, 18, 8),
+    embed_dims=(96, 192, 384, 768),
+    mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+)
+
 
 def _b(cfg: EfficientFormerConfig, kw: dict[str, object]) -> EfficientFormer:
     return EfficientFormer(
@@ -45,6 +57,34 @@ def efficientformer_l1(
     return _b(_CFG_L1, overrides)
 
 
+@register_model(
+    task="base",
+    family="efficientformer",
+    model_type="efficientformer",
+    model_class=EfficientFormer,
+    default_config=_CFG_L3,
+)
+def efficientformer_l3(
+    pretrained: bool = False, **overrides: object
+) -> EfficientFormer:
+    """EfficientFormer-L3 backbone (Li et al., 2022), ~30.9M params."""
+    return _b(_CFG_L3, overrides)
+
+
+@register_model(
+    task="base",
+    family="efficientformer",
+    model_type="efficientformer",
+    model_class=EfficientFormer,
+    default_config=_CFG_L7,
+)
+def efficientformer_l7(
+    pretrained: bool = False, **overrides: object
+) -> EfficientFormer:
+    """EfficientFormer-L7 backbone (Li et al., 2022), ~81.5M params."""
+    return _b(_CFG_L7, overrides)
+
+
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
@@ -60,3 +100,31 @@ def efficientformer_l1_cls(
 ) -> EfficientFormerForImageClassification:
     """EfficientFormer-L1 image classifier (Li et al., 2022)."""
     return _c(_CFG_L1, overrides)
+
+
+@register_model(
+    task="image-classification",
+    family="efficientformer",
+    model_type="efficientformer",
+    model_class=EfficientFormerForImageClassification,
+    default_config=_CFG_L3,
+)
+def efficientformer_l3_cls(
+    pretrained: bool = False, **overrides: object
+) -> EfficientFormerForImageClassification:
+    """EfficientFormer-L3 image classifier (Li et al., 2022), ~30.9M params."""
+    return _c(_CFG_L3, overrides)
+
+
+@register_model(
+    task="image-classification",
+    family="efficientformer",
+    model_type="efficientformer",
+    model_class=EfficientFormerForImageClassification,
+    default_config=_CFG_L7,
+)
+def efficientformer_l7_cls(
+    pretrained: bool = False, **overrides: object
+) -> EfficientFormerForImageClassification:
+    """EfficientFormer-L7 image classifier (Li et al., 2022), ~81.5M params."""
+    return _c(_CFG_L7, overrides)

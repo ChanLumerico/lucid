@@ -260,6 +260,20 @@ SPECS: list[ParitySpec] = [
     ParitySpec(
         M.resnet_152_cls, "resnet152", tier="slow", use_positional_fallback=True
     ),
+    ParitySpec(M.resnet_200_cls, None, tier="slow", use_positional_fallback=True),
+    ParitySpec(M.resnet_269_cls, None, tier="slow", use_positional_fallback=True),
+    ParitySpec(
+        M.wide_resnet_50_cls,
+        "wide_resnet50_2",
+        tier="slow",
+        use_positional_fallback=True,
+    ),
+    ParitySpec(
+        M.wide_resnet_101_cls,
+        "wide_resnet101_2",
+        tier="slow",
+        use_positional_fallback=True,
+    ),
     # ── ResNeXt ───────────────────────────────────────────────────────────────
     ParitySpec(
         M.resnext_50_32x4d_cls,
@@ -294,6 +308,8 @@ SPECS: list[ParitySpec] = [
     # ── SK-ResNet / SK-ResNeXt ────────────────────────────────────────────────
     # timm 1.0 only has skresnet18/34/50/50d and skresnext50_32x4d.
     # sk_resnet_101 has no timm counterpart → self-consistency only.
+    ParitySpec(M.sk_resnet_18_cls, "skresnet18", use_positional_fallback=True),
+    ParitySpec(M.sk_resnet_34_cls, "skresnet34", use_positional_fallback=True),
     ParitySpec(
         M.sk_resnet_50_cls, "skresnet50", tier="slow", use_positional_fallback=True
     ),
@@ -305,12 +321,16 @@ SPECS: list[ParitySpec] = [
         use_positional_fallback=True,
     ),
     # ── ResNeSt ───────────────────────────────────────────────────────────────
+    ParitySpec(M.resnest_14_cls, None),
+    ParitySpec(M.resnest_26_cls, None),
     ParitySpec(
         M.resnest_50_cls, "resnest50d", tier="slow", use_positional_fallback=True
     ),
     ParitySpec(
         M.resnest_101_cls, "resnest101e", tier="slow", use_positional_fallback=True
     ),
+    ParitySpec(M.resnest_200_cls, None, tier="slow"),
+    ParitySpec(M.resnest_269_cls, None, tier="slow"),
     # ── DenseNet ──────────────────────────────────────────────────────────────
     # timm DenseNet uses `classifier` head → exact name match (no remap).
     # Internal BN key order in transition layers differs from timm; named
@@ -386,6 +406,8 @@ SPECS: list[ParitySpec] = [
     ),
     # ── MobileNet v4 — architecture newer than current timm stable ────────────
     ParitySpec(M.mobilenet_v4_conv_small_cls, None),
+    ParitySpec(M.mobilenet_v4_conv_medium_cls, None, tier="slow"),
+    ParitySpec(M.mobilenet_v4_conv_large_cls, None, tier="slow"),
     # ── EfficientNet — head: classifier.weight (exact match) ─────────────────
     # Lucid uses features.N vs timm's blocks.N.M — positional fallback for body.
     ParitySpec(M.efficientnet_b0_cls, "efficientnet_b0", use_positional_fallback=True),
@@ -488,12 +510,25 @@ SPECS: list[ParitySpec] = [
     ParitySpec(M.cspresnet_50_cls, None),
     # ── PVT v2 ───────────────────────────────────────────────────────────────
     # head: head.weight (auto-remapped)
+    ParitySpec(M.pvt_v2_b0_cls, None),
+    ParitySpec(M.pvt_v2_b1_cls, "pvt_v2_b1", atol=2e-3),
+    ParitySpec(M.pvt_v2_b2_cls, None, tier="slow"),
+    ParitySpec(M.pvt_v2_b3_cls, None, tier="slow"),
+    ParitySpec(M.pvt_v2_b4_cls, None, tier="slow"),
+    ParitySpec(M.pvt_v2_b5_cls, None, tier="slow"),
     ParitySpec(M.pvt_tiny_cls, "pvt_v2_b1", atol=2e-3),
     # ── CvT ──────────────────────────────────────────────────────────────────
     # Internal ordering may differ → named transfer, accept partial match
     ParitySpec(M.cvt_13_cls, None),  # no stable timm equiv with same arch
+    ParitySpec(M.cvt_21_cls, None, tier="slow"),
+    ParitySpec(M.cvt_w24_cls, None, tier="slow"),
     # ── CrossViT ─────────────────────────────────────────────────────────────
     ParitySpec(M.crossvit_9_cls, None),
+    ParitySpec(M.crossvit_tiny_cls, None),
+    ParitySpec(M.crossvit_small_cls, None),
+    ParitySpec(M.crossvit_base_cls, None, tier="slow"),
+    ParitySpec(M.crossvit_15_cls, None),
+    ParitySpec(M.crossvit_18_cls, None),
     # ── CoAtNet ───────────────────────────────────────────────────────────────
     # 98 % of keys are unmatched (Lucid uses stem.N vs timm's stages.0.blocks.N);
     # positional shape mismatch confirms different module hierarchy.
@@ -501,10 +536,16 @@ SPECS: list[ParitySpec] = [
     ParitySpec(M.coatnet_0_cls, None, tier="slow"),
     # ── EfficientFormer ───────────────────────────────────────────────────────
     ParitySpec(M.efficientformer_l1_cls, None),
+    ParitySpec(M.efficientformer_l3_cls, None, tier="slow"),
+    ParitySpec(M.efficientformer_l7_cls, None, tier="slow"),
     # ── MaxViT ───────────────────────────────────────────────────────────────
     # 100% key coverage — attribute names match timm's maxvit_tiny_tf_224 exactly.
     # Relative position bias accumulation → atol=2e-2.
     ParitySpec(M.maxvit_t_cls, "maxvit_tiny_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_s_cls, "maxvit_small_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_b_cls, "maxvit_base_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_l_cls, "maxvit_large_tf_224", tier="slow", atol=2e-2),
+    ParitySpec(M.maxvit_xl_cls, None, tier="slow"),
     # ── InceptionNeXt ────────────────────────────────────────────────────────
     # 100% named key coverage — no key_transform or positional fallback needed.
     ParitySpec(M.inception_next_t_cls, "inception_next_tiny", tier="slow"),

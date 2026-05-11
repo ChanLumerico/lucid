@@ -8,6 +8,20 @@ from lucid.models.vision.mobilenet_v4._model import (
 )
 
 _CFG_CONV_SMALL = MobileNetV4Config(variant="conv_small")
+_CFG_CONV_MEDIUM = MobileNetV4Config(variant="conv_medium")
+_CFG_CONV_LARGE = MobileNetV4Config(variant="conv_large")
+
+
+def _b(cfg: MobileNetV4Config, kw: dict[str, object]) -> MobileNetV4:
+    return MobileNetV4(MobileNetV4Config(**{**cfg.__dict__, **kw}) if kw else cfg)
+
+
+def _c(
+    cfg: MobileNetV4Config, kw: dict[str, object]
+) -> MobileNetV4ForImageClassification:
+    return MobileNetV4ForImageClassification(
+        MobileNetV4Config(**{**cfg.__dict__, **kw}) if kw else cfg
+    )
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -24,12 +38,35 @@ def mobilenet_v4_conv_small(
     pretrained: bool = False, **overrides: object
 ) -> MobileNetV4:
     """MobileNet v4 Conv-Small backbone (Qin et al., 2024)."""
-    cfg = (
-        MobileNetV4Config(**{**_CFG_CONV_SMALL.__dict__, **overrides})
-        if overrides
-        else _CFG_CONV_SMALL
-    )
-    return MobileNetV4(cfg)
+    return _b(_CFG_CONV_SMALL, overrides)
+
+
+@register_model(
+    task="base",
+    family="mobilenet_v4",
+    model_type="mobilenet_v4",
+    model_class=MobileNetV4,
+    default_config=_CFG_CONV_MEDIUM,
+)
+def mobilenet_v4_conv_medium(
+    pretrained: bool = False, **overrides: object
+) -> MobileNetV4:
+    """MobileNet v4 Conv-Medium backbone (~9.7 M params)."""
+    return _b(_CFG_CONV_MEDIUM, overrides)
+
+
+@register_model(
+    task="base",
+    family="mobilenet_v4",
+    model_type="mobilenet_v4",
+    model_class=MobileNetV4,
+    default_config=_CFG_CONV_LARGE,
+)
+def mobilenet_v4_conv_large(
+    pretrained: bool = False, **overrides: object
+) -> MobileNetV4:
+    """MobileNet v4 Conv-Large backbone (~32.6 M params)."""
+    return _b(_CFG_CONV_LARGE, overrides)
 
 
 # ── Classifiers ───────────────────────────────────────────────────────────────
@@ -46,9 +83,32 @@ def mobilenet_v4_conv_small_cls(
     pretrained: bool = False, **overrides: object
 ) -> MobileNetV4ForImageClassification:
     """MobileNet v4 Conv-Small classifier."""
-    cfg = (
-        MobileNetV4Config(**{**_CFG_CONV_SMALL.__dict__, **overrides})
-        if overrides
-        else _CFG_CONV_SMALL
-    )
-    return MobileNetV4ForImageClassification(cfg)
+    return _c(_CFG_CONV_SMALL, overrides)
+
+
+@register_model(
+    task="image-classification",
+    family="mobilenet_v4",
+    model_type="mobilenet_v4",
+    model_class=MobileNetV4ForImageClassification,
+    default_config=_CFG_CONV_MEDIUM,
+)
+def mobilenet_v4_conv_medium_cls(
+    pretrained: bool = False, **overrides: object
+) -> MobileNetV4ForImageClassification:
+    """MobileNet v4 Conv-Medium classifier (~9.7 M params)."""
+    return _c(_CFG_CONV_MEDIUM, overrides)
+
+
+@register_model(
+    task="image-classification",
+    family="mobilenet_v4",
+    model_type="mobilenet_v4",
+    model_class=MobileNetV4ForImageClassification,
+    default_config=_CFG_CONV_LARGE,
+)
+def mobilenet_v4_conv_large_cls(
+    pretrained: bool = False, **overrides: object
+) -> MobileNetV4ForImageClassification:
+    """MobileNet v4 Conv-Large classifier (~32.6 M params)."""
+    return _c(_CFG_CONV_LARGE, overrides)

@@ -1,6 +1,9 @@
-"""PVT v2 parity tests (B1 / Tiny vs timm pvt_v2_b1).
+"""PVT v2 parity tests (B0–B5 + legacy pvt_tiny alias).
 
-Key coverage ~10%% — a key_transform is needed before timm parity works."""
+B0 — default tier (self-consistency).
+B1 — default tier (timm parity).
+B2–B5 — slow tier (self-consistency).
+pvt_tiny — alias for B1 (timm parity)."""
 
 import pytest
 import lucid.models as M
@@ -14,6 +17,12 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
+        M.pvt_v2_b0_cls,
+        M.pvt_v2_b1_cls,
+        M.pvt_v2_b2_cls,
+        M.pvt_v2_b3_cls,
+        M.pvt_v2_b4_cls,
+        M.pvt_v2_b5_cls,
         M.pvt_tiny_cls,
     }
 )

@@ -42,6 +42,10 @@ class SKNetConfig(ModelConfig):
 
     ``rd_divisor``
         Divisor for rounding the attention channel count.
+
+    ``block_type``
+        ``"bottleneck"`` (default, expansion=4) for SK-ResNet-50/101 or
+        ``"basic"`` (expansion=1) for SK-ResNet-18/34.
     """
 
     model_type: ClassVar[str] = "sknet"
@@ -49,6 +53,7 @@ class SKNetConfig(ModelConfig):
     num_classes: int = 1000
     in_channels: int = 3
     layers: tuple[int, ...] = (3, 4, 6, 3)
+    block_type: str = "bottleneck"
     cardinality: int = 1
     base_width: int = 64
     split_input: bool = True

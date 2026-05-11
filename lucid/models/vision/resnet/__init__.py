@@ -13,6 +13,14 @@ from lucid.models.vision.resnet._pretrained import (
     resnet_101_cls,
     resnet_152,
     resnet_152_cls,
+    wide_resnet_50,
+    wide_resnet_50_cls,
+    wide_resnet_101,
+    wide_resnet_101_cls,
+    resnet_200,
+    resnet_200_cls,
+    resnet_269,
+    resnet_269_cls,
 )
 
 __all__ = [
@@ -29,4 +37,12 @@ __all__ = [
     "resnet_101_cls",
     "resnet_152",
     "resnet_152_cls",
+    "wide_resnet_50",
+    "wide_resnet_50_cls",
+    "wide_resnet_101",
+    "wide_resnet_101_cls",
+    "resnet_200",
+    "resnet_200_cls",
+    "resnet_269",
+    "resnet_269_cls",
 ]

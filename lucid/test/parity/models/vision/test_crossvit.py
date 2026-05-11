@@ -1,6 +1,7 @@
-"""CrossViT parity tests (CrossViT-9).
+"""CrossViT parity tests (9 / Tiny / Small / Base / 15 / 18).
 
-Self-consistency only — no timm exact equivalent."""
+Self-consistency only — no timm exact equivalent.
+Base — slow tier.  Others — default tier."""
 
 import pytest
 import lucid.models as M
@@ -15,6 +16,11 @@ from lucid.test.parity.models._utils import (
 _FACTORIES = frozenset(
     {
         M.crossvit_9_cls,
+        M.crossvit_tiny_cls,
+        M.crossvit_small_cls,
+        M.crossvit_base_cls,
+        M.crossvit_15_cls,
+        M.crossvit_18_cls,
     }
 )
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]

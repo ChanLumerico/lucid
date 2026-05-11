@@ -1,6 +1,7 @@
 """SK-ResNet / SK-ResNeXt parity tests.
 
-sk_resnet_50 and sk_resnext_50_32x4d — timm parity (slow tier).
+sk_resnet_18 / 34 — timm parity (default tier).
+sk_resnet_50 / sk_resnext_50_32x4d — timm parity (slow tier).
 sk_resnet_101 — self-consistency only (no timm counterpart in timm 1.x)."""
 
 import pytest
@@ -15,6 +16,8 @@ from lucid.test.parity.models._utils import (
 
 _FACTORIES = frozenset(
     {
+        M.sk_resnet_18_cls,
+        M.sk_resnet_34_cls,
         M.sk_resnet_50_cls,
         M.sk_resnet_101_cls,
         M.sk_resnext_50_32x4d_cls,

@@ -8,6 +8,10 @@ from lucid.models.vision.efficientformer._model import (
 from lucid.models.vision.efficientformer._pretrained import (
     efficientformer_l1,
     efficientformer_l1_cls,
+    efficientformer_l3,
+    efficientformer_l3_cls,
+    efficientformer_l7,
+    efficientformer_l7_cls,
 )
 
 __all__ = [
@@ -16,4 +20,8 @@ __all__ = [
     "EfficientFormerForImageClassification",
     "efficientformer_l1",
     "efficientformer_l1_cls",
+    "efficientformer_l3",
+    "efficientformer_l3_cls",
+    "efficientformer_l7",
+    "efficientformer_l7_cls",
 ]
