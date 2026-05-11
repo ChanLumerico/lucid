@@ -115,8 +115,9 @@ def _build_features(cfg: MobileNetV2Config) -> tuple[nn.Sequential, int]:
             )
             in_ch = out_ch
 
-    # Head conv
-    last_ch = _ch(1280)
+    # Head conv — 1280 is NOT scaled by width_mult (paper §3.4 and timm both
+    # keep the head channel count at 1280 regardless of width multiplier)
+    last_ch = 1280
     layers += [
         nn.Conv2d(in_ch, last_ch, 1, bias=False),
         nn.BatchNorm2d(last_ch),
