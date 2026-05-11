@@ -71,6 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.efficientnet: EfficientNet B0–B7 (Tan & Le, 2019) — compound scaling, MBConv+SE blocks; B0 classifier 5,288,548 params reference-exact; 16 registry entries
 
+- lucid.models.vision.vit: ViT B/16 B/32 L/16 L/32 H/14 (Dosovitskiy et al., 2020) — patch embedding + transformer encoder; ViT-B/16 86,567,656 params reference-exact; 10 registry entries
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)

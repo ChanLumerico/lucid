@@ -67,6 +67,15 @@ from lucid.models.vision.mobilenet import (
     mobilenet_v1_050, mobilenet_v1_050_cls,
     mobilenet_v1_025, mobilenet_v1_025_cls,
 )
+# 2020 — ViT (Dosovitskiy et al.)
+from lucid.models.vision.vit import (
+    ViTConfig, ViT, ViTForImageClassification,
+    vit_b_16, vit_b_16_cls,
+    vit_b_32, vit_b_32_cls,
+    vit_l_16, vit_l_16_cls,
+    vit_l_32, vit_l_32_cls,
+    vit_h_14, vit_h_14_cls,
+)
 # 2019 — EfficientNet (Tan & Le)
 from lucid.models.vision.efficientnet import (
     EfficientNetConfig, EfficientNet, EfficientNetForImageClassification,
@@ -121,6 +130,11 @@ __all__ = [
     "mobilenet_v1_075", "mobilenet_v1_075_cls",
     "mobilenet_v1_050", "mobilenet_v1_050_cls",
     "mobilenet_v1_025", "mobilenet_v1_025_cls",
+    # ── Vision (2020) ViT ────────────────────────────────────────────────────
+    "ViTConfig", "ViT", "ViTForImageClassification",
+    "vit_b_16", "vit_b_16_cls", "vit_b_32", "vit_b_32_cls",
+    "vit_l_16", "vit_l_16_cls", "vit_l_32", "vit_l_32_cls",
+    "vit_h_14", "vit_h_14_cls",
     # ── Vision (2019) EfficientNet ────────────────────────────────────────────
     "EfficientNetConfig", "EfficientNet", "EfficientNetForImageClassification",
     "efficientnet_b0", "efficientnet_b0_cls", "efficientnet_b1", "efficientnet_b1_cls",
