@@ -57,6 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.resnet: ResNet 18/34/50/101/152 backbone (task=base) + classifier (task=image-classification); 10 registry entries; AutoModel/AutoModelForImageClassification compatible
 
+- lucid.models.vision.lenet: LeNet-5 (LeCun et al., 1998) — original tanh+avg and modern relu+max variants; backbone + classifier; 4 registry entries
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)

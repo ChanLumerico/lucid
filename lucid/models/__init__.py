@@ -42,7 +42,18 @@ from lucid.models._registry import (
     register_model,
 )
 
-# Vision families — importing triggers @register_model decorators
+# Vision families — in chronological order of publication
+# 1998 — LeNet-5 (LeCun et al.)
+from lucid.models.vision.lenet import (  # noqa: E402
+    LeNet,
+    LeNetConfig,
+    LeNetForImageClassification,
+    lenet_5,
+    lenet_5_cls,
+    lenet_5_relu,
+    lenet_5_relu_cls,
+)
+# 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
     ResNetConfig,
@@ -89,6 +100,14 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — LeNet (1998)
+    "LeNet",
+    "LeNetConfig",
+    "LeNetForImageClassification",
+    "lenet_5",
+    "lenet_5_cls",
+    "lenet_5_relu",
+    "lenet_5_relu_cls",
     # Registry
     "create_model",
     "is_model",
