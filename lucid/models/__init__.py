@@ -244,6 +244,90 @@ from lucid.models.vision.inception_next import (
     InceptionNeXtConfig, InceptionNeXt, InceptionNeXtForImageClassification,
     inception_next_tiny, inception_next_tiny_cls,
 )
+# 2022 — ConvNeXt V2 (Woo et al.)
+from lucid.models.vision.convnext_v2 import (
+    ConvNeXtV2Config, ConvNeXtV2, ConvNeXtV2ForImageClassification,
+    convnext_v2_atto, convnext_v2_atto_cls,
+    convnext_v2_femto, convnext_v2_femto_cls,
+    convnext_v2_pico, convnext_v2_pico_cls,
+    convnext_v2_nano, convnext_v2_nano_cls,
+    convnext_v2_tiny, convnext_v2_tiny_cls,
+    convnext_v2_small, convnext_v2_small_cls,
+    convnext_v2_base, convnext_v2_base_cls,
+    convnext_v2_large, convnext_v2_large_cls,
+    convnext_v2_huge, convnext_v2_huge_cls,
+)
+# 2021 — DeiT (Touvron et al.)
+from lucid.models.vision.deit import (
+    DeiTConfig, DeiT, DeiTForImageClassification,
+    deit_tiny, deit_tiny_cls,
+    deit_small, deit_small_cls,
+    deit_base, deit_base_cls,
+    deit_base_patch32, deit_base_patch32_cls,
+)
+# 2021 — EfficientNet V2 (Tan & Le)
+from lucid.models.vision.efficientnet_v2 import (
+    EfficientNetV2Config, EfficientNetV2, EfficientNetV2ForImageClassification,
+    efficientnet_v2_small, efficientnet_v2_small_cls,
+    efficientnet_v2_medium, efficientnet_v2_medium_cls,
+    efficientnet_v2_large, efficientnet_v2_large_cls,
+    efficientnet_v2_xlarge, efficientnet_v2_xlarge_cls,
+)
+# 2018 — SE-ResNeXt (Hu et al. + Xie et al.)
+from lucid.models.vision.se_resnext import (
+    SEResNeXtConfig, SEResNeXt, SEResNeXtForImageClassification,
+    se_resnext_50_32x4d, se_resnext_50_32x4d_cls,
+    se_resnext_101_32x4d, se_resnext_101_32x4d_cls,
+)
+# 2016 — SqueezeNet (Iandola et al.)
+from lucid.models.vision.squeezenet import (
+    SqueezeNetConfig, SqueezeNet, SqueezeNetForImageClassification,
+    squeezenet_1_0, squeezenet_1_0_cls,
+    squeezenet_1_1, squeezenet_1_1_cls,
+)
+# 2022 — Swin Transformer V2 (Liu et al.)
+from lucid.models.vision.swin_v2 import (
+    SwinV2Config, SwinTransformerV2, SwinTransformerV2ForImageClassification,
+    swin_v2_tiny, swin_v2_tiny_cls,
+    swin_v2_small, swin_v2_small_cls,
+    swin_v2_base, swin_v2_base_cls,
+    swin_v2_large, swin_v2_large_cls,
+)
+# 2021 — NFNet (Brock et al.)
+from lucid.models.vision.nfnet import (
+    NFNetConfig, NFNet, NFNetForImageClassification,
+    nfnet_f0, nfnet_f0_cls,
+    nfnet_f1, nfnet_f1_cls,
+    nfnet_f2, nfnet_f2_cls,
+    nfnet_f3, nfnet_f3_cls,
+)
+# 2021 — CaiT (Touvron et al.)
+from lucid.models.vision.cait import (
+    CaiTConfig, CaiT, CaiTForImageClassification,
+    cait_xxsmall_24, cait_xxsmall_24_cls,
+    cait_xxsmall_36, cait_xxsmall_36_cls,
+    cait_xsmall_24, cait_xsmall_24_cls,
+    cait_small_24, cait_small_24_cls,
+    cait_small_36, cait_small_36_cls,
+    cait_medium_36, cait_medium_36_cls,
+    cait_medium_48, cait_medium_48_cls,
+)
+# 2019 — MnasNet (Tan et al.)
+from lucid.models.vision.mnasnet import (
+    MnasNetConfig, MnasNet, MnasNetForImageClassification,
+    mnasnet_050, mnasnet_050_cls,
+    mnasnet_100, mnasnet_100_cls,
+    mnasnet_130, mnasnet_130_cls,
+)
+# 2022 — PoolFormer (Yu et al.)
+from lucid.models.vision.poolformer import (
+    PoolFormerConfig, PoolFormer, PoolFormerForImageClassification,
+    poolformer_s12, poolformer_s12_cls,
+    poolformer_s24, poolformer_s24_cls,
+    poolformer_s36, poolformer_s36_cls,
+    poolformer_m36, poolformer_m36_cls,
+    poolformer_m48, poolformer_m48_cls,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -390,4 +474,68 @@ __all__ = [
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
     "inception_next_tiny", "inception_next_tiny_cls",
+    # ── Vision (2022) ConvNeXt V2 ────────────────────────────────────────────
+    "ConvNeXtV2Config", "ConvNeXtV2", "ConvNeXtV2ForImageClassification",
+    "convnext_v2_atto", "convnext_v2_atto_cls",
+    "convnext_v2_femto", "convnext_v2_femto_cls",
+    "convnext_v2_pico", "convnext_v2_pico_cls",
+    "convnext_v2_nano", "convnext_v2_nano_cls",
+    "convnext_v2_tiny", "convnext_v2_tiny_cls",
+    "convnext_v2_small", "convnext_v2_small_cls",
+    "convnext_v2_base", "convnext_v2_base_cls",
+    "convnext_v2_large", "convnext_v2_large_cls",
+    "convnext_v2_huge", "convnext_v2_huge_cls",
+    # ── Vision (2021) DeiT ───────────────────────────────────────────────────
+    "DeiTConfig", "DeiT", "DeiTForImageClassification",
+    "deit_tiny", "deit_tiny_cls",
+    "deit_small", "deit_small_cls",
+    "deit_base", "deit_base_cls",
+    "deit_base_patch32", "deit_base_patch32_cls",
+    # ── Vision (2021) EfficientNet V2 ────────────────────────────────────────
+    "EfficientNetV2Config", "EfficientNetV2", "EfficientNetV2ForImageClassification",
+    "efficientnet_v2_small", "efficientnet_v2_small_cls",
+    "efficientnet_v2_medium", "efficientnet_v2_medium_cls",
+    "efficientnet_v2_large", "efficientnet_v2_large_cls",
+    "efficientnet_v2_xlarge", "efficientnet_v2_xlarge_cls",
+    # ── Vision (2018) SE-ResNeXt ─────────────────────────────────────────────
+    "SEResNeXtConfig", "SEResNeXt", "SEResNeXtForImageClassification",
+    "se_resnext_50_32x4d", "se_resnext_50_32x4d_cls",
+    "se_resnext_101_32x4d", "se_resnext_101_32x4d_cls",
+    # ── Vision (2016) SqueezeNet ─────────────────────────────────────────────
+    "SqueezeNetConfig", "SqueezeNet", "SqueezeNetForImageClassification",
+    "squeezenet_1_0", "squeezenet_1_0_cls",
+    "squeezenet_1_1", "squeezenet_1_1_cls",
+    # ── Vision (2022) Swin V2 ────────────────────────────────────────────────
+    "SwinV2Config", "SwinTransformerV2", "SwinTransformerV2ForImageClassification",
+    "swin_v2_tiny", "swin_v2_tiny_cls",
+    "swin_v2_small", "swin_v2_small_cls",
+    "swin_v2_base", "swin_v2_base_cls",
+    "swin_v2_large", "swin_v2_large_cls",
+    # ── Vision (2021) NFNet ──────────────────────────────────────────────────
+    "NFNetConfig", "NFNet", "NFNetForImageClassification",
+    "nfnet_f0", "nfnet_f0_cls",
+    "nfnet_f1", "nfnet_f1_cls",
+    "nfnet_f2", "nfnet_f2_cls",
+    "nfnet_f3", "nfnet_f3_cls",
+    # ── Vision (2021) CaiT ───────────────────────────────────────────────────
+    "CaiTConfig", "CaiT", "CaiTForImageClassification",
+    "cait_xxsmall_24", "cait_xxsmall_24_cls",
+    "cait_xxsmall_36", "cait_xxsmall_36_cls",
+    "cait_xsmall_24", "cait_xsmall_24_cls",
+    "cait_small_24", "cait_small_24_cls",
+    "cait_small_36", "cait_small_36_cls",
+    "cait_medium_36", "cait_medium_36_cls",
+    "cait_medium_48", "cait_medium_48_cls",
+    # ── Vision (2019) MnasNet ────────────────────────────────────────────────
+    "MnasNetConfig", "MnasNet", "MnasNetForImageClassification",
+    "mnasnet_050", "mnasnet_050_cls",
+    "mnasnet_100", "mnasnet_100_cls",
+    "mnasnet_130", "mnasnet_130_cls",
+    # ── Vision (2022) PoolFormer ─────────────────────────────────────────────
+    "PoolFormerConfig", "PoolFormer", "PoolFormerForImageClassification",
+    "poolformer_s12", "poolformer_s12_cls",
+    "poolformer_s24", "poolformer_s24_cls",
+    "poolformer_s36", "poolformer_s36_cls",
+    "poolformer_m36", "poolformer_m36_cls",
+    "poolformer_m48", "poolformer_m48_cls",
 ]

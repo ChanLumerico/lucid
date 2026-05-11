@@ -502,7 +502,7 @@ SPECS: list[ParitySpec] = [
     ),
     ParitySpec(
         M.convnext_xlarge_cls,
-        "convnext_xlargearge",
+        "convnext_xlarge",
         tier="heavy",
         key_transform=_convnext_key_transform,
     ),
@@ -549,6 +549,62 @@ SPECS: list[ParitySpec] = [
     # ── InceptionNeXt ────────────────────────────────────────────────────────
     # 100% named key coverage — no key_transform or positional fallback needed.
     ParitySpec(M.inception_next_tiny_cls, "inception_next_tiny", tier="slow"),
+    # ── ConvNeXt V2 ──────────────────────────────────────────────────────────
+    ParitySpec(M.convnext_v2_atto_cls, None),
+    ParitySpec(M.convnext_v2_femto_cls, None),
+    ParitySpec(M.convnext_v2_pico_cls, None),
+    ParitySpec(M.convnext_v2_nano_cls, None),
+    ParitySpec(M.convnext_v2_tiny_cls, "convnext_v2_tiny", key_transform=_convnext_key_transform),
+    ParitySpec(M.convnext_v2_small_cls, "convnext_v2_small", tier="slow", key_transform=_convnext_key_transform),
+    ParitySpec(M.convnext_v2_base_cls, "convnext_v2_base", tier="slow", key_transform=_convnext_key_transform),
+    ParitySpec(M.convnext_v2_large_cls, "convnext_v2_large", tier="heavy", key_transform=_convnext_key_transform),
+    ParitySpec(M.convnext_v2_huge_cls, None, tier="heavy"),
+    # ── DeiT ─────────────────────────────────────────────────────────────────
+    ParitySpec(M.deit_tiny_cls, "deit_tiny_patch16_224", use_positional_fallback=True),
+    ParitySpec(M.deit_small_cls, "deit_small_patch16_224", tier="slow", use_positional_fallback=True),
+    ParitySpec(M.deit_base_cls, "deit_base_patch16_224", tier="slow", use_positional_fallback=True),
+    ParitySpec(M.deit_base_patch32_cls, "deit_base_patch32_224", tier="slow", use_positional_fallback=True),
+    # ── EfficientNet V2 ───────────────────────────────────────────────────────
+    ParitySpec(M.efficientnet_v2_small_cls, "tf_efficientnetv2_s", tier="slow", use_positional_fallback=True),
+    ParitySpec(M.efficientnet_v2_medium_cls, "tf_efficientnetv2_m", tier="slow", use_positional_fallback=True),
+    ParitySpec(M.efficientnet_v2_large_cls, "tf_efficientnetv2_l", tier="heavy", use_positional_fallback=True),
+    ParitySpec(M.efficientnet_v2_xlarge_cls, None, tier="heavy"),
+    # ── SE-ResNeXt ────────────────────────────────────────────────────────────
+    ParitySpec(M.se_resnext_50_32x4d_cls, "seresnext50_32x4d", tier="slow", use_positional_fallback=True),
+    ParitySpec(M.se_resnext_101_32x4d_cls, "seresnext101_32x4d", tier="slow", use_positional_fallback=True),
+    # ── SqueezeNet ───────────────────────────────────────────────────────────
+    ParitySpec(M.squeezenet_1_0_cls, "squeezenet1_0", use_positional_fallback=True),
+    ParitySpec(M.squeezenet_1_1_cls, "squeezenet1_1", use_positional_fallback=True),
+    # ── Swin V2 ───────────────────────────────────────────────────────────────
+    # Scaled cosine attention + CPB MLP → atol=2e-2 same as V1
+    ParitySpec(M.swin_v2_tiny_cls, "swinv2_tiny_window8_256", tier="slow", atol=2e-2),
+    ParitySpec(M.swin_v2_small_cls, "swinv2_small_window8_256", tier="slow", atol=2e-2),
+    ParitySpec(M.swin_v2_base_cls, "swinv2_base_window8_256", tier="heavy", atol=2e-2),
+    ParitySpec(M.swin_v2_large_cls, None, tier="heavy"),
+    # ── NFNet ─────────────────────────────────────────────────────────────────
+    # Normalizer-free; key layout differs from timm → self-consistency only
+    ParitySpec(M.nfnet_f0_cls, None, tier="slow"),
+    ParitySpec(M.nfnet_f1_cls, None, tier="slow"),
+    ParitySpec(M.nfnet_f2_cls, None, tier="slow"),
+    ParitySpec(M.nfnet_f3_cls, None, tier="slow"),
+    # ── CaiT ─────────────────────────────────────────────────────────────────
+    ParitySpec(M.cait_xxsmall_24_cls, None),
+    ParitySpec(M.cait_xxsmall_36_cls, None, tier="slow"),
+    ParitySpec(M.cait_xsmall_24_cls, None, tier="slow"),
+    ParitySpec(M.cait_small_24_cls, None, tier="slow"),
+    ParitySpec(M.cait_small_36_cls, None, tier="slow"),
+    ParitySpec(M.cait_medium_36_cls, None, tier="heavy"),
+    ParitySpec(M.cait_medium_48_cls, None, tier="heavy"),
+    # ── MnasNet ──────────────────────────────────────────────────────────────
+    ParitySpec(M.mnasnet_050_cls, "mnasnet_050", use_positional_fallback=True),
+    ParitySpec(M.mnasnet_100_cls, "mnasnet_100", use_positional_fallback=True),
+    ParitySpec(M.mnasnet_130_cls, "mnasnet_130", use_positional_fallback=True),
+    # ── PoolFormer ────────────────────────────────────────────────────────────
+    ParitySpec(M.poolformer_s12_cls, None),
+    ParitySpec(M.poolformer_s24_cls, None, tier="slow"),
+    ParitySpec(M.poolformer_s36_cls, None, tier="slow"),
+    ParitySpec(M.poolformer_m36_cls, None, tier="slow"),
+    ParitySpec(M.poolformer_m48_cls, None, tier="slow"),
 ]
 
 
