@@ -53,6 +53,14 @@ from lucid.models.vision.lenet import (  # noqa: E402
     lenet_5_relu,
     lenet_5_relu_cls,
 )
+# 2012 — AlexNet (Krizhevsky, Sutskever & Hinton)
+from lucid.models.vision.alexnet import (  # noqa: E402
+    AlexNet,
+    AlexNetConfig,
+    AlexNetForImageClassification,
+    alexnet,
+    alexnet_cls,
+)
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
@@ -100,6 +108,12 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — AlexNet (2012)
+    "AlexNet",
+    "AlexNetConfig",
+    "AlexNetForImageClassification",
+    "alexnet",
+    "alexnet_cls",
     # Vision — LeNet (1998)
     "LeNet",
     "LeNetConfig",

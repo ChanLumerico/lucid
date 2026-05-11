@@ -59,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.lenet: LeNet-5 (LeCun et al., 1998) — original tanh+avg and modern relu+max variants; backbone + classifier; 4 registry entries
 
+- lucid.models.vision.alexnet: AlexNet (Krizhevsky et al., 2012) — original paper architecture (96/256/384/384/256 channels + LRN); backbone + classifier
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
