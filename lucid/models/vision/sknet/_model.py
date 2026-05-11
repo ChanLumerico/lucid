@@ -98,7 +98,13 @@ class _SKBlock(nn.Module):
 
 
 class _SKBottleneck(nn.Module):
-    """1×1 → SK(3×3/5×5) → 1×1 bottleneck."""
+    """1×1 → SK(3×3/5×5) → 1×1 bottleneck.
+
+    Uses standard ResNet-50 expansion=4.  The single 3×3 conv in each
+    bottleneck is replaced by an SK block (two branches with different
+    receptive fields).  ``cardinality`` (G in the paper) groups the SK
+    branch convolutions; G=32 for SK-ResNet-50, G=32 for SK-ResNeXt-50.
+    """
 
     expansion: int = 4
 
@@ -109,21 +115,14 @@ class _SKBottleneck(nn.Module):
         stride: int = 1,
         downsample: nn.Module | None = None,
         reduction: int = 16,
-        cardinality: int = 1,
-        width_per_group: int = 64,
+        cardinality: int = 32,
     ) -> None:
         super().__init__()
-        # Grouped-conv width (ResNeXt-style when cardinality > 1)
-        if cardinality > 1:
-            width = (width_per_group * out_channels // _BASE_WIDTH) * cardinality
-        else:
-            width = out_channels
+        width = out_channels
 
         self.conv1 = nn.Conv2d(in_channels, width, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(width)
-        # SK replaces the 3×3 conv; stride goes into the downsample path
-        # (SK cannot easily do stride > 1 with dilation, so we keep stride=1
-        #  inside SK and apply an average pool when stride=2 is needed)
+        # SK replaces the 3×3 conv; stride applied via AvgPool after SK.
         self.sk = _SKBlock(width, reduction=reduction, groups=cardinality)
         self.stride_pool: nn.Module | None = (
             nn.AvgPool2d(stride, stride=stride) if stride > 1 else None
@@ -164,7 +163,6 @@ def _make_layer(
     stride: int,
     reduction: int,
     cardinality: int,
-    width_per_group: int,
 ) -> tuple[nn.Sequential, int]:
     """Build one SK-ResNet stage. Returns (layer, new_in_channels)."""
     final_channels = out_channels * _SKBottleneck.expansion
@@ -184,7 +182,6 @@ def _make_layer(
             downsample=downsample,
             reduction=reduction,
             cardinality=cardinality,
-            width_per_group=width_per_group,
         )
     ]
     for _ in range(1, num_blocks):
@@ -194,7 +191,6 @@ def _make_layer(
                 out_channels,
                 reduction=reduction,
                 cardinality=cardinality,
-                width_per_group=width_per_group,
             )
         )
 
@@ -226,40 +222,16 @@ def _build_body(
 
     cur = stem_channels
     layer1, cur = _make_layer(
-        cur,
-        hidden_sizes[0],
-        config.layers[0],
-        1,
-        config.reduction,
-        config.cardinality,
-        config.width_per_group,
+        cur, hidden_sizes[0], config.layers[0], 1, config.reduction, config.cardinality,
     )
     layer2, cur = _make_layer(
-        cur,
-        hidden_sizes[1],
-        config.layers[1],
-        2,
-        config.reduction,
-        config.cardinality,
-        config.width_per_group,
+        cur, hidden_sizes[1], config.layers[1], 2, config.reduction, config.cardinality,
     )
     layer3, cur = _make_layer(
-        cur,
-        hidden_sizes[2],
-        config.layers[2],
-        2,
-        config.reduction,
-        config.cardinality,
-        config.width_per_group,
+        cur, hidden_sizes[2], config.layers[2], 2, config.reduction, config.cardinality,
     )
     layer4, cur = _make_layer(
-        cur,
-        hidden_sizes[3],
-        config.layers[3],
-        2,
-        config.reduction,
-        config.cardinality,
-        config.width_per_group,
+        cur, hidden_sizes[3], config.layers[3], 2, config.reduction, config.cardinality,
     )
 
     exp = _SKBottleneck.expansion
@@ -336,7 +308,7 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.layer3 = l3
         self.layer4 = l4
 
-        final_channels = 512 * _SKBottleneck.expansion  # 2048
+        final_channels = 512 * _SKBottleneck.expansion  # 2048 (expansion=4)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(final_channels, config.num_classes)
 

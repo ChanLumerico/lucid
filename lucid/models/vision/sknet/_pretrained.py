@@ -8,12 +8,13 @@ from lucid.models.vision.sknet._model import SKNet, SKNetForImageClassification
 # Canonical configs
 # ---------------------------------------------------------------------------
 
-# Plain SK-ResNet (cardinality=1 → standard conv inside each SK branch)
-_CFG_SK50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=1, width_per_group=64)
-_CFG_SK101 = SKNetConfig(layers=(3, 4, 23, 3), cardinality=1, width_per_group=64)
+# SK-ResNet: cardinality=32 groups inside SK branches, as in the original paper (G=32).
+# The 1×1 projection convs are always ungrouped.
+_CFG_SK50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=32)
+_CFG_SK101 = SKNetConfig(layers=(3, 4, 23, 3), cardinality=32)
 
-# SK-ResNeXt (cardinality=32, width_per_group=4 → ResNeXt-50 32×4d style)
-_CFG_SK_RX50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=32, width_per_group=4)
+# SK-ResNeXt-50: same grouping as the paper's SK-ResNeXt variant.
+_CFG_SK_RX50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=32)
 
 
 # ---------------------------------------------------------------------------

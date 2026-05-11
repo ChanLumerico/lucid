@@ -187,7 +187,9 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
         nn.BatchNorm2d(penultimate_ch),
         nn.Hardswish(),
     ]
-    return nn.Sequential(*layers), penultimate_ch, 1280
+    # Large → 1280, Small → 1024 (paper Table 2 / torchvision)
+    head_ch = _make_divisible(1280 * w) if cfg.variant == "large" else _make_divisible(1024 * w)
+    return nn.Sequential(*layers), penultimate_ch, head_ch
 
 
 def _build_classifier_head(

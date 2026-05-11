@@ -12,16 +12,16 @@ class SKNetConfig(ModelConfig):
 
     Paper: "Selective Kernel Networks"
 
-    The SK block replaces the 3×3 conv in a bottleneck with two parallel
-    branches (3×3 and dilated-3×3 with dilation=2, padding=2).  The branches
-    are fused via element-wise addition, squeezed with global average pooling,
-    and excited through a compact FC → softmax to produce per-branch attention
-    weights, which produce a weighted sum of the two branch outputs.
+    Architecture (SK-ResNet-50 defaults):
+      expansion = 2  (bottleneck: in → mid → mid*2)
+      Stage outputs: 128, 256, 512, 1024  (not ResNet's 256/512/1024/2048)
+      Final classifier: FC(1024, num_classes)
 
-    ``num_paths`` is fixed at 2 in the standard SKNet formulation.
-    ``reduction`` controls the bottleneck ratio of the gating FC layer.
-    ``cardinality`` / ``width_per_group`` enable ResNeXt-style grouped
-    convolutions inside the SK branches (set cardinality=1 for plain SK-ResNet).
+      ``cardinality`` = G in the paper (number of groups in SK branches).
+      SK-ResNet-50 uses G=32 (default). The 1×1 projection convs are always
+      ungrouped — only the SK branch convolutions use cardinality groups.
+      ``reduction`` controls the squeeze ratio of the gating FC (r=16 default,
+      minimum channel dim clamped to 32).
     """
 
     model_type: ClassVar[str] = "sknet"
@@ -30,10 +30,7 @@ class SKNetConfig(ModelConfig):
     in_channels: int = 3
     layers: tuple[int, ...] = (3, 4, 6, 3)
     reduction: int = 16
-    num_paths: int = 2
-    block_type: str = "bottleneck"
-    cardinality: int = 1
-    width_per_group: int = 64
+    cardinality: int = 32
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))
