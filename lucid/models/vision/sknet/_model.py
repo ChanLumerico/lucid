@@ -1,14 +1,20 @@
 """SKNet backbone and classification head (Li et al., 2019).
 
 Paper: "Selective Kernel Networks"
-The SK block fuses two parallel conv branches (3×3 and dilated 3×3) via
-channel-wise softmax attention derived from a global-average-pooled summary.
+This implementation follows the timm ``skresnet50`` architecture:
+SelectiveKernel with ``split_input=True`` (each branch receives half the
+input channels), two 3×3 branches (second with dilation=2 to mimic 5×5),
+and a Conv2d-based attention module.
 
-For SK-ResNeXt, both branches use grouped convolutions (cardinality > 1).
+For SK-ResNeXt, ``cardinality`` and ``base_width`` together determine the
+bottleneck width per the ResNeXt formula:
+  width = int(planes * (base_width / 64)) * cardinality
 """
 
+import math
 from typing import ClassVar, cast
 
+import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
@@ -18,137 +24,254 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.sknet._config import SKNetConfig
 
 # ---------------------------------------------------------------------------
-# SK block (replaces the 3×3 conv inside a bottleneck)
+# Helpers
 # ---------------------------------------------------------------------------
 
-_BASE_WIDTH: int = 64
+
+def _make_divisible(v: float, divisor: int = 8, min_value: int | None = None) -> int:
+    """Round *v* up to the nearest multiple of *divisor* (≥ *min_value*)."""
+    min_val = min_value if min_value is not None else divisor
+    new_v = max(min_val, int(v + divisor / 2) // divisor * divisor)
+    if new_v < 0.9 * v:
+        new_v += divisor
+    return new_v
 
 
-class _SKBlock(nn.Module):
-    """Selective Kernel block: 2-branch multi-scale conv + attention fusion."""
+# ---------------------------------------------------------------------------
+# SelectiveKernelAttn — attention module (Conv2d-based, as in timm)
+# ---------------------------------------------------------------------------
+
+
+class _SelectiveKernelAttn(nn.Module):
+    """Attention module for SelectiveKernel.
+
+    Input shape: ``(B, num_paths, C, H, W)`` — stacked branch outputs.
+    Performs global-average-pool over the element-wise sum, reduces
+    channels, then outputs per-path softmax weights of shape
+    ``(B, num_paths, C, 1, 1)``.
+    """
 
     def __init__(
         self,
         channels: int,
-        reduction: int = 16,
-        groups: int = 1,
+        num_paths: int = 2,
+        attn_channels: int = 32,
     ) -> None:
         super().__init__()
-        # Branch 1: standard 3×3
-        self.conv3 = nn.Conv2d(
-            channels, channels, 3, padding=1, groups=groups, bias=False
+        self.num_paths = num_paths
+        # Conv2d 1×1 — same param count as Linear but keeps (B, C, 1, 1) layout
+        self.fc_reduce = nn.Conv2d(channels, attn_channels, kernel_size=1, bias=False)
+        self.bn = nn.BatchNorm2d(attn_channels)
+        self.act = nn.ReLU(inplace=True)
+        self.fc_select = nn.Conv2d(
+            attn_channels, channels * num_paths, kernel_size=1, bias=False
         )
-        self.bn3 = nn.BatchNorm2d(channels)
-        # Branch 2: dilated 3×3 (effective 5×5 receptive field)
-        self.conv5 = nn.Conv2d(
-            channels, channels, 3, padding=2, dilation=2, groups=groups, bias=False
-        )
-        self.bn5 = nn.BatchNorm2d(channels)
-        self.relu = nn.ReLU(inplace=True)
-
-        # Gating: squeeze → compact FC → softmax over 2 paths
-        reduced = max(channels // reduction, 32)
-        self.gap = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Linear(channels, reduced, bias=False)
-        self.bn_fc = nn.BatchNorm1d(reduced)
-        # 2-path attention: (reduced → 2*channels) then reshaped
-        self.attn = nn.Linear(reduced, channels * 2, bias=False)
-
-        self._channels = channels
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        # x: (B, num_paths, C, H, W)
+        # Sum paths then global-average-pool → (B, C, 1, 1)
         b = x.shape[0]
-        c = self._channels
+        c = x.shape[2]
 
-        # Compute two branch outputs
-        u3 = cast(
-            Tensor, self.relu(cast(Tensor, self.bn3(cast(Tensor, self.conv3(x)))))
-        )
-        u5 = cast(
-            Tensor, self.relu(cast(Tensor, self.bn5(cast(Tensor, self.conv5(x)))))
-        )
+        # Sum over path dimension (dim=1)
+        summed = x[:, 0, :, :, :]
+        for p in range(1, self.num_paths):
+            summed = summed + x[:, p, :, :, :]
 
-        # Fuse: element-wise sum then squeeze
-        u = u3 + u5
-        s = cast(Tensor, self.gap(u))  # (B, C, 1, 1)
-        s = s.reshape(b, c)  # (B, C)
+        # Global average pool: mean over H and W
+        gap = cast(Tensor, nn.AdaptiveAvgPool2d(1)(summed))  # (B, C, 1, 1)
 
-        # Compact representation
-        z = cast(Tensor, self.relu(cast(Tensor, self.bn_fc(cast(Tensor, self.fc(s))))))
+        z = cast(Tensor, self.fc_reduce(gap))
+        z = cast(Tensor, self.bn(z))
+        z = cast(Tensor, self.act(z))
+        z = cast(Tensor, self.fc_select(z))  # (B, C*num_paths, 1, 1)
 
-        # Attention weights: (B, 2*C) → (B, 2, C)
-        attn_raw = cast(Tensor, self.attn(z))  # (B, 2*C)
-        attn_raw = attn_raw.reshape(b, 2, c)  # (B, 2, C)
-        attn = F.softmax(attn_raw, dim=1)  # softmax over 2 paths
-
-        # Split attention weights for each branch: (B, C)
-        a3 = attn[:, 0, :]  # (B, C)
-        a5 = attn[:, 1, :]  # (B, C)
-
-        # Reshape to (B, C, 1, 1) for broadcasting
-        a3 = a3.reshape(b, c, 1, 1)
-        a5 = a5.reshape(b, c, 1, 1)
-
-        return u3 * a3 + u5 * a5
+        # Reshape to (B, num_paths, C, 1, 1) then softmax over path dim
+        z = z.reshape(b, self.num_paths, c, 1, 1)
+        z = F.softmax(z, dim=1)
+        return z
 
 
 # ---------------------------------------------------------------------------
-# SK Bottleneck block
+# ConvBnAct — simple conv + BN + ReLU block
 # ---------------------------------------------------------------------------
 
 
-class _SKBottleneck(nn.Module):
-    """1×1 → SK(3×3/5×5) → 1×1 bottleneck.
-
-    Uses standard ResNet-50 expansion=4.  The single 3×3 conv in each
-    bottleneck is replaced by an SK block (two branches with different
-    receptive fields).  ``cardinality`` (G in the paper) groups the SK
-    branch convolutions; G=32 for SK-ResNet-50, G=32 for SK-ResNeXt-50.
-    """
-
-    expansion: int = 4
+class _ConvBnAct(nn.Module):
+    """Conv2d → BatchNorm2d → ReLU."""
 
     def __init__(
         self,
         in_channels: int,
         out_channels: int,
+        kernel_size: int = 3,
         stride: int = 1,
-        downsample: nn.Module | None = None,
-        reduction: int = 16,
-        cardinality: int = 32,
+        padding: int = 1,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = False,
+        apply_act: bool = True,
     ) -> None:
         super().__init__()
-        width = out_channels
-
-        self.conv1 = nn.Conv2d(in_channels, width, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(width)
-        # SK replaces the 3×3 conv; stride applied via AvgPool after SK.
-        self.sk = _SKBlock(width, reduction=reduction, groups=cardinality)
-        self.stride_pool: nn.Module | None = (
-            nn.AvgPool2d(stride, stride=stride) if stride > 1 else None
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
         )
-        self.conv3 = nn.Conv2d(width, out_channels * self.expansion, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(out_channels * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.apply_act = apply_act
+        if apply_act:
+            self.act: nn.Module = nn.ReLU(inplace=True)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        out = cast(Tensor, self.conv(x))
+        out = cast(Tensor, self.bn(out))
+        if self.apply_act:
+            out = cast(Tensor, self.act(out))
+        return out
+
+
+# ---------------------------------------------------------------------------
+# SelectiveKernel — multi-branch conv with split input
+# ---------------------------------------------------------------------------
+
+
+class _SelectiveKernel(nn.Module):
+    """Two-branch selective-kernel convolution.
+
+    By default ``split_input=True``: the input is split in half along the
+    channel axis and each half is fed to one branch.  This keeps the param
+    count comparable to a single grouped 3×3 conv.
+
+    Branches are 3×3 with dilation 1 and 3×3 with dilation 2 (mimicking 5×5).
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int | None = None,
+        stride: int = 1,
+        dilation: int = 1,
+        groups: int = 1,
+        split_input: bool = True,
+        rd_ratio: float = 1.0 / 16,
+        rd_divisor: int = 8,
+    ) -> None:
+        super().__init__()
+        out_channels = out_channels if out_channels is not None else in_channels
+        # keep_3x3=True: kernels [3, 5] → 3×3 with dilations [1, 2]
+        dilations = [dilation, dilation * 2]
+        kernel_sizes = [3, 3]
+        paddings = [d for d in dilations]
+
+        self.num_paths = 2
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.split_input = split_input
+
+        path_in = in_channels // self.num_paths if split_input else in_channels
+        effective_groups = min(out_channels, groups)
+
+        self.paths = nn.ModuleList(
+            [
+                _ConvBnAct(
+                    path_in,
+                    out_channels,
+                    kernel_size=k,
+                    stride=stride,
+                    padding=p,
+                    dilation=d,
+                    groups=effective_groups,
+                )
+                for k, d, p in zip(kernel_sizes, dilations, paddings)
+            ]
+        )
+
+        attn_channels = _make_divisible(out_channels * rd_ratio, divisor=rd_divisor)
+        self.attn = _SelectiveKernelAttn(out_channels, self.num_paths, attn_channels)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        if self.split_input:
+            half = self.in_channels // self.num_paths
+            x_paths = [
+                cast(Tensor, self.paths[i](x[:, i * half : (i + 1) * half, :, :]))
+                for i in range(self.num_paths)
+            ]
+        else:
+            x_paths = [cast(Tensor, op(x)) for op in self.paths]
+
+        # Stack: (B, num_paths, C, H, W)
+        stacked = lucid.stack(x_paths, dim=1)
+        # Attention weights: (B, num_paths, C, 1, 1)
+        attn = cast(Tensor, self.attn(stacked))
+        # Weighted sum
+        weighted = stacked * attn
+        out = weighted[:, 0, :, :, :]
+        for p in range(1, self.num_paths):
+            out = out + weighted[:, p, :, :, :]
+        return out
+
+
+# ---------------------------------------------------------------------------
+# SelectiveKernelBottleneck
+# ---------------------------------------------------------------------------
+
+
+class _SelectiveKernelBottleneck(nn.Module):
+    """1×1 → SK(3×3/3×3 dilated) → 1×1 bottleneck with SK attention."""
+
+    expansion: int = 4
+
+    def __init__(
+        self,
+        inplanes: int,
+        planes: int,
+        stride: int = 1,
+        downsample: nn.Module | None = None,
+        cardinality: int = 1,
+        base_width: int = 64,
+        split_input: bool = True,
+        rd_ratio: float = 1.0 / 16,
+        rd_divisor: int = 8,
+    ) -> None:
+        super().__init__()
+        # ResNeXt-style width computation (planes for standard ResNet when base_width=64)
+        width = int(math.floor(planes * (base_width / 64)) * cardinality)
+        outplanes = planes * self.expansion
+
+        self.conv1 = _ConvBnAct(inplanes, width, kernel_size=1, padding=0)
+        self.conv2 = _SelectiveKernel(
+            width,
+            width,
+            stride=stride,
+            groups=cardinality,
+            split_input=split_input,
+            rd_ratio=rd_ratio,
+            rd_divisor=rd_divisor,
+        )
+        self.conv3 = _ConvBnAct(
+            width, outplanes, kernel_size=1, padding=0, apply_act=False
+        )
+        self.act = nn.ReLU(inplace=True)
         self.downsample = downsample
-        self.stride = stride
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        )
-        out = cast(Tensor, self.sk(out))
-        if self.stride_pool is not None:
-            out = cast(Tensor, self.stride_pool(out))
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out = cast(Tensor, self.conv1(x))
+        out = cast(Tensor, self.conv2(out))
+        out = cast(Tensor, self.conv3(out))
 
         if self.downsample is not None:
             identity = cast(Tensor, self.downsample(x))
 
         out = out + identity
-        return cast(Tensor, self.relu(out))
+        return cast(Tensor, self.act(out))
 
 
 # ---------------------------------------------------------------------------
@@ -156,45 +279,55 @@ class _SKBottleneck(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _make_layer(
-    in_channels: int,
-    out_channels: int,
+def _make_stage(
+    inplanes: int,
+    planes: int,
     num_blocks: int,
     stride: int,
-    reduction: int,
     cardinality: int,
+    base_width: int,
+    split_input: bool,
+    rd_ratio: float,
+    rd_divisor: int,
 ) -> tuple[nn.Sequential, int]:
-    """Build one SK-ResNet stage. Returns (layer, new_in_channels)."""
-    final_channels = out_channels * _SKBottleneck.expansion
+    """Build one ResNet stage of SK bottleneck blocks."""
+    width = int(math.floor(planes * (base_width / 64)) * cardinality)
+    outplanes = planes * _SelectiveKernelBottleneck.expansion
 
     downsample: nn.Module | None = None
-    if stride != 1 or in_channels != final_channels:
+    if stride != 1 or inplanes != outplanes:
         downsample = nn.Sequential(
-            nn.Conv2d(in_channels, final_channels, 1, stride=stride, bias=False),
-            nn.BatchNorm2d(final_channels),
+            nn.Conv2d(inplanes, outplanes, kernel_size=1, stride=stride, bias=False),
+            nn.BatchNorm2d(outplanes),
         )
 
+    block_kwargs = dict(
+        cardinality=cardinality,
+        base_width=base_width,
+        split_input=split_input,
+        rd_ratio=rd_ratio,
+        rd_divisor=rd_divisor,
+    )
+
     blocks: list[nn.Module] = [
-        _SKBottleneck(
-            in_channels,
-            out_channels,
+        _SelectiveKernelBottleneck(
+            inplanes,
+            planes,
             stride=stride,
             downsample=downsample,
-            reduction=reduction,
-            cardinality=cardinality,
+            **block_kwargs,  # type: ignore[arg-type]
         )
     ]
     for _ in range(1, num_blocks):
         blocks.append(
-            _SKBottleneck(
-                final_channels,
-                out_channels,
-                reduction=reduction,
-                cardinality=cardinality,
+            _SelectiveKernelBottleneck(
+                outplanes,
+                planes,
+                **block_kwargs,  # type: ignore[arg-type]
             )
         )
 
-    return nn.Sequential(*blocks), final_channels
+    return nn.Sequential(*blocks), outplanes
 
 
 def _build_body(
@@ -208,40 +341,48 @@ def _build_body(
     nn.Sequential,
     list[FeatureInfo],
 ]:
-    stem_channels = 64
-    hidden_sizes = (64, 128, 256, 512)
-
+    """Build all layers from config; return them plus the stage feature-info list."""
     stem = nn.Sequential(
         nn.Conv2d(
-            config.in_channels, stem_channels, 7, stride=2, padding=3, bias=False
+            config.in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False
         ),
-        nn.BatchNorm2d(stem_channels),
+        nn.BatchNorm2d(64),
         nn.ReLU(inplace=True),
     )
-    pool = nn.MaxPool2d(3, stride=2, padding=1)
+    pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-    cur = stem_channels
-    layer1, cur = _make_layer(
-        cur, hidden_sizes[0], config.layers[0], 1, config.reduction, config.cardinality,
-    )
-    layer2, cur = _make_layer(
-        cur, hidden_sizes[1], config.layers[1], 2, config.reduction, config.cardinality,
-    )
-    layer3, cur = _make_layer(
-        cur, hidden_sizes[2], config.layers[2], 2, config.reduction, config.cardinality,
-    )
-    layer4, cur = _make_layer(
-        cur, hidden_sizes[3], config.layers[3], 2, config.reduction, config.cardinality,
+    planes_per_stage = [64, 128, 256, 512]
+    strides = [1, 2, 2, 2]
+
+    kw = dict(
+        cardinality=config.cardinality,
+        base_width=config.base_width,
+        split_input=config.split_input,
+        rd_ratio=config.rd_ratio,
+        rd_divisor=config.rd_divisor,
     )
 
-    exp = _SKBottleneck.expansion
-    feature_info = [
-        FeatureInfo(stage=1, num_channels=hidden_sizes[0] * exp, reduction=4),
-        FeatureInfo(stage=2, num_channels=hidden_sizes[1] * exp, reduction=8),
-        FeatureInfo(stage=3, num_channels=hidden_sizes[2] * exp, reduction=16),
-        FeatureInfo(stage=4, num_channels=hidden_sizes[3] * exp, reduction=32),
-    ]
-    return stem, pool, layer1, layer2, layer3, layer4, feature_info
+    cur = 64
+    layers: list[nn.Sequential] = []
+    feature_info: list[FeatureInfo] = []
+    reductions = [4, 8, 16, 32]
+
+    for stage_idx, (planes, stride) in enumerate(zip(planes_per_stage, strides)):
+        layer, cur = _make_stage(
+            cur,
+            planes,
+            config.layers[stage_idx],
+            stride,
+            **kw,  # type: ignore[arg-type]
+        )
+        layers.append(layer)
+        feature_info.append(
+            FeatureInfo(
+                stage=stage_idx + 1, num_channels=cur, reduction=reductions[stage_idx]
+            )
+        )
+
+    return stem, pool, layers[0], layers[1], layers[2], layers[3], feature_info
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +394,7 @@ class SKNet(PretrainedModel, BackboneMixin):
     """SK-ResNet feature extractor — no classification head.
 
     Output: ``BaseModelOutput`` with ``last_hidden_state`` of shape
-    ``(B, 2048, 7, 7)`` for 224×224 inputs.
+    ``(B, 2048, H/32, W/32)`` for typical inputs.
     """
 
     config_class: ClassVar[type[SKNetConfig]] = SKNetConfig
@@ -308,7 +449,7 @@ class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.layer3 = l3
         self.layer4 = l4
 
-        final_channels = 512 * _SKBottleneck.expansion  # 2048 (expansion=4)
+        final_channels = 512 * _SelectiveKernelBottleneck.expansion  # 2048
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self._build_classifier(final_channels, config.num_classes)
 

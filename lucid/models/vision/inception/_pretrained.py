@@ -7,8 +7,8 @@ from lucid.models.vision.inception._model import (
     InceptionV3ForImageClassification,
 )
 
-_CFG = InceptionConfig()
-_CFG_NO_AUX = InceptionConfig(aux_logits=False)
+_CFG = InceptionConfig(aux_logits=False)
+_CFG_AUX = InceptionConfig(aux_logits=True)
 
 
 @register_model(
@@ -34,6 +34,10 @@ def inception_v3(pretrained: bool = False, **overrides: object) -> InceptionV3:
 def inception_v3_cls(
     pretrained: bool = False, **overrides: object
 ) -> InceptionV3ForImageClassification:
-    """Inception v3 classifier with auxiliary classifier (Szegedy et al., 2015)."""
+    """Inception v3 classifier without auxiliary classifier (Szegedy et al., 2015).
+
+    Matches timm's default ``aux_logits=False`` for 23,834,568 parameters.
+    Pass ``aux_logits=True`` to enable the auxiliary head (used during training).
+    """
     cfg = InceptionConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
     return InceptionV3ForImageClassification(cfg)

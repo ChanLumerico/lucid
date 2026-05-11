@@ -21,5 +21,5 @@ class InceptionConfig(ModelConfig):
     num_classes: int = 1000
     in_channels: int = 3
     version: str = "v3"
-    aux_logits: bool = True
+    aux_logits: bool = False
     dropout: float = 0.5

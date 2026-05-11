@@ -272,18 +272,24 @@ class _InceptionE(nn.Module):
 
 
 class _InceptionAux(nn.Module):
-    """Auxiliary classifier for Inception v3 (attaches after InceptionC[1])."""
+    """Auxiliary classifier for Inception v3 (attaches after InceptionC[3]).
+
+    Matches torchvision / timm structure:
+      AvgPool(5,s=3) → Conv(in→128, 1×1) → Conv(128→768, 5×5) → FC(768, num_classes)
+    """
 
     def __init__(self, in_channels: int, num_classes: int) -> None:
         super().__init__()
         self.avgpool = nn.AvgPool2d(5, stride=3)
-        self.conv = _ConvBnReLU(in_channels, 128, 1)
+        self.conv0 = _ConvBnReLU(in_channels, 128, 1)
+        self.conv1 = _ConvBnReLU(128, 768, 5)
         self.adapt_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(128, num_classes)
+        self.fc = nn.Linear(768, num_classes)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.avgpool(x))
-        x = cast(Tensor, self.conv(x))
+        x = cast(Tensor, self.conv0(x))
+        x = cast(Tensor, self.conv1(x))
         x = cast(Tensor, self.adapt_pool(x))
         x = x.flatten(1)
         return cast(Tensor, self.fc(x))
@@ -335,14 +341,14 @@ class InceptionV3(PretrainedModel, BackboneMixin):
         super().__init__(config)
         self.stem = _build_inception_stem(config.in_channels)
 
-        # InceptionA × 3 (pool_features = 32, 32, 64)
+        # InceptionA × 3 (pool_features = 32, 64, 64)
         # InceptionA always outputs 64+64+96+pool_features channels
-        # a0: 192→256 (pool=32), a1: 256→256 (pool=32), a2: 256→288 (pool=64)
+        # a0: 192→256 (pool=32), a1: 256→288 (pool=64), a2: 288→288 (pool=64)
         self.inception_a0 = _InceptionA(192, pool_features=32)
-        self.inception_a1 = _InceptionA(256, pool_features=32)
-        self.inception_a2 = _InceptionA(256, pool_features=64)
+        self.inception_a1 = _InceptionA(256, pool_features=64)
+        self.inception_a2 = _InceptionA(288, pool_features=64)
 
-        # Reduction-A (InceptionB)
+        # Reduction-A (InceptionB) — input: 288 channels = 64+64+96+64
         self.reduction_a = _InceptionB(288)
 
         # InceptionC × 4 (channels_7x7 = 128, 160, 160, 192)
@@ -406,10 +412,10 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.stem = _build_inception_stem(config.in_channels)
 
         # InceptionA × 3
-        # a0: 192→256, a1: 256→256, a2: 256→288
+        # a0: 192→256 (pool=32), a1: 256→288 (pool=64), a2: 288→288 (pool=64)
         self.inception_a0 = _InceptionA(192, pool_features=32)
-        self.inception_a1 = _InceptionA(256, pool_features=32)
-        self.inception_a2 = _InceptionA(256, pool_features=64)
+        self.inception_a1 = _InceptionA(256, pool_features=64)
+        self.inception_a2 = _InceptionA(288, pool_features=64)
 
         # Reduction-A (input: 288 channels = 64+64+96+64)
         self.reduction_a = _InceptionB(288)

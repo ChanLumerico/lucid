@@ -1,23 +1,29 @@
 """MaxViT backbone and classifier (Tu et al., 2022).
 
 Paper: "MaxViT: Multi-Axis Vision Transformer"
+        https://arxiv.org/abs/2204.01697
 
 Key ideas:
-  1. Multi-Axis attention: combine local window attention (block) and global
-     grid attention in every block — O(n) overall complexity.
+  1. Multi-Axis attention: combine local window attention (block-attention) and
+     global grid attention in every block — O(n) overall complexity.
   2. MBConv (mobile inverted bottleneck) in each block for local features.
-  3. Window (block) attention: partition spatial into non-overlapping windows,
-     run MHA within each window.
-  4. Grid attention: transpose partition (every window_size-th pixel in each
-     direction forms a grid), run MHA within each grid.
+  3. Window (block) attention: partition spatial into non-overlapping ws×ws
+     windows, run MHA within each window.
+  4. Grid attention: dilated / strided partition (every ws-th pixel in each
+     direction forms a virtual "grid"), run MHA within each grid.
 
-Architecture (MaxViT-T, image=224, ws=8):
-  Stem   : Conv3×3(s=2) → Conv3×3(32→64) → (112×112, 64)
-  Stage 1: 2 × MaxViTBlock(64)  → Downsample → (56×56, 128)
-  Stage 2: 2 × MaxViTBlock(128) → Downsample → (28×28, 256)
-  Stage 3: 5 × MaxViTBlock(256) → Downsample → (14×14, 512)
+Architecture (MaxViT-T, image=224, ws=7):
+  Stem   : Conv3×3(s=2, → 32) → BN → GELU → Conv3×3(s=1, 32→64) → (112×112)
+  Stage 1: 2 × MaxViTBlock(64)  → Downsample(stride=2) → (56×56, 128)
+  Stage 2: 2 × MaxViTBlock(128) → Downsample(stride=2) → (28×28, 256)
+  Stage 3: 5 × MaxViTBlock(256) → Downsample(stride=2) → (14×14, 512)
   Stage 4: 2 × MaxViTBlock(512)
   Head   : AdaptiveAvgPool(1×1) → FC
+
+Padding strategy:
+  If H or W is not divisible by ws, we pad to the next multiple of ws before
+  window/grid partitioning and crop back afterwards. This ensures correctness
+  for arbitrary input sizes.
 """
 
 from typing import ClassVar, cast
@@ -32,16 +38,22 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.maxvit._config import MaxViTConfig
 
 # ---------------------------------------------------------------------------
-# Window partition / reverse (same as Swin)
+# Window partition / reverse
 # ---------------------------------------------------------------------------
 
 
 def _window_partition(x: Tensor, ws: int) -> tuple[Tensor, int, int]:
-    """(B, H, W, C) → (B*nH*nW, ws, ws, C)."""
+    """(B, H, W, C) → (B*nH*nW, ws, ws, C).
+
+    Divides the spatial map into non-overlapping ws×ws windows.
+    Requires H and W to be divisible by ws (caller must pad if needed).
+    """
     B, H, W, C = x.shape
-    x = x.reshape(B, H // ws, ws, W // ws, ws, C)
+    nH, nW = H // ws, W // ws
+    # (B, nH, ws, nW, ws, C) → permute → (B, nH, nW, ws, ws, C) → reshape
+    x = x.reshape(B, nH, ws, nW, ws, C)
     x = x.permute(0, 1, 3, 2, 4, 5).reshape(-1, ws, ws, C)
-    return x, H // ws, W // ws
+    return x, nH, nW
 
 
 def _window_reverse(windows: Tensor, ws: int, nH: int, nW: int) -> Tensor:
@@ -54,25 +66,25 @@ def _window_reverse(windows: Tensor, ws: int, nH: int, nW: int) -> Tensor:
 
 
 # ---------------------------------------------------------------------------
-# Grid partition: pick every ws-th pixel to form "grid" tokens
+# Grid partition / reverse
 # ---------------------------------------------------------------------------
 
 
 def _grid_partition(x: Tensor, ws: int) -> tuple[Tensor, int, int]:
-    """(B, H, W, C) → (B*ws*ws, nH*nW, C) grid partition.
+    """(B, H, W, C) → (B*ws*ws, nH*nW, C).
 
-    Grid attention: tokens at positions (i*ws+r, j*ws+s) for all i,j,
-    fixed (r,s) form a grid. We group by (r,s) to get ws² groups of
-    nH*nW tokens each.
+    Grid attention picks every ws-th pixel to form a "grid group".
+    Group (r, s) contains pixels at positions (i*ws+r, j*ws+s) for all i,j.
+    We merge (r,s) into the batch dimension so each group attends globally.
+
+    Requires H, W divisible by ws (caller must pad if needed).
     """
     B, H, W, C = x.shape
-    nH = H // ws
-    nW = W // ws
-    # Reshape: (B, nH, ws, nW, ws, C) → permute so ws dims come first
+    nH, nW = H // ws, W // ws
+    # (B, nH, ws, nW, ws, C) → permute (0,2,4,1,3,5) → (B, ws, ws, nH, nW, C)
     x = x.reshape(B, nH, ws, nW, ws, C)
-    # (B, ws, ws, nH, nW, C) — each (r,s) pair is a grid
     x = x.permute(0, 2, 4, 1, 3, 5)
-    # Merge batch with grid position: (B*ws*ws, nH*nW, C)
+    # Merge (B, ws, ws) → batch, flatten (nH, nW) → sequence
     x = x.reshape(B * ws * ws, nH * nW, C)
     return x, nH, nW
 
@@ -86,38 +98,65 @@ def _grid_reverse(x: Tensor, ws: int, nH: int, nW: int, B: int) -> Tensor:
 
 
 # ---------------------------------------------------------------------------
-# MBConv block (mobile inverted bottleneck)
+# Helpers: pad spatial to multiple of ws, then crop back
+# ---------------------------------------------------------------------------
+
+
+def _pad_to_multiple(x_cl: Tensor, ws: int) -> tuple[Tensor, int, int, int, int]:
+    """Pad (B, H, W, C) tensor so H and W are multiples of ws.
+
+    Returns padded tensor and original (H, W) for later cropping.
+    """
+    B, H, W, C = x_cl.shape
+    pH = (ws - H % ws) % ws
+    pW = (ws - W % ws) % ws
+    if pH > 0:
+        pad_h = lucid.zeros(B, pH, W, C)
+        x_cl = lucid.cat([x_cl, pad_h], dim=1)
+    if pW > 0:
+        Hp = x_cl.shape[1]
+        pad_w = lucid.zeros(B, Hp, pW, C)
+        x_cl = lucid.cat([x_cl, pad_w], dim=2)
+    return x_cl, H, W, pH, pW
+
+
+# ---------------------------------------------------------------------------
+# MBConv block (mobile inverted bottleneck, pre-norm with BN)
 # ---------------------------------------------------------------------------
 
 
 class _MBConv(nn.Module):
-    """MBConv: expand → DWConv3×3 → project, with pre-norm and residual."""
+    """MBConv: BN pre-norm → expand Conv1×1 → GELU → DWConv3×3 → GELU → project.
+
+    Residual connection around the whole block. Expand ratio = 4 (default).
+    """
 
     def __init__(self, dim: int, expand_ratio: int = 4) -> None:
         super().__init__()
         mid = dim * expand_ratio
         self.norm = nn.BatchNorm2d(dim)
         self.conv1 = nn.Conv2d(dim, mid, 1)
-        self.act = nn.GELU()
+        self.act1 = nn.GELU()
         self.dwconv = nn.Conv2d(mid, mid, 3, padding=1, groups=mid)
+        self.act2 = nn.GELU()
         self.conv2 = nn.Conv2d(mid, dim, 1)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
         x = cast(Tensor, self.norm(x))
-        x = cast(Tensor, self.act(cast(Tensor, self.conv1(x))))
-        x = cast(Tensor, self.act(cast(Tensor, self.dwconv(x))))
+        x = cast(Tensor, self.act1(cast(Tensor, self.conv1(x))))
+        x = cast(Tensor, self.act2(cast(Tensor, self.dwconv(x))))
         x = cast(Tensor, self.conv2(x))
         return shortcut + x
 
 
 # ---------------------------------------------------------------------------
-# Attention block (shared for window and grid)
+# Shared attention + MLP block (pre-LN, used for window and grid attention)
 # ---------------------------------------------------------------------------
 
 
 class _AttnBlock(nn.Module):
-    """Pre-LN MHA block operating on (B, N, C) sequences."""
+    """Pre-LN MHA block operating on (B, N, C) token sequences."""
 
     def __init__(self, dim: int, num_heads: int, mlp_ratio: float) -> None:
         super().__init__()
@@ -140,11 +179,18 @@ class _AttnBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# MaxViT block: MBConv + block-attn + grid-attn
+# MaxViT block: MBConv → block-attn → grid-attn
 # ---------------------------------------------------------------------------
 
 
 class _MaxViTBlock(nn.Module):
+    """Single MaxViT block = MBConv + window attention + grid attention.
+
+    Operates on (B, C, H, W) tensors throughout (NCHW layout).
+    Window and grid attention convert to channel-last internally for
+    the partition operations, then convert back.
+    """
+
     def __init__(
         self, dim: int, num_heads: int, window_size: int, mlp_ratio: float
     ) -> None:
@@ -158,42 +204,33 @@ class _MaxViTBlock(nn.Module):
         # x: (B, C, H, W)
         ws = self.ws
 
-        # 1. MBConv (local feature extraction)
+        # 1. MBConv local feature extraction
         x = cast(Tensor, self.mbconv(x))
 
         B, C, H, W = x.shape
-        # Convert to channel-last for window/grid ops
+        # Convert to channel-last for window/grid operations
         x_cl = x.permute(0, 2, 3, 1)  # (B, H, W, C)
 
-        # Pad H and W to be multiples of ws (required for partition ops).
-        # At later stages (e.g. 28×28 with ws=8) the spatial dim may not
-        # divide evenly; we pad with zeros and crop the output back.
-        pH = (ws - H % ws) % ws
-        pW = (ws - W % ws) % ws
-        if pH > 0:
-            pad_h = lucid.zeros(B, pH, W, C)
-            x_cl = lucid.cat([x_cl, pad_h], dim=1)
-        if pW > 0:
-            Hp = x_cl.shape[1]
-            pad_w = lucid.zeros(B, Hp, pW, C)
-            x_cl = lucid.cat([x_cl, pad_w], dim=2)
+        # Pad to multiples of ws so partition is exact
+        x_cl, orig_H, orig_W, _pH, _pW = _pad_to_multiple(x_cl, ws)
+        Hp, Wp = x_cl.shape[1], x_cl.shape[2]
 
-        # 2. Block attention (local window)
+        # 2. Block (window) attention — local within ws×ws windows
         wins, nH, nW = _window_partition(x_cl, ws)  # (B*nH*nW, ws, ws, C)
-        wins_flat = wins.reshape(-1, ws * ws, C)  # (B*nH*nW, ws², C)
-        wins_flat = cast(Tensor, self.block_attn(wins_flat))
-        wins = wins_flat.reshape(-1, ws, ws, C)
-        x_cl = _window_reverse(wins, ws, nH, nW)  # (B, H_pad, W_pad, C)
+        wins_seq = wins.reshape(-1, ws * ws, C)  # (B*nH*nW, ws², C)
+        wins_seq = cast(Tensor, self.block_attn(wins_seq))
+        wins = wins_seq.reshape(-1, ws, ws, C)
+        x_cl = _window_reverse(wins, ws, nH, nW)  # (B, Hp, Wp, C)
 
-        # 3. Grid attention (global sparse)
+        # 3. Grid attention — global among pixels at same grid offset
         grids, gH, gW = _grid_partition(x_cl, ws)  # (B*ws², nH*nW, C)
         grids = cast(Tensor, self.grid_attn(grids))
-        x_cl = _grid_reverse(grids, ws, gH, gW, B)  # (B, H_pad, W_pad, C)
+        x_cl = _grid_reverse(grids, ws, gH, gW, B)  # (B, Hp, Wp, C)
 
         # Crop back to original spatial size
-        x_cl = x_cl[:, :H, :W, :]
+        x_cl = x_cl[:, :orig_H, :orig_W, :]
 
-        return x_cl.permute(0, 3, 1, 2)  # back to (B, C, H, W)
+        return x_cl.permute(0, 3, 1, 2)  # (B, C, H, W)
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +239,8 @@ class _MaxViTBlock(nn.Module):
 
 
 class _MaxViTDownsample(nn.Module):
+    """Strided 3×3 conv + BN downsampling between stages."""
+
     def __init__(self, in_dim: int, out_dim: int) -> None:
         super().__init__()
         self.conv = nn.Conv2d(in_dim, out_dim, 3, stride=2, padding=1)
@@ -223,12 +262,16 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
     list[FeatureInfo],
     int,
 ]:
+    """Build shared MaxViT body: stem + stages + downsamplers.
+
+    Stem: Conv3×3(s=2) → BN → GELU → Conv3×3(s=1) → 2× downsampled feature map.
+    """
     stem_dim = 32
     stem = nn.Sequential(
         nn.Conv2d(cfg.in_channels, stem_dim, 3, stride=2, padding=1),
+        nn.BatchNorm2d(stem_dim),
         nn.GELU(),
         nn.Conv2d(stem_dim, cfg.dims[0], 3, stride=1, padding=1),
-        nn.GELU(),
     )
 
     stages: list[nn.Module] = []
@@ -264,7 +307,7 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
 
 
 class MaxViT(PretrainedModel, BackboneMixin):
-    """MaxViT feature extractor."""
+    """MaxViT feature extractor — global avg-pooled final stage features."""
 
     config_class: ClassVar[type[MaxViTConfig]] = MaxViTConfig
     base_model_prefix: ClassVar[str] = "maxvit"
@@ -303,7 +346,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
 
 
 class MaxViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """MaxViT with global avg-pool + FC head."""
+    """MaxViT with global avg-pool + FC classifier head."""
 
     config_class: ClassVar[type[MaxViTConfig]] = MaxViTConfig
     base_model_prefix: ClassVar[str] = "maxvit"

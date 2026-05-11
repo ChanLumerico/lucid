@@ -8,13 +8,27 @@ from lucid.models.vision.sknet._model import SKNet, SKNetForImageClassification
 # Canonical configs
 # ---------------------------------------------------------------------------
 
-# SK-ResNet: cardinality=32 groups inside SK branches, as in the original paper (G=32).
-# The 1×1 projection convs are always ungrouped.
-_CFG_SK50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=32)
-_CFG_SK101 = SKNetConfig(layers=(3, 4, 23, 3), cardinality=32)
+# sk_resnet_50 / sk_resnet_101:
+#   cardinality=1, base_width=64, split_input=True  →  timm ``skresnet50``
+#   25,803,160 parameters for sk_resnet_50_cls (1000-class head)
+_CFG_SK50 = SKNetConfig(
+    layers=(3, 4, 6, 3), cardinality=1, base_width=64, split_input=True
+)
+_CFG_SK101 = SKNetConfig(
+    layers=(3, 4, 23, 3), cardinality=1, base_width=64, split_input=True
+)
 
-# SK-ResNeXt-50: same grouping as the paper's SK-ResNeXt variant.
-_CFG_SK_RX50 = SKNetConfig(layers=(3, 4, 6, 3), cardinality=32)
+# sk_resnext_50_32x4d:
+#   cardinality=32, base_width=4, split_input=False, rd_ratio=1/16, rd_divisor=32
+#   Equivalent to the SKNet-50 entry in the original paper.  27,479,784 parameters.
+_CFG_SK_RX50 = SKNetConfig(
+    layers=(3, 4, 6, 3),
+    cardinality=32,
+    base_width=4,
+    split_input=False,
+    rd_ratio=1.0 / 16,
+    rd_divisor=32,
+)
 
 
 # ---------------------------------------------------------------------------

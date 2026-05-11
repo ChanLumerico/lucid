@@ -10,10 +10,12 @@ from lucid.models.vision.coatnet._model import CoAtNet, CoAtNetForImageClassific
 
 _CFG_0 = CoAtNetConfig(
     variant="coatnet_0",
-    blocks_per_stage=(2, 2, 6, 14, 2),
-    dims=(96, 192, 384, 768, 768),
-    attn_heads=(6, 6),
+    blocks_per_stage=(2, 3, 5, 2),
+    dims=(96, 192, 384, 768),
+    stem_width=64,
+    attn_heads=(12, 24),
     mbconv_expand=4,
+    head_hidden_size=768,
 )
 
 # ---------------------------------------------------------------------------

@@ -58,6 +58,7 @@ class _InvertedResidual(nn.Module):
         in_ch: int,
         exp_ch: int,
         out_ch: int,
+        kernel_size: int,
         stride: int,
         use_se: bool,
         use_hs: bool,
@@ -74,10 +75,17 @@ class _InvertedResidual(nn.Module):
                 nn.BatchNorm2d(exp_ch),
                 act,
             ]
+        pad = (kernel_size - 1) // 2
         act2: nn.Module = nn.Hardswish() if use_hs else nn.ReLU(inplace=True)
         layers += [
             nn.Conv2d(
-                exp_ch, exp_ch, 3, stride=stride, padding=1, groups=exp_ch, bias=False
+                exp_ch,
+                exp_ch,
+                kernel_size,
+                stride=stride,
+                padding=pad,
+                groups=exp_ch,
+                bias=False,
             ),
             nn.BatchNorm2d(exp_ch),
             act2,
@@ -102,54 +110,55 @@ class _InvertedResidual(nn.Module):
 
 # ---------------------------------------------------------------------------
 # Architecture specs
-# (in_ch, exp_ch, out_ch, use_se, use_hs, stride)
+# (in_ch, exp_ch, out_ch, kernel_size, use_se, use_hs, stride)
 # ---------------------------------------------------------------------------
 
-_LARGE_SPECS: list[tuple[int, int, int, bool, bool, int]] = [
-    (16, 16, 16, False, False, 1),
-    (16, 64, 24, False, False, 2),
-    (24, 72, 24, False, False, 1),
-    (24, 72, 40, True, False, 2),
-    (40, 120, 40, True, False, 1),
-    (40, 120, 40, True, False, 1),
-    (40, 240, 80, False, True, 2),
-    (80, 200, 80, False, True, 1),
-    (80, 184, 80, False, True, 1),
-    (80, 184, 80, False, True, 1),
-    (80, 480, 112, True, True, 1),
-    (112, 672, 112, True, True, 1),
-    (112, 672, 160, True, True, 2),
-    (160, 960, 160, True, True, 1),
-    (160, 960, 160, True, True, 1),
+_LARGE_SPECS: list[tuple[int, int, int, int, bool, bool, int]] = [
+    (16, 16, 16, 3, False, False, 1),
+    (16, 64, 24, 3, False, False, 2),
+    (24, 72, 24, 3, False, False, 1),
+    (24, 72, 40, 5, True, False, 2),
+    (40, 120, 40, 5, True, False, 1),
+    (40, 120, 40, 5, True, False, 1),
+    (40, 240, 80, 3, False, True, 2),
+    (80, 200, 80, 3, False, True, 1),
+    (80, 184, 80, 3, False, True, 1),
+    (80, 184, 80, 3, False, True, 1),
+    (80, 480, 112, 3, True, True, 1),
+    (112, 672, 112, 3, True, True, 1),
+    (112, 672, 160, 5, True, True, 2),
+    (160, 960, 160, 5, True, True, 1),
+    (160, 960, 160, 5, True, True, 1),
 ]
 
-_SMALL_SPECS: list[tuple[int, int, int, bool, bool, int]] = [
-    (16, 16, 16, True, False, 2),
-    (16, 72, 24, False, False, 2),
-    (24, 88, 24, False, False, 1),
-    (24, 96, 40, True, True, 2),
-    (40, 240, 40, True, True, 1),
-    (40, 240, 40, True, True, 1),
-    (40, 120, 48, True, True, 1),
-    (48, 144, 48, True, True, 1),
-    (48, 288, 96, True, True, 2),
-    (96, 576, 96, True, True, 1),
-    (96, 576, 96, True, True, 1),
+_SMALL_SPECS: list[tuple[int, int, int, int, bool, bool, int]] = [
+    (16, 16, 16, 3, True, False, 2),
+    (16, 72, 24, 3, False, False, 2),
+    (24, 88, 24, 3, False, False, 1),
+    (24, 96, 40, 5, True, True, 2),
+    (40, 240, 40, 5, True, True, 1),
+    (40, 240, 40, 5, True, True, 1),
+    (40, 120, 48, 5, True, True, 1),
+    (48, 144, 48, 5, True, True, 1),
+    (48, 288, 96, 5, True, True, 2),
+    (96, 576, 96, 5, True, True, 1),
+    (96, 576, 96, 5, True, True, 1),
 ]
 
 
 def _apply_width(
-    specs: list[tuple[int, int, int, bool, bool, int]],
+    specs: list[tuple[int, int, int, int, bool, bool, int]],
     w: float,
-) -> list[tuple[int, int, int, bool, bool, int]]:
+) -> list[tuple[int, int, int, int, bool, bool, int]]:
     """Scale channel counts by width_mult."""
-    out: list[tuple[int, int, int, bool, bool, int]] = []
-    for in_ch, exp_ch, o_ch, se, hs, s in specs:
+    out: list[tuple[int, int, int, int, bool, bool, int]] = []
+    for in_ch, exp_ch, o_ch, k, se, hs, s in specs:
         out.append(
             (
                 _make_divisible(in_ch * w),
                 _make_divisible(exp_ch * w),
                 _make_divisible(o_ch * w),
+                k,
                 se,
                 hs,
                 s,
@@ -172,9 +181,9 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
 
     scaled = _apply_width(specs, w)
     in_ch = stem_ch
-    for spec_in, exp_ch, out_ch, se, hs, stride in scaled:
+    for spec_in, exp_ch, out_ch, k, se, hs, stride in scaled:
         # Clamp first in_ch to stem_ch; subsequent blocks chain naturally
-        layers.append(_InvertedResidual(in_ch, exp_ch, out_ch, stride, se, hs))
+        layers.append(_InvertedResidual(in_ch, exp_ch, out_ch, k, stride, se, hs))
         in_ch = out_ch
 
     # Head conv
@@ -188,7 +197,11 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
         nn.Hardswish(),
     ]
     # Large → 1280, Small → 1024 (paper Table 2 / torchvision)
-    head_ch = _make_divisible(1280 * w) if cfg.variant == "large" else _make_divisible(1024 * w)
+    head_ch = (
+        _make_divisible(1280 * w)
+        if cfg.variant == "large"
+        else _make_divisible(1024 * w)
+    )
     return nn.Sequential(*layers), penultimate_ch, head_ch
 
 
@@ -232,7 +245,7 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
 
         cumulative = 2  # stem stride=2
         fi: list[FeatureInfo] = []
-        for i, (_, _, o_ch, _, _, s) in enumerate(scaled):
+        for i, (_, _, o_ch, _, _, _, s) in enumerate(scaled):
             cumulative *= s
             fi.append(FeatureInfo(stage=i + 1, num_channels=o_ch, reduction=cumulative))
         self._feature_info = fi

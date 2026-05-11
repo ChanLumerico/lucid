@@ -31,10 +31,12 @@ class PVTConfig(ModelConfig):
     depths: tuple[int, ...] = (2, 2, 2, 2)
     num_heads: tuple[int, ...] = (1, 2, 5, 8)
     sr_ratios: tuple[int, ...] = (8, 4, 2, 1)
-    mlp_ratio: float = 8.0
+    # Per-stage MLP expansion ratios (PVT v2-B1: 8,8,4,4 — stages 3&4 use 4)
+    mlp_ratios: tuple[float, ...] = (8.0, 8.0, 4.0, 4.0)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "embed_dims", tuple(self.embed_dims))
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
         object.__setattr__(self, "sr_ratios", tuple(self.sr_ratios))
+        object.__setattr__(self, "mlp_ratios", tuple(self.mlp_ratios))

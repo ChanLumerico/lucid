@@ -41,45 +41,42 @@ from lucid.models.vision.inception_next._config import InceptionNeXtConfig
 class _InceptionDWConv2d(nn.Module):
     """Decomposed DWConv with 4 parallel branches operating on channel splits.
 
-    Given ``dim`` channels, split into 4 equal parts (dim//4 each) and apply:
-      branch 0: identity (no-op)
-      branch 1: 3×3 DWConv
-      branch 2: 1×K DWConv → K×1 DWConv (band conv)
-      branch 3: 3×3 DWConv (remaining channels for high-frequency)
+    Matches timm's ``InceptionDWConv2d`` with ``branch_ratio=0.125``:
+      gc = int(dim * 0.125)  (channels per small branch)
+      branch 0: identity, dim - 3*gc channels (majority passthrough)
+      branch 1: 3×3 DWConv on gc channels
+      branch 2: 1×K DWConv → K×1 DWConv on gc channels (band conv)
+      branch 3: 3×3 DWConv on gc channels (high-frequency)
     All outputs concatenated to recover ``dim`` channels.
     """
 
-    def __init__(self, dim: int, band_kernel: int = 11) -> None:
+    def __init__(
+        self, dim: int, band_kernel: int = 11, branch_ratio: float = 0.125
+    ) -> None:
         super().__init__()
-        # Ensure even split; last branch gets any remainder
-        split = dim // 4
-        rem = dim - 3 * split  # branch 3 gets the remainder
-        self.split = split
-        self.rem = rem
+        gc = int(dim * branch_ratio)  # channels per small branch
+        self.gc = gc
+        self.identity_chs = dim - 3 * gc  # majority passthrough
 
         # branch 1: 3×3 DWConv
-        self.dw3x3 = nn.Conv2d(split, split, 3, padding=1, groups=split)
+        self.dw3x3 = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
 
         # branch 2: 1×K → K×1 (sequential band conv)
         pad = band_kernel // 2
-        self.dw_h = nn.Conv2d(
-            split, split, (1, band_kernel), padding=(0, pad), groups=split
-        )
-        self.dw_v = nn.Conv2d(
-            split, split, (band_kernel, 1), padding=(pad, 0), groups=split
-        )
+        self.dw_h = nn.Conv2d(gc, gc, (1, band_kernel), padding=(0, pad), groups=gc)
+        self.dw_v = nn.Conv2d(gc, gc, (band_kernel, 1), padding=(pad, 0), groups=gc)
 
-        # branch 3: 3×3 DWConv on remaining channels
-        self.dw3x3_b = nn.Conv2d(rem, rem, 3, padding=1, groups=rem)
+        # branch 3: 3×3 DWConv on gc channels
+        self.dw3x3_b = nn.Conv2d(gc, gc, 3, padding=1, groups=gc)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        s = self.split
-        r = self.rem
-        # Split along channel dim
-        x0 = x[:, :s, :, :]  # identity
-        x1 = x[:, s : 2 * s, :, :]  # 3×3 DWConv
-        x2 = x[:, 2 * s : 3 * s, :, :]  # band conv
-        x3 = x[:, 3 * s : 3 * s + r, :, :]  # high-freq 3×3
+        id_chs = self.identity_chs
+        gc = self.gc
+        # Split along channel dim: identity | dw3x3 | band | dw3x3_b
+        x0 = x[:, :id_chs, :, :]  # identity passthrough
+        x1 = x[:, id_chs : id_chs + gc, :, :]  # 3×3 DWConv
+        x2 = x[:, id_chs + gc : id_chs + 2 * gc, :, :]  # band conv
+        x3 = x[:, id_chs + 2 * gc :, :, :]  # high-freq 3×3
 
         y0 = x0
         y1 = cast(Tensor, self.dw3x3(x1))

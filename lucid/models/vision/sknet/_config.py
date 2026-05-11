@@ -12,16 +12,36 @@ class SKNetConfig(ModelConfig):
 
     Paper: "Selective Kernel Networks"
 
-    Architecture (SK-ResNet-50 defaults):
-      expansion = 2  (bottleneck: in → mid → mid*2)
-      Stage outputs: 128, 256, 512, 1024  (not ResNet's 256/512/1024/2048)
-      Final classifier: FC(1024, num_classes)
+    Architecture is identical to ResNet-50 (expansion=4, stages output
+    256/512/1024/2048 channels) except each 3×3 conv in the bottleneck
+    is replaced by a SelectiveKernel unit with two parallel branches
+    (3×3 + 3×3 dilated-2, mimicking 5×5 receptive field).
 
-      ``cardinality`` = G in the paper (number of groups in SK branches).
-      SK-ResNet-50 uses G=32 (default). The 1×1 projection convs are always
-      ungrouped — only the SK branch convolutions use cardinality groups.
-      ``reduction`` controls the squeeze ratio of the gating FC (r=16 default,
-      minimum channel dim clamped to 32).
+    Key hyper-parameters:
+
+    ``layers``
+        Number of bottleneck blocks per stage (default ResNet-50 = 3/4/6/3).
+
+    ``cardinality``
+        Number of groups for the SK branch convolutions (G in the paper).
+        Also used in the ResNeXt-style width formula:
+          width = int(planes * (base_width / 64)) * cardinality
+        Set to 1 for plain SK-ResNet (default).
+
+    ``base_width``
+        Base channel multiplier for the ResNeXt width formula.
+        64 → plain ResNet widths (64/128/256/512 at each stage).
+        4 with cardinality=32 → SK-ResNeXt-50 32×4d (SKNet-50 from paper).
+
+    ``split_input``
+        If True (timm default), each SK branch receives half the input
+        channels, keeping the param count similar to a single grouped conv.
+
+    ``rd_ratio``
+        Reduction ratio for the SelectiveKernelAttn bottleneck.
+
+    ``rd_divisor``
+        Divisor for rounding the attention channel count.
     """
 
     model_type: ClassVar[str] = "sknet"
@@ -29,8 +49,11 @@ class SKNetConfig(ModelConfig):
     num_classes: int = 1000
     in_channels: int = 3
     layers: tuple[int, ...] = (3, 4, 6, 3)
-    reduction: int = 16
-    cardinality: int = 32
+    cardinality: int = 1
+    base_width: int = 64
+    split_input: bool = True
+    rd_ratio: float = 1.0 / 16
+    rd_divisor: int = 8
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))

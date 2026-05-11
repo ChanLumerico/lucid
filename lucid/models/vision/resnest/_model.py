@@ -1,11 +1,20 @@
 """ResNeSt backbone and classifier (Zhang et al., 2020).
 
-Paper: "ResNeSt: Split-Attention Networks"
+Paper: "ResNeSt: Split-Attention Networks" — https://arxiv.org/abs/2004.08955
 
-Key idea: Replace the 3×3 convolution in a ResNet Bottleneck with a
-Split-Attention convolution that divides features into ``radix`` branches,
-applies separate convolutions per branch, then recombines using an
-attention-weighted sum (softmax over branches).
+Architecture overview for ResNeSt-50 (radix=2, groups=1, avd=True, avg_down=True):
+
+  Deep Stem : Conv(3→32, k=3, s=2) → BN → ReLU
+              Conv(32→32, k=3, s=1) → BN → ReLU
+              Conv(32→64, k=3, s=1) → BN → ReLU
+  MaxPool   : 3×3, stride=2
+  Stage 1–4 : ResNeStBottleneck blocks with Split-Attention conv
+  Head      : AdaptiveAvgPool(1×1) → Flatten → Linear
+
+Split-Attention convolution (SplitAttn):
+  - A single grouped conv produces ``radix`` branches at once
+  - Global average pool over the branch sum produces an attention vector
+  - Branches are recombined via softmax attention weights
 """
 
 from typing import ClassVar, cast
@@ -19,88 +28,139 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.resnest._config import ResNeStConfig
 
 # ---------------------------------------------------------------------------
-# Split-Attention Convolution
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-class _SplitAttentionConv(nn.Module):
-    """Split-Attention convolution: divide into ``radix`` branches and attend.
+def _make_divisible(v: float, divisor: int = 8, min_value: int = 32) -> int:
+    """Round ``v`` up to the nearest multiple of ``divisor`` (>= ``min_value``)."""
+    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+    if new_v < 0.9 * v:
+        new_v += divisor
+    return new_v
+
+
+# ---------------------------------------------------------------------------
+# RadixSoftmax
+# ---------------------------------------------------------------------------
+
+
+class _RadixSoftmax(nn.Module):
+    """Per-radix softmax (or sigmoid when radix==1)."""
+
+    def __init__(self, radix: int, groups: int) -> None:
+        super().__init__()
+        self._radix = radix
+        self._groups = groups
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        batch = x.shape[0]
+        if self._radix > 1:
+            # (B, groups, radix, C) → permute → (B, radix, groups, C)
+            x = x.reshape(batch, self._groups, self._radix, -1).permute(0, 2, 1, 3)
+            x = F.softmax(x, dim=1)
+            x = x.reshape(batch, -1)
+        else:
+            x = F.sigmoid(x)
+        return x
+
+
+# ---------------------------------------------------------------------------
+# Split-Attention convolution
+# ---------------------------------------------------------------------------
+
+
+class _SplitAttn(nn.Module):
+    """Split-Attention (Splat) convolution.
 
     Parameters
     ----------
-    in_ch:              Input channels.
-    out_ch:             Output channels per branch (total output = out_ch).
-    stride:             Spatial stride for the depthwise convolution.
-    radix:              Number of split branches (r in the paper).
-    groups:             Cardinality groups (k).
-    reduction_factor:   Channel reduction for the attention FC layers.
+    in_channels:    Input channels.
+    out_channels:   Output channels (= input channels in ResNeSt bottleneck).
+    kernel_size:    Convolution kernel size.
+    stride:         Spatial stride (applied to the main grouped conv).
+    padding:        Spatial padding.
+    dilation:       Dilation for the main conv.
+    groups:         Cardinality groups.
+    radix:          Number of split branches.
+    rd_ratio:       Attention channel reduction ratio.
+    rd_divisor:     Channel divisibility constraint.
     """
 
     def __init__(
         self,
-        in_ch: int,
-        out_ch: int,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
         stride: int = 1,
-        radix: int = 2,
+        padding: int = 1,
+        dilation: int = 1,
         groups: int = 1,
-        reduction_factor: int = 4,
+        radix: int = 2,
+        rd_ratio: float = 0.25,
+        rd_divisor: int = 8,
     ) -> None:
         super().__init__()
         self._radix = radix
-        self._out_ch = out_ch
-        self._groups = groups
+        mid_chs = out_channels * radix
+        attn_chs = _make_divisible(
+            in_channels * radix * rd_ratio,
+            divisor=rd_divisor,
+            min_value=32,
+        )
 
-        inter_ch = out_ch * radix
-        # Single conv that computes all radix branches at once
+        # Single grouped conv producing all radix branches simultaneously
         self.conv = nn.Conv2d(
-            in_ch,
-            inter_ch,
-            3,
+            in_channels,
+            mid_chs,
+            kernel_size,
             stride=stride,
-            padding=1,
+            padding=padding,
+            dilation=dilation,
             groups=groups * radix,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(inter_ch)
-        self.relu = nn.ReLU(inplace=True)
+        self.bn0 = nn.BatchNorm2d(mid_chs)
+        self.act0 = nn.ReLU(inplace=True)
 
-        # Attention FC layers (implemented as 1×1 convs for broadcast simplicity)
-        att_ch = max(out_ch // reduction_factor, 32)
-        self.fc1 = nn.Conv2d(out_ch, att_ch, 1, groups=groups, bias=False)
-        self.bn_att = nn.BatchNorm2d(att_ch)
-        self.relu2 = nn.ReLU(inplace=True)
-        self.fc2 = nn.Conv2d(att_ch, out_ch * radix, 1, groups=groups)
+        # Attention path — 1×1 convs with default bias=True
+        self.fc1 = nn.Conv2d(out_channels, attn_chs, 1, groups=groups)
+        self.bn1 = nn.BatchNorm2d(attn_chs)
+        self.act1 = nn.ReLU(inplace=True)
+        self.fc2 = nn.Conv2d(attn_chs, mid_chs, 1, groups=groups)
+        self.rsoftmax = _RadixSoftmax(radix, groups)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        # (B, out_ch*radix, H, W)
-        out = cast(Tensor, self.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x))))))
+        x = cast(Tensor, self.conv(x))
+        x = cast(Tensor, self.bn0(x))
+        x = cast(Tensor, self.act0(x))
 
-        b, _, h, w = out.shape
+        b, rc, h, w = x.shape
         r = self._radix
-        c = self._out_ch
-
-        # (B, radix, out_ch, H, W)
-        splits = out.reshape(b, r, c, h, w)
-        # Sum over radix → (B, out_ch, H, W)
-        gap = splits.sum(dim=1)
-        # Global average pool → (B, out_ch, 1, 1)
-        gap = gap.mean(dim=(2, 3), keepdim=True)
-
-        # Attention: FC1 → FC2 → (B, radix*out_ch, 1, 1)
-        attn = cast(
-            Tensor,
-            self.relu2(cast(Tensor, self.bn_att(cast(Tensor, self.fc1(gap))))),
-        )
-        attn = cast(Tensor, self.fc2(attn))
-        # (B, radix, out_ch, 1, 1)
-        attn = attn.reshape(b, r, c, 1, 1)
 
         if r > 1:
-            attn = F.softmax(attn, dim=1)
+            # (B, radix, C, H, W)
+            x = x.reshape(b, r, rc // r, h, w)
+            x_gap = x.sum(dim=1)  # (B, C, H, W)
+        else:
+            x_gap = x
 
-        # Weighted sum: (B, radix, out_ch, H, W) * (B, radix, out_ch, 1, 1)
-        result = (splits * attn).sum(dim=1)
-        return result.reshape(b, c, h, w)
+        # Global average pool → (B, C, 1, 1)
+        x_gap = x_gap.mean((2, 3), keepdim=True)
+        x_gap = cast(Tensor, self.fc1(x_gap))
+        x_gap = cast(Tensor, self.bn1(x_gap))
+        x_gap = cast(Tensor, self.act1(x_gap))
+        x_attn = cast(Tensor, self.fc2(x_gap))
+
+        x_attn = cast(Tensor, self.rsoftmax(x_attn)).reshape(b, -1, 1, 1)
+
+        if r > 1:
+            # x: (B, radix, C, H, W) ; x_attn: (B, radix*C, 1, 1) → (B, radix, C, 1, 1)
+            out = (x * x_attn.reshape(b, r, rc // r, 1, 1)).sum(dim=1)
+        else:
+            out = x * x_attn
+
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -109,54 +169,126 @@ class _SplitAttentionConv(nn.Module):
 
 
 class _ResNeStBottleneck(nn.Module):
-    """ResNet Bottleneck with Split-Attention 3×3 conv."""
+    """ResNeSt Bottleneck block.
 
-    expansion: int = 4
+    Parameters
+    ----------
+    inplanes:   Input channels.
+    planes:     Base width (output = planes * 4 due to expansion=4).
+    stride:     Spatial stride for the block.
+    downsample: Optional downsampling module for the skip connection.
+    radix:      Number of split branches in SplitAttn.
+    groups:     Cardinality.
+    avd:        Use averaged downsampling (AvgPool before/after SplitAttn).
+    avd_first:  Place the AvgPool before (True) or after (False) SplitAttn.
+    is_first:   True for the first block of the first stage (triggers avd even
+                at stride=1 to match the reference implementation).
+    dilation:   Dilation for the SplitAttn conv.
+    """
+
+    expansion: ClassVar[int] = 4
 
     def __init__(
         self,
-        in_channels: int,
-        out_channels: int,
+        inplanes: int,
+        planes: int,
         stride: int = 1,
-        radix: int = 2,
         downsample: nn.Module | None = None,
+        radix: int = 2,
+        groups: int = 1,
+        avd: bool = True,
+        avd_first: bool = False,
+        is_first: bool = False,
+        dilation: int = 1,
     ) -> None:
         super().__init__()
         self.downsample = downsample
+        group_width = int(planes * groups)
+
+        # Determine avd pooling stride
+        if avd and (stride > 1 or is_first):
+            avd_stride = stride
+            conv_stride = 1
+        else:
+            avd_stride = 0
+            conv_stride = stride
 
         # 1×1 expand
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
+        self.conv1 = nn.Conv2d(inplanes, group_width, 1, bias=False)
+        self.bn1 = nn.BatchNorm2d(group_width)
+        self.act1 = nn.ReLU(inplace=True)
 
-        # Split-Attention 3×3
-        self.conv2 = _SplitAttentionConv(
-            out_channels, out_channels, stride=stride, radix=radix
+        # AVD pool before SplitAttn (avd_first=True)
+        self.avd_first: nn.Module = (
+            nn.AvgPool2d(3, avd_stride, padding=1)
+            if avd_stride > 0 and avd_first
+            else nn.Identity()
         )
-        self.bn2 = nn.BatchNorm2d(out_channels)
+
+        # Split-Attention 3×3 conv (always uses conv_stride=1 when avd active)
+        self.conv2 = _SplitAttn(
+            group_width,
+            group_width,
+            kernel_size=3,
+            stride=conv_stride,
+            padding=dilation,
+            dilation=dilation,
+            groups=groups,
+            radix=radix,
+        )
+        # bn2 is Identity — SplitAttn already contains bn0 after its conv
+        self.bn2: nn.Module = nn.Identity()
+        self.act2: nn.Module = nn.Identity()
+
+        # AVD pool after SplitAttn (avd_first=False, default)
+        self.avd_last: nn.Module = (
+            nn.AvgPool2d(3, avd_stride, padding=1)
+            if avd_stride > 0 and not avd_first
+            else nn.Identity()
+        )
 
         # 1×1 project
-        self.conv3 = nn.Conv2d(
-            out_channels, out_channels * self.expansion, 1, bias=False
-        )
-        self.bn3 = nn.BatchNorm2d(out_channels * self.expansion)
+        self.conv3 = nn.Conv2d(group_width, planes * self.expansion, 1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * self.expansion)
+        self.act3 = nn.ReLU(inplace=True)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        identity = x
+        shortcut = x
 
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        )
-        out = cast(
-            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        )
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        out = cast(Tensor, self.conv1(x))
+        out = cast(Tensor, self.bn1(out))
+        out = cast(Tensor, self.act1(out))
+
+        out = cast(Tensor, self.avd_first(out))
+
+        out = cast(Tensor, self.conv2(out))
+        out = cast(Tensor, self.bn2(out))
+        out = cast(Tensor, self.act2(out))
+
+        out = cast(Tensor, self.avd_last(out))
+
+        out = cast(Tensor, self.conv3(out))
+        out = cast(Tensor, self.bn3(out))
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            shortcut = cast(Tensor, self.downsample(x))
 
-        out = out + identity
-        return cast(Tensor, self.relu(out))
+        out = out + shortcut
+        return cast(Tensor, self.act3(out))
+
+
+# ---------------------------------------------------------------------------
+# Downsampling helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_avg_downsample(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
+    """avg_down=True: AvgPool2d + 1×1 Conv (no stride in conv) + BN."""
+    return nn.Sequential(
+        nn.AvgPool2d(stride, stride=stride, ceil_mode=True),
+        nn.Conv2d(in_ch, out_ch, 1, bias=False),
+        nn.BatchNorm2d(out_ch),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -165,70 +297,177 @@ class _ResNeStBottleneck(nn.Module):
 
 
 def _make_layer(
-    in_ch: int,
-    width: int,
+    inplanes: int,
+    planes: int,
     num_blocks: int,
     stride: int,
     radix: int,
+    groups: int,
+    avd: bool,
+    avd_first: bool,
+    avg_down: bool,
+    dilation: int = 1,
 ) -> tuple[nn.Sequential, int]:
-    expansion = _ResNeStBottleneck.expansion
-    final_ch = width * expansion
+    """Build one stage of ResNeSt blocks.
 
+    Returns ``(stage_module, out_channels)``.
+    """
+    expansion = _ResNeStBottleneck.expansion
+    out_ch = planes * expansion
+
+    # Downsample for first block
     downsample: nn.Module | None = None
-    if stride != 1 or in_ch != final_ch:
-        downsample = nn.Sequential(
-            nn.Conv2d(in_ch, final_ch, 1, stride=stride, bias=False),
-            nn.BatchNorm2d(final_ch),
-        )
+    if stride != 1 or inplanes != out_ch:
+        if avg_down:
+            downsample = _make_avg_downsample(inplanes, out_ch, stride)
+        else:
+            downsample = nn.Sequential(
+                nn.Conv2d(inplanes, out_ch, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_ch),
+            )
 
     blocks: list[nn.Module] = [
         _ResNeStBottleneck(
-            in_ch, width, stride=stride, radix=radix, downsample=downsample
+            inplanes,
+            planes,
+            stride=stride,
+            downsample=downsample,
+            radix=radix,
+            groups=groups,
+            avd=avd,
+            avd_first=avd_first,
+            is_first=(stride == 1 and inplanes == out_ch),
+            dilation=dilation,
         )
     ]
     for _ in range(1, num_blocks):
-        blocks.append(_ResNeStBottleneck(final_ch, width, stride=1, radix=radix))
+        blocks.append(
+            _ResNeStBottleneck(
+                out_ch,
+                planes,
+                stride=1,
+                radix=radix,
+                groups=groups,
+                avd=avd,
+                avd_first=avd_first,
+                dilation=dilation,
+            )
+        )
 
-    return nn.Sequential(*blocks), final_ch
+    return nn.Sequential(*blocks), out_ch
 
 
-def _build_body(
-    config: ResNeStConfig,
-) -> tuple[
-    nn.Sequential,
-    nn.MaxPool2d,
-    nn.Sequential,
-    nn.Sequential,
-    nn.Sequential,
-    nn.Sequential,
-    list[FeatureInfo],
-]:
-    stem_ch = 64
-    stem = nn.Sequential(
-        nn.Conv2d(config.in_channels, stem_ch, 7, stride=2, padding=3, bias=False),
-        nn.BatchNorm2d(stem_ch),
+# ---------------------------------------------------------------------------
+# Deep stem
+# ---------------------------------------------------------------------------
+
+
+def _make_deep_stem(in_channels: int, stem_width: int) -> nn.Sequential:
+    """Three-convolution deep stem: in→stem_width→stem_width→2×stem_width."""
+    return nn.Sequential(
+        nn.Conv2d(in_channels, stem_width, 3, stride=2, padding=1, bias=False),
+        nn.BatchNorm2d(stem_width),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(stem_width, stem_width, 3, stride=1, padding=1, bias=False),
+        nn.BatchNorm2d(stem_width),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(stem_width, stem_width * 2, 3, stride=1, padding=1, bias=False),
+        nn.BatchNorm2d(stem_width * 2),
         nn.ReLU(inplace=True),
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared trunk builder
+# ---------------------------------------------------------------------------
+
+
+def _build_resnest(config: ResNeStConfig) -> tuple[
+    nn.Sequential,  # stem
+    nn.MaxPool2d,  # pool
+    nn.Sequential,  # layer1
+    nn.Sequential,  # layer2
+    nn.Sequential,  # layer3
+    nn.Sequential,  # layer4
+    list[FeatureInfo],
+    int,  # out_channels after layer4
+]:
+    stem_width = config.stem_width
+    stem_out = stem_width * 2  # 32*2 = 64 for default config
+
+    if config.deep_stem:
+        stem = _make_deep_stem(config.in_channels, stem_width)
+    else:
+        stem = nn.Sequential(
+            nn.Conv2d(config.in_channels, stem_out, 7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(stem_out),
+            nn.ReLU(inplace=True),
+        )
+
     pool = nn.MaxPool2d(3, stride=2, padding=1)
 
     widths = (64, 128, 256, 512)
+    strides = (1, 2, 2, 2)
     layers_cfg = config.layers
     radix = config.radix
+    groups = config.groups
+    avd = config.avd
+    avd_first = config.avd_first
+    avg_down = config.avg_down
 
-    cur = stem_ch
-    layer1, cur = _make_layer(cur, widths[0], layers_cfg[0], stride=1, radix=radix)
-    layer2, cur = _make_layer(cur, widths[1], layers_cfg[1], stride=2, radix=radix)
-    layer3, cur = _make_layer(cur, widths[2], layers_cfg[2], stride=2, radix=radix)
-    layer4, cur = _make_layer(cur, widths[3], layers_cfg[3], stride=2, radix=radix)
+    cur = stem_out
+    fi: list[FeatureInfo] = []
 
-    exp = _ResNeStBottleneck.expansion
-    fi = [
-        FeatureInfo(stage=1, num_channels=widths[0] * exp, reduction=4),
-        FeatureInfo(stage=2, num_channels=widths[1] * exp, reduction=8),
-        FeatureInfo(stage=3, num_channels=widths[2] * exp, reduction=16),
-        FeatureInfo(stage=4, num_channels=widths[3] * exp, reduction=32),
-    ]
-    return stem, pool, layer1, layer2, layer3, layer4, fi
+    layer1, cur = _make_layer(
+        cur,
+        widths[0],
+        layers_cfg[0],
+        strides[0],
+        radix,
+        groups,
+        avd,
+        avd_first,
+        avg_down,
+    )
+    fi.append(FeatureInfo(stage=1, num_channels=widths[0] * 4, reduction=4))
+    layer2, cur = _make_layer(
+        cur,
+        widths[1],
+        layers_cfg[1],
+        strides[1],
+        radix,
+        groups,
+        avd,
+        avd_first,
+        avg_down,
+    )
+    fi.append(FeatureInfo(stage=2, num_channels=widths[1] * 4, reduction=8))
+    layer3, cur = _make_layer(
+        cur,
+        widths[2],
+        layers_cfg[2],
+        strides[2],
+        radix,
+        groups,
+        avd,
+        avd_first,
+        avg_down,
+    )
+    fi.append(FeatureInfo(stage=3, num_channels=widths[2] * 4, reduction=16))
+    layer4, cur = _make_layer(
+        cur,
+        widths[3],
+        layers_cfg[3],
+        strides[3],
+        radix,
+        groups,
+        avd,
+        avd_first,
+        avg_down,
+    )
+    fi.append(FeatureInfo(stage=4, num_channels=widths[3] * 4, reduction=32))
+
+    return stem, pool, layer1, layer2, layer3, layer4, fi, cur
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +483,7 @@ class ResNeSt(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: ResNeStConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, fi = _build_body(config)
+        stem, pool, l1, l2, l3, l4, fi, _ = _build_resnest(config)
         self.stem = stem
         self.maxpool = pool
         self.layer1 = l1
@@ -283,7 +522,7 @@ class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: ResNeStConfig) -> None:
         super().__init__(config)
-        stem, pool, l1, l2, l3, l4, _ = _build_body(config)
+        stem, pool, l1, l2, l3, l4, _, out_ch = _build_resnest(config)
         self.stem = stem
         self.maxpool = pool
         self.layer1 = l1
@@ -291,9 +530,7 @@ class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.layer3 = l3
         self.layer4 = l4
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
-        final_ch = 512 * _ResNeStBottleneck.expansion
-        self._build_classifier(final_ch, config.num_classes, dropout=config.dropout)
+        self._build_classifier(out_ch, config.num_classes, dropout=config.dropout)
 
     def forward(  # type: ignore[override]
         self,

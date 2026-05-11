@@ -4,7 +4,11 @@ Paper: "Inception-v4, Inception-ResNet and the Impact of Residual Connections
         on Learning"
 
 Architecture overview (299×299 input):
-    Stem: 7 convs → 384 channels (35×35 feature map)
+    Stem:
+        Conv(3→32, s=2) + Conv(32→32) + Conv(32→64, p=1)
+        Mixed3a: MaxPool + Conv(64→96, s=2) → 160ch
+        Mixed4a: two branches → 192ch
+        Mixed5a: Conv(192→192, s=2) + MaxPool → 384ch
     Inception-A × 4  → 384 channels (35×35)
     Reduction-A      → 1024 channels (17×17)
     Inception-B × 7  → 1024 channels (17×17)
@@ -58,7 +62,67 @@ class _ConvBnReLU(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Stem (7 convs, 3 → 384)
+# Stem sub-modules: Mixed3a, Mixed4a, Mixed5a
+# ---------------------------------------------------------------------------
+
+
+class _Mixed3a(nn.Module):
+    """Mixed3a: MaxPool(s=2) + Conv(64→96, 3×3, s=2) → 160ch."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.maxpool = nn.MaxPool2d(3, stride=2)
+        self.conv = _ConvBnReLU(64, 96, 3, stride=2)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x0 = cast(Tensor, self.maxpool(x))
+        x1 = cast(Tensor, self.conv(x))
+        return lucid.cat([x0, x1], dim=1)
+
+
+class _Mixed4a(nn.Module):
+    """Mixed4a: two branches from 160ch → 192ch.
+
+    branch0: Conv(160→64,1×1) → Conv(64→96,3×3)
+    branch1: Conv(160→64,1×1) → Conv(64→64,(1,7)) → Conv(64→64,(7,1)) → Conv(64→96,3×3)
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        # branch 0
+        self.branch0_a = _ConvBnReLU(160, 64, 1)
+        self.branch0_b = _ConvBnReLU(64, 96, 3)
+        # branch 1
+        self.branch1_a = _ConvBnReLU(160, 64, 1)
+        self.branch1_b = _ConvBnReLU(64, 64, (1, 7), padding=(0, 3))
+        self.branch1_c = _ConvBnReLU(64, 64, (7, 1), padding=(3, 0))
+        self.branch1_d = _ConvBnReLU(64, 96, 3)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        b0 = cast(Tensor, self.branch0_b(cast(Tensor, self.branch0_a(x))))
+        b1 = cast(Tensor, self.branch1_a(x))
+        b1 = cast(Tensor, self.branch1_b(b1))
+        b1 = cast(Tensor, self.branch1_c(b1))
+        b1 = cast(Tensor, self.branch1_d(b1))
+        return lucid.cat([b0, b1], dim=1)
+
+
+class _Mixed5a(nn.Module):
+    """Mixed5a: Conv(192→192, 3×3, s=2) + MaxPool(s=2) → 384ch."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = _ConvBnReLU(192, 192, 3, stride=2)
+        self.maxpool = nn.MaxPool2d(3, stride=2)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x0 = cast(Tensor, self.conv(x))
+        x1 = cast(Tensor, self.maxpool(x))
+        return lucid.cat([x0, x1], dim=1)
+
+
+# ---------------------------------------------------------------------------
+# Stem (3 convs + Mixed3a + Mixed4a + Mixed5a → 384ch, 35×35)
 # ---------------------------------------------------------------------------
 
 
@@ -68,10 +132,9 @@ def _build_v4_stem(in_channels: int) -> nn.Sequential:
         _ConvBnReLU(in_channels, 32, 3, stride=2),  # 149×149
         _ConvBnReLU(32, 32, 3),  # 147×147
         _ConvBnReLU(32, 64, 3, padding=1),  # 147×147
-        nn.MaxPool2d(3, stride=2),  # 73×73
-        _ConvBnReLU(64, 80, 1),  # 73×73
-        _ConvBnReLU(80, 192, 3),  # 71×71
-        _ConvBnReLU(192, 384, 3, stride=2),  # 35×35
+        _Mixed3a(),  # 73×73, 160ch
+        _Mixed4a(),  # 71×71, 192ch
+        _Mixed5a(),  # 35×35, 384ch
     )
 
 
@@ -156,39 +219,32 @@ class _InceptionB(nn.Module):
         self.branch1 = _ConvBnReLU(in_channels, 384, 1)
         # branch2: 1×1(192) → 1×7(224) → 7×1(256)
         self.branch2_a = _ConvBnReLU(in_channels, 192, 1)
-        self.branch2_b = nn.Conv2d(192, 224, (1, 7), padding=(0, 3), bias=False)
-        self.branch2_b_bn = nn.BatchNorm2d(224)
-        self.branch2_c = nn.Conv2d(224, 256, (7, 1), padding=(3, 0), bias=False)
-        self.branch2_c_bn = nn.BatchNorm2d(256)
+        self.branch2_b = _ConvBnReLU(192, 224, (1, 7), padding=(0, 3))
+        self.branch2_c = _ConvBnReLU(224, 256, (7, 1), padding=(3, 0))
         # branch3: 1×1(192) → 7×1(192) → 1×7(224) → 7×1(224) → 1×7(256)
         self.branch3_a = _ConvBnReLU(in_channels, 192, 1)
-        self.branch3_b = nn.Conv2d(192, 192, (7, 1), padding=(3, 0), bias=False)
-        self.branch3_b_bn = nn.BatchNorm2d(192)
-        self.branch3_c = nn.Conv2d(192, 224, (1, 7), padding=(0, 3), bias=False)
-        self.branch3_c_bn = nn.BatchNorm2d(224)
-        self.branch3_d = nn.Conv2d(224, 224, (7, 1), padding=(3, 0), bias=False)
-        self.branch3_d_bn = nn.BatchNorm2d(224)
-        self.branch3_e = nn.Conv2d(224, 256, (1, 7), padding=(0, 3), bias=False)
-        self.branch3_e_bn = nn.BatchNorm2d(256)
+        self.branch3_b = _ConvBnReLU(192, 192, (7, 1), padding=(3, 0))
+        self.branch3_c = _ConvBnReLU(192, 224, (1, 7), padding=(0, 3))
+        self.branch3_d = _ConvBnReLU(224, 224, (7, 1), padding=(3, 0))
+        self.branch3_e = _ConvBnReLU(224, 256, (1, 7), padding=(0, 3))
         # branch4: AvgPool → 1×1(128)
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 128, 1)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1(x))
-
-        t = cast(Tensor, self.branch2_a(x))
-        t = F.relu(cast(Tensor, self.branch2_b_bn(cast(Tensor, self.branch2_b(t)))))
-        b2 = F.relu(cast(Tensor, self.branch2_c_bn(cast(Tensor, self.branch2_c(t)))))
-
-        t = cast(Tensor, self.branch3_a(x))
-        t = F.relu(cast(Tensor, self.branch3_b_bn(cast(Tensor, self.branch3_b(t)))))
-        t = F.relu(cast(Tensor, self.branch3_c_bn(cast(Tensor, self.branch3_c(t)))))
-        t = F.relu(cast(Tensor, self.branch3_d_bn(cast(Tensor, self.branch3_d(t)))))
-        b3 = F.relu(cast(Tensor, self.branch3_e_bn(cast(Tensor, self.branch3_e(t)))))
-
+        b2 = cast(
+            Tensor,
+            self.branch2_c(
+                cast(Tensor, self.branch2_b(cast(Tensor, self.branch2_a(x))))
+            ),
+        )
+        b3 = cast(Tensor, self.branch3_a(x))
+        b3 = cast(Tensor, self.branch3_b(b3))
+        b3 = cast(Tensor, self.branch3_c(b3))
+        b3 = cast(Tensor, self.branch3_d(b3))
+        b3 = cast(Tensor, self.branch3_e(b3))
         b4 = cast(Tensor, self.branch4_conv(cast(Tensor, self.branch4_pool(x))))
-
         return lucid.cat([b1, b2, b3, b4], dim=1)
 
 
@@ -207,22 +263,18 @@ class _ReductionB(nn.Module):
         self.branch1_b = _ConvBnReLU(192, 192, 3, stride=2)
         # branch2: 1×1(256) → 1×7(256) → 7×1(320) → 3×3 s2 (320)
         self.branch2_a = _ConvBnReLU(in_channels, 256, 1)
-        self.branch2_b = nn.Conv2d(256, 256, (1, 7), padding=(0, 3), bias=False)
-        self.branch2_b_bn = nn.BatchNorm2d(256)
-        self.branch2_c = nn.Conv2d(256, 320, (7, 1), padding=(3, 0), bias=False)
-        self.branch2_c_bn = nn.BatchNorm2d(320)
+        self.branch2_b = _ConvBnReLU(256, 256, (1, 7), padding=(0, 3))
+        self.branch2_c = _ConvBnReLU(256, 320, (7, 1), padding=(3, 0))
         self.branch2_d = _ConvBnReLU(320, 320, 3, stride=2)
         # branch3: MaxPool s2 (keeps 1024)
         self.branch3 = nn.MaxPool2d(3, stride=2)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         b1 = cast(Tensor, self.branch1_b(cast(Tensor, self.branch1_a(x))))
-
-        t = cast(Tensor, self.branch2_a(x))
-        t = F.relu(cast(Tensor, self.branch2_b_bn(cast(Tensor, self.branch2_b(t)))))
-        t = F.relu(cast(Tensor, self.branch2_c_bn(cast(Tensor, self.branch2_c(t)))))
-        b2 = cast(Tensor, self.branch2_d(t))
-
+        b2 = cast(Tensor, self.branch2_a(x))
+        b2 = cast(Tensor, self.branch2_b(b2))
+        b2 = cast(Tensor, self.branch2_c(b2))
+        b2 = cast(Tensor, self.branch2_d(b2))
         b3 = cast(Tensor, self.branch3(x))
         return lucid.cat([b1, b2, b3], dim=1)
 
@@ -241,18 +293,14 @@ class _InceptionC(nn.Module):
         self.branch1 = _ConvBnReLU(in_channels, 256, 1)
         # branch2: 1×1(384) → [1×3(256), 3×1(256)] concat
         self.branch2_a = _ConvBnReLU(in_channels, 384, 1)
-        self.branch2_b1 = nn.Conv2d(384, 256, (1, 3), padding=(0, 1), bias=False)
-        self.branch2_b1_bn = nn.BatchNorm2d(256)
-        self.branch2_b2 = nn.Conv2d(384, 256, (3, 1), padding=(1, 0), bias=False)
-        self.branch2_b2_bn = nn.BatchNorm2d(256)
-        # branch3: 1×1(384) → 3×3(448) → 3×3(512) → [1×3(256), 3×1(256)] concat
+        self.branch2_b1 = _ConvBnReLU(384, 256, (1, 3), padding=(0, 1))
+        self.branch2_b2 = _ConvBnReLU(384, 256, (3, 1), padding=(1, 0))
+        # branch3: 1×1(384) → 3×1(448) → 1×3(512) → [1×3(256), 3×1(256)] concat
         self.branch3_a = _ConvBnReLU(in_channels, 384, 1)
-        self.branch3_b = _ConvBnReLU(384, 448, 3, padding=1)
-        self.branch3_c = _ConvBnReLU(448, 512, 3, padding=1)
-        self.branch3_d1 = nn.Conv2d(512, 256, (1, 3), padding=(0, 1), bias=False)
-        self.branch3_d1_bn = nn.BatchNorm2d(256)
-        self.branch3_d2 = nn.Conv2d(512, 256, (3, 1), padding=(1, 0), bias=False)
-        self.branch3_d2_bn = nn.BatchNorm2d(256)
+        self.branch3_b = _ConvBnReLU(384, 448, (3, 1), padding=(1, 0))
+        self.branch3_c = _ConvBnReLU(448, 512, (1, 3), padding=(0, 1))
+        self.branch3_d1 = _ConvBnReLU(512, 256, (1, 3), padding=(0, 1))
+        self.branch3_d2 = _ConvBnReLU(512, 256, (3, 1), padding=(1, 0))
         # branch4: AvgPool → 1×1(256)
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 256, 1)
@@ -261,27 +309,18 @@ class _InceptionC(nn.Module):
         b1 = cast(Tensor, self.branch1(x))
 
         t2 = cast(Tensor, self.branch2_a(x))
-        b2a = F.relu(
-            cast(Tensor, self.branch2_b1_bn(cast(Tensor, self.branch2_b1(t2))))
+        b2 = lucid.cat(
+            [cast(Tensor, self.branch2_b1(t2)), cast(Tensor, self.branch2_b2(t2))],
+            dim=1,
         )
-        b2b = F.relu(
-            cast(Tensor, self.branch2_b2_bn(cast(Tensor, self.branch2_b2(t2))))
-        )
-        b2 = lucid.cat([b2a, b2b], dim=1)
 
-        t3 = cast(
-            Tensor,
-            self.branch3_c(
-                cast(Tensor, self.branch3_b(cast(Tensor, self.branch3_a(x))))
-            ),
+        t3 = cast(Tensor, self.branch3_a(x))
+        t3 = cast(Tensor, self.branch3_b(t3))
+        t3 = cast(Tensor, self.branch3_c(t3))
+        b3 = lucid.cat(
+            [cast(Tensor, self.branch3_d1(t3)), cast(Tensor, self.branch3_d2(t3))],
+            dim=1,
         )
-        b3a = F.relu(
-            cast(Tensor, self.branch3_d1_bn(cast(Tensor, self.branch3_d1(t3))))
-        )
-        b3b = F.relu(
-            cast(Tensor, self.branch3_d2_bn(cast(Tensor, self.branch3_d2(t3))))
-        )
-        b3 = lucid.cat([b3a, b3b], dim=1)
 
         b4 = cast(Tensor, self.branch4_conv(cast(Tensor, self.branch4_pool(x))))
 

@@ -1,24 +1,26 @@
-"""PVT (Pyramid Vision Transformer) backbone and classifier (Wang et al., 2021).
+"""PVT v2 (Pyramid Vision Transformer v2) backbone and classifier.
 
-Paper: "Pyramid Vision Transformer: A Versatile Backbone for Dense Prediction
-        without Convolutions"
+Paper: "PVT v2: Improved Baselines with Pyramid Vision Transformer"
+        Wang et al., 2022 — https://arxiv.org/abs/2106.13797
 
-Key ideas:
-  1. Hierarchical 4-stage structure like ResNet, each stage downsamples spatially.
-  2. Spatial Reduction Attention (SRA): K and V are pooled via Conv2d before MHA,
-     reducing the quadratic cost of attention for high-resolution feature maps.
-  3. Each stage: overlapping patch embedding → N transformer blocks → flatten.
-  4. Position encodings reshaped per-stage based on current spatial resolution.
+Key differences from PVT v1:
+  1. Overlapping patch embedding (kernel=7, stride=4, padding=3 for stage 0;
+     kernel=3, stride=2, padding=1 for subsequent stages) — no positional
+     embeddings needed because the overlapping conv implicitly encodes position.
+  2. MLP contains a depthwise Conv2d (3×3, same padding) between fc1 and fc2,
+     providing spatial awareness within the MLP.
+  3. Spatial Reduction Attention (SRA) unchanged from v1: K and V are reduced
+     via a stride-sr_ratio Conv2d before MHA, keeping cost manageable at high
+     resolutions.
 
-Architecture (PVT-Tiny, image=224):
-  Stage 1: patch=4 → (56×56, 64),  2 × SRABlock(heads=1, sr=8)
-  Stage 2: patch=2 → (28×28, 128), 2 × SRABlock(heads=2, sr=4)
-  Stage 3: patch=2 → (14×14, 320), 2 × SRABlock(heads=5, sr=2)
-  Stage 4: patch=2 → (7×7,  512),  2 × SRABlock(heads=8, sr=1)
-  Head   : LayerNorm → mean over tokens → FC(512, num_classes)
+Architecture (PVT v2-B1 / our 'pvt_tiny' default, 224 input):
+  Stage 1: OverlapPatchEmbed(k=7,s=4) → (56×56, 64),  2 × Block(heads=1, sr=8)
+  Stage 2: OverlapPatchEmbed(k=3,s=2) → (28×28, 128), 2 × Block(heads=2, sr=4)
+  Stage 3: OverlapPatchEmbed(k=3,s=2) → (14×14, 320), 2 × Block(heads=5, sr=2)
+  Stage 4: OverlapPatchEmbed(k=3,s=2) → (7×7,  512),  2 × Block(heads=8, sr=1)
+  Head   : global avg-pool → FC(512, num_classes)
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -31,28 +33,69 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.pvt._config import PVTConfig
 
 # ---------------------------------------------------------------------------
-# Patch embedding (overlapping via stride = patch_size)
+# Overlapping patch embedding
 # ---------------------------------------------------------------------------
 
 
-class _PatchEmbed(nn.Module):
-    """Patch embedding: Conv2d(patch_size, stride=patch_size) → LN."""
+class _OverlapPatchEmbed(nn.Module):
+    """Overlapping patch embedding via strided Conv2d + LayerNorm.
+
+    Returns spatial feature map (B, C, H', W') where H'=H/stride, W'=W/stride.
+    The overlapping kernel (size > stride) means adjacent windows share context,
+    implicitly encoding position so explicit positional embeddings are unnecessary.
+    """
 
     def __init__(
-        self, in_ch: int, patch_size: int, embed_dim: int, img_size: int
+        self,
+        in_ch: int,
+        embed_dim: int,
+        patch_size: int,
+        stride: int,
     ) -> None:
         super().__init__()
-        self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=patch_size)
+        padding = patch_size // 2
+        self.proj = nn.Conv2d(
+            in_ch, embed_dim, patch_size, stride=stride, padding=padding
+        )
         self.norm = nn.LayerNorm(embed_dim)
-        self.h_patches = img_size // patch_size
-        self.w_patches = img_size // patch_size
 
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))  # (B, C, H, W)
+        x = cast(Tensor, self.proj(x))  # (B, C, H', W')
         B, C, H, W = x.shape
-        x = x.flatten(2).permute(0, 2, 1)  # (B, H*W, C)
+        # permute to (B, H'*W', C), apply LN, return
+        x = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
         x = cast(Tensor, self.norm(x))
         return x, H, W
+
+
+# ---------------------------------------------------------------------------
+# MLP with depthwise conv (PVT v2 key change)
+# ---------------------------------------------------------------------------
+
+
+class _DWConvMLP(nn.Module):
+    """Two-layer MLP with a DWConv after fc1 for spatial mixing.
+
+    fc1 → reshape→ DWConv3×3 → reshape → GELU → fc2
+    """
+
+    def __init__(self, dim: int, mlp_ratio: float) -> None:
+        super().__init__()
+        hidden = int(dim * mlp_ratio)
+        self.fc1 = nn.Linear(dim, hidden)
+        self.dwconv = nn.Conv2d(hidden, hidden, 3, padding=1, groups=hidden)
+        self.fc2 = nn.Linear(hidden, dim)
+
+    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
+        B, _N, _C = x.shape
+        x = cast(Tensor, self.fc1(x))
+        # After fc1: (B, N, hidden) — reshape to spatial for DWConv
+        hidden = x.shape[-1]
+        x_2d = x.permute(0, 2, 1).reshape(B, hidden, H, W)
+        x_2d = cast(Tensor, self.dwconv(x_2d))
+        x = x_2d.reshape(B, hidden, H * W).permute(0, 2, 1)
+        x = F.gelu(x)
+        return cast(Tensor, self.fc2(x))
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +104,11 @@ class _PatchEmbed(nn.Module):
 
 
 class _SRAttention(nn.Module):
-    """MHA with optional spatial reduction on K and V."""
+    """MHA with optional spatial reduction on K and V.
+
+    When sr_ratio > 1, K and V are computed from a spatially reduced feature
+    map (via a stride-sr_ratio Conv2d), reducing the O(N²) cost for large N.
+    """
 
     def __init__(self, dim: int, num_heads: int, sr_ratio: int) -> None:
         super().__init__()
@@ -73,12 +120,13 @@ class _SRAttention(nn.Module):
         self.q = nn.Linear(dim, dim)
         self.kv = nn.Linear(dim, dim * 2)
         self.proj = nn.Linear(dim, dim)
-        self.norm = nn.LayerNorm(dim)
 
         if sr_ratio > 1:
             self.sr = nn.Conv2d(dim, dim, sr_ratio, stride=sr_ratio)
+            self.norm = nn.LayerNorm(dim)
         else:
             self.sr = None  # type: ignore[assignment]
+            self.norm = None  # type: ignore[assignment]
 
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
@@ -88,7 +136,6 @@ class _SRAttention(nn.Module):
         q = q.reshape(B, N, self.num_heads, head_dim).permute(0, 2, 1, 3)
 
         if self.sr is not None:
-            # Reshape tokens back to spatial form, apply stride conv to reduce
             x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
             x_2d = cast(Tensor, self.sr(x_2d))  # (B, C, H', W')
             x_2d = x_2d.flatten(2).permute(0, 2, 1)  # (B, H'*W', C)
@@ -109,23 +156,7 @@ class _SRAttention(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# MLP
-# ---------------------------------------------------------------------------
-
-
-class _MLP(nn.Module):
-    def __init__(self, dim: int, mlp_ratio: float) -> None:
-        super().__init__()
-        hidden = int(dim * mlp_ratio)
-        self.fc1 = nn.Linear(dim, hidden)
-        self.fc2 = nn.Linear(hidden, dim)
-
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.fc2(F.gelu(cast(Tensor, self.fc1(x)))))
-
-
-# ---------------------------------------------------------------------------
-# PVT transformer block
+# PVT v2 transformer block
 # ---------------------------------------------------------------------------
 
 
@@ -141,11 +172,11 @@ class _PVTBlock(nn.Module):
         self.norm1 = nn.LayerNorm(dim)
         self.attn = _SRAttention(dim, num_heads, sr_ratio)
         self.norm2 = nn.LayerNorm(dim)
-        self.mlp = _MLP(dim, mlp_ratio)
+        self.mlp = _DWConvMLP(dim, mlp_ratio)
 
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
         x = x + cast(Tensor, self.attn(cast(Tensor, self.norm1(x)), H, W))  # type: ignore[arg-type]
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)), H, W))  # type: ignore[arg-type]
         return x
 
 
@@ -155,50 +186,36 @@ class _PVTBlock(nn.Module):
 
 
 class _PVTStage(nn.Module):
+    """One PVT v2 stage = OverlapPatchEmbed + N × Block + LayerNorm."""
+
     def __init__(
         self,
         in_ch: int,
-        patch_size: int,
         embed_dim: int,
+        patch_size: int,
+        stride: int,
         depth: int,
         num_heads: int,
         sr_ratio: int,
         mlp_ratio: float,
-        img_size: int,
     ) -> None:
         super().__init__()
-        self.patch_embed = _PatchEmbed(in_ch, patch_size, embed_dim, img_size)
-        self.pos_embed = nn.Parameter(
-            lucid.zeros(
-                1,
-                (img_size // patch_size) * (img_size // patch_size),
-                embed_dim,
-            )
-        )
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        self.patch_embed = _OverlapPatchEmbed(in_ch, embed_dim, patch_size, stride)
         self.blocks = nn.ModuleList(
             [_PVTBlock(embed_dim, num_heads, sr_ratio, mlp_ratio) for _ in range(depth)]
         )
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
-        x, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
-        # Add positional embedding (may need to interpolate for different sizes)
-        B, N, C = x.shape
-        pos_enc: Tensor = self.pos_embed
-        if pos_enc.shape[1] != N:
-            # Interpolate positional encoding to match actual H, W
-            pH = pW = int(math.isqrt(pos_enc.shape[1]))
-            pos_2d = pos_enc.reshape(1, pH, pW, C).permute(0, 3, 1, 2)  # (1, C, pH, pW)
-            pos_2d = F.interpolate(pos_2d, size=(H, W), mode="bilinear")
-            pos_enc = pos_2d.permute(0, 2, 3, 1).reshape(1, H * W, C)
-        x = x + pos_enc
+        # x: (B, C_in, H_in, W_in) — spatial feature map from previous stage
+        tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
         for blk in self.blocks:
-            x = cast(Tensor, blk(x, H, W))  # type: ignore[arg-type]
-        x = cast(Tensor, self.norm(x))
-        # Reshape back to (B, C, H, W) for the next stage's patch embed
-        x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
-        return x_2d, H, W
+            tokens = cast(Tensor, blk(tokens, H, W))  # type: ignore[arg-type]
+        tokens = cast(Tensor, self.norm(tokens))
+        # Reshape back to (B, C, H, W) for next stage's patch embed
+        B, _, C = tokens.shape
+        x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
+        return x_out, H, W
 
 
 # ---------------------------------------------------------------------------
@@ -210,22 +227,19 @@ def _build_pvt(cfg: PVTConfig) -> tuple[nn.ModuleList, list[FeatureInfo], int]:
     stages: list[nn.Module] = []
     fi: list[FeatureInfo] = []
 
-    # Stage spatial sizes for 224 input
-    patch_sizes = [4, 2, 2, 2]
-    # Cumulative reductions: 4, 8, 16, 32
-    img_sizes = [224, 56, 28, 14]  # input size to each stage
-
     in_ch = cfg.in_channels
     reduction = 1
 
-    for i, (dim, depth, heads, sr) in enumerate(
-        zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios)
+    for i, (dim, depth, heads, sr, mlp_r) in enumerate(
+        zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios, cfg.mlp_ratios)
     ):
-        patch_size = patch_sizes[i]
-        img_size = img_sizes[i]
-        reduction *= patch_size
+        # Stage 0: kernel=7, stride=4 (4x downsample)
+        # Subsequent stages: kernel=3, stride=2 (2x downsample)
+        patch_size = 7 if i == 0 else 3
+        stride = 4 if i == 0 else 2
+        reduction *= stride
         stages.append(
-            _PVTStage(in_ch, patch_size, dim, depth, heads, sr, cfg.mlp_ratio, img_size)
+            _PVTStage(in_ch, dim, patch_size, stride, depth, heads, sr, mlp_r)
         )
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
         in_ch = dim
@@ -239,7 +253,7 @@ def _build_pvt(cfg: PVTConfig) -> tuple[nn.ModuleList, list[FeatureInfo], int]:
 
 
 class PVT(PretrainedModel, BackboneMixin):
-    """PVT feature extractor — mean-pooled final-stage token features."""
+    """PVT v2 feature extractor — mean-pooled final-stage token features."""
 
     config_class: ClassVar[type[PVTConfig]] = PVTConfig
     base_model_prefix: ClassVar[str] = "pvt"
@@ -258,7 +272,7 @@ class PVT(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         for stage in self.stages:
             x, _, _ = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W) — mean pool to (B, C)
+        # x: (B, C, H, W) — global average pool to (B, C)
         return x.flatten(2).mean(dim=2)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -272,7 +286,7 @@ class PVT(PretrainedModel, BackboneMixin):
 
 
 class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """PVT with token mean-pooling + LayerNorm + FC head."""
+    """PVT v2 with global avg-pool + FC head."""
 
     config_class: ClassVar[type[PVTConfig]] = PVTConfig
     base_model_prefix: ClassVar[str] = "pvt"
@@ -291,10 +305,9 @@ class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
     ) -> ImageClassificationOutput:
         for stage in self.stages:
             x, _, _ = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W)
-        x = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
+        # x: (B, C, H, W) — mean pool to (B, C)
+        x = x.flatten(2).mean(dim=2)
         x = cast(Tensor, self.norm(x))
-        x = x.mean(dim=1)  # (B, C) global average over tokens
         logits = cast(Tensor, self.classifier(x))
 
         loss: Tensor | None = None
