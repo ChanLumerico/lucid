@@ -95,6 +95,16 @@ from lucid.models.vision.googlenet import (  # noqa: E402
     googlenet,
     googlenet_cls,
 )
+# 2017 — MobileNet v1 (Howard et al.)
+from lucid.models.vision.mobilenet import (  # noqa: E402
+    MobileNetV1,
+    MobileNetV1Config,
+    MobileNetV1ForImageClassification,
+    mobilenet_v1, mobilenet_v1_cls,
+    mobilenet_v1_075, mobilenet_v1_075_cls,
+    mobilenet_v1_050, mobilenet_v1_050_cls,
+    mobilenet_v1_025, mobilenet_v1_025_cls,
+)
 # 2016 — DenseNet (Huang et al.)
 from lucid.models.vision.densenet import (  # noqa: E402
     DenseNet,
@@ -152,6 +162,14 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — MobileNet v1 (2017)
+    "MobileNetV1",
+    "MobileNetV1Config",
+    "MobileNetV1ForImageClassification",
+    "mobilenet_v1", "mobilenet_v1_cls",
+    "mobilenet_v1_075", "mobilenet_v1_075_cls",
+    "mobilenet_v1_050", "mobilenet_v1_050_cls",
+    "mobilenet_v1_025", "mobilenet_v1_025_cls",
     # Vision — DenseNet (2016)
     "DenseNet",
     "DenseNetConfig",
