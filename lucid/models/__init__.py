@@ -3,6 +3,8 @@
 See ``obsidian/roadmap/roadmap-models-zoo-v3.md`` for the design.
 """
 
+# fmt: off
+
 from lucid.models._auto import (
     AutoConfig,
     AutoModel,
@@ -95,26 +97,51 @@ from lucid.models.vision.googlenet import (  # noqa: E402
     googlenet,
     googlenet_cls,
 )
+
+# 2019 — EfficientNet (Tan & Le)
+from lucid.models.vision.efficientnet import (  # noqa: E402
+    EfficientNet,
+    EfficientNetConfig,
+    EfficientNetForImageClassification,
+    efficientnet_b0, efficientnet_b0_cls,
+    efficientnet_b1, efficientnet_b1_cls,
+    efficientnet_b2, efficientnet_b2_cls,
+    efficientnet_b3, efficientnet_b3_cls,
+    efficientnet_b4, efficientnet_b4_cls,
+    efficientnet_b5, efficientnet_b5_cls,
+    efficientnet_b6, efficientnet_b6_cls,
+    efficientnet_b7, efficientnet_b7_cls,
+)
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet import (  # noqa: E402
     MobileNetV1,
     MobileNetV1Config,
     MobileNetV1ForImageClassification,
-    mobilenet_v1, mobilenet_v1_cls,
-    mobilenet_v1_075, mobilenet_v1_075_cls,
-    mobilenet_v1_050, mobilenet_v1_050_cls,
-    mobilenet_v1_025, mobilenet_v1_025_cls,
+    mobilenet_v1,
+    mobilenet_v1_cls,
+    mobilenet_v1_075,
+    mobilenet_v1_075_cls,
+    mobilenet_v1_050,
+    mobilenet_v1_050_cls,
+    mobilenet_v1_025,
+    mobilenet_v1_025_cls,
 )
+
 # 2016 — DenseNet (Huang et al.)
 from lucid.models.vision.densenet import (  # noqa: E402
     DenseNet,
     DenseNetConfig,
     DenseNetForImageClassification,
-    densenet_121, densenet_121_cls,
-    densenet_169, densenet_169_cls,
-    densenet_201, densenet_201_cls,
-    densenet_264, densenet_264_cls,
+    densenet_121,
+    densenet_121_cls,
+    densenet_169,
+    densenet_169_cls,
+    densenet_201,
+    densenet_201_cls,
+    densenet_264,
+    densenet_264_cls,
 )
+
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
@@ -162,22 +189,42 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — EfficientNet (2019)
+    "EfficientNet",
+    "EfficientNetConfig",
+    "EfficientNetForImageClassification",
+    "efficientnet_b0", "efficientnet_b0_cls",
+    "efficientnet_b1", "efficientnet_b1_cls",
+    "efficientnet_b2", "efficientnet_b2_cls",
+    "efficientnet_b3", "efficientnet_b3_cls",
+    "efficientnet_b4", "efficientnet_b4_cls",
+    "efficientnet_b5", "efficientnet_b5_cls",
+    "efficientnet_b6", "efficientnet_b6_cls",
+    "efficientnet_b7", "efficientnet_b7_cls",
     # Vision — MobileNet v1 (2017)
     "MobileNetV1",
     "MobileNetV1Config",
     "MobileNetV1ForImageClassification",
-    "mobilenet_v1", "mobilenet_v1_cls",
-    "mobilenet_v1_075", "mobilenet_v1_075_cls",
-    "mobilenet_v1_050", "mobilenet_v1_050_cls",
-    "mobilenet_v1_025", "mobilenet_v1_025_cls",
+    "mobilenet_v1",
+    "mobilenet_v1_cls",
+    "mobilenet_v1_075",
+    "mobilenet_v1_075_cls",
+    "mobilenet_v1_050",
+    "mobilenet_v1_050_cls",
+    "mobilenet_v1_025",
+    "mobilenet_v1_025_cls",
     # Vision — DenseNet (2016)
     "DenseNet",
     "DenseNetConfig",
     "DenseNetForImageClassification",
-    "densenet_121", "densenet_121_cls",
-    "densenet_169", "densenet_169_cls",
-    "densenet_201", "densenet_201_cls",
-    "densenet_264", "densenet_264_cls",
+    "densenet_121",
+    "densenet_121_cls",
+    "densenet_169",
+    "densenet_169_cls",
+    "densenet_201",
+    "densenet_201_cls",
+    "densenet_264",
+    "densenet_264_cls",
     # Vision — GoogLeNet (2014)
     "GoogLeNet",
     "GoogLeNetConfig",

@@ -32,10 +32,10 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.densenet._config import DenseNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Dense layer (bottleneck)
 # ---------------------------------------------------------------------------
+
 
 class _DenseLayer(nn.Module):
     """Single dense layer: BN-ReLU-Conv1×1-BN-ReLU-Conv3×3."""
@@ -55,9 +55,7 @@ class _DenseLayer(nn.Module):
         self.conv2 = nn.Conv2d(inter_features, growth_rate, 3, padding=1, bias=False)
         self.drop = nn.Dropout(p=dropout_rate) if dropout_rate > 0.0 else None
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out = cast(Tensor, self.conv1(F.relu(cast(Tensor, self.norm1(x)))))
         out = cast(Tensor, self.conv2(F.relu(cast(Tensor, self.norm2(out)))))
         if self.drop is not None:
@@ -69,6 +67,7 @@ class _DenseLayer(nn.Module):
 # ---------------------------------------------------------------------------
 # Dense block
 # ---------------------------------------------------------------------------
+
 
 class _DenseBlock(nn.Module):
     """N stacked _DenseLayers; each layer receives all previous outputs."""
@@ -94,9 +93,7 @@ class _DenseBlock(nn.Module):
             )
         self.layers = nn.ModuleList(layers)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         for layer in self.layers:
             x = cast(Tensor, layer(x))
         return x
@@ -105,6 +102,7 @@ class _DenseBlock(nn.Module):
 # ---------------------------------------------------------------------------
 # Transition block
 # ---------------------------------------------------------------------------
+
 
 class _Transition(nn.Module):
     """BN-ReLU-Conv1×1-AvgPool — halves channels and spatial resolution."""
@@ -115,9 +113,7 @@ class _Transition(nn.Module):
         self.conv = nn.Conv2d(num_input_features, num_output_features, 1, bias=False)
         self.pool = nn.AvgPool2d(2, stride=2)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.conv(F.relu(cast(Tensor, self.norm(x)))))
         return cast(Tensor, self.pool(x))
 
@@ -125,6 +121,7 @@ class _Transition(nn.Module):
 # ---------------------------------------------------------------------------
 # Shared builder: stem + blocks + transitions
 # ---------------------------------------------------------------------------
+
 
 def _build_densenet(
     cfg: DenseNetConfig,
@@ -134,7 +131,9 @@ def _build_densenet(
     ``transitions`` has len(blocks) - 1 elements (no transition after last block).
     """
     stem = nn.Sequential(
-        nn.Conv2d(cfg.in_channels, cfg.num_init_features, 7, stride=2, padding=3, bias=False),
+        nn.Conv2d(
+            cfg.in_channels, cfg.num_init_features, 7, stride=2, padding=3, bias=False
+        ),
         nn.BatchNorm2d(cfg.num_init_features),
         nn.ReLU(inplace=True),
         nn.MaxPool2d(3, stride=2, padding=1),
@@ -145,7 +144,9 @@ def _build_densenet(
     num_features = cfg.num_init_features
 
     for i, num_layers in enumerate(cfg.block_config):
-        block = _DenseBlock(num_layers, num_features, cfg.growth_rate, cfg.bn_size, cfg.dropout_rate)
+        block = _DenseBlock(
+            num_layers, num_features, cfg.growth_rate, cfg.bn_size, cfg.dropout_rate
+        )
         blocks.append(block)
         num_features += num_layers * cfg.growth_rate
 
@@ -155,12 +156,19 @@ def _build_densenet(
             num_features = out_features
 
     final_norm = nn.BatchNorm2d(num_features)
-    return stem, nn.ModuleList(blocks), nn.ModuleList(transitions), final_norm, num_features
+    return (
+        stem,
+        nn.ModuleList(blocks),
+        nn.ModuleList(transitions),
+        final_norm,
+        num_features,
+    )
 
 
 # ---------------------------------------------------------------------------
 # DenseNet backbone  (task="base")
 # ---------------------------------------------------------------------------
+
 
 class DenseNet(PretrainedModel, BackboneMixin):
     """DenseNet feature extractor — outputs final dense-block activations.
@@ -207,15 +215,14 @@ class DenseNet(PretrainedModel, BackboneMixin):
         x = F.relu(cast(Tensor, self.final_norm(x)))
         return cast(Tensor, self.avgpool(x))
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
 # ---------------------------------------------------------------------------
 # DenseNet for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """DenseNet with global average pool + linear classification head."""

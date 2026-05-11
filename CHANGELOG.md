@@ -69,6 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.mobilenet: MobileNet v1 (Howard et al., 2017) — depthwise separable convolutions; width_mult 1.0/0.75/0.5/0.25; 4.2M params paper-exact
 
+- lucid.models.vision.efficientnet: EfficientNet B0–B7 (Tan & Le, 2019) — compound scaling, MBConv+SE blocks; B0 classifier 5,288,548 params reference-exact; 16 registry entries
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)

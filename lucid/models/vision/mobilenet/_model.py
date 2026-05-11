@@ -58,17 +58,17 @@ def _dw_pw(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
 
 # (out_channels, stride) specs for the 13 DW+PW layers (at width_mult=1.0)
 _DW_PW_SPECS: list[tuple[int, int]] = [
-    (64,   1),
-    (128,  2),
-    (128,  1),
-    (256,  2),
-    (256,  1),
-    (512,  2),
-    (512,  1),
-    (512,  1),
-    (512,  1),
-    (512,  1),
-    (512,  1),
+    (64, 1),
+    (128, 2),
+    (128, 1),
+    (256, 2),
+    (256, 1),
+    (512, 2),
+    (512, 1),
+    (512, 1),
+    (512, 1),
+    (512, 1),
+    (512, 1),
     (1024, 2),
     (1024, 1),
 ]
@@ -100,6 +100,7 @@ def _build_features(cfg: MobileNetV1Config) -> tuple[nn.Sequential, int]:
 # MobileNet v1 backbone  (task="base")
 # ---------------------------------------------------------------------------
 
+
 class MobileNetV1(PretrainedModel, BackboneMixin):
     """MobileNet v1 feature extractor — 1024-ch spatial map (1×1 after AvgPool)."""
 
@@ -114,14 +115,15 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
         self._num_features = num_features
 
         w = config.width_mult
+
         def _ch(c: int) -> int:
             return _make_divisible(c * w)
 
         self._feature_info = [
-            FeatureInfo(stage=1, num_channels=_ch(64),   reduction=2),
-            FeatureInfo(stage=2, num_channels=_ch(128),  reduction=4),
-            FeatureInfo(stage=3, num_channels=_ch(256),  reduction=8),
-            FeatureInfo(stage=4, num_channels=_ch(512),  reduction=16),
+            FeatureInfo(stage=1, num_channels=_ch(64), reduction=2),
+            FeatureInfo(stage=2, num_channels=_ch(128), reduction=4),
+            FeatureInfo(stage=3, num_channels=_ch(256), reduction=8),
+            FeatureInfo(stage=4, num_channels=_ch(512), reduction=16),
             FeatureInfo(stage=5, num_channels=_ch(1024), reduction=32),
         ]
 
@@ -133,15 +135,14 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
 # ---------------------------------------------------------------------------
 # MobileNet v1 for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """MobileNet v1 with AvgPool + Dropout + FC classifier."""
