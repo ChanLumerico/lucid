@@ -60,6 +60,7 @@ markers = [
     "parity:    numerical parity vs reference framework (auto-skip when missing)",
     "smoke:     quick sanity test (< 1s)",
     "slow:      end-to-end, > 5s (model forwards, training loops)",
+    "heavy:     very large model (> 100M params); skip unless -m heavy is passed",
     "gpu:       requires Apple Silicon GPU (Metal); auto-skip otherwise",
     "perf:      pytest-benchmark timing test (opt-in via --benchmark-only)",
     "stability: numerical-edge / extreme-value coverage (inf / nan / subnormal)",
