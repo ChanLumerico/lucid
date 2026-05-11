@@ -95,6 +95,16 @@ from lucid.models.vision.googlenet import (  # noqa: E402
     googlenet,
     googlenet_cls,
 )
+# 2016 — DenseNet (Huang et al.)
+from lucid.models.vision.densenet import (  # noqa: E402
+    DenseNet,
+    DenseNetConfig,
+    DenseNetForImageClassification,
+    densenet_121, densenet_121_cls,
+    densenet_169, densenet_169_cls,
+    densenet_201, densenet_201_cls,
+    densenet_264, densenet_264_cls,
+)
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
@@ -142,6 +152,14 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — DenseNet (2016)
+    "DenseNet",
+    "DenseNetConfig",
+    "DenseNetForImageClassification",
+    "densenet_121", "densenet_121_cls",
+    "densenet_169", "densenet_169_cls",
+    "densenet_201", "densenet_201_cls",
+    "densenet_264", "densenet_264_cls",
     # Vision — GoogLeNet (2014)
     "GoogLeNet",
     "GoogLeNetConfig",

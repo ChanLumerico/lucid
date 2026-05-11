@@ -65,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.googlenet: GoogLeNet / Inception v1 (Szegedy et al., 2014) — parallel Inception modules, auxiliary classifiers (train only, 0.3× weighted), 13.4M params paper-exact
 
+- lucid.models.vision.densenet: DenseNet 121/169/201/264 (Huang et al., 2016) — dense connections with growth_rate/bn_size config; DenseNet-121 classifier 7,978,856 params paper-exact
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
