@@ -58,6 +58,7 @@ def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
 # AlexNet backbone  (task="base")
 # ---------------------------------------------------------------------------
 
+
 class AlexNet(PretrainedModel, BackboneMixin):
     """AlexNet feature extractor — outputs the 5-block conv activations.
 
@@ -73,7 +74,7 @@ class AlexNet(PretrainedModel, BackboneMixin):
         self.features = _build_features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         self._feature_info = [
-            FeatureInfo(stage=1, num_channels=96,  reduction=4),
+            FeatureInfo(stage=1, num_channels=96, reduction=4),
             FeatureInfo(stage=2, num_channels=256, reduction=8),
             FeatureInfo(stage=3, num_channels=384, reduction=16),
             FeatureInfo(stage=4, num_channels=384, reduction=16),
@@ -88,15 +89,14 @@ class AlexNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.features(x))
         return cast(Tensor, self.avgpool(x))
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
 # ---------------------------------------------------------------------------
 # AlexNet for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """AlexNet with FC6→FC7→classifier head (4096→4096→num_classes)."""

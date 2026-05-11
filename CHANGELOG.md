@@ -61,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.alexnet: AlexNet (Krizhevsky et al., 2012) — original paper architecture (96/256/384/384/256 channels + LRN); backbone + classifier
 
+- lucid.models.vision.vgg: VGG 11/13/16/19 + BN variants (Simonyan & Zisserman, 2014); 16 registry entries; VGG-16 classifier 138,357,544 params (paper-exact)
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)

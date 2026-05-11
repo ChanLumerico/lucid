@@ -26,5 +26,5 @@ class LeNetConfig(ModelConfig):
 
     num_classes: int = 10
     in_channels: int = 1
-    activation: str = "tanh"   # "tanh" | "relu"
-    pooling: str = "avg"        # "avg" | "max"
+    activation: str = "tanh"  # "tanh" | "relu"
+    pooling: str = "avg"  # "avg" | "max"

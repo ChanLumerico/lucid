@@ -10,7 +10,6 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.resnet._config import ResNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Building blocks
 # ---------------------------------------------------------------------------
@@ -34,19 +33,17 @@ class _BasicBlock(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(out_channels)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(
-            out_channels, out_channels, 3, padding=1, bias=False
-        )
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.downsample = downsample
         self.stride = stride
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
-        out = cast(Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x))))))
+        out = cast(
+            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        )
         out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
 
         if self.downsample is not None:
@@ -84,13 +81,15 @@ class _Bottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         identity = x
 
-        out = cast(Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x))))))
-        out = cast(Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))))
+        out = cast(
+            Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        )
+        out = cast(
+            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
+        )
         out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
 
         if self.downsample is not None:
@@ -222,9 +221,7 @@ class ResNet(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.layer4(x))
         return x
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
@@ -254,7 +251,9 @@ class ResNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         )
         final_channels = config.hidden_sizes[-1] * block_cls.expansion
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self._build_classifier(final_channels, config.num_classes, dropout=config.dropout)
+        self._build_classifier(
+            final_channels, config.num_classes, dropout=config.dropout
+        )
 
         if config.zero_init_residual:
             _zero_init_residual(self)

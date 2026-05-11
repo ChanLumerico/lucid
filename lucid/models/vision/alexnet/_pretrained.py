@@ -27,7 +27,9 @@ def alexnet(pretrained: bool = False, **overrides: object) -> AlexNet:
     model_class=AlexNetForImageClassification,
     default_config=_CFG,
 )
-def alexnet_cls(pretrained: bool = False, **overrides: object) -> AlexNetForImageClassification:
+def alexnet_cls(
+    pretrained: bool = False, **overrides: object
+) -> AlexNetForImageClassification:
     """AlexNet classifier (Krizhevsky et al., 2012)."""
     cfg = AlexNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
     return AlexNetForImageClassification(cfg)

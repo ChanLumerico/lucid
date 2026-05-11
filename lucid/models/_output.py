@@ -55,7 +55,8 @@ class ModelOutput:
     def keys(self) -> list[str]:
         """Names of fields whose value is not None, in declaration order."""
         return [
-            f.name for f in fields(self)  # type: ignore[arg-type]
+            f.name
+            for f in fields(self)  # type: ignore[arg-type]
             if getattr(self, f.name) is not None
         ]
 

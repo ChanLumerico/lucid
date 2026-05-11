@@ -53,6 +53,7 @@ from lucid.models.vision.lenet import (  # noqa: E402
     lenet_5_relu,
     lenet_5_relu_cls,
 )
+
 # 2012 — AlexNet (Krizhevsky, Sutskever & Hinton)
 from lucid.models.vision.alexnet import (  # noqa: E402
     AlexNet,
@@ -61,6 +62,30 @@ from lucid.models.vision.alexnet import (  # noqa: E402
     alexnet,
     alexnet_cls,
 )
+
+# 2014 — VGG (Simonyan & Zisserman)
+from lucid.models.vision.vgg import (  # noqa: E402
+    VGG,
+    VGGConfig,
+    VGGForImageClassification,
+    vgg_11,
+    vgg_11_bn,
+    vgg_11_cls,
+    vgg_11_bn_cls,
+    vgg_13,
+    vgg_13_bn,
+    vgg_13_cls,
+    vgg_13_bn_cls,
+    vgg_16,
+    vgg_16_bn,
+    vgg_16_cls,
+    vgg_16_bn_cls,
+    vgg_19,
+    vgg_19_bn,
+    vgg_19_cls,
+    vgg_19_bn_cls,
+)
+
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
@@ -108,6 +133,26 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — VGG (2014)
+    "VGG",
+    "VGGConfig",
+    "VGGForImageClassification",
+    "vgg_11",
+    "vgg_11_bn",
+    "vgg_11_cls",
+    "vgg_11_bn_cls",
+    "vgg_13",
+    "vgg_13_bn",
+    "vgg_13_cls",
+    "vgg_13_bn_cls",
+    "vgg_16",
+    "vgg_16_bn",
+    "vgg_16_cls",
+    "vgg_16_bn_cls",
+    "vgg_19",
+    "vgg_19_bn",
+    "vgg_19_cls",
+    "vgg_19_bn_cls",
     # Vision — AlexNet (2012)
     "AlexNet",
     "AlexNetConfig",

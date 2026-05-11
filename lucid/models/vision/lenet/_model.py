@@ -26,10 +26,10 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.lenet._config import LeNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _act(name: str) -> nn.Module:
     if name == "relu":
@@ -46,6 +46,7 @@ def _pool(name: str) -> nn.Module:
 # ---------------------------------------------------------------------------
 # Shared feature extractor (C1→S2→C3→S4→C5)
 # ---------------------------------------------------------------------------
+
 
 def _build_features(cfg: LeNetConfig) -> nn.Sequential:
     return nn.Sequential(
@@ -69,6 +70,7 @@ def _build_features(cfg: LeNetConfig) -> nn.Sequential:
 # LeNet backbone  (task="base")
 # ---------------------------------------------------------------------------
 
+
 class LeNet(PretrainedModel, BackboneMixin):
     """LeNet-5 feature extractor — outputs C5 activations (120-dim spatial).
 
@@ -83,8 +85,8 @@ class LeNet(PretrainedModel, BackboneMixin):
         super().__init__(config)
         self.features = _build_features(config)
         self._feature_info = [
-            FeatureInfo(stage=1, num_channels=6,   reduction=2),
-            FeatureInfo(stage=2, num_channels=16,  reduction=4),
+            FeatureInfo(stage=1, num_channels=6, reduction=2),
+            FeatureInfo(stage=2, num_channels=16, reduction=4),
             FeatureInfo(stage=3, num_channels=120, reduction=32),
         ]
 
@@ -95,15 +97,14 @@ class LeNet(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         return cast(Tensor, self.features(x))
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> BaseModelOutput:
+    def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         return BaseModelOutput(last_hidden_state=self.forward_features(x))
 
 
 # ---------------------------------------------------------------------------
 # LeNet for image classification  (task="image-classification")
 # ---------------------------------------------------------------------------
+
 
 class LeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     """LeNet-5 with F6 (120→84) and output (84→num_classes) fully-connected layers."""
