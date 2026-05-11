@@ -63,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.vgg: VGG 11/13/16/19 + BN variants (Simonyan & Zisserman, 2014); 16 registry entries; VGG-16 classifier 138,357,544 params (paper-exact)
 
+- lucid.models.vision.googlenet: GoogLeNet / Inception v1 (Szegedy et al., 2014) — parallel Inception modules, auxiliary classifiers (train only, 0.3× weighted), 13.4M params paper-exact
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)

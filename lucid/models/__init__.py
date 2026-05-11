@@ -86,6 +86,15 @@ from lucid.models.vision.vgg import (  # noqa: E402
     vgg_19_bn_cls,
 )
 
+# 2014 — GoogLeNet / Inception v1 (Szegedy et al.)
+from lucid.models.vision.googlenet import (  # noqa: E402
+    GoogLeNet,
+    GoogLeNetConfig,
+    GoogLeNetForImageClassification,
+    GoogLeNetOutput,
+    googlenet,
+    googlenet_cls,
+)
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (  # noqa: E402
     ResNet,
@@ -133,6 +142,13 @@ __all__ = [
     "ObjectDetectionOutput",
     "SemanticSegmentationOutput",
     "Seq2SeqLMOutput",
+    # Vision — GoogLeNet (2014)
+    "GoogLeNet",
+    "GoogLeNetConfig",
+    "GoogLeNetForImageClassification",
+    "GoogLeNetOutput",
+    "googlenet",
+    "googlenet_cls",
     # Vision — VGG (2014)
     "VGG",
     "VGGConfig",
