@@ -98,7 +98,7 @@ export async function ClassDoc({ cls, methodName }: ClassDocProps) {
             <MathText text={cls.summary} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
           {cls.extended && (
-            <MathText text={cls.extended} block className="text-sm text-lucid-text-low leading-relaxed" />
+            <MathText text={cls.extended} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
           {cls.parameters.length > 0 && <ParameterTable parameters={cls.parameters} />}
           {cls.attributes.length > 0 && <AttributeTable attributes={cls.attributes} />}
@@ -108,9 +108,9 @@ export async function ClassDoc({ cls, methodName }: ClassDocProps) {
               <h4 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase">
                 Notes
               </h4>
-              <div className="rounded-xl border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-3">
+              <div className="rounded-xl border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-3 space-y-2">
                 {cls.notes.map((note, i) => (
-                  <MathText key={i} text={note} block className="text-sm text-lucid-text-low leading-relaxed" />
+                  <MathText key={i} text={note} block className="text-sm text-lucid-text-mid leading-relaxed" />
                 ))}
               </div>
             </section>

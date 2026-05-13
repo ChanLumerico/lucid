@@ -117,8 +117,11 @@ def _rst_to_text(text: str) -> str:
         return f"$$\n{body}\n$$"
     text = re.sub(r"\.\. math::\n\n((?:[ \t]+.+\n?)+)", _block_math, text)
 
-    # Inline math: :math:`expr` → $expr$
-    text = re.sub(r":math:`([^`]+)`", r"$\1$", text)
+    # Inline math: :math:`expr` → $expr$ (join multi-line math to single line)
+    def _inline_math(m: re.Match[str]) -> str:
+        inner = " ".join(m.group(1).split())   # collapse whitespace/newlines
+        return f"${inner}$"
+    text = re.sub(r":math:`([^`]+)`", _inline_math, text, flags=re.DOTALL)
 
     # Double-backtick code: ``code`` → `code`
     text = re.sub(r"``([^`]+)``", r"`\1`", text)

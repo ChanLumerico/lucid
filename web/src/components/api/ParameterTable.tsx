@@ -32,7 +32,7 @@ export function ParameterTable({ parameters, className }: ParameterTableProps) {
                 </code>
               )}
             </div>
-            <div className="text-sm text-lucid-text-low leading-relaxed flex-1">
+            <div className="text-sm text-lucid-text-mid leading-relaxed flex-1">
               {p.description
                 ? <MathText text={p.description} />
                 : <span className="italic opacity-50">No description.</span>}
@@ -66,7 +66,7 @@ export function AttributeTable({ attributes, className }: AttributeTableProps) {
               </code>
               {a.annotation && <TypeAnnotation annotation={a.annotation} />}
             </div>
-            <div className="text-sm text-lucid-text-low leading-relaxed flex-1">
+            <div className="text-sm text-lucid-text-mid leading-relaxed flex-1">
               <MathText text={a.description} />
             </div>
           </div>
