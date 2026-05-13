@@ -84,10 +84,12 @@ class EfficientDetConfig(ModelConfig):
     max_detections: int = 100
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "backbone_in_channels", tuple(self.backbone_in_channels))
-        object.__setattr__(self, "anchor_scales",        tuple(self.anchor_scales))
-        object.__setattr__(self, "anchor_ratios",        tuple(self.anchor_ratios))
-        object.__setattr__(self, "anchor_base_sizes",    tuple(self.anchor_base_sizes))
+        object.__setattr__(
+            self, "backbone_in_channels", tuple(self.backbone_in_channels)
+        )
+        object.__setattr__(self, "anchor_scales", tuple(self.anchor_scales))
+        object.__setattr__(self, "anchor_ratios", tuple(self.anchor_ratios))
+        object.__setattr__(self, "anchor_base_sizes", tuple(self.anchor_base_sizes))
 
 
 # ---------------------------------------------------------------------------
@@ -97,14 +99,14 @@ class EfficientDetConfig(ModelConfig):
 # Each entry: (phi, fpn_channels, fpn_repeats, head_repeats,
 #              backbone_in_channels-P3/P4/P5, image_size)
 _COMPOUND_PARAMS: dict[int, tuple[int, int, int, tuple[int, int, int]]] = {
-    0: (64,   3, 3, (40,  112, 320)),
-    1: (88,   4, 3, (40,  112, 320)),
-    2: (112,  5, 3, (48,  120, 352)),
-    3: (160,  6, 4, (48,  136, 384)),
-    4: (224,  7, 4, (56,  160, 448)),
-    5: (288,  7, 4, (64,  176, 512)),
-    6: (384,  8, 5, (72,  200, 576)),
-    7: (384,  8, 5, (80,  224, 640)),
+    0: (64, 3, 3, (40, 112, 320)),
+    1: (88, 4, 3, (40, 112, 320)),
+    2: (112, 5, 3, (48, 120, 352)),
+    3: (160, 6, 4, (48, 136, 384)),
+    4: (224, 7, 4, (56, 160, 448)),
+    5: (288, 7, 4, (64, 176, 512)),
+    6: (384, 8, 5, (72, 200, 576)),
+    7: (384, 8, 5, (80, 224, 640)),
 }
 
 

@@ -65,7 +65,7 @@ class MaskRCNNConfig(ModelConfig):
     in_channels: int = 3
 
     # Backbone
-    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)   # ResNet-50
+    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
     fpn_out_channels: int = 256
 
     # RPN
@@ -97,7 +97,7 @@ class MaskRCNNConfig(ModelConfig):
     mask_thresh: float = 0.5
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "backbone_layers",  tuple(self.backbone_layers))
-        object.__setattr__(self, "rpn_anchor_sizes",  tuple(self.rpn_anchor_sizes))
+        object.__setattr__(self, "backbone_layers", tuple(self.backbone_layers))
+        object.__setattr__(self, "rpn_anchor_sizes", tuple(self.rpn_anchor_sizes))
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
-        object.__setattr__(self, "bbox_reg_weights",  tuple(self.bbox_reg_weights))
+        object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))

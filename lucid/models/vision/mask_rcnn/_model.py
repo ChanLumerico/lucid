@@ -66,7 +66,6 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
 
-
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
@@ -100,11 +99,11 @@ class _Bottleneck(nn.Module):
         out_ch = mid_ch * self.expansion
 
         self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
-        self.bn1   = nn.BatchNorm2d(mid_ch)
+        self.bn1 = nn.BatchNorm2d(mid_ch)
         self.conv2 = nn.Conv2d(mid_ch, mid_ch, 3, stride=stride, padding=1, bias=False)
-        self.bn2   = nn.BatchNorm2d(mid_ch)
+        self.bn2 = nn.BatchNorm2d(mid_ch)
         self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
-        self.bn3   = nn.BatchNorm2d(out_ch)
+        self.bn3 = nn.BatchNorm2d(out_ch)
         self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -159,14 +158,14 @@ class _ResNet50Backbone(nn.Module):
         super().__init__()
         # Stem: conv1 7×7 stride-2 → BN → ReLU → MaxPool 3×3 stride-2 → stride 4
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
-        self.bn1   = nn.BatchNorm2d(64)
-        self.pool  = nn.MaxPool2d(3, stride=2, padding=1)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
 
         # Stages (layer1 has stride 1; layers 2–4 double the spatial stride)
-        self.layer1, c2 = _make_layer(64,   64,  layers[0], stride=1)  # C2: 256ch
-        self.layer2, c3 = _make_layer(c2,   128, layers[1], stride=2)  # C3: 512ch
-        self.layer3, c4 = _make_layer(c3,   256, layers[2], stride=2)  # C4: 1024ch
-        self.layer4, c5 = _make_layer(c4,   512, layers[3], stride=2)  # C5: 2048ch
+        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)  # C2: 256ch
+        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)  # C3: 512ch
+        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2)  # C4: 1024ch
+        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2)  # C5: 2048ch
 
         self.out_channels: list[int] = [c2, c3, c4, c5]
 
@@ -294,16 +293,19 @@ def _fpn_roi_align(
             key = (b, lvl)
             if key not in groups:
                 groups[key] = []
-            groups[key].append((n, proposals[b][n : n + 1]))   # (1, 4)
+            groups[key].append((n, proposals[b][n : n + 1]))  # (1, 4)
 
     for (b, lvl), items in groups.items():
-        feat_b = fpn_feats[lvl]         # (B, C, H, W)
-        scale  = spatial_scales[lvl]
-        boxes  = lucid.cat([box for _, box in items], dim=0)  # (k, 4)
+        feat_b = fpn_feats[lvl]  # (B, C, H, W)
+        scale = spatial_scales[lvl]
+        boxes = lucid.cat([box for _, box in items], dim=0)  # (k, 4)
         # roi_align expects a list-per-image
-        crops = roi_align(feat_b, [lucid.zeros((0, 4))] * b + [boxes] +
-                          [lucid.zeros((0, 4))] * (B - b - 1),
-                          output_size=output_size, spatial_scale=scale)
+        crops = roi_align(
+            feat_b,
+            [lucid.zeros((0, 4))] * b + [boxes] + [lucid.zeros((0, 4))] * (B - b - 1),
+            output_size=output_size,
+            spatial_scale=scale,
+        )
         result_map[(b, lvl)] = crops
 
     # Reassemble in original proposal order
@@ -367,7 +369,10 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         # FPN spatial scales for detection levels P2–P5
         # P2 stride=4, P3=8, P4=16, P5=32
         self._det_spatial_scales: list[float] = [
-            1.0 / 4.0, 1.0 / 8.0, 1.0 / 16.0, 1.0 / 32.0
+            1.0 / 4.0,
+            1.0 / 8.0,
+            1.0 / 16.0,
+            1.0 / 32.0,
         ]
 
         # 3. Anchor generator (5 levels: P2–P6)
@@ -431,42 +436,44 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             level_preds.append((lg, dl))
 
         for b in range(B):
-            gt_boxes = targets[b]["boxes"]   # (M, 4)
+            gt_boxes = targets[b]["boxes"]  # (M, 4)
             M = int(gt_boxes.shape[0])
 
             # Flatten anchors and preds across all levels
             all_anc_parts: list[Tensor] = []
-            all_lg_parts:  list[Tensor] = []
-            all_dl_parts:  list[Tensor] = []
+            all_lg_parts: list[Tensor] = []
+            all_dl_parts: list[Tensor] = []
 
             for lvl_idx, (lg_map, dl_map) in enumerate(level_preds):
                 A = int(lg_map.shape[1])
                 fH = int(lg_map.shape[2])
                 fW = int(lg_map.shape[3])
                 lg_b = lg_map[b].reshape(-1)
-                dl_b = dl_map[b].reshape(A, 4, fH, fW).permute(0, 2, 3, 1).reshape(-1, 4)
+                dl_b = (
+                    dl_map[b].reshape(A, 4, fH, fW).permute(0, 2, 3, 1).reshape(-1, 4)
+                )
                 all_anc_parts.append(anchors[lvl_idx])
                 all_lg_parts.append(lg_b)
                 all_dl_parts.append(dl_b)
 
             all_anc = lucid.cat(all_anc_parts, dim=0)  # (A_total, 4)
-            all_lg  = lucid.cat(all_lg_parts,  dim=0)  # (A_total,)
-            all_dl  = lucid.cat(all_dl_parts,  dim=0)  # (A_total, 4)
+            all_lg = lucid.cat(all_lg_parts, dim=0)  # (A_total,)
+            all_dl = lucid.cat(all_dl_parts, dim=0)  # (A_total, 4)
             A_total = int(all_anc.shape[0])
 
             if M == 0:
                 neg_mask: list[int] = list(range(min(256, A_total)))
                 neg_t = lucid.tensor(neg_mask)
                 lbl_neg = lucid.zeros((len(neg_mask),))
-                cls_losses.append(F.binary_cross_entropy_with_logits(
-                    all_lg[neg_t], lbl_neg
-                ))
+                cls_losses.append(
+                    F.binary_cross_entropy_with_logits(all_lg[neg_t], lbl_neg)
+                )
                 continue
 
-            iou_mat = box_iou(all_anc, gt_boxes)   # (A_total, M)
+            iou_mat = box_iou(all_anc, gt_boxes)  # (A_total, M)
 
             best_iou_list: list[float] = []
-            best_gt_list:  list[int]   = []
+            best_gt_list: list[int] = []
             for a in range(A_total):
                 best_v = -1.0
                 best_g = 0
@@ -503,31 +510,41 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
             pos_idx = [a for a in range(A_total) if labels[a] == 1][:128]
             neg_idx = [a for a in range(A_total) if labels[a] == 0][
-                :max(0, 256 - len(pos_idx))
+                : max(0, 256 - len(pos_idx))
             ]
             sampled = pos_idx + neg_idx
             if not sampled:
                 continue
 
-            samp_t   = lucid.tensor(sampled)
+            samp_t = lucid.tensor(sampled)
             lbl_samp = lucid.tensor([labels[a] for a in sampled])
-            cls_losses.append(F.binary_cross_entropy_with_logits(
-                all_lg[samp_t].float(), lbl_samp.float()
-            ))
+            cls_losses.append(
+                F.binary_cross_entropy_with_logits(
+                    all_lg[samp_t].float(), lbl_samp.float()
+                )
+            )
 
             if pos_idx:
-                pos_t  = lucid.tensor(pos_idx)
+                pos_t = lucid.tensor(pos_idx)
                 gt_pos = lucid.tensor(
-                    [[float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
-                     for a in pos_idx]
+                    [
+                        [float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
+                        for a in pos_idx
+                    ]
                 )
                 tgt_d = encode_boxes(gt_pos, all_anc[pos_t], (1.0, 1.0, 1.0, 1.0))
                 reg_losses.append(_smooth_l1(all_dl[pos_t] - tgt_d, sigma=3.0).mean())
 
-        cls_l = lucid.cat([l.reshape(1) for l in cls_losses]).mean() \
-            if cls_losses else lucid.zeros((1,))
-        reg_l = lucid.cat([l.reshape(1) for l in reg_losses]).mean() \
-            if reg_losses else lucid.zeros((1,))
+        cls_l = (
+            lucid.cat([l.reshape(1) for l in cls_losses]).mean()
+            if cls_losses
+            else lucid.zeros((1,))
+        )
+        reg_l = (
+            lucid.cat([l.reshape(1) for l in reg_losses]).mean()
+            if reg_losses
+            else lucid.zeros((1,))
+        )
         return cls_l + reg_l
 
     # ------------------------------------------------------------------
@@ -544,16 +561,16 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         """Cross-entropy + smooth-L1.  Also returns fg proposal indices."""
         K = self._cfg.num_classes
         N_total = int(all_deltas.shape[0])
-        all_cls:     list[Tensor] = []
+        all_cls: list[Tensor] = []
         all_reg_tgt: list[Tensor] = []
-        all_reg_wt:  list[Tensor] = []
-        fg_flags:    list[int]    = []  # 1 = fg, 0 = bg, flat over all proposals
+        all_reg_wt: list[Tensor] = []
+        fg_flags: list[int] = []  # 1 = fg, 0 = bg, flat over all proposals
 
         for props, tgt in zip(proposals, targets):
-            N_i  = int(props.shape[0])
+            N_i = int(props.shape[0])
             gt_b = tgt["boxes"]
             lb_b = tgt["labels"]
-            M    = int(gt_b.shape[0])
+            M = int(gt_b.shape[0])
 
             if M == 0:
                 all_cls.append(lucid.zeros((N_i,)))
@@ -564,7 +581,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
             iou_mat = box_iou(props, gt_b)
             labels_list: list[int] = []
-            best_gt:     list[int] = []
+            best_gt: list[int] = []
 
             for n in range(N_i):
                 best_v = -1.0
@@ -588,17 +605,17 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             ]
             matched_boxes = lucid.tensor(matched_data)
             reg_tgt = encode_boxes(matched_boxes, props, self._cfg.bbox_reg_weights)
-            lbl_t   = lucid.tensor(labels_list)
-            wt_t    = lucid.tensor([1.0 if l > 0 else 0.0 for l in labels_list])
+            lbl_t = lucid.tensor(labels_list)
+            wt_t = lucid.tensor([1.0 if l > 0 else 0.0 for l in labels_list])
 
             all_cls.append(lbl_t)
             all_reg_tgt.append(reg_tgt)
             all_reg_wt.append(wt_t)
             fg_flags.extend([1 if l > 0 else 0 for l in labels_list])
 
-        cls_labels  = lucid.cat(all_cls,     dim=0)
+        cls_labels = lucid.cat(all_cls, dim=0)
         reg_targets = lucid.cat(all_reg_tgt, dim=0)
-        reg_weights = lucid.cat(all_reg_wt,  dim=0)
+        reg_weights = lucid.cat(all_reg_wt, dim=0)
 
         valid_idx: list[int] = [
             n for n in range(N_total) if int(cls_labels[n].item()) >= 0
@@ -606,7 +623,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         if not valid_idx:
             return lucid.zeros((1,)), fg_flags
 
-        valid_t  = lucid.tensor(valid_idx)
+        valid_t = lucid.tensor(valid_idx)
         cls_loss = F.cross_entropy(all_logits[valid_t], cls_labels[valid_t])
 
         deltas_3d = all_deltas.reshape(N_total, K, 4)
@@ -616,11 +633,14 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                 continue
             c = max(0, min(int(cls_labels[n].item()) - 1, K - 1))
             pred_d = deltas_3d[n, c]
-            tgt_d  = reg_targets[n]
+            tgt_d = reg_targets[n]
             reg_parts.append(_smooth_l1(pred_d - tgt_d).mean())
 
-        reg_loss = lucid.cat([l.reshape(1) for l in reg_parts]).mean() \
-            if reg_parts else lucid.zeros((1,))
+        reg_loss = (
+            lucid.cat([l.reshape(1) for l in reg_parts]).mean()
+            if reg_parts
+            else lucid.zeros((1,))
+        )
 
         return cls_loss + reg_loss, fg_flags
 
@@ -644,20 +664,20 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         if int(mask_crops.shape[0]) == 0:
             return lucid.zeros((1,))
 
-        K   = self._cfg.num_classes
-        mH  = int(mask_crops.shape[2])   # 28
-        mW  = int(mask_crops.shape[3])
+        K = self._cfg.num_classes
+        mH = int(mask_crops.shape[2])  # 28
+        mW = int(mask_crops.shape[3])
 
         mask_logits = cast(Tensor, self.mask_head(mask_crops))  # (N, K, mH, mW)
 
         all_losses: list[Tensor] = []
-        proposal_idx = 0   # flat index into proposals / fg_flags
+        proposal_idx = 0  # flat index into proposals / fg_flags
 
         for b, (props, tgt) in enumerate(zip(proposals, targets)):
-            N_i  = int(props.shape[0])
+            N_i = int(props.shape[0])
             gt_b = tgt["boxes"]
             lb_b = tgt["labels"]
-            M    = int(gt_b.shape[0])
+            M = int(gt_b.shape[0])
 
             gt_masks_tgt = tgt.get("masks")  # (M, H_img, W_img) or None
 
@@ -670,14 +690,14 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                 best_v = -1.0
                 best_g = 0
                 for m in range(M):
-                    iou_v = float(box_iou(
-                        props[n : n + 1], gt_b[m : m + 1]
-                    )[0, 0].item())
+                    iou_v = float(
+                        box_iou(props[n : n + 1], gt_b[m : m + 1])[0, 0].item()
+                    )
                     if iou_v > best_v:
                         best_v = iou_v
                         best_g = m
 
-                cls_idx = int(lb_b[best_g].item()) - 1   # 0-indexed class
+                cls_idx = int(lb_b[best_g].item()) - 1  # 0-indexed class
                 if cls_idx < 0 or cls_idx >= K:
                     continue
 
@@ -690,18 +710,26 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                     x2 = max(x1 + 1, int(float(props[n, 2].item())))
                     y2 = max(y1 + 1, int(float(props[n, 3].item())))
 
-                    gt_mask_full: Tensor = gt_masks_tgt[best_g]   # (H, W)
-                    gt_crop = gt_mask_full[y1:y2, x1:x2].unsqueeze(0).unsqueeze(0).float()
-                    gt_resized: Tensor = F.interpolate(
-                        gt_crop, size=(mH, mW), mode="bilinear", align_corners=False
-                    ).squeeze(0).squeeze(0)
+                    gt_mask_full: Tensor = gt_masks_tgt[best_g]  # (H, W)
+                    gt_crop = (
+                        gt_mask_full[y1:y2, x1:x2].unsqueeze(0).unsqueeze(0).float()
+                    )
+                    gt_resized: Tensor = (
+                        F.interpolate(
+                            gt_crop, size=(mH, mW), mode="bilinear", align_corners=False
+                        )
+                        .squeeze(0)
+                        .squeeze(0)
+                    )
                     gt_mask = (gt_resized > 0.5).float()
                 else:
                     gt_mask = lucid.zeros((mH, mW))
 
-                all_losses.append(F.binary_cross_entropy_with_logits(
-                    pred_mask.reshape(-1), gt_mask.reshape(-1)
-                ))
+                all_losses.append(
+                    F.binary_cross_entropy_with_logits(
+                        pred_mask.reshape(-1), gt_mask.reshape(-1)
+                    )
+                )
 
             proposal_idx += N_i
 
@@ -732,7 +760,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
               ``pred_masks`` : (Σ proposals, K, 28, 28) mask logits.
               ``loss``       : total loss when targets provided.
         """
-        B  = int(x.shape[0])
+        B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
@@ -743,12 +771,16 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         fpn_feats: list[Tensor] = self.fpn.forward(c_maps)
 
         # Split: detection uses P2–P5, RPN uses all 5
-        det_feats = fpn_feats[:4]   # [P2, P3, P4, P5]
-        rpn_feats = fpn_feats       # [P2, P3, P4, P5, P6]
+        det_feats = fpn_feats[:4]  # [P2, P3, P4, P5]
+        rpn_feats = fpn_feats  # [P2, P3, P4, P5, P6]
 
         # Strides for each RPN level
         rpn_strides: list[tuple[int, int]] = [
-            (4, 4), (8, 8), (16, 16), (32, 32), (64, 64)
+            (4, 4),
+            (8, 8),
+            (16, 16),
+            (32, 32),
+            (64, 64),
         ]
 
         # 3. Generate anchors
@@ -762,7 +794,9 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
         # 6. Detection RoI Align (7×7)
         det_crops = _fpn_roi_align(
-            det_feats, proposals, level_assignments,
+            det_feats,
+            proposals,
+            level_assignments,
             output_size=self._cfg.roi_det_size,
             spatial_scales=self._det_spatial_scales,
         )
@@ -779,7 +813,9 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
         # 8. Mask RoI Align (14×14)
         mask_crops = _fpn_roi_align(
-            det_feats, proposals, level_assignments,
+            det_feats,
+            proposals,
+            level_assignments,
             output_size=self._cfg.roi_mask_size,
             spatial_scales=self._det_spatial_scales,
         )
@@ -822,9 +858,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
     ) -> Tensor:
         if not any(int(p.shape[0]) > 0 for p in proposals):
             return lucid.zeros((0, 4))
-        flat_props = lucid.cat(
-            [p for p in proposals if int(p.shape[0]) > 0], dim=0
-        )
+        flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         N = int(all_deltas.shape[0])
         if N == 0:
             return lucid.zeros((0, 4))
@@ -847,61 +881,68 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         Returns list of per-image result dicts with
         "boxes", "scores", "labels", and "masks".
         """
-        logits     = output.logits
+        logits = output.logits
         pred_boxes = output.pred_boxes
         pred_masks = output.pred_masks
-        K          = self._cfg.num_classes
-        results:   list[dict[str, Tensor]] = []
+        K = self._cfg.num_classes
+        results: list[dict[str, Tensor]] = []
         offset = 0
 
         for props in proposals:
             N_i = int(props.shape[0])
-            lg_i  = logits[offset: offset + N_i]
-            bx_i  = pred_boxes[offset: offset + N_i]
-            mk_i  = pred_masks[offset: offset + N_i]   # (N_i, K, 28, 28)
+            lg_i = logits[offset : offset + N_i]
+            bx_i = pred_boxes[offset : offset + N_i]
+            mk_i = pred_masks[offset : offset + N_i]  # (N_i, K, 28, 28)
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
-            keep_boxes:  list[Tensor] = []
+            keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
-            keep_masks:  list[Tensor] = []
+            keep_masks: list[Tensor] = []
 
             for c in range(1, K + 1):
                 sc_c_all = scores_i[:, c]
                 mask: list[int] = [
-                    i for i in range(N_i)
+                    i
+                    for i in range(N_i)
                     if float(sc_c_all[i].item()) >= self._cfg.score_thresh
                 ]
                 if not mask:
                     continue
                 mask_t = lucid.tensor(mask)
-                sc_c  = sc_c_all[mask_t]
-                bx_c  = bx_i[mask_t]
-                mk_c  = F.sigmoid(mk_i[mask_t, c - 1])  # (k, 28, 28)
+                sc_c = sc_c_all[mask_t]
+                bx_c = bx_i[mask_t]
+                mk_c = F.sigmoid(mk_i[mask_t, c - 1])  # (k, 28, 28)
 
                 keep = batched_nms(
-                    bx_c, sc_c, lucid.zeros(int(sc_c.shape[0])),
+                    bx_c,
+                    sc_c,
+                    lucid.zeros(int(sc_c.shape[0])),
                     self._cfg.nms_thresh,
                 )
-                keep = keep[:self._cfg.max_detections]
+                keep = keep[: self._cfg.max_detections]
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
                 keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
                 keep_masks.append((mk_c[keep] > self._cfg.mask_thresh).float())
 
             if keep_boxes:
-                results.append({
-                    "boxes":  lucid.cat(keep_boxes,  dim=0),
-                    "scores": lucid.cat(keep_scores, dim=0),
-                    "labels": lucid.cat(keep_labels, dim=0),
-                    "masks":  lucid.cat(keep_masks,  dim=0),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.cat(keep_boxes, dim=0),
+                        "scores": lucid.cat(keep_scores, dim=0),
+                        "labels": lucid.cat(keep_labels, dim=0),
+                        "masks": lucid.cat(keep_masks, dim=0),
+                    }
+                )
             else:
-                results.append({
-                    "boxes":  lucid.zeros((0, 4)),
-                    "scores": lucid.zeros((0,)),
-                    "labels": lucid.zeros((0,)),
-                    "masks":  lucid.zeros((0, 28, 28)),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.zeros((0, 4)),
+                        "scores": lucid.zeros((0,)),
+                        "labels": lucid.zeros((0,)),
+                        "masks": lucid.zeros((0, 28, 28)),
+                    }
+                )
         return results

@@ -39,7 +39,6 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.rcnn._config import RCNNConfig
 
-
 # ---------------------------------------------------------------------------
 # CNN backbone (AlexNet-style, applied per RoI crop)
 # ---------------------------------------------------------------------------
@@ -120,11 +119,11 @@ class _FCHead(nn.Module):
         dropout: float,
     ) -> None:
         super().__init__()
-        self.fc6  = nn.Linear(feat_dim, 4096)
-        self.fc7  = nn.Linear(4096, 4096)
+        self.fc6 = nn.Linear(feat_dim, 4096)
+        self.fc7 = nn.Linear(4096, 4096)
         self.drop = nn.Dropout(p=dropout)
 
-        self.cls_head  = nn.Linear(4096, num_classes + 1)
+        self.cls_head = nn.Linear(4096, num_classes + 1)
         self.bbox_head = nn.Linear(4096, num_classes * 4)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
@@ -168,11 +167,11 @@ class RCNNForObjectDetection(PretrainedModel):
 
     def __init__(self, config: RCNNConfig) -> None:
         super().__init__(config)
-        self._num_classes  = config.num_classes
-        self._roi_size     = config.roi_size
+        self._num_classes = config.num_classes
+        self._roi_size = config.roi_size
         self._score_thresh = config.score_thresh
-        self._nms_thresh   = config.nms_thresh
-        self._max_det      = config.max_detections
+        self._nms_thresh = config.nms_thresh
+        self._max_det = config.max_detections
 
         self.conv_features = _ConvFeatures(config.in_channels)
         self.fc_head = _FCHead(
@@ -253,12 +252,12 @@ class RCNNForObjectDetection(PretrainedModel):
             cls_idx = int(top_class[n].item())
             if cls_idx == 0:
                 # Background — return the original proposal
-                decoded.append(proposals[n:n + 1])
+                decoded.append(proposals[n : n + 1])
             else:
                 c = cls_idx - 1  # foreground class index (0-based)
                 c_clamped = max(0, min(c, K - 1))
-                delta_n = deltas[n:n + 1, c_clamped, :]  # (1, 4)
-                box_n = decode_boxes(delta_n, proposals[n:n + 1])  # (1, 4)
+                delta_n = deltas[n : n + 1, c_clamped, :]  # (1, 4)
+                box_n = decode_boxes(delta_n, proposals[n : n + 1])  # (1, 4)
                 decoded.append(box_n)
 
         if not decoded:
@@ -295,19 +294,19 @@ class RCNNForObjectDetection(PretrainedModel):
         if proposals is None:
             proposals = [lucid.zeros((0, 4)) for _ in range(B)]
 
-        all_logits: list[Tensor]     = []
-        all_boxes:  list[Tensor]     = []
+        all_logits: list[Tensor] = []
+        all_boxes: list[Tensor] = []
 
         for b in range(B):
-            props = proposals[b]          # (N_i, 4)
-            N_i   = int(props.shape[0])
+            props = proposals[b]  # (N_i, 4)
+            N_i = int(props.shape[0])
 
             if N_i == 0:
                 all_logits.append(lucid.zeros((0, self._num_classes + 1)))
                 all_boxes.append(lucid.zeros((0, 4)))
                 continue
 
-            img = x[b:b + 1]             # (1, C, H, W)
+            img = x[b : b + 1]  # (1, C, H, W)
 
             # 1. Warp proposals → fixed-size crops
             crops = self._warp_proposals(img, props)  # (N_i, C, S, S)
@@ -324,9 +323,7 @@ class RCNNForObjectDetection(PretrainedModel):
             scores_i = F.softmax(logits_i, dim=-1)  # (N_i, K+1)
             top_cls_i = lucid.argsort(-scores_i, dim=-1)[:, 0]  # (N_i,)
 
-            boxes_i = self._decode_top_boxes(
-                props, deltas_i, top_cls_i, (H, W)
-            )
+            boxes_i = self._decode_top_boxes(props, deltas_i, top_cls_i, (H, W))
 
             all_logits.append(logits_i)
             all_boxes.append(boxes_i)
@@ -337,7 +334,7 @@ class RCNNForObjectDetection(PretrainedModel):
             final_boxes = lucid.cat(all_boxes, dim=0)
         else:
             final_logits = lucid.zeros((0, self._num_classes + 1))
-            final_boxes  = lucid.zeros((0, 4))
+            final_boxes = lucid.zeros((0, 4))
 
         return ObjectDetectionOutput(logits=final_logits, pred_boxes=final_boxes)
 
@@ -362,7 +359,7 @@ class RCNNForObjectDetection(PretrainedModel):
               ``"scores"`` : (K,)   class confidence scores
               ``"labels"`` : (K,)   integer class indices (1-based, 0=bg)
         """
-        logits    = output.logits     # (Σ N_i, num_classes + 1)
+        logits = output.logits  # (Σ N_i, num_classes + 1)
         pred_boxes = output.pred_boxes  # (Σ N_i, 4)
 
         results: list[dict[str, Tensor]] = []
@@ -370,13 +367,13 @@ class RCNNForObjectDetection(PretrainedModel):
 
         for props in proposals:
             N_i = int(props.shape[0])
-            lg_i = logits[offset: offset + N_i]      # (N_i, K+1)
-            bx_i = pred_boxes[offset: offset + N_i]  # (N_i, 4)
+            lg_i = logits[offset : offset + N_i]  # (N_i, K+1)
+            bx_i = pred_boxes[offset : offset + N_i]  # (N_i, 4)
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
 
-            keep_boxes:  list[Tensor] = []
+            keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
@@ -386,41 +383,45 @@ class RCNNForObjectDetection(PretrainedModel):
 
                 # Score threshold
                 mask: list[int] = [
-                    i for i in range(N_i)
+                    i
+                    for i in range(N_i)
                     if float(cls_scores[i].item()) >= self._score_thresh
                 ]
                 if not mask:
                     continue
 
                 mask_t = lucid.tensor(mask)
-                sc_c    = cls_scores[mask_t]
-                bx_c    = bx_i[mask_t]
+                sc_c = cls_scores[mask_t]
+                bx_c = bx_i[mask_t]
 
                 # NMS
                 keep = batched_nms(
-                        bx_c, sc_c,
-                        lucid.zeros(int(sc_c.shape[0])),  # single class → no offset
-                        self._nms_thresh,
+                    bx_c,
+                    sc_c,
+                    lucid.zeros(int(sc_c.shape[0])),  # single class → no offset
+                    self._nms_thresh,
                 )
-                keep = keep[:self._max_det]
+                keep = keep[: self._max_det]
 
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
-                keep_labels.append(
-                    lucid.full((int(keep.shape[0]),), float(c))
-                )
+                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
 
             if keep_boxes:
-                results.append({
-                    "boxes":  lucid.cat(keep_boxes,  dim=0),
-                    "scores": lucid.cat(keep_scores, dim=0),
-                    "labels": lucid.cat(keep_labels, dim=0),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.cat(keep_boxes, dim=0),
+                        "scores": lucid.cat(keep_scores, dim=0),
+                        "labels": lucid.cat(keep_labels, dim=0),
+                    }
+                )
             else:
-                results.append({
-                    "boxes":  lucid.zeros((0, 4)),
-                    "scores": lucid.zeros((0,)),
-                    "labels": lucid.zeros((0,)),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.zeros((0, 4)),
+                        "scores": lucid.zeros((0,)),
+                        "labels": lucid.zeros((0,)),
+                    }
+                )
 
         return results

@@ -80,6 +80,6 @@ class FasterRCNNConfig(ModelConfig):
     max_detections: int = 300
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "rpn_anchor_sizes",  tuple(self.rpn_anchor_sizes))
+        object.__setattr__(self, "rpn_anchor_sizes", tuple(self.rpn_anchor_sizes))
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
-        object.__setattr__(self, "bbox_reg_weights",  tuple(self.bbox_reg_weights))
+        object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))

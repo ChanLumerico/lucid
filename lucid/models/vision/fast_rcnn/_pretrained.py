@@ -17,9 +17,7 @@ _CFG_VGG16 = FastRCNNConfig(
 )
 
 
-def _det(
-    cfg: FastRCNNConfig, kw: dict[str, object]
-) -> FastRCNNForObjectDetection:
+def _det(cfg: FastRCNNConfig, kw: dict[str, object]) -> FastRCNNForObjectDetection:
     return FastRCNNForObjectDetection(
         FastRCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

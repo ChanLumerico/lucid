@@ -71,7 +71,6 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.detr._config import DETRConfig
 
-
 # ---------------------------------------------------------------------------
 # ResNet-50 backbone (C5 only — same building blocks as Mask R-CNN)
 # ---------------------------------------------------------------------------
@@ -90,11 +89,11 @@ class _Bottleneck(nn.Module):
         super().__init__()
         out_ch = mid_ch * self.expansion
         self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
-        self.bn1   = nn.BatchNorm2d(mid_ch)
+        self.bn1 = nn.BatchNorm2d(mid_ch)
         self.conv2 = nn.Conv2d(mid_ch, mid_ch, 3, stride=stride, padding=1, bias=False)
-        self.bn2   = nn.BatchNorm2d(mid_ch)
+        self.bn2 = nn.BatchNorm2d(mid_ch)
         self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
-        self.bn3   = nn.BatchNorm2d(out_ch)
+        self.bn3 = nn.BatchNorm2d(out_ch)
         self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -107,7 +106,9 @@ class _Bottleneck(nn.Module):
         return F.relu(out + identity)
 
 
-def _make_layer(in_ch: int, mid_ch: int, num_blocks: int, stride: int = 1) -> tuple[nn.Sequential, int]:
+def _make_layer(
+    in_ch: int, mid_ch: int, num_blocks: int, stride: int = 1
+) -> tuple[nn.Sequential, int]:
     out_ch = mid_ch * 4
     ds: nn.Module | None = None
     if stride != 1 or in_ch != out_ch:
@@ -126,13 +127,13 @@ class _ResNet50C5(nn.Module):
 
     def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
         super().__init__()
-        self.conv1  = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
-        self.bn1    = nn.BatchNorm2d(64)
-        self.pool   = nn.MaxPool2d(3, stride=2, padding=1)
-        self.layer1, c2 = _make_layer(64,  64,  layers[0], stride=1)
-        self.layer2, c3 = _make_layer(c2,  128, layers[1], stride=2)
-        self.layer3, c4 = _make_layer(c3,  256, layers[2], stride=2)
-        self.layer4, c5 = _make_layer(c4,  512, layers[3], stride=2)
+        self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
+        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)
+        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)
+        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2)
+        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2)
         self.out_channels: int = c5
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -149,7 +150,9 @@ class _ResNet50C5(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _build_2d_sin_pos_enc(h: int, w: int, d_model: int, temperature: float = 10000.0) -> Tensor:
+def _build_2d_sin_pos_enc(
+    h: int, w: int, d_model: int, temperature: float = 10000.0
+) -> Tensor:
     """Build 2-D sine / cosine positional encoding of shape (h*w, d_model).
 
     Each spatial position (row r, col c) gets a d_model-dim embedding:
@@ -198,7 +201,7 @@ def _build_2d_sin_pos_enc(h: int, w: int, d_model: int, temperature: float = 100
         pos_enc_data.append(row_slice)
 
     pos_2d = lucid.tensor(pos_enc_data)  # (h, w, d_model)
-    return pos_2d.reshape(h * w, d_model)   # (h*w, d_model)
+    return pos_2d.reshape(h * w, d_model)  # (h*w, d_model)
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +212,9 @@ def _build_2d_sin_pos_enc(h: int, w: int, d_model: int, temperature: float = 100
 class _MLP(nn.Module):
     """Simple N-layer MLP with ReLU activations (last layer has no activation)."""
 
-    def __init__(self, in_dim: int, hidden_dim: int, out_dim: int, n_layers: int) -> None:
+    def __init__(
+        self, in_dim: int, hidden_dim: int, out_dim: int, n_layers: int
+    ) -> None:
         super().__init__()
         dims = [in_dim] + [hidden_dim] * (n_layers - 1) + [out_dim]
         layers: list[nn.Module] = []
@@ -229,10 +234,10 @@ class _MLP(nn.Module):
 
 
 def _hungarian_match(
-    pred_logits: Tensor,    # (N, K+1)
-    pred_boxes: Tensor,     # (N, 4) cxcywh normalised
-    gt_labels: Tensor,      # (M,)
-    gt_boxes: Tensor,       # (M, 4) cxcywh normalised
+    pred_logits: Tensor,  # (N, K+1)
+    pred_boxes: Tensor,  # (N, 4) cxcywh normalised
+    gt_labels: Tensor,  # (M,)
+    gt_boxes: Tensor,  # (M, 4) cxcywh normalised
     cost_cls: float = 1.0,
     cost_l1: float = 5.0,
     cost_giou: float = 2.0,
@@ -251,12 +256,12 @@ def _hungarian_match(
         return [], []
 
     # Classification cost: negative softmax probability for the GT class
-    scores = F.softmax(pred_logits, dim=-1)     # (N, K+1)
+    scores = F.softmax(pred_logits, dim=-1)  # (N, K+1)
 
     # L1 cost: sum of absolute differences in cxcywh space
     # GIoU cost: negative GIoU between decoded boxes
-    gt_xy = box_cxcywh_to_xyxy(gt_boxes)        # (M, 4)
-    pred_xy = box_cxcywh_to_xyxy(pred_boxes)    # (N, 4)
+    gt_xy = box_cxcywh_to_xyxy(gt_boxes)  # (M, 4)
+    pred_xy = box_cxcywh_to_xyxy(pred_boxes)  # (N, 4)
     giou_mat = generalized_box_iou(pred_xy, gt_xy)  # (N, M)
 
     # Build cost matrix (N, M) using Python loops over small M
@@ -284,7 +289,7 @@ def _hungarian_match(
     # u[n]: potential for query n; v[m]: potential for GT m
     u = [0.0] * (N + 1)
     v = [0.0] * (M + 1)
-    p = [0] * (M + 1)       # p[m] = which query is matched to GT m (1-indexed)
+    p = [0] * (M + 1)  # p[m] = which query is matched to GT m (1-indexed)
     way = [0] * (M + 1)
 
     for n in range(1, N + 1):
@@ -326,7 +331,7 @@ def _hungarian_match(
     gt_idx: list[int] = []
     for m in range(1, M + 1):
         if p[m] != 0:
-            pred_idx.append(p[m] - 1)   # 0-indexed
+            pred_idx.append(p[m] - 1)  # 0-indexed
             gt_idx.append(m - 1)
 
     # Sort by pred_idx ascending
@@ -387,7 +392,7 @@ class DETRForObjectDetection(PretrainedModel):
 
         # Prediction heads
         self.class_embed = nn.Linear(d, config.num_classes + 1)
-        self.bbox_embed  = _MLP(
+        self.bbox_embed = _MLP(
             in_dim=d,
             hidden_dim=config.bbox_hidden_dim,
             out_dim=4,
@@ -412,55 +417,61 @@ class DETRForObjectDetection(PretrainedModel):
               ``pred_boxes``: (B, N, 4) cxcywh normalised boxes.
               ``loss``      : set-prediction loss when targets provided.
         """
-        B  = int(x.shape[0])
+        B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
         # 1. Backbone + projection → (B, d, H', W')
         feat: Tensor = cast(Tensor, self.backbone(x))
-        feat = cast(Tensor, self.input_proj(feat))   # (B, d, H', W')
+        feat = cast(Tensor, self.input_proj(feat))  # (B, d, H', W')
 
         fH = int(feat.shape[2])
         fW = int(feat.shape[3])
-        d  = int(feat.shape[1])
+        d = int(feat.shape[1])
 
         # 2. 2-D positional encoding → add to feature map
-        pos_enc = _build_2d_sin_pos_enc(fH, fW, d)    # (H'W', d)
+        pos_enc = _build_2d_sin_pos_enc(fH, fW, d)  # (H'W', d)
         # Expand to (B, H'W', d) → (H'W', B, d)
         pos_enc_b: list[list[list[float]]] = []
         for _ in range(B):
-            pos_enc_b.append([[float(pos_enc[i, j].item()) for j in range(d)]
-                              for i in range(fH * fW)])
+            pos_enc_b.append(
+                [
+                    [float(pos_enc[i, j].item()) for j in range(d)]
+                    for i in range(fH * fW)
+                ]
+            )
         pos_tensor = lucid.tensor(pos_enc_b)  # (B, H'W', d)
 
         # Flatten feature: (B, d, H'W') → (H'W', B, d) for Transformer
         src = feat.reshape(B, d, fH * fW).permute(2, 0, 1)  # (S, B, d)
-        pos_t = pos_tensor.permute(1, 0, 2)                  # (S, B, d)
+        pos_t = pos_tensor.permute(1, 0, 2)  # (S, B, d)
         src = src + pos_t
 
         # 3. Object queries → (N, B, d)
         queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
         N = int(queries.shape[0])
-        tgt = lucid.zeros((N, B, d))   # (N, B, d) — queries start as zero
+        tgt = lucid.zeros((N, B, d))  # (N, B, d) — queries start as zero
 
         # 4. Transformer (src as memory, tgt as queries)
         # nn.Transformer expects: src=(S, B, d), tgt=(T, B, d)
-        pos_queries = queries.unsqueeze(1).expand(-1, B, -1)   # (N, B, d)
+        pos_queries = queries.unsqueeze(1).expand(-1, B, -1)  # (N, B, d)
         hs: Tensor = cast(
             Tensor,
             self.transformer(
                 src=src,
-                tgt=tgt + pos_queries,   # add positional query embeddings to tgt
-            )
+                tgt=tgt + pos_queries,  # add positional query embeddings to tgt
+            ),
         )
         # hs: (N, B, d) — decoder output
 
         # Rearrange to (B, N, d)
-        hs_bn = hs.permute(1, 0, 2)   # (B, N, d)
+        hs_bn = hs.permute(1, 0, 2)  # (B, N, d)
 
         # 5. Prediction heads
-        logits: Tensor = cast(Tensor, self.class_embed(hs_bn))          # (B, N, K+1)
-        pred_boxes: Tensor = F.sigmoid(cast(Tensor, self.bbox_embed(hs_bn)))  # (B, N, 4)
+        logits: Tensor = cast(Tensor, self.class_embed(hs_bn))  # (B, N, K+1)
+        pred_boxes: Tensor = F.sigmoid(
+            cast(Tensor, self.bbox_embed(hs_bn))
+        )  # (B, N, 4)
 
         # 6. Loss
         loss: Tensor | None = None
@@ -485,23 +496,23 @@ class DETRForObjectDetection(PretrainedModel):
         image_size: tuple[int, int],
     ) -> Tensor:
         """Hungarian-matched set loss across the batch."""
-        B   = int(logits.shape[0])
-        N   = int(logits.shape[1])
-        K   = self._cfg.num_classes
+        B = int(logits.shape[0])
+        N = int(logits.shape[1])
+        K = self._cfg.num_classes
         iH, iW = image_size
 
-        cls_losses:  list[Tensor] = []
-        l1_losses:   list[Tensor] = []
+        cls_losses: list[Tensor] = []
+        l1_losses: list[Tensor] = []
         giou_losses: list[Tensor] = []
 
-        bg_weight = 0.1   # down-weight "no object" in CE loss
+        bg_weight = 0.1  # down-weight "no object" in CE loss
 
         for b in range(B):
-            lg_b  = logits[b]       # (N, K+1)
-            pb_b  = pred_boxes[b]   # (N, 4) cxcywh
+            lg_b = logits[b]  # (N, K+1)
+            pb_b = pred_boxes[b]  # (N, 4) cxcywh
 
-            gt_boxes_xyxy = targets[b]["boxes"]   # (M, 4) xyxy normalised [0,1]
-            gt_labels     = targets[b]["labels"]  # (M,)
+            gt_boxes_xyxy = targets[b]["boxes"]  # (M, 4) xyxy normalised [0,1]
+            gt_labels = targets[b]["labels"]  # (M,)
             M = int(gt_boxes_xyxy.shape[0])
 
             # Convert GT from xyxy → cxcywh for L1 cost
@@ -515,8 +526,13 @@ class DETRForObjectDetection(PretrainedModel):
 
             # Hungarian matching
             pred_idx, gt_idx = _hungarian_match(
-                lg_b, pb_b, gt_labels, gt_boxes_cxcywh,
-                cost_cls=1.0, cost_l1=5.0, cost_giou=2.0,
+                lg_b,
+                pb_b,
+                gt_labels,
+                gt_boxes_cxcywh,
+                cost_cls=1.0,
+                cost_l1=5.0,
+                cost_giou=2.0,
             )
 
             # Build per-query target labels (unmatched → background = 0)
@@ -530,10 +546,10 @@ class DETRForObjectDetection(PretrainedModel):
                 weight_data[pi] = 1.0
 
             cls_tgt = lucid.tensor(cls_targets_data)
-            weight  = lucid.tensor(weight_data)
+            weight = lucid.tensor(weight_data)
 
             # Weighted CE (per-sample weight)
-            log_sm   = F.log_softmax(lg_b, dim=-1)   # (N, K+1)
+            log_sm = F.log_softmax(lg_b, dim=-1)  # (N, K+1)
             ce_per_n: list[Tensor] = []
             for n in range(N):
                 c = cls_targets_data[n]
@@ -544,28 +560,42 @@ class DETRForObjectDetection(PretrainedModel):
                 continue
 
             # L1 loss on matched pairs
-            pred_matched_data = [[float(pb_b[pi, d].item()) for d in range(4)]
-                                  for pi in pred_idx]
-            gt_matched_data   = [[float(gt_boxes_cxcywh[gi, d].item()) for d in range(4)]
-                                  for gi in gt_idx]
+            pred_matched_data = [
+                [float(pb_b[pi, d].item()) for d in range(4)] for pi in pred_idx
+            ]
+            gt_matched_data = [
+                [float(gt_boxes_cxcywh[gi, d].item()) for d in range(4)]
+                for gi in gt_idx
+            ]
             pred_matched = lucid.tensor(pred_matched_data)  # (P, 4)
-            gt_matched   = lucid.tensor(gt_matched_data)    # (P, 4)
+            gt_matched = lucid.tensor(gt_matched_data)  # (P, 4)
             l1_losses.append(lucid.abs(pred_matched - gt_matched).mean())
 
             # GIoU loss on matched pairs
-            pred_xyxy = box_cxcywh_to_xyxy(pred_matched)    # (P, 4)
-            gt_xyxy   = box_cxcywh_to_xyxy(gt_matched)      # (P, 4)
-            giou_mat  = generalized_box_iou(pred_xyxy, gt_xyxy)   # (P, P)
-            giou_diag_data: list[float] = [float(giou_mat[i, i].item()) for i in range(len(pred_idx))]
+            pred_xyxy = box_cxcywh_to_xyxy(pred_matched)  # (P, 4)
+            gt_xyxy = box_cxcywh_to_xyxy(gt_matched)  # (P, 4)
+            giou_mat = generalized_box_iou(pred_xyxy, gt_xyxy)  # (P, P)
+            giou_diag_data: list[float] = [
+                float(giou_mat[i, i].item()) for i in range(len(pred_idx))
+            ]
             giou_diag = lucid.tensor(giou_diag_data)
             giou_losses.append((1.0 - giou_diag).mean())
 
-        cls_l  = lucid.cat([l.reshape(1) for l in cls_losses]).mean() \
-            if cls_losses else lucid.zeros((1,))
-        l1_l   = lucid.cat([l.reshape(1) for l in l1_losses]).mean() \
-            if l1_losses else lucid.zeros((1,))
-        giou_l = lucid.cat([l.reshape(1) for l in giou_losses]).mean() \
-            if giou_losses else lucid.zeros((1,))
+        cls_l = (
+            lucid.cat([l.reshape(1) for l in cls_losses]).mean()
+            if cls_losses
+            else lucid.zeros((1,))
+        )
+        l1_l = (
+            lucid.cat([l.reshape(1) for l in l1_losses]).mean()
+            if l1_losses
+            else lucid.zeros((1,))
+        )
+        giou_l = (
+            lucid.cat([l.reshape(1) for l in giou_losses]).mean()
+            if giou_losses
+            else lucid.zeros((1,))
+        )
 
         return 1.0 * cls_l + 5.0 * l1_l + 2.0 * giou_l
 
@@ -588,30 +618,30 @@ class DETRForObjectDetection(PretrainedModel):
             List of per-image result dicts with "boxes" (xyxy pixels),
             "scores", and "labels".
         """
-        B       = int(output.logits.shape[0])
-        N       = int(output.logits.shape[1])
+        B = int(output.logits.shape[0])
+        N = int(output.logits.shape[1])
         results: list[dict[str, Tensor]] = []
 
         for b in range(B):
-            lg_b = output.logits[b]       # (N, K+1)
-            pb_b = output.pred_boxes[b]   # (N, 4) cxcywh [0,1]
+            lg_b = output.logits[b]  # (N, K+1)
+            pb_b = output.pred_boxes[b]  # (N, 4) cxcywh [0,1]
             iH, iW = image_sizes[b]
 
-            probs = F.softmax(lg_b, dim=-1)   # (N, K+1)
+            probs = F.softmax(lg_b, dim=-1)  # (N, K+1)
 
-            keep_boxes:  list[Tensor] = []
+            keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
             for n in range(N):
                 # Best non-background class
                 best_cls = 0
-                best_sc  = -1.0
+                best_sc = -1.0
                 K_plus_1 = int(probs.shape[1])
                 for c in range(1, K_plus_1):
                     sc = float(probs[n, c].item())
                     if sc > best_sc:
-                        best_sc  = sc
+                        best_sc = sc
                         best_cls = c
 
                 if best_sc < self._cfg.score_thresh:
@@ -622,22 +652,32 @@ class DETRForObjectDetection(PretrainedModel):
                 cy = float(pb_b[n, 1].item()) * iH
                 w2 = float(pb_b[n, 2].item()) * iW / 2.0
                 h2 = float(pb_b[n, 3].item()) * iH / 2.0
-                box_data = [[max(0.0, cx - w2), max(0.0, cy - h2),
-                             min(float(iW), cx + w2), min(float(iH), cy + h2)]]
+                box_data = [
+                    [
+                        max(0.0, cx - w2),
+                        max(0.0, cy - h2),
+                        min(float(iW), cx + w2),
+                        min(float(iH), cy + h2),
+                    ]
+                ]
                 keep_boxes.append(lucid.tensor(box_data))
                 keep_scores.append(lucid.tensor([[best_sc]]))
                 keep_labels.append(lucid.tensor([[float(best_cls)]]))
 
             if keep_boxes:
-                results.append({
-                    "boxes":  lucid.cat(keep_boxes,  dim=0).squeeze(1),
-                    "scores": lucid.cat(keep_scores, dim=0).squeeze(1),
-                    "labels": lucid.cat(keep_labels, dim=0).squeeze(1),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.cat(keep_boxes, dim=0).squeeze(1),
+                        "scores": lucid.cat(keep_scores, dim=0).squeeze(1),
+                        "labels": lucid.cat(keep_labels, dim=0).squeeze(1),
+                    }
+                )
             else:
-                results.append({
-                    "boxes":  lucid.zeros((0, 4)),
-                    "scores": lucid.zeros((0,)),
-                    "labels": lucid.zeros((0,)),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.zeros((0, 4)),
+                        "scores": lucid.zeros((0,)),
+                        "labels": lucid.zeros((0,)),
+                    }
+                )
         return results

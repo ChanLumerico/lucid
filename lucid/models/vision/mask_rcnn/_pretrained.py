@@ -32,9 +32,7 @@ _CFG_R50_FPN = MaskRCNNConfig(
 )
 
 
-def _seg(
-    cfg: MaskRCNNConfig, kw: dict[str, object]
-) -> MaskRCNNForObjectDetection:
+def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetection:
     return MaskRCNNForObjectDetection(
         MaskRCNNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

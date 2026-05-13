@@ -37,12 +37,8 @@ _CFG_R50_DC5 = DETRConfig(
 )
 
 
-def _det(
-    cfg: DETRConfig, kw: dict[str, object]
-) -> DETRForObjectDetection:
-    return DETRForObjectDetection(
-        DETRConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+def _det(cfg: DETRConfig, kw: dict[str, object]) -> DETRForObjectDetection:
+    return DETRForObjectDetection(DETRConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
 
 
 @register_model(

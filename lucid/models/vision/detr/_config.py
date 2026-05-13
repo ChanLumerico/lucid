@@ -54,7 +54,7 @@ class DETRConfig(ModelConfig):
     in_channels: int = 3
 
     # Backbone
-    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)   # ResNet-50
+    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
 
     # Transformer
     d_model: int = 256

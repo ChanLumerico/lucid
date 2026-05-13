@@ -8,7 +8,9 @@ from lucid.models.vision.efficientdet._config import (
 from lucid.models.vision.efficientdet._model import EfficientDetForObjectDetection
 
 
-def _det(cfg: EfficientDetConfig, kw: dict[str, object]) -> EfficientDetForObjectDetection:
+def _det(
+    cfg: EfficientDetConfig, kw: dict[str, object]
+) -> EfficientDetForObjectDetection:
     return EfficientDetForObjectDetection(
         EfficientDetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

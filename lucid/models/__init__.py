@@ -263,6 +263,17 @@ from lucid.models.vision.efficientdet import (
     efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3,
     efficientdet_d4, efficientdet_d5, efficientdet_d6, efficientdet_d7,
 )
+# 2016–2020 — YOLO family (Redmon et al., Bochkovskiy et al.)
+from lucid.models.vision.yolo import (
+    YOLOV1Config, YOLOV1ForObjectDetection,
+    yolo_v1, yolo_v1_tiny,
+    YOLOV2Config, YOLOV2ForObjectDetection,
+    yolo_v2, yolo_v2_tiny,
+    YOLOV3Config, YOLOV3ForObjectDetection,
+    yolo_v3, yolo_v3_tiny,
+    YOLOV4Config, YOLOV4ForObjectDetection,
+    yolo_v4,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -420,4 +431,16 @@ __all__ = [
     "EfficientDetConfig", "EfficientDetForObjectDetection", "efficientdet_config",
     "efficientdet_d0", "efficientdet_d1", "efficientdet_d2", "efficientdet_d3",
     "efficientdet_d4", "efficientdet_d5", "efficientdet_d6", "efficientdet_d7",
+    # ── Vision (2016) YOLOv1 ──────────────────────────────────────────────────
+    "YOLOV1Config", "YOLOV1ForObjectDetection",
+    "yolo_v1", "yolo_v1_tiny",
+    # ── Vision (2017) YOLOv2 ──────────────────────────────────────────────────
+    "YOLOV2Config", "YOLOV2ForObjectDetection",
+    "yolo_v2", "yolo_v2_tiny",
+    # ── Vision (2018) YOLOv3 ──────────────────────────────────────────────────
+    "YOLOV3Config", "YOLOV3ForObjectDetection",
+    "yolo_v3", "yolo_v3_tiny",
+    # ── Vision (2020) YOLOv4 ──────────────────────────────────────────────────
+    "YOLOV4Config", "YOLOV4ForObjectDetection",
+    "yolo_v4",
 ]

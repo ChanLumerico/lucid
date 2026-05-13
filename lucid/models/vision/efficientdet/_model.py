@@ -64,7 +64,6 @@ from lucid.models._utils._detection import (
 )
 from lucid.models.vision.efficientdet._config import EfficientDetConfig
 
-
 # ---------------------------------------------------------------------------
 # Depthwise-separable convolution (BiFPN building block)
 # ---------------------------------------------------------------------------
@@ -75,13 +74,21 @@ class _SepConv(nn.Module):
 
     def __init__(self, channels: int, kernel_size: int = 3, padding: int = 1) -> None:
         super().__init__()
-        self.dw = nn.Conv2d(channels, channels, kernel_size, padding=padding,
-                            groups=channels, bias=False)
+        self.dw = nn.Conv2d(
+            channels,
+            channels,
+            kernel_size,
+            padding=padding,
+            groups=channels,
+            bias=False,
+        )
         self.pw = nn.Conv2d(channels, channels, 1, bias=False)
         self.bn = nn.BatchNorm2d(channels)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(x)))))))
+        return F.relu(
+            cast(Tensor, self.bn(cast(Tensor, self.pw(cast(Tensor, self.dw(x))))))
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +114,8 @@ class _BiFPNLayer(nn.Module):
         # Level 0 (finest): fuse 2 inputs (P_in + P_td)
         # Levels 1..L-1: fuse 3 inputs (P_in + P_td + down-sampled output)
         self.out_weights: nn.ParameterList = nn.ParameterList(
-            [nn.Parameter(lucid.ones((2,)))] +
-            [nn.Parameter(lucid.ones((3,))) for _ in range(L - 1)]
+            [nn.Parameter(lucid.ones((2,)))]
+            + [nn.Parameter(lucid.ones((3,))) for _ in range(L - 1)]
         )
 
         # Convolutions (one per intermediate top-down node + one per output)
@@ -128,15 +135,16 @@ class _BiFPNLayer(nn.Module):
 
         # --- Top-down intermediate ---
         td: list[Tensor] = [features[-1]]  # coarsest passes through
-        for i in range(L - 2, -1, -1):     # from coarsest-1 down to finest
+        for i in range(L - 2, -1, -1):  # from coarsest-1 down to finest
             w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i]))
             w0 = float(w[0].item()) + _EPS
             w1 = float(w[1].item()) + _EPS
             wsum = w0 + w1
             up = F.interpolate(td[0], scale_factor=2.0, mode="nearest")
-            node: Tensor = cast(Tensor, self.td_convs[L - 2 - i](
-                (w0 / wsum) * features[i] + (w1 / wsum) * up
-            ))
+            node: Tensor = cast(
+                Tensor,
+                self.td_convs[L - 2 - i]((w0 / wsum) * features[i] + (w1 / wsum) * up),
+            )
             td.insert(0, node)  # prepend so td[0] = finest
 
         # --- Bottom-up output ---
@@ -146,9 +154,12 @@ class _BiFPNLayer(nn.Module):
         wf0 = float(wf[0].item()) + _EPS
         wf1 = float(wf[1].item()) + _EPS
         wfsum = wf0 + wf1
-        out.append(cast(Tensor, self.out_convs[0](
-            (wf0 / wfsum) * features[0] + (wf1 / wfsum) * td[0]
-        )))
+        out.append(
+            cast(
+                Tensor,
+                self.out_convs[0]((wf0 / wfsum) * features[0] + (wf1 / wfsum) * td[0]),
+            )
+        )
 
         for i in range(1, L):
             wl: Tensor = F.relu(cast(Tensor, self.out_weights[i]))
@@ -157,11 +168,16 @@ class _BiFPNLayer(nn.Module):
             wl2 = float(wl[2].item()) + _EPS
             wlsum = wl0 + wl1 + wl2
             down = cast(Tensor, nn.MaxPool2d(2, stride=2)(out[-1]))
-            out.append(cast(Tensor, self.out_convs[i](
-                (wl0 / wlsum) * features[i] +
-                (wl1 / wlsum) * td[i] +
-                (wl2 / wlsum) * down
-            )))
+            out.append(
+                cast(
+                    Tensor,
+                    self.out_convs[i](
+                        (wl0 / wlsum) * features[i]
+                        + (wl1 / wlsum) * td[i]
+                        + (wl2 / wlsum) * down
+                    ),
+                )
+            )
 
         return out
 
@@ -188,17 +204,28 @@ class _MBConv(nn.Module):
 
         layers: list[nn.Module] = []
         if expand_ratio != 1:
-            layers += [nn.Conv2d(in_ch, mid_ch, 1, bias=False),
-                       nn.BatchNorm2d(mid_ch), nn.ReLU(inplace=True)]
+            layers += [
+                nn.Conv2d(in_ch, mid_ch, 1, bias=False),
+                nn.BatchNorm2d(mid_ch),
+                nn.ReLU(inplace=True),
+            ]
         layers += [
-            nn.Conv2d(mid_ch, mid_ch, kernel_size, stride=stride,
-                      padding=padding, groups=mid_ch, bias=False),
-            nn.BatchNorm2d(mid_ch), nn.ReLU(inplace=True),
+            nn.Conv2d(
+                mid_ch,
+                mid_ch,
+                kernel_size,
+                stride=stride,
+                padding=padding,
+                groups=mid_ch,
+                bias=False,
+            ),
+            nn.BatchNorm2d(mid_ch),
+            nn.ReLU(inplace=True),
             nn.Conv2d(mid_ch, out_ch, 1, bias=False),
             nn.BatchNorm2d(out_ch),
         ]
         self.block = nn.Sequential(*layers)
-        self.use_skip = (stride == 1 and in_ch == out_ch)
+        self.use_skip = stride == 1 and in_ch == out_ch
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(Tensor, self.block(x))
@@ -206,8 +233,7 @@ class _MBConv(nn.Module):
 
 
 def _make_mbconv_stage(
-    in_ch: int, out_ch: int, n: int,
-    stride: int = 1, expand: int = 6, k: int = 3
+    in_ch: int, out_ch: int, n: int, stride: int = 1, expand: int = 6, k: int = 3
 ) -> nn.Sequential:
     blocks: list[nn.Module] = [_MBConv(in_ch, out_ch, expand, stride, k)]
     for _ in range(1, n):
@@ -234,11 +260,11 @@ class _EfficientNetBackbone(nn.Module):
             nn.ReLU(inplace=True),
         )
         # MBConv stages (EfficientNet-B0 settings)
-        self.stage0 = _make_mbconv_stage(32,  16,  n=1, stride=1, expand=1, k=3)
-        self.stage1 = _make_mbconv_stage(16,  24,  n=2, stride=2, expand=6, k=3)
-        self.stage2 = _make_mbconv_stage(24,  40,  n=2, stride=2, expand=6, k=5)
-        self.stage3 = _make_mbconv_stage(40,  80,  n=3, stride=2, expand=6, k=3)
-        self.stage4 = _make_mbconv_stage(80,  112, n=3, stride=1, expand=6, k=5)
+        self.stage0 = _make_mbconv_stage(32, 16, n=1, stride=1, expand=1, k=3)
+        self.stage1 = _make_mbconv_stage(16, 24, n=2, stride=2, expand=6, k=3)
+        self.stage2 = _make_mbconv_stage(24, 40, n=2, stride=2, expand=6, k=5)
+        self.stage3 = _make_mbconv_stage(40, 80, n=3, stride=2, expand=6, k=3)
+        self.stage4 = _make_mbconv_stage(80, 112, n=3, stride=1, expand=6, k=5)
         self.stage5 = _make_mbconv_stage(112, 192, n=4, stride=2, expand=6, k=5)
         self.stage6 = _make_mbconv_stage(192, 320, n=1, stride=1, expand=6, k=3)
         self.p3_channels: int = 40
@@ -249,11 +275,11 @@ class _EfficientNetBackbone(nn.Module):
         x = cast(Tensor, self.stem(x))
         x = cast(Tensor, self.stage0(x))
         x = cast(Tensor, self.stage1(x))
-        p3: Tensor = cast(Tensor, self.stage2(x))       # stride 8
+        p3: Tensor = cast(Tensor, self.stage2(x))  # stride 8
         x = cast(Tensor, self.stage3(p3))
-        p4: Tensor = cast(Tensor, self.stage4(x))       # stride 16
+        p4: Tensor = cast(Tensor, self.stage4(x))  # stride 16
         x = cast(Tensor, self.stage5(p4))
-        p5: Tensor = cast(Tensor, self.stage6(x))       # stride 32
+        p5: Tensor = cast(Tensor, self.stage6(x))  # stride 32
         return p3, p4, p5
 
 
@@ -271,7 +297,7 @@ class _PredictionHead(nn.Module):
     def __init__(
         self,
         in_channels: int,
-        num_outputs: int,   # num_classes or 4 * num_anchors
+        num_outputs: int,  # num_classes or 4 * num_anchors
         num_repeats: int,
         num_levels: int = 5,
     ) -> None:
@@ -281,17 +307,30 @@ class _PredictionHead(nn.Module):
 
         # Shared DWConv weights (one per repeat depth)
         self.dw_convs = nn.ModuleList(
-            [nn.Conv2d(in_channels, in_channels, 3, padding=1, groups=in_channels, bias=False)
-             for _ in range(num_repeats)]
+            [
+                nn.Conv2d(
+                    in_channels,
+                    in_channels,
+                    3,
+                    padding=1,
+                    groups=in_channels,
+                    bias=False,
+                )
+                for _ in range(num_repeats)
+            ]
         )
         self.pw_convs = nn.ModuleList(
-            [nn.Conv2d(in_channels, in_channels, 1, bias=False)
-             for _ in range(num_repeats)]
+            [
+                nn.Conv2d(in_channels, in_channels, 1, bias=False)
+                for _ in range(num_repeats)
+            ]
         )
         # Separate BN per level per depth
         self.bns = nn.ModuleList(
-            [nn.ModuleList([nn.BatchNorm2d(in_channels) for _ in range(num_levels)])
-             for _ in range(num_repeats)]
+            [
+                nn.ModuleList([nn.BatchNorm2d(in_channels) for _ in range(num_levels)])
+                for _ in range(num_repeats)
+            ]
         )
         self.predictor = nn.Conv2d(in_channels, num_outputs, 1)
 
@@ -338,8 +377,8 @@ def _focal_loss(
         logits:  (N,) raw logits.
         targets: (N,) binary targets {0.0, 1.0}.
     """
-    p: Tensor   = F.sigmoid(logits)
-    ce: Tensor  = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+    p: Tensor = F.sigmoid(logits)
+    ce: Tensor = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
     p_t: Tensor = targets * p + (1.0 - targets) * (1.0 - p)
     alpha_t = targets * alpha + (1.0 - targets) * (1.0 - alpha)
     focal_weight = alpha_t * (1.0 - p_t) ** gamma
@@ -377,7 +416,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
         self._cfg = config
         W = config.fpn_channels
         K = config.num_classes
-        num_levels = 5     # P3–P7
+        num_levels = 5  # P3–P7
         num_anchors = len(config.anchor_scales) * len(config.anchor_ratios)
 
         # Backbone
@@ -395,26 +434,34 @@ class EfficientDetForObjectDetection(PretrainedModel):
         # P6/P7 still W channels (from P5 projection)
 
         # BiFPN stack
-        self.bifpn = nn.ModuleList([
-            _BiFPNLayer(W, num_levels=num_levels)
-            for _ in range(config.fpn_repeats)
-        ])
+        self.bifpn = nn.ModuleList(
+            [_BiFPNLayer(W, num_levels=num_levels) for _ in range(config.fpn_repeats)]
+        )
 
         # Prediction heads
-        self.cls_head = _PredictionHead(W, K * num_anchors, config.head_repeats, num_levels)
-        self.box_head = _PredictionHead(W, 4 * num_anchors, config.head_repeats, num_levels)
+        self.cls_head = _PredictionHead(
+            W, K * num_anchors, config.head_repeats, num_levels
+        )
+        self.box_head = _PredictionHead(
+            W, 4 * num_anchors, config.head_repeats, num_levels
+        )
 
         # Anchor generator (5 levels; one base size per level)
         sizes: tuple[tuple[int, ...], ...] = tuple(
-            (int(s * r),) for s, r in [
-                (config.anchor_base_sizes[i],
-                 config.anchor_scales[0])   # base size only; scales handled by anchor_scales
+            (int(s * r),)
+            for s, r in [
+                (
+                    config.anchor_base_sizes[i],
+                    config.anchor_scales[0],
+                )  # base size only; scales handled by anchor_scales
                 for i in range(num_levels)
             ]
         )
         # Build anchors with all scales × ratios
         all_sizes: tuple[tuple[int, ...], ...] = tuple(
-            tuple(int(config.anchor_base_sizes[lvl] * sc) for sc in config.anchor_scales)
+            tuple(
+                int(config.anchor_base_sizes[lvl] * sc) for sc in config.anchor_scales
+            )
             for lvl in range(num_levels)
         )
         self._anchor_gen = AnchorGenerator(
@@ -426,9 +473,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _project_backbone(
-        self, p3: Tensor, p4: Tensor, p5: Tensor
-    ) -> list[Tensor]:
+    def _project_backbone(self, p3: Tensor, p4: Tensor, p5: Tensor) -> list[Tensor]:
         """Project P3/P4/P5 to FPN width and build P6/P7."""
         fp3: Tensor = F.relu(cast(Tensor, self.p3_proj(p3)))
         fp4: Tensor = F.relu(cast(Tensor, self.p4_proj(p4)))
@@ -458,15 +503,12 @@ class EfficientDetForObjectDetection(PretrainedModel):
               ``pred_boxes``: (B, A, 4) decoded xyxy boxes.
               ``loss``      : focal + smooth-L1 when targets provided.
         """
-        B  = int(x.shape[0])
+        B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
         # 1. Backbone → (P3, P4, P5)
-        p3, p4, p5 = cast(
-            tuple[Tensor, Tensor, Tensor],
-            self.backbone(x)
-        )
+        p3, p4, p5 = cast(tuple[Tensor, Tensor, Tensor], self.backbone(x))
 
         # 2. Project → [P3, P4, P5, P6, P7] in FPN-width channels
         fpn_feats = self._project_backbone(p3, p4, p5)
@@ -477,7 +519,11 @@ class EfficientDetForObjectDetection(PretrainedModel):
 
         # 4. Strides for 5 levels (P3=8, P4=16, P5=32, P6=64, P7=128)
         strides: list[tuple[int, int]] = [
-            (8, 8), (16, 16), (32, 32), (64, 64), (128, 128)
+            (8, 8),
+            (16, 16),
+            (32, 32),
+            (64, 64),
+            (128, 128),
         ]
 
         # 5. Generate anchors → list of (A_l, 4) per level
@@ -509,15 +555,15 @@ class EfficientDetForObjectDetection(PretrainedModel):
             box_all_parts.append(bm_r)
             anchors_flat_parts.append(anc)  # (A_l, 4)
 
-        all_logits:  Tensor = lucid.cat(cls_all_parts, dim=1)   # (B, A, K)
-        all_deltas:  Tensor = lucid.cat(box_all_parts, dim=1)   # (B, A, 4)
+        all_logits: Tensor = lucid.cat(cls_all_parts, dim=1)  # (B, A, K)
+        all_deltas: Tensor = lucid.cat(box_all_parts, dim=1)  # (B, A, 4)
         all_anchors: Tensor = lucid.cat(anchors_flat_parts, dim=0)  # (A, 4)
 
         # 8. Decode boxes
         A_total = int(all_deltas.shape[1])
         all_boxes_parts: list[Tensor] = []
         for b in range(B):
-            boxes_b = decode_boxes(all_deltas[b], all_anchors)   # (A, 4)
+            boxes_b = decode_boxes(all_deltas[b], all_anchors)  # (A, 4)
             boxes_b = clip_boxes_to_image(boxes_b, (iH, iW))
             all_boxes_parts.append(boxes_b.unsqueeze(0))
         all_boxes: Tensor = lucid.cat(all_boxes_parts, dim=0)  # (B, A, 4)
@@ -541,10 +587,10 @@ class EfficientDetForObjectDetection(PretrainedModel):
 
     def _compute_loss(
         self,
-        all_logits: Tensor,   # (B, A, K)
-        all_deltas: Tensor,   # (B, A, 4)
+        all_logits: Tensor,  # (B, A, K)
+        all_deltas: Tensor,  # (B, A, 4)
         all_anchors: Tensor,  # (A, 4)
-        all_boxes: Tensor,    # (B, A, 4)
+        all_boxes: Tensor,  # (B, A, 4)
         targets: list[dict[str, Tensor]],
         image_size: tuple[int, int],
     ) -> Tensor:
@@ -556,11 +602,11 @@ class EfficientDetForObjectDetection(PretrainedModel):
         reg_losses: list[Tensor] = []
 
         for b in range(B):
-            gt_boxes  = targets[b]["boxes"]   # (M, 4) xyxy
+            gt_boxes = targets[b]["boxes"]  # (M, 4) xyxy
             gt_labels = targets[b]["labels"]  # (M,)
             M = int(gt_boxes.shape[0])
 
-            lg_b  = all_logits[b]   # (A, K)
+            lg_b = all_logits[b]  # (A, K)
 
             if M == 0:
                 # All anchors → background
@@ -571,12 +617,13 @@ class EfficientDetForObjectDetection(PretrainedModel):
             # Compute pairwise IoU between anchors and GT boxes
             # Build manually to avoid importing box_iou with its O(NxM) loop
             from lucid.models._utils._detection import box_iou as _box_iou
-            iou_mat = _box_iou(all_anchors, gt_boxes)   # (A, M)
+
+            iou_mat = _box_iou(all_anchors, gt_boxes)  # (A, M)
 
             # Assign each anchor: best GT, then label
             tgt_cls_data = [[0.0] * K for _ in range(A)]
             pos_idx: list[int] = []
-            pos_gt:  list[int] = []
+            pos_gt: list[int] = []
 
             for a in range(A):
                 best_v = -1.0
@@ -593,7 +640,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
                     pos_idx.append(a)
                     pos_gt.append(best_m)
                 elif best_v < 0.4:
-                    pass   # background — all zeros (already set)
+                    pass  # background — all zeros (already set)
                 # else: ignore (IoU in [0.4, 0.5)) — no loss
 
             tgt_cls = lucid.tensor(tgt_cls_data)  # (A, K)
@@ -602,18 +649,26 @@ class EfficientDetForObjectDetection(PretrainedModel):
             if pos_idx:
                 pos_t = lucid.tensor(pos_idx)
                 gt_boxes_pos = lucid.tensor(
-                    [[float(gt_boxes[pos_gt[i], d].item()) for d in range(4)]
-                     for i in range(len(pos_idx))]
+                    [
+                        [float(gt_boxes[pos_gt[i], d].item()) for d in range(4)]
+                        for i in range(len(pos_idx))
+                    ]
                 )
-                anc_pos  = all_anchors[pos_t]     # (P, 4)
-                tgt_d    = encode_boxes(gt_boxes_pos, anc_pos)
-                pred_d   = all_deltas[b][pos_t]   # (P, 4)
+                anc_pos = all_anchors[pos_t]  # (P, 4)
+                tgt_d = encode_boxes(gt_boxes_pos, anc_pos)
+                pred_d = all_deltas[b][pos_t]  # (P, 4)
                 reg_losses.append(_smooth_l1(pred_d - tgt_d).mean())
 
-        cls_l = lucid.cat([l.reshape(1) for l in cls_losses]).mean() \
-            if cls_losses else lucid.zeros((1,))
-        reg_l = lucid.cat([l.reshape(1) for l in reg_losses]).mean() \
-            if reg_losses else lucid.zeros((1,))
+        cls_l = (
+            lucid.cat([l.reshape(1) for l in cls_losses]).mean()
+            if cls_losses
+            else lucid.zeros((1,))
+        )
+        reg_l = (
+            lucid.cat([l.reshape(1) for l in reg_losses]).mean()
+            if reg_losses
+            else lucid.zeros((1,))
+        )
         return cls_l + reg_l
 
     # ------------------------------------------------------------------
@@ -633,18 +688,19 @@ class EfficientDetForObjectDetection(PretrainedModel):
         results: list[dict[str, Tensor]] = []
 
         for b in range(B):
-            lg_b = output.logits[b]       # (A, K)
-            bx_b = output.pred_boxes[b]   # (A, 4)
-            sc_b = F.sigmoid(lg_b)        # (A, K) — per-class probabilities
+            lg_b = output.logits[b]  # (A, K)
+            bx_b = output.pred_boxes[b]  # (A, 4)
+            sc_b = F.sigmoid(lg_b)  # (A, K) — per-class probabilities
 
-            keep_boxes:  list[Tensor] = []
+            keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
             for c in range(K):
                 sc_c = sc_b[:, c]
                 mask: list[int] = [
-                    i for i in range(int(sc_c.shape[0]))
+                    i
+                    for i in range(int(sc_c.shape[0]))
                     if float(sc_c[i].item()) >= self._cfg.score_thresh
                 ]
                 if not mask:
@@ -653,25 +709,30 @@ class EfficientDetForObjectDetection(PretrainedModel):
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(
-                    bx_sel, sc_sel,
+                    bx_sel,
+                    sc_sel,
                     lucid.zeros(int(sc_sel.shape[0])),
                     self._cfg.nms_thresh,
                 )
-                keep = keep[:self._cfg.max_detections]
+                keep = keep[: self._cfg.max_detections]
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
                 keep_labels.append(lucid.full((int(keep.shape[0]),), float(c + 1)))
 
             if keep_boxes:
-                results.append({
-                    "boxes":  lucid.cat(keep_boxes,  dim=0),
-                    "scores": lucid.cat(keep_scores, dim=0),
-                    "labels": lucid.cat(keep_labels, dim=0),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.cat(keep_boxes, dim=0),
+                        "scores": lucid.cat(keep_scores, dim=0),
+                        "labels": lucid.cat(keep_labels, dim=0),
+                    }
+                )
             else:
-                results.append({
-                    "boxes":  lucid.zeros((0, 4)),
-                    "scores": lucid.zeros((0,)),
-                    "labels": lucid.zeros((0,)),
-                })
+                results.append(
+                    {
+                        "boxes": lucid.zeros((0, 4)),
+                        "scores": lucid.zeros((0,)),
+                        "labels": lucid.zeros((0,)),
+                    }
+                )
         return results
