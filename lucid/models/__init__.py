@@ -252,6 +252,11 @@ from lucid.models.vision.mask_rcnn import (
     MaskRCNNConfig, MaskRCNNForObjectDetection,
     mask_rcnn,
 )
+# 2020 — DETR (Carion et al.)
+from lucid.models.vision.detr import (
+    DETRConfig, DETRForObjectDetection,
+    detr_resnet50,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -402,4 +407,7 @@ __all__ = [
     # ── Vision (2017) Mask R-CNN ──────────────────────────────────────────────
     "MaskRCNNConfig", "MaskRCNNForObjectDetection",
     "mask_rcnn",
+    # ── Vision (2020) DETR ────────────────────────────────────────────────────
+    "DETRConfig", "DETRForObjectDetection",
+    "detr_resnet50",
 ]
