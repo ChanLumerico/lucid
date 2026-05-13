@@ -122,15 +122,17 @@ function renderInline(text: string): React.ReactNode[] {
 // ── Category label styles ─────────────────────────────────────────────────────
 
 const CATEGORY_COLOR: Record<string, string> = {
-  added:       "text-lucid-success",
-  fixed:       "text-lucid-warning",
-  changed:     "text-lucid-blue",
-  refactored:  "text-lucid-blue",
-  removed:     "text-lucid-error",
-  deprecated:  "text-lucid-warning",
-  performance: "text-lucid-primary",
-  security:    "text-lucid-error",
-  tooling:     "text-lucid-text-low",
+  added:         "text-lucid-success",
+  fixed:         "text-lucid-warning",
+  changed:       "text-lucid-blue",
+  refactored:    "text-lucid-blue",
+  removed:       "text-lucid-error",
+  deprecated:    "text-lucid-warning",
+  performance:   "text-lucid-primary",
+  security:      "text-lucid-error",
+  tooling:       "text-lucid-text-low",
+  documentation: "text-lucid-text-low",
+  breaking:      "text-lucid-error",
 };
 
 function categoryColor(name: string): string {
