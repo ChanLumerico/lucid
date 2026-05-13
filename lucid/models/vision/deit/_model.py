@@ -79,7 +79,7 @@ class _Attention(nn.Module):
 
         # Scaled dot-product attention
         attn: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
-        attn = cast(Tensor, F.softmax(attn, dim=-1))
+        attn = F.softmax(attn, dim=-1)
         attn = cast(Tensor, self.attn_drop(attn))
 
         # (B, H, N, D) → (B, N, H*D) = (B, N, C)
