@@ -103,6 +103,15 @@ class ObjectDetectionOutput(ModelOutput):
 
 
 @dataclass
+class InstanceSegmentationOutput(ModelOutput):
+    logits: Tensor
+    pred_boxes: Tensor
+    pred_masks: Tensor
+    loss: Tensor | None = None
+    hidden_states: tuple[Tensor, ...] | None = None
+
+
+@dataclass
 class SemanticSegmentationOutput(ModelOutput):
     logits: Tensor
     loss: Tensor | None = None

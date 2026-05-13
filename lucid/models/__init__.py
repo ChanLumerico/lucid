@@ -13,8 +13,8 @@ from lucid.models._hub    import PretrainedEntry, download, load_from_pretrained
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
-    ImageClassificationOutput, ObjectDetectionOutput, SemanticSegmentationOutput,
-    CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
+    ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
+    SemanticSegmentationOutput, CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
 )
 from lucid.models._registry import create_model, is_model, list_models, model_entrypoint, register_model
 
@@ -247,6 +247,11 @@ from lucid.models.vision.faster_rcnn import (
     FasterRCNNConfig, FasterRCNNForObjectDetection,
     faster_rcnn,
 )
+# 2017 — Mask R-CNN (He et al.)
+from lucid.models.vision.mask_rcnn import (
+    MaskRCNNConfig, MaskRCNNForObjectDetection,
+    mask_rcnn,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -254,8 +259,8 @@ __all__ = [
     "PretrainedEntry", "download", "load_from_pretrained_entry",
     "BackboneMixin", "ClassificationHeadMixin", "FeatureInfo",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
-    "ImageClassificationOutput", "ObjectDetectionOutput", "SemanticSegmentationOutput",
-    "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
+    "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
+    "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
     "AutoConfig", "AutoModel",
     "AutoModelForCausalLM", "AutoModelForImageClassification",
     "AutoModelForMaskedLM", "AutoModelForObjectDetection", "AutoModelForSemanticSegmentation",
@@ -394,4 +399,7 @@ __all__ = [
     # ── Vision (2015) Faster R-CNN ────────────────────────────────────────────
     "FasterRCNNConfig", "FasterRCNNForObjectDetection",
     "faster_rcnn",
+    # ── Vision (2017) Mask R-CNN ──────────────────────────────────────────────
+    "MaskRCNNConfig", "MaskRCNNForObjectDetection",
+    "mask_rcnn",
 ]
