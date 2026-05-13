@@ -126,7 +126,7 @@ class TestConvNeXtRegistry(unittest.TestCase):
 
     def test_all_sizes_present(self) -> None:
         names = models.list_models(family="convnext")
-        for size in ["t", "s", "b", "l", "xl"]:
+        for size in ["tiny", "small", "base", "large", "xlarge"]:
             self.assertIn(f"convnext_{size}", names)
             self.assertIn(f"convnext_{size}_cls", names)
 
