@@ -132,8 +132,8 @@ def _tf_same_pad2d(x: Tensor, kernel_size: int, stride: int) -> Tensor:
 
     timm uses ``Conv2dSame`` for stride-2 convolutions in MaxViT.  TF pads
     right/bottom first (ceil division), giving asymmetric padding whenever
-    the total pad is odd.  Standard PyTorch ``padding=1`` pads symmetrically,
-    which produces different border values for real inputs.
+    the total pad is odd.  Standard ``padding=1`` in most frameworks pads
+    symmetrically, which produces different border values for real inputs.
     """
     H, W = x.shape[2], x.shape[3]
     pad_h = max(int(math.ceil(H / stride) - 1) * stride + kernel_size - H, 0)
