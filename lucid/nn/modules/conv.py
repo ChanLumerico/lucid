@@ -147,7 +147,142 @@ def _call_conv(
 
 
 class Conv1d(Module):
-    """1D convolution."""
+    r"""Applies a 1D convolution over a sequence of input signals.
+
+    A 1D convolution slides a learned filter (kernel) across a 1D sequence
+    and computes a dot product at each position.  Strictly speaking the
+    operation is *cross-correlation*:
+
+    .. math::
+
+        y[n, c_{\text{out}}, l] = \sum_{c_{\text{in}}=0}^{C_{\text{in}}/g - 1}
+            \sum_{k=0}^{K-1}
+            x\!\left[n,\, c_{\text{in}},\, l \cdot s + k \cdot d\right]
+            \cdot W\!\left[c_{\text{out}},\, c_{\text{in}},\, k\right]
+            + b\!\left[c_{\text{out}}\right]
+
+    where :math:`s` is the stride, :math:`d` is the dilation factor,
+    :math:`g` is the number of groups, and :math:`K` is the kernel size.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input signal.
+    out_channels : int
+        Number of channels produced by the convolution (i.e. number of
+        independent filters).
+    kernel_size : int
+        Length of the 1D convolving kernel.
+    stride : int, optional
+        Step size between consecutive kernel placements along the length
+        dimension. Default: ``1``.
+    padding : int or str, optional
+        Zero-padding added to both sides of the input before the
+        convolution.  Can also be ``"same"`` (output length equals
+        ``ceil(L_in / stride)``, requires ``stride=1``) or ``"valid"``
+        (no padding; identical to ``padding=0``). Default: ``0``.
+    dilation : int, optional
+        Spacing between kernel elements.  A dilation of ``d`` inserts
+        ``d - 1`` zeros between consecutive kernel weights, expanding the
+        effective receptive field without increasing parameter count
+        (also called *atrous* convolution). Default: ``1``.
+    groups : int, optional
+        Splits the input and output channels into ``groups`` independent
+        paths.  ``in_channels`` and ``out_channels`` must both be
+        divisible by ``groups``.  Setting ``groups = in_channels``
+        gives *depthwise* convolution. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias of shape ``(out_channels,)`` is
+        added to the output. Default: ``True``.
+    padding_mode : str, optional
+        Padding strategy when ``padding`` is an integer.  One of
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable filter tensor of shape
+        ``(out_channels, in_channels // groups, kernel_size)``.
+        Initialized with Kaiming uniform:
+
+        .. math::
+
+            \text{fan\_in} = \frac{C_{\text{in}}}{g} \cdot K, \quad
+            W \sim \mathcal{U}\!\left[
+                -\sqrt{\tfrac{6}{\text{fan\_in}}},\;
+                \sqrt{\tfrac{6}{\text{fan\_in}}}
+            \right]
+
+        (using :math:`a = \sqrt{5}` in the Kaiming formula).
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None`` if
+        ``bias=False``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, L)`
+    Output:
+        :math:`(N, C_{\text{out}}, L_{\text{out}})` where
+
+        .. math::
+
+            L_{\text{out}} = \left\lfloor
+                \frac{L + 2p - d(K - 1) - 1}{s} + 1
+            \right\rfloor
+
+        and :math:`p` is the (symmetric) padding, :math:`d` is dilation,
+        :math:`K` is kernel size, :math:`s` is stride.
+
+    Notes
+    -----
+    **Groups and depthwise convolution.**  When ``groups = g > 1``, the
+    input channels are split into ``g`` groups of size
+    ``in_channels // g``, each group is convolved independently, and the
+    results are concatenated.  Depthwise convolution (``groups =
+    in_channels``) applies one filter per input channel, dramatically
+    reducing the parameter count compared to a full convolution.
+
+    **Dilated (atrous) convolution.**  Setting ``dilation > 1`` inserts
+    gaps between kernel taps, enlarging the receptive field without
+    additional parameters or pooling.  This is commonly used in semantic
+    segmentation and WaveNet-style audio models.
+
+    **Padding modes.**  ``"reflect"`` and ``"circular"`` padding
+    avoid boundary artefacts that zero-padding can introduce;
+    ``"replicate"`` repeats edge values.  These modes are applied via
+    a pre-padding step followed by a ``padding=0`` convolution.
+
+    Examples
+    --------
+    Basic 1D convolution:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> conv = nn.Conv1d(in_channels=1, out_channels=8, kernel_size=3, padding=1)
+    >>> x = lucid.zeros(4, 1, 16)   # (N, C_in, L)
+    >>> y = conv(x)
+    >>> y.shape
+    (4, 8, 16)
+
+    Depthwise 1D convolution (one filter per channel):
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> depthwise = nn.Conv1d(
+    ...     in_channels=32, out_channels=32,
+    ...     kernel_size=5, padding=2, groups=32
+    ... )
+    >>> x = lucid.zeros(2, 32, 64)
+    >>> y = depthwise(x)
+    >>> y.shape
+    (2, 32, 64)
+    """
 
     def __init__(
         self,
@@ -241,7 +376,155 @@ class Conv1d(Module):
 
 
 class Conv2d(Module):
-    """2D convolution."""
+    r"""Applies a 2D convolution over a batch of images or feature maps.
+
+    This module computes the 2D *cross-correlation* between the input
+    and a set of learnable filters.  For a single output channel and a
+    single input channel the operation is:
+
+    .. math::
+
+        y[n, c_{\text{out}}, h, w] =
+        \sum_{c_{\text{in}}=0}^{C_{\text{in}}/g - 1}
+        \sum_{k_h=0}^{K_H-1} \sum_{k_w=0}^{K_W-1}
+        x\!\left[n,\; c_{\text{in}},\;
+                  h \cdot s_h + k_h \cdot d_h,\;
+                  w \cdot s_w + k_w \cdot d_w\right]
+        \cdot W\!\left[c_{\text{out}},\; c_{\text{in}},\; k_h,\; k_w\right]
+        + b\!\left[c_{\text{out}}\right]
+
+    where :math:`(s_h, s_w)` is the stride, :math:`(d_h, d_w)` is the
+    dilation factor, and :math:`g` is the number of groups.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input image.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple[int, int]
+        Size of the convolving kernel.  A single ``int`` is broadcast
+        to ``(kernel_size, kernel_size)``.
+    stride : int or tuple[int, int], optional
+        Stride of the convolution. Default: ``1``.
+    padding : int, tuple[int, int], or str, optional
+        Padding added to all four sides of the input.  ``"same"`` pads
+        so the output spatial size equals ``ceil(H_in / s)`` (requires
+        ``stride=1``); ``"valid"`` means no padding. Default: ``0``.
+    dilation : int or tuple[int, int], optional
+        Spacing between kernel elements (atrous / dilated convolution).
+        Default: ``1``.
+    groups : int, optional
+        Number of blocked connections from input channels to output
+        channels.  Both ``in_channels`` and ``out_channels`` must be
+        divisible by ``groups``.  ``groups = in_channels`` gives
+        *depthwise* convolution. Default: ``1``.
+    bias : bool, optional
+        If ``True``, adds a learnable bias to the output. Default: ``True``.
+    padding_mode : str, optional
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable filter tensor of shape
+        ``(out_channels, in_channels // groups, K_H, K_W)``.
+        Initialized with Kaiming uniform using :math:`a = \sqrt{5}`:
+
+        .. math::
+
+            \text{fan\_in} = \frac{C_{\text{in}}}{g} \cdot K_H \cdot K_W, \quad
+            W \sim \mathcal{U}\!\left[
+                -\sqrt{\tfrac{6}{\text{fan\_in}}},\;
+                \sqrt{\tfrac{6}{\text{fan\_in}}}
+            \right]
+
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, H, W)`
+    Output:
+        :math:`(N, C_{\text{out}}, H_{\text{out}}, W_{\text{out}})` where
+
+        .. math::
+
+            H_{\text{out}} = \left\lfloor
+                \frac{H + 2p_h - d_h(K_H - 1) - 1}{s_h} + 1
+            \right\rfloor, \quad
+            W_{\text{out}} = \left\lfloor
+                \frac{W + 2p_w - d_w(K_W - 1) - 1}{s_w} + 1
+            \right\rfloor
+
+    Notes
+    -----
+    **Groups and depthwise convolution.**  When ``groups = in_channels``
+    each input channel is convolved with its own filter, yielding
+    *depthwise* convolution.  This is the building block of
+    MobileNet-style architectures.  A subsequent ``groups=1`` Conv2d
+    with kernel size 1 (pointwise convolution) forms a
+    *depthwise-separable* block.
+
+    **Dilated (atrous) convolution.**  ``dilation > 1`` enlarges the
+    receptive field of each kernel tap without increasing the number of
+    parameters or reducing the spatial resolution.  Widely used in
+    semantic segmentation (DeepLab) and generative models.
+
+    **padding="same".**  Mimics the ``SAME`` padding convention: output
+    is spatially identical in size to the input.  When the required
+    total padding is odd, the extra pixel is added on the bottom/right
+    side (low side gets ``pad_total // 2``).  Requires ``stride=1``.
+
+    Examples
+    --------
+    Basic image convolution:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> conv = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, padding=1)
+    >>> x = lucid.zeros(8, 3, 32, 32)   # (N, C_in, H, W)
+    >>> y = conv(x)
+    >>> y.shape
+    (8, 64, 32, 32)
+
+    Depthwise separable convolution block:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> depthwise  = nn.Conv2d(32, 32, kernel_size=3, padding=1, groups=32)
+    >>> pointwise  = nn.Conv2d(32, 64, kernel_size=1)
+    >>> x = lucid.zeros(4, 32, 16, 16)
+    >>> y = pointwise(depthwise(x))
+    >>> y.shape
+    (4, 64, 16, 16)
+
+    Dilated convolution (receptive field 9×9 with only 3×3 parameters):
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> dilated = nn.Conv2d(1, 1, kernel_size=3, padding=4, dilation=4)
+    >>> x = lucid.zeros(1, 1, 16, 16)
+    >>> y = dilated(x)
+    >>> y.shape
+    (1, 1, 16, 16)
+
+    Convolution without bias:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> conv_no_bias = nn.Conv2d(16, 32, kernel_size=1, bias=False)
+    >>> x = lucid.zeros(2, 16, 8, 8)
+    >>> y = conv_no_bias(x)
+    >>> y.shape
+    (2, 32, 8, 8)
+    """
 
     def __init__(
         self,
@@ -334,7 +617,120 @@ class Conv2d(Module):
 
 
 class Conv3d(Module):
-    """3D convolution."""
+    r"""Applies a 3D convolution over volumetric data (e.g. video or medical scans).
+
+    Computes the 3D *cross-correlation* of the input with a bank of
+    learnable 3D filters:
+
+    .. math::
+
+        y[n, c_{\text{out}}, d, h, w] =
+        \sum_{c_{\text{in}}=0}^{C_{\text{in}}/g - 1}
+        \sum_{k_d, k_h, k_w}
+        x\!\left[n,\; c_{\text{in}},\;
+                  d \cdot s_d + k_d \cdot d_d,\;
+                  h \cdot s_h + k_h \cdot d_h,\;
+                  w \cdot s_w + k_w \cdot d_w\right]
+        \cdot W\!\left[c_{\text{out}},\; c_{\text{in}},\; k_d,\; k_h,\; k_w\right]
+        + b\!\left[c_{\text{out}}\right]
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input volume.
+    out_channels : int
+        Number of channels produced by the convolution.
+    kernel_size : int or tuple[int, int, int]
+        Size of the 3D convolving kernel ``(K_D, K_H, K_W)``.
+        A single ``int`` is broadcast to all three dimensions.
+    stride : int or tuple[int, int, int], optional
+        Stride along each spatial dimension. Default: ``1``.
+    padding : int, tuple[int, int, int], or str, optional
+        Zero-padding added on both sides along each spatial dimension.
+        Accepts ``"same"`` (requires ``stride=1``) or ``"valid"``.
+        Default: ``0``.
+    dilation : int or tuple[int, int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    groups : int, optional
+        Number of blocked connections.  ``groups = in_channels`` gives
+        depthwise 3D convolution. Default: ``1``.
+    bias : bool, optional
+        If ``True``, adds a learnable bias. Default: ``True``.
+    padding_mode : str, optional
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable filter tensor of shape
+        ``(out_channels, in_channels // groups, K_D, K_H, K_W)``.
+        Initialized with Kaiming uniform:
+
+        .. math::
+
+            \text{fan\_in} = \frac{C_{\text{in}}}{g}
+                             \cdot K_D \cdot K_H \cdot K_W, \quad
+            W \sim \mathcal{U}\!\left[
+                -\sqrt{\tfrac{6}{\text{fan\_in}}},\;
+                \sqrt{\tfrac{6}{\text{fan\_in}}}
+            \right]
+
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, D, H, W)`
+    Output:
+        :math:`(N, C_{\text{out}}, D_{\text{out}}, H_{\text{out}}, W_{\text{out}})` where
+
+        .. math::
+
+            X_{\text{out}} = \left\lfloor
+                \frac{X + 2p_x - d_x(K_X - 1) - 1}{s_x} + 1
+            \right\rfloor \quad \text{for } X \in \{D, H, W\}
+
+    Notes
+    -----
+    **Typical use cases.**  Conv3d is the standard building block for
+    video understanding (3D ResNets, SlowFast), medical image analysis
+    (CT/MRI volumetric segmentation), and point-cloud processing.  It is
+    computationally heavier than Conv2d by a factor of roughly
+    :math:`K_D` per layer; factorised (2+1)D convolutions are a common
+    approximation.
+
+    **Memory.**  A single 3D feature map can be large; consider
+    ``groups > 1`` or smaller ``kernel_size`` when memory is a concern.
+
+    Examples
+    --------
+    Basic volumetric convolution:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> conv3 = nn.Conv3d(in_channels=1, out_channels=16,
+    ...                   kernel_size=3, padding=1)
+    >>> x = lucid.zeros(2, 1, 16, 32, 32)   # (N, C, D, H, W)
+    >>> y = conv3(x)
+    >>> y.shape
+    (2, 16, 16, 32, 32)
+
+    Strided 3D convolution for spatial downsampling:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> conv3_stride = nn.Conv3d(16, 32, kernel_size=3, stride=2, padding=1)
+    >>> x = lucid.zeros(2, 16, 16, 32, 32)
+    >>> y = conv3_stride(x)
+    >>> y.shape
+    (2, 32, 8, 16, 16)
+    """
 
     def __init__(
         self,
@@ -436,7 +832,121 @@ class Conv3d(Module):
 
 
 class ConvTranspose1d(Module):
-    """Transposed 1D convolution."""
+    r"""Applies a 1D transposed convolution (fractionally-strided convolution).
+
+    A transposed convolution — sometimes loosely called a *deconvolution*,
+    though it is not a true mathematical inverse — is the gradient of a
+    standard convolution with respect to its input.  It upsamples the
+    spatial dimension by inserting implicit zeros between input elements
+    before applying a convolution, and is the go-to building block for
+    decoders, generators, and any network that must increase sequence
+    length.
+
+    Formally, for a stride :math:`s` and kernel size :math:`K`:
+
+    .. math::
+
+        L_{\text{out}} = (L_{\text{in}} - 1) \cdot s
+                         - 2p + d(K - 1) + p_{\text{out}} + 1
+
+    where :math:`p` is ``padding``, :math:`d` is ``dilation``, and
+    :math:`p_{\text{out}}` is ``output_padding``.
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int
+        Size of the convolving kernel.
+    stride : int, optional
+        Stride of the convolution.  Values ``> 1`` upsample the input.
+        Default: ``1``.
+    padding : int, optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding is added
+        to both sides of each dimension in the input.  Default: ``0``.
+    output_padding : int, optional
+        Additional size added to one side of the output shape.  Must
+        satisfy ``0 <= output_padding < max(stride, dilation)``.  Used
+        to disambiguate the output size when the formula
+        :math:`(L_{\text{in}} - 1) \cdot s - 2p + d(K-1) + 1` is
+        compatible with multiple :math:`L_{\text{in}}`. Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, adds a learnable bias. Default: ``True``.
+    dilation : int, optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable kernel of shape
+        ``(in_channels, out_channels // groups, kernel_size)``.
+        Note the channel axis ordering is **transposed** relative to
+        :class:`Conv1d`: the leading dimension corresponds to
+        ``in_channels``, not ``out_channels``.
+        Initialized with Kaiming uniform (:math:`a = \sqrt{5}`).
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, L)`
+    Output:
+        :math:`(N, C_{\text{out}}, L_{\text{out}})` where
+
+        .. math::
+
+            L_{\text{out}} = (L - 1) \cdot s - 2p + d(K - 1)
+                             + p_{\text{out}} + 1
+
+    Notes
+    -----
+    **Not a true inverse.**  :class:`ConvTranspose1d` is the transpose
+    (adjoint) of :class:`Conv1d` in the linear-algebra sense: if
+    ``conv_forward`` maps :math:`\mathbb{R}^{C_{\text{in}} \times L}
+    \to \mathbb{R}^{C_{\text{out}} \times L'}`, then
+    ``ConvTranspose1d`` with the same weights maps back
+    :math:`\mathbb{R}^{C_{\text{out}} \times L'} \to
+    \mathbb{R}^{C_{\text{in}} \times L}`.  When used in autoencoders or
+    flow models the weights are learned independently and no exact
+    inversion is implied.
+
+    **output_padding.**  The transposed convolution output size formula
+    can map multiple ``L_in`` values to the same ``L_out``.
+    ``output_padding`` breaks this ambiguity by adding a single extra row
+    on the output; it does *not* add actual padding to the input.
+
+    Examples
+    --------
+    Upsample a sequence by factor 2:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> upsample = nn.ConvTranspose1d(in_channels=16, out_channels=16,
+    ...                               kernel_size=4, stride=2, padding=1)
+    >>> x = lucid.zeros(2, 16, 32)
+    >>> y = upsample(x)
+    >>> y.shape
+    (2, 16, 64)
+
+    Simple 1D decoder layer:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> decoder = nn.ConvTranspose1d(64, 32, kernel_size=3, stride=1, padding=1)
+    >>> x = lucid.zeros(4, 64, 20)
+    >>> y = decoder(x)
+    >>> y.shape
+    (4, 32, 20)
+    """
 
     def __init__(
         self,
@@ -503,7 +1013,113 @@ class ConvTranspose1d(Module):
 
 
 class ConvTranspose2d(Module):
-    """Transposed 2D convolution."""
+    r"""Applies a 2D transposed convolution (fractionally-strided convolution).
+
+    Also known as a *fractionally-strided convolution*, this module is
+    commonly used as the spatial upsampling primitive in generative
+    models (VAEs, GANs), dense prediction decoders (U-Net), and
+    super-resolution networks.  It is the transpose (adjoint) of
+    :class:`Conv2d`.
+
+    The output spatial dimensions satisfy:
+
+    .. math::
+
+        H_{\text{out}} = (H_{\text{in}} - 1) \cdot s_h - 2p_h
+                         + d_h(K_H - 1) + p^{\text{out}}_h + 1
+
+        W_{\text{out}} = (W_{\text{in}} - 1) \cdot s_w - 2p_w
+                         + d_w(K_W - 1) + p^{\text{out}}_w + 1
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input feature map.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int or tuple[int, int]
+        Size of the convolving kernel.
+    stride : int or tuple[int, int], optional
+        Stride.  Values ``> 1`` upsample the spatial dimensions.
+        Default: ``1``.
+    padding : int or tuple[int, int], optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding is added
+        to both sides of each spatial dimension.  Default: ``0``.
+    output_padding : int or tuple[int, int], optional
+        Additional size added to one side of each spatial dimension of
+        the output.  Must satisfy
+        ``0 <= output_padding < max(stride, dilation)`` along each axis.
+        Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, adds a learnable bias. Default: ``True``.
+    dilation : int or tuple[int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable kernel of shape
+        ``(in_channels, out_channels // groups, K_H, K_W)``.
+        The leading axis is ``in_channels`` — the reverse of
+        :class:`Conv2d`.
+        Initialized with Kaiming uniform (:math:`a = \sqrt{5}`).
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, H, W)`
+    Output:
+        :math:`(N, C_{\text{out}}, H_{\text{out}}, W_{\text{out}})`
+        as given by the formulas above.
+
+    Notes
+    -----
+    **Checkerboard artefacts.**  Transposed convolutions with
+    ``stride > 1`` can produce characteristic checkerboard patterns in
+    the output when kernel size is not divisible by stride.  A common
+    mitigation is to use ``kernel_size = stride * n`` for some integer
+    ``n``, or to replace the transposed conv with bilinear upsampling
+    followed by a regular convolution.
+
+    **output_padding.**  When ``stride > 1`` the output size formula is
+    not injective: multiple input sizes map to the same output size.
+    ``output_padding`` resolves this ambiguity and must be set
+    consistently with the encoder stride to reconstruct the exact spatial
+    dimensions.
+
+    Examples
+    --------
+    VAE decoder: upsample 4×4 latent to 8×8:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> decoder = nn.ConvTranspose2d(
+    ...     in_channels=128, out_channels=64,
+    ...     kernel_size=4, stride=2, padding=1
+    ... )
+    >>> z = lucid.zeros(8, 128, 4, 4)
+    >>> y = decoder(z)
+    >>> y.shape
+    (8, 64, 8, 8)
+
+    U-Net upsampling block:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> up = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+    >>> x = lucid.zeros(4, 256, 16, 16)
+    >>> y = up(x)
+    >>> y.shape
+    (4, 128, 32, 32)
+    """
 
     def __init__(
         self,
@@ -567,7 +1183,104 @@ class ConvTranspose2d(Module):
 
 
 class ConvTranspose3d(Module):
-    """Transposed 3D convolution."""
+    r"""Applies a 3D transposed convolution (fractionally-strided convolution).
+
+    The 3D extension of :class:`ConvTranspose2d`.  It upsamples all
+    three spatial dimensions simultaneously and is used in volumetric
+    decoders such as 3D autoencoders, video generators, and medical
+    image synthesis.
+
+    Output size along each spatial axis :math:`X \in \{D, H, W\}`:
+
+    .. math::
+
+        X_{\text{out}} = (X_{\text{in}} - 1) \cdot s_x - 2p_x
+                         + d_x(K_X - 1) + p^{\text{out}}_x + 1
+
+    Parameters
+    ----------
+    in_channels : int
+        Number of channels in the input volume.
+    out_channels : int
+        Number of channels produced by the transposed convolution.
+    kernel_size : int or tuple[int, int, int]
+        Size of the 3D convolving kernel.
+    stride : int or tuple[int, int, int], optional
+        Stride.  Values ``> 1`` upsample the spatial dimensions.
+        Default: ``1``.
+    padding : int or tuple[int, int, int], optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding applied
+        on both sides of each axis.  Default: ``0``.
+    output_padding : int or tuple[int, int, int], optional
+        Additional size added to one side of each spatial dimension.
+        Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, adds a learnable bias. Default: ``True``.
+    dilation : int or tuple[int, int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device on which to allocate parameters. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type for the parameters. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter
+        Learnable kernel of shape
+        ``(in_channels, out_channels // groups, K_D, K_H, K_W)``.
+        Leading axis is ``in_channels`` (same convention as
+        :class:`ConvTranspose2d`).
+        Initialized with Kaiming uniform (:math:`a = \sqrt{5}`).
+    bias : Parameter or None
+        Learnable bias of shape ``(out_channels,)``, or ``None``.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, D, H, W)`
+    Output:
+        :math:`(N, C_{\text{out}}, D_{\text{out}}, H_{\text{out}}, W_{\text{out}})`
+        as given by the formula above.
+
+    Notes
+    -----
+    **Memory.**  3D transposed convolutions produce large feature maps
+    at decoder stages.  Gradient checkpointing or smaller
+    ``out_channels`` values are often necessary when operating on
+    high-resolution volumes.
+
+    **Symmetric decoder design.**  Pair each :class:`Conv3d` in the
+    encoder with a :class:`ConvTranspose3d` having identical
+    ``kernel_size``, ``stride``, and ``padding`` in the decoder to
+    guarantee exact shape reconstruction.
+
+    Examples
+    --------
+    Volumetric upsampling (2× along all spatial axes):
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> up3d = nn.ConvTranspose3d(
+    ...     in_channels=64, out_channels=32,
+    ...     kernel_size=4, stride=2, padding=1
+    ... )
+    >>> x = lucid.zeros(2, 64, 4, 8, 8)
+    >>> y = up3d(x)
+    >>> y.shape
+    (2, 32, 8, 16, 16)
+
+    3D autoencoder decoder block:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> decoder3d = nn.ConvTranspose3d(128, 64, kernel_size=3, stride=1, padding=1)
+    >>> x = lucid.zeros(1, 128, 8, 8, 8)
+    >>> y = decoder3d(x)
+    >>> y.shape
+    (1, 64, 8, 8, 8)
+    """
 
     def __init__(
         self,
@@ -656,7 +1369,104 @@ def _init_lazy_conv_weights(weight: Parameter, bias: Parameter | None) -> None:
 
 
 class LazyConv1d(Conv1d):
-    """Conv1d with lazy ``in_channels`` inference from the first input."""
+    r"""A :class:`Conv1d` that infers ``in_channels`` from the first input.
+
+    Lazy modules defer the allocation and initialization of ``weight``
+    and ``bias`` until the first call to :meth:`forward` (or until a
+    compatible ``state_dict`` is loaded).  This removes the need to know
+    ``in_channels`` at construction time, simplifying sequential model
+    building and automatic architecture search.
+
+    Materialization happens exactly once: on the first :meth:`forward`
+    call the channel count is read from ``x.shape[1]``, weights are
+    allocated and Kaiming-uniform initialized, and subsequent calls
+    behave identically to a fully-initialized :class:`Conv1d`.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels.
+    kernel_size : int
+        Length of the 1D convolving kernel.
+    stride : int, optional
+        Stride of the convolution. Default: ``1``.
+    padding : int or str, optional
+        Zero-padding or ``"same"`` / ``"valid"`` string specifier.
+        Default: ``0``.
+    dilation : int, optional
+        Spacing between kernel elements. Default: ``1``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    padding_mode : str, optional
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device used when allocating weights at materialization time.
+        Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` until first :meth:`forward`; afterwards shape
+        ``(out_channels, in_channels // groups, kernel_size)``.
+    bias : Parameter or None
+        ``None`` until first :meth:`forward`; afterwards shape
+        ``(out_channels,)`` if ``bias=True``, else remains ``None``.
+    in_channels : int or None
+        ``None`` before materialization; set to the inferred value on
+        the first forward pass.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, L)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, L_{\text{out}})` — same formula as
+        :class:`Conv1d`.
+
+    Notes
+    -----
+    **State-dict loading.**  Loading a ``state_dict`` that contains a
+    ``weight`` key of shape
+    ``(out_channels, in_channels // groups, kernel_size)`` also triggers
+    materialization, so a lazy module can be restored from a checkpoint
+    without ever calling :meth:`forward`.
+
+    **groups constraint.**  ``in_channels`` (inferred at runtime) must
+    be divisible by ``groups``; this is checked inside ``_initialize``.
+
+    Examples
+    --------
+    Lazy conv in a sequential model:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Sequential(
+    ...     nn.LazyConv1d(out_channels=32, kernel_size=3, padding=1),
+    ...     nn.ReLU(),
+    ... )
+    >>> x = lucid.zeros(4, 16, 64)   # in_channels=16 inferred here
+    >>> y = model(x)
+    >>> y.shape
+    (4, 32, 64)
+
+    Check that in_channels was inferred:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy = nn.LazyConv1d(out_channels=8, kernel_size=5, padding=2)
+    >>> print(lazy.in_channels)
+    None
+    >>> _ = lazy(lucid.zeros(1, 3, 20))
+    >>> print(lazy.in_channels)
+    3
+    """
 
     def __init__(
         self,
@@ -776,7 +1586,92 @@ class LazyConv1d(Conv1d):
 
 
 class LazyConv2d(Conv2d):
-    """Conv2d with lazy ``in_channels`` inference from the first input."""
+    r"""A :class:`Conv2d` that infers ``in_channels`` from the first input.
+
+    Lazy initialization allows building 2D convolutional networks without
+    knowing the input channel count in advance.  The module registers
+    ``weight`` and ``bias`` as ``None`` parameters and allocates them on
+    the first :meth:`forward` call, reading ``C_in`` from
+    ``x.shape[1]``.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple[int, int]
+        Size of the 2D convolving kernel.
+    stride : int or tuple[int, int], optional
+        Stride of the convolution. Default: ``1``.
+    padding : int, tuple[int, int], or str, optional
+        Zero-padding or ``"same"`` / ``"valid"`` string specifier.
+        Default: ``0``.
+    dilation : int or tuple[int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    padding_mode : str, optional
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device used when allocating weights. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` before materialization; shape
+        ``(out_channels, in_channels // groups, K_H, K_W)`` afterwards.
+    bias : Parameter or None
+        ``None`` before materialization; shape ``(out_channels,)`` if
+        ``bias=True``, else remains ``None``.
+    in_channels : int or None
+        ``None`` before the first forward pass; inferred channel count
+        afterwards.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, H, W)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, H_{\text{out}}, W_{\text{out}})` —
+        same formula as :class:`Conv2d`.
+
+    Notes
+    -----
+    **State-dict materialization.**  Loading a ``state_dict`` with a
+    4-D ``weight`` tensor triggers materialization before parameter
+    copying, enabling round-trip checkpoint compatibility.
+
+    Examples
+    --------
+    Dynamic channel inference in a feature extractor:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> model = nn.Sequential(
+    ...     nn.LazyConv2d(out_channels=64, kernel_size=3, padding=1),
+    ...     nn.ReLU(),
+    ...     nn.LazyConv2d(out_channels=128, kernel_size=3, padding=1),
+    ... )
+    >>> x = lucid.zeros(2, 3, 32, 32)   # in_channels=3 inferred here
+    >>> y = model(x)
+    >>> y.shape
+    (2, 128, 32, 32)
+
+    Verify inferred in_channels after forward:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy = nn.LazyConv2d(out_channels=16, kernel_size=3, padding=1)
+    >>> _ = lazy(lucid.zeros(1, 8, 16, 16))
+    >>> print(lazy.in_channels)
+    8
+    """
 
     def __init__(
         self,
@@ -898,7 +1793,88 @@ class LazyConv2d(Conv2d):
 
 
 class LazyConv3d(Conv3d):
-    """Conv3d with lazy ``in_channels`` inference from the first input."""
+    r"""A :class:`Conv3d` that infers ``in_channels`` from the first input.
+
+    Lazy initialization for 3D convolution: ``in_channels`` need not be
+    specified at construction time.  Weight allocation and Kaiming
+    uniform initialization are deferred until the first :meth:`forward`
+    call (or ``state_dict`` load), at which point ``C_in`` is read from
+    ``x.shape[1]``.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple[int, int, int]
+        Size of the 3D convolving kernel.
+    stride : int or tuple[int, int, int], optional
+        Stride of the convolution. Default: ``1``.
+    padding : int, tuple[int, int, int], or str, optional
+        Zero-padding or ``"same"`` / ``"valid"`` string specifier.
+        Default: ``0``.
+    dilation : int or tuple[int, int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    padding_mode : str, optional
+        ``"zeros"``, ``"reflect"``, ``"replicate"``, or ``"circular"``.
+        Default: ``"zeros"``.
+    device : DeviceLike, optional
+        Device used when allocating weights. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` before materialization; shape
+        ``(out_channels, in_channels // groups, K_D, K_H, K_W)`` afterwards.
+    bias : Parameter or None
+        ``None`` before materialization; ``(out_channels,)`` if
+        ``bias=True``, else ``None``.
+    in_channels : int or None
+        ``None`` before the first forward pass.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, D, H, W)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, D_{\text{out}}, H_{\text{out}}, W_{\text{out}})` —
+        same formula as :class:`Conv3d`.
+
+    Notes
+    -----
+    **State-dict materialization.**  A 5-D ``weight`` tensor in the
+    ``state_dict`` triggers materialization before parameter copying.
+
+    Examples
+    --------
+    Lazy 3D conv in a volumetric network:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy3d = nn.LazyConv3d(out_channels=32, kernel_size=3, padding=1)
+    >>> x = lucid.zeros(2, 4, 16, 32, 32)   # in_channels=4 inferred
+    >>> y = lazy3d(x)
+    >>> y.shape
+    (2, 32, 16, 32, 32)
+
+    Verify materialization:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy3d = nn.LazyConv3d(out_channels=16, kernel_size=3, padding=1)
+    >>> print(lazy3d.in_channels)
+    None
+    >>> _ = lazy3d(lucid.zeros(1, 8, 4, 4, 4))
+    >>> print(lazy3d.in_channels)
+    8
+    """
 
     def __init__(
         self,
@@ -1027,7 +2003,90 @@ class LazyConv3d(Conv3d):
 
 
 class LazyConvTranspose1d(ConvTranspose1d):
-    """ConvTranspose1d with lazy ``in_channels`` inference."""
+    r"""A :class:`ConvTranspose1d` that infers ``in_channels`` from the first input.
+
+    Combines the fractionally-strided upsampling of
+    :class:`ConvTranspose1d` with lazy weight materialization.
+    ``in_channels`` need not be known at construction time; it is read
+    from ``x.shape[1]`` on the first :meth:`forward` call.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels after the transposed convolution.
+    kernel_size : int
+        Length of the 1D convolving kernel.
+    stride : int, optional
+        Stride (upsampling factor). Default: ``1``.
+    padding : int, optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding on each
+        side.  String padding is not supported. Default: ``0``.
+    output_padding : int, optional
+        Additional size added to one side of the output. Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    dilation : int, optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device used when allocating weights. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` before materialization; shape
+        ``(in_channels, out_channels // groups, kernel_size)`` afterwards.
+        Note: leading axis is ``in_channels``, not ``out_channels``.
+    bias : Parameter or None
+        ``None`` before materialization; ``(out_channels,)`` if
+        ``bias=True``.
+    in_channels : int or None
+        ``None`` before the first forward pass.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, L)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, L_{\text{out}})` — same formula as
+        :class:`ConvTranspose1d`.
+
+    Notes
+    -----
+    **State-dict loading.**  A 3-D ``weight`` tensor in the
+    ``state_dict`` whose leading axis equals the inferred ``in_channels``
+    triggers materialization before parameter copying.
+
+    Examples
+    --------
+    Lazy transposed conv in a sequence decoder:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> decoder = nn.LazyConvTranspose1d(
+    ...     out_channels=16, kernel_size=4, stride=2, padding=1
+    ... )
+    >>> x = lucid.zeros(2, 32, 10)   # in_channels=32 inferred
+    >>> y = decoder(x)
+    >>> y.shape
+    (2, 16, 20)
+
+    Inspect pre- and post-materialization state:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy = nn.LazyConvTranspose1d(out_channels=8, kernel_size=3, padding=1)
+    >>> print(lazy.in_channels)
+    None
+    >>> _ = lazy(lucid.zeros(1, 4, 16))
+    >>> print(lazy.in_channels)
+    4
+    """
 
     def __init__(
         self,
@@ -1133,7 +2192,93 @@ class LazyConvTranspose1d(ConvTranspose1d):
 
 
 class LazyConvTranspose2d(ConvTranspose2d):
-    """ConvTranspose2d with lazy ``in_channels`` inference."""
+    r"""A :class:`ConvTranspose2d` that infers ``in_channels`` from the first input.
+
+    Lazy version of the 2D transposed convolution.  Weight allocation is
+    deferred until the first :meth:`forward` call, making it easy to
+    compose upsampling decoder networks without manually tracking the
+    channel dimension through each block.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple[int, int]
+        Size of the 2D convolving kernel.
+    stride : int or tuple[int, int], optional
+        Stride (upsampling factor). Default: ``1``.
+    padding : int or tuple[int, int], optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding applied
+        on each side.  String padding is not supported. Default: ``0``.
+    output_padding : int or tuple[int, int], optional
+        Additional size added to one side of each output dimension.
+        Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    dilation : int or tuple[int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device used when allocating weights. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` before materialization; shape
+        ``(in_channels, out_channels // groups, K_H, K_W)`` afterwards.
+    bias : Parameter or None
+        ``None`` before materialization; ``(out_channels,)`` if
+        ``bias=True``.
+    in_channels : int or None
+        ``None`` before the first forward pass.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, H, W)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, H_{\text{out}}, W_{\text{out}})` —
+        same formula as :class:`ConvTranspose2d`.
+
+    Notes
+    -----
+    **State-dict loading.**  A 4-D ``weight`` tensor (shape
+    ``(in_channels, out_channels // groups, K_H, K_W)``) triggers
+    materialization before parameter copying.
+
+    **Symmetric encoder–decoder pairs.**  Pair each :class:`LazyConv2d`
+    encoder stride with a :class:`LazyConvTranspose2d` of matching
+    ``kernel_size``, ``stride``, and ``padding`` to reconstruct exact
+    spatial dimensions.
+
+    Examples
+    --------
+    Lazy VAE decoder:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> decoder = nn.LazyConvTranspose2d(
+    ...     out_channels=64, kernel_size=4, stride=2, padding=1
+    ... )
+    >>> z = lucid.zeros(4, 128, 8, 8)   # in_channels=128 inferred
+    >>> y = decoder(z)
+    >>> y.shape
+    (4, 64, 16, 16)
+
+    Verify inference:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy = nn.LazyConvTranspose2d(out_channels=32, kernel_size=3)
+    >>> _ = lazy(lucid.zeros(1, 64, 4, 4))
+    >>> print(lazy.in_channels)
+    64
+    """
 
     def __init__(
         self,
@@ -1241,7 +2386,95 @@ class LazyConvTranspose2d(ConvTranspose2d):
 
 
 class LazyConvTranspose3d(ConvTranspose3d):
-    """ConvTranspose3d with lazy ``in_channels`` inference."""
+    r"""A :class:`ConvTranspose3d` that infers ``in_channels`` from the first input.
+
+    Lazy version of the 3D transposed convolution.  Combines volumetric
+    upsampling with deferred weight allocation, simplifying the
+    construction of 3D generative decoders and medical image synthesis
+    networks where channel dimensions are computed dynamically.
+
+    Parameters
+    ----------
+    out_channels : int
+        Number of output channels.
+    kernel_size : int or tuple[int, int, int]
+        Size of the 3D convolving kernel.
+    stride : int or tuple[int, int, int], optional
+        Stride (upsampling factor). Default: ``1``.
+    padding : int or tuple[int, int, int], optional
+        ``dilation * (kernel_size - 1) - padding`` zero-padding applied
+        on each side of each spatial axis.  String padding is not
+        supported. Default: ``0``.
+    output_padding : int or tuple[int, int, int], optional
+        Additional size added to one side of each spatial output
+        dimension. Default: ``0``.
+    groups : int, optional
+        Number of blocked connections. Default: ``1``.
+    bias : bool, optional
+        If ``True``, a learnable bias is added after materialization.
+        Default: ``True``.
+    dilation : int or tuple[int, int, int], optional
+        Spacing between kernel elements. Default: ``1``.
+    device : DeviceLike, optional
+        Device used when allocating weights. Default: ``None``.
+    dtype : DTypeLike, optional
+        Data type used when allocating weights. Default: ``None``.
+
+    Attributes
+    ----------
+    weight : Parameter or None
+        ``None`` before materialization; shape
+        ``(in_channels, out_channels // groups, K_D, K_H, K_W)``
+        afterwards.
+    bias : Parameter or None
+        ``None`` before materialization; ``(out_channels,)`` if
+        ``bias=True``.
+    in_channels : int or None
+        ``None`` before the first forward pass.
+
+    Shape
+    -----
+    Input:
+        :math:`(N, C_{\text{in}}, D, H, W)` — :math:`C_{\text{in}}` is
+        inferred automatically.
+    Output:
+        :math:`(N, C_{\text{out}}, D_{\text{out}}, H_{\text{out}}, W_{\text{out}})` —
+        same formula as :class:`ConvTranspose3d`.
+
+    Notes
+    -----
+    **State-dict loading.**  A 5-D ``weight`` tensor triggers
+    materialization before parameter copying.
+
+    **Symmetric 3D encoder–decoder.**  Pair each :class:`LazyConv3d`
+    with a :class:`LazyConvTranspose3d` using matching ``kernel_size``,
+    ``stride``, and ``padding`` for lossless spatial reconstruction.
+
+    Examples
+    --------
+    Lazy 3D decoder block:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> up3d = nn.LazyConvTranspose3d(
+    ...     out_channels=32, kernel_size=4, stride=2, padding=1
+    ... )
+    >>> x = lucid.zeros(2, 64, 4, 8, 8)   # in_channels=64 inferred
+    >>> y = up3d(x)
+    >>> y.shape
+    (2, 32, 8, 16, 16)
+
+    Verify materialization:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> lazy = nn.LazyConvTranspose3d(out_channels=16, kernel_size=3, padding=1)
+    >>> print(lazy.in_channels)
+    None
+    >>> _ = lazy(lucid.zeros(1, 8, 4, 4, 4))
+    >>> print(lazy.in_channels)
+    8
+    """
 
     def __init__(
         self,
