@@ -19,7 +19,6 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
 
-
 # ---------------------------------------------------------------------------
 # Squeeze-and-Excitation block (Hard-sigmoid gating)
 # ---------------------------------------------------------------------------

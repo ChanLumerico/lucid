@@ -17,7 +17,6 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 
-
 # ---------------------------------------------------------------------------
 # §1  Box operations
 # ---------------------------------------------------------------------------
@@ -81,8 +80,8 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     area1 = box_area(boxes1)  # (N,)
     area2 = box_area(boxes2)  # (M,)
 
-    b1 = boxes1[:, None, :]   # (N, 1, 4)
-    b2 = boxes2[None, :, :]   # (1, M, 4)
+    b1 = boxes1[:, None, :]  # (N, 1, 4)
+    b2 = boxes2[None, :, :]  # (1, M, 4)
 
     # Intersection
     inter_x1: Tensor = lucid.maximum(b1[..., 0], b2[..., 0])
@@ -135,8 +134,8 @@ def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
     """
     cx = boxes[..., 0:1]
     cy = boxes[..., 1:2]
-    w  = boxes[..., 2:3]
-    h  = boxes[..., 3:4]
+    w = boxes[..., 2:3]
+    h = boxes[..., 3:4]
     return lucid.cat([cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0], dim=-1)
 
 
@@ -171,7 +170,8 @@ def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
     ws = boxes[:, 2] - boxes[:, 0]
     hs = boxes[:, 3] - boxes[:, 1]
     keep: list[int] = [
-        i for i in range(int(boxes.shape[0]))
+        i
+        for i in range(int(boxes.shape[0]))
         if float(ws[i].item()) >= min_size and float(hs[i].item()) >= min_size
     ]
     if not keep:
@@ -229,8 +229,8 @@ def decode_boxes(
     anc = box_xyxy_to_cxcywh(anchors)
     acx = anc[:, 0]
     acy = anc[:, 1]
-    aw  = anc[:, 2]
-    ah  = anc[:, 3]
+    aw = anc[:, 2]
+    ah = anc[:, 3]
 
     dx = deltas[:, 0] / wx
     dy = deltas[:, 1] / wy
@@ -239,8 +239,8 @@ def decode_boxes(
 
     pred_cx = dx * aw + acx
     pred_cy = dy * ah + acy
-    pred_w  = lucid.exp(dw) * aw
-    pred_h  = lucid.exp(dh) * ah
+    pred_w = lucid.exp(dw) * aw
+    pred_h = lucid.exp(dh) * ah
 
     x1 = pred_cx - pred_w / 2.0
     y1 = pred_cy - pred_h / 2.0
@@ -295,12 +295,12 @@ def nms(
         if suppressed[idx]:
             continue
         keep.append(idx)
-        box_i = boxes[idx:idx + 1]  # (1, 4)
+        box_i = boxes[idx : idx + 1]  # (1, 4)
         for j in range(i + 1, len(order)):
             jdx = order[j]
             if suppressed[jdx]:
                 continue
-            box_j = boxes[jdx:jdx + 1]  # (1, 4)
+            box_j = boxes[jdx : jdx + 1]  # (1, 4)
             iou_val = float(box_iou(box_i, box_j)[0, 0].item())
             if iou_val > iou_threshold:
                 suppressed[jdx] = True
@@ -356,15 +356,13 @@ class AnchorGenerator(nn.Module):
 
     def __init__(
         self,
-        sizes: tuple[tuple[int, ...], ...] = (
-            (32,), (64,), (128,), (256,), (512,)
-        ),
+        sizes: tuple[tuple[int, ...], ...] = ((32,), (64,), (128,), (256,), (512,)),
         aspect_ratios: tuple[tuple[float, ...], ...] = ((0.5, 1.0, 2.0),) * 5,
     ) -> None:
         super().__init__()
-        assert len(sizes) == len(aspect_ratios), (
-            "sizes and aspect_ratios must have the same number of levels"
-        )
+        assert len(sizes) == len(
+            aspect_ratios
+        ), "sizes and aspect_ratios must have the same number of levels"
         self.sizes = sizes
         self.aspect_ratios = aspect_ratios
         self._cell_anchors: list[Tensor] = self._compute_cell_anchors()
@@ -436,9 +434,7 @@ class AnchorGenerator(nn.Module):
         """
         assert len(feature_maps) == len(self._cell_anchors)
         all_anchors: list[Tensor] = []
-        for feat, base, stride in zip(
-            feature_maps, self._cell_anchors, strides
-        ):
+        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
             fH = int(feat.shape[2])
             fW = int(feat.shape[3])
             all_anchors.append(self._grid_anchors((fH, fW), stride, base))
@@ -491,7 +487,7 @@ def roi_align(
         if N == 0:
             continue
 
-        feat: Tensor = input[b_idx:b_idx + 1]  # (1, C, H, W)
+        feat: Tensor = input[b_idx : b_idx + 1]  # (1, C, H, W)
 
         x1 = roi_boxes[:, 0] * spatial_scale
         y1 = roi_boxes[:, 1] * spatial_scale
@@ -635,17 +631,16 @@ class FPN(nn.Module):
             [nn.Conv2d(ic, out_channels, 1) for ic in in_channels]
         )
         self.output_convs = nn.ModuleList(
-            [nn.Conv2d(out_channels, out_channels, 3, padding=1)
-             for _ in range(n)]
+            [nn.Conv2d(out_channels, out_channels, 3, padding=1) for _ in range(n)]
         )
         self.extra_convs = nn.ModuleList(
-            [nn.Conv2d(out_channels, out_channels, 3, stride=2, padding=1)
-             for _ in range(extra_blocks)]
+            [
+                nn.Conv2d(out_channels, out_channels, 3, stride=2, padding=1)
+                for _ in range(extra_blocks)
+            ]
         )
 
-    def forward(  # type: ignore[override]
-        self, features: list[Tensor]
-    ) -> list[Tensor]:
+    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """
         Args:
             features: Bottom-up maps, finest → coarsest (e.g. C2, C3, C4, C5).
@@ -655,8 +650,7 @@ class FPN(nn.Module):
         """
         # Lateral projections
         laterals: list[Tensor] = [
-            cast(Tensor, lat(f))
-            for lat, f in zip(self.lateral_convs, features)
+            cast(Tensor, lat(f)) for lat, f in zip(self.lateral_convs, features)
         ]
 
         # Top-down: merge from coarsest to finest
@@ -667,8 +661,7 @@ class FPN(nn.Module):
 
         # 3×3 output convolutions (anti-aliasing)
         outs: list[Tensor] = [
-            cast(Tensor, conv(lat))
-            for conv, lat in zip(self.output_convs, laterals)
+            cast(Tensor, conv(lat)) for conv, lat in zip(self.output_convs, laterals)
         ]
 
         # Extra coarser levels
@@ -711,15 +704,15 @@ class RPN(nn.Module):
         score_thresh: float = 0.0,
     ) -> None:
         super().__init__()
-        self.pre_nms_top_n  = pre_nms_top_n
+        self.pre_nms_top_n = pre_nms_top_n
         self.post_nms_top_n = post_nms_top_n
-        self.nms_threshold  = nms_threshold
-        self.min_size       = min_size
-        self.score_thresh   = score_thresh
+        self.nms_threshold = nms_threshold
+        self.min_size = min_size
+        self.score_thresh = score_thresh
 
-        self.conv       = nn.Conv2d(in_channels, in_channels, 3, padding=1)
+        self.conv = nn.Conv2d(in_channels, in_channels, 3, padding=1)
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, 1)
-        self.bbox_pred  = nn.Conv2d(in_channels, num_anchors * 4, 1)
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
 
     def forward(  # type: ignore[override]
         self,
@@ -741,30 +734,30 @@ class RPN(nn.Module):
         """
         B = int(features[0].shape[0])
         all_proposals: list[list[Tensor]] = [[] for _ in range(B)]
-        all_scores:    list[list[Tensor]] = [[] for _ in range(B)]
+        all_scores: list[list[Tensor]] = [[] for _ in range(B)]
 
         for feat, level_anchors in zip(features, anchors):
             t = F.relu(cast(Tensor, self.conv(feat)))
-            logits = cast(Tensor, self.cls_logits(t))   # (B, A, H, W)
-            deltas = cast(Tensor, self.bbox_pred(t))     # (B, 4A, H, W)
+            logits = cast(Tensor, self.cls_logits(t))  # (B, A, H, W)
+            deltas = cast(Tensor, self.bbox_pred(t))  # (B, 4A, H, W)
 
             A = int(logits.shape[1])
             fH = int(logits.shape[2])
             fW = int(logits.shape[3])
 
-            scores_flat = F.sigmoid(logits.reshape(B, -1))   # (B, A*H*W)
+            scores_flat = F.sigmoid(logits.reshape(B, -1))  # (B, A*H*W)
             deltas_flat = deltas.reshape(B, A * fH * fW, 4)  # (B, A*H*W, 4)
 
             for b in range(B):
-                sc = scores_flat[b]       # (N_anc,)
-                dl = deltas_flat[b]       # (N_anc, 4)
+                sc = scores_flat[b]  # (N_anc,)
+                dl = deltas_flat[b]  # (N_anc, 4)
 
                 K = min(self.pre_nms_top_n, int(sc.shape[0]))
                 # argsort ascending on negated scores → top-K indices
                 topk_idx = lucid.argsort(-sc)[:K]
 
-                topk_sc  = sc[topk_idx]
-                topk_dl  = dl[topk_idx]
+                topk_sc = sc[topk_idx]
+                topk_dl = dl[topk_idx]
                 topk_anc = level_anchors[topk_idx]
 
                 props = decode_boxes(topk_dl, topk_anc)
@@ -774,25 +767,26 @@ class RPN(nn.Module):
                 if int(keep_small.shape[0]) == 0:
                     continue
 
-                props    = props[keep_small]
-                topk_sc  = topk_sc[keep_small]
+                props = props[keep_small]
+                topk_sc = topk_sc[keep_small]
 
                 score_mask: list[int] = [
-                    i for i in range(int(props.shape[0]))
+                    i
+                    for i in range(int(props.shape[0]))
                     if float(topk_sc[i].item()) >= self.score_thresh
                 ]
                 if not score_mask:
                     continue
 
                 mask_t = lucid.tensor(score_mask)
-                props   = props[mask_t]
+                props = props[mask_t]
                 topk_sc = topk_sc[mask_t]
 
                 all_proposals[b].append(props)
                 all_scores[b].append(topk_sc)
 
         final_proposals: list[Tensor] = []
-        final_scores:    list[Tensor] = []
+        final_scores: list[Tensor] = []
 
         for b in range(B):
             if not all_proposals[b]:
@@ -801,10 +795,10 @@ class RPN(nn.Module):
                 continue
 
             props_b = lucid.cat(all_proposals[b], dim=0)
-            sc_b    = lucid.cat(all_scores[b], dim=0)
+            sc_b = lucid.cat(all_scores[b], dim=0)
 
             keep = nms(props_b, sc_b, self.nms_threshold)
-            K2   = min(self.post_nms_top_n, int(keep.shape[0]))
+            K2 = min(self.post_nms_top_n, int(keep.shape[0]))
             keep = keep[:K2]
 
             final_proposals.append(props_b[keep])
@@ -845,9 +839,7 @@ class RoIHead(nn.Module):
         self.cls_score = nn.Linear(representation_size, num_classes + 1)
         self.bbox_pred = nn.Linear(representation_size, num_classes * 4)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """
         Args:
             x: (N_rois, C, roi_h, roi_w) RoI-aligned feature crops.
@@ -861,5 +853,5 @@ class RoIHead(nn.Module):
         x = F.relu(cast(Tensor, self.fc6(x)))
         x = F.relu(cast(Tensor, self.fc7(x)))
         class_logits = cast(Tensor, self.cls_score(x))
-        box_deltas   = cast(Tensor, self.bbox_pred(x))
+        box_deltas = cast(Tensor, self.bbox_pred(x))
         return class_logits, box_deltas

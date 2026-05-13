@@ -242,6 +242,11 @@ from lucid.models.vision.fast_rcnn import (
     FastRCNNConfig, FastRCNNForObjectDetection,
     fast_rcnn,
 )
+# 2015 — Faster R-CNN (Ren et al.)
+from lucid.models.vision.faster_rcnn import (
+    FasterRCNNConfig, FasterRCNNForObjectDetection,
+    faster_rcnn,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -386,4 +391,7 @@ __all__ = [
     # ── Vision (2015) Fast R-CNN ──────────────────────────────────────────────
     "FastRCNNConfig", "FastRCNNForObjectDetection",
     "fast_rcnn",
+    # ── Vision (2015) Faster R-CNN ────────────────────────────────────────────
+    "FasterRCNNConfig", "FasterRCNNForObjectDetection",
+    "faster_rcnn",
 ]
