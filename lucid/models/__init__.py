@@ -237,6 +237,11 @@ from lucid.models.vision.rcnn import (
     RCNNConfig, RCNNForObjectDetection,
     rcnn,
 )
+# 2015 — Fast R-CNN (Girshick)
+from lucid.models.vision.fast_rcnn import (
+    FastRCNNConfig, FastRCNNForObjectDetection,
+    fast_rcnn,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -378,4 +383,7 @@ __all__ = [
     # ── Vision (2014) R-CNN ───────────────────────────────────────────────────
     "RCNNConfig", "RCNNForObjectDetection",
     "rcnn",
+    # ── Vision (2015) Fast R-CNN ──────────────────────────────────────────────
+    "FastRCNNConfig", "FastRCNNForObjectDetection",
+    "fast_rcnn",
 ]
