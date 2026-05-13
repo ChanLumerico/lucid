@@ -10,20 +10,28 @@ from lucid.test.parity.models._utils import (
     _spec_param,
 )
 
-_FACTORIES = frozenset({
-    M.deit_tiny_cls, M.deit_small_cls, M.deit_base_cls, M.deit_base_patch32_cls,
-})
+_FACTORIES = frozenset(
+    {
+        M.deit_tiny_cls,
+        M.deit_small_cls,
+        M.deit_base_cls,
+        M.deit_base_patch32_cls,
+    }
+)
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]
 _TIMM = [s for s in _SPECS if s.timm_name is not None]
 _SC = [s for s in _SPECS if s.timm_name is None]
 
 if _TIMM:
+
     @requires_timm
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _TIMM])
     def test_parity(spec: ParitySpec) -> None:
         _run_parity(spec)
 
+
 if _SC:
+
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _SC])
     def test_self_consistency(spec: ParitySpec) -> None:
         _run_self_consistency(spec)

@@ -16,12 +16,12 @@ _CFG_1_1 = SqueezeNetConfig(version="1_1")
 
 
 def _b(cfg: SqueezeNetConfig, kw: dict[str, object]) -> SqueezeNet:
-    return SqueezeNet(
-        SqueezeNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return SqueezeNet(SqueezeNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
 
 
-def _c(cfg: SqueezeNetConfig, kw: dict[str, object]) -> SqueezeNetForImageClassification:
+def _c(
+    cfg: SqueezeNetConfig, kw: dict[str, object]
+) -> SqueezeNetForImageClassification:
     return SqueezeNetForImageClassification(
         SqueezeNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

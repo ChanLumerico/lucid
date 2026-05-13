@@ -13,9 +13,7 @@ def _b(cfg: MnasNetConfig, kw: dict[str, object]) -> MnasNet:
     return MnasNet(MnasNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
 
 
-def _c(
-    cfg: MnasNetConfig, kw: dict[str, object]
-) -> MnasNetForImageClassification:
+def _c(cfg: MnasNetConfig, kw: dict[str, object]) -> MnasNetForImageClassification:
     return MnasNetForImageClassification(
         MnasNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

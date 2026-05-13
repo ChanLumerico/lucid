@@ -73,17 +73,17 @@ class _Attention(nn.Module):
         # (B, N, 3*C) → (B, N, 3, H, D) → (3, B, H, N, D)
         qkv = cast(Tensor, self.qkv(x))
         qkv = qkv.reshape(B, N, 3, H, D).permute(2, 0, 3, 1, 4)
-        q = cast(Tensor, qkv[0])
-        k = cast(Tensor, qkv[1])
-        v = cast(Tensor, qkv[2])
+        q: Tensor = qkv[0]
+        k: Tensor = qkv[1]
+        v: Tensor = qkv[2]
 
         # Scaled dot-product attention
-        attn = cast(Tensor, q @ k.permute(0, 1, 3, 2)) / self.scale
+        attn: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
         attn = cast(Tensor, F.softmax(attn, dim=-1))
         attn = cast(Tensor, self.attn_drop(attn))
 
         # (B, H, N, D) → (B, N, H*D) = (B, N, C)
-        out = cast(Tensor, attn @ v)
+        out: Tensor = attn @ v
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 
@@ -138,13 +138,13 @@ class _Block(nn.Module):
 
 def _build_trunk(cfg: DeiTConfig) -> tuple[
     _PatchEmbed,
-    Tensor,         # cls_token parameter
-    Tensor,         # dist_token parameter
-    Tensor,         # pos_embed parameter
+    Tensor,  # cls_token parameter
+    Tensor,  # dist_token parameter
+    Tensor,  # pos_embed parameter
     nn.Dropout,
     nn.ModuleList,  # blocks
-    nn.LayerNorm,   # norm
-    int,            # num_patches
+    nn.LayerNorm,  # norm
+    int,  # num_patches
 ]:
     num_patches = (cfg.image_size // cfg.patch_size) ** 2
     mlp_dim = int(cfg.dim * cfg.mlp_ratio)
@@ -169,7 +169,16 @@ def _build_trunk(cfg: DeiTConfig) -> tuple[
     )
     norm = nn.LayerNorm(cfg.dim)
 
-    return patch_embed, cls_token, dist_token, pos_embed, drop, blocks, norm, num_patches
+    return (
+        patch_embed,
+        cls_token,
+        dist_token,
+        pos_embed,
+        drop,
+        blocks,
+        norm,
+        num_patches,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -214,17 +223,17 @@ class DeiT(PretrainedModel, BackboneMixin):
 
     def forward_features(self, x: Tensor) -> Tensor:
         B = x.shape[0]
-        x = cast(Tensor, self.patch_embed(x))           # (B, N, dim)
-        cls = self.cls_token.expand(B, -1, -1)          # (B, 1, dim)
-        dist = self.dist_token.expand(B, -1, -1)        # (B, 1, dim)
-        x = lucid.cat([cls, dist, x], dim=1)            # (B, N+2, dim)
+        x = cast(Tensor, self.patch_embed(x))  # (B, N, dim)
+        cls = self.cls_token.expand(B, -1, -1)  # (B, 1, dim)
+        dist = self.dist_token.expand(B, -1, -1)  # (B, 1, dim)
+        x = lucid.cat([cls, dist, x], dim=1)  # (B, N+2, dim)
         x = cast(Tensor, self.pos_drop(x + self.pos_embed))
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         x = cast(Tensor, self.norm(x))
         # Average of cls (position 0) and dist (position 1) tokens
-        cls_out = cast(Tensor, x[:, 0])
-        dist_out = cast(Tensor, x[:, 1])
+        cls_out: Tensor = x[:, 0]
+        dist_out: Tensor = x[:, 1]
         return (cls_out + dist_out) / 2  # (B, dim)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -274,14 +283,14 @@ class DeiTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x = cast(Tensor, self.patch_embed(x))
         cls = self.cls_token.expand(B, -1, -1)
         dist = self.dist_token.expand(B, -1, -1)
-        x = lucid.cat([cls, dist, x], dim=1)            # (B, N+2, dim)
+        x = lucid.cat([cls, dist, x], dim=1)  # (B, N+2, dim)
         x = cast(Tensor, self.pos_drop(x + self.pos_embed))
         for blk in self.blocks:
             x = cast(Tensor, blk(x))
         x = cast(Tensor, self.norm(x))
 
-        cls_out = cast(Tensor, x[:, 0])                  # (B, dim)
-        dist_out = cast(Tensor, x[:, 1])                 # (B, dim)
+        cls_out: Tensor = x[:, 0]  # (B, dim)
+        dist_out: Tensor = x[:, 1]  # (B, dim)
         cls_logits = cast(Tensor, self.head(cls_out))
         dist_logits = cast(Tensor, self.head_dist(dist_out))
         # Average predictions from both heads (inference protocol)

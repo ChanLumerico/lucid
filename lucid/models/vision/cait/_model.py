@@ -31,7 +31,6 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.cait._config import CaiTConfig
 
-
 # ---------------------------------------------------------------------------
 # Patch embedding (shared with ViT pattern)
 # ---------------------------------------------------------------------------
@@ -113,17 +112,17 @@ class _Attention(nn.Module):
         B, N, C = x.shape
         H, D = self.num_heads, self.head_dim
 
-        qkv = cast(Tensor, self.qkv(x))                      # (B, N, 3C)
+        qkv = cast(Tensor, self.qkv(x))  # (B, N, 3C)
         qkv = qkv.reshape(B, N, 3, H, D).permute(2, 0, 3, 1, 4)
-        q: Tensor = qkv[0]                                    # (B, H, N, D)
+        q: Tensor = qkv[0]  # (B, H, N, D)
         k: Tensor = qkv[1]
         v: Tensor = qkv[2]
 
-        attn = q @ k.permute(0, 1, 3, 2) / self.scale        # (B, H, N, N)
+        attn = q @ k.permute(0, 1, 3, 2) / self.scale  # (B, H, N, N)
         attn = F.softmax(attn, dim=-1)
         attn = cast(Tensor, self.attn_drop(attn))
 
-        out = attn @ v                                        # (B, H, N, D)
+        out = attn @ v  # (B, H, N, D)
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 
@@ -169,9 +168,9 @@ class _ClassAttention(nn.Module):
         attn = F.softmax(attn, dim=-1)
         attn = cast(Tensor, self.attn_drop(attn))
 
-        out = attn @ v                              # (B, H, 1, D)
+        out = attn @ v  # (B, H, 1, D)
         out = out.permute(0, 2, 1, 3).reshape(B, 1, C)
-        return cast(Tensor, self.proj(out))          # (B, 1, C)
+        return cast(Tensor, self.proj(out))  # (B, 1, C)
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +202,24 @@ class _SelfAttnBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, N, C) — patch tokens only
-        x = x + cast(Tensor, self.drop(cast(Tensor, self.ls1(cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))))))
-        x = x + cast(Tensor, self.drop(cast(Tensor, self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))))))
+        x = x + cast(
+            Tensor,
+            self.drop(
+                cast(
+                    Tensor,
+                    self.ls1(cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))),
+                )
+            ),
+        )
+        x = x + cast(
+            Tensor,
+            self.drop(
+                cast(
+                    Tensor,
+                    self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))),
+                )
+            ),
+        )
         return x
 
 
@@ -242,10 +257,14 @@ class _ClassAttnBlock(nn.Module):
         # x:   (B, N, C)   — patch tokens (unchanged by this block)
         # cls: (B, 1, C)   — class token
         # Concatenate for LN and attention input
-        xc = lucid.cat([cls, x], dim=1)             # (B, N+1, C)
+        xc = lucid.cat([cls, x], dim=1)  # (B, N+1, C)
         xc_norm = cast(Tensor, self.norm1(xc))
-        cls = cls + cast(Tensor, self.ls1(cast(Tensor, self.attn(xc_norm))))   # (B, 1, C)
-        cls = cls + cast(Tensor, self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(cls))))))
+        cls = cls + cast(
+            Tensor, self.ls1(cast(Tensor, self.attn(xc_norm)))
+        )  # (B, 1, C)
+        cls = cls + cast(
+            Tensor, self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(cls)))))
+        )
         return x, cls
 
 
@@ -256,13 +275,13 @@ class _ClassAttnBlock(nn.Module):
 
 def _build_cait(cfg: CaiTConfig) -> tuple[
     _PatchEmbed,
-    Tensor,           # cls_token parameter
-    Tensor,           # pos_embed parameter
+    Tensor,  # cls_token parameter
+    Tensor,  # pos_embed parameter
     nn.Dropout,
-    nn.ModuleList,    # self-attention blocks
-    nn.ModuleList,    # class-attention blocks
-    nn.LayerNorm,     # final norm
-    int,              # num_patches
+    nn.ModuleList,  # self-attention blocks
+    nn.ModuleList,  # class-attention blocks
+    nn.LayerNorm,  # final norm
+    int,  # num_patches
 ]:
     num_patches = (cfg.image_size // cfg.patch_size) ** 2
 
@@ -276,24 +295,45 @@ def _build_cait(cfg: CaiTConfig) -> tuple[
 
     pos_drop = nn.Dropout(p=cfg.dropout)
 
-    sa_blocks = nn.ModuleList([
-        _SelfAttnBlock(
-            cfg.dim, cfg.num_heads, cfg.mlp_ratio,
-            cfg.dropout, cfg.attention_dropout, cfg.layer_scale_init,
-        )
-        for _ in range(cfg.depth)
-    ])
+    sa_blocks = nn.ModuleList(
+        [
+            _SelfAttnBlock(
+                cfg.dim,
+                cfg.num_heads,
+                cfg.mlp_ratio,
+                cfg.dropout,
+                cfg.attention_dropout,
+                cfg.layer_scale_init,
+            )
+            for _ in range(cfg.depth)
+        ]
+    )
 
-    ca_blocks = nn.ModuleList([
-        _ClassAttnBlock(
-            cfg.dim, cfg.num_heads, cfg.mlp_ratio,
-            cfg.dropout, cfg.attention_dropout, cfg.layer_scale_init,
-        )
-        for _ in range(cfg.class_depth)
-    ])
+    ca_blocks = nn.ModuleList(
+        [
+            _ClassAttnBlock(
+                cfg.dim,
+                cfg.num_heads,
+                cfg.mlp_ratio,
+                cfg.dropout,
+                cfg.attention_dropout,
+                cfg.layer_scale_init,
+            )
+            for _ in range(cfg.class_depth)
+        ]
+    )
 
     norm = nn.LayerNorm(cfg.dim)
-    return patch_embed, cls_token, pos_embed, pos_drop, sa_blocks, ca_blocks, norm, num_patches
+    return (
+        patch_embed,
+        cls_token,
+        pos_embed,
+        pos_drop,
+        sa_blocks,
+        ca_blocks,
+        norm,
+        num_patches,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +375,7 @@ class CaiT(PretrainedModel, BackboneMixin):
 
     def forward_features(self, x: Tensor) -> Tensor:
         B = x.shape[0]
-        x = cast(Tensor, self.patch_embed(x))         # (B, N, dim)
+        x = cast(Tensor, self.patch_embed(x))  # (B, N, dim)
         x = cast(Tensor, self.pos_drop(x + self.pos_embed))
 
         # Self-attention stage — patch tokens only
@@ -343,13 +383,13 @@ class CaiT(PretrainedModel, BackboneMixin):
             x = cast(Tensor, blk(x))
 
         # Class-attention stage — insert cls token
-        cls = self.cls_token.expand(B, -1, -1)        # (B, 1, dim)
+        cls = self.cls_token.expand(B, -1, -1)  # (B, 1, dim)
         for blk in self.class_blocks:
             x, cls = blk(x, cls)
 
         # Normalise and return cls token
         cls = cast(Tensor, self.norm(cls))
-        cls_out: Tensor = cls[:, 0]                    # (B, dim)
+        cls_out: Tensor = cls[:, 0]  # (B, dim)
         return cls_out
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]

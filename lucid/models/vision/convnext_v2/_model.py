@@ -55,8 +55,8 @@ class _GRN(nn.Module):
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, H, W, C)
         # Compute L2 norm over spatial dims (1, 2), keepdim → (B, 1, 1, C)
-        gx = cast(Tensor, (x * x).sum(dim=(1, 2), keepdim=True))
-        gx = cast(Tensor, (gx + 1e-6) ** 0.5)
+        gx: Tensor = (x * x).sum(dim=(1, 2), keepdim=True)
+        gx = (gx + 1e-6) ** 0.5
         # Normalise across channels: divide by mean over C dim
         nx = gx / (gx.mean(dim=-1, keepdim=True) + 1e-6)
         return self.gamma * (x * nx) + self.beta + x
@@ -81,15 +81,15 @@ class _ConvNeXtV2Block(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
-        x = cast(Tensor, self.dwconv(x))   # (B, C, H, W)
-        x = x.permute(0, 2, 3, 1)          # (B, H, W, C)
+        x = cast(Tensor, self.dwconv(x))  # (B, C, H, W)
+        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
         x = cast(Tensor, self.fc1(x))
         x = F.gelu(x)
-        x = cast(Tensor, self.grn(x))      # GRN after GELU, on 4C features
+        x = cast(Tensor, self.grn(x))  # GRN after GELU, on 4C features
         x = cast(Tensor, self.fc2(x))
-        x = x * self.gamma                 # layer scale
-        x = x.permute(0, 3, 1, 2)          # (B, C, H, W)
+        x = x * self.gamma  # layer scale
+        x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
         return shortcut + x
 
 
@@ -124,10 +124,10 @@ class _StemWithNorm(nn.Module):
         self.norm = norm
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.conv(x))    # (B, C, H, W)
-        x = x.permute(0, 2, 3, 1)        # (B, H, W, C)
+        x = cast(Tensor, self.conv(x))  # (B, C, H, W)
+        x = x.permute(0, 2, 3, 1)  # (B, H, W, C)
         x = cast(Tensor, self.norm(x))
-        return x.permute(0, 3, 1, 2)     # (B, C, H, W)
+        return x.permute(0, 3, 1, 2)  # (B, C, H, W)
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +137,11 @@ class _StemWithNorm(nn.Module):
 
 def _build_convnext_v2(cfg: ConvNeXtV2Config) -> tuple[
     _StemWithNorm,
-    nn.ModuleList,   # stages
-    nn.ModuleList,   # downsamplers
-    nn.LayerNorm,    # head norm
+    nn.ModuleList,  # stages
+    nn.ModuleList,  # downsamplers
+    nn.LayerNorm,  # head norm
     list[FeatureInfo],
-    int,             # final channels
+    int,  # final channels
 ]:
     stem_conv = nn.Sequential(
         nn.Conv2d(cfg.in_channels, cfg.dims[0], 4, stride=4),
@@ -214,7 +214,7 @@ class ConvNeXtV2(PretrainedModel, BackboneMixin):
         x = cast(Tensor, self.avgpool(x)).flatten(1)  # (B, C)
         # Apply head norm in channel-last
         x = x.unsqueeze(-1).unsqueeze(-1)  # (B, C, 1, 1)
-        x = x.permute(0, 2, 3, 1)          # (B, 1, 1, C)
+        x = x.permute(0, 2, 3, 1)  # (B, 1, 1, C)
         x = cast(Tensor, self.head_norm(x))
         return x.permute(0, 3, 1, 2).flatten(1)  # (B, C)
 

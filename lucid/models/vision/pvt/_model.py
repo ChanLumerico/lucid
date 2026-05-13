@@ -237,9 +237,7 @@ class _PVTStage(nn.Module):
         # x is a spatial map (B, C_in, H_in, W_in).
         # For stage 0 this should NOT be called directly — call forward_tokens.
         # For stages 1-3, downsample first, then run blocks.
-        tokens, H, W = cast(
-            tuple[Tensor, int, int], self.downsample(x)  # type: ignore[attr-defined]
-        )
+        tokens, H, W = cast(tuple[Tensor, int, int], self.downsample(x))
         return self.forward_tokens(tokens, H, W)
 
 
@@ -323,10 +321,7 @@ class PVT(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         # Stage 0: use top-level patch_embed then stage blocks
         tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
-        x_spatial, H, W = cast(
-            tuple[Tensor, int, int],
-            self.stages[0].forward_tokens(tokens, H, W),  # type: ignore[union-attr]
-        )
+        x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
         # Stages 1-3: each stage calls its own downsample internally
         for stage in list(self.stages)[1:]:
             x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))
@@ -361,10 +356,7 @@ class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
     ) -> ImageClassificationOutput:
         # Stage 0: use top-level patch_embed then stage blocks
         tokens, H, W = cast(tuple[Tensor, int, int], self.patch_embed(x))
-        x_spatial, H, W = cast(
-            tuple[Tensor, int, int],
-            self.stages[0].forward_tokens(tokens, H, W),  # type: ignore[union-attr]
-        )
+        x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
         # Stages 1-3
         for stage in list(self.stages)[1:]:
             x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))

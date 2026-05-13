@@ -166,9 +166,7 @@ class _WindowAttentionV2(nn.Module):
 
         # V2 Change 1: learnable log-scale temperature τ per head.
         # Initialised at log(10); clamped to [0, log(100)] during forward.
-        self.logit_scale = nn.Parameter(
-            lucid.full((num_heads, 1, 1), math.log(10.0))
-        )
+        self.logit_scale = nn.Parameter(lucid.full((num_heads, 1, 1), math.log(10.0)))
 
         # V2 Change 2: CPB MLP — 2 → 512 → num_heads (no bias on output layer)
         self.cpb_mlp = nn.Sequential(

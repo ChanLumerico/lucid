@@ -44,48 +44,48 @@ from lucid.models.vision.efficientnet_v2._config import EfficientNetV2Config
 _StageSpec = tuple[str, int, int, int, int, int, int, float]
 
 _STAGES_SMALL: list[_StageSpec] = [
-    ("fused",  1, 3, 1,  24,  24,  2, 0.0),
-    ("fused",  4, 3, 2,  24,  48,  4, 0.0),
-    ("fused",  4, 3, 2,  48,  64,  4, 0.0),
-    ("mbconv", 4, 3, 2,  64, 128,  6, 0.25),
-    ("mbconv", 6, 3, 1, 128, 160,  9, 0.25),
+    ("fused", 1, 3, 1, 24, 24, 2, 0.0),
+    ("fused", 4, 3, 2, 24, 48, 4, 0.0),
+    ("fused", 4, 3, 2, 48, 64, 4, 0.0),
+    ("mbconv", 4, 3, 2, 64, 128, 6, 0.25),
+    ("mbconv", 6, 3, 1, 128, 160, 9, 0.25),
     ("mbconv", 6, 3, 2, 160, 256, 15, 0.25),
 ]
 
 _STAGES_MEDIUM: list[_StageSpec] = [
-    ("fused",  1, 3, 1,  24,  24,  3, 0.0),
-    ("fused",  4, 3, 2,  24,  48,  5, 0.0),
-    ("fused",  4, 3, 2,  48,  80,  5, 0.0),
-    ("mbconv", 4, 3, 2,  80, 160,  7, 0.25),
+    ("fused", 1, 3, 1, 24, 24, 3, 0.0),
+    ("fused", 4, 3, 2, 24, 48, 5, 0.0),
+    ("fused", 4, 3, 2, 48, 80, 5, 0.0),
+    ("mbconv", 4, 3, 2, 80, 160, 7, 0.25),
     ("mbconv", 6, 3, 1, 160, 176, 14, 0.25),
     ("mbconv", 6, 3, 2, 176, 304, 18, 0.25),
-    ("mbconv", 6, 3, 1, 304, 512,  5, 0.25),
+    ("mbconv", 6, 3, 1, 304, 512, 5, 0.25),
 ]
 
 _STAGES_LARGE: list[_StageSpec] = [
-    ("fused",  1, 3, 1,  32,  32,  4, 0.0),
-    ("fused",  4, 3, 2,  32,  64,  7, 0.0),
-    ("fused",  4, 3, 2,  64,  96,  7, 0.0),
-    ("mbconv", 4, 3, 2,  96, 192, 10, 0.25),
+    ("fused", 1, 3, 1, 32, 32, 4, 0.0),
+    ("fused", 4, 3, 2, 32, 64, 7, 0.0),
+    ("fused", 4, 3, 2, 64, 96, 7, 0.0),
+    ("mbconv", 4, 3, 2, 96, 192, 10, 0.25),
     ("mbconv", 6, 3, 1, 192, 224, 19, 0.25),
     ("mbconv", 6, 3, 2, 224, 384, 25, 0.25),
-    ("mbconv", 6, 3, 1, 384, 640,  7, 0.25),
+    ("mbconv", 6, 3, 1, 384, 640, 7, 0.25),
 ]
 
 _STAGES_XLARGE: list[_StageSpec] = [
-    ("fused",  1, 3, 1,  32,  32,  4, 0.0),
-    ("fused",  4, 3, 2,  32,  64,  8, 0.0),
-    ("fused",  4, 3, 2,  64,  96,  8, 0.0),
-    ("mbconv", 4, 3, 2,  96, 192, 16, 0.25),
+    ("fused", 1, 3, 1, 32, 32, 4, 0.0),
+    ("fused", 4, 3, 2, 32, 64, 8, 0.0),
+    ("fused", 4, 3, 2, 64, 96, 8, 0.0),
+    ("mbconv", 4, 3, 2, 96, 192, 16, 0.25),
     ("mbconv", 6, 3, 1, 192, 256, 24, 0.25),
     ("mbconv", 6, 3, 2, 256, 512, 32, 0.25),
-    ("mbconv", 6, 3, 1, 512, 640,  8, 0.25),
+    ("mbconv", 6, 3, 1, 512, 640, 8, 0.25),
 ]
 
 _VARIANT_STAGES: dict[str, list[_StageSpec]] = {
-    "small":  _STAGES_SMALL,
+    "small": _STAGES_SMALL,
     "medium": _STAGES_MEDIUM,
-    "large":  _STAGES_LARGE,
+    "large": _STAGES_LARGE,
     "xlarge": _STAGES_XLARGE,
 }
 
@@ -258,19 +258,24 @@ def _build_features(
     fi: list[FeatureInfo] = []
     cumulative_stride: int = 2  # stem is stride-2
 
-    for stage_idx, (blk_type, expand, kernel, stride, in_ch, out_ch, n_blks, se_r) in enumerate(stages):
+    for stage_idx, (
+        blk_type,
+        expand,
+        kernel,
+        stride,
+        in_ch,
+        out_ch,
+        n_blks,
+        se_r,
+    ) in enumerate(stages):
         for i in range(n_blks):
             s: int = stride if i == 0 else 1
             ic: int = in_ch if i == 0 else out_ch
 
             if blk_type == "fused":
-                all_layers.append(
-                    _FusedMBConvBlock(ic, out_ch, kernel, s, expand)
-                )
+                all_layers.append(_FusedMBConvBlock(ic, out_ch, kernel, s, expand))
             else:
-                all_layers.append(
-                    _MBConvBlock(ic, out_ch, kernel, s, expand, se_r)
-                )
+                all_layers.append(_MBConvBlock(ic, out_ch, kernel, s, expand, se_r))
 
         if stride > 1:
             cumulative_stride *= stride

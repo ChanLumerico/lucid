@@ -268,30 +268,30 @@ class XceptionOutput:
 def _xception_forward_features(model: nn.Module, x: Tensor) -> Tensor:
     """Common feature-extraction path for Xception backbone and classifier."""
     # Stem
-    x = F.relu(cast(Tensor, model.bn1(cast(Tensor, model.conv1(x)))))  # type: ignore[union-attr]
-    x = F.relu(cast(Tensor, model.bn2(cast(Tensor, model.conv2(x)))))  # type: ignore[union-attr]
+    x = F.relu(cast(Tensor, model.bn1(cast(Tensor, model.conv1(x)))))
+    x = F.relu(cast(Tensor, model.bn2(cast(Tensor, model.conv2(x)))))
 
     # Entry flow
-    x = cast(Tensor, model.block1(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block2(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block3(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block1(x))
+    x = cast(Tensor, model.block2(x))
+    x = cast(Tensor, model.block3(x))
 
     # Middle flow
-    x = cast(Tensor, model.block4(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block5(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block6(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block7(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block8(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block9(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block10(x))  # type: ignore[union-attr]
-    x = cast(Tensor, model.block11(x))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block4(x))
+    x = cast(Tensor, model.block5(x))
+    x = cast(Tensor, model.block6(x))
+    x = cast(Tensor, model.block7(x))
+    x = cast(Tensor, model.block8(x))
+    x = cast(Tensor, model.block9(x))
+    x = cast(Tensor, model.block10(x))
+    x = cast(Tensor, model.block11(x))
 
     # Exit flow
-    x = cast(Tensor, model.block12(x))  # type: ignore[union-attr]
-    x = F.relu(cast(Tensor, model.bn3(cast(Tensor, model.conv3(x)))))  # type: ignore[union-attr]
-    x = F.relu(cast(Tensor, model.bn4(cast(Tensor, model.conv4(x)))))  # type: ignore[union-attr]
+    x = cast(Tensor, model.block12(x))
+    x = F.relu(cast(Tensor, model.bn3(cast(Tensor, model.conv3(x)))))
+    x = F.relu(cast(Tensor, model.bn4(cast(Tensor, model.conv4(x)))))
 
-    return cast(Tensor, model.avgpool(x))  # type: ignore[union-attr]
+    return cast(Tensor, model.avgpool(x))
 
 
 def _build_xception_body(ic: int) -> dict[str, nn.Module]:

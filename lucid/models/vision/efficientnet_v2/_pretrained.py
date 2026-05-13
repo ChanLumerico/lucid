@@ -11,16 +11,14 @@ from lucid.models.vision.efficientnet_v2._model import (
 # Canonical configs
 # ---------------------------------------------------------------------------
 
-_CFG_S = EfficientNetV2Config(variant="small",  dropout=0.2)
+_CFG_S = EfficientNetV2Config(variant="small", dropout=0.2)
 _CFG_M = EfficientNetV2Config(variant="medium", dropout=0.3)
-_CFG_L = EfficientNetV2Config(variant="large",  dropout=0.4)
+_CFG_L = EfficientNetV2Config(variant="large", dropout=0.4)
 _CFG_XL = EfficientNetV2Config(variant="xlarge", dropout=0.4)
 
 
 def _b(cfg: EfficientNetV2Config, kw: dict[str, object]) -> EfficientNetV2:
-    return EfficientNetV2(
-        EfficientNetV2Config(**{**cfg.__dict__, **kw}) if kw else cfg
-    )
+    return EfficientNetV2(EfficientNetV2Config(**{**cfg.__dict__, **kw}) if kw else cfg)
 
 
 def _c(

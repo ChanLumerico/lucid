@@ -6,15 +6,9 @@ from lucid.models.vision.deit._model import DeiT, DeiTForImageClassification
 
 # ── Canonical configurations (Table 1 of the paper) ──────────────────────────
 
-_CFG_TINY = DeiTConfig(
-    image_size=224, patch_size=16, dim=192, depth=12, num_heads=3
-)
-_CFG_SMALL = DeiTConfig(
-    image_size=224, patch_size=16, dim=384, depth=12, num_heads=6
-)
-_CFG_BASE = DeiTConfig(
-    image_size=224, patch_size=16, dim=768, depth=12, num_heads=12
-)
+_CFG_TINY = DeiTConfig(image_size=224, patch_size=16, dim=192, depth=12, num_heads=3)
+_CFG_SMALL = DeiTConfig(image_size=224, patch_size=16, dim=384, depth=12, num_heads=6)
+_CFG_BASE = DeiTConfig(image_size=224, patch_size=16, dim=768, depth=12, num_heads=12)
 _CFG_BASE_P32 = DeiTConfig(
     image_size=224, patch_size=32, dim=768, depth=12, num_heads=12
 )

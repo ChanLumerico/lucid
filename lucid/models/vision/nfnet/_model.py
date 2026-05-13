@@ -32,7 +32,6 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.nfnet._config import NFNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Scaled Weight Standardization convolution
 # ---------------------------------------------------------------------------
@@ -61,14 +60,20 @@ class _ScaledStdConv2d(nn.Module):
     ) -> None:
         super().__init__()
         self.conv = nn.Conv2d(
-            in_ch, out_ch, kernel, stride=stride, padding=padding, groups=groups, bias=bias
+            in_ch,
+            out_ch,
+            kernel,
+            stride=stride,
+            padding=padding,
+            groups=groups,
+            bias=bias,
         )
         # Per-filter learnable gain, initialised to 1.0
         self.gain = nn.Parameter(lucid.ones(out_ch, 1, 1, 1))
         self.eps = eps
         fan_in = in_ch * kernel * kernel // groups
         # Precomputed scale = 1 / sqrt(fan_in)
-        self._scale: float = fan_in ** -0.5
+        self._scale: float = fan_in**-0.5
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         w = self.conv.weight  # (out_ch, in_ch//groups, kH, kW)
@@ -206,11 +211,11 @@ class _NFBlock(nn.Module):
 def _build_nfnet(
     cfg: NFNetConfig,
 ) -> tuple[
-    nn.Sequential,          # stem
-    nn.ModuleList,          # stages
-    nn.AdaptiveAvgPool2d,   # pool
+    nn.Sequential,  # stem
+    nn.ModuleList,  # stages
+    nn.AdaptiveAvgPool2d,  # pool
     list[FeatureInfo],
-    int,                    # final channels
+    int,  # final channels
 ]:
     """Build NFNet stem + stages from a config."""
     # Stem: four ScaledStdConv2d layers (two stride-2)
@@ -257,11 +262,13 @@ def _build_nfnet(
                     se_ratio=cfg.se_ratio,
                 )
             )
-            expected_var += cfg.alpha ** 2
+            expected_var += cfg.alpha**2
             in_ch = out_ch
 
         stages.append(nn.Sequential(*blocks))
-        fi.append(FeatureInfo(stage=stage_idx + 1, num_channels=out_ch, reduction=reduction))
+        fi.append(
+            FeatureInfo(stage=stage_idx + 1, num_channels=out_ch, reduction=reduction)
+        )
 
     pool = nn.AdaptiveAvgPool2d(1)
     return stem, nn.ModuleList(stages), pool, fi, in_ch

@@ -16,12 +16,15 @@ _TIMM = [s for s in _SPECS if s.timm_name is not None]
 _SC = [s for s in _SPECS if s.timm_name is None]
 
 if _TIMM:
+
     @requires_timm
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _TIMM])
     def test_parity(spec: ParitySpec) -> None:
         _run_parity(spec)
 
+
 if _SC:
+
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _SC])
     def test_self_consistency(spec: ParitySpec) -> None:
         _run_self_consistency(spec)

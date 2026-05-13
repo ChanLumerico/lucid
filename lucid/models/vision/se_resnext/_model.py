@@ -197,20 +197,40 @@ def _build_body(
 
     cur: int = stem_channels
     layer1, cur = _make_layer(
-        cur, planes_per_stage[0], config.layers[0], 1,
-        config.cardinality, config.base_width, config.se_reduction,
+        cur,
+        planes_per_stage[0],
+        config.layers[0],
+        1,
+        config.cardinality,
+        config.base_width,
+        config.se_reduction,
     )
     layer2, cur = _make_layer(
-        cur, planes_per_stage[1], config.layers[1], 2,
-        config.cardinality, config.base_width, config.se_reduction,
+        cur,
+        planes_per_stage[1],
+        config.layers[1],
+        2,
+        config.cardinality,
+        config.base_width,
+        config.se_reduction,
     )
     layer3, cur = _make_layer(
-        cur, planes_per_stage[2], config.layers[2], 2,
-        config.cardinality, config.base_width, config.se_reduction,
+        cur,
+        planes_per_stage[2],
+        config.layers[2],
+        2,
+        config.cardinality,
+        config.base_width,
+        config.se_reduction,
     )
     layer4, cur = _make_layer(
-        cur, planes_per_stage[3], config.layers[3], 2,
-        config.cardinality, config.base_width, config.se_reduction,
+        cur,
+        planes_per_stage[3],
+        config.layers[3],
+        2,
+        config.cardinality,
+        config.base_width,
+        config.se_reduction,
     )
 
     exp: int = _SEResNeXtBottleneck.expansion

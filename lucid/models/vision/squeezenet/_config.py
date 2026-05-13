@@ -17,7 +17,7 @@ class SqueezeNetConfig(ModelConfig):
 
     model_type: ClassVar[str] = "squeezenet"
 
-    version: str = "1_1"   # "1_0" or "1_1"
+    version: str = "1_1"  # "1_0" or "1_1"
     num_classes: int = 1000
     in_channels: int = 3
     dropout: float = 0.5

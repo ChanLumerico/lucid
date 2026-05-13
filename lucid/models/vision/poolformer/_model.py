@@ -165,9 +165,9 @@ def _build_poolformer(
     _PatchEmbed,
     nn.ModuleList,  # stages (each is nn.Sequential of _PoolFormerBlock)
     nn.ModuleList,  # downsamplers (len == num_stages - 1)
-    nn.LayerNorm,   # head norm
+    nn.LayerNorm,  # head norm
     list[FeatureInfo],
-    int,            # final embed_dim
+    int,  # final embed_dim
 ]:
     patch_embed = _PatchEmbed(
         in_ch=cfg.in_channels,

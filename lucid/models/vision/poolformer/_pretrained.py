@@ -8,11 +8,11 @@ from lucid.models.vision.poolformer._model import (
 )
 
 # Variant configs (paper Table 1)
-_CFG_S12 = PoolFormerConfig(layers=(2, 2, 6, 2),   embed_dims=(64, 128, 320, 512))
-_CFG_S24 = PoolFormerConfig(layers=(4, 4, 12, 4),  embed_dims=(64, 128, 320, 512))
-_CFG_S36 = PoolFormerConfig(layers=(6, 6, 18, 6),  embed_dims=(64, 128, 320, 512))
-_CFG_M36 = PoolFormerConfig(layers=(6, 6, 18, 6),  embed_dims=(96, 192, 384, 768))
-_CFG_M48 = PoolFormerConfig(layers=(8, 8, 24, 8),  embed_dims=(96, 192, 384, 768))
+_CFG_S12 = PoolFormerConfig(layers=(2, 2, 6, 2), embed_dims=(64, 128, 320, 512))
+_CFG_S24 = PoolFormerConfig(layers=(4, 4, 12, 4), embed_dims=(64, 128, 320, 512))
+_CFG_S36 = PoolFormerConfig(layers=(6, 6, 18, 6), embed_dims=(64, 128, 320, 512))
+_CFG_M36 = PoolFormerConfig(layers=(6, 6, 18, 6), embed_dims=(96, 192, 384, 768))
+_CFG_M48 = PoolFormerConfig(layers=(8, 8, 24, 8), embed_dims=(96, 192, 384, 768))
 
 
 def _b(cfg: PoolFormerConfig, kw: dict[str, object]) -> PoolFormer:

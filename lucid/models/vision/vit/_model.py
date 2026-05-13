@@ -80,17 +80,17 @@ class _Attention(nn.Module):
         qkv = cast(Tensor, self.qkv(x))
         qkv = qkv.reshape(B, N, 3, H, D).permute(2, 0, 3, 1, 4)
         # Each: (B, H, N, D)
-        q = cast(Tensor, qkv[0])
-        k = cast(Tensor, qkv[1])
-        v = cast(Tensor, qkv[2])
+        q: Tensor = qkv[0]
+        k: Tensor = qkv[1]
+        v: Tensor = qkv[2]
 
         # Scaled dot-product attention
-        attn = cast(Tensor, q @ k.permute(0, 1, 3, 2)) / self.scale
-        attn = cast(Tensor, F.softmax(attn, dim=-1))
+        attn: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
+        attn = F.softmax(attn, dim=-1)
         attn = cast(Tensor, self.attn_drop(attn))
 
         # (B, H, N, D) → (B, N, H*D) = (B, N, C)
-        out = cast(Tensor, attn @ v)
+        out: Tensor = attn @ v
         out = out.permute(0, 2, 1, 3).reshape(B, N, C)
         return cast(Tensor, self.proj(out))
 

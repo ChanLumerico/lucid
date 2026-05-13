@@ -24,6 +24,6 @@ class SEResNeXtConfig(ModelConfig):
     in_channels: int = 3
     layers: tuple[int, ...] = (3, 4, 6, 3)
     cardinality: int = 32
-    base_width: int = 4   # base_width per group
+    base_width: int = 4  # base_width per group
     se_reduction: int = 16
     dropout: float = 0.0

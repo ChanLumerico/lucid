@@ -12,22 +12,33 @@ from lucid.test.parity.models._utils import (
     _spec_param,
 )
 
-_FACTORIES = frozenset({
-    M.convnext_v2_atto_cls, M.convnext_v2_femto_cls, M.convnext_v2_pico_cls,
-    M.convnext_v2_nano_cls, M.convnext_v2_tiny_cls, M.convnext_v2_small_cls,
-    M.convnext_v2_base_cls, M.convnext_v2_large_cls, M.convnext_v2_huge_cls,
-})
+_FACTORIES = frozenset(
+    {
+        M.convnext_v2_atto_cls,
+        M.convnext_v2_femto_cls,
+        M.convnext_v2_pico_cls,
+        M.convnext_v2_nano_cls,
+        M.convnext_v2_tiny_cls,
+        M.convnext_v2_small_cls,
+        M.convnext_v2_base_cls,
+        M.convnext_v2_large_cls,
+        M.convnext_v2_huge_cls,
+    }
+)
 _SPECS = [s for s in SPECS if s.lucid_factory in _FACTORIES]
 _TIMM = [s for s in _SPECS if s.timm_name is not None]
 _SC = [s for s in _SPECS if s.timm_name is None]
 
 if _TIMM:
+
     @requires_timm
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _TIMM])
     def test_parity(spec: ParitySpec) -> None:
         _run_parity(spec)
 
+
 if _SC:
+
     @pytest.mark.parametrize("spec", [_spec_param(s) for s in _SC])
     def test_self_consistency(spec: ParitySpec) -> None:
         _run_self_consistency(spec)

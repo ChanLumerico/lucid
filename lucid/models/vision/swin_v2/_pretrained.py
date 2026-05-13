@@ -10,7 +10,9 @@ from lucid.models.vision.swin_v2._model import (
 _CFG_TINY = SwinV2Config(embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
 _CFG_SMALL = SwinV2Config(embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
 _CFG_BASE = SwinV2Config(embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
-_CFG_LARGE = SwinV2Config(embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+_CFG_LARGE = SwinV2Config(
+    embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48)
+)
 
 
 def _b(cfg: SwinV2Config, kw: dict[str, object]) -> SwinTransformerV2:
