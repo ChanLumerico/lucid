@@ -6,9 +6,26 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeShiki from "@shikijs/rehype";
+import type { ShikiTransformer } from "shiki";
+import type { Element } from "hast";
 import type { MDXComponents } from "mdx/types";
 
 const CONTENT_DIR = path.join(process.cwd(), "content");
+
+// Strips shiki's inline background/color from <pre> and copies
+// data-language from the inner <code> up to <pre> so CodeBlock can read it.
+const lucidShikiTransformer: ShikiTransformer = {
+  name: "lucid:fix-pre",
+  pre(node) {
+    delete node.properties.style;
+    const codeEl = node.children.find(
+      (c): c is Element => c.type === "element" && (c as Element).tagName === "code",
+    );
+    if (codeEl?.properties?.["data-language"]) {
+      node.properties["data-language"] = codeEl.properties["data-language"];
+    }
+  },
+};
 
 export interface DocFrontmatter {
   title: string;
@@ -86,7 +103,8 @@ export async function compileDoc(
           [
             rehypeShiki,
             {
-              theme: "one-dark-pro",
+              theme: "tokyo-night",
+              transformers: [lucidShikiTransformer],
             },
           ],
         ],
