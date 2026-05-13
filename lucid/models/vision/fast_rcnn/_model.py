@@ -336,7 +336,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         if not valid_mask:
             cls_loss: Tensor = lucid.zeros((1,))
         else:
-            valid_t = lucid.tensor(valid_mask)
+            valid_t = lucid.tensor(valid_mask).long()
             cls_loss = F.cross_entropy(
                 all_logits[valid_t],
                 cls_labels[valid_t],
@@ -506,7 +506,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
                 if not mask:
                     continue
 
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_c = cls_scores[mask_t]
                 bx_c = bx_i[mask_t]
 

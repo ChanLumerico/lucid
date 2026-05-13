@@ -656,17 +656,23 @@ class YOLOV3ForObjectDetection(PretrainedModel):
         # Backbone
         self.backbone = _Darknet53(config.in_channels)
 
-        # P5 head (1024ch input): compress → predict
-        # compress: alternating 1x1/3x3, mid_ch=512
+        # Actual backbone output channels:
+        #   p3_raw : 128ch  (stride-8  feature, before down2)
+        #   p4_raw : 256ch  (stride-16 feature, before down3)
+        #   p5     : 1024ch (stride-32 final stage)
+
+        # P5 head (1024ch input): compress mid_ch=512
         self.p5_compress, self.p5_predict = _make_detection_head(1024, 512, nA, C)
+        # p5_compress output: 512ch
 
-        # Upsample + concat: P5_feature (512ch) + P4_raw (512ch) = 1024ch
-        self.p5_to_p4_conv = _ConvBnLeaky(512, 256, 1)
-        self.p4_compress, self.p4_predict = _make_detection_head(512 + 256, 256, nA, C)
+        # Upsample + concat: p5_up (256ch) + p4_raw (256ch) = 512ch
+        self.p5_to_p4_conv = _ConvBnLeaky(512, 256, 1)  # 512→256
+        self.p4_compress, self.p4_predict = _make_detection_head(256 + 256, 256, nA, C)
+        # p4_compress output: 256ch
 
-        # Upsample + concat: P4_feature (256ch) + P3_raw (256ch) = 512ch
-        self.p4_to_p3_conv = _ConvBnLeaky(256, 128, 1)
-        self.p3_compress, self.p3_predict = _make_detection_head(256 + 128, 128, nA, C)
+        # Upsample + concat: p4_up (128ch) + p3_raw (128ch) = 256ch
+        self.p4_to_p3_conv = _ConvBnLeaky(256, 128, 1)  # 256→128
+        self.p3_compress, self.p3_predict = _make_detection_head(128 + 128, 128, nA, C)
 
     def forward(  # type: ignore[override]
         self,

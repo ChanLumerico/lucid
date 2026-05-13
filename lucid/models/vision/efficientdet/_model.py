@@ -121,6 +121,8 @@ class _BiFPNLayer(nn.Module):
         # Convolutions (one per intermediate top-down node + one per output)
         self.td_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L - 1)])
         self.out_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L)])
+        # Registered down-sampler (avoids allocating a new module each forward call)
+        self.down = nn.MaxPool2d(2, stride=2)
 
     def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
         """
@@ -167,7 +169,7 @@ class _BiFPNLayer(nn.Module):
             wl1 = float(wl[1].item()) + _EPS
             wl2 = float(wl[2].item()) + _EPS
             wlsum = wl0 + wl1 + wl2
-            down = cast(Tensor, nn.MaxPool2d(2, stride=2)(out[-1]))
+            down = cast(Tensor, self.down(out[-1]))
             out.append(
                 cast(
                     Tensor,

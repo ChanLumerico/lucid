@@ -448,9 +448,10 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                 A = int(lg_map.shape[1])
                 fH = int(lg_map.shape[2])
                 fW = int(lg_map.shape[3])
-                lg_b = lg_map[b].reshape(-1)
+                # Spatial-major to match AnchorGenerator ordering (G*A, 4)
+                lg_b = lg_map[b].permute(1, 2, 0).reshape(-1)
                 dl_b = (
-                    dl_map[b].reshape(A, 4, fH, fW).permute(0, 2, 3, 1).reshape(-1, 4)
+                    dl_map[b].reshape(A, 4, fH, fW).permute(2, 3, 0, 1).reshape(-1, 4)
                 )
                 all_anc_parts.append(anchors[lvl_idx])
                 all_lg_parts.append(lg_b)
@@ -463,7 +464,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
             if M == 0:
                 neg_mask: list[int] = list(range(min(256, A_total)))
-                neg_t = lucid.tensor(neg_mask)
+                neg_t = lucid.tensor(neg_mask).long()
                 lbl_neg = lucid.zeros((len(neg_mask),))
                 cls_losses.append(
                     F.binary_cross_entropy_with_logits(all_lg[neg_t], lbl_neg)
@@ -516,7 +517,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             if not sampled:
                 continue
 
-            samp_t = lucid.tensor(sampled)
+            samp_t = lucid.tensor(sampled).long()
             lbl_samp = lucid.tensor([labels[a] for a in sampled])
             cls_losses.append(
                 F.binary_cross_entropy_with_logits(
@@ -525,7 +526,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             )
 
             if pos_idx:
-                pos_t = lucid.tensor(pos_idx)
+                pos_t = lucid.tensor(pos_idx).long()
                 gt_pos = lucid.tensor(
                     [
                         [float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
@@ -623,7 +624,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         if not valid_idx:
             return lucid.zeros((1,)), fg_flags
 
-        valid_t = lucid.tensor(valid_idx)
+        valid_t = lucid.tensor(valid_idx).long()
         cls_loss = F.cross_entropy(all_logits[valid_t], cls_labels[valid_t])
 
         deltas_3d = all_deltas.reshape(N_total, K, 4)
@@ -910,7 +911,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_c = sc_c_all[mask_t]
                 bx_c = bx_i[mask_t]
                 mk_c = F.sigmoid(mk_i[mask_t, c - 1])  # (k, 28, 28)

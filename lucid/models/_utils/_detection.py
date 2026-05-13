@@ -57,12 +57,12 @@ def box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     inter_x2: Tensor = lucid.minimum(b1[..., 2], b2[..., 2])
     inter_y2: Tensor = lucid.minimum(b1[..., 3], b2[..., 3])
 
-    inter_w = (inter_x2 - inter_x1).clamp(min=0.0)
-    inter_h = (inter_y2 - inter_y1).clamp(min=0.0)
+    inter_w = (inter_x2 - inter_x1).clamp(0.0, 1e9)
+    inter_h = (inter_y2 - inter_y1).clamp(0.0, 1e9)
     inter_area = inter_w * inter_h  # (N, M)
 
     union = area1[:, None] + area2[None, :] - inter_area
-    return inter_area / union.clamp(min=1e-6)
+    return inter_area / union.clamp(1e-6, 1e9)
 
 
 def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
@@ -89,8 +89,8 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     inter_x2: Tensor = lucid.minimum(b1[..., 2], b2[..., 2])
     inter_y2: Tensor = lucid.minimum(b1[..., 3], b2[..., 3])
 
-    inter_w = (inter_x2 - inter_x1).clamp(min=0.0)
-    inter_h = (inter_y2 - inter_y1).clamp(min=0.0)
+    inter_w = (inter_x2 - inter_x1).clamp(0.0, 1e9)
+    inter_h = (inter_y2 - inter_y1).clamp(0.0, 1e9)
     inter_area = inter_w * inter_h  # (N, M)
 
     union = area1[:, None] + area2[None, :] - inter_area
@@ -101,10 +101,10 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     enc_x2: Tensor = lucid.maximum(b1[..., 2], b2[..., 2])
     enc_y2: Tensor = lucid.maximum(b1[..., 3], b2[..., 3])
 
-    enc_area = (enc_x2 - enc_x1).clamp(min=0.0) * (enc_y2 - enc_y1).clamp(min=0.0)
+    enc_area = (enc_x2 - enc_x1).clamp(0.0, 1e9) * (enc_y2 - enc_y1).clamp(0.0, 1e9)
 
-    iou = inter_area / union.clamp(min=1e-6)
-    return iou - (enc_area - union) / enc_area.clamp(min=1e-6)
+    iou = inter_area / union.clamp(1e-6, 1e9)
+    return iou - (enc_area - union) / enc_area.clamp(1e-6, 1e9)
 
 
 def box_xyxy_to_cxcywh(boxes: Tensor) -> Tensor:
@@ -150,10 +150,10 @@ def clip_boxes_to_image(boxes: Tensor, size: tuple[int, int]) -> Tensor:
         (N, 4) clipped boxes.
     """
     h, w = size
-    x1 = boxes[:, 0:1].clamp(min=0.0, max=float(w))
-    y1 = boxes[:, 1:2].clamp(min=0.0, max=float(h))
-    x2 = boxes[:, 2:3].clamp(min=0.0, max=float(w))
-    y2 = boxes[:, 3:4].clamp(min=0.0, max=float(h))
+    x1 = boxes[:, 0:1].clamp(0.0, float(w))
+    y1 = boxes[:, 1:2].clamp(0.0, float(h))
+    x2 = boxes[:, 2:3].clamp(0.0, float(w))
+    y2 = boxes[:, 3:4].clamp(0.0, float(h))
     return lucid.cat([x1, y1, x2, y2], dim=1)
 
 
@@ -175,8 +175,8 @@ def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
         if float(ws[i].item()) >= min_size and float(hs[i].item()) >= min_size
     ]
     if not keep:
-        return lucid.zeros((0,))
-    return lucid.tensor(keep)
+        return lucid.zeros((0,)).long()
+    return lucid.tensor(keep).long()
 
 
 def encode_boxes(
@@ -199,10 +199,10 @@ def encode_boxes(
     ref = box_xyxy_to_cxcywh(reference_boxes)
     pro = box_xyxy_to_cxcywh(proposals)
 
-    dx = wx * (ref[:, 0] - pro[:, 0]) / pro[:, 2].clamp(min=1e-6)
-    dy = wy * (ref[:, 1] - pro[:, 1]) / pro[:, 3].clamp(min=1e-6)
-    dw = ww * lucid.log(ref[:, 2] / pro[:, 2].clamp(min=1e-6))
-    dh = wh * lucid.log(ref[:, 3] / pro[:, 3].clamp(min=1e-6))
+    dx = wx * (ref[:, 0] - pro[:, 0]) / pro[:, 2].clamp(1e-6, 1e9)
+    dy = wy * (ref[:, 1] - pro[:, 1]) / pro[:, 3].clamp(1e-6, 1e9)
+    dw = ww * lucid.log(ref[:, 2] / pro[:, 2].clamp(1e-6, 1e9))
+    dh = wh * lucid.log(ref[:, 3] / pro[:, 3].clamp(1e-6, 1e9))
 
     return lucid.stack([dx, dy, dw, dh], dim=1)
 
@@ -234,8 +234,8 @@ def decode_boxes(
 
     dx = deltas[:, 0] / wx
     dy = deltas[:, 1] / wy
-    dw = (deltas[:, 2] / ww).clamp(max=bbox_xform_clip)
-    dh = (deltas[:, 3] / wh).clamp(max=bbox_xform_clip)
+    dw = (deltas[:, 2] / ww).clamp(-1e9, bbox_xform_clip)
+    dh = (deltas[:, 3] / wh).clamp(-1e9, bbox_xform_clip)
 
     pred_cx = dx * aw + acx
     pred_cy = dy * ah + acy
@@ -280,7 +280,7 @@ def nms(
     """
     N: int = int(boxes.shape[0])
     if N == 0:
-        return lucid.zeros((0,))
+        return lucid.zeros((0,)).long()
 
     # Sort descending by score using Python-level argsort on negated scores
     order: list[int] = sorted(
@@ -306,8 +306,8 @@ def nms(
                 suppressed[jdx] = True
 
     if not keep:
-        return lucid.zeros((0,))
-    return lucid.tensor(keep)
+        return lucid.zeros((0,)).long()
+    return lucid.tensor(keep).long()
 
 
 def batched_nms(
@@ -745,8 +745,16 @@ class RPN(nn.Module):
             fH = int(logits.shape[2])
             fW = int(logits.shape[3])
 
-            scores_flat = F.sigmoid(logits.reshape(B, -1))  # (B, A*H*W)
-            deltas_flat = deltas.reshape(B, A * fH * fW, 4)  # (B, A*H*W, 4)
+            # Spatial-major flatten to match AnchorGenerator ordering (G*A, 4)
+            # logits: (B, A, H, W) → permute(0,2,3,1) → (B,H,W,A) → (B, H*W*A)
+            # deltas: (B,4A,H,W) → reshape(B,A,4,H,W) → permute(0,3,4,1,2)
+            #         → (B,H,W,A,4) → (B, H*W*A, 4)
+            scores_flat = F.sigmoid(logits.permute(0, 2, 3, 1).reshape(B, -1))
+            deltas_flat = (
+                deltas.reshape(B, A, 4, fH, fW)
+                .permute(0, 3, 4, 1, 2)
+                .reshape(B, fH * fW * A, 4)
+            )
 
             for b in range(B):
                 sc = scores_flat[b]  # (N_anc,)
@@ -778,7 +786,7 @@ class RPN(nn.Module):
                 if not score_mask:
                     continue
 
-                mask_t = lucid.tensor(score_mask)
+                mask_t = lucid.tensor(score_mask).long()
                 props = props[mask_t]
                 topk_sc = topk_sc[mask_t]
 

@@ -195,7 +195,7 @@ def _generate_proposals(
     ]
     if not thr_mask:
         return lucid.zeros((0, 4)), lucid.zeros((0,))
-    thr_t = lucid.tensor(thr_mask)
+    thr_t = lucid.tensor(thr_mask).long()
     props = props[thr_t]
     scores = scores[thr_t]
 
@@ -326,11 +326,15 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         k = self._num_anchors
 
         for b in range(B):
-            # Flatten: (k*fH*fW,) and (k*fH*fW, 4)
-            lg_b = logits_map[b].reshape(-1)  # (A,)
-            dl_b = deltas_map[b].reshape(k, 4, fH, fW)
-            # Rearrange to (A, 4) with anchor-major order matching anchors
-            dl_b = dl_b.permute(0, 2, 3, 1).reshape(-1, 4)  # (A, 4)
+            # Flatten logits/deltas to spatial-major order to match AnchorGenerator
+            # AnchorGenerator produces (fH*fW*k, 4) in row-major cell order.
+            # logits_map: (k, fH, fW) → permute(1,2,0) → (fH, fW, k) → (fH*fW*k,)
+            # deltas_map: (4k, fH, fW) → reshape(k,4,fH,fW) → permute(2,3,0,1)
+            #             → (fH, fW, k, 4) → (fH*fW*k, 4)
+            lg_b = logits_map[b].permute(1, 2, 0).reshape(-1)  # (fH*fW*k,)
+            dl_b = (
+                deltas_map[b].reshape(k, 4, fH, fW).permute(2, 3, 0, 1).reshape(-1, 4)
+            )  # (fH*fW*k, 4)
 
             props_b, sc_b = _generate_proposals(
                 lg_b,
@@ -387,14 +391,16 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             gt_boxes = targets[b]["boxes"]  # (M, 4)
             M = int(gt_boxes.shape[0])
 
-            lg_b = logits_map[b].reshape(-1)  # (A,)
-            dl_b = deltas_map[b].reshape(k, 4, fH, fW)
-            dl_b = dl_b.permute(0, 2, 3, 1).reshape(-1, 4)  # (A, 4)
+            # Spatial-major ordering to match AnchorGenerator
+            lg_b = logits_map[b].permute(1, 2, 0).reshape(-1)
+            dl_b = (
+                deltas_map[b].reshape(k, 4, fH, fW).permute(2, 3, 0, 1).reshape(-1, 4)
+            )
 
             if M == 0:
                 # No GT — all negatives
                 neg_mask: list[int] = list(range(min(256, A)))
-                neg_t = lucid.tensor(neg_mask)
+                neg_t = lucid.tensor(neg_mask).long()
                 lbl_neg = lucid.zeros((len(neg_mask),))
                 cls_losses.append(
                     F.binary_cross_entropy_with_logits(lg_b[neg_t], lbl_neg)
@@ -451,7 +457,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             if not sampled:
                 continue
 
-            samp_t = lucid.tensor(sampled)
+            samp_t = lucid.tensor(sampled).long()
             lbl_samp = lucid.tensor([labels[a] for a in sampled])
 
             # Classification loss (binary cross-entropy objectness)
@@ -463,7 +469,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
 
             # Regression loss (positive anchors only)
             if pos_idx:
-                pos_t = lucid.tensor(pos_idx)
+                pos_t = lucid.tensor(pos_idx).long()
                 gt_pos = lucid.tensor(
                     [
                         [float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
@@ -559,7 +565,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         ]
         if not valid_idx:
             return lucid.zeros((1,))
-        valid_t = lucid.tensor(valid_idx)
+        valid_t = lucid.tensor(valid_idx).long()
         cls_loss = F.cross_entropy(all_logits[valid_t], cls_labels[valid_t])
 
         # Regression loss (foreground proposals only)
@@ -703,7 +709,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_c = sc_c_all[mask_t]
                 bx_c = bx_i[mask_t]
                 keep = batched_nms(
