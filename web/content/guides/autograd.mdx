@@ -1,0 +1,132 @@
+---
+title: Autograd
+description: Understand automatic differentiation in Lucid — computation graphs, custom Functions, and functional transforms.
+category: Guides
+order: 3
+---
+
+Lucid's autograd engine records every operation on tensors with `requires_grad=True` and builds a directed acyclic graph (DAG) at runtime. Calling `.backward()` traverses the DAG in reverse, accumulating gradients via the chain rule.
+
+## The computation graph
+
+```python
+import lucid
+
+x = lucid.tensor([2.0, 3.0], requires_grad=True)
+y = x ** 2          # records Pow node
+z = y.sum()         # records Sum node
+
+z.backward()
+print(x.grad)       # [4.0, 6.0]  (dz/dx = 2x)
+```
+
+Each operation creates a `Function` node that stores:
+- A reference to its output tensor
+- The `backward` callable that propagates gradients upstream
+
+## retain_graph
+
+By default the graph is freed after `.backward()`. Pass `retain_graph=True` to keep it for multiple backward passes (e.g. higher-order gradients):
+
+```python
+loss.backward(retain_graph=True)
+loss.backward()   # second pass — works because graph is still alive
+```
+
+## Gradient accumulation
+
+Gradients **accumulate** into `.grad`. Call `optimizer.zero_grad()` (or `tensor.grad = None`) before each backward pass to reset them.
+
+```python
+for x_batch, y_batch in loader:
+    pred  = model(x_batch)
+    loss  = criterion(pred, y_batch)
+    optimizer.zero_grad()   # clear before backward
+    loss.backward()
+    optimizer.step()
+```
+
+## no_grad context
+
+Use `lucid.no_grad()` to disable gradient tracking in inference or validation:
+
+```python
+with lucid.no_grad():
+    output = model(x_val)   # no graph built, lower memory
+```
+
+## Custom Function
+
+Subclass `lucid.autograd.Function` to define a custom op with an explicit backward:
+
+```python
+import lucid
+import lucid.autograd as autograd
+
+class Clamp(autograd.Function):
+    @staticmethod
+    def forward(
+        ctx: autograd.FunctionCtx,
+        x: lucid.Tensor,
+        lo: float,
+        hi: float,
+    ) -> lucid.Tensor:
+        ctx.save_for_backward(x)
+        ctx.lo, ctx.hi = lo, hi
+        return x.clamp(lo, hi)
+
+    @staticmethod
+    def backward(
+        ctx: autograd.FunctionCtx,
+        grad_out: lucid.Tensor,
+    ) -> tuple[lucid.Tensor, None, None]:
+        (x,) = ctx.saved_tensors
+        mask = (x >= ctx.lo) & (x <= ctx.hi)
+        return grad_out * mask, None, None
+
+out = Clamp.apply(x, -1.0, 1.0)
+```
+
+<Callout variant="note">
+Return `None` for non-Tensor arguments (like the scalar bounds above) — autograd ignores `None` gradient slots.
+</Callout>
+
+## Functional transforms
+
+`lucid.func` provides composable gradient transforms inspired by JAX:
+
+| Function | Description |
+|---|---|
+| `lucid.func.grad(f)` | Returns a function that computes `∇f` |
+| `lucid.func.vmap(f)` | Vectorises `f` over a batch dimension |
+| `lucid.func.vjp(f)` | Vector-Jacobian product |
+| `lucid.func.jvp(f)` | Jacobian-vector product |
+| `lucid.func.jacrev(f)` | Full Jacobian via reverse-mode |
+| `lucid.func.jacfwd(f)` | Full Jacobian via forward-mode |
+| `lucid.func.hessian(f)` | Hessian matrix |
+
+```python
+import lucid.func as F
+
+def f(x: lucid.Tensor) -> lucid.Tensor:
+    return (x ** 3).sum()
+
+grad_f  = F.grad(f)
+hess_f  = F.hessian(f)
+
+x = lucid.tensor([1.0, 2.0])
+print(grad_f(x))   # [3.0, 12.0]  (d/dx x³)
+print(hess_f(x))   # [[6.0, 0.0], [0.0, 12.0]]
+```
+
+## gradcheck
+
+Use `lucid.autograd.gradcheck` to numerically verify a custom backward:
+
+```python
+lucid.autograd.gradcheck(Clamp.apply, (x, -1.0, 1.0), eps=1e-5)
+```
+
+<Callout variant="warning">
+`gradcheck` is expensive — use it in unit tests, not in training loops.
+</Callout>

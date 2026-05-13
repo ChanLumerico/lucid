@@ -8,6 +8,7 @@ import { Search, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { springs } from "@/components/motion/springs";
+import { SearchDialog } from "@/components/layout/SearchDialog";
 
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
@@ -160,6 +161,7 @@ export function Header() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
 
   React.useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -172,8 +174,20 @@ export function Header() {
     setMobileOpen(false);
   }, [pathname]);
 
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
   return (
     <>
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
       <header
         className={cn(
           "fixed inset-x-0 top-0 z-50 h-14 transition-all duration-300",
@@ -189,11 +203,25 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search (⌘K)"
+              className={cn(
+                "hidden sm:flex items-center gap-2 rounded-lg border border-lucid-border",
+                "bg-lucid-surface px-3 py-1.5 text-xs text-lucid-text-low",
+                "transition-colors hover:border-lucid-primary/40 hover:text-lucid-text-mid",
+              )}
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span>Search…</span>
+              <kbd className="ml-1 text-[10px] text-lucid-text-disabled">⌘K</kbd>
+            </button>
             <Button
               variant="ghost"
               size="icon-sm"
+              onClick={() => setSearchOpen(true)}
               aria-label="Search"
-              className="text-lucid-text-low hover:text-lucid-text-high"
+              className="sm:hidden text-lucid-text-low hover:text-lucid-text-high"
             >
               <Search className="h-4 w-4" />
             </Button>
