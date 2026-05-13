@@ -257,6 +257,12 @@ from lucid.models.vision.detr import (
     DETRConfig, DETRForObjectDetection,
     detr_resnet50,
 )
+# 2020 — EfficientDet (Tan et al.)
+from lucid.models.vision.efficientdet import (
+    EfficientDetConfig, EfficientDetForObjectDetection, efficientdet_config,
+    efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3,
+    efficientdet_d4, efficientdet_d5, efficientdet_d6, efficientdet_d7,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -410,4 +416,8 @@ __all__ = [
     # ── Vision (2020) DETR ────────────────────────────────────────────────────
     "DETRConfig", "DETRForObjectDetection",
     "detr_resnet50",
+    # ── Vision (2020) EfficientDet ────────────────────────────────────────────
+    "EfficientDetConfig", "EfficientDetForObjectDetection", "efficientdet_config",
+    "efficientdet_d0", "efficientdet_d1", "efficientdet_d2", "efficientdet_d3",
+    "efficientdet_d4", "efficientdet_d5", "efficientdet_d6", "efficientdet_d7",
 ]
