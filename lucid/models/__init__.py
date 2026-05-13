@@ -252,6 +252,21 @@ from lucid.models.vision.mask_rcnn import (
     MaskRCNNConfig, MaskRCNNForObjectDetection,
     mask_rcnn,
 )
+# 2015 — FCN (Long et al.)
+from lucid.models.vision.fcn import (
+    FCNConfig, FCNForSemanticSegmentation,
+    fcn_resnet50, fcn_resnet101,
+)
+# 2015 — U-Net (Ronneberger et al.)
+from lucid.models.vision.unet import (
+    UNetConfig, UNetForSemanticSegmentation,
+    unet, unet_small, unet_bilinear,
+)
+# 2018 — Attention U-Net (Oktay et al.)
+from lucid.models.vision.attention_unet import (
+    AttentionUNetConfig, AttentionUNetForSemanticSegmentation,
+    attention_unet, attention_unet_small,
+)
 # 2020 — DETR (Carion et al.)
 from lucid.models.vision.detr import (
     DETRConfig, DETRForObjectDetection,
@@ -262,6 +277,16 @@ from lucid.models.vision.efficientdet import (
     EfficientDetConfig, EfficientDetForObjectDetection, efficientdet_config,
     efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3,
     efficientdet_d4, efficientdet_d5, efficientdet_d6, efficientdet_d7,
+)
+# 2021 — MaskFormer (Cheng et al.)
+from lucid.models.vision.maskformer import (
+    MaskFormerConfig, MaskFormerForSemanticSegmentation,
+    maskformer_resnet50, maskformer_resnet101,
+)
+# 2022 — Mask2Former (Cheng et al.)
+from lucid.models.vision.mask2former import (
+    Mask2FormerConfig, Mask2FormerForSemanticSegmentation,
+    mask2former_resnet50, mask2former_resnet101,
 )
 # 2016–2020 — YOLO family (Redmon et al., Bochkovskiy et al.)
 from lucid.models.vision.yolo import (
@@ -412,6 +437,15 @@ __all__ = [
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
     "inception_next_tiny", "inception_next_tiny_cls",
+    # ── Vision (2015) FCN ────────────────────────────────────────────────────
+    "FCNConfig", "FCNForSemanticSegmentation",
+    "fcn_resnet50", "fcn_resnet101",
+    # ── Vision (2015) U-Net ──────────────────────────────────────────────────
+    "UNetConfig", "UNetForSemanticSegmentation",
+    "unet", "unet_small", "unet_bilinear",
+    # ── Vision (2018) Attention U-Net ────────────────────────────────────────
+    "AttentionUNetConfig", "AttentionUNetForSemanticSegmentation",
+    "attention_unet", "attention_unet_small",
     # ── Vision (2014) R-CNN ───────────────────────────────────────────────────
     "RCNNConfig", "RCNNForObjectDetection",
     "rcnn",
@@ -431,6 +465,12 @@ __all__ = [
     "EfficientDetConfig", "EfficientDetForObjectDetection", "efficientdet_config",
     "efficientdet_d0", "efficientdet_d1", "efficientdet_d2", "efficientdet_d3",
     "efficientdet_d4", "efficientdet_d5", "efficientdet_d6", "efficientdet_d7",
+    # ── Vision (2021) MaskFormer ──────────────────────────────────────────────
+    "MaskFormerConfig", "MaskFormerForSemanticSegmentation",
+    "maskformer_resnet50", "maskformer_resnet101",
+    # ── Vision (2022) Mask2Former ─────────────────────────────────────────────
+    "Mask2FormerConfig", "Mask2FormerForSemanticSegmentation",
+    "mask2former_resnet50", "mask2former_resnet101",
     # ── Vision (2016) YOLOv1 ──────────────────────────────────────────────────
     "YOLOV1Config", "YOLOV1ForObjectDetection",
     "yolo_v1", "yolo_v1_tiny",
