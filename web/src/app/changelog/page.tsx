@@ -1,65 +1,151 @@
+import fs from "fs";
+import path from "path";
 import type { Metadata } from "next";
+import { compileMDX } from "next-mdx-remote/rsc";
+import remarkGfm from "remark-gfm";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { Badge } from "@/components/ui/badge";
+import { InlineCode } from "@/components/mdx/CodeBlock";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Changelog",
   description: "What's new in Lucid.",
 };
 
-interface ChangeEntry {
-  version: string;
-  date: string;
-  tag?: "latest" | "major";
-  items: { kind: "feat" | "fix" | "refactor" | "chore"; text: string }[];
+// ── Changelog-specific MDX components ────────────────────────────────────────
+
+function VersionHeading({ children }: { children: React.ReactNode }) {
+  const text = String(children).trim();
+
+  // "[Unreleased]" or "[3.0.0] — 2026-05-10"
+  const match = text.match(/^\[?([^\]]+)\]?(?:\s*[—–-]+\s*(.+))?$/);
+  const version = match?.[1]?.trim() ?? text;
+  const date = match?.[2]?.trim();
+
+  const isUnreleased = version.toLowerCase() === "unreleased";
+  const isPreRelease = version.toLowerCase().startsWith("pre");
+
+  return (
+    <div className="relative pl-6 mt-10 first:mt-0">
+      {/* Timeline dot */}
+      <div
+        className={cn(
+          "absolute left-[-3.5px] top-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-lucid-bg",
+          isUnreleased
+            ? "bg-lucid-primary"
+            : isPreRelease
+              ? "bg-lucid-text-disabled"
+              : "bg-lucid-blue",
+        )}
+      />
+
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="text-lg font-bold text-lucid-text-high">
+          {isPreRelease ? version : `v${version}`}
+        </span>
+        {isUnreleased && <Badge variant="default">Unreleased</Badge>}
+        {date && (
+          <time className="text-xs text-lucid-text-disabled">{date}</time>
+        )}
+      </div>
+    </div>
+  );
 }
 
-const CHANGELOG: ChangeEntry[] = [
-  {
-    version: "v3.0.0",
-    date: "2026-05-12",
-    tag: "latest",
-    items: [
-      { kind: "feat", text: "Full MLX GPU + Apple Accelerate CPU backend bifurcation" },
-      { kind: "feat", text: "314 top-level ops — linalg, fft, signal, special, distributions, einops, amp, profiler" },
-      { kind: "feat", text: "Model zoo: 10+ vision families (ViT, Swin-V2, EfficientNetV2, CaiT, DeiT, NFNet, …)" },
-      { kind: "feat", text: "Functional transforms: grad, vmap, vjp, jvp, jacrev, jacfwd, hessian" },
-      { kind: "feat", text: "Full parity test suite — 1169 tests passing" },
-      { kind: "refactor", text: "Hard Rules H1–H10 enforced throughout — strict type hints, no forward refs" },
-      { kind: "chore", text: "Sphinx docs retired — replaced with Next.js + Griffe site" },
-    ],
-  },
-  {
-    version: "v2.1.0",
-    date: "2026-03-15",
-    items: [
-      { kind: "feat", text: "torch.fft 22-function rollout — rfft, irfft, fftshift, fftfreq, …" },
-      { kind: "feat", text: "AMP (autocast + GradScaler) — experimental" },
-      { kind: "fix", text: "MobileNetV2 head always 1280 channels (not width-scaled)" },
-    ],
-  },
-  {
-    version: "v2.0.0",
-    date: "2026-01-01",
-    tag: "major",
-    items: [
-      { kind: "feat", text: "Initial Apple Silicon–only release. CPU = Accelerate, GPU = MLX" },
-      { kind: "feat", text: "nn.Module, autograd engine, Adam / SGD optimizers" },
-      { kind: "feat", text: "ResNet, MobileNet, VGG model families" },
-    ],
-  },
-];
+function CategoryHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-5 mb-2 pl-6 text-[11px] font-semibold uppercase tracking-widest text-lucid-text-low">
+      {children}
+    </p>
+  );
+}
 
-const KIND_COLOR = {
-  feat: "text-lucid-success",
-  fix: "text-lucid-warning",
-  refactor: "text-lucid-blue",
-  chore: "text-lucid-text-low",
-} as const;
+function ChangelogList({ children }: { children: React.ReactNode }) {
+  return (
+    <ul className="pl-6 space-y-1.5">
+      {children}
+    </ul>
+  );
+}
 
-export default function ChangelogPage() {
+function ChangelogItem({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2 text-sm text-lucid-text-mid leading-relaxed">
+      <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-lucid-border" />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function ChangelogParagraph({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="pl-6 mt-2 mb-3 text-sm text-lucid-text-low leading-relaxed italic">
+      {children}
+    </p>
+  );
+}
+
+function ChangelogLink({
+  href,
+  children,
+}: {
+  href?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-lucid-primary underline underline-offset-4 decoration-lucid-primary/40 hover:decoration-lucid-primary transition-colors"
+    >
+      {children}
+    </a>
+  );
+}
+
+const CHANGELOG_COMPONENTS = {
+  h2: VersionHeading,
+  h3: CategoryHeading,
+  ul: ChangelogList,
+  li: ChangelogItem,
+  p: ChangelogParagraph,
+  a: ChangelogLink,
+  code: InlineCode,
+};
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+async function getChangelog() {
+  // CHANGELOG.md is at repo root — one level above web/
+  const filePath = path.join(process.cwd(), "..", "CHANGELOG.md");
+  if (!fs.existsSync(filePath)) return null;
+
+  // Strip the reference-link footer (lines like "[3.0.0]: https://...")
+  // so remark doesn't turn version headers into anchor tags
+  const raw = fs.readFileSync(filePath, "utf-8");
+  const stripped = raw.replace(/^\[[^\]]+\]:\s*https?:\/\/.+$/gm, "");
+
+  const { content } = await compileMDX({
+    source: stripped,
+    components: CHANGELOG_COMPONENTS,
+    options: {
+      mdxOptions: {
+        format: "md",       // pure markdown — prevents {…} being parsed as JSX expressions
+        remarkPlugins: [remarkGfm],
+      },
+    },
+  });
+
+  return content;
+}
+
+export default async function ChangelogPage() {
+  const content = await getChangelog();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
@@ -70,38 +156,27 @@ export default function ChangelogPage() {
               Changelog
             </h1>
             <p className="text-lucid-text-mid mb-12 text-sm leading-relaxed">
-              A record of all notable changes to Lucid.
+              All notable changes to Lucid, based on{" "}
+              <a
+                href="https://keepachangelog.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-lucid-primary underline underline-offset-4"
+              >
+                Keep a Changelog
+              </a>
+              .
             </p>
 
-            <div className="relative space-y-10 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-px before:bg-lucid-border">
-              {CHANGELOG.map(({ version, date, tag, items }) => (
-                <div key={version} className="relative pl-6">
-                  <div className="absolute left-[-3.5px] top-1.5 h-2 w-2 rounded-full bg-lucid-primary ring-2 ring-lucid-bg" />
-                  <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <span className="text-base font-bold text-lucid-text-high">
-                      {version}
-                    </span>
-                    {tag === "latest" && <Badge variant="default">Latest</Badge>}
-                    {tag === "major" && <Badge variant="secondary">Major</Badge>}
-                    <time className="text-xs text-lucid-text-disabled">{date}</time>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {items.map(({ kind, text }, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <span
-                          className={`shrink-0 font-mono text-[10px] font-semibold uppercase tracking-wider mt-[3px] w-16 ${KIND_COLOR[kind]}`}
-                        >
-                          {kind}
-                        </span>
-                        <span className="text-lucid-text-mid leading-relaxed">
-                          {text}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
+            {content ? (
+              <div className="relative before:absolute before:left-0 before:top-3 before:bottom-3 before:w-px before:bg-lucid-border">
+                {content}
+              </div>
+            ) : (
+              <p className="text-lucid-text-low text-sm">
+                CHANGELOG.md not found.
+              </p>
+            )}
           </FadeIn>
         </div>
       </main>
