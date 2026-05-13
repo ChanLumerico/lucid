@@ -25,20 +25,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.resnest._config import ResNeStConfig
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_divisible(v: float, divisor: int = 8, min_value: int = 32) -> int:
-    """Round ``v`` up to the nearest multiple of ``divisor`` (>= ``min_value``)."""
-    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
-    if new_v < 0.9 * v:
-        new_v += divisor
-    return new_v
-
 
 # ---------------------------------------------------------------------------
 # RadixSoftmax

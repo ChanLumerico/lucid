@@ -16,14 +16,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.mobilenet_v2._config import MobileNetV2Config
-
-
-def _make_divisible(v: float, divisor: int = 8) -> int:
-    new_v = max(divisor, int(v + divisor / 2) // divisor * divisor)
-    if new_v < 0.9 * v:
-        new_v += divisor
-    return new_v
 
 
 # ---------------------------------------------------------------------------

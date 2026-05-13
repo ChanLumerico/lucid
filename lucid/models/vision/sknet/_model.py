@@ -21,21 +21,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.sknet._config import SKNetConfig
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_divisible(v: float, divisor: int = 8, min_value: int | None = None) -> int:
-    """Round *v* up to the nearest multiple of *divisor* (≥ *min_value*)."""
-    min_val = min_value if min_value is not None else divisor
-    new_v = max(min_val, int(v + divisor / 2) // divisor * divisor)
-    if new_v < 0.9 * v:
-        new_v += divisor
-    return new_v
-
 
 # ---------------------------------------------------------------------------
 # SelectiveKernelAttn — attention module (Conv2d-based, as in timm)

@@ -15,17 +15,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.senet._config import SENetConfig
-
-# ---------------------------------------------------------------------------
-# Helper — make_divisible(v, divisor)
-# ---------------------------------------------------------------------------
-
-
-def _make_divisible(v: float, divisor: int) -> int:
-    """Round *v* up to the nearest multiple of *divisor*, at least *divisor*."""
-    return max(divisor, int(v + divisor / 2) // divisor * divisor)
-
 
 # ---------------------------------------------------------------------------
 # Squeeze-Excitation block (timm-accurate)

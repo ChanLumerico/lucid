@@ -31,15 +31,8 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.mobilenet._config import MobileNetV1Config
-
-
-def _make_divisible(v: float, divisor: int = 8) -> int:
-    """Round v to the nearest multiple of divisor (≥ divisor)."""
-    new_v = max(divisor, int(v + divisor / 2) // divisor * divisor)
-    if new_v < 0.9 * v:
-        new_v += divisor
-    return new_v
 
 
 def _dw_pw(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
