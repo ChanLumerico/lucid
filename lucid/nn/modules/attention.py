@@ -1,4 +1,4 @@
-"""
+r"""
 Multi-head attention module.
 """
 
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 _NEG_INF: float = float("-inf")
 
 
-def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
+def _to_additive_mask(mask: "Tensor", float_dtype: object) -> "Tensor":
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
     if mask.dtype == _lucid.bool_:
@@ -38,29 +38,233 @@ def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
 
 
 class MultiheadAttention(Module):
-    """Multi-head scaled dot-product attention.
+    r"""Multi-head scaled dot-product attention.
+
+    Implements the multi-head attention mechanism introduced in
+    "Attention Is All You Need" (Vaswani et al., 2017).  Each head
+    independently computes scaled dot-product attention over a
+    learned linear projection of the query, key and value inputs;
+    the per-head outputs are then concatenated and projected once
+    more to produce the final result.
+
+    **Scaled dot-product attention** for a single head:
+
+    .. math::
+
+        \text{Attention}(Q, K, V)
+        = \text{softmax}\!\left(\frac{Q K^{\top}}{\sqrt{d_k}}\right) V
+
+    where :math:`d_k` is the per-head key dimension (``head_dim``).
+    The :math:`1/\sqrt{d_k}` scaling prevents the dot-products from
+    growing so large that the softmax function is pushed into regions
+    with extremely small gradients.
+
+    **Multi-head attention** uses :math:`h` parallel heads:
+
+    .. math::
+
+        \text{head}_i = \text{Attention}(Q W_i^Q,\; K W_i^K,\; V W_i^V)
+
+    .. math::
+
+        \text{MultiHead}(Q, K, V)
+        = \text{Concat}(\text{head}_1, \ldots, \text{head}_h)\, W^O
+
+    where :math:`W_i^Q \in \mathbb{R}^{d_{\text{model}} \times d_k}`,
+    :math:`W_i^K \in \mathbb{R}^{d_{\text{model}} \times d_k}`,
+    :math:`W_i^V \in \mathbb{R}^{d_{\text{model}} \times d_v}`, and
+    :math:`W^O \in \mathbb{R}^{h d_v \times d_{\text{model}}}` are
+    learned projection matrices.
+
+    When ``kdim`` and ``vdim`` both equal ``embed_dim``, the three
+    input projections are stored as a single fused weight
+    ``in_proj_weight`` of shape ``(3 * embed_dim, embed_dim)`` and
+    split at runtime, which is more cache-friendly on Apple Silicon.
 
     Parameters
     ----------
     embed_dim : int
-        Total dimension of the model (split across heads).
+        Total dimension of the model, :math:`d_{\text{model}}`.
+        Must be divisible by ``num_heads``.
     num_heads : int
-        Number of parallel attention heads; ``embed_dim`` must be divisible.
+        Number of parallel attention heads :math:`h`.
+        Each head operates on a subspace of dimension
+        ``head_dim = embed_dim // num_heads``.
+    dropout : float, optional
+        Dropout probability applied to the attention weight matrix
+        during training.  Default: ``0.0``.
+    bias : bool, optional
+        If ``True``, learnable bias terms are added to all input and
+        output projection layers.  Default: ``True``.
+    add_bias_kv : bool, optional
+        If ``True``, learnable bias rows ``bias_k`` and ``bias_v``
+        (each of shape ``(1, 1, embed_dim)``) are appended to the
+        key and value sequences along the sequence dimension before
+        the attention computation.  Useful for cross-attention
+        scenarios where extra context tokens are desired.
+        Default: ``False``.
+    add_zero_attn : bool, optional
+        If ``True``, a zero-valued row is appended to the key and
+        value sequences.  This can stabilise training in early steps
+        by providing an "attend to nothing" option.  Default: ``False``.
+    kdim : int or None, optional
+        Feature dimension of the key input.  When ``None`` (default),
+        falls back to ``embed_dim`` and a fused ``in_proj_weight``
+        is used.
+    vdim : int or None, optional
+        Feature dimension of the value input.  When ``None``
+        (default), falls back to ``embed_dim``.
+    batch_first : bool, optional
+        Controls the expected layout of all input and output tensors.
+
+        * ``False`` (default): ``(seq_len, batch, embed_dim)``  — the
+          classic sequence-first convention.
+        * ``True``: ``(batch, seq_len, embed_dim)`` — more intuitive
+          for most modern use-cases.
+
+    device : DeviceLike, optional
+        Device on which to allocate parameters.  ``None`` defaults to
+        the current default device.
+    dtype : DTypeLike, optional
+        Data type for all parameters.  ``None`` defaults to the
+        current default floating-point type.
+
+    Attributes
+    ----------
+    embed_dim : int
+        Total model dimension passed at construction.
+    num_heads : int
+        Number of attention heads.
+    head_dim : int
+        Per-head dimension: ``embed_dim // num_heads``.
+    kdim : int
+        Effective key feature dimension.
+    vdim : int
+        Effective value feature dimension.
     dropout : float
-        Probability applied to attention weights during training.
-    bias : bool
-        Add a learnable bias to the input / output projections.
-    add_bias_kv : bool
-        Prepend learnable bias rows to ``K`` and ``V`` along the sequence axis.
-    add_zero_attn : bool
-        Append a zero row to ``K`` and ``V`` along the sequence axis.
-    kdim, vdim : int | None
-        Separate dimensions for the key / value inputs.  When unset they
-        fall back to ``embed_dim`` and the three projections share a fused
-        weight (``in_proj_weight``).
+        Attention weight dropout probability.
     batch_first : bool
-        If ``True``, inputs / outputs are ``(batch, seq, feature)`` rather
-        than the default ``(seq, batch, feature)``.
+        Whether inputs are ``(batch, seq, feature)``.
+    in_proj_weight : Parameter or None
+        Fused ``(3 * embed_dim, embed_dim)`` projection weight used
+        when ``kdim == vdim == embed_dim``.  Sliced at runtime into
+        Q, K, V sub-weights.  ``None`` when using separate weights.
+    q_proj_weight : Parameter or None
+        Separate query projection weight ``(embed_dim, embed_dim)``.
+        Non-``None`` only when ``kdim`` or ``vdim`` differs from
+        ``embed_dim``.
+    k_proj_weight : Parameter or None
+        Separate key projection weight ``(embed_dim, kdim)``.
+    v_proj_weight : Parameter or None
+        Separate value projection weight ``(embed_dim, vdim)``.
+    in_proj_bias : Parameter or None
+        Bias for the fused input projection ``(3 * embed_dim,)``.
+        ``None`` when ``bias=False``.
+    out_proj_weight : Parameter
+        Output projection weight ``(embed_dim, embed_dim)``.
+    out_proj_bias : Parameter or None
+        Output projection bias ``(embed_dim,)``.
+        ``None`` when ``bias=False``.
+    bias_k : Parameter or None
+        Learnable key bias row ``(1, 1, embed_dim)``.
+        Non-``None`` when ``add_bias_kv=True``.
+    bias_v : Parameter or None
+        Learnable value bias row ``(1, 1, embed_dim)``.
+        Non-``None`` when ``add_bias_kv=True``.
+    add_zero_attn : bool
+        Whether a zero row is appended to K and V.
+
+    Shape
+    -----
+    The shapes below use the following notation:
+
+    * :math:`N` — batch size
+    * :math:`L` — target (query) sequence length
+    * :math:`S` — source (key / value) sequence length
+    * :math:`E` — ``embed_dim``
+
+    When ``batch_first=False`` (default):
+
+    * ``query``: :math:`(L, N, E)`
+    * ``key``: :math:`(S, N, E_k)` where :math:`E_k` = ``kdim``
+    * ``value``: :math:`(S, N, E_v)` where :math:`E_v` = ``vdim``
+    * Output ``attn_output``: :math:`(L, N, E)`
+    * Output ``attn_weights``: :math:`(N, L, S)` when
+      ``need_weights=True`` and ``average_attn_weights=True``;
+      :math:`(N, h, L, S)` when ``average_attn_weights=False``.
+
+    When ``batch_first=True``:
+
+    * ``query``: :math:`(N, L, E)`
+    * ``key`` / ``value``: :math:`(N, S, E_{k/v})`
+    * Output ``attn_output``: :math:`(N, L, E)`
+
+    Notes
+    -----
+    **Why scale by** :math:`1/\sqrt{d_k}`?
+        As :math:`d_k` grows, the dot-products :math:`QK^\top`
+        accumulate over more dimensions and their magnitude grows
+        like :math:`\sqrt{d_k}` under the assumption of unit-variance
+        inputs.  Without the scale factor the softmax would saturate,
+        producing near-one-hot distributions and vanishingly small
+        gradients.  Dividing by :math:`\sqrt{d_k}` restores
+        roughly unit variance before the softmax.
+
+    **Causal masking** (``is_causal=True``):
+        An upper-triangular :math:`-\infty` mask is added to the
+        score matrix so that position :math:`i` cannot attend to any
+        position :math:`j > i`.  This implements the autoregressive
+        constraint needed for language model decoding.
+
+    **Fused vs. separate projections**:
+        When ``kdim == vdim == embed_dim``, the Q/K/V projections
+        share a single ``(3E, E)`` weight matrix.  This layout
+        allows a single ``linear`` call plus a cheap ``split_at``
+        on the result, which amortises kernel-launch overhead and
+        improves cache locality on the MLX / Accelerate backends.
+
+    **Checkpoint compatibility**:
+        State-dicts from the reference framework store the output
+        projection under the key ``out_proj.weight`` / ``out_proj.bias``
+        (a sub-module named ``out_proj``).  Lucid's ``_load_from_state_dict``
+        hook transparently remaps those keys to the flat
+        ``out_proj_weight`` / ``out_proj_bias`` attributes used here,
+        so pre-trained weights can be loaded directly.
+
+    Examples
+    --------
+    **Basic self-attention** (sequence-first layout):
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> mha = nn.MultiheadAttention(embed_dim=64, num_heads=8)
+    >>> # Sequence-first: (seq_len, batch, embed_dim)
+    >>> x = lucid.randn(10, 2, 64)          # 10 tokens, batch=2
+    >>> out, weights = mha(x, x, x)
+    >>> out.shape
+    (10, 2, 64)
+    >>> weights.shape                        # averaged over heads
+    (2, 10, 10)
+
+    **Cross-attention with batch_first layout and causal mask**:
+
+    >>> mha = nn.MultiheadAttention(embed_dim=64, num_heads=8,
+    ...                             batch_first=True)
+    >>> q = lucid.randn(2, 6, 64)           # batch=2, 6 query tokens
+    >>> kv = lucid.randn(2, 10, 64)         # 10 key/value tokens
+    >>> out, _ = mha(q, kv, kv, need_weights=False)
+    >>> out.shape
+    (2, 6, 64)
+
+    **Cross-modal attention with different key/value dimensions**:
+
+    >>> mha = nn.MultiheadAttention(embed_dim=128, num_heads=4,
+    ...                             kdim=64, vdim=64)
+    >>> q = lucid.randn(5, 1, 128)
+    >>> kv = lucid.randn(7, 1, 64)
+    >>> out, weights = mha(q, kv, kv)
+    >>> out.shape
+    (5, 1, 128)
     """
 
     def __init__(
@@ -171,7 +375,7 @@ class MultiheadAttention(Module):
     # ── reference-checkpoint loading: accept ``out_proj.weight`` / ``out_proj.bias``
     def _load_from_state_dict(
         self,
-        state_dict: dict[str, Tensor],
+        state_dict: dict[str, "Tensor"],
         prefix: str,
         local_metadata: dict[str, object],
         strict: bool,
@@ -204,8 +408,8 @@ class MultiheadAttention(Module):
         )
 
     def _project_qkv(
-        self, query: Tensor, key: Tensor, value: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor]:
+        self, query: "Tensor", key: "Tensor", value: "Tensor"
+    ) -> tuple["Tensor", "Tensor", "Tensor"]:
         """Apply the input projections, returning ``(q, k, v)`` each shaped
         ``(B, T*, embed_dim)``."""
         d: int = self.embed_dim
@@ -234,25 +438,25 @@ class MultiheadAttention(Module):
         v: Tensor = linear(value, v_w, v_b)
         return q, k, v
 
-    def _split_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
+    def _split_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
         """Reshape ``(B, T, embed_dim)`` → ``(B, num_heads, T, head_dim)``."""
         return x.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(
             [0, 2, 1, 3]
         )
 
-    def _merge_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
+    def _merge_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
         """Inverse of :meth:`_split_heads`."""
         return x.permute([0, 2, 1, 3]).reshape(batch_size, seq_len, self.embed_dim)
 
     def _build_attn_mask(
         self,
-        attn_mask: Tensor | None,
-        key_padding_mask: Tensor | None,
+        attn_mask: "Tensor | None",
+        key_padding_mask: "Tensor | None",
         batch_size: int,
         target_len: int,
         source_len: int,
         float_dtype: object,
-    ) -> Tensor | None:
+    ) -> "Tensor | None":
         """Combine ``attn_mask`` and ``key_padding_mask`` into a single
         ``(B, H, T, S)`` additive float mask suitable for SDPA."""
         merged: Tensor | None = None
@@ -280,15 +484,15 @@ class MultiheadAttention(Module):
 
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
-        query: Tensor,
-        key: Tensor,
-        value: Tensor,
-        key_padding_mask: Tensor | None = None,
+        query: "Tensor",
+        key: "Tensor",
+        value: "Tensor",
+        key_padding_mask: "Tensor | None" = None,
         need_weights: bool = True,
-        attn_mask: Tensor | None = None,
+        attn_mask: "Tensor | None" = None,
         average_attn_weights: bool = True,
         is_causal: bool = False,
-    ) -> tuple[Tensor, Tensor | None]:
+    ) -> tuple["Tensor", "Tensor | None"]:
         # Internally operate in (B, T, E) layout regardless of batch_first.
         if not self.batch_first:
             query = query.permute([1, 0, 2])
@@ -368,12 +572,12 @@ class MultiheadAttention(Module):
 
     def _attn_with_weights(
         self,
-        q: Tensor,
-        k: Tensor,
-        v: Tensor,
-        attn_mask: Tensor | None,
+        q: "Tensor",
+        k: "Tensor",
+        v: "Tensor",
+        attn_mask: "Tensor | None",
         is_causal: bool,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple["Tensor", "Tensor"]:
         """Manual scaled-dot-product attention that also returns weights.
 
         Used when the caller asks for attention weights — the fused SDPA
