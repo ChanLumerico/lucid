@@ -12,7 +12,6 @@ type Segment =
 
 function parseSegments(text: string): Segment[] {
   const segments: Segment[] = [];
-  // Priority: $$ first (longer), then $ inline, then `code`
   const RE = /(\$\$[\s\S]+?\$\$|\$(?!\$)[^$\n]+?\$|`[^`]+`)/g;
   let last = 0;
 
@@ -39,6 +38,65 @@ function parseSegments(text: string): Segment[] {
   return segments;
 }
 
+function renderSegments(segments: Segment[]) {
+  return segments.map((seg, i) => {
+    if (seg.type === "text") {
+      // Preserve line breaks within a paragraph
+      const lines = seg.content.split("\n");
+      return (
+        <span key={i}>
+          {lines.map((line, j) => (
+            <span key={j}>
+              {j > 0 && <br />}
+              {line}
+            </span>
+          ))}
+        </span>
+      );
+    }
+
+    if (seg.type === "code") {
+      return (
+        <code
+          key={i}
+          className="font-mono text-[0.875em] bg-lucid-elevated text-lucid-text-high px-1 py-px rounded"
+        >
+          {seg.content}
+        </code>
+      );
+    }
+
+    if (seg.type === "block") {
+      const html = katex.renderToString(seg.latex, {
+        throwOnError: false,
+        displayMode: true,
+        output: "html",
+      });
+      return (
+        <span
+          key={i}
+          className="my-3 block overflow-x-auto text-center"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
+    }
+
+    // inline math
+    const html = katex.renderToString(seg.latex, {
+      throwOnError: false,
+      displayMode: false,
+      output: "html",
+    });
+    return (
+      <span
+        key={i}
+        className="mx-0.5"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  });
+}
+
 // ---------------------------------------------------------------------------
 // MathText — renders a docstring text field with math and inline-code support
 // ---------------------------------------------------------------------------
@@ -53,56 +111,25 @@ interface MathTextProps {
 export function MathText({ text, className, block = false }: MathTextProps) {
   if (!text) return null;
 
-  const segments = parseSegments(text);
-  const Tag = block ? "p" : "span";
+  // Multi-paragraph: split on double newlines and render each separately
+  const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim());
+
+  if (!block || paragraphs.length <= 1) {
+    const Tag = block ? "p" : "span";
+    return (
+      <Tag className={className}>
+        {renderSegments(parseSegments(text))}
+      </Tag>
+    );
+  }
 
   return (
-    <Tag className={className}>
-      {segments.map((seg, i) => {
-        if (seg.type === "text") {
-          return <span key={i}>{seg.content}</span>;
-        }
-
-        if (seg.type === "code") {
-          return (
-            <code
-              key={i}
-              className="font-mono text-[0.875em] bg-lucid-elevated text-lucid-text-high px-1 py-px rounded"
-            >
-              {seg.content}
-            </code>
-          );
-        }
-
-        if (seg.type === "block") {
-          const html = katex.renderToString(seg.latex, {
-            throwOnError: false,
-            displayMode: true,
-            output: "html",
-          });
-          return (
-            <span
-              key={i}
-              className="my-3 block overflow-x-auto text-center"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          );
-        }
-
-        // inline math
-        const html = katex.renderToString(seg.latex, {
-          throwOnError: false,
-          displayMode: false,
-          output: "html",
-        });
-        return (
-          <span
-            key={i}
-            className="mx-0.5"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-        );
-      })}
-    </Tag>
+    <div className={className}>
+      {paragraphs.map((para, i) => (
+        <p key={i} className={i > 0 ? "mt-3" : ""}>
+          {renderSegments(parseSegments(para))}
+        </p>
+      ))}
+    </div>
   );
 }

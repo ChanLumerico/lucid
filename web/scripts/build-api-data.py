@@ -213,9 +213,18 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
         if kind == K.text:
             text = _rst_to_text(str(val))
             if result["summary"] is None:
-                result["summary"] = text
+                # Split first paragraph → summary, rest → extended
+                paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+                result["summary"] = paragraphs[0] if paragraphs else text
+                rest = "\n\n".join(paragraphs[1:])
+                if rest:
+                    result["extended"] = rest
             else:
-                result["extended"] = text
+                # Second K.text block: append to extended
+                if result["extended"]:
+                    result["extended"] += "\n\n" + text
+                else:
+                    result["extended"] = text
 
         elif kind == K.parameters:
             for item in val:
@@ -243,17 +252,35 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
                 })
 
         elif kind == K.examples:
-            block = str(val) if isinstance(val, str) else "\n".join(
-                str(ex.value) if hasattr(ex, "value") else str(ex)
-                for ex in (val if hasattr(val, "__iter__") else [val])
-            )
-            if block.strip():
-                result["examples"].append(block.strip())
+            # Griffe NumPy parser yields a list of (DocstringSectionKind, str) tuples
+            parts: list[str] = []
+            items_iter = val if hasattr(val, "__iter__") and not isinstance(val, str) else [val]
+            for ex in items_iter:
+                if isinstance(ex, tuple) and len(ex) == 2:
+                    # (DocstringSectionKind.examples|text, code_str) tuple
+                    parts.append(str(ex[1]).strip())
+                elif isinstance(ex, str):
+                    parts.append(ex.strip())
+                elif hasattr(ex, "value"):
+                    parts.append(str(ex.value).strip())
+                else:
+                    parts.append(str(ex).strip())
+            block = "\n".join(p for p in parts if p)
+            if not block:
+                block = str(val).strip()
+            if block:
+                result["examples"].append(block)
 
         elif kind in (K.admonition,):
-            # Notes, warnings, tips expressed as admonitions
+            # Notes/warnings expressed as admonitions (reST style)
             note_text = _rst_to_text(str(val) if isinstance(val, str) else
                                      getattr(val, "description", str(val)))
+            if note_text:
+                result["notes"].append(note_text)
+
+        elif hasattr(K, "notes") and kind == K.notes:
+            # NumPy "Notes" section → dedicated kind in newer Griffe
+            note_text = _rst_to_text(str(val))
             if note_text:
                 result["notes"].append(note_text)
 
