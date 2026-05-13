@@ -1,0 +1,171 @@
+---
+title: Modules
+description: Building reusable models with lucid.nn.Module — parameters, buffers, hooks, and serialization.
+category: Concepts
+order: 6
+---
+
+`lucid.nn.Module` is the base class for all neural network layers and models. It manages parameters, submodules, hooks, and device movement in a composable way.
+
+## Defining a module
+
+Subclass `nn.Module` and implement `forward`:
+
+```python
+import lucid
+import lucid.nn as nn
+
+class MLP(nn.Module):
+    def __init__(self, in_features: int, hidden: int, out_features: int) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(in_features, hidden)
+        self.fc2 = nn.Linear(hidden, out_features)
+        self.act = nn.ReLU()
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.fc2(self.act(self.fc1(x)))
+
+model = MLP(784, 256, 10)
+```
+
+Assign any `nn.Module` or `nn.Parameter` as an attribute and it is registered automatically.
+
+## Parameters and buffers
+
+| Type | Registered as | Moved with `.to()` | Saved in `state_dict` | Gradient |
+|---|---|---|---|---|
+| `nn.Parameter` | parameter | yes | yes | yes |
+| `lucid.Tensor` (plain) | — | no | no | depends |
+| Buffer (via `register_buffer`) | buffer | yes | yes | no |
+
+```python
+class NormLayer(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(lucid.ones(dim))
+        self.bias   = nn.Parameter(lucid.zeros(dim))
+        self.register_buffer("running_mean", lucid.zeros(dim))
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return x * self.weight + self.bias
+```
+
+## Iterating parameters
+
+```python
+# All leaf parameters (with gradients)
+for name, p in model.named_parameters():
+    print(name, p.shape)
+
+# All submodules (recursive)
+for name, mod in model.named_modules():
+    print(name, type(mod).__name__)
+
+# Count parameters
+total = sum(p.numel for p in model.parameters())
+print(f"{total:,} parameters")
+```
+
+## Device movement
+
+```python
+model.to("metal")   # all parameters + buffers → Metal GPU
+model.cpu()         # all → CPU
+
+# Check device of first parameter
+next(model.parameters()).device
+```
+
+## Training vs eval mode
+
+Certain layers (BatchNorm, Dropout) behave differently in train vs eval:
+
+```python
+model.train()   # training mode (default)
+model.eval()    # inference mode — disables Dropout, fixes BatchNorm stats
+```
+
+## Forward hooks
+
+Hooks let you inspect or modify activations without changing the module:
+
+```python
+activations: dict[str, lucid.Tensor] = {}
+
+def save_activation(module, input, output):
+    activations[module.__class__.__name__] = output
+
+handle = model.fc1.register_forward_hook(save_activation)
+
+model(x)
+print(activations["Linear"].shape)
+
+handle.remove()   # clean up when done
+```
+
+## Gradient hooks
+
+```python
+def clip_grad(grad: lucid.Tensor) -> lucid.Tensor:
+    return grad.clamp(-1.0, 1.0)
+
+model.fc1.weight.register_hook(clip_grad)
+```
+
+## state_dict and checkpointing
+
+```python
+import lucid.serialization as ser
+
+# Save
+state = model.state_dict()
+ser.save(state, "checkpoint.pkl")
+
+# Load
+state = ser.load("checkpoint.pkl")
+model.load_state_dict(state)
+```
+
+<Callout variant="warning">
+`load_state_dict` expects an **exact** key match by default. Pass `strict=False` to allow missing or extra keys.
+</Callout>
+
+## Freezing parameters
+
+```python
+# Freeze all parameters in a submodule
+for p in model.fc1.parameters():
+    p.requires_grad = False
+
+# Or freeze the whole model
+model.requires_grad_(False)
+
+# Unfreeze
+model.requires_grad_(True)
+```
+
+## Sequential and ModuleList
+
+For simple chains, use `nn.Sequential`:
+
+```python
+encoder = nn.Sequential(
+    nn.Linear(784, 512),
+    nn.ReLU(),
+    nn.Linear(512, 128),
+)
+```
+
+For dynamic collections, use `nn.ModuleList`:
+
+```python
+class Ensemble(nn.Module):
+    def __init__(self, n: int) -> None:
+        super().__init__()
+        self.heads = nn.ModuleList([nn.Linear(128, 10) for _ in range(n)])
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return lucid.stack([h(x) for h in self.heads]).mean(dim=0)
+```
+
+Full reference: [`lucid.nn`](/api/lucid.nn)
