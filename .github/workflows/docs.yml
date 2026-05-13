@@ -1,0 +1,99 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "lucid/**/*.py"
+      - "lucid/**/*.pyi"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "lucid/**/*.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Job 1: Build the HTML docs
+  # ────────────────────────────────────────────────────────────
+  build:
+    name: Build docs
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Lucid (no C++ build needed — autodoc mocks _C)
+        run: pip install -e ".[docs]"
+
+      # Doxygen is needed for Breathe + Exhale (C++ API pages)
+      - name: Install Doxygen
+        run: brew install doxygen
+
+      - name: Build HTML
+        working-directory: docs
+        run: make html SPHINXOPTS="-W --keep-going -n"
+        # -W  : turn warnings into errors
+        # -n  : nit-picky mode (warn on all missing references)
+        # --keep-going : report all errors, not just the first
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+  # ────────────────────────────────────────────────────────────
+  # Job 2: Deploy to GitHub Pages (main branch only)
+  # ────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ────────────────────────────────────────────────────────────
+  # Job 3: Link check (PRs only — informational)
+  # ────────────────────────────────────────────────────────────
+  linkcheck:
+    name: Link check
+    runs-on: macos-14
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install -e ".[docs]"
+
+      - name: Run linkcheck
+        working-directory: docs
+        run: make linkcheck
+        continue-on-error: true   # informational — don't block PR
