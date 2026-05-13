@@ -232,6 +232,11 @@ from lucid.models.vision.inception_next import (
     InceptionNeXtConfig, InceptionNeXt, InceptionNeXtForImageClassification,
     inception_next_tiny, inception_next_tiny_cls,
 )
+# 2014 — R-CNN (Girshick et al.)
+from lucid.models.vision.rcnn import (
+    RCNNConfig, RCNNForObjectDetection,
+    rcnn,
+)
 
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
@@ -370,4 +375,7 @@ __all__ = [
     # ── Vision (2023) InceptionNeXt ──────────────────────────────────────────
     "InceptionNeXtConfig", "InceptionNeXt", "InceptionNeXtForImageClassification",
     "inception_next_tiny", "inception_next_tiny_cls",
+    # ── Vision (2014) R-CNN ───────────────────────────────────────────────────
+    "RCNNConfig", "RCNNForObjectDetection",
+    "rcnn",
 ]
