@@ -1,7 +1,7 @@
 """Mask2Former configuration (Cheng et al., CVPR 2022)."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
 
@@ -49,6 +49,13 @@ class Mask2FormerConfig(ModelConfig):
 
     # Backbone
     backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
+    backbone_type: Literal["resnet", "swin"] = "resnet"
+    backbone_block: Literal["basic", "bottleneck"] = "bottleneck"
+    # Swin-backbone config (used only when backbone_type == "swin")
+    swin_embed_dim: int = 96
+    swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2)
+    swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24)
+    swin_window_size: int = 7
 
     # Transformer
     d_model: int = 256
@@ -67,3 +74,5 @@ class Mask2FormerConfig(ModelConfig):
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "backbone_layers", tuple(self.backbone_layers))
+        object.__setattr__(self, "swin_depths", tuple(self.swin_depths))
+        object.__setattr__(self, "swin_num_heads", tuple(self.swin_num_heads))

@@ -1,7 +1,7 @@
 """U-Net configuration (Ronneberger et al., MICCAI 2015)."""
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
 
@@ -44,3 +44,7 @@ class UNetConfig(ModelConfig):
     depth: int = 4
     bilinear: bool = False
     dropout: float = 0.0
+    # Spatial dimensionality (2 → standard images, 3 → volumetric data).
+    dim: Literal[2, 3] = 2
+    # Block style: "basic" = paper DoubleConv, "res" = residual DoubleConv.
+    block: Literal["basic", "res"] = "basic"

@@ -131,7 +131,9 @@ class _WindowAttention(nn.Module):
         self.rel_pos_bias = nn.Parameter(lucid.zeros(n, num_heads))
         nn.init.trunc_normal_(self.rel_pos_bias, std=0.02)
 
-        # Pre-compute relative position index as int64 (no in-place ops)
+        # Pre-compute relative position index as int64 (no in-place ops).
+        # Registered as a non-persistent buffer so that .to(device=...) moves
+        # it together with the model (and to keep it out of state_dicts).
         coords_1d = lucid.arange(window_size).to(lucid.int64)
         gy, gx = lucid.meshgrid(coords_1d, coords_1d, indexing="ij")  # (ws, ws)
         flat_y, flat_x = gy.flatten(), gx.flatten()  # (ws^2,)
@@ -140,8 +142,7 @@ class _WindowAttention(nn.Module):
         )  # (ws^2, ws^2)
         rel_x = flat_x.unsqueeze(1) - flat_x.unsqueeze(0) + (window_size - 1)
         rel_idx = rel_y * (2 * window_size - 1) + rel_x  # (ws^2, ws^2)
-        self.rel_pos_idx: Tensor
-        object.__setattr__(self, "rel_pos_idx", rel_idx)
+        self.register_buffer("rel_pos_idx", rel_idx, persistent=False)
 
     def forward(  # type: ignore[override]
         self,
@@ -215,12 +216,12 @@ class _SwinBlock(nn.Module):
             nn.Dropout(p=dropout),
         )
 
-    def _attn_mask(self, H: int, W: int) -> Tensor | None:
+    def _attn_mask(self, H: int, W: int, device: str = "cpu") -> Tensor | None:
         if self.shift_size == 0:
             return None
         ws = self.ws
         ss = self.shift_size
-        img_mask = lucid.zeros(1, H, W, 1)
+        img_mask = lucid.zeros(1, H, W, 1, device=device)
         slices_h = [slice(0, -ws), slice(-ws, -ss), slice(-ss, None)]
         slices_w = [slice(0, -ws), slice(-ws, -ss), slice(-ss, None)]
         cnt = 0
@@ -233,7 +234,9 @@ class _SwinBlock(nn.Module):
         mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)  # (nW, ws^2, ws^2)
         # Replace non-zero with -100
         mask = lucid.where(
-            mask != 0, lucid.full(mask.shape, -100.0), lucid.zeros(mask.shape)
+            mask != 0,
+            lucid.full(mask.shape, -100.0, device=device),
+            lucid.zeros(mask.shape, device=device),
         )
         return mask
 
@@ -246,7 +249,7 @@ class _SwinBlock(nn.Module):
             ss = self.shift_size
             x = lucid.roll(x, [-ss, -ss], dims=[1, 2])  # type: ignore[list-item]
 
-        mask = self._attn_mask(H, W)
+        mask = self._attn_mask(H, W, device=x.device.type)
         windows, nH, nW = _window_partition(x, self.ws)
         windows = windows.reshape(-1, self.ws * self.ws, C)
 

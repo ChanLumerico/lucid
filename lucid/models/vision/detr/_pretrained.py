@@ -20,10 +20,10 @@ _CFG_R50 = DETRConfig(
     score_thresh=0.7,
 )
 
-_CFG_R50_DC5 = DETRConfig(
+_CFG_R101 = DETRConfig(
     num_classes=80,
     in_channels=3,
-    backbone_layers=(3, 4, 6, 3),
+    backbone_layers=(3, 4, 23, 3),  # ResNet-101
     d_model=256,
     n_head=8,
     num_encoder_layers=6,
@@ -59,3 +59,22 @@ def detr_resnet50(
     loss — no anchors, no NMS.
     """
     return _det(_CFG_R50, overrides)
+
+
+@register_model(
+    task="object-detection",
+    family="detr",
+    model_type="detr",
+    model_class=DETRForObjectDetection,
+    default_config=_CFG_R101,
+)
+def detr_resnet101(
+    pretrained: bool = False,
+    **overrides: object,
+) -> DETRForObjectDetection:
+    """DETR with ResNet-101 backbone (Carion et al., ECCV 2020).
+
+    Same transformer head configuration as the ResNet-50 variant, with a
+    deeper backbone (23 layer-3 blocks instead of 6) for higher capacity.
+    """
+    return _det(_CFG_R101, overrides)

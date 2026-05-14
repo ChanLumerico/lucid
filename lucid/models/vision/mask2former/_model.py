@@ -54,6 +54,51 @@ from lucid.models.vision.mask2former._config import Mask2FormerConfig
 # ---------------------------------------------------------------------------
 
 
+class _BasicBlock(nn.Module):
+    """ResNet BasicBlock (used by ResNet-18 / -34): 3×3 → 3×3, expansion 1."""
+
+    expansion: ClassVar[int] = 1
+
+    def __init__(
+        self,
+        in_ch: int,
+        mid_ch: int,
+        stride: int = 1,
+        downsample: nn.Module | None = None,
+        dilation: int = 1,
+    ) -> None:
+        super().__init__()
+        out_ch = mid_ch * self.expansion
+        self.conv1 = nn.Conv2d(
+            in_ch,
+            mid_ch,
+            3,
+            stride=stride,
+            padding=dilation,
+            dilation=dilation,
+            bias=False,
+        )
+        self.bn1 = nn.BatchNorm2d(mid_ch)
+        self.conv2 = nn.Conv2d(
+            mid_ch,
+            out_ch,
+            3,
+            padding=dilation,
+            dilation=dilation,
+            bias=False,
+        )
+        self.bn2 = nn.BatchNorm2d(out_ch)
+        self.downsample = downsample
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        identity = x
+        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
+        if self.downsample is not None:
+            identity = cast(Tensor, self.downsample(x))
+        return F.relu(out + identity)
+
+
 class _Bottleneck(nn.Module):
     expansion: ClassVar[int] = 4
 
@@ -94,9 +139,14 @@ class _Bottleneck(nn.Module):
 
 
 def _make_layer(
-    in_ch: int, mid_ch: int, num_blocks: int, stride: int = 1, dilation: int = 1
+    in_ch: int,
+    mid_ch: int,
+    num_blocks: int,
+    stride: int = 1,
+    dilation: int = 1,
+    block: type[_BasicBlock] | type[_Bottleneck] = _Bottleneck,
 ) -> tuple[nn.Sequential, int]:
-    out_ch = mid_ch * 4
+    out_ch = mid_ch * block.expansion
     ds: nn.Module | None = None
     if stride != 1 or in_ch != out_ch:
         ds = nn.Sequential(
@@ -104,25 +154,33 @@ def _make_layer(
             nn.BatchNorm2d(out_ch),
         )
     blocks: list[nn.Module] = [
-        _Bottleneck(in_ch, mid_ch, stride=stride, downsample=ds, dilation=dilation)
+        block(in_ch, mid_ch, stride=stride, downsample=ds, dilation=dilation)
     ]
     for _ in range(1, num_blocks):
-        blocks.append(_Bottleneck(out_ch, mid_ch, dilation=dilation))
+        blocks.append(block(out_ch, mid_ch, dilation=dilation))
     return nn.Sequential(*blocks), out_ch
 
 
 class _ResNetBackbone(nn.Module):
     """ResNet backbone returning [C2, C3, C4, C5] feature maps."""
 
-    def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        layers: tuple[int, int, int, int],
+        block_type: str = "bottleneck",
+    ) -> None:
         super().__init__()
+        block: type[_BasicBlock] | type[_Bottleneck] = (
+            _BasicBlock if block_type == "basic" else _Bottleneck
+        )
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.pool = nn.MaxPool2d(3, stride=2, padding=1)
-        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)
-        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)
-        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2)
-        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2)
+        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1, block=block)
+        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2, block=block)
+        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2, block=block)
+        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2, block=block)
         self.out_channels: list[int] = [c2, c3, c4, c5]
 
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
@@ -133,6 +191,69 @@ class _ResNetBackbone(nn.Module):
         c4: Tensor = cast(Tensor, self.layer3(c3))
         c5: Tensor = cast(Tensor, self.layer4(c4))
         return [c2, c3, c4, c5]
+
+
+class _SwinBackbone(nn.Module):
+    """Swin Transformer backbone returning [C2, C3, C4, C5] in (B, C, H, W) format.
+
+    Strides: patch_size=4 → C2 at stride 4, then C3/C4/C5 at strides 8/16/32.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        embed_dim: int = 96,
+        depths: tuple[int, int, int, int] = (2, 2, 6, 2),
+        num_heads: tuple[int, int, int, int] = (3, 6, 12, 24),
+        window_size: int = 7,
+        mlp_ratio: float = 4.0,
+        dropout: float = 0.0,
+        attn_drop: float = 0.0,
+    ) -> None:
+        from lucid.models.vision.swin._model import _PatchEmbed, _SwinStage
+
+        super().__init__()
+        self.patch_embed = _PatchEmbed(in_channels, patch_size=4, embed_dim=embed_dim)
+        stages: list[nn.Module] = []
+        dim = embed_dim
+        out_channels: list[int] = []
+        for i, (depth, heads) in enumerate(zip(depths, num_heads)):
+            downsample = i < len(depths) - 1
+            stages.append(
+                _SwinStage(
+                    dim=dim,
+                    depth=depth,
+                    num_heads=heads,
+                    window_size=window_size,
+                    mlp_ratio=mlp_ratio,
+                    dropout=dropout,
+                    attn_drop=attn_drop,
+                    downsample=downsample,
+                )
+            )
+            out_channels.append(dim)
+            if downsample:
+                dim *= 2
+        self.stages = nn.ModuleList(stages)
+        self.out_channels: list[int] = out_channels
+
+    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
+        # PatchEmbed → (B, H/4, W/4, C)
+        h: Tensor = cast(Tensor, self.patch_embed(x))
+        feats: list[Tensor] = []
+        from lucid.models.vision.swin._model import _SwinStage
+        for stage_mod in self.stages:
+            # _SwinStage.forward applies blocks then (optionally) downsample.
+            # We want the feature BEFORE downsample as the FPN tap for level i.
+            stage = cast(_SwinStage, stage_mod)
+            pre: Tensor = h
+            blocks_mod = stage.blocks
+            for blk in blocks_mod:
+                pre = cast(Tensor, blk(pre))
+            feats.append(pre.permute(0, 3, 1, 2))  # (B, C, H, W)
+            ds = stage.downsample
+            h = cast(Tensor, ds(pre)) if ds is not None else pre
+        return feats
 
 
 # ---------------------------------------------------------------------------
@@ -413,8 +534,25 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         fpn_ch = config.fpn_out_channels
         K = config.num_classes
 
-        # 1. Backbone
-        self.backbone = _ResNetBackbone(config.in_channels, config.backbone_layers)
+        # 1. Backbone (ResNet or Swin)
+        self.backbone: _ResNetBackbone | _SwinBackbone
+        if config.backbone_type == "swin":
+            sd = config.swin_depths
+            sh = config.swin_num_heads
+            assert len(sd) == 4 and len(sh) == 4, "Swin needs 4-stage depths/num_heads"
+            self.backbone = _SwinBackbone(
+                in_channels=config.in_channels,
+                embed_dim=config.swin_embed_dim,
+                depths=(sd[0], sd[1], sd[2], sd[3]),
+                num_heads=(sh[0], sh[1], sh[2], sh[3]),
+                window_size=config.swin_window_size,
+            )
+        else:
+            self.backbone = _ResNetBackbone(
+                config.in_channels,
+                config.backbone_layers,
+                config.backbone_block,
+            )
 
         # 2. Multi-scale pixel decoder
         self.pixel_decoder = _MultiScaleFPNDecoder(
