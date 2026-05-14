@@ -79,6 +79,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 20 new vision model families: ZFNet, Inception v3/v4/ResNet, Xception, ResNeXt, SENet, SKNet, MobileNet v2/v3/v4, ResNeSt, CSPNet, CoAtNet, CvT, CrossViT, PVT, EfficientFormer, MaxViT, InceptionNeXt (156 total registered variants)
 
+- lucid.models.vision.rcnn: R-CNN (Girshick et al., CVPR 2014) — AlexNet-style CNN per warped proposal crop, class-specific bbox regression (1 factory)
+
+- lucid.models.vision.fast_rcnn: Fast R-CNN (Girshick, ICCV 2015) — VGG16 backbone + RoI Pool 7×7 + 2-FC head; smooth-L1(σ=1) + cross-entropy loss (1 factory)
+
+- lucid.models.vision.faster_rcnn: Faster R-CNN (Ren et al., NeurIPS 2015) — VGG16 + RPN + RoI Pool; smooth-L1(σ=3) RPN loss + ROI head loss; 9 anchors per cell (1 factory)
+
+- lucid.models.vision.mask_rcnn: Mask R-CNN (He et al., ICCV 2017) — ResNet-50-FPN backbone, RoI Align, mask FCN head 14→28 via deconv; instance-segmentation output (1 factory)
+
+- lucid.models.vision.detr: DETR (Carion et al., ECCV 2020) — ResNet-50/101 + nn.Transformer encoder-decoder + Hungarian set-prediction loss; 100 object queries (2 factories)
+
+- lucid.models.vision.efficientdet: EfficientDet D0–D7 (Tan et al., CVPR 2020) — EfficientNet-B0 backbone, BiFPN with fast-normalised weighted fusion, focal+smooth-L1 loss (8 factories)
+
+- lucid.models.vision.yolo: YOLO v1/v2/v3/v4 + tiny variants (Redmon et al., Bochkovskiy et al., 2016–2020) — custom Darknet / Darknet-19 / Darknet-53 / CSPDarknet-53 backbones; YOLOv4 uses Mish in backbone per paper §3.4 (7 factories)
+
+- lucid.models.vision.fcn: FCN (Long et al., CVPR 2015) — dilated ResNet-50/101 (stride 8) + FCN head + auxiliary head with 0.4 weight (2 factories)
+
+- lucid.models.vision.unet: U-Net 2D/3D + ResUNet 2D/3D (Ronneberger et al., MICCAI 2015) — `dim` config field switches Conv2d↔Conv3d / bilinear↔trilinear; `block` field toggles residual DoubleConv (6 factories)
+
+- lucid.models.vision.attention_unet: Attention U-Net (Oktay et al., MIDL 2018) — additive Wx+Wg→ReLU→ψ→sigmoid attention gates on skip connections (2 factories)
+
+- lucid.models.vision.maskformer: MaskFormer (Cheng et al., NeurIPS 2021) — ResNet-18/34/50/101 backbone, FPN pixel decoder, N learnable mask queries + Hungarian mask-classification loss (4 factories)
+
+- lucid.models.vision.mask2former: Mask2Former (Cheng et al., CVPR 2022) — ResNet-18/34/50/101 or Swin-T/S/B/L backbone, multi-scale FPN pixel decoder, masked cross-attention with per-layer FPN level cycling (8 factories)
+
+- ObjectDetectionOutput / InstanceSegmentationOutput / SemanticSegmentationOutput dataclasses in models._output
+
+- lucid.models._utils package: _common (make_divisible canonicalised across 7 model families), _classification (LayerScale), _detection (box ops, NMS, AnchorGenerator, roi_align/roi_pool, FPN, RPN, RoIHead shared modules)
+
+- _kuhn_munkres_rectangular: textbook Hungarian/JV implementation in models.vision.detr — shared by DETR / MaskFormer / Mask2Former matchers; verified against `scipy.optimize.linear_sum_assignment` on 100+ random matrices
+
+- AutoModelForObjectDetection / AutoModelForSemanticSegmentation auto-classes for the two new task tags
+
+- unit tests: test_models_detection.py (10 detection model groups × CPU+Metal), test_models_segmentation.py (13 segmentation model groups × CPU+Metal), test_hungarian.py (6 scipy-cross-checked correctness tests) — 69 / 69 pass
+
 ### Tooling
 
 - tools/changelog.py — Keep-a-Changelog helper (add/propose/release/check)
@@ -100,6 +134,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - models.load_from_pretrained_entry: validates entry.config.model_type == model.config.model_type before downloading weights
 - safetensors: 0-d tensors (BatchNorm num_batches_tracked) now round-trip correctly — saved as (1,) with metadata tag, squeezed back to () on load
 - MaxViT _MaxViTBlock: pad spatial dims to window_size multiple before grid/window partition to handle non-divisible resolutions (e.g. 28×28 with ws=7)
+
+- Faster R-CNN / Mask R-CNN / `_utils._detection` RPN: anchor ordering bug — Conv2d output `(B, A, H, W)` was being flattened anchor-major while AnchorGenerator emits spatial-major `(G·A, 4)`. Fixed by permuting predictions to spatial-major before flatten.
+
+- YOLOv3 detection head: channel-count mismatch — `_Darknet53` returns p3_raw=128ch / p4_raw=256ch (residual blocks keep input channels) but the head was built for 256/512. Rewired to use actual backbone widths.
+
+- `.clamp()` is positional-only in Lucid — replaced every `clamp(min=...)` / `clamp(max=...)` single-kwarg call (in `_detection.py`, YOLOv1) with `clamp(low, high)`.
+
+- `lucid.tensor([int_list])` returns float32 but `index_select` requires int — added `.long()` to all index-tensor construction sites in `_detection.py` + 4 R-CNN family models.
+
+- Device propagation across 30+ sites in detection training / postprocess paths (R-CNN, Fast/Faster/Mask R-CNN, EfficientDet): every `lucid.zeros(...)`, `lucid.tensor([...])`, and `lucid.full(...)` in the loss helpers / postprocessors now derives `device=` from input tensors so the models work on Metal training.
+
+- DETR / MaskFormer / Mask2Former Hungarian matcher: custom JV variant iterated over the wrong axis and returned non-optimal assignments even on trivial inputs (5×3 trivial match returned 1/2/4 instead of 0/1/2). Replaced with a textbook rectangular Kuhn-Munkres implementation that cross-checks against `scipy.optimize.linear_sum_assignment`.
+
+- MaskFormer pixel decoder: `out3`/`out4`/`out5` 3×3 smoothing convs were declared but never applied in forward — dead parameters and a silent paper-fidelity deviation. Now every FPN level passes through its own smoothing conv per paper §3.2.
+
+- MaskFormer / Mask2Former `_binary_mask_iou`: vectorised — replaced the per-pixel Python double-loop with `.item()` (O(H·W) device→host syncs per call) with `(p>0.5).float() * (g>0.5).float()` form + a single `.sum().item()`.
+
+- Swin `rel_pos_idx`: re-registered as a non-persistent buffer (was a raw attribute via `object.__setattr__`, so `.to(device=...)` left it on CPU and broke metal-side `rel_pos_bias[idx]`).
+
+- Swin `_attn_mask`: takes `device=x.device.type` so the shifted-window mask is built on the same device as activations.
+
+- MaxViT docstring: replaced "Standard PyTorch padding=1" with framework-neutral wording (H5).
+
+### Performance
+
+- NMS: vectorised per-row IoU computation — replaced O(N²) pairwise `box_iou(box_i, box_j)` allocations with K vectorised `box_iou(boxes[idx:idx+1], boxes)` rows (where K is the number of survivors). Sort is now a single device-side `argsort` instead of N `.item()` calls inside Python `sorted`.
+
+- Anchor assignment in Faster R-CNN / Mask R-CNN / EfficientDet RPN + RoI losses: replaced 2·A·M nested `.item()` loops with a single `argmax(dim=...)` / `max(dim=...)` reduction per axis and bulk materialisation. ~10× fewer device→host syncs.
+
+- Wave 3d unit test suite (CPU + Metal): 62 s → 53 s end-to-end as a result of the NMS / anchor-assignment vectorisation.
 
 ---
 
