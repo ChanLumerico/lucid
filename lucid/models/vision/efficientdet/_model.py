@@ -599,6 +599,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
         B = len(targets)
         K = self._cfg.num_classes
         A = int(all_anchors.shape[0])
+        dev = all_logits.device.type
 
         cls_losses: list[Tensor] = []
         reg_losses: list[Tensor] = []
@@ -612,7 +613,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
 
             if M == 0:
                 # All anchors → background
-                tgt_cls = lucid.zeros((A, K))
+                tgt_cls = lucid.zeros((A, K), device=dev)
                 cls_losses.append(_focal_loss(lg_b.reshape(-1), tgt_cls.reshape(-1)))
                 continue
 
@@ -627,14 +628,19 @@ class EfficientDetForObjectDetection(PretrainedModel):
             pos_idx: list[int] = []
             pos_gt: list[int] = []
 
+            # Vectorised per-anchor reductions.
+            best_m_t = lucid.argmax(iou_mat, dim=1)
+            best_v_t = iou_mat.max(dim=1)
+            best_v_list: list[float] = [
+                float(best_v_t[a].item()) for a in range(A)
+            ]
+            best_m_list: list[int] = [
+                int(best_m_t[a].item()) for a in range(A)
+            ]
+
             for a in range(A):
-                best_v = -1.0
-                best_m = 0
-                for m in range(M):
-                    v = float(iou_mat[a, m].item())
-                    if v > best_v:
-                        best_v = v
-                        best_m = m
+                best_v = best_v_list[a]
+                best_m = best_m_list[a]
                 if best_v >= 0.5:
                     c = int(gt_labels[best_m].item()) - 1  # 0-indexed
                     if 0 <= c < K:
@@ -645,16 +651,17 @@ class EfficientDetForObjectDetection(PretrainedModel):
                     pass  # background — all zeros (already set)
                 # else: ignore (IoU in [0.4, 0.5)) — no loss
 
-            tgt_cls = lucid.tensor(tgt_cls_data)  # (A, K)
+            tgt_cls = lucid.tensor(tgt_cls_data, device=dev)  # (A, K)
             cls_losses.append(_focal_loss(lg_b.reshape(-1), tgt_cls.reshape(-1)))
 
             if pos_idx:
-                pos_t = lucid.tensor(pos_idx).long()
+                pos_t = lucid.tensor(pos_idx, device=dev).long()
                 gt_boxes_pos = lucid.tensor(
                     [
                         [float(gt_boxes[pos_gt[i], d].item()) for d in range(4)]
                         for i in range(len(pos_idx))
-                    ]
+                    ],
+                    device=dev,
                 )
                 anc_pos = all_anchors[pos_t]  # (P, 4)
                 tgt_d = encode_boxes(gt_boxes_pos, anc_pos)
@@ -664,12 +671,12 @@ class EfficientDetForObjectDetection(PretrainedModel):
         cls_l = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()
             if cls_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((1,), device=dev)
         )
         reg_l = (
             lucid.cat([l.reshape(1) for l in reg_losses]).mean()
             if reg_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((1,), device=dev)
         )
         return cls_l + reg_l
 
@@ -688,6 +695,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
         B = int(output.logits.shape[0])
         K = self._cfg.num_classes
         results: list[dict[str, Tensor]] = []
+        dev = output.logits.device.type
 
         for b in range(B):
             lg_b = output.logits[b]  # (A, K)
@@ -707,19 +715,21 @@ class EfficientDetForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask).long()
+                mask_t = lucid.tensor(mask, device=dev).long()
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(
                     bx_sel,
                     sc_sel,
-                    lucid.zeros(int(sc_sel.shape[0])),
+                    lucid.zeros(int(sc_sel.shape[0]), device=dev),
                     self._cfg.nms_thresh,
                 )
                 keep = keep[: self._cfg.max_detections]
                 keep_boxes.append(bx_sel[keep])
                 keep_scores.append(sc_sel[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c + 1)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c + 1), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -732,9 +742,9 @@ class EfficientDetForObjectDetection(PretrainedModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
         return results

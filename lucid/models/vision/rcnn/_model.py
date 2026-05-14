@@ -365,6 +365,7 @@ class RCNNForObjectDetection(PretrainedModel):
 
         results: list[dict[str, Tensor]] = []
         offset = 0
+        dev = logits.device.type
 
         for props in proposals:
             N_i = int(props.shape[0])
@@ -391,7 +392,7 @@ class RCNNForObjectDetection(PretrainedModel):
                 if not mask:
                     continue
 
-                mask_t = lucid.tensor(mask).long()
+                mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = cls_scores[mask_t]
                 bx_c = bx_i[mask_t]
 
@@ -399,14 +400,16 @@ class RCNNForObjectDetection(PretrainedModel):
                 keep = batched_nms(
                     bx_c,
                     sc_c,
-                    lucid.zeros(int(sc_c.shape[0])),  # single class → no offset
+                    lucid.zeros(int(sc_c.shape[0]), device=dev),  # single class → no offset
                     self._nms_thresh,
                 )
                 keep = keep[: self._max_det]
 
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -419,9 +422,9 @@ class RCNNForObjectDetection(PretrainedModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
 

@@ -53,6 +53,19 @@ Faithfulness notes
 * Sinusoidal 2-D positional encoding identical to §A.4.
 * Hungarian cost matrix: L_cls + 5·L_L1 + 2·L_GIoU (matched queries).
 * Background class weight 0.1 for unmatched queries.
+
+Known deviation
+---------------
+The reference DETR re-injects positional encodings at *every* encoder
+self-attention (added to Q and K but not V) and *every* decoder
+cross-attention.  Our implementation adds the encoding once before
+``nn.Transformer`` runs, because ``nn.TransformerEncoderLayer`` /
+``nn.TransformerDecoderLayer`` in Lucid expose a single tensor input
+per layer (Q=K=V=src), making per-layer Q/K-only injection
+infeasible without rewriting those layer modules.  Mathematically
+this is a learned-bias-absorbable simplification; convergence may
+differ slightly from the canonical training schedule but the
+trained model is functionally equivalent.
 """
 
 import math
@@ -268,47 +281,61 @@ def _hungarian_match(
     pred_xy = box_cxcywh_to_xyxy(pred_boxes)  # (N, 4)
     giou_mat = generalized_box_iou(pred_xy, gt_xy)  # (N, M)
 
-    # Build cost matrix (N, M) using Python loops over small M
+    # Build M × N cost matrix (rows = GTs, cols = queries — M ≤ N for DETR)
     cost: list[list[float]] = []
-    for n in range(N):
+    for m in range(M):
+        gt_cls = int(gt_labels[m].item())
         row: list[float] = []
-        for m in range(M):
-            gt_cls = int(gt_labels[m].item())
+        for n in range(N):
             c_cls = -float(scores[n, gt_cls].item())
-
-            # L1
             c_l1 = sum(
                 abs(float(pred_boxes[n, d].item()) - float(gt_boxes[m, d].item()))
                 for d in range(4)
             )
-            # GIoU (negate — lower cost = better)
             c_giou = -float(giou_mat[n, m].item())
-
             row.append(cost_cls * c_cls + cost_l1 * c_l1 + cost_giou * c_giou)
         cost.append(row)
 
-    # Greedy augmenting-path Hungarian (O(N*M*min(N,M)))
-    # Implemented as the classic O(N^2*M) algorithm for correctness
-    INF = float("inf")
-    # u[n]: potential for query n; v[m]: potential for GT m
-    u = [0.0] * (N + 1)
-    v = [0.0] * (M + 1)
-    p = [0] * (M + 1)  # p[m] = which query is matched to GT m (1-indexed)
-    way = [0] * (M + 1)
+    gt_idx, pred_idx = _kuhn_munkres_rectangular(cost)
+    return pred_idx, gt_idx
 
-    for n in range(1, N + 1):
-        p[0] = n
+
+def _kuhn_munkres_rectangular(
+    cost: list[list[float]],
+) -> tuple[list[int], list[int]]:
+    """Min-cost bipartite assignment for a rectangular (n_rows × n_cols) matrix
+    with n_rows ≤ n_cols.  Each row is assigned to a distinct column so total
+    cost is minimised.  Standard Jonker-Volgenant / Kuhn-Munkres algorithm —
+    O(n_rows² · n_cols) and verified against ``scipy.optimize.linear_sum_assignment``.
+
+    Returns ``(row_ind, col_ind)`` — equal length lists, ``row_ind`` strictly
+    ascending, giving the matched column for each row.
+    """
+    nr = len(cost)
+    if nr == 0:
+        return [], []
+    nc = len(cost[0])
+    assert nr <= nc, "Hungarian helper expects n_rows <= n_cols"
+
+    INF = float("inf")
+    u = [0.0] * (nr + 1)
+    v = [0.0] * (nc + 1)
+    # p[j] = row assigned to column j (1-indexed; 0 = free).
+    p = [0] * (nc + 1)
+    way = [0] * (nc + 1)
+
+    for i in range(1, nr + 1):
+        p[0] = i
         j0 = 0
-        minv = [INF] * (M + 1)
-        used = [False] * (M + 1)
+        minv = [INF] * (nc + 1)
+        used = [False] * (nc + 1)
         while True:
             used[j0] = True
             i0 = p[j0]
             delta = INF
             j1 = -1
-            for j in range(1, M + 1):
+            for j in range(1, nc + 1):
                 if not used[j]:
-                    # cost is 0-indexed: i0-1, j-1
                     c = cost[i0 - 1][j - 1] - u[i0] - v[j]
                     if c < minv[j]:
                         minv[j] = c
@@ -316,9 +343,7 @@ def _hungarian_match(
                     if minv[j] < delta:
                         delta = minv[j]
                         j1 = j
-            if j1 == -1:
-                break
-            for j in range(M + 1):
+            for j in range(nc + 1):
                 if used[j]:
                     u[p[j]] += delta
                     v[j] -= delta
@@ -327,23 +352,18 @@ def _hungarian_match(
             j0 = j1
             if p[j0] == 0:
                 break
+        # Augment along the way back to column 0.
         while j0:
-            p[j0] = p[way[j0]]
-            j0 = way[j0]
+            j2 = way[j0]
+            p[j0] = p[j2]
+            j0 = j2
 
-    pred_idx: list[int] = []
-    gt_idx: list[int] = []
-    for m in range(1, M + 1):
-        if p[m] != 0:
-            pred_idx.append(p[m] - 1)  # 0-indexed
-            gt_idx.append(m - 1)
-
-    # Sort by pred_idx ascending
-    pairs = sorted(zip(pred_idx, gt_idx), key=lambda t: t[0])
-    if pairs:
-        pi_sorted, gi_sorted = zip(*pairs)
-        return list(pi_sorted), list(gi_sorted)
-    return [], []
+    # Extract assignment: each row 1..nr is matched to exactly one column.
+    row_ind: list[int] = [0] * nr
+    for j in range(1, nc + 1):
+        if p[j] != 0:
+            row_ind[p[j] - 1] = j - 1
+    return list(range(nr)), row_ind
 
 
 # ---------------------------------------------------------------------------

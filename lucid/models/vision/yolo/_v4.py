@@ -123,7 +123,11 @@ class YOLOV4Config(ModelConfig):
 
 
 class _ConvBnLeaky(nn.Module):
-    """Conv2d(bias=False) → BatchNorm2d → LeakyReLU(0.1)."""
+    """Conv2d(bias=False) → BatchNorm2d → LeakyReLU(0.1).
+
+    Used by the YOLOv4 neck (SPP, PANet) and the prediction heads.  The
+    backbone (CSPDarknet-53) uses ``_ConvBnMish`` instead — paper §3.4.
+    """
 
     def __init__(
         self,
@@ -146,19 +150,51 @@ class _ConvBnLeaky(nn.Module):
         )
 
 
+class _ConvBnMish(nn.Module):
+    """Conv2d(bias=False) → BatchNorm2d → Mish.
+
+    YOLOv4 backbone activation per paper §3.4: ``Mish(x) = x · tanh(softplus(x))``.
+    Empirically smoother gradient flow than LeakyReLU in deep CSP residual stacks.
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        out_ch: int,
+        kernel: int,
+        stride: int = 1,
+        padding: int = -1,
+    ) -> None:
+        super().__init__()
+        pad = padding if padding >= 0 else (kernel - 1) // 2
+        self.conv = nn.Conv2d(
+            in_ch, out_ch, kernel, stride=stride, padding=pad, bias=False
+        )
+        self.bn = nn.BatchNorm2d(out_ch)
+        self.act = nn.Mish()
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(
+            Tensor, self.act(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+        )
+
+
 # ---------------------------------------------------------------------------
 # CSP Block — Cross Stage Partial
 # ---------------------------------------------------------------------------
 
 
 class _CSPBottleneck(nn.Module):
-    """One CSP bottleneck unit (1×1 → 3×3) used inside _CSPBlock."""
+    """One CSP bottleneck unit (1×1 → 3×3) used inside _CSPBlock.
+
+    Lives inside the CSPDarknet-53 backbone → uses Mish activation per paper §3.4.
+    """
 
     def __init__(self, ch: int) -> None:
         super().__init__()
         mid = ch // 2
-        self.conv1 = _ConvBnLeaky(ch, mid, 1)
-        self.conv2 = _ConvBnLeaky(mid, ch, 3)
+        self.conv1 = _ConvBnMish(ch, mid, 1)
+        self.conv2 = _ConvBnMish(mid, ch, 3)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return x + cast(Tensor, self.conv2(cast(Tensor, self.conv1(x))))
@@ -171,20 +207,26 @@ class _CSPBlock(nn.Module):
     Route 2 (main): Conv(in_ch, in_ch//2, 1) → n_repeats × _CSPBottleneck.
     Merge: concat(route1, route2) → Conv(in_ch, in_ch, 1).
 
+    All convs inside the backbone use Mish; the same primitive is reused by
+    the neck (PANet, SPP) where it's instantiated with ``act="leaky"``.
+
     Args:
         in_ch:      Number of input channels.
         n_repeats:  Number of residual bottleneck repeats in route 2.
+        act:        ``"mish"`` for the backbone, ``"leaky"`` for the neck.
     """
 
-    def __init__(self, in_ch: int, n_repeats: int) -> None:
+    def __init__(self, in_ch: int, n_repeats: int, act: str = "mish") -> None:
         super().__init__()
         half = in_ch // 2
-        self.route1 = _ConvBnLeaky(in_ch, half, 1)  # skip branch
-        self.route2 = _ConvBnLeaky(in_ch, half, 1)  # main branch
+        Conv = _ConvBnMish if act == "mish" else _ConvBnLeaky
+        self.route1 = Conv(in_ch, half, 1)  # skip branch
+        self.route2 = Conv(in_ch, half, 1)  # main branch
+        # Bottlenecks always use the same activation as the surrounding block.
         self.bottlenecks = nn.Sequential(
             *[_CSPBottleneck(half) for _ in range(n_repeats)]
         )
-        self.merge = _ConvBnLeaky(in_ch, in_ch, 1)  # after concat
+        self.merge = Conv(in_ch, in_ch, 1)  # after concat
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         r1 = cast(Tensor, self.route1(x))
@@ -209,28 +251,28 @@ class _CSPDarknet53(nn.Module):
 
     def __init__(self, in_channels: int) -> None:
         super().__init__()
-        # Stem
-        self.stem = _ConvBnLeaky(in_channels, 32, 3)
+        # Stem + every stride-2 down conv + every CSP block use Mish (paper §3.4).
+        self.stem = _ConvBnMish(in_channels, 32, 3)
 
         # Stage 1: stride-2 → 64ch, 1×CSP
-        self.down1 = _ConvBnLeaky(32, 64, 3, stride=2)
-        self.csp1 = _CSPBlock(64, 1)
+        self.down1 = _ConvBnMish(32, 64, 3, stride=2)
+        self.csp1 = _CSPBlock(64, 1, act="mish")
 
         # Stage 2: stride-2 → 128ch, 2×CSP
-        self.down2 = _ConvBnLeaky(64, 128, 3, stride=2)
-        self.csp2 = _CSPBlock(128, 2)
+        self.down2 = _ConvBnMish(64, 128, 3, stride=2)
+        self.csp2 = _CSPBlock(128, 2, act="mish")
 
         # Stage 3: stride-2 → 256ch, 8×CSP  [P3]
-        self.down3 = _ConvBnLeaky(128, 256, 3, stride=2)
-        self.csp3 = _CSPBlock(256, 8)
+        self.down3 = _ConvBnMish(128, 256, 3, stride=2)
+        self.csp3 = _CSPBlock(256, 8, act="mish")
 
         # Stage 4: stride-2 → 512ch, 8×CSP  [P4]
-        self.down4 = _ConvBnLeaky(256, 512, 3, stride=2)
-        self.csp4 = _CSPBlock(512, 8)
+        self.down4 = _ConvBnMish(256, 512, 3, stride=2)
+        self.csp4 = _CSPBlock(512, 8, act="mish")
 
         # Stage 5: stride-2 → 1024ch, 4×CSP  [P5]
-        self.down5 = _ConvBnLeaky(512, 1024, 3, stride=2)
-        self.csp5 = _CSPBlock(1024, 4)
+        self.down5 = _ConvBnMish(512, 1024, 3, stride=2)
+        self.csp5 = _CSPBlock(1024, 4, act="mish")
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:  # type: ignore[override]
         x = cast(Tensor, self.stem(x))

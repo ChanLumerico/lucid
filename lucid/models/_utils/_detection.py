@@ -263,12 +263,14 @@ def nms(
     """Greedy NMS — returns indices of surviving boxes, sorted by score desc.
 
     Algorithm:
-      1. Sort boxes by descending score.
-      2. Iterate: keep highest-scoring box; suppress remaining boxes with
-         IoU > ``iou_threshold`` against the kept box.
+      1. Sort boxes by descending score (vectorised ``argsort``).
+      2. For each surviving box, compute IoU against *all* boxes in a single
+         vectorised call; materialise that row to a Python list with one
+         device→host sync; suppress later boxes whose IoU exceeds the threshold.
 
-    The loop is O(N²) but operates on scalars extracted via ``.item()``,
-    which is acceptable for typical proposal counts (≤ a few thousand).
+    Previous behaviour built a fresh ``(1, 1)`` IoU tensor per pair (O(N²)
+    device round-trips).  This version performs K vectorised row computations
+    (where K is the number of kept boxes ≪ N in practice).
 
     Args:
         boxes:         (N, 4) xyxy float Tensor.
@@ -279,35 +281,40 @@ def nms(
         1-D int Tensor of surviving box indices (descending score order).
     """
     N: int = int(boxes.shape[0])
+    dev = boxes.device.type
     if N == 0:
-        return lucid.zeros((0,), device=boxes.device.type).long()
+        return lucid.zeros((0,), device=dev).long()
 
-    # Sort descending by score using Python-level argsort on negated scores
-    order: list[int] = sorted(
-        range(N), key=lambda i: float(scores[i].item()), reverse=True
-    )
+    # One device-side argsort for the entire ranking.
+    order_t = lucid.argsort(-scores)  # (N,) int
+    order: list[int] = [int(order_t[i].item()) for i in range(N)]
 
     suppressed: list[bool] = [False] * N
     keep: list[int] = []
 
-    for i in range(len(order)):
+    for i in range(N):
         idx = order[i]
         if suppressed[idx]:
             continue
         keep.append(idx)
-        box_i = boxes[idx : idx + 1]  # (1, 4)
-        for j in range(i + 1, len(order)):
+        if i == N - 1:
+            break
+        # Compute IoU of the kept box against *every* box in a single call.
+        # `box_iou(boxes[idx:idx+1], boxes)` → (1, N); take row 0.
+        iou_row = box_iou(boxes[idx : idx + 1], boxes)[0]  # (N,)
+        # Pull the whole row in one shot — N item() calls but no Python loop
+        # of pairwise tensor allocations.
+        ious: list[float] = [float(iou_row[k].item()) for k in range(N)]
+        for j in range(i + 1, N):
             jdx = order[j]
             if suppressed[jdx]:
                 continue
-            box_j = boxes[jdx : jdx + 1]  # (1, 4)
-            iou_val = float(box_iou(box_i, box_j)[0, 0].item())
-            if iou_val > iou_threshold:
+            if ious[jdx] > iou_threshold:
                 suppressed[jdx] = True
 
     if not keep:
-        return lucid.zeros((0,), device=boxes.device.type).long()
-    return lucid.tensor(keep, device=boxes.device.type).long()
+        return lucid.zeros((0,), device=dev).long()
+    return lucid.tensor(keep, device=dev).long()
 
 
 def batched_nms(

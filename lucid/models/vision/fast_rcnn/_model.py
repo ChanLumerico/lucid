@@ -240,9 +240,10 @@ class FastRCNNForObjectDetection(PretrainedModel):
 
         N = int(proposals.shape[0])
         M = int(gt_boxes.shape[0])
+        dev = proposals.device.type
 
         if M == 0:
-            return lucid.zeros((N,)), proposals.clone()
+            return lucid.zeros((N,), device=dev), proposals.clone()
 
         iou = box_iou(proposals, gt_boxes)  # (N, M)
 
@@ -270,13 +271,13 @@ class FastRCNNForObjectDetection(PretrainedModel):
             else:
                 labels_list.append(-1)  # ignored
 
-        assigned_labels = lucid.tensor(labels_list)
+        assigned_labels = lucid.tensor(labels_list, device=dev)
         # Build matched GT boxes
         matched_boxes_data: list[list[float]] = [
             [float(gt_boxes[best_gt_idx_list[n], k].item()) for k in range(4)]
             for n in range(N)
         ]
-        assigned_boxes = lucid.tensor(matched_boxes_data)
+        assigned_boxes = lucid.tensor(matched_boxes_data, device=dev)
         return assigned_labels, assigned_boxes
 
     def _compute_loss(
@@ -300,6 +301,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         all_cls_labels: list[Tensor] = []
         all_bbox_targets: list[Tensor] = []
         all_bbox_weights: list[Tensor] = []
+        dev = all_logits.device.type
 
         offset = 0
         for b, (props, tgt) in enumerate(zip(proposals, targets)):
@@ -317,7 +319,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
             fg_mask: list[float] = [
                 1.0 if int(labels_i[n].item()) > 0 else 0.0 for n in range(N_i)
             ]
-            weight_i = lucid.tensor(fg_mask)
+            weight_i = lucid.tensor(fg_mask, device=dev)
 
             all_cls_labels.append(labels_i)
             all_bbox_targets.append(reg_tgt_i)
@@ -334,9 +336,9 @@ class FastRCNNForObjectDetection(PretrainedModel):
             n for n in range(int(cls_labels.shape[0])) if int(cls_labels[n].item()) >= 0
         ]
         if not valid_mask:
-            cls_loss: Tensor = lucid.zeros((1,))
+            cls_loss: Tensor = lucid.zeros((1,), device=dev)
         else:
-            valid_t = lucid.tensor(valid_mask).long()
+            valid_t = lucid.tensor(valid_mask, device=dev).long()
             cls_loss = F.cross_entropy(
                 all_logits[valid_t],
                 cls_labels[valid_t],
@@ -364,7 +366,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         if reg_loss_parts:
             reg_loss = lucid.cat([l.reshape(1) for l in reg_loss_parts]).mean()
         else:
-            reg_loss = lucid.zeros((1,))
+            reg_loss = lucid.zeros((1,), device=dev)
 
         return cls_loss + reg_loss
 
@@ -438,12 +440,13 @@ class FastRCNNForObjectDetection(PretrainedModel):
         """Decode top-scoring class bbox delta for every proposal."""
         K = self._num_classes
         N_total = int(all_deltas.shape[0])
+        dev = all_deltas.device.type
 
         # Flatten all proposals
         if any(int(p.shape[0]) > 0 for p in proposals):
             flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         else:
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=dev)
 
         # all_deltas: (N_total, K*4) → (N_total, K, 4)
         deltas_3d = all_deltas.reshape(N_total, K, 4)
@@ -482,6 +485,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
 
         results: list[dict[str, Tensor]] = []
         offset = 0
+        dev = logits.device.type
 
         for props in proposals:
             N_i = int(props.shape[0])
@@ -506,21 +510,23 @@ class FastRCNNForObjectDetection(PretrainedModel):
                 if not mask:
                     continue
 
-                mask_t = lucid.tensor(mask).long()
+                mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = cls_scores[mask_t]
                 bx_c = bx_i[mask_t]
 
                 keep = batched_nms(
                     bx_c,
                     sc_c,
-                    lucid.zeros(int(sc_c.shape[0])),
+                    lucid.zeros(int(sc_c.shape[0]), device=dev),
                     self._nms_thresh,
                 )
                 keep = keep[: self._max_det]
 
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -533,9 +539,9 @@ class FastRCNNForObjectDetection(PretrainedModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
 

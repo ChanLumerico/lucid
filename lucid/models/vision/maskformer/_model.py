@@ -291,71 +291,20 @@ def _hungarian_match_masks(
     probs = F.softmax(class_logits, dim=-1)  # (N, K+1)
     pred_probs = F.sigmoid(mask_logits)  # (N, H, W)
 
-    # Build cost matrix
+    # Build M × N cost matrix (rows = GTs, cols = queries — M ≤ N)
     cost: list[list[float]] = []
-    for n in range(N):
+    for m in range(M):
+        gt_cls = int(gt_labels[m].item())
         row: list[float] = []
-        for m in range(M):
-            gt_cls = int(gt_labels[m].item())
+        for n in range(N):
             c_cls = -float(probs[n, gt_cls].item())
             iou = _binary_mask_iou(pred_probs[n], gt_masks[m])
-            c_iou = -iou
-            row.append(c_cls + c_iou)
+            row.append(c_cls - iou)
         cost.append(row)
 
-    # Hungarian via augmenting-path
-    INF = float("inf")
-    u = [0.0] * (N + 1)
-    v = [0.0] * (M + 1)
-    p = [0] * (M + 1)
-    way = [0] * (M + 1)
-
-    for n in range(1, N + 1):
-        p[0] = n
-        j0 = 0
-        minv = [INF] * (M + 1)
-        used = [False] * (M + 1)
-        while True:
-            used[j0] = True
-            i0 = p[j0]
-            delta = INF
-            j1 = -1
-            for j in range(1, M + 1):
-                if not used[j]:
-                    c = cost[i0 - 1][j - 1] - u[i0] - v[j]
-                    if c < minv[j]:
-                        minv[j] = c
-                        way[j] = j0
-                    if minv[j] < delta:
-                        delta = minv[j]
-                        j1 = j
-            if j1 == -1:
-                break
-            for j in range(M + 1):
-                if used[j]:
-                    u[p[j]] += delta
-                    v[j] -= delta
-                else:
-                    minv[j] -= delta
-            j0 = j1
-            if p[j0] == 0:
-                break
-        while j0:
-            p[j0] = p[way[j0]]
-            j0 = way[j0]
-
-    pred_idx: list[int] = []
-    gt_idx: list[int] = []
-    for m in range(1, M + 1):
-        if p[m] != 0:
-            pred_idx.append(p[m] - 1)
-            gt_idx.append(m - 1)
-
-    pairs = sorted(zip(pred_idx, gt_idx), key=lambda t: t[0])
-    if pairs:
-        pi, gi = zip(*pairs)
-        return list(pi), list(gi)
-    return [], []
+    from lucid.models.vision.detr._model import _kuhn_munkres_rectangular
+    gt_idx, pred_idx = _kuhn_munkres_rectangular(cost)
+    return pred_idx, gt_idx
 
 
 # ---------------------------------------------------------------------------

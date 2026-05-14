@@ -388,6 +388,8 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         cls_losses: list[Tensor] = []
         reg_losses: list[Tensor] = []
 
+        dev = feat.device.type
+
         for b in range(B):
             gt_boxes = targets[b]["boxes"]  # (M, 4)
             M = int(gt_boxes.shape[0])
@@ -401,8 +403,8 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             if M == 0:
                 # No GT — all negatives
                 neg_mask: list[int] = list(range(min(256, A)))
-                neg_t = lucid.tensor(neg_mask).long()
-                lbl_neg = lucid.zeros((len(neg_mask),))
+                neg_t = lucid.tensor(neg_mask, device=dev).long()
+                lbl_neg = lucid.zeros((len(neg_mask),), device=dev)
                 cls_losses.append(
                     F.binary_cross_entropy_with_logits(lg_b[neg_t], lbl_neg)
                 )
@@ -410,31 +412,22 @@ class FasterRCNNForObjectDetection(PretrainedModel):
 
             iou_mat = box_iou(anchors, gt_boxes)  # (A, M)
 
-            # Max IoU per anchor → best GT
-            best_iou_list: list[float] = []
-            best_gt_list: list[int] = []
-            for a in range(A):
-                best_v = -1.0
-                best_g = 0
-                for m in range(M):
-                    v = float(iou_mat[a, m].item())
-                    if v > best_v:
-                        best_v = v
-                        best_g = m
-                best_iou_list.append(best_v)
-                best_gt_list.append(best_g)
+            # Vectorised reductions: device-side argmax/max, then a single bulk
+            # materialisation each.  Replaces 2 × A × M ``.item()`` syncs with
+            # ~ 2A + M syncs.
+            best_gt_t = lucid.argmax(iou_mat, dim=1)         # (A,) int — best GT per anchor
+            best_iou_t = iou_mat.max(dim=1)                  # (A,)
+            best_anc_t = lucid.argmax(iou_mat, dim=0)        # (M,) int — best anchor per GT
 
-            # Also ensure every GT has at least one positive anchor
-            best_anchor_for_gt: list[int] = []
-            for m in range(M):
-                best_v = -1.0
-                best_a = 0
-                for a in range(A):
-                    v = float(iou_mat[a, m].item())
-                    if v > best_v:
-                        best_v = v
-                        best_a = a
-                best_anchor_for_gt.append(best_a)
+            best_iou_list: list[float] = [
+                float(best_iou_t[a].item()) for a in range(A)
+            ]
+            best_gt_list: list[int] = [
+                int(best_gt_t[a].item()) for a in range(A)
+            ]
+            best_anchor_for_gt: list[int] = [
+                int(best_anc_t[m].item()) for m in range(M)
+            ]
 
             labels: list[int] = []
             for a in range(A):
@@ -458,8 +451,8 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             if not sampled:
                 continue
 
-            samp_t = lucid.tensor(sampled).long()
-            lbl_samp = lucid.tensor([labels[a] for a in sampled])
+            samp_t = lucid.tensor(sampled, device=dev).long()
+            lbl_samp = lucid.tensor([labels[a] for a in sampled], device=dev)
 
             # Classification loss (binary cross-entropy objectness)
             cls_losses.append(
@@ -470,12 +463,13 @@ class FasterRCNNForObjectDetection(PretrainedModel):
 
             # Regression loss (positive anchors only)
             if pos_idx:
-                pos_t = lucid.tensor(pos_idx).long()
+                pos_t = lucid.tensor(pos_idx, device=dev).long()
                 gt_pos = lucid.tensor(
                     [
                         [float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
                         for a in pos_idx
-                    ]
+                    ],
+                    device=dev,
                 )
                 tgt_deltas = encode_boxes(gt_pos, anchors[pos_t], (1.0, 1.0, 1.0, 1.0))
                 pred_d = dl_b[pos_t]
@@ -484,12 +478,12 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         cls_loss = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()
             if cls_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((1,), device=dev)
         )
         reg_loss = (
             lucid.cat([l.reshape(1) for l in reg_losses]).mean()
             if reg_losses
-            else lucid.zeros((1,))
+            else lucid.zeros((1,), device=dev)
         )
         return cls_loss + reg_loss
 
@@ -506,6 +500,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     ) -> Tensor:
         K = self._cfg.num_classes
         N_total = int(all_deltas.shape[0])
+        dev = all_logits.device.type
 
         all_cls: list[Tensor] = []
         all_reg_tgt: list[Tensor] = []
@@ -518,40 +513,43 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             M = int(gt_b.shape[0])
 
             if M == 0:
-                all_cls.append(lucid.zeros((N_i,)))
-                all_reg_tgt.append(lucid.zeros((N_i, 4)))
-                all_reg_wt.append(lucid.zeros((N_i,)))
+                all_cls.append(lucid.zeros((N_i,), device=dev))
+                all_reg_tgt.append(lucid.zeros((N_i, 4), device=dev))
+                all_reg_wt.append(lucid.zeros((N_i,), device=dev))
                 continue
 
             iou_mat = box_iou(props, gt_b)  # (N_i, M)
 
             labels_list: list[int] = []
-            best_gt: list[int] = []
+            # Vectorised: argmax + max over GT axis.
+            best_g_t = lucid.argmax(iou_mat, dim=1)  # (N_i,)
+            best_v_t = iou_mat.max(dim=1)            # (N_i,)
+            best_v_list: list[float] = [
+                float(best_v_t[n].item()) for n in range(N_i)
+            ]
+            best_gt: list[int] = [
+                int(best_g_t[n].item()) for n in range(N_i)
+            ]
             for n in range(N_i):
-                best_v = -1.0
-                best_g = 0
-                for m in range(M):
-                    v = float(iou_mat[n, m].item())
-                    if v > best_v:
-                        best_v = v
-                        best_g = m
+                best_v = best_v_list[n]
                 if best_v >= self._cfg.roi_fg_iou_thresh:
-                    labels_list.append(int(lb_b[best_g].item()))
+                    labels_list.append(int(lb_b[best_gt[n]].item()))
                 elif best_v < self._cfg.roi_bg_iou_thresh:
                     labels_list.append(0)
                 else:
                     labels_list.append(-1)
-                best_gt.append(best_g)
 
             matched_boxes_data = [
                 [float(gt_b[best_gt[n], k2].item()) for k2 in range(4)]
                 for n in range(N_i)
             ]
-            matched_boxes = lucid.tensor(matched_boxes_data)
+            matched_boxes = lucid.tensor(matched_boxes_data, device=dev)
             reg_tgt = encode_boxes(matched_boxes, props, self._cfg.bbox_reg_weights)
 
-            lbl_t = lucid.tensor(labels_list)
-            wt_t = lucid.tensor([1.0 if l > 0 else 0.0 for l in labels_list])
+            lbl_t = lucid.tensor(labels_list, device=dev)
+            wt_t = lucid.tensor(
+                [1.0 if l > 0 else 0.0 for l in labels_list], device=dev,
+            )
 
             all_cls.append(lbl_t)
             all_reg_tgt.append(reg_tgt)
@@ -565,8 +563,8 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             n for n in range(N_total) if int(cls_labels[n].item()) >= 0
         ]
         if not valid_idx:
-            return lucid.zeros((1,))
-        valid_t = lucid.tensor(valid_idx).long()
+            return lucid.zeros((1,), device=dev)
+        valid_t = lucid.tensor(valid_idx, device=dev).long()
         cls_loss = F.cross_entropy(all_logits[valid_t], cls_labels[valid_t])
 
         # Regression loss (foreground proposals only)
@@ -583,7 +581,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         reg_loss = (
             lucid.cat([l.reshape(1) for l in reg_parts]).mean()
             if reg_parts
-            else lucid.zeros((1,))
+            else lucid.zeros((1,), device=dev)
         )
 
         return cls_loss + reg_loss
@@ -691,6 +689,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         pred_boxes = output.pred_boxes
         results: list[dict[str, Tensor]] = []
         offset = 0
+        dev = logits.device.type
 
         for props in proposals:
             N_i = int(props.shape[0])
@@ -712,19 +711,21 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask).long()
+                mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = sc_c_all[mask_t]
                 bx_c = bx_i[mask_t]
                 keep = batched_nms(
                     bx_c,
                     sc_c,
-                    lucid.zeros(int(sc_c.shape[0])),
+                    lucid.zeros(int(sc_c.shape[0]), device=dev),
                     self._cfg.nms_thresh,
                 )
                 keep = keep[: self._cfg.max_detections]
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
-                keep_labels.append(lucid.full((int(keep.shape[0]),), float(c)))
+                keep_labels.append(
+                    lucid.full((int(keep.shape[0]),), float(c), device=dev)
+                )
 
             if keep_boxes:
                 results.append(
@@ -737,9 +738,9 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             else:
                 results.append(
                     {
-                        "boxes": lucid.zeros((0, 4)),
-                        "scores": lucid.zeros((0,)),
-                        "labels": lucid.zeros((0,)),
+                        "boxes": lucid.zeros((0, 4), device=dev),
+                        "scores": lucid.zeros((0,), device=dev),
+                        "labels": lucid.zeros((0,), device=dev),
                     }
                 )
         return results
