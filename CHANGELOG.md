@@ -157,6 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MaxViT docstring: replaced "Standard PyTorch padding=1" with framework-neutral wording (H5).
 
+- move CHANGELOG auto-injection from prepare-commit-msg → post-commit
+
 ### Performance
 
 - NMS: vectorised per-row IoU computation — replaced O(N²) pairwise `box_iou(box_i, box_j)` allocations with K vectorised `box_iou(boxes[idx:idx+1], boxes)` rows (where K is the number of survivors). Sort is now a single device-side `argsort` instead of N `.item()` calls inside Python `sorted`.

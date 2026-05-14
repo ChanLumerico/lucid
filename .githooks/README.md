@@ -23,20 +23,28 @@ git config --unset core.hooksPath
 
 ## What's installed
 
-| Hook                  | Stage                              | Behavior |
-|-----------------------|------------------------------------|----------|
-| `pre-commit`          | before commit msg drafted          | Updates the Lines-of-Code badge in `README.md` via `cloc`, re-stages it.  Skip with `LUCID_SKIP_LOC_BADGE=1`. |
-| `prepare-commit-msg`  | after msg drafted, before commit lands | **Auto-injects a `CHANGELOG.md` entry** under `[Unreleased]` for every user-facing conventional commit (`feat:` / `fix:` / `perf:` / `refactor:` / `revert:` / `remove:` / `deprec:` / `sec:`).  Reads the staged commit message file directly (HEAD hasn't moved yet), calls `tools/changelog.py propose --auto --message-file <msg>`, and stages the updated `CHANGELOG.md` so it lands in the same commit. |
-| `commit-msg`          | before commit lands                | Defensive warning if the staged diff *still* doesn't include `CHANGELOG.md` (e.g. when the commit isn't conventional, or when the user opted out). |
-| `post-commit`         | after commit lands                 | Confirms (`📝 CHANGELOG.md updated alongside this commit ✓`) or nudges with the exact `tools/changelog.py` invocation. |
+| Hook          | Stage                | Behavior |
+|---------------|----------------------|----------|
+| `pre-commit`  | before commit drafted | Updates the Lines-of-Code badge in `README.md` via `cloc`, re-stages it.  Skip with `LUCID_SKIP_LOC_BADGE=1`. |
+| `commit-msg`  | before commit lands   | Defensive warning if the staged diff doesn't include `CHANGELOG.md` and the commit subject uses a user-facing conventional-commit prefix (`feat:` / `fix:` / `perf:` / `refactor:` / `revert:` / `remove:` / `deprec:` / `sec:`). |
+| `post-commit` | after commit lands    | **Auto-injects + amends `CHANGELOG.md`** for every user-facing conventional commit.  Calls `tools/changelog.py propose --auto --message-file .git/COMMIT_EDITMSG`, then `git commit --amend --no-edit --no-verify` to fold the entry into the same commit (preserving subject / body / author / date). A guard env var prevents the resulting amend from recursing. |
 
-The `prepare-commit-msg` hook makes `[Unreleased]` **automatically
-stay in sync** with the conventional-commit history — manual
-``tools/changelog.py add`` is reserved for entries that don't map 1-to-1
-to a commit subject (e.g. multi-commit features grouped under one bullet).
+### Why post-commit and not prepare-commit-msg?
 
-`commit-msg` / `post-commit` are still **advisory** — they never abort
-a commit.  Strict enforcement is delegated to CI via:
+Git's commit pipeline finalises the *tree* of the commit at the end of
+the `pre-commit` hook — any `git add` performed in
+`prepare-commit-msg` or `commit-msg` modifies the index for the *next*
+commit, not the current one.  `post-commit` runs after the commit
+hash has been computed but before push, so amending in place is safe.
+
+The post-commit auto-amend keeps `[Unreleased]` **in sync with the
+conventional-commit history with zero human steps**.  Manual
+``tools/changelog.py add`` is reserved for entries that don't map
+1-to-1 to a commit subject (e.g. a multi-commit feature grouped under
+one bullet).
+
+`commit-msg` is still **advisory** — it never aborts a commit.  Strict
+enforcement is delegated to CI via:
 
 ```bash
 python tools/changelog.py check --strict
