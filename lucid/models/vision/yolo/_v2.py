@@ -390,6 +390,7 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         B_batch = int(raw.shape[0])
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
+        device = raw.device
 
         # Stride of this feature map
         stride_h = H / fH
@@ -411,8 +412,8 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         col_data: list[float] = [float(c) for c in range(fW)]
         row_data: list[float] = [float(r) for r in range(fH)]
 
-        col_offsets = lucid.tensor(col_data).reshape(1, 1, fW, 1)  # (1,1,fW,1)
-        row_offsets = lucid.tensor(row_data).reshape(1, fH, 1, 1)  # (1,fH,1,1)
+        col_offsets = lucid.tensor(col_data, device=device).reshape(1, 1, fW, 1)
+        row_offsets = lucid.tensor(row_data, device=device).reshape(1, fH, 1, 1)
 
         # Decode box centres in pixels
         # bx = (sigmoid(tx) + col) * stride_w
@@ -426,8 +427,8 @@ class YOLOV2ForObjectDetection(PretrainedModel):
         anchor_w_data = [anchors[a][0] for a in range(A)]
         anchor_h_data = [anchors[a][1] for a in range(A)]
 
-        aw_t = lucid.tensor(anchor_w_data).reshape(1, 1, 1, A)  # (1,1,1,A)
-        ah_t = lucid.tensor(anchor_h_data).reshape(1, 1, 1, A)
+        aw_t = lucid.tensor(anchor_w_data, device=device).reshape(1, 1, 1, A)
+        ah_t = lucid.tensor(anchor_h_data, device=device).reshape(1, 1, 1, A)
 
         bw = aw_t * lucid.exp(tw.clamp(min=-10.0, max=10.0)) * stride_w
         bh = ah_t * lucid.exp(th.clamp(min=-10.0, max=10.0)) * stride_h
@@ -690,7 +691,7 @@ class YOLOV2ForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(

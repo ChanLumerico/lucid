@@ -46,7 +46,6 @@ from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.unet._config import UNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Building blocks
 # ---------------------------------------------------------------------------
@@ -141,9 +140,7 @@ class _DecoderBlock(nn.Module):
             # After concat: in_ch//2 + skip_ch channels
             self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch, dropout)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor, skip: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
         """Decode one level.
 
         Args:
@@ -207,7 +204,7 @@ class UNetForSemanticSegmentation(PretrainedModel):
         in_ch = config.in_channels
         enc_channels: list[int] = []
         for i in range(depth):
-            out_ch = ch * (2 ** i)
+            out_ch = ch * (2**i)
             block = _EncoderBlock(in_ch, out_ch, dropout)
             self.add_module(f"encoder_{i}", block)
             self.encoders.append(block)
@@ -215,7 +212,7 @@ class UNetForSemanticSegmentation(PretrainedModel):
             in_ch = out_ch
 
         # Bottleneck
-        bottleneck_ch = ch * (2 ** depth)
+        bottleneck_ch = ch * (2**depth)
         self.bottleneck = _DoubleConv(in_ch, bottleneck_ch, dropout)
 
         # Decoder stages (reverse order)
@@ -225,7 +222,9 @@ class UNetForSemanticSegmentation(PretrainedModel):
             skip_ch = enc_channels[i]
             dec_out = enc_channels[i]
             dec_block = _DecoderBlock(
-                dec_in, skip_ch, dec_out,
+                dec_in,
+                skip_ch,
+                dec_out,
                 bilinear=config.bilinear,
                 dropout=dropout,
             )

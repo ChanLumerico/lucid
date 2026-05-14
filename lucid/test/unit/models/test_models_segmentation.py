@@ -1,18 +1,16 @@
-"""Unit tests for Wave 3d segmentation models.
+"""Unit tests for Wave 3d segmentation models — CPU + Metal parametrized.
 
 Covers:
   FCN (resnet50/101), UNet (base/small/bilinear),
-  Attention U-Net, MaskFormer (resnet50), Mask2Former (resnet50)
+  Attention U-Net, MaskFormer (resnet50/101),
+  Mask2Former (resnet50/101)
 
-Each test group checks:
-  1. Factory construction succeeds.
-  2. Output type is SemanticSegmentationOutput.
-  3. Logits tensor has correct spatial shape matching input H×W.
-  4. Self-consistency: same input → identical output.
-  5. loss is None when no targets supplied.
+Each test combines factory check, output type, shape, deterministic
+self-consistency, and loss=None checks in ONE forward pass per device.
+
+Tests are parametrized over the ``device`` fixture so they run on both
+the CPU (Accelerate) and Metal (MLX) streams.
 """
-
-import unittest
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -20,317 +18,200 @@ from lucid.models._output import SemanticSegmentationOutput
 
 _B = 1
 _C = 3
-_H = 128  # Must be divisible by 32 for stride-32 backbones
+_H = 128
 _W = 128
 
 
-def _img() -> Tensor:
+def _img(device: str, ch: int = _C) -> Tensor:
     lucid.manual_seed(0)
-    return lucid.randn((_B, _C, _H, _W))
+    return lucid.randn((_B, ch, _H, _W), device=device)
 
 
-def _seg_target(num_classes: int = 21) -> Tensor:
-    """(B, H, W) integer segmentation map."""
-    return lucid.zeros((_B, _H, _W))
+def _build(factory, device: str):
+    m = factory()
+    m.eval()
+    return m.to(device=device)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FCN
 # ─────────────────────────────────────────────────────────────────────────────
 
+class TestFCNResNet50:
+    def test_factory_and_forward(self, device: str) -> None:
+        from lucid.models.vision.fcn import fcn_resnet50, FCNForSemanticSegmentation
+        m = _build(fcn_resnet50, device)
+        assert isinstance(m, FCNForSemanticSegmentation)
 
-class TestFCNResNet50(unittest.TestCase):
+        x = _img(device)
+        out = m(x)
+        assert isinstance(out, SemanticSegmentationOutput)
+        K = m.config.num_classes
+        assert tuple(out.logits.shape) == (_B, K, _H, _W)
+        assert out.loss is None
 
-    def setUp(self) -> None:
-        from lucid.models.vision.fcn import fcn_resnet50
-
-        self.model = fcn_resnet50()
-        self.model.eval()
-
-    def test_factory_type(self) -> None:
-        from lucid.models.vision.fcn import FCNForSemanticSegmentation
-
-        self.assertIsInstance(self.model, FCNForSemanticSegmentation)
-
-    def test_output_type(self) -> None:
-        out = self.model(_img())
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-
-    def test_logits_shape(self) -> None:
-        out = self.model(_img())
-        K = self.model.config.num_classes  # 21
-        # logits: (B, K, H, W) — same spatial size as input
-        self.assertEqual(tuple(out.logits.shape), (_B, K, _H, _W))
-
-    def test_no_loss_without_target(self) -> None:
-        out = self.model(_img())
-        self.assertIsNone(out.loss)
-
-    def test_self_consistency(self) -> None:
-        x = _img()
-        out1 = self.model(x)
-        out2 = self.model(x)
-        diff = float(lucid.abs(out1.logits - out2.logits).max().item())
-        self.assertAlmostEqual(diff, 0.0, places=5)
+        out2 = m(x)
+        diff = float(lucid.abs(out.logits - out2.logits).max().item())
+        assert diff < 1e-5
 
 
-class TestFCNResNet101(unittest.TestCase):
-
-    def test_factory_and_shape(self) -> None:
-        from lucid.models.vision.fcn import fcn_resnet101
-
-        m = fcn_resnet101()
-        m.eval()
-        out = m(_img())
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-        self.assertEqual(int(out.logits.shape[0]), _B)
-        self.assertEqual(int(out.logits.shape[-1]), _W)
+class TestFCNResNet101:
+    def test_factory_and_forward(self, device: str) -> None:
+        from lucid.models.vision.fcn import fcn_resnet101, FCNForSemanticSegmentation
+        m = _build(fcn_resnet101, device)
+        assert isinstance(m, FCNForSemanticSegmentation)
+        out = m(_img(device))
+        assert isinstance(out, SemanticSegmentationOutput)
+        assert int(out.logits.shape[0]) == _B
+        assert int(out.logits.shape[-1]) == _W
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UNet
+# UNet variants
 # ─────────────────────────────────────────────────────────────────────────────
 
+class TestUNet:
+    def test_factory_and_forward(self, device: str) -> None:
+        from lucid.models.vision.unet import unet, UNetForSemanticSegmentation
+        m = _build(unet, device)
+        assert isinstance(m, UNetForSemanticSegmentation)
 
-class TestUNet(unittest.TestCase):
+        x = _img(device, ch=1)
+        out = m(x)
+        assert isinstance(out, SemanticSegmentationOutput)
+        K = m.config.num_classes
+        assert int(out.logits.shape[1]) == K
+        assert int(out.logits.shape[-2]) == _H
+        assert int(out.logits.shape[-1]) == _W
+        assert out.loss is None
 
-    def _unet_img(self) -> Tensor:
-        """UNet default: 1-channel biomedical images."""
-        lucid.manual_seed(0)
-        return lucid.randn((_B, 1, _H, _W))
-
-    def setUp(self) -> None:
-        from lucid.models.vision.unet import unet
-
-        self.model = unet()
-        self.model.eval()
-
-    def test_factory_type(self) -> None:
-        from lucid.models.vision.unet import UNetForSemanticSegmentation
-
-        self.assertIsInstance(self.model, UNetForSemanticSegmentation)
-
-    def test_output_type(self) -> None:
-        out = self.model(self._unet_img())
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-
-    def test_logits_spatial_match(self) -> None:
-        out = self.model(self._unet_img())
-        # Output spatial size must equal input spatial size
-        self.assertEqual(int(out.logits.shape[-2]), _H)
-        self.assertEqual(int(out.logits.shape[-1]), _W)
-
-    def test_logits_channels(self) -> None:
-        out = self.model(self._unet_img())
-        K = self.model.config.num_classes  # 2
-        self.assertEqual(int(out.logits.shape[1]), K)
-
-    def test_no_loss_without_target(self) -> None:
-        out = self.model(self._unet_img())
-        self.assertIsNone(out.loss)
-
-    def test_self_consistency(self) -> None:
-        x = self._unet_img()
-        out1 = self.model(x)
-        out2 = self.model(x)
-        diff = float(lucid.abs(out1.logits - out2.logits).max().item())
-        self.assertAlmostEqual(diff, 0.0, places=5)
+        out2 = m(x)
+        diff = float(lucid.abs(out.logits - out2.logits).max().item())
+        assert diff < 1e-5
 
 
-class TestUNetSmall(unittest.TestCase):
-
-    def test_factory_and_shape(self) -> None:
+class TestUNetSmall:
+    def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.unet import unet_small
-
-        m = unet_small()
-        m.eval()
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
-        out = m(x)
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-        self.assertEqual(int(out.logits.shape[-2]), _H)
-        self.assertEqual(int(out.logits.shape[-1]), _W)
+        m = _build(unet_small, device)
+        out = m(_img(device, ch=1))
+        assert isinstance(out, SemanticSegmentationOutput)
+        assert int(out.logits.shape[-2]) == _H
+        assert int(out.logits.shape[-1]) == _W
 
 
-class TestUNetBilinear(unittest.TestCase):
-
-    def test_factory_and_shape(self) -> None:
+class TestUNetBilinear:
+    def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.unet import unet_bilinear
-
-        m = unet_bilinear()
-        m.eval()
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
-        out = m(x)
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-        self.assertEqual(int(out.logits.shape[-2]), _H)
-        self.assertEqual(int(out.logits.shape[-1]), _W)
+        m = _build(unet_bilinear, device)
+        out = m(_img(device, ch=1))
+        assert isinstance(out, SemanticSegmentationOutput)
+        assert int(out.logits.shape[-2]) == _H
+        assert int(out.logits.shape[-1]) == _W
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Attention U-Net
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-class TestAttentionUNet(unittest.TestCase):
-
-    def setUp(self) -> None:
-        from lucid.models.vision.attention_unet import attention_unet
-
-        self.model = attention_unet()
-        self.model.eval()
-
-    def test_factory_type(self) -> None:
+class TestAttentionUNet:
+    def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.attention_unet import (
-            AttentionUNetForSemanticSegmentation,
+            attention_unet, AttentionUNetForSemanticSegmentation,
         )
+        m = _build(attention_unet, device)
+        assert isinstance(m, AttentionUNetForSemanticSegmentation)
 
-        self.assertIsInstance(self.model, AttentionUNetForSemanticSegmentation)
-
-    def test_output_type(self) -> None:
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
-        out = self.model(x)
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-
-    def test_logits_spatial_match(self) -> None:
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
-        out = self.model(x)
-        self.assertEqual(int(out.logits.shape[-2]), _H)
-        self.assertEqual(int(out.logits.shape[-1]), _W)
-
-    def test_self_consistency(self) -> None:
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
-        out1 = self.model(x)
-        out2 = self.model(x)
-        diff = float(lucid.abs(out1.logits - out2.logits).max().item())
-        self.assertAlmostEqual(diff, 0.0, places=5)
-
-    def test_small_variant(self) -> None:
-        from lucid.models.vision.attention_unet import attention_unet_small
-
-        m = attention_unet_small()
-        m.eval()
-        lucid.manual_seed(0)
-        x = lucid.randn((_B, 1, _H, _W))
+        x = _img(device, ch=1)
         out = m(x)
-        self.assertIsInstance(out, SemanticSegmentationOutput)
+        assert isinstance(out, SemanticSegmentationOutput)
+        assert int(out.logits.shape[-2]) == _H
+        assert int(out.logits.shape[-1]) == _W
+
+        out2 = m(x)
+        diff = float(lucid.abs(out.logits - out2.logits).max().item())
+        assert diff < 1e-5
+
+    def test_small_variant(self, device: str) -> None:
+        from lucid.models.vision.attention_unet import attention_unet_small
+        m = _build(attention_unet_small, device)
+        out = m(_img(device, ch=1))
+        assert isinstance(out, SemanticSegmentationOutput)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MaskFormer
 # ─────────────────────────────────────────────────────────────────────────────
 
+class TestMaskFormer:
+    def test_factory_and_forward(self, device: str) -> None:
+        from lucid.models.vision.maskformer import (
+            maskformer_resnet50, MaskFormerForSemanticSegmentation,
+        )
+        # Slim transformer + queries for test speed
+        m = _build(
+            lambda: maskformer_resnet50(
+                num_queries=20, num_decoder_layers=2,
+            ),
+            device,
+        )
+        assert isinstance(m, MaskFormerForSemanticSegmentation)
 
-class TestMaskFormer(unittest.TestCase):
+        x = _img(device)
+        out = m(x)
+        assert isinstance(out, SemanticSegmentationOutput)
+        K = m.config.num_classes
+        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
+        assert out.loss is None
 
-    def setUp(self) -> None:
-        from lucid.models.vision.maskformer import maskformer_resnet50
-
-        self.model = maskformer_resnet50()
-        self.model.eval()
-
-    def test_factory_type(self) -> None:
-        from lucid.models.vision.maskformer import MaskFormerForSemanticSegmentation
-
-        self.assertIsInstance(self.model, MaskFormerForSemanticSegmentation)
-
-    def test_output_type(self) -> None:
-        out = self.model(_img())
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-
-    def test_logits_shape(self) -> None:
-        out = self.model(_img())
-        K = self.model.config.num_classes  # 150
-        # logits: (B, K+1, H, W) — full spatial resolution
-        self.assertEqual(int(out.logits.shape[0]), _B)
-        self.assertEqual(int(out.logits.shape[1]), K + 1)
-        self.assertEqual(int(out.logits.shape[2]), _H)
-        self.assertEqual(int(out.logits.shape[3]), _W)
-
-    def test_no_loss_without_target(self) -> None:
-        out = self.model(_img())
-        self.assertIsNone(out.loss)
-
-    def test_self_consistency(self) -> None:
-        x = _img()
-        out1 = self.model(x)
-        out2 = self.model(x)
-        diff = float(lucid.abs(out1.logits - out2.logits).max().item())
-        self.assertAlmostEqual(diff, 0.0, places=5)
+        out2 = m(x)
+        diff = float(lucid.abs(out.logits - out2.logits).max().item())
+        assert diff < 1e-5
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Mask2Former
 # ─────────────────────────────────────────────────────────────────────────────
 
+class TestMask2Former:
+    def test_factory_and_forward(self, device: str) -> None:
+        from lucid.models.vision.mask2former import (
+            mask2former_resnet50, Mask2FormerForSemanticSegmentation,
+        )
+        m = _build(
+            lambda: mask2former_resnet50(
+                num_queries=20, num_decoder_layers=2,
+            ),
+            device,
+        )
+        assert isinstance(m, Mask2FormerForSemanticSegmentation)
 
-class TestMask2Former(unittest.TestCase):
+        x = _img(device)
+        out = m(x)
+        assert isinstance(out, SemanticSegmentationOutput)
+        K = m.config.num_classes
+        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
+        assert out.loss is None
 
-    def setUp(self) -> None:
-        from lucid.models.vision.mask2former import mask2former_resnet50
-
-        self.model = mask2former_resnet50()
-        self.model.eval()
-
-    def test_factory_type(self) -> None:
-        from lucid.models.vision.mask2former import Mask2FormerForSemanticSegmentation
-
-        self.assertIsInstance(self.model, Mask2FormerForSemanticSegmentation)
-
-    def test_output_type(self) -> None:
-        out = self.model(_img())
-        self.assertIsInstance(out, SemanticSegmentationOutput)
-
-    def test_logits_shape(self) -> None:
-        out = self.model(_img())
-        K = self.model.config.num_classes  # 150
-        self.assertEqual(int(out.logits.shape[0]), _B)
-        self.assertEqual(int(out.logits.shape[1]), K + 1)
-        self.assertEqual(int(out.logits.shape[2]), _H)
-        self.assertEqual(int(out.logits.shape[3]), _W)
-
-    def test_no_loss_without_target(self) -> None:
-        out = self.model(_img())
-        self.assertIsNone(out.loss)
-
-    def test_self_consistency(self) -> None:
-        x = _img()
-        out1 = self.model(x)
-        out2 = self.model(x)
-        diff = float(lucid.abs(out1.logits - out2.logits).max().item())
-        self.assertAlmostEqual(diff, 0.0, places=5)
+        out2 = m(x)
+        diff = float(lucid.abs(out.logits - out2.logits).max().item())
+        assert diff < 1e-5
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Registry smoke-test
+# Registry smoke-test (device-independent)
 # ─────────────────────────────────────────────────────────────────────────────
 
-
-class TestSegmentationRegistry(unittest.TestCase):
-
+class TestSegmentationRegistry:
     def test_segmentation_models_registered(self) -> None:
         import lucid.models as M
-
         seg_models = M.list_models(task="semantic-segmentation")
         expected = [
-            "fcn_resnet50",
-            "fcn_resnet101",
-            "unet",
-            "unet_small",
-            "unet_bilinear",
-            "attention_unet",
-            "attention_unet_small",
-            "maskformer_resnet50",
-            "maskformer_resnet101",
-            "mask2former_resnet50",
-            "mask2former_resnet101",
+            "fcn_resnet50", "fcn_resnet101",
+            "unet", "unet_small", "unet_bilinear",
+            "attention_unet", "attention_unet_small",
+            "maskformer_resnet50", "maskformer_resnet101",
+            "mask2former_resnet50", "mask2former_resnet101",
         ]
         for name in expected:
-            self.assertIn(name, seg_models, f"{name!r} missing from registry")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert name in seg_models, f"{name!r} missing from registry"

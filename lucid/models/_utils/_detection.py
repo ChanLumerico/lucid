@@ -175,8 +175,8 @@ def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
         if float(ws[i].item()) >= min_size and float(hs[i].item()) >= min_size
     ]
     if not keep:
-        return lucid.zeros((0,)).long()
-    return lucid.tensor(keep).long()
+        return lucid.zeros((0,), device=boxes.device.type).long()
+    return lucid.tensor(keep, device=boxes.device.type).long()
 
 
 def encode_boxes(
@@ -280,7 +280,7 @@ def nms(
     """
     N: int = int(boxes.shape[0])
     if N == 0:
-        return lucid.zeros((0,)).long()
+        return lucid.zeros((0,), device=boxes.device.type).long()
 
     # Sort descending by score using Python-level argsort on negated scores
     order: list[int] = sorted(
@@ -306,8 +306,8 @@ def nms(
                 suppressed[jdx] = True
 
     if not keep:
-        return lucid.zeros((0,)).long()
-    return lucid.tensor(keep).long()
+        return lucid.zeros((0,), device=boxes.device.type).long()
+    return lucid.tensor(keep, device=boxes.device.type).long()
 
 
 def batched_nms(
@@ -386,6 +386,7 @@ class AnchorGenerator(nn.Module):
         feature_map_size: tuple[int, int],
         stride: tuple[int, int],
         base_anchors: Tensor,
+        device: str = "cpu",
     ) -> Tensor:
         """Tile base_anchors across a feature map grid.
 
@@ -393,6 +394,7 @@ class AnchorGenerator(nn.Module):
             feature_map_size: (H, W) of the feature map.
             stride:           (stride_h, stride_w) pixels per cell.
             base_anchors:     (A, 4) base anchors centred at origin.
+            device:           Device for the generated anchor tensor.
 
         Returns:
             (H × W × A, 4) anchors in xyxy image-pixel coordinates.
@@ -406,13 +408,18 @@ class AnchorGenerator(nn.Module):
             for r in range(fH)
             for c in range(fW)
         ]
-        shifts_t = lucid.tensor(shifts)  # (G, 4)
+        shifts_t = lucid.tensor(shifts, device=device)  # (G, 4)
+        base_on_dev = (
+            base_anchors.to(device=device)
+            if base_anchors.device.type != device
+            else base_anchors
+        )
 
         G = fH * fW
         A = int(base_anchors.shape[0])
 
         # (G, 1, 4) + (1, A, 4) → (G, A, 4) → (G*A, 4)
-        grid = shifts_t[:, None, :] + base_anchors[None, :, :]
+        grid = shifts_t[:, None, :] + base_on_dev[None, :, :]
         return grid.reshape(G * A, 4)
 
     def forward(  # type: ignore[override]
@@ -433,11 +440,16 @@ class AnchorGenerator(nn.Module):
             List of (H_l × W_l × A_l, 4) anchor tensors, one per level.
         """
         assert len(feature_maps) == len(self._cell_anchors)
+        # Propagate device from the first feature map so anchors stay co-located
+        # with the predictions they will be matched against.
+        device = feature_maps[0].device.type if feature_maps else "cpu"
         all_anchors: list[Tensor] = []
         for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
             fH = int(feat.shape[2])
             fW = int(feat.shape[3])
-            all_anchors.append(self._grid_anchors((fH, fW), stride, base))
+            all_anchors.append(
+                self._grid_anchors((fH, fW), stride, base, device=device)
+            )
         return all_anchors
 
 
@@ -524,14 +536,14 @@ def roi_align(
                 row.append(col)
             grid_data.append(row)
 
-        grid = lucid.tensor(grid_data)  # (N, H, W, 2)
+        grid = lucid.tensor(grid_data, device=feat.device.type)  # (N, H, W, 2)
 
         feat_n = feat.expand(N, -1, -1, -1)
         sampled = F.grid_sample(feat_n, grid, mode="bilinear", align_corners=True)
         results.append(sampled)
 
     if not results:
-        return lucid.zeros((0, C, out_h, out_w))
+        return lucid.zeros((0, C, out_h, out_w), device=input.device.type)
     return lucid.cat(results, dim=0)
 
 
@@ -589,7 +601,7 @@ def roi_pool(
             results.append(pooled.unsqueeze(0))
 
     if not results:
-        return lucid.zeros((0, C, out_h, out_w))
+        return lucid.zeros((0, C, out_h, out_w), device=input.device.type)
     return lucid.cat(results, dim=0)
 
 
@@ -786,7 +798,7 @@ class RPN(nn.Module):
                 if not score_mask:
                     continue
 
-                mask_t = lucid.tensor(score_mask).long()
+                mask_t = lucid.tensor(score_mask, device=props.device.type).long()
                 props = props[mask_t]
                 topk_sc = topk_sc[mask_t]
 
@@ -795,11 +807,12 @@ class RPN(nn.Module):
 
         final_proposals: list[Tensor] = []
         final_scores: list[Tensor] = []
+        dev = features[0].device.type if features else "cpu"
 
         for b in range(B):
             if not all_proposals[b]:
-                final_proposals.append(lucid.zeros((0, 4)))
-                final_scores.append(lucid.zeros((0,)))
+                final_proposals.append(lucid.zeros((0, 4), device=dev))
+                final_scores.append(lucid.zeros((0,), device=dev))
                 continue
 
             props_b = lucid.cat(all_proposals[b], dim=0)

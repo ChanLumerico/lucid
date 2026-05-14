@@ -25,9 +25,7 @@ _CFG_RESNET101 = FCNConfig(
 )
 
 
-def _build(
-    cfg: FCNConfig, kw: dict[str, object]
-) -> FCNForSemanticSegmentation:
+def _build(cfg: FCNConfig, kw: dict[str, object]) -> FCNForSemanticSegmentation:
     return FCNForSemanticSegmentation(
         FCNConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

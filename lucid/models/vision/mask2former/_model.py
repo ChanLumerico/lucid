@@ -49,7 +49,6 @@ from lucid.models._output import SemanticSegmentationOutput
 from lucid.models._registry import register_model
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
 
-
 # ---------------------------------------------------------------------------
 # ResNet backbone (self-contained — no cross-family import)
 # ---------------------------------------------------------------------------
@@ -115,9 +114,7 @@ def _make_layer(
 class _ResNetBackbone(nn.Module):
     """ResNet backbone returning [C2, C3, C4, C5] feature maps."""
 
-    def __init__(
-        self, in_channels: int, layers: tuple[int, int, int, int]
-    ) -> None:
+    def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -242,8 +239,8 @@ class _MaskedAttentionDecoderLayer(nn.Module):
 
     def forward(  # type: ignore[override]
         self,
-        tgt: Tensor,              # (N, B, d_model)
-        memory: Tensor,           # (S, B, fpn_ch) — FPN level flattened
+        tgt: Tensor,  # (N, B, d_model)
+        memory: Tensor,  # (S, B, fpn_ch) — FPN level flattened
         attn_mask: Tensor | None = None,  # (N, S) or (B*n_head, N, S) for masking
     ) -> Tensor:
         """One masked-attention decoder layer.
@@ -452,8 +449,8 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
 
     def _compute_mask_attn(
         self,
-        queries: Tensor,     # (N, B, d)
-        pixel_emb: Tensor,   # (B, d, H/4, W/4)
+        queries: Tensor,  # (N, B, d)
+        pixel_emb: Tensor,  # (B, d, H/4, W/4)
         mem_H: int,
         mem_W: int,
     ) -> Tensor:
@@ -488,9 +485,7 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         p2_W = int(pixel_emb.shape[3])
 
         # Reshape logits to spatial, then interpolate
-        ml_spatial: Tensor = mask_logits.reshape(
-            B, N, p2_H, p2_W
-        )  # (B, N, H/4, W/4)
+        ml_spatial: Tensor = mask_logits.reshape(B, N, p2_H, p2_W)  # (B, N, H/4, W/4)
         # Merge B and N for interpolation
         ml_bn: Tensor = ml_spatial.reshape(B * N, 1, p2_H, p2_W)
         if p2_H != mem_H or p2_W != mem_W:
@@ -517,7 +512,7 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
                 row_m.append(0.0 if avg >= 0.5 else -1e4)
             mask_data.append(row_m)
 
-        return lucid.tensor(mask_data)  # (N, S_fpn)
+        return lucid.tensor(mask_data, device=queries.device)  # (N, S_fpn)
 
     def forward(  # type: ignore[override]
         self,
@@ -553,7 +548,7 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         # 3. Initialise queries: (N, B, d)
         N = self._cfg.num_queries
         q_embed: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
-        tgt: Tensor = q_embed.unsqueeze(1).expand(-1, B, -1)     # (N, B, d)
+        tgt: Tensor = q_embed.unsqueeze(1).expand(-1, B, -1)  # (N, B, d)
 
         # 4. Masked-attention decoder layers
         num_levels = self._cfg.num_feature_levels
@@ -577,18 +572,18 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
         hs_bn: Tensor = tgt.permute(1, 0, 2)  # (B, N, d)
         class_logits: Tensor = cast(Tensor, self.class_head(hs_bn))  # (B, N, K+1)
 
-        mask_emb_out: Tensor = cast(Tensor, self.mask_embed(hs_bn))   # (B, N, d)
-        pixel_flat: Tensor = pixel_emb.reshape(B, d, fH * fW)         # (B, d, S)
+        mask_emb_out: Tensor = cast(Tensor, self.mask_embed(hs_bn))  # (B, N, d)
+        pixel_flat: Tensor = pixel_emb.reshape(B, d, fH * fW)  # (B, d, S)
         mask_logits_flat: Tensor = lucid.matmul(mask_emb_out, pixel_flat)
         mask_logits: Tensor = mask_logits_flat.reshape(B, N, fH, fW)
 
         # 6. Seg logits (inference)
         K_plus_1 = self._cfg.num_classes + 1
         class_probs: Tensor = F.softmax(class_logits, dim=-1)  # (B, N, K+1)
-        mask_probs: Tensor = F.sigmoid(mask_logits)            # (B, N, H/4, W/4)
+        mask_probs: Tensor = F.sigmoid(mask_logits)  # (B, N, H/4, W/4)
 
-        class_probs_t: Tensor = class_probs.permute(0, 2, 1)     # (B, K+1, N)
-        mask_flat: Tensor = mask_probs.reshape(B, N, fH * fW)    # (B, N, S)
+        class_probs_t: Tensor = class_probs.permute(0, 2, 1)  # (B, K+1, N)
+        mask_flat: Tensor = mask_probs.reshape(B, N, fH * fW)  # (B, N, S)
         seg_flat: Tensor = lucid.matmul(class_probs_t, mask_flat)
         seg_logits_small: Tensor = seg_flat.reshape(B, K_plus_1, fH, fW)
 

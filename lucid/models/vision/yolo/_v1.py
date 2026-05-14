@@ -470,8 +470,8 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                             ) * float(H)
                             tgt_sqrt_w = float(math.sqrt(max(w_m, 0.0)))
                             tgt_sqrt_h = float(math.sqrt(max(h_m, 0.0)))
-                            sqrt_pw = lucid.log(pred_w_px.clamp(min=1e-6)) * 0.5
-                            sqrt_ph = lucid.log(pred_h_px.clamp(min=1e-6)) * 0.5
+                            sqrt_pw = lucid.log(pred_w_px.clamp(1e-6, 1e9)) * 0.5
+                            sqrt_ph = lucid.log(pred_h_px.clamp(1e-6, 1e9)) * 0.5
                             # Approximate sqrt MSE as (sqrt(pw) - sqrt(tw))²
                             # but we can also do it directly:
                             wh_terms.append(
@@ -589,7 +589,7 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(

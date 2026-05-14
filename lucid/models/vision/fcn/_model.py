@@ -39,7 +39,6 @@ from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.fcn._config import FCNConfig
 
-
 # ---------------------------------------------------------------------------
 # ResNet backbone (dilated, self-contained)
 # ---------------------------------------------------------------------------
@@ -147,9 +146,7 @@ class _DilatedResNet(nn.Module):
         self.c4_channels: int = c4
         self.c5_channels: int = c5
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
         """Return (c4, c5) feature maps.
 
         Returns:
@@ -226,7 +223,7 @@ class FCNForSemanticSegmentation(PretrainedModel):
 
         # Backbone layer counts by name
         _layer_counts: dict[str, tuple[int, int, int, int]] = {
-            "resnet50":  (3, 4, 6, 3),
+            "resnet50": (3, 4, 6, 3),
             "resnet101": (3, 4, 23, 3),
         }
         layers = _layer_counts.get(config.backbone, (3, 4, 6, 3))

@@ -177,13 +177,14 @@ def _generate_proposals(
     anchors = anchors[order]
 
     # Decode
+    dev = logits.device.type
     props = decode_boxes(deltas, anchors, bbox_weights)
     props = clip_boxes_to_image(props, image_size)
 
     # Remove tiny boxes
     keep_small = remove_small_boxes(props, min_size)
     if int(keep_small.shape[0]) == 0:
-        return lucid.zeros((0, 4)), lucid.zeros((0,))
+        return lucid.zeros((0, 4), device=dev), lucid.zeros((0,), device=dev)
     props = props[keep_small]
     scores = scores[keep_small]
 
@@ -194,8 +195,8 @@ def _generate_proposals(
         if float(scores[i].item()) >= score_thresh
     ]
     if not thr_mask:
-        return lucid.zeros((0, 4)), lucid.zeros((0,))
-    thr_t = lucid.tensor(thr_mask).long()
+        return lucid.zeros((0, 4), device=dev), lucid.zeros((0,), device=dev)
+    thr_t = lucid.tensor(thr_mask, device=dev).long()
     props = props[thr_t]
     scores = scores[thr_t]
 
@@ -203,7 +204,7 @@ def _generate_proposals(
     keep = batched_nms(
         props,
         scores,
-        lucid.zeros(int(scores.shape[0])),
+        lucid.zeros(int(scores.shape[0]), device=dev),
         nms_thresh,
     )
     keep = keep[:post_nms_top_n]
@@ -630,12 +631,13 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         # 4. RoI head
         all_logits: Tensor
         all_deltas: Tensor
+        dev = x.device.type
         if int(roi_crops.shape[0]) > 0:
             all_logits, all_deltas = self.roi_head(roi_crops)
         else:
             K = self._cfg.num_classes
-            all_logits = lucid.zeros((0, K + 1))
-            all_deltas = lucid.zeros((0, K * 4))
+            all_logits = lucid.zeros((0, K + 1), device=dev)
+            all_deltas = lucid.zeros((0, K * 4), device=dev)
 
         # 5. Decode top-class boxes
         pred_boxes = self._decode_boxes(proposals, all_deltas, (iH, iW))
@@ -659,12 +661,13 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         all_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
+        dev = all_deltas.device.type
         if not any(int(p.shape[0]) > 0 for p in proposals):
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=dev)
         flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         N = int(all_deltas.shape[0])
         if N == 0:
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=dev)
         K = self._cfg.num_classes
         # Use class-0 (first fg) delta as canonical decode
         top_deltas = all_deltas.reshape(N, K, 4)[:, 0, :]

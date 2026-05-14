@@ -40,7 +40,6 @@ from lucid.models._output import SemanticSegmentationOutput
 from lucid.models._registry import register_model
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 
-
 # ---------------------------------------------------------------------------
 # ResNet backbone (C2–C5 feature maps)
 # ---------------------------------------------------------------------------
@@ -106,9 +105,7 @@ def _make_layer(
 class _ResNetBackbone(nn.Module):
     """ResNet backbone returning [C2, C3, C4, C5] feature maps."""
 
-    def __init__(
-        self, in_channels: int, layers: tuple[int, int, int, int]
-    ) -> None:
+    def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -190,9 +187,7 @@ class _FPNPixelDecoder(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def _binary_mask_iou(
-    pred_mask: Tensor, gt_mask: Tensor
-) -> float:
+def _binary_mask_iou(pred_mask: Tensor, gt_mask: Tensor) -> float:
     """Compute IoU between two binary masks (after sigmoid/threshold).
 
     Args:
@@ -221,9 +216,9 @@ def _binary_mask_iou(
 
 def _hungarian_match_masks(
     class_logits: Tensor,  # (N, K+1)
-    mask_logits: Tensor,   # (N, H, W)
-    gt_labels: Tensor,     # (M,) integer class ids
-    gt_masks: Tensor,      # (M, H, W) binary
+    mask_logits: Tensor,  # (N, H, W)
+    gt_labels: Tensor,  # (M,) integer class ids
+    gt_masks: Tensor,  # (M, H, W) binary
 ) -> tuple[list[int], list[int]]:
     """Hungarian matching between N queries and M GT segments.
 
@@ -238,7 +233,7 @@ def _hungarian_match_masks(
         return [], []
 
     probs = F.softmax(class_logits, dim=-1)  # (N, K+1)
-    pred_probs = F.sigmoid(mask_logits)      # (N, H, W)
+    pred_probs = F.sigmoid(mask_logits)  # (N, H, W)
 
     # Build cost matrix
     cost: list[list[float]] = []
@@ -407,7 +402,7 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         # 3. Object queries → (N, B, d)
         N = self._cfg.num_queries
         q_embed: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
-        tgt: Tensor = q_embed.unsqueeze(1).expand(-1, B, -1)     # (N, B, d)
+        tgt: Tensor = q_embed.unsqueeze(1).expand(-1, B, -1)  # (N, B, d)
 
         # 4. Transformer decoder
         hs: Tensor = self.transformer_decoder.forward(tgt, mem)  # (N, B, d)
@@ -429,7 +424,7 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         # 8. Compute output seg logits (inference)
         # class_probs: (B, N, K+1), mask_probs: (B, N, H/4, W/4)
         class_probs: Tensor = F.softmax(class_logits, dim=-1)  # (B, N, K+1)
-        mask_probs: Tensor = F.sigmoid(mask_logits)            # (B, N, H/4, W/4)
+        mask_probs: Tensor = F.sigmoid(mask_logits)  # (B, N, H/4, W/4)
 
         K_plus_1 = self._cfg.num_classes + 1
         # seg_logits[b,k,h,w] = sum_n class_probs[b,n,k] * mask_probs[b,n,h,w]
@@ -447,16 +442,14 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         # 9. Loss
         loss: Tensor | None = None
         if targets is not None:
-            loss = self._compute_loss(
-                class_logits, mask_logits, targets, (fH, fW)
-            )
+            loss = self._compute_loss(class_logits, mask_logits, targets, (fH, fW))
 
         return SemanticSegmentationOutput(logits=seg_logits, loss=loss)
 
     def _compute_loss(
         self,
-        class_logits: Tensor,   # (B, N, K+1)
-        mask_logits: Tensor,    # (B, N, H/4, W/4)
+        class_logits: Tensor,  # (B, N, K+1)
+        mask_logits: Tensor,  # (B, N, H/4, W/4)
         targets: dict[str, Tensor],
         feat_size: tuple[int, int],
     ) -> Tensor:
@@ -472,8 +465,8 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         mask_losses: list[Tensor] = []
 
         for b in range(B):
-            cl_b: Tensor = class_logits[b]    # (N, K+1)
-            ml_b: Tensor = mask_logits[b]     # (N, H/4, W/4)
+            cl_b: Tensor = class_logits[b]  # (N, K+1)
+            ml_b: Tensor = mask_logits[b]  # (N, H/4, W/4)
             seg_b: Tensor = gt_masks_full[b]  # (H, W) integer
 
             # Discover unique classes present (exclude 0 if it's background)
@@ -510,7 +503,7 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
                 gt_masks_list.append(row_data)
 
             gt_labels_t: Tensor = lucid.tensor(gt_label_data)  # (M,)
-            gt_masks_t: Tensor = lucid.tensor(gt_masks_list)   # (M, H, W)
+            gt_masks_t: Tensor = lucid.tensor(gt_masks_list)  # (M, H, W)
 
             # Downsample GT masks to feature resolution for matching
             gt_masks_small: Tensor = F.interpolate(
@@ -521,8 +514,10 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
 
             # Hungarian match
             pred_idx, gt_idx = _hungarian_match_masks(
-                cl_b, ml_b.detach() if hasattr(ml_b, "detach") else ml_b,
-                gt_labels_t, gt_masks_small
+                cl_b,
+                ml_b.detach() if hasattr(ml_b, "detach") else ml_b,
+                gt_labels_t,
+                gt_masks_small,
             )
 
             # Class loss: matched → gt class, unmatched → K (no-object)
@@ -535,7 +530,7 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
             # Mask loss: BCE on matched pairs
             if pred_idx:
                 for pi, gi in zip(pred_idx, gt_idx):
-                    pred_m: Tensor = ml_b[pi]       # (H/4, W/4)
+                    pred_m: Tensor = ml_b[pi]  # (H/4, W/4)
                     gt_m: Tensor = gt_masks_small[gi]  # (H/4, W/4)
                     mask_losses.append(
                         F.binary_cross_entropy_with_logits(

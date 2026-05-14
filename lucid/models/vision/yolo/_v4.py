@@ -417,6 +417,7 @@ def _decode_predictions(
     fW = int(raw.shape[3])
     nA = len(anchors_wh)
     C = int(raw.shape[1]) // nA - 5
+    device = raw.device
 
     raw = raw.reshape(B, nA, 5 + C, fH, fW).permute(0, 1, 3, 4, 2)
 
@@ -429,8 +430,8 @@ def _decode_predictions(
 
     col_data: list[list[float]] = [[float(c) for c in range(fW)] for _ in range(fH)]
     row_data: list[list[float]] = [[float(r)] * fW for r in range(fH)]
-    col_t = lucid.tensor(col_data)
-    row_t = lucid.tensor(row_data)
+    col_t = lucid.tensor(col_data, device=device)
+    row_t = lucid.tensor(row_data, device=device)
 
     px = (F.sigmoid(tx) + col_t) * float(stride)
     py = (F.sigmoid(ty) + row_t) * float(stride)
@@ -448,8 +449,8 @@ def _decode_predictions(
         aw_data.append(b_aw)
         ah_data.append(b_ah)
 
-    aw_t = lucid.tensor(aw_data)
-    ah_t = lucid.tensor(ah_data)
+    aw_t = lucid.tensor(aw_data, device=device)
+    ah_t = lucid.tensor(ah_data, device=device)
 
     pw = lucid.exp(tw) * aw_t
     ph = lucid.exp(th) * ah_t

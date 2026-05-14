@@ -270,11 +270,12 @@ def _fpn_roi_align(
     num_levels = len(fpn_feats)
     C = int(fpn_feats[0].shape[1])
     B = len(proposals)
+    dev = fpn_feats[0].device.type
 
     # Collect results preserving original (b, n) order
     total_n = sum(int(p.shape[0]) for p in proposals)
     if total_n == 0:
-        return lucid.zeros((0, C, output_size, output_size))
+        return lucid.zeros((0, C, output_size, output_size), device=dev)
 
     # Build a flat list of (b, n, level) tuples in proposal order
     order: list[tuple[int, int, int]] = []
@@ -300,9 +301,10 @@ def _fpn_roi_align(
         scale = spatial_scales[lvl]
         boxes = lucid.cat([box for _, box in items], dim=0)  # (k, 4)
         # roi_align expects a list-per-image
+        empty = lucid.zeros((0, 4), device=dev)
         crops = roi_align(
             feat_b,
-            [lucid.zeros((0, 4))] * b + [boxes] + [lucid.zeros((0, 4))] * (B - b - 1),
+            [empty] * b + [boxes] + [empty] * (B - b - 1),
             output_size=output_size,
             spatial_scale=scale,
         )
@@ -804,13 +806,14 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
         # 7. Detection head
         K = self._cfg.num_classes
+        dev = x.device.type
         if int(det_crops.shape[0]) > 0:
             all_logits, all_deltas = cast(
                 tuple[Tensor, Tensor], self.det_head(det_crops)
             )
         else:
-            all_logits = lucid.zeros((0, K + 1))
-            all_deltas = lucid.zeros((0, K * 4))
+            all_logits = lucid.zeros((0, K + 1), device=dev)
+            all_deltas = lucid.zeros((0, K * 4), device=dev)
 
         # 8. Mask RoI Align (14×14)
         mask_crops = _fpn_roi_align(
@@ -825,7 +828,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         if int(mask_crops.shape[0]) > 0:
             mask_logits: Tensor = cast(Tensor, self.mask_head(mask_crops))
         else:
-            mask_logits = lucid.zeros((0, K, 28, 28))
+            mask_logits = lucid.zeros((0, K, 28, 28), device=dev)
 
         # 10. Decode detection boxes
         pred_boxes = self._decode_boxes(proposals, all_deltas, (iH, iW))
@@ -857,12 +860,13 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         all_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
+        dev = all_deltas.device.type
         if not any(int(p.shape[0]) > 0 for p in proposals):
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=dev)
         flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         N = int(all_deltas.shape[0])
         if N == 0:
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=dev)
         K = self._cfg.num_classes
         top_deltas = all_deltas.reshape(N, K, 4)[:, 0, :]
         boxes = decode_boxes(top_deltas, flat_props, self._cfg.bbox_reg_weights)

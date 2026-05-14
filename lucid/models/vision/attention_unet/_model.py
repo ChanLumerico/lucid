@@ -43,7 +43,6 @@ from lucid.models._output import SemanticSegmentationOutput
 from lucid.models._registry import register_model
 from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Building blocks
 # ---------------------------------------------------------------------------
@@ -76,18 +75,14 @@ class _AttentionGate(nn.Module):
         inter_channels: Intermediate projection size.
     """
 
-    def __init__(
-        self, x_channels: int, g_channels: int, inter_channels: int
-    ) -> None:
+    def __init__(self, x_channels: int, g_channels: int, inter_channels: int) -> None:
         super().__init__()
         self.Wx = nn.Conv2d(x_channels, inter_channels, 1, bias=True)
         self.Wg = nn.Conv2d(g_channels, inter_channels, 1, bias=True)
         self.psi = nn.Conv2d(inter_channels, 1, 1, bias=True)
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor, g: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor, g: Tensor) -> Tensor:  # type: ignore[override]
         """Apply attention gate.
 
         Args:
@@ -145,9 +140,7 @@ class _DecoderBlock(nn.Module):
             self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, 2, stride=2)
             self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch)
 
-    def forward(  # type: ignore[override]
-        self, x: Tensor, skip: Tensor
-    ) -> Tensor:
+    def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
         """Decode one level.
 
         Args:
@@ -215,7 +208,9 @@ class AttentionUNetForSemanticSegmentation(PretrainedModel):
         for i in range(depth - 1, -1, -1):
             skip_ch = enc_channels[i]
             dec_out = enc_channels[i]
-            dec_block = _DecoderBlock(dec_in, skip_ch, dec_out, bilinear=config.bilinear)
+            dec_block = _DecoderBlock(
+                dec_in, skip_ch, dec_out, bilinear=config.bilinear
+            )
             self.add_module(f"decoder_{i}", dec_block)
             self.decoders.append(dec_block)
             dec_in = dec_out

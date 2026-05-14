@@ -151,7 +151,11 @@ class _ResNet50C5(nn.Module):
 
 
 def _build_2d_sin_pos_enc(
-    h: int, w: int, d_model: int, temperature: float = 10000.0
+    h: int,
+    w: int,
+    d_model: int,
+    temperature: float = 10000.0,
+    device: str = "cpu",
 ) -> Tensor:
     """Build 2-D sine / cosine positional encoding of shape (h*w, d_model).
 
@@ -173,7 +177,7 @@ def _build_2d_sin_pos_enc(
             row.append(math.sin(c * omega))
             row.append(math.cos(c * omega))
         col_data.append(row)
-    col_enc = lucid.tensor(col_data)  # (w, half)
+    col_enc = lucid.tensor(col_data, device=device)  # (w, half)
 
     # row encoding (y-axis)
     row_data: list[list[float]] = []
@@ -184,7 +188,7 @@ def _build_2d_sin_pos_enc(
             row2.append(math.sin(r * omega))
             row2.append(math.cos(r * omega))
         row_data.append(row2)
-    row_enc = lucid.tensor(row_data)  # (h, half)
+    row_enc = lucid.tensor(row_data, device=device)  # (h, half)
 
     # Tile: (h, w, d_model)
     # For each (r,c): first half = col_enc[c], second half = row_enc[r]
@@ -200,7 +204,7 @@ def _build_2d_sin_pos_enc(
             row_slice.append(vec)
         pos_enc_data.append(row_slice)
 
-    pos_2d = lucid.tensor(pos_enc_data)  # (h, w, d_model)
+    pos_2d = lucid.tensor(pos_enc_data, device=device)  # (h, w, d_model)
     return pos_2d.reshape(h * w, d_model)  # (h*w, d_model)
 
 
@@ -429,28 +433,21 @@ class DETRForObjectDetection(PretrainedModel):
         fW = int(feat.shape[3])
         d = int(feat.shape[1])
 
+        device = feat.device.type
+
         # 2. 2-D positional encoding → add to feature map
-        pos_enc = _build_2d_sin_pos_enc(fH, fW, d)  # (H'W', d)
-        # Expand to (B, H'W', d) → (H'W', B, d)
-        pos_enc_b: list[list[list[float]]] = []
-        for _ in range(B):
-            pos_enc_b.append(
-                [
-                    [float(pos_enc[i, j].item()) for j in range(d)]
-                    for i in range(fH * fW)
-                ]
-            )
-        pos_tensor = lucid.tensor(pos_enc_b)  # (B, H'W', d)
+        pos_enc = _build_2d_sin_pos_enc(fH, fW, d, device=device)  # (H'W', d)
+        # Expand to (S, B, d) by repeating across batch
+        pos_t = pos_enc.unsqueeze(1).expand(-1, B, -1)  # (S, B, d)
 
         # Flatten feature: (B, d, H'W') → (H'W', B, d) for Transformer
         src = feat.reshape(B, d, fH * fW).permute(2, 0, 1)  # (S, B, d)
-        pos_t = pos_tensor.permute(1, 0, 2)  # (S, B, d)
         src = src + pos_t
 
         # 3. Object queries → (N, B, d)
         queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
         N = int(queries.shape[0])
-        tgt = lucid.zeros((N, B, d))  # (N, B, d) — queries start as zero
+        tgt = lucid.zeros((N, B, d), device=device)  # (N, B, d) — queries start as zero
 
         # 4. Transformer (src as memory, tgt as queries)
         # nn.Transformer expects: src=(S, B, d), tgt=(T, B, d)

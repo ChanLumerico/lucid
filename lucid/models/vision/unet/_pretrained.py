@@ -32,9 +32,7 @@ _CFG_BILINEAR = UNetConfig(
 )
 
 
-def _build(
-    cfg: UNetConfig, kw: dict[str, object]
-) -> UNetForSemanticSegmentation:
+def _build(cfg: UNetConfig, kw: dict[str, object]) -> UNetForSemanticSegmentation:
     return UNetForSemanticSegmentation(
         UNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )

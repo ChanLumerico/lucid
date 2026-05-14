@@ -649,7 +649,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
             cls_losses.append(_focal_loss(lg_b.reshape(-1), tgt_cls.reshape(-1)))
 
             if pos_idx:
-                pos_t = lucid.tensor(pos_idx)
+                pos_t = lucid.tensor(pos_idx).long()
                 gt_boxes_pos = lucid.tensor(
                     [
                         [float(gt_boxes[pos_gt[i], d].item()) for d in range(4)]
@@ -707,7 +707,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
                 ]
                 if not mask:
                     continue
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_sel = sc_c[mask_t]
                 bx_sel = bx_b[mask_t]
                 keep = batched_nms(

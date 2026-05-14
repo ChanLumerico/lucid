@@ -397,7 +397,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         iW = int(x.shape[3])
 
         if proposals is None:
-            proposals = [lucid.zeros((0, 4)) for _ in range(B)]
+            proposals = [lucid.zeros((0, 4), device=x.device.type) for _ in range(B)]
 
         # 1. Shared feature extraction (one forward pass for the whole batch)
         feat_map = cast(Tensor, self.backbone(x))  # (B, 512, H/16, W/16)

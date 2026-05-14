@@ -334,6 +334,7 @@ def _decode_predictions(
     fW = int(raw.shape[3])
     nA = len(anchors_wh)
     C = int(raw.shape[1]) // nA - 5
+    device = raw.device
 
     # Reshape → (B, nA, 5+C, H, W) → (B, nA, H, W, 5+C)
     raw = raw.reshape(B, nA, 5 + C, fH, fW)
@@ -350,8 +351,8 @@ def _decode_predictions(
     col_data: list[list[float]] = [[float(c) for c in range(fW)] for _ in range(fH)]
     row_data: list[list[float]] = [[float(r)] * fW for r in range(fH)]
 
-    col_t = lucid.tensor(col_data)  # (fH, fW)
-    row_t = lucid.tensor(row_data)  # (fH, fW)
+    col_t = lucid.tensor(col_data, device=device)  # (fH, fW)
+    row_t = lucid.tensor(row_data, device=device)  # (fH, fW)
 
     # Decode box centres
     px = (F.sigmoid(tx) + col_t) * float(stride)  # (B, nA, fH, fW)
@@ -373,8 +374,8 @@ def _decode_predictions(
         aw_data.append(b_aw)
         ah_data.append(b_ah)
 
-    aw_t = lucid.tensor(aw_data)  # (B, nA, fH, fW)
-    ah_t = lucid.tensor(ah_data)
+    aw_t = lucid.tensor(aw_data, device=device)  # (B, nA, fH, fW)
+    ah_t = lucid.tensor(ah_data, device=device)
 
     pw = lucid.exp(tw) * aw_t  # (B, nA, fH, fW)
     ph = lucid.exp(th) * ah_t

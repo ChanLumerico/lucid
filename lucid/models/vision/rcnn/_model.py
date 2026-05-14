@@ -219,7 +219,7 @@ class RCNNForObjectDetection(PretrainedModel):
 
         if not crops:
             C = int(img.shape[1])
-            return lucid.zeros((0, C, S, S))
+            return lucid.zeros((0, C, S, S), device=img.device.type)
         return lucid.cat(crops, dim=0)
 
     def _decode_top_boxes(
@@ -261,7 +261,7 @@ class RCNNForObjectDetection(PretrainedModel):
                 decoded.append(box_n)
 
         if not decoded:
-            return lucid.zeros((0, 4))
+            return lucid.zeros((0, 4), device=proposals.device.type)
 
         boxes = lucid.cat(decoded, dim=0)
         return clip_boxes_to_image(boxes, image_size)
@@ -290,9 +290,10 @@ class RCNNForObjectDetection(PretrainedModel):
         B = int(x.shape[0])
         H = int(x.shape[2])
         W = int(x.shape[3])
+        dev = x.device.type
 
         if proposals is None:
-            proposals = [lucid.zeros((0, 4)) for _ in range(B)]
+            proposals = [lucid.zeros((0, 4), device=dev) for _ in range(B)]
 
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
@@ -302,8 +303,8 @@ class RCNNForObjectDetection(PretrainedModel):
             N_i = int(props.shape[0])
 
             if N_i == 0:
-                all_logits.append(lucid.zeros((0, self._num_classes + 1)))
-                all_boxes.append(lucid.zeros((0, 4)))
+                all_logits.append(lucid.zeros((0, self._num_classes + 1), device=dev))
+                all_boxes.append(lucid.zeros((0, 4), device=dev))
                 continue
 
             img = x[b : b + 1]  # (1, C, H, W)
@@ -333,8 +334,8 @@ class RCNNForObjectDetection(PretrainedModel):
             final_logits = lucid.cat(all_logits, dim=0)
             final_boxes = lucid.cat(all_boxes, dim=0)
         else:
-            final_logits = lucid.zeros((0, self._num_classes + 1))
-            final_boxes = lucid.zeros((0, 4))
+            final_logits = lucid.zeros((0, self._num_classes + 1), device=dev)
+            final_boxes = lucid.zeros((0, 4), device=dev)
 
         return ObjectDetectionOutput(logits=final_logits, pred_boxes=final_boxes)
 
@@ -390,7 +391,7 @@ class RCNNForObjectDetection(PretrainedModel):
                 if not mask:
                     continue
 
-                mask_t = lucid.tensor(mask)
+                mask_t = lucid.tensor(mask).long()
                 sc_c = cls_scores[mask_t]
                 bx_c = bx_i[mask_t]
 
