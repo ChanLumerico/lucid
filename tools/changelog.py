@@ -247,18 +247,43 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
 # ── propose ──────────────────────────────────────────────────────────────────
 
 
-def _propose() -> None:
-    """Read HEAD commit, suggest a category + message, ask for confirmation."""
-    subject = _git("log", "-1", "--format=%s")
-    body = _git("log", "-1", "--format=%b")
+def _propose(*, auto: bool = False, message_file: str | None = None) -> None:
+    """Propose an [Unreleased] entry from a commit message.
+
+    Args:
+        auto:         If True, skip the interactive confirmation and add the
+                      entry directly.  Used by the ``prepare-commit-msg``
+                      Git hook to keep CHANGELOG.md in sync automatically.
+        message_file: Path to a file containing the commit message to parse
+                      (used by ``prepare-commit-msg`` since HEAD doesn't yet
+                      reflect the commit being created).  Falls back to
+                      ``git log -1`` when ``None``.
+    """
+    if message_file is not None:
+        with open(message_file, encoding="utf-8") as f:
+            full = f.read()
+        # Strip git-comment lines (starting with '#').
+        lines = [ln for ln in full.splitlines() if not ln.startswith("#")]
+        subject = lines[0] if lines else ""
+        body = "\n".join(lines[1:]).strip()
+    else:
+        subject = _git("log", "-1", "--format=%s")
+        body = _git("log", "-1", "--format=%b")
     prefix = _commit_prefix(subject)
     if prefix is None:
-        print(f"  ⚠️   Commit subject has no conventional prefix: {subject!r}")
-        print("       Skip — use `add <category> <message>` manually.")
+        if not auto:
+            print(f"  ⚠️   Commit subject has no conventional prefix: {subject!r}")
+            print("       Skip — use `add <category> <message>` manually.")
         return
     category = _category_for_prefix(prefix)
     # Strip the conventional prefix from the message.
     message = re.sub(r"^[a-z]+(?:\([^)]*\))?!?:\s*", "", subject)
+
+    if auto:
+        # Quietly add and return — no prompt.
+        _add_bullet(category, message)
+        return
+
     print(f"  HEAD: {subject}")
     print(f"  → category: {category}  ({CATEGORIES[category]})")
     print(f"  → message : {message}")
@@ -429,8 +454,20 @@ def main() -> None:
     p_add.add_argument("category", choices=list(CATEGORIES))
     p_add.add_argument("message", nargs="+", help="bullet text (multiple words OK)")
 
-    sub.add_parser(
+    p_prop = sub.add_parser(
         "propose", help="propose an [Unreleased] entry from the latest commit"
+    )
+    p_prop.add_argument(
+        "--auto",
+        action="store_true",
+        help="skip the confirmation prompt and add the entry unconditionally "
+        "(used by the prepare-commit-msg hook)",
+    )
+    p_prop.add_argument(
+        "--message-file",
+        default=None,
+        help="parse this file as the commit message instead of reading from "
+        "git log (used by prepare-commit-msg, which fires before HEAD updates)",
     )
 
     p_rel = sub.add_parser(
@@ -453,7 +490,7 @@ def main() -> None:
     if args.cmd == "add":
         _add_bullet(args.category, " ".join(args.message))
     elif args.cmd == "propose":
-        _propose()
+        _propose(auto=args.auto, message_file=args.message_file)
     elif args.cmd == "release":
         _release(args.version)
     elif args.cmd == "check":

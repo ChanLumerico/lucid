@@ -23,13 +23,20 @@ git config --unset core.hooksPath
 
 ## What's installed
 
-| Hook         | Stage              | Behavior |
-|--------------|--------------------|----------|
-| `commit-msg` | before commit lands | Warns (does **not** block) when the commit subject uses a user-facing conventional-commit prefix (`feat:` / `fix:` / `perf:` / `refactor:` / `revert:` / `remove:` / `deprec:` / `sec:`) but the staged diff doesn't include `CHANGELOG.md`. |
-| `post-commit`| after commit lands  | Same detection logic — prints either a confirmation (`📝 CHANGELOG.md updated alongside this commit ✓`) or a follow-up nudge with the exact `tools/changelog.py` invocation to add the entry. |
+| Hook                  | Stage                              | Behavior |
+|-----------------------|------------------------------------|----------|
+| `pre-commit`          | before commit msg drafted          | Updates the Lines-of-Code badge in `README.md` via `cloc`, re-stages it.  Skip with `LUCID_SKIP_LOC_BADGE=1`. |
+| `prepare-commit-msg`  | after msg drafted, before commit lands | **Auto-injects a `CHANGELOG.md` entry** under `[Unreleased]` for every user-facing conventional commit (`feat:` / `fix:` / `perf:` / `refactor:` / `revert:` / `remove:` / `deprec:` / `sec:`).  Reads the staged commit message file directly (HEAD hasn't moved yet), calls `tools/changelog.py propose --auto --message-file <msg>`, and stages the updated `CHANGELOG.md` so it lands in the same commit. |
+| `commit-msg`          | before commit lands                | Defensive warning if the staged diff *still* doesn't include `CHANGELOG.md` (e.g. when the commit isn't conventional, or when the user opted out). |
+| `post-commit`         | after commit lands                 | Confirms (`📝 CHANGELOG.md updated alongside this commit ✓`) or nudges with the exact `tools/changelog.py` invocation. |
 
-Both hooks are **advisory** — they never abort a commit.  Strict
-enforcement is delegated to CI via:
+The `prepare-commit-msg` hook makes `[Unreleased]` **automatically
+stay in sync** with the conventional-commit history — manual
+``tools/changelog.py add`` is reserved for entries that don't map 1-to-1
+to a commit subject (e.g. multi-commit features grouped under one bullet).
+
+`commit-msg` / `post-commit` are still **advisory** — they never abort
+a commit.  Strict enforcement is delegated to CI via:
 
 ```bash
 python tools/changelog.py check --strict
