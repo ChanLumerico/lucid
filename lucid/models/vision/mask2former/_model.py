@@ -408,18 +408,11 @@ class _MaskedAttentionDecoderLayer(nn.Module):
 
 
 def _binary_mask_iou(pred_mask: Tensor, gt_mask: Tensor) -> float:
-    H = int(pred_mask.shape[0])
-    W = int(pred_mask.shape[1])
-    inter = 0.0
-    union = 0.0
-    for h in range(H):
-        for w in range(W):
-            p = float(pred_mask[h, w].item()) > 0.5
-            g = float(gt_mask[h, w].item()) > 0.5
-            if p and g:
-                inter += 1.0
-            if p or g:
-                union += 1.0
+    """Vectorised binary mask IoU (no per-pixel ``.item()`` sync)."""
+    p_bin = (pred_mask > 0.5).float()
+    g_bin = (gt_mask > 0.5).float()
+    inter = float((p_bin * g_bin).sum().item())
+    union = float((p_bin + g_bin - p_bin * g_bin).sum().item())
     if union < 1e-6:
         return 1.0 if inter < 1e-6 else 0.0
     return inter / union

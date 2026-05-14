@@ -158,7 +158,8 @@ class _WindowAttention(nn.Module):
         attn = (q @ k.permute(0, 1, 3, 2)) * self.scale
 
         # Relative position bias
-        idx = self.rel_pos_idx.reshape(-1)
+        rel_pos_idx = cast(Tensor, self.rel_pos_idx)
+        idx = rel_pos_idx.reshape(-1)
         bias = (
             self.rel_pos_bias[idx]
             .reshape(self.ws * self.ws, self.ws * self.ws, self.num_heads)

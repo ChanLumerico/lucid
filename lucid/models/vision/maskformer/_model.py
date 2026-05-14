@@ -227,14 +227,18 @@ class _FPNPixelDecoder(nn.Module):
         """
         c2, c3, c4, c5 = features
 
-        # Top-down FPN
-        p5: Tensor = F.relu(cast(Tensor, self.lat5(c5)))
-        p4: Tensor = F.relu(cast(Tensor, self.lat4(c4))) + cast(Tensor, self.up(p5))
-        p3: Tensor = F.relu(cast(Tensor, self.lat3(c3))) + cast(Tensor, self.up(p4))
-        p2: Tensor = F.relu(cast(Tensor, self.lat2(c2))) + cast(Tensor, self.up(p3))
-
-        # Smooth
-        p2 = F.relu(cast(Tensor, self.out2(p2)))
+        # Top-down FPN with per-level 3×3 smoothing (paper §3.2):
+        # each lateral is smoothed via its own out_* conv before merging.
+        p5: Tensor = cast(Tensor, self.out5(F.relu(cast(Tensor, self.lat5(c5)))))
+        p4: Tensor = cast(Tensor, self.out4(
+            F.relu(cast(Tensor, self.lat4(c4))) + cast(Tensor, self.up(p5))
+        ))
+        p3: Tensor = cast(Tensor, self.out3(
+            F.relu(cast(Tensor, self.lat3(c3))) + cast(Tensor, self.up(p4))
+        ))
+        p2: Tensor = cast(Tensor, self.out2(
+            F.relu(cast(Tensor, self.lat2(c2))) + cast(Tensor, self.up(p3))
+        ))
 
         # Project to d_model
         return cast(Tensor, self.proj(p2))  # (B, out_ch, H/4, W/4)
@@ -248,25 +252,19 @@ class _FPNPixelDecoder(nn.Module):
 def _binary_mask_iou(pred_mask: Tensor, gt_mask: Tensor) -> float:
     """Compute IoU between two binary masks (after sigmoid/threshold).
 
+    Vectorised: single ``.sum().item()`` per call (no per-pixel sync).
+
     Args:
-        pred_mask: (H, W) float predictions.
+        pred_mask: (H, W) float predictions in [0, 1].
         gt_mask:   (H, W) binary ground truth.
 
     Returns:
         IoU as a float.
     """
-    H = int(pred_mask.shape[0])
-    W = int(pred_mask.shape[1])
-    inter = 0.0
-    union = 0.0
-    for h in range(H):
-        for w in range(W):
-            p = float(pred_mask[h, w].item()) > 0.5
-            g = float(gt_mask[h, w].item()) > 0.5
-            if p and g:
-                inter += 1.0
-            if p or g:
-                union += 1.0
+    p_bin = (pred_mask > 0.5).float()
+    g_bin = (gt_mask > 0.5).float()
+    inter = float((p_bin * g_bin).sum().item())
+    union = float((p_bin + g_bin - p_bin * g_bin).sum().item())
     if union < 1e-6:
         return 1.0 if inter < 1e-6 else 0.0
     return inter / union
