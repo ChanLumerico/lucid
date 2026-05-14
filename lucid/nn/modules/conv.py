@@ -298,6 +298,7 @@ class Conv1d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Conv1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -334,6 +335,7 @@ class Conv1d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the Conv1d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -341,6 +343,7 @@ class Conv1d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def _resolve_pad(self, x: Tensor) -> tuple[tuple[int], tuple[int]]:
+        """Internal helper for the Conv1d module."""
         if self._padding_str == "valid":
             return (0,), (0,)
         if self._padding_str == "same":
@@ -351,6 +354,20 @@ class Conv1d(Module):
         return (self.padding,), (self.padding,)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -366,6 +383,7 @@ class Conv1d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
@@ -540,6 +558,7 @@ class Conv2d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Conv2d module. See the class docstring for parameter semantics."""
         super().__init__()
         kh, kw = _pair(kernel_size)
         self.in_channels = in_channels
@@ -573,6 +592,7 @@ class Conv2d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the Conv2d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -580,6 +600,7 @@ class Conv2d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def _resolve_pad(self, x: Tensor) -> tuple[tuple[int, int], tuple[int, int]]:
+        """Internal helper for the Conv2d module."""
         if self._padding_str == "valid":
             return (0, 0), (0, 0)
         if self._padding_str == "same":
@@ -592,6 +613,20 @@ class Conv2d(Module):
         return self.padding, self.padding
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -607,6 +642,7 @@ class Conv2d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
@@ -746,6 +782,7 @@ class Conv3d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Conv3d module. See the class docstring for parameter semantics."""
         super().__init__()
         kd, kh, kw = _triple(kernel_size)
         self.in_channels = in_channels
@@ -785,6 +822,7 @@ class Conv3d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the Conv3d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -794,6 +832,7 @@ class Conv3d(Module):
     def _resolve_pad(
         self, x: Tensor
     ) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+        """Internal helper for the Conv3d module."""
         if self._padding_str == "valid":
             return (0, 0, 0), (0, 0, 0)
         if self._padding_str == "same":
@@ -807,6 +846,20 @@ class Conv3d(Module):
         return self.padding, self.padding
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         pad_lo, pad_hi = self._resolve_pad(x)
         return _conv_forward_with_mode(
             x,
@@ -822,6 +875,7 @@ class Conv3d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s = (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self._padding_str if self._padding_str else self.padding}"
@@ -962,6 +1016,7 @@ class ConvTranspose1d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the ConvTranspose1d module. See the class docstring for parameter semantics."""
         super().__init__()
         _validate_int_padding(padding, "ConvTranspose1d")
         self.in_channels = in_channels
@@ -987,6 +1042,7 @@ class ConvTranspose1d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the ConvTranspose1d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -994,6 +1050,20 @@ class ConvTranspose1d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         return conv_transpose1d(
             x,
             self.weight,
@@ -1006,6 +1076,7 @@ class ConvTranspose1d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self.padding}"
@@ -1135,6 +1206,7 @@ class ConvTranspose2d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the ConvTranspose2d module. See the class docstring for parameter semantics."""
         super().__init__()
         _validate_int_padding(padding, "ConvTranspose2d")
         kh, kw = _pair(kernel_size)
@@ -1157,6 +1229,7 @@ class ConvTranspose2d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the ConvTranspose2d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -1164,6 +1237,20 @@ class ConvTranspose2d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         return conv_transpose2d(
             x,
             self.weight,
@@ -1176,6 +1263,7 @@ class ConvTranspose2d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self.padding}"
@@ -1296,6 +1384,7 @@ class ConvTranspose3d(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the ConvTranspose3d module. See the class docstring for parameter semantics."""
         super().__init__()
         _validate_int_padding(padding, "ConvTranspose3d")
         kd, kh, kw = _triple(kernel_size)
@@ -1324,6 +1413,7 @@ class ConvTranspose3d(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the ConvTranspose3d module."""
         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
@@ -1331,6 +1421,20 @@ class ConvTranspose3d(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         return conv_transpose3d(
             x,
             self.weight,
@@ -1343,6 +1447,7 @@ class ConvTranspose3d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.in_channels}, {self.out_channels}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}, padding={self.padding}"
@@ -1481,6 +1586,7 @@ class LazyConv1d(Conv1d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConv1d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
@@ -1510,6 +1616,7 @@ class LazyConv1d(Conv1d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConv1d module."""
         self.in_channels = in_channels
         self.weight = Parameter(
             empty(
@@ -1538,6 +1645,7 @@ class LazyConv1d(Conv1d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConv1d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -1570,11 +1678,26 @@ class LazyConv1d(Conv1d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv1d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -1686,6 +1809,7 @@ class LazyConv2d(Conv2d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConv2d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
@@ -1715,6 +1839,7 @@ class LazyConv2d(Conv2d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConv2d module."""
         self.in_channels = in_channels
         kh, kw = self.kernel_size
         self.weight = Parameter(
@@ -1745,6 +1870,7 @@ class LazyConv2d(Conv2d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConv2d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -1777,11 +1903,26 @@ class LazyConv2d(Conv2d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv2d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -1889,6 +2030,7 @@ class LazyConv3d(Conv3d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConv3d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.in_channels: int | None = None  # type: ignore[assignment]
         self.out_channels: int = out_channels
@@ -1918,6 +2060,7 @@ class LazyConv3d(Conv3d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConv3d module."""
         self.in_channels = in_channels
         kd, kh, kw = self.kernel_size
         self.weight = Parameter(
@@ -1949,6 +2092,7 @@ class LazyConv3d(Conv3d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConv3d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -1981,11 +2125,26 @@ class LazyConv3d(Conv3d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return Conv3d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -2101,6 +2260,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConvTranspose1d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose1d")
         self.in_channels: int | None = None  # type: ignore[assignment]
@@ -2118,6 +2278,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConvTranspose1d module."""
         self.in_channels = in_channels
         self.weight = Parameter(
             empty(
@@ -2146,6 +2307,7 @@ class LazyConvTranspose1d(ConvTranspose1d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConvTranspose1d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -2179,11 +2341,26 @@ class LazyConvTranspose1d(ConvTranspose1d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose1d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -2293,6 +2470,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConvTranspose2d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose2d")
         self.in_channels: int | None = None  # type: ignore[assignment]
@@ -2310,6 +2488,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConvTranspose2d module."""
         self.in_channels = in_channels
         kh, kw = self.kernel_size
         self.weight = Parameter(
@@ -2340,6 +2519,7 @@ class LazyConvTranspose2d(ConvTranspose2d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConvTranspose2d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -2373,11 +2553,26 @@ class LazyConvTranspose2d(ConvTranspose2d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose2d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
@@ -2489,6 +2684,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyConvTranspose3d module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         _validate_int_padding(padding, "LazyConvTranspose3d")
         self.in_channels: int | None = None  # type: ignore[assignment]
@@ -2506,6 +2702,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_channels: int) -> None:
+        """Internal helper for the LazyConvTranspose3d module."""
         self.in_channels = in_channels
         kd, kh, kw = self.kernel_size
         self.weight = Parameter(
@@ -2537,6 +2734,7 @@ class LazyConvTranspose3d(ConvTranspose3d):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the LazyConvTranspose3d module."""
         if self.weight is None:
             weight: Tensor | None = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -2570,11 +2768,26 @@ class LazyConvTranspose3d(ConvTranspose3d):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the convolution to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C_{\text{in}}, *)`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(N, C_{\text{out}}, *)` with
+            spatial dimensions determined by stride, padding, dilation, and
+            kernel size.
+        """
         if self.weight is None:
             self._initialize(int(x.shape[1]))
         return ConvTranspose3d.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in_channels={self.in_channels}, out_channels={self.out_channels}, "
             f"kernel_size={self.kernel_size}, stride={self.stride}, "

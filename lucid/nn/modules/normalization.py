@@ -119,6 +119,7 @@ class LayerNorm(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LayerNorm module. See the class docstring for parameter semantics."""
         super().__init__()
         if isinstance(normalized_shape, int):
             normalized_shape = (normalized_shape,)
@@ -140,11 +141,24 @@ class LayerNorm(Module):
             self.bias = None
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         return layer_norm(
             x, list(self.normalized_shape), self.weight, self.bias, self.eps
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.normalized_shape}, eps={self.eps}, "
             f"elementwise_affine={self.elementwise_affine}"
@@ -233,6 +247,7 @@ class RMSNorm(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the RMSNorm module. See the class docstring for parameter semantics."""
         super().__init__()
         if isinstance(normalized_shape, int):
             normalized_shape = (normalized_shape,)
@@ -243,9 +258,22 @@ class RMSNorm(Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"{self.normalized_shape}, eps={self.eps}"
 
 
@@ -345,6 +373,7 @@ class GroupNorm(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the GroupNorm module. See the class docstring for parameter semantics."""
         super().__init__()
         self.num_groups = num_groups
         self.num_channels = num_channels
@@ -362,9 +391,22 @@ class GroupNorm(Module):
             self.bias = None
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"{self.num_groups}, {self.num_channels}, eps={self.eps}, affine={self.affine}"
 
 
@@ -462,6 +504,7 @@ class _BatchNormBase(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the _BatchNormBase module. See the class docstring for parameter semantics."""
         super().__init__()
         self.num_features = num_features
         self.eps = eps
@@ -512,6 +555,7 @@ class _BatchNormBase(Module):
         # Version-1 checkpoints predate `num_batches_tracked`.  Drop the
         # missing-key entry for it so users loading old weights aren't
         # spuriously warned.
+        """Internal helper for the _BatchNormBase module."""
         version: int | None = (
             local_metadata.get("version") if local_metadata else None  # type: ignore[assignment]
         )
@@ -537,6 +581,18 @@ class _BatchNormBase(Module):
         # Update running stats before the forward when training with
         # tracking enabled.  Detach to avoid linking the buffer into the
         # autograd graph; buffers are never differentiated through.
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         if self.training and self.track_running_stats:
             self._update_running_stats(x)
 
@@ -605,6 +661,7 @@ class _BatchNormBase(Module):
             self._buffers["running_var"] = new_rv.detach()
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
             f"affine={self.affine}, track_running_stats={self.track_running_stats}"
@@ -967,6 +1024,7 @@ class _InstanceNormBase(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the _InstanceNormBase module. See the class docstring for parameter semantics."""
         super().__init__()
         self.num_features: int = num_features
         self.eps: float = eps
@@ -997,6 +1055,7 @@ class _InstanceNormBase(Module):
             self.register_buffer("running_var", None)
 
     def _check_input_dim(self, x: Tensor) -> None:
+        """Internal helper for the _InstanceNormBase module."""
         if self._expected_dim and x.ndim != self._expected_dim:
             raise ValueError(
                 f"{type(self).__name__} expects a {self._expected_dim}-D input "
@@ -1005,6 +1064,18 @@ class _InstanceNormBase(Module):
             )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         self._check_input_dim(x)
         # eval mode + track_running_stats=True ⇒ use running stats path.
         use_input_stats: bool = self.training or not self.track_running_stats
@@ -1043,6 +1114,7 @@ class _InstanceNormBase(Module):
             self._buffers["running_var"] = new_rv.detach()
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
             f"affine={self.affine}, track_running_stats={self.track_running_stats}"
@@ -1391,6 +1463,7 @@ class LocalResponseNorm(Module):
         beta: float = 0.75,
         k: float = 1.0,
     ) -> None:
+        """Initialise the LocalResponseNorm module. See the class docstring for parameter semantics."""
         super().__init__()
         self.size = size
         self.alpha = alpha
@@ -1398,6 +1471,18 @@ class LocalResponseNorm(Module):
         self.k = k
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -1453,6 +1538,7 @@ class LocalResponseNorm(Module):
         return _wrap(_C_engine.div(xi, scale))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"size={self.size}, alpha={self.alpha}, beta={self.beta}, k={self.k}"
 
 
@@ -1523,6 +1609,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
         dtype: DTypeLike = None,
     ) -> None:
         # Skip _BatchNormBase.__init__ — we don't have num_features yet.
+        """Initialise the _LazyBatchNormMixin module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.num_features: int | None = None  # type: ignore[assignment]
         self.eps: float = eps
@@ -1548,6 +1635,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
             self.register_buffer("num_batches_tracked", None)
 
     def _initialize(self, num_features: int) -> None:
+        """Internal helper for the _LazyBatchNormMixin module."""
         self.num_features = num_features
         if self.affine:
             self.weight = Parameter(
@@ -1577,6 +1665,7 @@ class _LazyBatchNormMixin(_BatchNormBase):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the _LazyBatchNormMixin module."""
         if self.num_features is None:
             # Probe known persistent keys for the feature dim.
             probe_keys: tuple[str, ...] = ("weight", "running_mean", "bias")
@@ -1613,11 +1702,24 @@ class _LazyBatchNormMixin(_BatchNormBase):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         if self.num_features is None:
             self._initialize(int(x.shape[1]))
         return _BatchNormBase.forward(self, x)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"num_features={self.num_features}, eps={self.eps}, "
             f"momentum={self.momentum}, affine={self.affine}, "
@@ -1835,6 +1937,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the _LazyInstanceNormMixin module. See the class docstring for parameter semantics."""
         Module.__init__(self)
         self.num_features: int | None = None  # type: ignore[assignment]
         self.eps: float = eps
@@ -1853,6 +1956,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         self.register_buffer("running_var", None)
 
     def _initialize(self, num_features: int) -> None:
+        """Internal helper for the _LazyInstanceNormMixin module."""
         self.num_features = num_features
         if self.affine:
             self.weight = Parameter(
@@ -1879,6 +1983,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the _LazyInstanceNormMixin module."""
         if self.num_features is None:
             for k in ("weight", "running_mean", "bias"):
                 t: Tensor | None = state_dict.get(f"{prefix}{k}")
@@ -1903,6 +2008,18 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply normalisation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor whose shape is documented in the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Normalised tensor of the same shape as ``input``.
+        """
         if self.num_features is None:
             self._initialize(int(x.shape[1]))
         return _InstanceNormBase.forward(self, x)

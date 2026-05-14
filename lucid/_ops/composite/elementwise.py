@@ -29,10 +29,12 @@ if TYPE_CHECKING:
 
 
 def absolute(x: Tensor) -> Tensor:
+    """Element-wise absolute value — alias of :func:`lucid.abs`."""
     return lucid.abs(x)
 
 
 def negative(x: Tensor) -> Tensor:
+    """Element-wise negation — alias of :func:`lucid.neg`."""
     return lucid.neg(x)
 
 
@@ -42,20 +44,39 @@ def positive(x: Tensor) -> Tensor:
 
 
 def subtract(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
+    """Compute ``a - alpha * b`` element-wise.
+
+    Parameters
+    ----------
+    a : Tensor
+        Minuend.
+    b : Tensor | Scalar
+        Subtrahend.
+    alpha : float, optional
+        Scalar multiplier applied to ``b`` before subtraction. Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Element-wise difference, broadcast as needed.
+    """
     if alpha == 1.0:
         return a - b
     return a - (b * alpha)
 
 
 def multiply(a: Tensor, b: Tensor | Scalar) -> Tensor:
+    """Element-wise product — alias of the ``*`` operator."""
     return a * b
 
 
 def divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
+    """Element-wise true division — alias of the ``/`` operator."""
     return a / b
 
 
 def true_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
+    """Element-wise true division (always floating-point) — same as :func:`divide`."""
     return a / b
 
 
@@ -67,6 +88,11 @@ def rsub(a: Tensor, b: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor:
 
 
 def arctan2(y: Tensor, x: Tensor) -> Tensor:
+    """Two-argument arctangent — alias of :func:`lucid.atan2`.
+
+    Returns the angle (in radians) of the point ``(x, y)`` in the plane,
+    correctly resolving the quadrant.
+    """
     return lucid.atan2(y, x)
 
 
@@ -74,26 +100,38 @@ def arctan2(y: Tensor, x: Tensor) -> Tensor:
 
 
 def arccosh(x: Tensor) -> Tensor:
+    r"""Inverse hyperbolic cosine: :math:`\operatorname{arccosh}(x) = \log(x + \sqrt{x^2 - 1})`.
+
+    Defined for :math:`x \geq 1`.
+    """
     return lucid.log(x + lucid.sqrt(x * x - 1.0))
 
 
 def acosh(x: Tensor) -> Tensor:
+    """Inverse hyperbolic cosine — alias of :func:`arccosh`."""
     return arccosh(x)
 
 
 def arcsinh(x: Tensor) -> Tensor:
+    r"""Inverse hyperbolic sine: :math:`\operatorname{arcsinh}(x) = \log(x + \sqrt{x^2 + 1})`."""
     return lucid.log(x + lucid.sqrt(x * x + 1.0))
 
 
 def asinh(x: Tensor) -> Tensor:
+    """Inverse hyperbolic sine — alias of :func:`arcsinh`."""
     return arcsinh(x)
 
 
 def arctanh(x: Tensor) -> Tensor:
+    r"""Inverse hyperbolic tangent: :math:`\tfrac{1}{2}\log\!\bigl((1+x)/(1-x)\bigr)`.
+
+    Defined for :math:`|x| < 1`.
+    """
     return lucid.log((1.0 + x) / (1.0 - x)) * 0.5
 
 
 def atanh(x: Tensor) -> Tensor:
+    """Inverse hyperbolic tangent — alias of :func:`arctanh`."""
     return arctanh(x)
 
 

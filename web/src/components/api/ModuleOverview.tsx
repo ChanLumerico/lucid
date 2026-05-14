@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { FunctionCard } from "./FunctionSignature";
-import { ClassCard } from "./ClassDoc";
-import type { ApiModule, ApiClassModule, ApiFunction, ApiClass } from "@/lib/types";
+import { ClassCard, ClassDoc } from "./ClassDoc";
+import type { ApiModule, ApiClassModule, ApiClass } from "@/lib/types";
 import { isApiClass, isApiFunction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -9,29 +9,33 @@ interface ModuleOverviewProps {
   data: ApiModule | ApiClassModule;
 }
 
-export function ModuleOverview({ data }: ModuleOverviewProps) {
+export async function ModuleOverview({ data }: ModuleOverviewProps) {
   if (data.kind === "class-module") {
-    return (
-      <div>
-        <ModuleHeader
-          name={data.name}
-          path={data.path}
-          summary={data.summary}
-          kind="class"
-          count={data.methods.length}
-        />
-        <section className="mb-10">
-          <h2 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase mb-3">
-            Methods ({data.methods.length})
-          </h2>
-          <div className="space-y-2">
-            {data.methods.map((method) => (
-              <FunctionCard key={method.name} fn={method as ApiFunction} moduleSlug={data.slug} />
-            ))}
-          </div>
-        </section>
-      </div>
-    );
+    // The module IS a class (e.g. lucid.tensor → Tensor).  Rebuild it as an
+    // ApiClass and delegate to ClassDoc so the full docstring body —
+    // extended description, parameters, attributes, notes, examples — is
+    // rendered identically to any other class detail page.
+    const cls: ApiClass = {
+      name:        data.name,
+      path:        data.path,
+      kind:        "class",
+      class_kind:  data.class_kind,
+      bases:       data.bases,
+      labels:      data.labels,
+      signature:   data.signature,
+      source:      data.source,
+      methods:     data.methods,
+      summary:     data.summary,
+      extended:    data.extended,
+      parameters:  data.parameters,
+      returns:     data.returns,
+      raises:      data.raises,
+      examples:    data.examples,
+      notes:       data.notes,
+      attributes:  data.attributes,
+      warns:       data.warns,
+    };
+    return <ClassDoc cls={cls} />;
   }
 
   const classes   = data.members.filter(isApiClass);

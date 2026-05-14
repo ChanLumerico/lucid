@@ -125,6 +125,7 @@ class MaxPool1d(Module):
         return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the MaxPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -137,6 +138,19 @@ class MaxPool1d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_pool1d(
             x,
             self.kernel_size,
@@ -148,6 +162,7 @@ class MaxPool1d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}"
@@ -249,6 +264,7 @@ class MaxPool2d(Module):
         return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the MaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -261,6 +277,19 @@ class MaxPool2d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_pool2d(
             x,
             self.kernel_size,
@@ -272,6 +301,7 @@ class MaxPool2d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}"
@@ -368,6 +398,7 @@ class AvgPool1d(Module):
         ceil_mode: bool = False,
         count_include_pad: bool = True,
     ) -> None:
+        """Initialise the AvgPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride
@@ -376,6 +407,19 @@ class AvgPool1d(Module):
         self.count_include_pad = count_include_pad
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return avg_pool1d(
             x,
             self.kernel_size,
@@ -386,6 +430,7 @@ class AvgPool1d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
 
 
@@ -479,6 +524,7 @@ class AvgPool2d(Module):
         ceil_mode: bool = False,
         count_include_pad: bool = True,
     ) -> None:
+        """Initialise the AvgPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride
@@ -487,6 +533,19 @@ class AvgPool2d(Module):
         self.count_include_pad = count_include_pad
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return avg_pool2d(
             x,
             self.kernel_size,
@@ -497,6 +556,7 @@ class AvgPool2d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
 
 
@@ -561,13 +621,28 @@ class AdaptiveAvgPool1d(Module):
     """
 
     def __init__(self, output_size: int | tuple[int, ...]) -> None:
+        """Initialise the AdaptiveAvgPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_avg_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -635,13 +710,28 @@ class AdaptiveAvgPool2d(Module):
     """
 
     def __init__(self, output_size: _Size2d) -> None:
+        """Initialise the AdaptiveAvgPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_avg_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -705,6 +795,7 @@ class AdaptiveMaxPool2d(Module):
     """
 
     def __init__(self, output_size: _Size2d, return_indices: bool = False) -> None:
+        """Initialise the AdaptiveMaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -713,9 +804,23 @@ class AdaptiveMaxPool2d(Module):
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_max_pool2d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -817,6 +922,7 @@ class MaxPool3d(Module):
         return_indices: bool = False,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the MaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -829,9 +935,23 @@ class MaxPool3d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
             f"padding={self.padding}"
@@ -926,6 +1046,7 @@ class AvgPool3d(Module):
         count_include_pad: bool = True,
         divisor_override: int | None = None,
     ) -> None:
+        """Initialise the AvgPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride
@@ -934,9 +1055,23 @@ class AvgPool3d(Module):
         self.count_include_pad = count_include_pad
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return avg_pool3d(x, self.kernel_size, self.stride, self.padding)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"kernel_size={self.kernel_size}, stride={self.stride}, padding={self.padding}"
 
 
@@ -1002,13 +1137,28 @@ class AdaptiveAvgPool3d(Module):
     """
 
     def __init__(self, output_size: _Size3d) -> None:
+        """Initialise the AdaptiveAvgPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_avg_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -1078,6 +1228,7 @@ class AdaptiveMaxPool1d(Module):
     def __init__(
         self, output_size: int | tuple[int, ...], return_indices: bool = False
     ) -> None:
+        """Initialise the AdaptiveMaxPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -1086,9 +1237,23 @@ class AdaptiveMaxPool1d(Module):
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_max_pool1d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -1155,6 +1320,7 @@ class AdaptiveMaxPool3d(Module):
     """
 
     def __init__(self, output_size: _Size3d, return_indices: bool = False) -> None:
+        """Initialise the AdaptiveMaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         if return_indices:
             raise NotImplementedError(
@@ -1163,9 +1329,23 @@ class AdaptiveMaxPool3d(Module):
         self.output_size = output_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return adaptive_max_pool3d(x, self.output_size)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"output_size={self.output_size}"
 
 
@@ -1253,6 +1433,7 @@ class LPPool1d(Module):
         stride: int | None = None,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the LPPool1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.norm_type = norm_type
         self.kernel_size = kernel_size
@@ -1260,6 +1441,19 @@ class LPPool1d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -1276,6 +1470,7 @@ class LPPool1d(Module):
         return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"norm_type={self.norm_type}, kernel_size={self.kernel_size}, stride={self.stride}"
 
 
@@ -1369,6 +1564,7 @@ class LPPool2d(Module):
         stride: int | tuple[int, int] | None = None,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the LPPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.norm_type = norm_type
         kh, kw = (
@@ -1382,6 +1578,19 @@ class LPPool2d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _unwrap, _wrap
 
@@ -1400,6 +1609,7 @@ class LPPool2d(Module):
         return _wrap(_C_engine.pow_scalar(summed, 1.0 / p))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"norm_type={self.norm_type}, kernel_size=({self.kh},{self.kw}), "
             f"stride=({self.sh},{self.sw})"
@@ -1482,6 +1692,7 @@ class LPPool3d(Module):
         stride: int | tuple[int, int, int] | None = None,
         ceil_mode: bool = False,
     ) -> None:
+        """Initialise the LPPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.norm_type = norm_type
         self.kernel_size = kernel_size
@@ -1489,6 +1700,19 @@ class LPPool3d(Module):
         self.ceil_mode = ceil_mode
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         from lucid.nn.functional.pooling import lp_pool3d
 
         return lp_pool3d(
@@ -1500,6 +1724,7 @@ class LPPool3d(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"norm_type={self.norm_type}, kernel_size={self.kernel_size}, "
             f"stride={self.stride}"
@@ -1525,12 +1750,14 @@ class _MaxUnpoolNd(Module):
         stride: int | tuple[int, ...] | None = None,
         padding: int | tuple[int, ...] = 0,
     ) -> None:
+        """Initialise the _MaxUnpoolNd module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.stride = stride if stride is not None else kernel_size
         self.padding = padding
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"kernel_size={self.kernel_size}, stride={self.stride}, "
             f"padding={self.padding}"
@@ -1621,6 +1848,19 @@ class MaxUnpool1d(_MaxUnpoolNd):
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_unpool1d(
             x,
             indices,
@@ -1712,6 +1952,19 @@ class MaxUnpool2d(_MaxUnpoolNd):
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_unpool2d(
             x,
             indices,
@@ -1789,6 +2042,19 @@ class MaxUnpool3d(_MaxUnpoolNd):
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return max_unpool3d(
             x,
             indices,
@@ -1891,6 +2157,7 @@ class FractionalMaxPool2d(Module):
         output_ratio: float | tuple[float, float] | None = None,
         return_indices: bool = False,
     ) -> None:
+        """Initialise the FractionalMaxPool2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.output_size = output_size
@@ -1898,6 +2165,19 @@ class FractionalMaxPool2d(Module):
         self.return_indices = return_indices
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return fractional_max_pool2d(
             x,
             kernel_size=self.kernel_size,
@@ -1990,6 +2270,7 @@ class FractionalMaxPool3d(Module):
         output_ratio: float | tuple[float, float, float] | None = None,
         return_indices: bool = False,
     ) -> None:
+        """Initialise the FractionalMaxPool3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.output_size = output_size
@@ -1997,6 +2278,19 @@ class FractionalMaxPool3d(Module):
         self.return_indices = return_indices
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the pooling operation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
+            spatial dimensions appropriate for this pooling layer.
+
+        Returns
+        -------
+        Tensor
+            Pooled output tensor.
+        """
         return fractional_max_pool3d(
             x,
             kernel_size=self.kernel_size,

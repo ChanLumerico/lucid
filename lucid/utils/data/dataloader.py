@@ -390,6 +390,23 @@ class DataLoader:
         prefetch_factor: int | None = None,
         persistent_workers: bool = False,
     ) -> None:
+        """Configure a ``DataLoader``; see the class docstring for parameter
+        semantics.
+
+        Notes
+        -----
+        ``sampler`` / ``batch_sampler`` / ``shuffle`` / ``batch_size`` /
+        ``drop_last`` interact: passing ``batch_sampler`` precludes the
+        other four; passing ``sampler`` precludes ``shuffle``. When no
+        sampler is supplied, a :class:`SequentialSampler` (``shuffle=False``)
+        or :class:`RandomSampler` (``shuffle=True``) is constructed
+        automatically. ``persistent_workers`` requires ``num_workers > 0``.
+
+        Raises
+        ------
+        ValueError
+            On any of the above mutual-exclusion / range violations.
+        """
         if num_workers < 0:
             raise ValueError(f"num_workers must be >= 0, got {num_workers}")
         if prefetch_factor is not None and prefetch_factor <= 0:
@@ -436,6 +453,19 @@ class DataLoader:
         self._persistent_iter: _MultiProcessDataLoaderIter | None = None
 
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
+        """Yield collated mini-batches for one full pass over the dataset.
+
+        Dispatches to either the single-process iterator (``num_workers ==
+        0``) or the multi-process iterator. When ``persistent_workers`` is
+        enabled the multi-process worker pool survives between epochs;
+        otherwise workers are spawned and joined per call.
+
+        Yields
+        ------
+        Tensor or tuple of Tensor
+            Output of ``collate_fn`` applied to each sampled batch of
+            dataset items.
+        """
         if self.num_workers == 0:
             yield from _SingleProcessDataLoaderIter(self)
             return
@@ -461,4 +491,5 @@ class DataLoader:
             yield from _MultiProcessDataLoaderIter(self)
 
     def __len__(self) -> int:
+        """Return the number of batches per epoch (``len(batch_sampler)``)."""
         return len(self.batch_sampler)

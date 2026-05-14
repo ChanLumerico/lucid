@@ -12,11 +12,65 @@ from lucid._C import engine as _C_engine
 
 
 class Optimizer:
-    """
-    Base class for all optimizers.
+    """Base class for all optimizers.
 
-    param_groups: list of dicts, each with:
-      {"params": list[Parameter], "lr": float, ...}
+    Every concrete optimizer must subclass ``Optimizer`` and implement
+    :meth:`step`.  The base class manages parameter groups, provides
+    :meth:`zero_grad`, and handles :meth:`state_dict` / :meth:`load_state_dict`
+    checkpointing.
+
+    Parameters
+    ----------
+    params : iterable of Parameter or iterable of dict
+        Either a flat iterable of :class:`~lucid.nn.Parameter` objects, or
+        a list of *parameter-group dicts*.  Each group dict must contain at
+        least a ``"params"`` key; any other keys override the corresponding
+        entry in ``defaults`` for that group.
+    defaults : dict
+        Default hyperparameter values (e.g. ``{"lr": 1e-3, "weight_decay": 0}``).
+        These are copied into each param group that does not override them.
+
+    Attributes
+    ----------
+    param_groups : list of dict
+        List of parameter groups.  Each entry is a dict with at least
+        ``"params": list[Parameter]`` plus all hyperparameter keys from
+        ``defaults`` (possibly overridden per group).
+    defaults : dict
+        The default hyperparameters passed at construction.
+    state : dict
+        Per-parameter optimizer state indexed by flat parameter index.
+        Populated by :meth:`state_dict` and consumed by
+        :meth:`load_state_dict`.
+
+    Notes
+    -----
+    Every concrete ``step()`` override is automatically wrapped at class
+    definition time (via :meth:`__init_subclass__`) to flush all parameter
+    tensors to the Metal GPU after each update.  This ensures that
+    parameter values are materialised before the next forward pass.
+
+    Parameter groups allow different hyperparameters per group:
+
+    .. code-block:: python
+
+        optimizer = optim.SGD(
+            [
+                {"params": model.backbone.parameters(), "lr": 1e-3},
+                {"params": model.head.parameters(),     "lr": 1e-2},
+            ],
+            lr=1e-4,   # default, overridden per group above
+        )
+
+    Examples
+    --------
+    ``Optimizer`` is not used directly.  Use a concrete subclass:
+
+    >>> import lucid.optim as optim
+    >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    >>> optimizer.zero_grad()
+    >>> loss.backward()
+    >>> optimizer.step()
     """
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -57,6 +111,7 @@ class Optimizer:
         params: Iterable[Parameter] | Iterable[dict[str, object]],
         defaults: dict[str, object],
     ) -> None:
+        """Initialise the Optimizer.  See the class docstring for parameter semantics."""
         if (
             isinstance(params, (list, tuple))
             and len(params) > 0

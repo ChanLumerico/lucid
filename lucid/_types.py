@@ -86,17 +86,23 @@ class HasShape(Protocol):
     """Structural protocol: anything with ``.shape`` and ``.ndim``."""
 
     @property
-    def shape(self) -> tuple[int, ...]: ...
+    def shape(self) -> tuple[int, ...]:
+        """Tuple of dimension sizes."""
+        ...
 
     @property
-    def ndim(self) -> int: ...
+    def ndim(self) -> int:
+        """Number of dimensions (length of :attr:`shape`)."""
+        ...
 
 
 @runtime_checkable
 class SupportsNumpyConversion(Protocol):
     """Structural protocol: anything convertible to a :class:`numpy.ndarray`."""
 
-    def numpy(self) -> np.ndarray: ...
+    def numpy(self) -> np.ndarray:
+        """Return a NumPy view / copy of the underlying buffer."""
+        ...
 
 
 @runtime_checkable
@@ -104,11 +110,17 @@ class SupportsGrad(Protocol):
     """Structural protocol: anything that participates in autograd."""
 
     @property
-    def requires_grad(self) -> bool: ...
+    def requires_grad(self) -> bool:
+        """Whether autograd tracks operations on this object."""
+        ...
 
-    def backward(self, *, retain_graph: bool = ...) -> None: ...
+    def backward(self, *, retain_graph: bool = ...) -> None:
+        """Trigger reverse-mode differentiation through the graph rooted here."""
+        ...
 
-    def detach(self) -> SupportsGrad: ...
+    def detach(self) -> SupportsGrad:
+        """Return a view of this object detached from the autograd graph."""
+        ...
 
 
 @runtime_checkable
@@ -137,12 +149,18 @@ class TensorLikeProtocol(HasShape, SupportsNumpyConversion, Protocol):
     """
 
     @property
-    def dtype(self) -> _DType: ...
+    def dtype(self) -> _DType:
+        """Element :class:`~lucid.dtype` of the underlying buffer."""
+        ...
 
     @property
-    def device(self) -> _Device: ...
+    def device(self) -> _Device:
+        """:class:`~lucid.device` on which this object resides."""
+        ...
 
-    def to(self, *args: object, **kwargs: object) -> TensorLikeProtocol: ...
+    def to(self, *args: object, **kwargs: object) -> TensorLikeProtocol:
+        """Return a (possibly converted) version of this object on a new device/dtype."""
+        ...
 
 
 # ── TypedDict: optimizer parameter group ─────────────────────────────────────

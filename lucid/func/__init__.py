@@ -66,6 +66,12 @@ _ISOLATION_ATTR = "_lucid_needs_vmap_isolation"
 
 
 def _mark_isolation(fn: Callable[..., object]) -> Callable[..., object]:
+    """Tag *fn* so :func:`vmap` uses the per-element isolation path.
+
+    Used by :func:`jacrev` / :func:`jacfwd` / :func:`hessian` whose
+    materialised backward passes must not see the batch dimension as part
+    of the input.
+    """
     setattr(fn, _ISOLATION_ATTR, True)
     return fn
 
@@ -180,6 +186,12 @@ def vmap(
         *args: Tensor,
         **kwargs: object,
     ) -> Tensor | tuple[Tensor, ...]:
+        """Run ``func`` once across the batched axis of each input.
+
+        Inputs whose ``in_dims`` entry is not ``None`` must share the
+        same batch length on the indicated axis. The unwrapped outputs
+        are stacked along ``out_dims`` to form the vectorised result.
+        """
         _in = _normalise_in_dims(in_dims, len(args))
 
         # ── validate inputs and find batch_size ───────────────────────
@@ -398,6 +410,7 @@ def grad(
     )
 
     def grad_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+        """Closure that computes the gradient via reverse-mode autograd."""
         from lucid._tensor.tensor import Tensor as _T
         from lucid.autograd._grad_mode import enable_grad
         from lucid.autograd._backward import grad as _ag
@@ -458,6 +471,7 @@ def grad_and_value(
     def gv_fn(
         *args: Tensor, **kwargs: object
     ) -> tuple[Tensor | tuple[Tensor | None, ...], Tensor]:
+        """Closure that computes the gradient-vector product."""
         from lucid._tensor.tensor import Tensor as _T
         from lucid.autograd._grad_mode import enable_grad
         from lucid.autograd._backward import grad as _ag
@@ -728,6 +742,7 @@ def linearize(
     def linear_fn(
         *tangents: Tensor,
     ) -> Tensor | tuple[Tensor, ...]:
+        """Closure that applies the linear approximation."""
         _, tangents_out = jvp(func, primals, tangents)
         return tangents_out
 
@@ -765,6 +780,7 @@ def jacrev(
     )
 
     def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+        """Closure that computes the Jacobian."""
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
         from lucid._dispatch import _wrap, _unwrap
@@ -877,6 +893,7 @@ def jacfwd(
     )
 
     def jac_fn(*args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor | None, ...]:
+        """Closure that computes the Jacobian."""
         import lucid
         from lucid._tensor.tensor import Tensor as _T
         from lucid._C import engine as _C_engine
@@ -992,6 +1009,7 @@ def hessian(
     def hessian_fn(
         *args: Tensor, **kwargs: object
     ) -> Tensor | tuple[Tensor | None, ...]:
+        """Closure that computes the Hessian (second-order derivative tensor)."""
         selected: object = (
             args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
         )

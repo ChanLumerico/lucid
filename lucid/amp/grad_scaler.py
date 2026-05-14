@@ -39,6 +39,22 @@ class GradScaler:
         growth_interval: int = 2000,
         enabled: bool = True,
     ) -> None:
+        """Initialize the scaler state.
+
+        Parameters
+        ----------
+        init_scale : float, default=2**16
+            Initial loss scaling factor applied by :meth:`scale`.
+        growth_factor : float, default=2.0
+            Multiplier applied to the scale after ``growth_interval``
+            consecutive non-overflowing steps.
+        backoff_factor : float, default=0.5
+            Multiplier applied when an inf/NaN gradient is detected.
+        growth_interval : int, default=2000
+            Number of overflow-free steps required before the scale grows.
+        enabled : bool, default=True
+            When ``False`` the scaler is a transparent pass-through.
+        """
         self._scale = float(init_scale)
         self._growth_factor = growth_factor
         self._backoff_factor = backoff_factor

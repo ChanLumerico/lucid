@@ -41,6 +41,7 @@ class RemovableHandle:
         key: int,
         extra_sets: tuple[set[int], ...] = (),
     ) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._hooks: dict[int, object] = (
             hooks  # covariant dict usage: we only pop/read, never write incompatible types
         )
@@ -54,9 +55,11 @@ class RemovableHandle:
             extra_set.discard(self._key)
 
     def __enter__(self) -> RemovableHandle:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         self.remove()
 
 

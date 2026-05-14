@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 def numel(x: Tensor) -> int:
+    """Return the total number of elements in ``x`` as a Python ``int``."""
     return int(x.numel())
 
 
@@ -20,20 +21,30 @@ def is_storage(x: Tensor) -> bool:
 
 
 def is_nonzero(x: Tensor) -> bool:
+    """Return ``True`` if a scalar tensor's element is non-zero.
+
+    Raises
+    ------
+    RuntimeError
+        If ``x`` is not a scalar (i.e. ``x.numel() != 1``).
+    """
     if x.numel() != 1:
         raise RuntimeError("is_nonzero is defined only for scalar tensors (numel == 1)")
     return bool(x.item() != 0)
 
 
 def is_same_size(a: Tensor, b: Tensor) -> bool:
+    """Return ``True`` if ``a`` and ``b`` have identical shapes."""
     return tuple(a.shape) == tuple(b.shape)
 
 
 def is_neg(x: Tensor) -> bool:
+    """Always ``False`` — Lucid does not carry lazy negation metadata on tensors."""
     return False
 
 
 def is_conj(x: Tensor) -> bool:
+    """Always ``False`` — Lucid does not carry lazy conjugate metadata on tensors."""
     return False
 
 
@@ -59,10 +70,12 @@ def isin(
 
 
 def isneginf(x: Tensor) -> Tensor:
+    """Element-wise ``True`` where ``x`` equals :math:`-\\infty`."""
     return lucid.logical_and(lucid.isinf(x), x < 0.0)
 
 
 def isposinf(x: Tensor) -> Tensor:
+    """Element-wise ``True`` where ``x`` equals :math:`+\\infty`."""
     return lucid.logical_and(lucid.isinf(x), x > 0.0)
 
 

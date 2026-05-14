@@ -120,6 +120,7 @@ class Sequential(Module):
     def __init__(self, arg: OrderedDict[str, Module]) -> None: ...
 
     def __init__(self, *args: Module | OrderedDict[str, Module]) -> None:  # type: ignore[misc]
+        """Initialise the Sequential module. See the class docstring for parameter semantics."""
         super().__init__()
         if len(args) == 1 and isinstance(args[0], OrderedDict):
             for key, module in args[0].items():
@@ -129,12 +130,25 @@ class Sequential(Module):
                 self.add_module(str(idx), module)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Apply the contained modules to the input.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor.
+
+        Returns
+        -------
+        Tensor
+            Output tensor produced by the contained modules.
+        """
         for m in self._modules.values():
             assert m is not None
             x = cast(Tensor, m(x))
         return x
 
     def __getitem__(self, idx: int | slice) -> Module:
+        """Return the child module(s) at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             return Sequential(
@@ -143,10 +157,12 @@ class Sequential(Module):
         return cast(Module, self._modules[keys[idx]])
 
     def __setitem__(self, idx: int, module: Module) -> None:
+        """Replace the child module at the given index."""
         keys = list(self._modules.keys())
         self._modules[keys[idx]] = module
 
     def __delitem__(self, idx: int | slice) -> None:
+        """Remove the child module at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             for key in keys[idx]:
@@ -156,19 +172,26 @@ class Sequential(Module):
         self._renumber_modules()
 
     def __len__(self) -> int:
+        """Return the number of registered child modules."""
         return len(self._modules)
 
     def __iter__(self) -> Iterator[Module]:
+        """Iterate over the registered child modules."""
         for m in self._modules.values():
             assert m is not None
             yield m
 
     def append(self, module: Module) -> None:
+        """Append a module to the end of the Sequential."""
         self.add_module(str(len(self._modules)), module)
+
     def extend(self, modules: Iterable[Module]) -> None:
+        """Append each module from an iterable to the Sequential."""
         for module in modules:
             self.append(module)
+
     def insert(self, index: int, module: Module) -> None:
+        """Insert a module at the given position in the Sequential."""
         n = len(self._modules)
         if index < 0:
             index += n
@@ -180,6 +203,7 @@ class Sequential(Module):
             self.add_module(str(i), item)
 
     def _renumber_modules(self) -> None:
+        """Internal helper for the Sequential module."""
         items = list(self._modules.values())
         self._modules.clear()
         for i, module in enumerate(items):
@@ -278,22 +302,26 @@ class ModuleList(Module):
     """
 
     def __init__(self, modules: list[Module] | None = None) -> None:
+        """Initialise the ModuleList module. See the class docstring for parameter semantics."""
         super().__init__()
         if modules is not None:
             for i, m in enumerate(modules):
                 self.add_module(str(i), m)
 
     def __getitem__(self, idx: int | slice) -> Module:
+        """Return the child module(s) at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             return ModuleList([cast(Module, self._modules[k]) for k in keys[idx]])
         return cast(Module, self._modules[keys[idx]])
 
     def __setitem__(self, idx: int, module: Module) -> None:
+        """Replace the child module at the given index."""
         keys = list(self._modules.keys())
         self._modules[keys[idx]] = module
 
     def __delitem__(self, idx: int | slice) -> None:
+        """Remove the child module at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             for key in keys[idx]:
@@ -303,19 +331,26 @@ class ModuleList(Module):
         self._renumber_modules()
 
     def __len__(self) -> int:
+        """Return the number of registered child modules."""
         return len(self._modules)
 
     def __iter__(self) -> Iterator[Module]:
+        """Iterate over the registered child modules."""
         for m in self._modules.values():
             assert m is not None
             yield m
 
     def append(self, module: Module) -> None:
+        """Append a module to the end of the ModuleList."""
         self.add_module(str(len(self._modules)), module)
+
     def extend(self, modules: Iterable[Module]) -> None:
+        """Append each module from an iterable to the ModuleList."""
         for module in modules:
             self.append(module)
+
     def insert(self, index: int, module: Module) -> None:
+        """Insert a module at the given position in the ModuleList."""
         n = len(self._modules)
         if index < 0:
             index += n
@@ -327,12 +362,24 @@ class ModuleList(Module):
             self.add_module(str(i), item)
 
     def _renumber_modules(self) -> None:
+        """Internal helper for the ModuleList module."""
         items = list(self._modules.values())
         self._modules.clear()
         for i, module in enumerate(items):
             self.add_module(str(i), module)
 
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Apply the contained modules to the input.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Tensor
+            Output tensor produced by the contained modules.
+        """
         raise NotImplementedError("ModuleList has no forward; iterate manually.")
 
 
@@ -434,55 +481,80 @@ class ModuleDict(Module):
     """
 
     def __init__(self, modules: dict[str, Module] | None = None) -> None:
+        """Initialise the ModuleDict module. See the class docstring for parameter semantics."""
         super().__init__()
         if modules is not None:
             for k, m in modules.items():
                 self.add_module(k, m)
 
     def __getitem__(self, key: str) -> Module:
+        """Return the child module(s) at the given index or slice."""
         return cast(Module, self._modules[key])
 
     def __setitem__(self, key: str, module: Module) -> None:
+        """Replace the child module at the given index."""
         self.add_module(key, module)
 
     def __contains__(self, key: str) -> bool:
+        """Return ``True`` if the key/module is registered."""
         return key in self._modules
 
     def __len__(self) -> int:
+        """Return the number of registered child modules."""
         return len(self._modules)
 
     def __iter__(self) -> Iterator[str]:
+        """Iterate over the registered child modules."""
         yield from self._modules.keys()
 
     def __delitem__(self, key: str) -> None:
+        """Remove the child module at the given index or slice."""
         del self._modules[key]
 
     def keys(self) -> KeysView[str]:
+        """Return an iterable over the keys of the ModuleDict."""
         return self._modules.keys()
 
     def items(self) -> ItemsView[str, Module]:
+        """Return an iterable of ``(key, module)`` pairs in the ModuleDict."""
         return cast(ItemsView[str, Module], self._modules.items())
 
     def values(self) -> ValuesView[Module]:
+        """Return an iterable over the modules in the ModuleDict."""
         return cast(ValuesView[Module], self._modules.values())
 
     def get(self, key: str, default: Module | None = None) -> Module | None:
+        """Method on the ModuleDict module."""
         return self._modules.get(key, default)
 
     def pop(self, key: str) -> Module:
+        """Remove and return the module at the given index from the ModuleDict."""
         return cast(Module, self._modules.pop(key))
 
     def clear(self) -> None:
+        """Remove all modules from the ModuleDict."""
         self._modules.clear()
 
     def update(
         self, modules: Mapping[str, Module] | Iterable[tuple[str, Module]]
     ) -> None:
+        """Update the ModuleDict with another mapping of modules."""
         items = modules.items() if isinstance(modules, Mapping) else modules
         for key, module in items:
             self.add_module(key, module)
 
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Apply the contained modules to the input.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Tensor
+            Output tensor produced by the contained modules.
+        """
         raise NotImplementedError("ModuleDict has no forward; use indexing.")
 
 
@@ -565,22 +637,26 @@ class ParameterList(Module):
     """
 
     def __init__(self, parameters: list[Parameter] | None = None) -> None:
+        """Initialise the ParameterList module. See the class docstring for parameter semantics."""
         super().__init__()
         if parameters is not None:
             for i, p in enumerate(parameters):
                 self.register_parameter(str(i), p)
 
     def __getitem__(self, idx: int) -> Parameter:
+        """Return the child module(s) at the given index or slice."""
         keys = list(self._parameters.keys())
         p = self._parameters[keys[idx]]
         assert p is not None
         return p
 
     def __setitem__(self, idx: int, param: Parameter) -> None:
+        """Replace the child module at the given index."""
         keys = list(self._parameters.keys())
         self._parameters[keys[idx]] = param
 
     def __delitem__(self, idx: int | slice) -> None:
+        """Remove the child module at the given index or slice."""
         keys = list(self._parameters.keys())
         if isinstance(idx, slice):
             for key in keys[idx]:
@@ -590,25 +666,43 @@ class ParameterList(Module):
         self._renumber_parameters()
 
     def __len__(self) -> int:
+        """Return the number of registered child modules."""
         return len(self._parameters)
 
     def __iter__(self) -> Iterator[Parameter]:
+        """Iterate over the registered child modules."""
         for p in self._parameters.values():
             assert p is not None
             yield p
 
     def append(self, param: Parameter) -> None:
+        """Append a module to the end of the ParameterList."""
         self.register_parameter(str(len(self._parameters)), param)
+
     def extend(self, parameters: Iterable[Parameter]) -> None:
+        """Append each module from an iterable to the ParameterList."""
         for param in parameters:
             self.append(param)
+
     def _renumber_parameters(self) -> None:
+        """Internal helper for the ParameterList module."""
         items = list(self._parameters.values())
         self._parameters.clear()
         for i, param in enumerate(items):
             self.register_parameter(str(i), param)
 
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Apply the contained modules to the input.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Tensor
+            Output tensor produced by the contained modules.
+        """
         raise NotImplementedError(
             "ParameterList has no forward(); it is a container for Parameters only. "
             "Access individual parameters via indexing: self.params[i]"
@@ -708,59 +802,84 @@ class ParameterDict(Module):
     """
 
     def __init__(self, parameters: dict[str, Parameter] | None = None) -> None:
+        """Initialise the ParameterDict module. See the class docstring for parameter semantics."""
         super().__init__()
         if parameters is not None:
             for k, p in parameters.items():
                 self.register_parameter(k, p)
 
     def __getitem__(self, key: str) -> Parameter:
+        """Return the child module(s) at the given index or slice."""
         p = self._parameters[key]
         assert p is not None
         return p
 
     def __setitem__(self, key: str, param: Parameter) -> None:
+        """Replace the child module at the given index."""
         self.register_parameter(key, param)
 
     def __contains__(self, key: str) -> bool:
+        """Return ``True`` if the key/module is registered."""
         return key in self._parameters
 
     def __len__(self) -> int:
+        """Return the number of registered child modules."""
         return len(self._parameters)
 
     def __iter__(self) -> Iterator[str]:
+        """Iterate over the registered child modules."""
         yield from self._parameters.keys()
 
     def __delitem__(self, key: str) -> None:
+        """Remove the child module at the given index or slice."""
         del self._parameters[key]
 
     def keys(self) -> KeysView[str]:
+        """Return an iterable over the keys of the ParameterDict."""
         return self._parameters.keys()
 
     def items(self) -> ItemsView[str, Parameter]:
+        """Return an iterable of ``(key, module)`` pairs in the ParameterDict."""
         return cast(ItemsView[str, Parameter], self._parameters.items())
 
     def values(self) -> ValuesView[Parameter]:
+        """Return an iterable over the modules in the ParameterDict."""
         return cast(ValuesView[Parameter], self._parameters.values())
 
     def get(self, key: str, default: Parameter | None = None) -> Parameter | None:
+        """Method on the ParameterDict module."""
         return self._parameters.get(key, default)
 
     def pop(self, key: str) -> Parameter:
+        """Remove and return the module at the given index from the ParameterDict."""
         p = self._parameters.pop(key)
         assert p is not None
         return p
 
     def clear(self) -> None:
+        """Remove all modules from the ParameterDict."""
         self._parameters.clear()
 
     def update(
         self, parameters: Mapping[str, Parameter] | Iterable[tuple[str, Parameter]]
     ) -> None:
+        """Update the ParameterDict with another mapping of modules."""
         items = parameters.items() if isinstance(parameters, Mapping) else parameters
         for key, param in items:
             self.register_parameter(key, param)
 
     def forward(self, *args: object) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Apply the contained modules to the input.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        Tensor
+            Output tensor produced by the contained modules.
+        """
         raise NotImplementedError(
             "ParameterDict has no forward(); it is a container for Parameters only. "
             "Access individual parameters via key: self.params['key']"

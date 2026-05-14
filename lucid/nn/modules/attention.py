@@ -281,6 +281,7 @@ class MultiheadAttention(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the MultiheadAttention module. See the class docstring for parameter semantics."""
         super().__init__()
         if embed_dim % num_heads != 0:
             raise ValueError(
@@ -354,6 +355,7 @@ class MultiheadAttention(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the MultiheadAttention module."""
         if self.in_proj_weight is not None:
             init.xavier_uniform_(self.in_proj_weight)
         if self.q_proj_weight is not None:
@@ -386,6 +388,7 @@ class MultiheadAttention(Module):
         # Inline-rename ``out_proj.weight`` → ``out_proj_weight`` (and bias)
         # so external checkpoints using the reference framework's MHA
         # layout load directly.  Both forms are tolerated.
+        """Internal helper for the MultiheadAttention module."""
         for src_name, dst_name in (
             ("out_proj.weight", "out_proj_weight"),
             ("out_proj.bias", "out_proj_bias"),
@@ -494,6 +497,32 @@ class MultiheadAttention(Module):
         is_causal: bool = False,
     ) -> tuple["Tensor", "Tensor | None"]:
         # Internally operate in (B, T, E) layout regardless of batch_first.
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        query : Tensor
+            See the class docstring.
+        key : Tensor
+            See the class docstring.
+        value : Tensor
+            See the class docstring.
+        key_padding_mask : Tensor
+            See the class docstring.
+        need_weights : Tensor
+            See the class docstring.
+        attn_mask : Tensor
+            See the class docstring.
+        average_attn_weights : Tensor
+            See the class docstring.
+        is_causal : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         if not self.batch_first:
             query = query.permute([1, 0, 2])
             key = key.permute([1, 0, 2])
@@ -614,6 +643,7 @@ class MultiheadAttention(Module):
         return out, weights
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = (
             f"embed_dim={self.embed_dim}, num_heads={self.num_heads}, "
             f"dropout={self.dropout}, batch_first={self.batch_first}"

@@ -21,6 +21,7 @@ class OpEvent:
     """A single recorded operation event."""
 
     def __init__(self, impl: _C_engine.OpEvent) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._impl = impl
 
     @property
@@ -59,6 +60,7 @@ class OpEvent:
         return int(self._impl.memory_delta_bytes)
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         return (
             f"OpEvent(name={self.name!r}, time_us={self.time_us:.3f}, "
             f"shape={self.shape})"
@@ -69,6 +71,7 @@ class ProfileSummary:
     """Aggregated summary of a named operation across multiple calls."""
 
     def __init__(self, name: str, events: list[OpEvent]) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self.name = name
         self._events = events
 
@@ -93,6 +96,7 @@ class ProfileSummary:
         return sum(e.flops for e in self._events)
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         return (
             f"ProfileSummary(name={self.name!r}, count={self.count}, "
             f"avg_us={self.avg_time_us:.3f}, total_flops={self.total_flops})"
@@ -103,6 +107,7 @@ class MemoryStats:
     """Memory usage snapshot."""
 
     def __init__(self, impl: _C_engine.MemoryStats) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._impl = impl
 
     @property
@@ -126,6 +131,7 @@ class MemoryStats:
         return int(self._impl.free_count)
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         return (
             f"MemoryStats(current={self.current_bytes / 1024:.1f}KB, "
             f"peak={self.peak_bytes / 1024:.1f}KB)"
@@ -145,6 +151,7 @@ class Profiler:
     """
 
     def __init__(self, with_memory: bool = True) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._impl = _C_engine.Profiler()
         self._with_memory = with_memory
         self._active = False
@@ -162,10 +169,12 @@ class Profiler:
         self._active = False
 
     def __enter__(self) -> Profiler:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         self.start()
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         self.stop()
 
     def events(self) -> list[OpEvent]:

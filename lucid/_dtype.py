@@ -1,8 +1,41 @@
+"""Lucid scalar dtype descriptors and dtype-info helpers.
+
+This module defines the :class:`dtype` class together with the canonical
+singleton instances (``float32``, ``int64``, ``bool_`` …) that parameterize
+every tensor operation. It also exposes :class:`finfo` / :class:`iinfo` for
+querying numerical limits of floating / integer dtypes, mirroring the
+NumPy API.
+"""
+
 from lucid._C import engine as _C_engine
 
 
 class dtype:
-    """Lucid scalar data type. Singletons compared by identity (is)."""
+    """Lucid scalar data type descriptor.
+
+    Represents the element type of a tensor (``float32``, ``int64``, ``bool``
+    …). Instances are module-level singletons compared by identity (``is``);
+    do not instantiate :class:`dtype` directly — use the predefined
+    constants exported by :mod:`lucid`.
+
+    Attributes
+    ----------
+    _name : str
+        Canonical type name (e.g. ``"float32"``).
+    _engine : lucid._C.engine.Dtype
+        C++ engine enum value for this dtype.
+    itemsize : int
+        Size of one element in bytes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.zeros(3, dtype=lucid.float32)
+    >>> x.dtype
+    lucid.float32
+    >>> x.dtype is lucid.float32
+    True
+    """
 
     def __init__(
         self,
@@ -10,17 +43,31 @@ class dtype:
         engine_dtype: _C_engine.Dtype,
         itemsize: int,
     ) -> None:
+        """Initialize a dtype singleton.
+
+        Parameters
+        ----------
+        name : str
+            Canonical type name (e.g. ``"float32"``).
+        engine_dtype : lucid._C.engine.Dtype
+            Corresponding C++ engine enum value.
+        itemsize : int
+            Element size in bytes.
+        """
         self._name = name
         self._engine = engine_dtype
         self.itemsize = itemsize
 
     def __repr__(self) -> str:
+        """Return ``"lucid.<name>"`` (e.g. ``"lucid.float32"``)."""
         return f"lucid.{self._name}"
 
     def __eq__(self, other: object) -> bool:
+        """Identity comparison — dtypes are singletons."""
         return self is other
 
     def __hash__(self) -> int:
+        """Identity-based hash so dtypes can key dicts/sets."""
         return id(self)
 
 
@@ -149,6 +196,28 @@ class finfo:
     dtype: str = ""
 
     def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
+        """Populate floating-point limits for ``dt``.
+
+        Parameters
+        ----------
+        dt : dtype or lucid._C.engine.Dtype or str
+            Floating dtype to query (``float16`` / ``bfloat16`` / ``float32``
+            / ``float64``). Passing an integer / boolean / complex dtype
+            raises :class:`TypeError`.
+
+        Raises
+        ------
+        TypeError
+            If ``dt`` is not a recognized floating-point dtype.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.finfo(lucid.float32).eps
+        1.1920929e-07
+        >>> lucid.finfo(lucid.float32).max
+        3.4028235e+38
+        """
         # Resolve to a lucid dtype name first — bfloat16 and float16 share the
         # same engine enum (F16), so we can't distinguish them via the engine.
         name = _resolve_dtype_name(dt)
@@ -205,6 +274,28 @@ class iinfo:
     dtype: str = ""
 
     def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
+        """Populate integer limits for ``dt``.
+
+        Parameters
+        ----------
+        dt : dtype or lucid._C.engine.Dtype or str
+            Integer dtype to query (``int8`` / ``int16`` / ``int32`` /
+            ``int64``). Passing a non-integer dtype raises
+            :class:`TypeError`.
+
+        Raises
+        ------
+        TypeError
+            If ``dt`` is not a recognized integer dtype.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.iinfo(lucid.int32).max
+        2147483647
+        >>> lucid.iinfo(lucid.int8).min
+        -128
+        """
         name = _resolve_dtype_name(dt)
         table: dict[str, tuple[int, int, int]] = {
             "int8": (8, -(2**7), 2**7 - 1),

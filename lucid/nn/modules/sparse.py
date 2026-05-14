@@ -137,6 +137,7 @@ class Embedding(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Embedding module. See the class docstring for parameter semantics."""
         super().__init__()
         if scale_grad_by_freq:
             raise NotImplementedError(
@@ -208,11 +209,24 @@ class Embedding(Module):
         self.weight._impl = new_w._impl
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Look up embeddings for the given indices.
+
+        Parameters
+        ----------
+        input : Tensor
+            Tensor of integer indices.
+
+        Returns
+        -------
+        Tensor
+            Tensor of embedding vectors of shape ``(*input.shape, embedding_dim)``.
+        """
         if self.max_norm is not None:
             self._renorm_weight_inplace()
         return embedding(x, self.weight, self.padding_idx)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"{self.num_embeddings}, {self.embedding_dim}"
         if self.padding_idx is not None:
             s += f", padding_idx={self.padding_idx}"
@@ -351,6 +365,7 @@ class EmbeddingBag(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the EmbeddingBag module. See the class docstring for parameter semantics."""
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -362,6 +377,18 @@ class EmbeddingBag(Module):
         init.normal_(self.weight)
 
     def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Look up embeddings for the given indices.
+
+        Parameters
+        ----------
+        input : Tensor
+            Tensor of integer indices.
+
+        Returns
+        -------
+        Tensor
+            Tensor of embedding vectors of shape ``(*input.shape, embedding_dim)``.
+        """
         from lucid.nn.functional.sampling import embedding_bag as _eb
 
         _mode_map = {"sum": "sum", "mean": "mean", "max": "max"}
@@ -374,6 +401,7 @@ class EmbeddingBag(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.num_embeddings}, {self.embedding_dim}, "
             f"mode={self.mode!r}, padding_idx={self.padding_idx}"

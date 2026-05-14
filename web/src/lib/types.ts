@@ -58,6 +58,7 @@ export interface ApiFunction extends DocstringParsed {
   labels: ApiLabel[];
   signature: string | null;
   source: string | null;
+  subcategory?: string | null;
 }
 
 export interface ApiMethod extends DocstringParsed {
@@ -80,6 +81,7 @@ export interface ApiClass extends DocstringParsed {
   labels: ApiLabel[];
   signature: string | null;
   source: string | null;
+  subcategory?: string | null;
   methods: ApiMethod[];
 }
 
@@ -104,8 +106,12 @@ export interface ApiClassModule extends DocstringParsed {
   name: string;
   path: string;
   kind: "class-module";
+  class_kind: ApiClassKind;
+  bases: string[];
+  labels: ApiLabel[];
   signature: string | null;
   source: string | null;
+  subcategory?: string | null;
   methods: ApiMethod[];
 }
 

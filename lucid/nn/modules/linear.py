@@ -122,6 +122,7 @@ class Linear(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Linear module. See the class docstring for parameter semantics."""
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -145,9 +146,22 @@ class Linear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the linear transformation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(*, \text{in\_features})`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(*, \text{out\_features})`.
+        """
         return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}"
 
 
@@ -206,6 +220,18 @@ class Identity(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the linear transformation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(*, \text{in\_features})`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(*, \text{out\_features})`.
+        """
         return x
 
 
@@ -317,6 +343,7 @@ class FusedLinear(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the FusedLinear module. See the class docstring for parameter semantics."""
         super().__init__()
         if activation not in self._SUPPORTED:
             raise ValueError(
@@ -347,6 +374,18 @@ class FusedLinear(Module):
             _init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the linear transformation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(*, \text{in\_features})`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(*, \text{out\_features})`.
+        """
         if self.bias is None:
             # No fused kernel for bias=False — fall back to standard ops.
             import lucid.nn.functional as F
@@ -359,6 +398,7 @@ class FusedLinear(Module):
         return fused_linear_gelu(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"activation={self.activation!r}, bias={self.bias is not None}"
@@ -456,6 +496,7 @@ class Bilinear(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Bilinear module. See the class docstring for parameter semantics."""
         super().__init__()
         self.in1_features = in1_features
         self.in2_features = in2_features
@@ -478,9 +519,22 @@ class Bilinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the linear transformation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(*, \text{in\_features})`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(*, \text{out\_features})`.
+        """
         return bilinear(x1, x2, self.weight, self.bias)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in1_features={self.in1_features}, in2_features={self.in2_features}, "
             f"out_features={self.out_features}, bias={self.bias is not None}"
@@ -594,6 +648,7 @@ class LazyLinear(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LazyLinear module. See the class docstring for parameter semantics."""
         super().__init__()
         self.out_features = out_features
         self.in_features: int | None = None
@@ -604,6 +659,7 @@ class LazyLinear(Module):
         self.register_parameter("bias", None)
 
     def _initialize(self, in_features: int) -> None:
+        """Internal helper for the LazyLinear module."""
         self.in_features = in_features
         self.weight = Parameter(
             empty(
@@ -632,6 +688,7 @@ class LazyLinear(Module):
         error_msgs: list[str],
     ) -> None:
         # If still uninitialized, materialize from the checkpoint shape first.
+        """Internal helper for the LazyLinear module."""
         if self.weight is None:
             weight = state_dict.get(f"{prefix}weight")
             if weight is not None:
@@ -686,11 +743,24 @@ class LazyLinear(Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the linear transformation to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(*, \text{in\_features})`.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of shape :math:`(*, \text{out\_features})`.
+        """
         if self.weight is None:
             self._initialize(x.shape[-1])
         return linear(x, self.weight, self.bias)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"bias={self._has_bias}"

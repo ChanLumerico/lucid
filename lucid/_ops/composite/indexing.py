@@ -24,6 +24,11 @@ if TYPE_CHECKING:
 
 
 def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
+    """Cast an engine index tensor to ``int32`` if it is not already.
+
+    Used internally by the scatter / gather composites because the engine
+    indexing primitives expect ``int32`` index buffers.
+    """
     if impl.dtype == _C_engine.I64:
         return _C_engine.astype(impl, _C_engine.I32)
     if impl.dtype != _C_engine.I32:

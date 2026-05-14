@@ -89,14 +89,28 @@ class Flatten(Module):
     """
 
     def __init__(self, start_dim: int = 1, end_dim: int = -1) -> None:
+        """Initialise the Flatten module. See the class docstring for parameter semantics."""
         super().__init__()
         self.start_dim = start_dim
         self.end_dim = end_dim
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Flatten (or unflatten) the specified dimensions of the input.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor.
+
+        Returns
+        -------
+        Tensor
+            Tensor with the configured dimensions flattened or unflattened.
+        """
         return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"start_dim={self.start_dim}, end_dim={self.end_dim}"
 
 
@@ -173,11 +187,24 @@ class Unflatten(Module):
     """
 
     def __init__(self, dim: int, unflattened_size: tuple[int, ...]) -> None:
+        """Initialise the Unflatten module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
         self.unflattened_size = unflattened_size
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Flatten (or unflatten) the specified dimensions of the input.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor.
+
+        Returns
+        -------
+        Tensor
+            Tensor with the configured dimensions flattened or unflattened.
+        """
         shape = list(x.shape)
         new_shape = (
             shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
@@ -185,6 +212,7 @@ class Unflatten(Module):
         return _wrap(_C_engine.reshape(_unwrap(x), new_shape))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}, unflattened_size={self.unflattened_size}"
 
 
@@ -282,6 +310,7 @@ class Unfold(Module):
         padding: _Size2d = 0,
         stride: _Size2d = 1,
     ) -> None:
+        """Initialise the Unfold module. See the class docstring for parameter semantics."""
         super().__init__()
         self.kernel_size = kernel_size
         self.dilation = dilation
@@ -289,11 +318,24 @@ class Unfold(Module):
         self.stride = stride
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Flatten (or unflatten) the specified dimensions of the input.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor.
+
+        Returns
+        -------
+        Tensor
+            Tensor with the configured dimensions flattened or unflattened.
+        """
         from lucid.nn.functional.sampling import unfold as _unfold
 
         return _unfold(x, self.kernel_size, self.dilation, self.padding, self.stride)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"kernel_size={self.kernel_size}, dilation={self.dilation}, "
             f"padding={self.padding}, stride={self.stride}"
@@ -415,6 +457,7 @@ class Fold(Module):
         padding: _Size2d = 0,
         stride: _Size2d = 1,
     ) -> None:
+        """Initialise the Fold module. See the class docstring for parameter semantics."""
         super().__init__()
         self.output_size = (
             output_size
@@ -433,6 +476,18 @@ class Fold(Module):
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Flatten (or unflatten) the specified dimensions of the input.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor.
+
+        Returns
+        -------
+        Tensor
+            Tensor with the configured dimensions flattened or unflattened.
+        """
         from lucid.nn.functional.sampling import fold as _fold
 
         oH, oW = self.output_size
@@ -445,6 +500,7 @@ class Fold(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"output_size={self.output_size}, kernel_size={self.kernel_size}, "
             f"dilation={self.dilation}, padding={self.padding}, stride={self.stride}"

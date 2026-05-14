@@ -13,24 +13,97 @@ from lucid.optim.optimizer import Optimizer
 
 
 class LBFGS(Optimizer):
-    """L-BFGS optimizer.
+    r"""Limited-memory Broyden–Fletcher–Goldfarb–Shanno (L-BFGS) optimizer.
 
-    Implements the L-BFGS algorithm using a two-loop recursion for the
-    Hessian approximation and Wolfe-condition line search.
+    L-BFGS is a quasi-Newton method that approximates the inverse Hessian
+    using a limited history of gradient and parameter difference vectors.
+    At each step it computes a search direction :math:`d_t` via the
+    two-loop recursion:
 
-    Args:
-        params:       iterable of Parameters to optimize
-        lr:           step size for the line search (default: 1.0)
-        max_iter:     maximum number of iterations per step() call (default: 20)
-        max_eval:     maximum number of function evaluations per step() (default: 25)
-        tolerance_grad: stop when gradient norm is below this (default: 1e-7)
-        tolerance_change: stop when parameter change is below this (default: 1e-9)
-        history_size: number of past (s, y) pairs to keep (default: 100)
-        line_search_fn: ``"strong_wolfe"`` or ``None`` (default: ``"strong_wolfe"``)
+    .. math::
 
-    .. note::
-        Unlike other optimizers, this requires a ``closure`` argument in
-        ``step()`` that reevaluates the model and returns the loss.
+        d_t = -H_t^{-1} \nabla L(\theta_t)
+
+    where :math:`H_t^{-1}` is the L-BFGS Hessian approximation built from
+    the last ``history_size`` curvature pairs
+    :math:`\{(s_k, y_k)\}_{k=t-m}^{t-1}`:
+
+    .. math::
+
+        s_k &= \theta_{k+1} - \theta_k \\
+        y_k &= \nabla L(\theta_{k+1}) - \nabla L(\theta_k)
+
+    The diagonal scaling of :math:`H_t^{-1}` is initialised as:
+
+    .. math::
+
+        H_{\text{diag}} = \frac{s_{t-1}^\top y_{t-1}}{y_{t-1}^\top y_{t-1}}
+
+    A back-tracking Armijo line search finds a step size :math:`\alpha` that
+    satisfies the sufficient-decrease condition:
+
+    .. math::
+
+        L(\theta_t + \alpha d_t)
+        \le L(\theta_t) + c_1 \alpha \, \nabla L(\theta_t)^\top d_t
+
+    with :math:`c_1 = 10^{-4}`.
+
+    Parameters
+    ----------
+    params : iterable of Parameter or iterable of dict
+        Parameters to optimise.
+    lr : float, optional
+        Initial step size for the line search (default: ``1.0``).
+    max_iter : int, optional
+        Maximum number of L-BFGS iterations per :meth:`step` call
+        (default: ``20``).
+    max_eval : int, optional
+        Maximum number of closure evaluations per :meth:`step` call
+        (default: ``25``).
+    tolerance_grad : float, optional
+        Gradient-norm convergence threshold; optimisation stops when
+        :math:`\|\nabla L\|_2 \le \text{tolerance\_grad}`
+        (default: ``1e-7``).
+    tolerance_change : float, optional
+        Parameter-change convergence threshold (default: ``1e-9``).
+    history_size : int, optional
+        Number of :math:`(s, y)` curvature pairs retained in memory
+        (default: ``100``).
+    line_search_fn : str or None, optional
+        Line search strategy.  Currently ``"strong_wolfe"`` (back-tracking
+        Armijo) and ``None`` (fixed step) are recognised
+        (default: ``"strong_wolfe"``).
+
+    Attributes
+    ----------
+    param_groups : list of dict
+        Single parameter group containing all parameters.
+    defaults : dict
+        Default hyperparameter values.
+
+    Notes
+    -----
+    Unlike first-order optimizers, L-BFGS **requires a closure** argument
+    in :meth:`step` that clears gradients, computes the loss, and calls
+    ``loss.backward()``.  Without a closure the method raises
+    :exc:`ValueError`.
+
+    L-BFGS is best suited for full-batch or large-batch training where the
+    curvature information is reliable.  It is not recommended for
+    stochastic mini-batch training because noisy gradients corrupt the
+    Hessian approximation.
+
+    Examples
+    --------
+    >>> import lucid.optim as optim
+    >>> optimizer = optim.LBFGS(model.parameters(), lr=1.0, max_iter=20)
+    >>> def closure():
+    ...     optimizer.zero_grad()
+    ...     loss = criterion(model(x), y)
+    ...     loss.backward()
+    ...     return loss
+    >>> optimizer.step(closure)
     """
 
     def __init__(
@@ -44,6 +117,7 @@ class LBFGS(Optimizer):
         history_size: int = 100,
         line_search_fn: str | None = "strong_wolfe",
     ) -> None:
+        """Initialise the LBFGS.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
             lr=lr,
             max_iter=max_iter,
@@ -212,16 +286,80 @@ class LBFGS(Optimizer):
         return alpha, f_k, g_k
 
     def zero_grad(self, set_to_none: bool = True) -> None:
+        """Set gradients of all parameters to ``None``.
+
+        L-BFGS always sets gradients to ``None`` regardless of the
+        ``set_to_none`` argument, because the closure passed to
+        :meth:`step` is responsible for zeroing and recomputing gradients
+        on each function evaluation.
+
+        Parameters
+        ----------
+        set_to_none : bool, optional
+            Ignored; kept for API compatibility with :class:`Optimizer`
+            (default: ``True``).
+
+        Examples
+        --------
+        >>> def closure():
+        ...     optimizer.zero_grad()
+        ...     loss = criterion(model(x), y)
+        ...     loss.backward()
+        ...     return loss
+        >>> optimizer.step(closure)
+        """
         for group in self.param_groups:
             for p in cast(list[Tensor], group["params"]):
                 p.grad = None
 
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
-        """Perform a single L-BFGS optimization step.
+        """Perform a single L-BFGS optimisation step.
 
-        Args:
-            closure: A callable that clears gradients, computes the loss, and
-                     calls ``loss.backward()``.  Required for L-BFGS.
+        Computes the L-BFGS search direction using the two-loop recursion,
+        performs a back-tracking Armijo line search to find an acceptable
+        step size, updates all parameters, and then updates the curvature
+        history :math:`(s, y)`.
+
+        Parameters
+        ----------
+        closure : callable
+            A zero-argument callable that:
+
+            1. Calls ``optimizer.zero_grad()`` to clear stale gradients.
+            2. Runs the forward pass and computes the scalar loss.
+            3. Calls ``loss.backward()`` to populate gradients.
+            4. Returns the loss tensor.
+
+            This argument is **required** — passing ``None`` raises
+            :exc:`ValueError`.
+
+        Returns
+        -------
+        Tensor
+            The loss value at the final parameter position after the line
+            search.
+
+        Raises
+        ------
+        ValueError
+            If ``closure`` is ``None``.
+
+        Notes
+        -----
+        The closure may be called multiple times per :meth:`step` call
+        (up to ``max_eval`` times) during the line search.  Ensure that
+        any side effects (e.g. batch norm running stats) are handled
+        appropriately if this matters for your use-case.
+
+        Examples
+        --------
+        >>> def closure():
+        ...     optimizer.zero_grad()
+        ...     output = model(x)
+        ...     loss = criterion(output, y)
+        ...     loss.backward()
+        ...     return loss
+        >>> optimizer.step(closure)
         """
 
         if closure is None:

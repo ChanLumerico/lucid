@@ -22,6 +22,12 @@ def _inject_methods(tensor_cls: type) -> None:
     """Attach all registry ops as Tensor methods."""
 
     def _make_method(e: OpEntry) -> object:
+        """Build a Tensor method that dispatches to ``e.engine_fn``.
+
+        Two branches are emitted based on ``e.n_tensor_args``: a variadic
+        version (``-1``) that accepts a list of tensors after ``self``, and
+        the standard version that takes a fixed-arity argument list.
+        """
         if e.n_tensor_args == -1:
 
             def method_list(
@@ -30,6 +36,7 @@ def _inject_methods(tensor_cls: type) -> None:
                 *args: object,
                 **kwargs: object,
             ) -> Tensor:
+                """Variadic-tensor method body — prepends ``self`` to the unwrapped tensor list."""
                 all_tensors = [_unwrap(t) for t in [self] + list(tensors)]
                 result = e.engine_fn(all_tensors, *args, **kwargs)
                 if e.returns_tensor:
@@ -43,6 +50,13 @@ def _inject_methods(tensor_cls: type) -> None:
         else:
 
             def method(self: Tensor, *args: object, **kwargs: object) -> Tensor:
+                """Standard-arity method body for registry-driven Tensor methods.
+
+                Unwraps any leading ``Tensor`` positional args (up to the
+                op's declared tensor-arg count), dispatches to the engine
+                op, and either wraps the result as a Tensor or returns the
+                raw value depending on ``e.returns_tensor``.
+                """
                 # Unwrap any Tensor in extra tensor arg positions
                 proc_args: list[object] = []
                 for i, a in enumerate(args):

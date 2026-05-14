@@ -89,13 +89,27 @@ class ReLU(Module):
     """
 
     def __init__(self, inplace: bool = False) -> None:
+        """Initialise the ReLU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return relu(x, self.inplace)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"inplace={self.inplace}" if self.inplace else ""
 
 
@@ -146,14 +160,28 @@ class LeakyReLU(Module):
     """
 
     def __init__(self, negative_slope: float = 0.01, inplace: bool = False) -> None:
+        """Initialise the LeakyReLU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.negative_slope = negative_slope
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return leaky_relu(x, self.negative_slope, self.inplace)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"negative_slope={self.negative_slope}"
 
 
@@ -205,14 +233,28 @@ class ELU(Module):
     """
 
     def __init__(self, alpha: float = 1.0, inplace: bool = False) -> None:
+        """Initialise the ELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.alpha = alpha
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return elu(x, self.alpha, self.inplace)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"alpha={self.alpha}"
 
 
@@ -272,10 +314,23 @@ class SELU(Module):
     """
 
     def __init__(self, inplace: bool = False) -> None:
+        """Initialise the SELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return selu(x, self.inplace)
 
 
@@ -343,13 +398,27 @@ class GELU(Module):
     """
 
     def __init__(self, approximate: str = "none") -> None:
+        """Initialise the GELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.approximate = approximate
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return gelu(x, self.approximate)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"approximate={self.approximate!r}" if self.approximate != "none" else ""
 
 
@@ -401,9 +470,22 @@ class SiLU(Module):
     """
 
     def __init__(self, inplace: bool = False) -> None:
+        """Initialise the SiLU module. See the class docstring for parameter semantics."""
         super().__init__()
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return silu(x)
 
 
@@ -450,6 +532,18 @@ class Mish(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return mish(x)
 
 
@@ -507,14 +601,28 @@ class Softplus(Module):
     """
 
     def __init__(self, beta: float = 1.0, threshold: float = 20.0) -> None:
+        """Initialise the Softplus module. See the class docstring for parameter semantics."""
         super().__init__()
         self.beta = beta
         self.threshold = threshold
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return softplus(x, self.beta, self.threshold)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         if self.beta == 1.0 and self.threshold == 20.0:
             return ""
         return f"beta={self.beta}, threshold={self.threshold}"
@@ -567,6 +675,18 @@ class Hardswish(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return hardswish(x)
 
 
@@ -606,6 +726,18 @@ class Hardsigmoid(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return hardsigmoid(x)
 
 
@@ -649,6 +781,18 @@ class Sigmoid(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return sigmoid(x)
 
 
@@ -693,6 +837,18 @@ class Tanh(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return tanh(x)
 
 
@@ -745,13 +901,27 @@ class Softmax(Module):
     """
 
     def __init__(self, dim: int | None = None) -> None:
+        """Initialise the Softmax module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return softmax(x, self.dim)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
 
 
@@ -801,13 +971,27 @@ class LogSoftmax(Module):
     """
 
     def __init__(self, dim: int | None = None) -> None:
+        """Initialise the LogSoftmax module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return log_softmax(x, self.dim)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
 
 
@@ -853,6 +1037,18 @@ class Softmax2d(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         if x.ndim != 4:
             raise ValueError(
                 f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={x.ndim}"
@@ -922,17 +1118,31 @@ class RReLU(Module):
         upper: float = 1.0 / 3.0,
         inplace: bool = False,
     ) -> None:
+        """Initialise the RReLU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.lower = lower
         self.upper = upper
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return rrelu(
             x, self.lower, self.upper, training=self.training, inplace=self.inplace
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"lower={self.lower}, upper={self.upper}"
 
 
@@ -978,9 +1188,22 @@ class ReLU6(Module):
     """
 
     def __init__(self, inplace: bool = False) -> None:
+        """Initialise the ReLU6 module. See the class docstring for parameter semantics."""
         super().__init__()
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return relu6(x)
 
 
@@ -1058,6 +1281,7 @@ class PReLU(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the PReLU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.num_parameters = num_parameters
         self.weight = Parameter(
@@ -1065,9 +1289,22 @@ class PReLU(Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return prelu(x, self.weight)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"num_parameters={self.num_parameters}"
 
 
@@ -1121,11 +1358,24 @@ class Threshold(Module):
     """
 
     def __init__(self, threshold: float, value: float, inplace: bool = False) -> None:
+        """Initialise the Threshold module. See the class docstring for parameter semantics."""
         super().__init__()
         self.threshold = threshold
         self.value = value
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         impl = _unwrap(x)
         fill = _C_engine.full(impl.shape, self.value, impl.dtype, impl.device)
         thresh = _C_engine.full(impl.shape, self.threshold, impl.dtype, impl.device)
@@ -1133,6 +1383,7 @@ class Threshold(Module):
         return _wrap(_C_engine.where(mask, impl, fill))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"threshold={self.threshold}, value={self.value}"
 
 
@@ -1195,15 +1446,29 @@ class Hardtanh(Module):
     def __init__(
         self, min_val: float = -1.0, max_val: float = 1.0, inplace: bool = False
     ) -> None:
+        """Initialise the Hardtanh module. See the class docstring for parameter semantics."""
         super().__init__()
         self.min_val = min_val
         self.max_val = max_val
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         impl = _unwrap(x)
         return _wrap(_C_engine.clip(impl, self.min_val, self.max_val))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"min_val={self.min_val}, max_val={self.max_val}"
 
 
@@ -1251,6 +1516,18 @@ class LogSigmoid(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(x))))
 
 
@@ -1296,6 +1573,18 @@ class Softsign(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         impl = _unwrap(x)
         denom = _C_engine.add(
             _C_engine.full(impl.shape, 1.0, impl.dtype, impl.device),
@@ -1346,13 +1635,27 @@ class Softmin(Module):
     """
 
     def __init__(self, dim: int | None = None) -> None:
+        """Initialise the Softmin module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return softmin(x, self.dim)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
 
 
@@ -1409,13 +1712,27 @@ class GLU(Module):
     """
 
     def __init__(self, dim: int = -1) -> None:
+        """Initialise the GLU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return glu(x, self.dim)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}"
 
 
@@ -1467,13 +1784,27 @@ class CELU(Module):
     """
 
     def __init__(self, alpha: float = 1.0, inplace: bool = False) -> None:
+        """Initialise the CELU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.alpha = alpha
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return celu(x, self.alpha)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"alpha={self.alpha}"
 
 
@@ -1523,13 +1854,27 @@ class Hardshrink(Module):
     """
 
     def __init__(self, lambd: float = 0.5) -> None:
+        """Initialise the Hardshrink module. See the class docstring for parameter semantics."""
         super().__init__()
         self.lambd = lambd
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return hardshrink(x, self.lambd)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"lambd={self.lambd}"
 
 
@@ -1575,6 +1920,18 @@ class Tanhshrink(Module):
     """
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return tanhshrink(x)
 
 
@@ -1631,13 +1988,27 @@ class Softshrink(Module):
     """
 
     def __init__(self, lambd: float = 0.5) -> None:
+        """Initialise the Softshrink module. See the class docstring for parameter semantics."""
         super().__init__()
         self.lambd = lambd
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return softshrink(x, self.lambd)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"lambd={self.lambd}"
 
 
@@ -1693,14 +2064,28 @@ class CosineSimilarity(Module):
     """
 
     def __init__(self, dim: int = 1, eps: float = 1e-8) -> None:
+        """Initialise the CosineSimilarity module. See the class docstring for parameter semantics."""
         super().__init__()
         self.dim = dim
         self.eps = eps
 
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return cosine_similarity(x1, x2, dim=self.dim, eps=self.eps)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"dim={self.dim}, eps={self.eps}"
 
 
@@ -1767,13 +2152,27 @@ class PairwiseDistance(Module):
         eps: float = 1e-6,
         keepdim: bool = False,
     ) -> None:
+        """Initialise the PairwiseDistance module. See the class docstring for parameter semantics."""
         super().__init__()
         self.p = p
         self.eps = eps
         self.keepdim = keepdim
 
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply the activation function element-wise.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``.
+        """
         return pairwise_distance(x1, x2, p=self.p, eps=self.eps, keepdim=self.keepdim)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"p={self.p}, eps={self.eps}, keepdim={self.keepdim}"

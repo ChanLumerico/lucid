@@ -76,13 +76,16 @@ class MetalStream:
     """
 
     def __init__(self, priority: int = 0) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._priority = priority
         self._stream = _mx.default_stream(_mx.gpu)  # type: ignore[arg-type]
 
     def __enter__(self) -> MetalStream:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         self.synchronize()
 
     def synchronize(self) -> None:
@@ -109,6 +112,7 @@ class MetalEvent:
     """
 
     def __init__(self, enable_timing: bool = False) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._enable_timing = enable_timing
         self._t: float | None = None
 

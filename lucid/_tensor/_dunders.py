@@ -93,138 +93,179 @@ def _inject_dunders(cls: type) -> None:
     """Attach all dunder methods to the Tensor class."""
 
     def __add__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise addition: ``self + other`` with dtype promotion and broadcasting."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.add(a, b))
 
     def __radd__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected addition: ``other + self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.add(a, b))
 
     def __iadd__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """In-place addition: ``self += other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         self._impl = _C_engine.add_(a, b)
         return self
 
     def __sub__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise subtraction: ``self - other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.sub(a, b))
 
     def __rsub__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected subtraction: ``other - self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.sub(a, b))
 
     def __isub__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """In-place subtraction: ``self -= other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         self._impl = _C_engine.sub_(a, b)
         return self
 
     def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise multiplication: ``self * other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.mul(a, b))
 
     def __rmul__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected multiplication: ``other * self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.mul(a, b))
 
     def __imul__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """In-place multiplication: ``self *= other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         self._impl = _C_engine.mul_(a, b)
         return self
 
     def __truediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise true division: ``self / other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.div(a, b))
 
     def __rtruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected true division: ``other / self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.div(a, b))
 
     def __itruediv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """In-place true division: ``self /= other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         self._impl = _C_engine.div_(a, b)
         return self
 
     def __floordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise floor division: ``self // other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.floordiv(a, b))
 
     def __rfloordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected floor division: ``other // self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.floordiv(a, b))
 
     def __pow__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise exponentiation: ``self ** other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         return _wrap(_C_engine.pow(a, b))
 
     def __rpow__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Reflected exponentiation: ``other ** self``."""
         a, b = _maybe_promote(_unwrap_or_scalar(other, self._impl), self._impl)
         return _wrap(_C_engine.pow(a, b))
 
     def __ipow__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """In-place exponentiation: ``self **= other``."""
         a, b = _maybe_promote(self._impl, _unwrap_or_scalar(other, self._impl))
         self._impl = _C_engine.pow_(a, b)
         return self
 
     def __matmul__(self: Tensor, other: Tensor) -> Tensor:
+        """Matrix multiplication: ``self @ other`` with batched semantics."""
         return _wrap(_C_engine.matmul(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __rmatmul__(self: Tensor, other: Tensor) -> Tensor:
+        """Reflected matrix multiplication: ``other @ self``."""
         return _wrap(_C_engine.matmul(_unwrap_or_scalar(other, self._impl), self._impl))
 
     def __neg__(self: Tensor) -> Tensor:
+        """Unary negation: ``-self``."""
         return _wrap(_C_engine.neg(self._impl))
 
     def __abs__(self: Tensor) -> Tensor:
+        """Element-wise absolute value: ``abs(self)``."""
         return _wrap(_C_engine.abs(self._impl))
 
     def __invert__(self: Tensor) -> Tensor:
+        """Bitwise/logical NOT: ``~self`` (boolean negation for bool tensors)."""
         return _wrap(_C_engine.invert(self._impl))
 
     def __and__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise bitwise/logical AND: ``self & other``."""
         return _wrap(
             _C_engine.bitwise_and(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __or__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise bitwise/logical OR: ``self | other``."""
         return _wrap(
             _C_engine.bitwise_or(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __xor__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise bitwise/logical XOR: ``self ^ other``."""
         return _wrap(
             _C_engine.bitwise_xor(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __eq__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise equality comparison.  Returns a boolean Tensor."""
         return _wrap(_C_engine.equal(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __ne__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise inequality comparison.  Returns a boolean Tensor."""
         return _wrap(
             _C_engine.not_equal(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __lt__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise less-than comparison.  Returns a boolean Tensor."""
         return _wrap(_C_engine.less(self._impl, _unwrap_or_scalar(other, self._impl)))
 
     def __le__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise less-than-or-equal comparison.  Returns a boolean Tensor."""
         return _wrap(
             _C_engine.less_equal(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __gt__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise greater-than comparison.  Returns a boolean Tensor."""
         return _wrap(
             _C_engine.greater(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __ge__(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Element-wise greater-than-or-equal comparison.  Returns a boolean Tensor."""
         return _wrap(
             _C_engine.greater_equal(self._impl, _unwrap_or_scalar(other, self._impl))
         )
 
     def __getitem__(self: Tensor, idx: _IndexType) -> Tensor:
+        """Tensor indexing: dispatches to :func:`lucid._tensor._indexing._getitem`.
+
+        Supports basic indexing (ints, slices, ``None``/``...``), advanced
+        indexing (integer / boolean tensors), and combinations thereof.
+        """
         return _getitem(self, idx)
 
     def __setitem__(self: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
+        """In-place indexed assignment: ``self[idx] = value``.
+
+        Dispatches to :func:`lucid._tensor._indexing._setitem` and supports
+        the same index forms as :meth:`__getitem__`.
+        """
         _setitem(self, idx, value)
 
     # attach all methods

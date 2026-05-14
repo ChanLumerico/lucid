@@ -99,7 +99,7 @@ export function RaisesTable({ raises, className }: RaisesTableProps) {
                 </code>
               )}
             </div>
-            <div className="text-sm text-lucid-text-low leading-relaxed flex-1">
+            <div className="text-sm text-lucid-text-mid leading-relaxed flex-1">
               <MathText text={r.description} />
             </div>
           </div>

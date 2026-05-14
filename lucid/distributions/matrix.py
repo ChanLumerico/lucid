@@ -56,6 +56,29 @@ class Wishart(Distribution):
         scale_tril: Tensor | None = None,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise a Wishart distribution.
+
+        Converts ``covariance_matrix`` or ``precision_matrix`` to a Cholesky
+        factor internally.  Exactly one scale specification must be provided.
+
+        Parameters
+        ----------
+        df : Tensor | float
+            Degrees of freedom :math:`\nu > D - 1` where :math:`D` is the
+            matrix dimension.  Values :math:`\nu \leq D - 1` violate the
+            positive-definiteness guarantee.
+        covariance_matrix : Tensor | None, optional
+            Positive-definite scale matrix :math:`\Sigma` of shape
+            ``(..., D, D)``.
+        precision_matrix : Tensor | None, optional
+            Positive-definite precision matrix :math:`\Sigma^{-1}` of shape
+            ``(..., D, D)``.  Converted via :math:`\Sigma = (\Sigma^{-1})^{-1}`.
+        scale_tril : Tensor | None, optional
+            Lower-triangular Cholesky factor :math:`L` of :math:`\Sigma`,
+            shape ``(..., D, D)`` with positive diagonal.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         n_spec = sum(
             x is not None for x in (covariance_matrix, precision_matrix, scale_tril)
         )
@@ -91,6 +114,7 @@ class Wishart(Distribution):
 
     @property
     def support(self) -> Constraint:  # type: ignore[override]
+        """Constraint: positive-definite symmetric matrices."""
         return positive_definite
 
     @property
@@ -223,6 +247,22 @@ class LKJCholesky(Distribution):
         concentration: Tensor | float = 1.0,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise an LKJ distribution over Cholesky factors.
+
+        Pre-computes the Beta distribution parameters used by the vectorised
+        Onion sampler (Lewandowski et al. 2009, §3).
+
+        Parameters
+        ----------
+        dim : int
+            Dimension :math:`D \geq 2` of the correlation matrix.
+        concentration : Tensor | float, optional
+            Shape parameter :math:`\eta > 0`.  Default is ``1.0`` (uniform
+            distribution over correlation matrices).  Larger values concentrate
+            mass near the identity (near-zero correlations).
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         if dim < 2:
             raise ValueError(f"LKJCholesky: dim must be ≥ 2, got {dim}.")
         self.dim = dim
@@ -252,6 +292,7 @@ class LKJCholesky(Distribution):
 
     @property
     def support(self) -> Constraint:  # type: ignore[override]
+        """Constraint: positive-definite matrices (proxy for correlation-Cholesky support)."""
         return positive_definite  # approximate — actual support is corr-cholesky
 
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

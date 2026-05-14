@@ -52,6 +52,18 @@ class Gumbel(Distribution):
         scale: Tensor | float,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise a Gumbel distribution.
+
+        Parameters
+        ----------
+        loc : Tensor | float
+            Location parameter :math:`\mu \in \mathbb{R}`.  Shifts the
+            distribution along the real line.
+        scale : Tensor | float
+            Scale parameter :math:`s > 0`.  Stretches the distribution.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         self.loc = _as_tensor(loc)
         self.scale = _as_tensor(scale)
         self.loc, self.scale = _broadcast_pair(self.loc, self.scale)
@@ -73,6 +85,14 @@ class Gumbel(Distribution):
 
     @property
     def mode(self) -> Tensor:
+        """Mode of the Gumbel distribution.
+
+        Returns
+        -------
+        Tensor
+            The location parameter :math:`\\mu`, which coincides with the mode
+            of the Gumbel PDF.
+        """
         return self.loc
 
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
@@ -84,6 +104,19 @@ class Gumbel(Distribution):
         return self.loc - self.scale * (-(u.log())).log()
 
     def log_prob(self, value: Tensor) -> Tensor:
+        r"""Log-probability density of the Gumbel distribution.
+
+        Parameters
+        ----------
+        value : Tensor
+            Point(s) :math:`x \in \mathbb{R}` at which to evaluate the density.
+
+        Returns
+        -------
+        Tensor
+            Log-density :math:`\log p(x) = -(z + e^{-z}) - \log s`
+            where :math:`z = (x - \mu) / s`.
+        """
         z: Tensor = (value - self.loc) / self.scale
         return -(z + (-z).exp()) - self.scale.log()
 
@@ -114,6 +147,17 @@ class InverseGamma(Distribution):
         rate: Tensor | float,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise an Inverse-Gamma distribution.
+
+        Parameters
+        ----------
+        concentration : Tensor | float
+            Shape parameter :math:`\alpha > 0`.
+        rate : Tensor | float
+            Rate (inverse-scale) parameter :math:`\beta > 0`.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         self.concentration = _as_tensor(concentration)
         self.rate = _as_tensor(rate)
         self.concentration, self.rate = _broadcast_pair(self.concentration, self.rate)
@@ -145,6 +189,19 @@ class InverseGamma(Distribution):
         return (1.0 / y).detach()
 
     def log_prob(self, value: Tensor) -> Tensor:
+        r"""Log-probability density of the Inverse-Gamma distribution.
+
+        Parameters
+        ----------
+        value : Tensor
+            Point(s) :math:`x > 0` at which to evaluate the density.
+
+        Returns
+        -------
+        Tensor
+            Log-density :math:`\alpha\log\beta - \log\Gamma(\alpha)
+            - (\alpha+1)\log x - \beta/x`.
+        """
         c, r = self.concentration, self.rate
         return c * r.log() - lucid.lgamma(c) - (c + 1.0) * value.log() - r / value
 
@@ -175,6 +232,17 @@ class Kumaraswamy(Distribution):
         concentration0: Tensor | float,
         validate_args: bool | None = None,
     ) -> None:
+        """Initialise a Kumaraswamy distribution.
+
+        Parameters
+        ----------
+        concentration1 : Tensor | float
+            First shape parameter :math:`a > 0` (controls the left tail).
+        concentration0 : Tensor | float
+            Second shape parameter :math:`b > 0` (controls the right tail).
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         self.concentration1 = _as_tensor(concentration1)  # a
         self.concentration0 = _as_tensor(concentration0)  # b
         self.concentration1, self.concentration0 = _broadcast_pair(
@@ -224,6 +292,18 @@ class Kumaraswamy(Distribution):
         return (1.0 - (1.0 - u) ** (1.0 / b)) ** (1.0 / a)
 
     def log_prob(self, value: Tensor) -> Tensor:
+        r"""Log-probability density of the Kumaraswamy distribution.
+
+        Parameters
+        ----------
+        value : Tensor
+            Point(s) :math:`x \in (0, 1)` at which to evaluate the density.
+
+        Returns
+        -------
+        Tensor
+            Log-density :math:`\log a + \log b + (a-1)\log x + (b-1)\log(1-x^a)`.
+        """
         a, b = self.concentration1, self.concentration0
         return (
             a.log()
@@ -282,6 +362,24 @@ class Multinomial(Distribution):
         logits: Tensor | None = None,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise a Multinomial distribution.
+
+        Parameters
+        ----------
+        total_count : Tensor | int, optional
+            Total number of draws :math:`n \geq 0`.  Must be a scalar.
+            Default is ``1`` (reduces to a one-hot Categorical).
+        probs : Tensor | None, optional
+            Unnormalised probability vector(s) of shape ``(..., K)``.
+            Normalised to sum to 1 internally.  Mutually exclusive with
+            ``logits``.
+        logits : Tensor | None, optional
+            Unnormalised log-probability vector(s) of shape ``(..., K)``.
+            Converted to probabilities via softmax.  Mutually exclusive with
+            ``probs``.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         if (probs is None) == (logits is None):
             raise ValueError("Multinomial: pass exactly one of `probs` or `logits`.")
         if probs is not None:
@@ -302,10 +400,25 @@ class Multinomial(Distribution):
 
     @property
     def support(self) -> Constraint:  # type: ignore[override]
+        """Support of the distribution: non-negative integers.
+
+        Returns
+        -------
+        Constraint
+            ``nonnegative_integer`` — the multinomial event count vector lives
+            in :math:`\\mathbb{Z}_{\\geq 0}^K`, subject to the additional
+            constraint that the counts sum to ``total_count``.
+        """
         return nonnegative_integer
 
     @property
     def _probs(self) -> Tensor:
+        """Lazily resolved category probabilities (summing to 1 along the last axis).
+
+        Applies a max-shifted softmax to the stored logits when the
+        distribution was constructed from ``logits``; otherwise renormalises
+        the stored raw probabilities along the final axis.
+        """
         if self._is_logits:
             lp: Tensor = self._param
             # softmax along last dim
@@ -318,12 +431,26 @@ class Multinomial(Distribution):
 
     @property
     def _logits(self) -> Tensor:
+        """Lazily resolved per-category logits.
+
+        Returns the stored parameter when constructed from ``logits``;
+        otherwise computes :math:`\\log(p/(1-p))` from the normalised probs.
+        """
         if self._is_logits:
             return self._param
         return _probs_to_logits(self._probs)
 
     @property
     def total_count(self) -> Tensor:
+        """Total number of trials :math:`n` per Multinomial draw.
+
+        Returns
+        -------
+        Tensor
+            The integer-valued ``n`` parameter broadcast over the batch shape.
+            Each independent Multinomial sums to this many trials across the
+            ``K`` categories.
+        """
         return self._total_count
 
     @property
@@ -393,6 +520,19 @@ class ContinuousBernoulli(Distribution):
         logits: Tensor | float | None = None,
         validate_args: bool | None = None,
     ) -> None:
+        r"""Initialise a Continuous Bernoulli distribution.
+
+        Parameters
+        ----------
+        probs : Tensor | float | None, optional
+            Parameter :math:`p \in [0, 1]`.  Mutually exclusive with
+            ``logits``.
+        logits : Tensor | float | None, optional
+            Log-odds :math:`l = \log(p/(1-p)) \in \mathbb{R}`.  Mutually
+            exclusive with ``probs``.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+        """
         if (probs is None) == (logits is None):
             raise ValueError(
                 "ContinuousBernoulli: pass exactly one of `probs` or `logits`."
@@ -411,10 +551,20 @@ class ContinuousBernoulli(Distribution):
 
     @property
     def _probs(self) -> Tensor:
+        """Lazily resolved probability parameter :math:`p \\in [0, 1]`.
+
+        Returns the stored parameter when constructed from ``probs``;
+        otherwise applies the sigmoid to the stored logits.
+        """
         return self._param if not self._is_logits else _logits_to_probs(self._param)
 
     @property
     def _logits(self) -> Tensor:
+        """Lazily resolved logit parameter :math:`\\ell = \\log(p/(1-p))`.
+
+        Returns the stored parameter when constructed from ``logits``;
+        otherwise computes the log-odds from the stored probs.
+        """
         return self._param if self._is_logits else _probs_to_logits(self._param)
 
     # -- helpers ---------------------------------------------------------------

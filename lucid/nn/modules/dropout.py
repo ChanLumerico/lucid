@@ -101,15 +101,30 @@ class Dropout(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the Dropout module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         return dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
@@ -186,6 +201,7 @@ class Dropout1d(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the Dropout1d module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
@@ -195,9 +211,23 @@ class Dropout1d(Module):
         # The engine's ``dropoutnd`` kernel handles 3-D / 4-D / 5-D inputs by
         # building the mask along the channel axis, so the same call works
         # here as for ``Dropout2d``.
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         return dropout2d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
@@ -275,15 +305,30 @@ class Dropout2d(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the Dropout2d module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         return dropout2d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
@@ -377,15 +422,30 @@ class AlphaDropout(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the AlphaDropout module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), self.p, self.training))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
@@ -460,17 +520,32 @@ class Dropout3d(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the Dropout3d module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         from lucid.nn.functional.dropout import dropout3d
 
         return dropout3d(x, self.p, self.training)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"
@@ -564,15 +639,30 @@ class FeatureAlphaDropout(Module):
     """
 
     def __init__(self, p: float = 0.5, inplace: bool = False) -> None:
+        """Initialise the FeatureAlphaDropout module. See the class docstring for parameter semantics."""
         super().__init__()
         _check_dropout_prob(p)
         self.p = p
         self.inplace = inplace
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Apply dropout to the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of arbitrary shape.
+
+        Returns
+        -------
+        Tensor
+            Output tensor of the same shape as ``input``; in eval mode this is
+            the identity.
+        """
         return feature_alpha_dropout(x, self.p, self.training, self.inplace)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = f"p={self.p}"
         if self.inplace:
             s += ", inplace=True"

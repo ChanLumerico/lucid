@@ -83,6 +83,7 @@ class Module:
     _load_state_dict_post_hooks: OrderedDict[int, Callable[..., object]]
 
     def __init__(self) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         object.__setattr__(self, "_parameters", OrderedDict())
         object.__setattr__(self, "_buffers", OrderedDict())
         object.__setattr__(self, "_modules", OrderedDict())
@@ -103,6 +104,7 @@ class Module:
         raise NotImplementedError(f"{type(self).__name__}.forward() not implemented")
 
     def __call__(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
+        """Forward to the underlying callable (see class docstring)."""
         for hook, with_kwargs in _GLOBAL_FORWARD_PRE_HOOKS.values():
             args, kwargs = self._call_forward_pre_hook(
                 hook, args, kwargs, with_kwargs=with_kwargs
@@ -319,6 +321,7 @@ class Module:
         return _wrap(wrapped_impl)
 
     def __setattr__(self, name: str, value: object) -> None:
+        """Attribute setter; routes Tensor / Parameter / Module assignments to the proper internal registries."""
         if not isinstance(name, str):
             raise TypeError("module attribute name must be a string")
         if "." in name:
@@ -349,6 +352,7 @@ class Module:
             object.__setattr__(self, name, value)
 
     def __getattr__(self, name: str) -> Tensor | Parameter | Module:
+        """Attribute lookup fallback; resolves Parameter / buffer / submodule registries when ordinary lookup fails."""
         p = object.__getattribute__(self, "_parameters")
         if name in p:
             return cast(Tensor | Parameter | Module, p[name])
@@ -361,6 +365,7 @@ class Module:
         raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
 
     def __delattr__(self, name: str) -> None:
+        """Attribute deletion; mirrors :meth:`__setattr__` by removing the entry from the corresponding registry."""
         if name in self._parameters:
             del self._parameters[name]
             return
@@ -1009,6 +1014,7 @@ class Module:
     # ── repr ──────────────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         extra = self.extra_repr()
         cls_name = type(self).__name__
         if not self._modules:

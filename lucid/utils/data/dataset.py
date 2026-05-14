@@ -9,32 +9,159 @@ if TYPE_CHECKING:
 
 
 class Dataset:
-    """Abstract base class for datasets. Subclasses must implement __len__ and __getitem__."""
+    """Abstract base class for map-style datasets.
+
+    Subclasses must implement :meth:`__len__` (total number of samples) and
+    :meth:`__getitem__` (sample retrieval by integer index). Together these
+    two methods constitute the *map-style* dataset protocol used by
+    :class:`~lucid.utils.data.DataLoader`.
+
+    Notes
+    -----
+    Map-style datasets are random-access: any index ``0 <= i < len(ds)``
+    can be fetched at any time, which is what lets samplers (such as
+    :class:`~lucid.utils.data.RandomSampler` or
+    :class:`~lucid.utils.data.BatchSampler`) drive iteration. If the data
+    source does not support random access (e.g., a streaming log), use
+    :class:`IterableDataset` instead.
+
+    Examples
+    --------
+    >>> class Squares(Dataset):
+    ...     def __init__(self, n): self.n = n
+    ...     def __len__(self): return self.n
+    ...     def __getitem__(self, i): return i * i
+    >>> ds = Squares(5)
+    >>> ds[3]
+    9
+    """
 
     def __getitem__(self, index: int) -> Tensor | tuple[Tensor, ...]:
+        """Retrieve a single sample by integer index.
+
+        Parameters
+        ----------
+        index : int
+            Position of the sample to return. Implementations are expected
+            to support ``0 <= index < len(self)``; negative indexing is not
+            part of the protocol.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            The sample at the given index. Multi-output datasets typically
+            return a tuple such as ``(input, target)``.
+        """
         raise NotImplementedError
 
     def __len__(self) -> int:
+        """Return the number of samples in the dataset.
+
+        Returns
+        -------
+        int
+            Total number of samples available via :meth:`__getitem__`.
+        """
         raise NotImplementedError
 
     def __add__(self, other: Dataset) -> ConcatDataset:
+        """Concatenate this dataset with another via the ``+`` operator.
+
+        Parameters
+        ----------
+        other : Dataset
+            Dataset whose samples should follow those of ``self``.
+
+        Returns
+        -------
+        ConcatDataset
+            A :class:`ConcatDataset` wrapping ``[self, other]``.
+        """
         return ConcatDataset([self, other])
 
 
 class IterableDataset:
-    """Base class for iterable-style datasets. Subclasses must implement __iter__."""
+    """Base class for iterable-style (stream) datasets.
+
+    Subclasses must implement :meth:`__iter__`, yielding samples one at a
+    time. Unlike :class:`Dataset`, iterable datasets do not support random
+    access via integer indices and therefore cannot be used with samplers;
+    :class:`~lucid.utils.data.DataLoader` consumes them sequentially.
+
+    Notes
+    -----
+    Use :class:`IterableDataset` when:
+
+    * The data source is a stream (network socket, generator, log tail).
+    * The dataset size is unknown a priori.
+    * Random access is prohibitively expensive.
+
+    Otherwise prefer :class:`Dataset` — it composes with shuffling and
+    distributed sampling, which is impossible for iterable streams.
+
+    Examples
+    --------
+    >>> class CountUp(IterableDataset):
+    ...     def __init__(self, n): self.n = n
+    ...     def __iter__(self):
+    ...         for i in range(self.n):
+    ...             yield i
+    """
 
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
+        """Yield samples one at a time.
+
+        Returns
+        -------
+        Iterator
+            Iterator producing individual samples. The iterator should
+            terminate (raise ``StopIteration``) when the stream is
+            exhausted; infinite streams are permitted but require the
+            consumer to externally bound iteration.
+        """
         raise NotImplementedError
 
     def __add__(self, other: IterableDataset) -> IterableDataset:
+        """Concatenation via ``+`` — not supported for iterable datasets.
+
+        Use :class:`ChainDataset` to chain iterable datasets end-to-end.
+
+        Raises
+        ------
+        NotImplementedError
+            Always; iterable datasets cannot be concatenated through ``+``.
+        """
         raise NotImplementedError("Concatenation of IterableDatasets is not supported.")
 
 
 class TensorDataset(Dataset):
-    """Dataset wrapping Tensors. Each sample is a tuple of slices along the first dim."""
+    """Dataset wrapping one or more Tensors, indexed along their first axis.
+
+    Each sample is the tuple ``(t1[i], t2[i], ...)`` where ``t1, t2, ...``
+    are the wrapped tensors. All tensors must agree in their first
+    dimension (the sample axis); subsequent dimensions are independent.
+
+    Parameters
+    ----------
+    *tensors : Tensor
+        One or more tensors of identical leading-dimension size. The
+        dataset length equals ``tensors[0].shape[0]``.
+
+    Raises
+    ------
+    ValueError
+        If no tensors are provided or the leading dimensions disagree.
+
+    Examples
+    --------
+    >>> X = lucid.randn(100, 4)
+    >>> y = lucid.randint(0, 3, (100,))
+    >>> ds = TensorDataset(X, y)
+    >>> x_i, y_i = ds[0]
+    """
 
     def __init__(self, *tensors: Tensor) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         if not tensors:
             raise ValueError("TensorDataset requires at least one tensor")
         n = tensors[0].shape[0]
@@ -47,16 +174,46 @@ class TensorDataset(Dataset):
         self.tensors = tensors
 
     def __getitem__(self, index: int) -> tuple[Tensor, ...]:
+        """Return ``(t[index] for t in self.tensors)`` as a tuple.
+
+        Parameters
+        ----------
+        index : int
+            Sample index along the leading dimension.
+
+        Returns
+        -------
+        tuple of Tensor
+            One element per wrapped tensor, in registration order.
+        """
         return tuple(t[index] for t in self.tensors)
 
     def __len__(self) -> int:
+        """Return the leading-dimension size shared by all wrapped tensors."""
         return self.tensors[0].shape[0]
 
 
 class ConcatDataset(Dataset):
-    """Dataset that concatenates multiple datasets."""
+    """Dataset formed by concatenating several map-style datasets end-to-end.
+
+    Sample ``i`` is fetched from the first child whose cumulative length
+    exceeds ``i``, with the relative index translated accordingly.
+
+    Parameters
+    ----------
+    datasets : list of Dataset
+        Child datasets, concatenated in order. Each child must implement
+        :meth:`__len__` and :meth:`__getitem__`.
+
+    Examples
+    --------
+    >>> combined = ConcatDataset([ds_a, ds_b, ds_c])
+    >>> len(combined) == len(ds_a) + len(ds_b) + len(ds_c)
+    True
+    """
 
     def __init__(self, datasets: list[Dataset]) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self.datasets = list(datasets)
         self.cumulative_sizes = self._cumsum([len(d) for d in datasets])
 
@@ -70,9 +227,23 @@ class ConcatDataset(Dataset):
         return result
 
     def __len__(self) -> int:
+        """Return the total length — sum of all child dataset lengths."""
         return self.cumulative_sizes[-1] if self.cumulative_sizes else 0
 
     def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
+        """Return the sample at the given global index.
+
+        Parameters
+        ----------
+        idx : int
+            Index into the concatenated dataset. Negative indices are
+            translated relative to the total length.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Sample fetched from the appropriate child dataset.
+        """
         if idx < 0:
             idx = len(self) + idx
         dataset_idx = 0
@@ -89,16 +260,49 @@ class ConcatDataset(Dataset):
 
 
 class Subset(Dataset):
-    """Subset of a dataset at specified indices."""
+    """View into a parent dataset restricted to a list of indices.
+
+    Useful for train/val splits, k-fold cross-validation, or any time a
+    contiguous subset of a larger dataset is needed without copying the
+    underlying data.
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Parent dataset to view into.
+    indices : list of int
+        Indices into ``dataset`` that compose this subset. Order is
+        preserved; duplicates are allowed.
+
+    Examples
+    --------
+    >>> full = TensorDataset(X, y)
+    >>> train = Subset(full, list(range(0, 80)))
+    >>> val = Subset(full, list(range(80, 100)))
+    """
 
     def __init__(self, dataset: Dataset, indices: list[int]) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self.dataset = dataset
         self.indices = indices
 
     def __len__(self) -> int:
+        """Return the number of indices in the subset."""
         return len(self.indices)
 
     def __getitem__(self, idx: int) -> Tensor | tuple[Tensor, ...]:
+        """Return ``dataset[indices[idx]]``.
+
+        Parameters
+        ----------
+        idx : int
+            Position within the subset (not the parent dataset).
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Sample from the parent dataset at the remapped index.
+        """
         return self.dataset[self.indices[idx]]
 
 
@@ -162,6 +366,19 @@ class ChainDataset(IterableDataset):
     """
 
     def __init__(self, datasets: list[IterableDataset]) -> None:
+        """Build a chain over the given iterable datasets.
+
+        Parameters
+        ----------
+        datasets : list of IterableDataset
+            Iterable datasets to chain in order. Each must be an
+            :class:`IterableDataset` instance.
+
+        Raises
+        ------
+        TypeError
+            If any element is not an :class:`IterableDataset`.
+        """
         bad: list[type] = [
             type(d) for d in datasets if not isinstance(d, IterableDataset)
         ]
@@ -172,6 +389,13 @@ class ChainDataset(IterableDataset):
         self.datasets: list[IterableDataset] = list(datasets)
 
     def __iter__(self) -> Iterator[Tensor | tuple[Tensor, ...]]:
+        """Iterate through each child dataset in registration order.
+
+        Yields
+        ------
+        Tensor or tuple of Tensor
+            Each sample produced by each child, in sequence.
+        """
         for d in self.datasets:
             yield from d
 
@@ -190,6 +414,22 @@ class StackDataset(Dataset):
     """
 
     def __init__(self, *args: Dataset, **kwargs: Dataset) -> None:
+        """Bundle child datasets either positionally or by keyword.
+
+        Parameters
+        ----------
+        *args : Dataset
+            Positional child datasets. The resulting samples are tuples.
+        **kwargs : Dataset
+            Keyword child datasets. The resulting samples are dicts keyed
+            by the keyword names.
+
+        Raises
+        ------
+        ValueError
+            If both positional and keyword children are given, if no
+            children are given, or if the children disagree in length.
+        """
         if args and kwargs:
             raise ValueError(
                 "StackDataset takes either positional or keyword child datasets, not both"
@@ -209,9 +449,24 @@ class StackDataset(Dataset):
         self._n: int = n
 
     def __len__(self) -> int:
+        """Return the common length shared by all bundled child datasets."""
         return self._n
 
     def __getitem__(self, idx: int) -> tuple[object, ...] | dict[str, object]:  # type: ignore[override]
+        """Return one sample drawn from each child at index ``idx``.
+
+        Parameters
+        ----------
+        idx : int
+            Index into the bundled datasets.
+
+        Returns
+        -------
+        tuple or dict
+            A tuple of child samples if the dataset was built positionally,
+            otherwise a dict keyed by the keyword names supplied at
+            construction time.
+        """
         items: tuple[object, ...] = tuple(d[idx] for d in self.datasets)
         if self._keys is not None:
             return dict(zip(self._keys, items))

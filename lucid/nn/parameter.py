@@ -22,6 +22,7 @@ class Parameter(Tensor):
         data: Tensor | list[object] | None = None,
         requires_grad: bool = True,
     ) -> Parameter:
+        """Allocate a new instance.  See the class docstring for parameter semantics."""
         if data is None:
             impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
             impl = impl.clone_with_grad(requires_grad)
@@ -38,7 +39,9 @@ class Parameter(Tensor):
         data: Tensor | list[object] | None = None,
         requires_grad: bool = True,
     ) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         pass
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         return f"Parameter containing:\n{super().__repr__()}"

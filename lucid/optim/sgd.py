@@ -12,16 +12,81 @@ from lucid.optim.optimizer import Optimizer
 
 
 class SGD(Optimizer):
-    """
-    Stochastic gradient descent (with optional momentum).
+    r"""Stochastic Gradient Descent optimizer with optional momentum and weight decay.
 
-    Args:
-        params:       iterable of Parameters to optimize
-        lr:           learning rate
-        momentum:     momentum factor (default: 0)
-        dampening:    dampening for momentum (default: 0)
-        weight_decay: L2 penalty (default: 0)
-        nesterov:     enables Nesterov momentum (default: False)
+    Implements the classic SGD update rule.  Without momentum the update is:
+
+    .. math::
+
+        \theta_{t+1} = \theta_t - \alpha \, \nabla L(\theta_t)
+
+    With momentum (Polyak momentum), a velocity buffer :math:`v` is
+    maintained and the update becomes:
+
+    .. math::
+
+        v_{t+1} &= \mu \, v_t + (1 - \tau) \, \nabla L(\theta_t) \\
+        \theta_{t+1} &= \theta_t - \alpha \, v_{t+1}
+
+    where :math:`\mu` is the momentum factor and :math:`\tau` is the
+    dampening coefficient.  With Nesterov momentum the gradient is
+    evaluated at the *lookahead* position:
+
+    .. math::
+
+        \theta_{t+1} = \theta_t - \alpha
+            \bigl(\nabla L(\theta_t) + \mu \, v_{t+1}\bigr)
+
+    L2 weight decay adds :math:`\lambda \theta_t` to the gradient before
+    the momentum step:
+
+    .. math::
+
+        g_t = \nabla L(\theta_t) + \lambda \, \theta_t
+
+    Parameters
+    ----------
+    params : iterable of Parameter or iterable of dict
+        Parameters to optimise, or a list of parameter-group dicts.
+    lr : float
+        Learning rate :math:`\alpha`.
+    momentum : float, optional
+        Momentum factor :math:`\mu` (default: ``0``).  Set to a value
+        such as ``0.9`` to enable momentum.
+    dampening : float, optional
+        Dampening factor :math:`\tau` for the momentum buffer
+        (default: ``0``).  Has no effect when ``momentum=0``.
+    weight_decay : float, optional
+        L2 regularisation coefficient :math:`\lambda` (default: ``0``).
+    nesterov : bool, optional
+        If ``True``, use Nesterov momentum (default: ``False``).
+        Requires ``momentum > 0`` and ``dampening == 0``.
+
+    Attributes
+    ----------
+    param_groups : list of dict
+        Parameter groups, each containing ``"params"``, ``"lr"``,
+        ``"momentum"``, ``"dampening"``, ``"weight_decay"``, and
+        ``"nesterov"``.
+    defaults : dict
+        Default hyperparameter values.
+
+    Notes
+    -----
+    SGD with momentum is the de-facto standard for training image
+    classifiers.  Nesterov momentum often converges faster than vanilla
+    momentum because it incorporates a correction based on where the
+    parameters will be after the momentum step.
+
+    Examples
+    --------
+    >>> import lucid.optim as optim
+    >>> optimizer = optim.SGD(
+    ...     model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4
+    ... )
+    >>> optimizer.zero_grad()
+    >>> loss.backward()
+    >>> optimizer.step()
     """
 
     def __init__(
@@ -33,6 +98,7 @@ class SGD(Optimizer):
         weight_decay: float = 0,
         nesterov: bool = False,
     ) -> None:
+        """Initialise the SGD.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
             lr=lr,
             momentum=momentum,

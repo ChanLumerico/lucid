@@ -35,12 +35,31 @@ class autocast:
         dtype: dtype = float16,
         enabled: bool = True,
     ) -> None:
+        """Configure the autocast context.
+
+        Parameters
+        ----------
+        device_type : str, default='metal'
+            Device the autocast scope applies to. Apple Silicon supports
+            ``'metal'`` (GPU stream) and ``'cpu'`` (Accelerate stream).
+        dtype : lucid.dtype, default=float16
+            Lower-precision dtype that supported ops cast inputs to inside
+            the scope.
+        enabled : bool, default=True
+            When ``False`` the context is a no-op (useful for ablation).
+        """
         self._dtype = dtype
         self._enabled = enabled
         self._prev_active: bool = False
         self._prev_dtype: object = None
 
     def __enter__(self) -> autocast:
+        """Activate the autocast scope and return ``self``.
+
+        Captures the previously active AMP state (if any) so it can be
+        restored on exit, then installs a new ``AutocastGuard`` for the
+        configured target dtype.
+        """
         if not self._enabled:
             return self
         self._prev_active = _C_engine.amp_is_active()
@@ -51,6 +70,12 @@ class autocast:
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Restore the previous AMP state on scope exit.
+
+        If autocast was already active before this scope, the prior
+        dtype guard is reinstalled. Otherwise a neutral float32 guard
+        is entered since the engine has no ``disable_amp()`` primitive.
+        """
         if not self._enabled:
             return
         if self._prev_active and self._prev_dtype is not None:
@@ -70,6 +95,7 @@ class autocast:
 
         @functools.wraps(fn)
         def wrapper(*args: object, **kwargs: object) -> object:
+            """Invoke ``fn`` inside a fresh autocast scope with the captured config."""
             with autocast(dtype=self._dtype, enabled=self._enabled):
                 return fn(*args, **kwargs)
 

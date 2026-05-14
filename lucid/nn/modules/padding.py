@@ -36,6 +36,7 @@ class _ConstantPadNd(Module):
     """
 
     def __init__(self, padding: int | tuple[int, ...], value: float) -> None:
+        """Initialise the _ConstantPadNd module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (
             padding if isinstance(padding, tuple) else _make_tuple(padding, self._dims)  # type: ignore[arg-type]
@@ -43,9 +44,23 @@ class _ConstantPadNd(Module):
         self.value = value
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="constant", value=self.value)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}, value={self.value}"
 
 
@@ -113,6 +128,7 @@ class ConstantPad1d(_ConstantPadNd):
     _dims = 2
 
     def __init__(self, padding: _Size2d, value: float) -> None:
+        """Initialise the ConstantPad1d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value)
 
 
@@ -173,6 +189,7 @@ class ConstantPad2d(_ConstantPadNd):
     _dims = 4
 
     def __init__(self, padding: int | tuple[int, int, int, int], value: float) -> None:
+        """Initialise the ConstantPad2d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value)
 
 
@@ -234,6 +251,7 @@ class ConstantPad3d(_ConstantPadNd):
     def __init__(
         self, padding: int | tuple[int, int, int, int, int, int], value: float
     ) -> None:
+        """Initialise the ConstantPad3d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value)
 
 
@@ -285,9 +303,11 @@ class ZeroPad1d(ConstantPad1d):
     """
 
     def __init__(self, padding: _Size2d) -> None:
+        """Initialise the ZeroPad1d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -339,9 +359,11 @@ class ZeroPad2d(ConstantPad2d):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        """Initialise the ZeroPad2d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -391,9 +413,11 @@ class ZeroPad3d(ConstantPad3d):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        """Initialise the ZeroPad3d module. See the class docstring for parameter semantics."""
         super().__init__(padding, value=0.0)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -458,15 +482,30 @@ class ReflectionPad1d(Module):
     """
 
     def __init__(self, padding: _Size2d) -> None:
+        """Initialise the ReflectionPad1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -533,13 +572,28 @@ class ReflectionPad2d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        """Initialise the ReflectionPad2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -602,15 +656,30 @@ class ReplicationPad1d(Module):
     """
 
     def __init__(self, padding: _Size2d) -> None:
+        """Initialise the ReplicationPad1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -676,13 +745,28 @@ class ReplicationPad2d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        """Initialise the ReplicationPad2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -730,13 +814,28 @@ class ReplicationPad3d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        """Initialise the ReplicationPad3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="replicate")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -793,13 +892,28 @@ class ReflectionPad3d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        """Initialise the ReflectionPad3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="reflect")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -862,15 +976,30 @@ class CircularPad1d(Module):
     """
 
     def __init__(self, padding: _Size2d) -> None:
+        """Initialise the CircularPad1d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (
             (padding, padding) if isinstance(padding, int) else tuple(padding)
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -936,13 +1065,28 @@ class CircularPad2d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int]) -> None:
+        """Initialise the CircularPad2d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 4 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"
 
 
@@ -1004,11 +1148,26 @@ class CircularPad3d(Module):
     """
 
     def __init__(self, padding: int | tuple[int, int, int, int, int, int]) -> None:
+        """Initialise the CircularPad3d module. See the class docstring for parameter semantics."""
         super().__init__()
         self.padding = (padding,) * 6 if isinstance(padding, int) else tuple(padding)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Pad the input tensor according to the configured padding.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Padded tensor with spatial dimensions expanded by the configured
+            padding amounts.
+        """
         return pad(x, self.padding, mode="circular")
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"padding={self.padding}"

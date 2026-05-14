@@ -106,6 +106,7 @@ class _CellNamingMixin:
         # to recurse with their own keys; the top-level walker handles
         # children, but these are meant to be flattened.  Mark the cell
         # submodules so the recursive walker does not visit them.
+        """Internal helper for the _CellNamingMixin module."""
         for layer in range(self.num_layers):
             for direction in range(2 if self.bidirectional else 1):
                 suffix: str = "_reverse" if direction == 1 else ""
@@ -127,6 +128,7 @@ class _CellNamingMixin:
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
+        """Internal helper for the _CellNamingMixin module."""
         from lucid._C import engine as _C_engine
         from lucid._tensor.tensor import Tensor
 
@@ -366,6 +368,7 @@ class LSTM(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LSTM module. See the class docstring for parameter semantics."""
         super().__init__()
         if proj_size < 0:
             raise ValueError(f"proj_size must be >= 0, got {proj_size}")
@@ -432,6 +435,7 @@ class LSTM(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the LSTM module."""
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
@@ -534,7 +538,6 @@ class LSTM(Module):
         if self.batch_first:
             x = x.permute([1, 0, 2])
 
-
         B: int = int(x.shape[1])
         num_dirs: int = 2 if self.bidirectional else 1
         L: int = self.num_layers
@@ -599,6 +602,7 @@ class LSTM(Module):
         return layer_input, (h_n_final, c_n_final)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         s: str = (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
             f"bias={self.bias}, batch_first={self.batch_first}, "
@@ -709,6 +713,7 @@ class RNNCell(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the RNNCell module. See the class docstring for parameter semantics."""
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -729,11 +734,26 @@ class RNNCell(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the RNNCell module."""
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         pre = linear(x, self.weight_ih, self.bias_ih) + linear(
@@ -742,6 +762,7 @@ class RNNCell(Module):
         return tanh(pre) if self.nonlinearity == "tanh" else relu(pre)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.input_size}, {self.hidden_size}, nonlinearity={self.nonlinearity!r}"
         )
@@ -851,6 +872,7 @@ class LSTMCell(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the LSTMCell module. See the class docstring for parameter semantics."""
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -874,6 +896,7 @@ class LSTMCell(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the LSTMCell module."""
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
@@ -883,6 +906,20 @@ class LSTMCell(Module):
         x: Tensor,
         hx: tuple[Tensor, Tensor] | None = None,
     ) -> tuple[Tensor, Tensor]:
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
         if hx is None:
             batch = x.shape[0]
             h0 = zeros(batch, self.hidden_size, device=x.device, dtype=x.dtype)
@@ -902,6 +939,7 @@ class LSTMCell(Module):
         return h1, c1
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"{self.input_size}, {self.hidden_size}"
 
 
@@ -1012,6 +1050,7 @@ class GRUCell(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the GRUCell module. See the class docstring for parameter semantics."""
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -1035,11 +1074,26 @@ class GRUCell(Module):
         self._init_weights()
 
     def _init_weights(self) -> None:
+        """Internal helper for the GRUCell module."""
         stdv = 1.0 / math.sqrt(self.hidden_size)
         for p in self.parameters():
             init.uniform_(p, -stdv, stdv)
 
     def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
         if hx is None:
             hx = zeros(x.shape[0], self.hidden_size, device=x.device, dtype=x.dtype)
         hs = self.hidden_size
@@ -1052,6 +1106,7 @@ class GRUCell(Module):
         return h1
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"{self.input_size}, {self.hidden_size}"
 
 
@@ -1172,6 +1227,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the GRU module. See the class docstring for parameter semantics."""
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -1191,6 +1247,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
                 )
 
     def _cell(self, layer: int, reverse: bool = False) -> GRUCell:
+        """Internal helper for the GRU module."""
         suffix: str = "_reverse" if reverse else ""
         return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
 
@@ -1203,6 +1260,20 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         x: Tensor,
         hx: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
         _check_not_packed(x, "GRU")
         if self.batch_first:
             x = x.permute([1, 0, 2])
@@ -1261,6 +1332,7 @@ class GRU(_CellNamingMixin, Module):  # type: ignore[misc]
         return out, h_n_tensor
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
             f"batch_first={self.batch_first}, bidirectional={self.bidirectional}"
@@ -1394,6 +1466,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the RNN module. See the class docstring for parameter semantics."""
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -1420,6 +1493,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
                 )
 
     def _cell(self, layer: int, reverse: bool = False) -> RNNCell:
+        """Internal helper for the RNN module."""
         suffix: str = "_reverse" if reverse else ""
         return self._modules[f"cell_l{layer}{suffix}"]  # type: ignore[return-value]
 
@@ -1432,6 +1506,20 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         x: Tensor,
         hx: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
         _check_not_packed(x, "RNN")
         if self.batch_first:
             x = x.permute([1, 0, 2])
@@ -1487,6 +1575,7 @@ class RNN(_CellNamingMixin, Module):  # type: ignore[misc]
         return out, h_n_tensor
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"{self.input_size}, {self.hidden_size}, num_layers={self.num_layers}, "
             f"nonlinearity={self.nonlinearity!r}, batch_first={self.batch_first}, "

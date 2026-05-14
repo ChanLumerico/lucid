@@ -321,6 +321,7 @@ def _register(
     def decorator(
         fn: Callable[[], dict[str, object]],
     ) -> Callable[[], dict[str, object]]:
+        """Bind ``fn`` as the loader for every name in the enclosing group."""
         for name in names:
             _GROUP_LOADERS[name] = fn
         return fn
@@ -330,6 +331,7 @@ def _register(
 
 @_register(_FACTORY_NAMES)
 def _load_factories() -> dict[str, object]:
+    """Lazy loader for tensor factory functions (zeros / ones / arange / …)."""
     import lucid._factories as _fac
 
     return {n: getattr(_fac, n) for n in _FACTORY_NAMES}
@@ -337,6 +339,7 @@ def _load_factories() -> dict[str, object]:
 
 @_register(_OPS_NAMES)
 def _load_ops() -> dict[str, object]:
+    """Lazy loader for the core engine-backed op surface (add / matmul / …)."""
     import lucid._ops as _ops
 
     return {n: getattr(_ops, n) for n in _OPS_NAMES}
@@ -344,6 +347,7 @@ def _load_ops() -> dict[str, object]:
 
 @_register(_SCATTER_NAMES)
 def _load_scatter() -> dict[str, object]:
+    """Lazy loader for ``scatter_add`` (split out so it imports independently)."""
     from lucid._ops import scatter_add
 
     return {"scatter_add": scatter_add}
@@ -351,6 +355,7 @@ def _load_scatter() -> dict[str, object]:
 
 @_register(_GRAD_NAMES)
 def _load_grad() -> dict[str, object]:
+    """Lazy loader for autograd mode helpers (``no_grad`` / ``enable_grad`` / …)."""
     from lucid.autograd._grad_mode import (
         no_grad,
         enable_grad,
@@ -370,6 +375,7 @@ def _load_grad() -> dict[str, object]:
 
 @_register(_PREDICATE_NAMES)
 def _load_predicates() -> dict[str, object]:
+    """Lazy loader for dtype predicate helpers (``is_tensor`` / ``is_floating_point`` / …)."""
     from lucid._C import engine as _C_engine
 
     _FLOAT_DTYPES = frozenset([_C_engine.F16, _C_engine.F32, _C_engine.F64])
@@ -421,6 +427,7 @@ def _load_predicates() -> dict[str, object]:
 
 @_register(_SERIALIZATION_NAMES)
 def _load_serialization() -> dict[str, object]:
+    """Lazy loader for ``save`` / ``load`` (sharded and safetensors variants)."""
     import lucid.serialization as _ser
 
     return {
@@ -463,7 +470,10 @@ def _load_method_aliases() -> dict[str, object]:
     from lucid._tensor.tensor import Tensor as _T
 
     def _make(method_name: str) -> Callable[..., object]:
+        """Build a free-function wrapper that forwards to ``Tensor.<method_name>``."""
+
         def _fn(input: object, *args: object, **kwargs: object) -> object:
+            """Dispatch ``lucid.<method_name>(input, ...)`` to ``input.<method_name>(...)``."""
             if not isinstance(input, _T):
                 raise TypeError(
                     f"lucid.{method_name}() expects a Tensor as the first "
@@ -484,6 +494,7 @@ def _load_method_aliases() -> dict[str, object]:
 
 @_register(_TYPE_ALIAS_NAMES)
 def _load_type_aliases() -> dict[str, object]:
+    """Lazy loader for the public type aliases / protocols re-exported from :mod:`lucid._types`."""
     from lucid._types import (
         Scalar,
         TensorLike,
@@ -550,6 +561,13 @@ def eval(*tensors: object) -> None:  # type: ignore[override]
 
 
 def __getattr__(name: str) -> object:
+    """Lazy attribute resolver for the top-level :mod:`lucid` namespace.
+
+    Implements PEP 562 lazy imports — names listed in the lazy-loader
+    registries are not imported at package init time, but only on first
+    attribute access (e.g. ``lucid.zeros`` triggers the factories loader).
+    Subsequent accesses go through the regular module ``__dict__``.
+    """
     _g = globals()
 
     # Tensor is special-cased: it lives in a TYPE_CHECKING-guarded module.

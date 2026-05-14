@@ -30,16 +30,21 @@ class no_grad:
     _prev: bool
 
     def __enter__(self) -> no_grad:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         self._prev = _C_engine.grad_enabled()
         _C_engine.set_grad_enabled(False)
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         _C_engine.set_grad_enabled(self._prev)
 
     def __call__(self, fn: _F) -> _F:
+        """Forward to the underlying callable (see class docstring)."""
+
         @functools.wraps(fn)
         def wrapper(*args: object, **kwargs: object) -> object:
+            """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
             with no_grad():
                 return fn(*args, **kwargs)
 
@@ -52,16 +57,21 @@ class enable_grad:
     _prev: bool
 
     def __enter__(self) -> enable_grad:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         self._prev = _C_engine.grad_enabled()
         _C_engine.set_grad_enabled(True)
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         _C_engine.set_grad_enabled(self._prev)
 
     def __call__(self, fn: _F) -> _F:
+        """Forward to the underlying callable (see class docstring)."""
+
         @functools.wraps(fn)
         def wrapper(*args: object, **kwargs: object) -> object:
+            """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
             with enable_grad():
                 return fn(*args, **kwargs)
 

@@ -87,7 +87,7 @@ export async function FunctionSignature({
             <MathText text={fn.summary} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
           {fn.extended && (
-            <MathText text={fn.extended} block className="text-sm text-lucid-text-low leading-relaxed" />
+            <MathText text={fn.extended} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
 
           {fn.parameters.length > 0 && <ParameterTable parameters={fn.parameters} />}
@@ -99,7 +99,7 @@ export async function FunctionSignature({
               </h4>
               <div className="rounded-xl border border-lucid-border bg-lucid-surface px-4 py-3">
                 <TypeAnnotation annotation={fn.returns.annotation} className="block mb-1" />
-                <MathText text={fn.returns.description} block className="text-sm text-lucid-text-low" />
+                <MathText text={fn.returns.description} block className="text-sm text-lucid-text-mid" />
               </div>
             </section>
           )}
@@ -113,7 +113,7 @@ export async function FunctionSignature({
               </h4>
               <div className="rounded-xl border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-3">
                 {fn.notes.map((note, i) => (
-                  <MathText key={i} text={note} block className="text-sm text-lucid-text-low leading-relaxed" />
+                  <MathText key={i} text={note} block className="text-sm text-lucid-text-mid leading-relaxed" />
                 ))}
               </div>
             </section>

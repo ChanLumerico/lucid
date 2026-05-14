@@ -24,21 +24,60 @@ class _FunctionClass(Protocol):
 
 
 class FunctionCtx:
-    """Context object passed to forward/backward in custom Functions."""
+    """Per-call context shared between :meth:`Function.forward` and
+    :meth:`Function.backward`.
+
+    A fresh ``FunctionCtx`` is created on every :meth:`Function.apply`
+    invocation. ``forward`` populates it with anything ``backward`` will
+    need: saved tensors (via :meth:`save_for_backward`), non-differentiable
+    output markers (via :meth:`mark_non_differentiable`), and arbitrary
+    user-defined attributes (cached shapes, axis indices, scalar
+    hyperparameters, ...) set with ordinary attribute assignment.
+
+    Attributes
+    ----------
+    needs_input_grad : tuple of bool
+        One flag per positional Tensor input to ``forward``, indicating
+        whether autograd would propagate a gradient to that input. Useful
+        for skipping unneeded gradient computations.
+    saved_tensors : tuple of Tensor
+        Read-only view of tensors stored via :meth:`save_for_backward`.
+    """
 
     def __init__(self) -> None:
+        """Initialise an empty context with no saved tensors or extras."""
         self._saved_tensors: list[Tensor] = []
         self.needs_input_grad: tuple[bool, ...] = ()
         self._non_differentiable: list[Tensor] = []
         self._extra: dict[str, object] = {}
 
     def save_for_backward(self, *tensors: Tensor) -> None:
-        """Save tensors to be retrieved in backward()."""
+        """Store tensors needed to compute the backward pass.
+
+        Parameters
+        ----------
+        *tensors : Tensor
+            Activations / inputs the ``backward`` implementation will
+            require. They are retrieved later via the :attr:`saved_tensors`
+            property as a tuple in the same order.
+
+        Notes
+        -----
+        Each call replaces any tensors previously saved on this context.
+        """
         self._saved_tensors = list(tensors)
 
     @property
     def saved_tensors(self) -> tuple[Tensor, ...]:
-        """Return the tensors saved by save_for_backward() as Tensors."""
+        """Read back the tensors saved during ``forward``.
+
+        Returns
+        -------
+        tuple of Tensor
+            The tensors stored by :meth:`save_for_backward`, wrapped
+            back into Python ``Tensor`` instances if the engine stored
+            raw ``TensorImpl`` handles.
+        """
         result: list[Tensor] = []
         for t in self._saved_tensors:
             if isinstance(t, _C_engine.TensorImpl):
@@ -48,10 +87,24 @@ class FunctionCtx:
         return tuple(result)
 
     def mark_non_differentiable(self, *tensors: Tensor) -> None:
-        """Mark outputs as non-differentiable."""
+        """Declare that the given output tensors carry no gradient.
+
+        Parameters
+        ----------
+        *tensors : Tensor
+            Outputs of :meth:`Function.forward` for which autograd should
+            not propagate gradients (e.g., integer indices, masks).
+        """
         self._non_differentiable = list(tensors)
 
     def __setattr__(self, name: str, value: object) -> None:
+        """Route user-defined attributes onto the ``_extra`` dict.
+
+        Reserved private names and ``needs_input_grad`` use normal
+        instance storage so they remain accessible through descriptors;
+        everything else falls back to the extras bag, keeping the
+        context permissive while preserving the public schema.
+        """
         if name.startswith("_") or name in ("needs_input_grad",):
             object.__setattr__(self, name, value)
         else:
@@ -61,6 +114,11 @@ class FunctionCtx:
                 self._extra[name] = value
 
     def __getattr__(self, name: str) -> object:
+        """Look up overflow attributes that were stored in ``_extra``.
+
+        Called only when normal attribute resolution fails, so it
+        complements :meth:`__setattr__` without shadowing class members.
+        """
         extra = object.__getattribute__(self, "_extra")
         if name in extra:
             return extra[name]
@@ -68,9 +126,12 @@ class FunctionCtx:
 
 
 def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
+    """Build the per-subclass ``apply`` classmethod injected by ``FunctionMeta``."""
+
     def apply(
         klass: type, *args: Tensor, **kwargs: object
     ) -> Tensor | tuple[Tensor, ...]:
+        """Run ``forward`` and register the autograd node when needed."""
         ctx = FunctionCtx()
         ctx.needs_input_grad = tuple(
             isinstance(a, Tensor) and a.requires_grad for a in args
@@ -89,9 +150,19 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
 
 
 class FunctionMeta(type):
+    """Metaclass that wires a fresh :meth:`apply` onto each ``Function`` subclass.
+
+    The base ``Function`` class is left untouched (so ``Function.apply`` keeps
+    its explanatory stub); every concrete subclass receives a closure that
+    instantiates a :class:`FunctionCtx`, calls the subclass's ``forward``,
+    and — when grad is enabled and any input requests it — registers the
+    autograd node.
+    """
+
     def __init__(
         cls, name: str, bases: tuple[type, ...], dct: dict[str, object]
     ) -> None:
+        """Install the dispatching :meth:`apply` on the freshly built subclass."""
         super().__init__(name, bases, dct)
         if name != "Function":
             cls.apply = _make_apply(cls)
@@ -118,14 +189,52 @@ class Function(metaclass=FunctionMeta):
 
     @staticmethod
     def forward(ctx: FunctionCtx, *args: Tensor) -> Tensor | tuple[Tensor, ...]:
-        """Compute the forward pass. Override in subclasses."""
+        """Compute the forward result of the custom op.
+
+        Subclasses override this static method. Save anything needed
+        during backward on ``ctx`` (via ``ctx.save_for_backward(...)``
+        or by setting attributes like ``ctx.shape = x.shape``); do not
+        capture tensors via closure.
+
+        Parameters
+        ----------
+        ctx : FunctionCtx
+            Per-call context; will be passed unchanged to :meth:`backward`.
+        *args : Tensor
+            Positional inputs to the custom op. Non-Tensor positional
+            arguments are allowed but receive no gradients.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            One or more output tensors.
+        """
         raise NotImplementedError
 
     @staticmethod
     def backward(
         ctx: FunctionCtx, *grad_outputs: Tensor
     ) -> Tensor | tuple[Tensor, ...]:
-        """Compute the backward pass. Override in subclasses."""
+        r"""Compute gradients of the loss w.r.t. each input of :meth:`forward`.
+
+        Subclasses override this static method. The returned tuple must
+        contain one gradient per **positional argument** of ``forward``,
+        in the same order; non-Tensor arguments receive ``None``.
+
+        Parameters
+        ----------
+        ctx : FunctionCtx
+            The same context that was populated during ``forward``.
+        *grad_outputs : Tensor
+            Upstream gradients :math:`\partial L / \partial y_i`, one per
+            output that ``forward`` returned.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Downstream gradients matching the positional inputs of
+            ``forward``. Use ``None`` for inputs that have no gradient.
+        """
         raise NotImplementedError
 
     @classmethod

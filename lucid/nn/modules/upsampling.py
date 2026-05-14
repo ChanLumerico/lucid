@@ -128,6 +128,7 @@ class Upsample(Module):
         mode: str = "nearest",
         align_corners: bool | None = None,
     ) -> None:
+        """Initialise the Upsample module. See the class docstring for parameter semantics."""
         super().__init__()
         self.size = size
         self.scale_factor = scale_factor
@@ -135,6 +136,18 @@ class Upsample(Module):
         self.align_corners = align_corners
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Upsample the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Upsampled output tensor.
+        """
         return interpolate(
             x,
             size=self.size,
@@ -144,6 +157,7 @@ class Upsample(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         parts = []
         if self.size is not None:
             parts.append(f"size={self.size}")
@@ -219,6 +233,7 @@ class UpsamplingNearest2d(Upsample):
         size: int | tuple[int, int] | None = None,
         scale_factor: float | tuple[float, float] | None = None,
     ) -> None:
+        """Initialise the UpsamplingNearest2d module. See the class docstring for parameter semantics."""
         super().__init__(size=size, scale_factor=scale_factor, mode="nearest")
 
 
@@ -294,6 +309,7 @@ class UpsamplingBilinear2d(Upsample):
         size: int | tuple[int, int] | None = None,
         scale_factor: float | tuple[float, float] | None = None,
     ) -> None:
+        """Initialise the UpsamplingBilinear2d module. See the class docstring for parameter semantics."""
         super().__init__(
             size=size, scale_factor=scale_factor, mode="bilinear", align_corners=True
         )
@@ -369,10 +385,23 @@ class PixelShuffle(Module):
     """
 
     def __init__(self, upscale_factor: int) -> None:
+        """Initialise the PixelShuffle module. See the class docstring for parameter semantics."""
         super().__init__()
         self.upscale_factor = upscale_factor
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Upsample the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Upsampled output tensor.
+        """
         r = self.upscale_factor
         n, c_r2, h, w = x.shape
         c = c_r2 // (r * r)
@@ -382,6 +411,7 @@ class PixelShuffle(Module):
         return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"upscale_factor={self.upscale_factor}"
 
 
@@ -448,10 +478,23 @@ class PixelUnshuffle(Module):
     """
 
     def __init__(self, downscale_factor: int) -> None:
+        """Initialise the PixelUnshuffle module. See the class docstring for parameter semantics."""
         super().__init__()
         self.downscale_factor = downscale_factor
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Upsample the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Upsampled output tensor.
+        """
         r = self.downscale_factor
         n, c, h_r, w_r = x.shape
         h, w = h_r // r, w_r // r
@@ -461,6 +504,7 @@ class PixelUnshuffle(Module):
         return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"downscale_factor={self.downscale_factor}"
 
 
@@ -559,11 +603,25 @@ class ChannelShuffle(Module):
     """
 
     def __init__(self, groups: int) -> None:
+        """Initialise the ChannelShuffle module. See the class docstring for parameter semantics."""
         super().__init__()
         self.groups = groups
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]  # narrower signature than Module.forward(*args) by design
+        r"""Upsample the input tensor.
+
+        Parameters
+        ----------
+        input : Tensor
+            Input tensor of shape :math:`(N, C, *)`.
+
+        Returns
+        -------
+        Tensor
+            Upsampled output tensor.
+        """
         return channel_shuffle(x, groups=self.groups)
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"groups={self.groups}"

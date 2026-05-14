@@ -15,6 +15,9 @@ export interface SidebarItem {
   items?: SidebarItem[];
   /** "C" = class, "f" = function, or a plain count string like "22" */
   badge?: string;
+  /** Optional secondary label rendered next to the title (e.g. the real
+   *  Python slug "lucid.nn" next to the friendly alias "Neural Networks"). */
+  tag?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +62,21 @@ function KindBadge({
   );
 }
 
+/** Renders the item's title plus an optional dim mono-font tag.  Used to
+ *  show the real Python slug ("lucid.nn") next to the friendly alias
+ *  ("Neural Networks") in the sidebar. */
+function TitleWithTag({ title, tag }: { title: string; tag?: string }) {
+  if (!tag) return <span className="truncate">{title}</span>;
+  return (
+    <span className="flex items-baseline gap-1.5 min-w-0 flex-1">
+      <span className="truncate">{title}</span>
+      <span className="shrink-0 font-mono text-[10px] text-lucid-text-disabled">
+        {tag}
+      </span>
+    </span>
+  );
+}
+
 interface SidebarGroupProps {
   item: SidebarItem;
   depth?: number;
@@ -94,9 +112,9 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
             : "text-lucid-text-low hover:bg-lucid-surface hover:text-lucid-text-mid",
         )}
         aria-current={isActive ? "page" : undefined}
-        style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+        style={{ paddingLeft: `${0.625 + depth * 0.625}rem` }}
       >
-        <span className="truncate">{item.title}</span>
+        <TitleWithTag title={item.title} tag={item.tag} />
         {item.badge && (
           <KindBadge badge={item.badge} depth={depth} active={isActive} />
         )}
@@ -127,10 +145,10 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
                 ? "hover:bg-lucid-primary/10"
                 : "hover:bg-lucid-surface",
             )}
-            style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+            style={{ paddingLeft: `${0.625 + depth * 0.625}rem` }}
             aria-current={isActive ? "page" : undefined}
           >
-            <span className="truncate">{item.title}</span>
+            <TitleWithTag title={item.title} tag={item.tag} />
             {item.badge && (
               <KindBadge badge={item.badge} depth={depth} active={isActive || isChildActive} />
             )}
@@ -143,9 +161,9 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
               "flex flex-1 items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors min-w-0",
               isActive || isChildActive ? "hover:bg-lucid-primary/10" : "hover:bg-lucid-surface",
             )}
-            style={{ paddingLeft: `${0.625 + depth * 0.75}rem` }}
+            style={{ paddingLeft: `${0.625 + depth * 0.625}rem` }}
           >
-            <span className="truncate">{item.title}</span>
+            <TitleWithTag title={item.title} tag={item.tag} />
             {item.badge && (
               <KindBadge badge={item.badge} depth={depth} active={isActive || isChildActive} />
             )}
@@ -201,7 +219,7 @@ export function Sidebar({ items, className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col w-64 shrink-0",
+        "hidden lg:flex flex-col w-80 shrink-0",
         className,
       )}
       aria-label="Documentation navigation"

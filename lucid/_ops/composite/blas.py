@@ -78,6 +78,22 @@ def addcmul(
     *,
     value: float = 1.0,
 ) -> Tensor:
+    r"""Element-wise fused multiply-add: :math:`\text{input} + \text{value} \cdot (t_1 \odot t_2)`.
+
+    Parameters
+    ----------
+    input : Tensor
+        Tensor added to the scaled element-wise product.
+    t1, t2 : Tensor
+        Operands of the element-wise product. Broadcast with ``input``.
+    value : float, optional
+        Scalar multiplier applied to ``t1 * t2``. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor with the broadcast shape of the inputs.
+    """
     return input + (t1 * t2) * value
 
 
@@ -88,10 +104,40 @@ def addcdiv(
     *,
     value: float = 1.0,
 ) -> Tensor:
+    r"""Element-wise fused divide-add: :math:`\text{input} + \text{value} \cdot (t_1 / t_2)`.
+
+    Parameters
+    ----------
+    input : Tensor
+        Tensor added to the scaled element-wise quotient.
+    t1, t2 : Tensor
+        Numerator and denominator of the element-wise quotient.
+    value : float, optional
+        Scalar multiplier applied to ``t1 / t2``. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor with the broadcast shape of the inputs.
+    """
     return input + (t1 / t2) * value
 
 
 def mv(mat: Tensor, vec: Tensor) -> Tensor:
+    r"""Matrix-vector product :math:`\text{mat} \cdot \text{vec}`.
+
+    Parameters
+    ----------
+    mat : Tensor
+        2-D matrix of shape ``(M, N)``.
+    vec : Tensor
+        1-D vector of shape ``(N,)``.
+
+    Returns
+    -------
+    Tensor
+        Resulting 1-D tensor of shape ``(M,)``.
+    """
     return lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
 
 

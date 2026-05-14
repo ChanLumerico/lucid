@@ -27,6 +27,7 @@ def _linalg_op(fn: Callable[..., object]) -> Callable[..., object]:
 
     @functools.wraps(fn)
     def wrapper(*args: object, **kwargs: object) -> object:
+        """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
         ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type]
         uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type]
         out = fn(*ua, **uk)

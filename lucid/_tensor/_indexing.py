@@ -39,10 +39,16 @@ if TYPE_CHECKING:
 
 
 def _is_bool_tensor(x: object) -> bool:
+    """Return ``True`` if ``x`` duck-types as a Tensor with boolean dtype."""
     return hasattr(x, "_impl") and getattr(x, "dtype", None) is _bool_dtype
 
 
 def _is_int_tensor(x: object) -> bool:
+    """Return ``True`` if ``x`` duck-types as a Tensor with a non-boolean dtype.
+
+    Used by the index dispatcher to distinguish advanced integer indexing
+    from boolean masking.
+    """
     return hasattr(x, "_impl") and not _is_bool_tensor(x)
 
 
@@ -520,6 +526,26 @@ def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
 
 
 def _getitem(t: Tensor, idx: _IndexType) -> Tensor:
+    """Top-level dispatcher for ``Tensor.__getitem__``.
+
+    Routes between three code paths:
+
+    * pure basic indexing (ints, slices, ``None``, ``...``);
+    * advanced indexing (one or more integer / boolean Tensor selectors);
+    * mixed basic + advanced indexing.
+
+    Parameters
+    ----------
+    t : Tensor
+        The tensor being indexed.
+    idx : _IndexType
+        Index spec — either a single index element or a tuple of them.
+
+    Returns
+    -------
+    Tensor
+        The selected sub-tensor (a view where possible, a copy otherwise).
+    """
     impl = t._impl
 
     # Normalize to tuple

@@ -277,6 +277,11 @@ def multinomial(
     """
 
     def _sample_row(probs_list: list[float], k: int, replace: bool) -> list[int]:
+        """Draw ``k`` indices from a single categorical row with weights ``probs_list``.
+
+        Weights are renormalised internally. When ``replace`` is ``False``,
+        each chosen index is removed before the next draw.
+        """
         total = sum(probs_list)
         probs_list = [p / total for p in probs_list]
         population = list(range(len(probs_list)))

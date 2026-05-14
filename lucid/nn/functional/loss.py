@@ -359,6 +359,7 @@ def triplet_margin_with_distance_loss(
     if df is None:
 
         def df(a: Tensor, b: Tensor) -> Tensor:
+            """Derivative helper used inside the loss-function gradient computation."""
             return pairwise_distance(a, b, p=2.0)
 
     d_ap: Tensor = df(anchor, positive)

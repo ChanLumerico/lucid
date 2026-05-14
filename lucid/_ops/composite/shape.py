@@ -16,10 +16,15 @@ if TYPE_CHECKING:
 
 
 def swapaxes(x: Tensor, axis0: int, axis1: int) -> Tensor:
+    """Return ``x`` with axes ``axis0`` and ``axis1`` exchanged.
+
+    NumPy-style alias for :func:`swapdims`.
+    """
     return _swap_dims(x, axis0, axis1)
 
 
 def swapdims(x: Tensor, dim0: int, dim1: int) -> Tensor:
+    """Return ``x`` with dimensions ``dim0`` and ``dim1`` exchanged."""
     return _swap_dims(x, dim0, dim1)
 
 
@@ -28,6 +33,11 @@ def moveaxis(
     source: int | Sequence[int],
     destination: int | Sequence[int],
 ) -> Tensor:
+    """Move one or more axes from ``source`` to ``destination`` positions.
+
+    Other axes retain their relative order. Thin wrapper around
+    :func:`lucid.movedim` that accepts either ``int`` or sequence inputs.
+    """
     _src = list(source) if not isinstance(source, int) else source
     _dst = list(destination) if not isinstance(destination, int) else destination
     return lucid.movedim(x, _src, _dst)  # type: ignore[arg-type]
@@ -78,11 +88,23 @@ def dstack(tensors: Sequence[Tensor]) -> Tensor:
 
 
 def atleast_1d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
+    """Promote each input to at least 1 dimension.
+
+    Scalars become length-1 vectors; higher-rank inputs pass through.
+    Returns a single tensor when a single argument is given, otherwise a
+    tuple matching the input order.
+    """
     out = [t_i.reshape(1) if t_i.ndim == 0 else t_i for t_i in tensors]
     return out[0] if len(out) == 1 else tuple(out)
 
 
 def atleast_2d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
+    """Promote each input to at least 2 dimensions.
+
+    Scalars become ``(1, 1)``, 1-D tensors become ``(1, N)``; higher-rank
+    inputs pass through. Returns a single tensor when a single argument is
+    given, otherwise a tuple matching the input order.
+    """
     out: list[Tensor] = []
     for t_i in tensors:
         if t_i.ndim == 0:
@@ -94,6 +116,12 @@ def atleast_2d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
 
 
 def atleast_3d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
+    """Promote each input to at least 3 dimensions.
+
+    Scalars become ``(1, 1, 1)``, 1-D tensors become ``(1, N, 1)``, 2-D
+    tensors gain a trailing axis of size 1. Returns a single tensor when a
+    single argument is given, otherwise a tuple matching the input order.
+    """
     out: list[Tensor] = []
     for t_i in tensors:
         if t_i.ndim == 0:
@@ -133,16 +161,41 @@ def _split_along(
 
 
 def vsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``x`` along its first axis (row-wise).
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor, must be at least 1-D.
+    indices_or_sections : int | Sequence[int]
+        Either an integer number of equal-sized splits or the cut indices.
+
+    Raises
+    ------
+    ValueError
+        If ``x`` has fewer than 1 dimension.
+    """
     if x.ndim < 1:
         raise ValueError("vsplit requires at least 1-D input")
     return _split_along(x, indices_or_sections, 0)
 
 
 def hsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``x`` along its second axis (column-wise).
+
+    For 1-D inputs, splits along the only axis.
+    """
     return _split_along(x, indices_or_sections, 0 if x.ndim == 1 else 1)
 
 
 def dsplit(x: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``x`` along the third axis (depth-wise).
+
+    Raises
+    ------
+    ValueError
+        If ``x`` has fewer than 3 dimensions.
+    """
     if x.ndim < 3:
         raise ValueError("dsplit requires at least 3-D input")
     return _split_along(x, indices_or_sections, 2)
@@ -153,6 +206,11 @@ def tensor_split(
     indices_or_sections: int | Sequence[int],
     dim: int = 0,
 ) -> list[Tensor]:
+    """Split ``x`` along ``dim`` using NumPy-style integer or index specifications.
+
+    With an integer ``k``, partitions ``x`` into ``k`` near-equal pieces;
+    with a sequence of cut indices, splits at those positions along ``dim``.
+    """
     return _split_along(x, indices_or_sections, dim)
 
 

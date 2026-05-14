@@ -56,6 +56,7 @@ class RemovableHandle:
     def __init__(
         self, hooks_list: list[Callable[..., object]], hook: Callable[..., object]
     ) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self._hooks_list = hooks_list
         self._hook = hook
 
@@ -67,9 +68,11 @@ class RemovableHandle:
             pass  # already removed
 
     def __enter__(self) -> RemovableHandle:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         self.remove()
 
 

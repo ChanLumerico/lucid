@@ -21,6 +21,11 @@ from lucid._tensor.tensor import Tensor
 
 
 def _is_tensor(x: object) -> TypeGuard[Tensor]:
+    """``TypeGuard`` for runtime-typed ``Tensor`` narrowing.
+
+    Returns ``True`` when ``x`` is a :class:`Tensor` instance, narrowing
+    its static type for callers that branch on the result.
+    """
     return isinstance(x, Tensor)
 
 

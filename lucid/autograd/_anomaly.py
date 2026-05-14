@@ -27,10 +27,12 @@ class detect_anomaly:
     """
 
     def __init__(self, check_nan: bool = True) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         self.check_nan = check_nan
         self._prev: bool = False
 
     def __enter__(self) -> detect_anomaly:
+        """Enter the context.  Returns self so the value can be bound via ``with ... as``."""
         from lucid.autograd._grad_mode import _ANOMALY_ENABLED
 
         self._prev = _ANOMALY_ENABLED[0]
@@ -38,6 +40,7 @@ class detect_anomaly:
         return self
 
     def __exit__(self, *args: object) -> None:
+        """Exit the context, restoring any state that was modified on entry."""
         from lucid.autograd._grad_mode import _ANOMALY_ENABLED
 
         _ANOMALY_ENABLED[0] = self._prev
@@ -48,6 +51,7 @@ class detect_anomaly:
 
         @functools.wraps(fn)  # type: ignore[arg-type]
         def wrapper(*args: object, **kwargs: object) -> object:
+            """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
             with self.__class__(self.check_nan):
                 return fn(*args, **kwargs)
 

@@ -34,12 +34,14 @@ class ParametrizationContainer(Module):
     """
 
     def __init__(self, parametrization: Module, original: Parameter) -> None:
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         super().__init__()
         self.parametrization: Module = parametrization
         self.original: Parameter = original
 
     def forward(self, *args: object, **kwargs: object) -> Tensor:
         # Apply the transformation to the cached ``original`` weight.
+        """Apply the layer / parametrization to the input."""
         return self.parametrization(self.original)  # type: ignore[return-value]
 
 

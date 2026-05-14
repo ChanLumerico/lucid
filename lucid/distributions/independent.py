@@ -13,9 +13,82 @@ from lucid.distributions.distribution import Distribution
 
 
 class Independent(Distribution):
-    """Wrap ``base`` and treat ``reinterpreted_batch_ndims`` rightmost
-    batch dimensions as event dimensions.  Sums log_probs over the
-    re-interpreted axes."""
+    r"""Re-interpret rightmost batch dimensions of a base distribution as event dims.
+
+    ``Independent(base_distribution, reinterpreted_batch_ndims=n)`` takes
+    the last :math:`n` dimensions of ``base_distribution.batch_shape`` and
+    moves them into ``event_shape``.  Log-probabilities are *summed* over the
+    re-interpreted axes, turning a product of independent marginals into the
+    joint log-probability.
+
+    This is a pure structural wrapper — it does **not** change the sampler or
+    the underlying computation.  Its main use is to express
+
+    - **Diagonal multivariate Normals** from batches of scalar Normals, or
+    - **Independent Bernoulli likelihoods** over image pixels from a
+      per-pixel Bernoulli batch.
+
+    Parameters
+    ----------
+    base_distribution : Distribution
+        The underlying distribution.  Its ``batch_shape`` must have at least
+        ``reinterpreted_batch_ndims`` dimensions.
+    reinterpreted_batch_ndims : int
+        Number of rightmost batch dimensions to absorb into ``event_shape``.
+        Must satisfy ``0 <= reinterpreted_batch_ndims <= len(batch_shape)``.
+    validate_args : bool | None, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Attributes
+    ----------
+    base_dist : Distribution
+        The wrapped base distribution.
+    reinterpreted_batch_ndims : int
+        Number of absorbed batch dimensions.
+
+    Notes
+    -----
+    Given ``base`` with ``batch_shape = (B, D)`` and ``event_shape = ()``,
+    wrapping with ``reinterpreted_batch_ndims=1`` yields:
+
+    - ``batch_shape = (B,)``
+    - ``event_shape = (D,)``
+
+    The resulting ``log_prob(x)`` sums the :math:`D` scalar log-probabilities:
+
+    .. math::
+
+        \log p(x_1, \ldots, x_D) = \sum_{i=1}^{D} \log p_i(x_i)
+
+    which is correct because the components are independent by construction.
+
+    **Entropy** is similarly summed:
+
+    .. math::
+
+        H[X_1, \ldots, X_D] = \sum_{i=1}^{D} H[X_i]
+
+    (equality holds because independence implies
+    :math:`H[X_1, \ldots, X_D] = \sum_i H[X_i]`).
+
+    The ``has_rsample`` property mirrors ``base_dist.has_rsample``, so
+    gradient flow is preserved when the base distribution supports it.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Independent
+    >>> from lucid.distributions import Normal
+    >>> # Diagonal Normal: batch of D=4 scalars → single 4-d event
+    >>> base = Normal(lucid.zeros(4), lucid.ones(4))
+    >>> dist = Independent(base, reinterpreted_batch_ndims=1)
+    >>> dist.batch_shape, dist.event_shape
+    ((), (4,))
+    >>> x = dist.rsample()
+    >>> x.shape  # (4,)
+    (4,)
+    >>> dist.log_prob(x)  # scalar — sum of 4 log-probs
+    """
 
     def __init__(
         self,
@@ -23,6 +96,26 @@ class Independent(Distribution):
         reinterpreted_batch_ndims: int,
         validate_args: bool | None = None,
     ) -> None:
+        """Initialise an Independent distribution wrapper.
+
+        Parameters
+        ----------
+        base_distribution : Distribution
+            The underlying distribution.  Its ``batch_shape`` must have at
+            least ``reinterpreted_batch_ndims`` dimensions.
+        reinterpreted_batch_ndims : int
+            Number of rightmost batch dimensions to move into ``event_shape``.
+            Must satisfy
+            ``0 <= reinterpreted_batch_ndims <= len(batch_shape)``.
+        validate_args : bool | None, optional
+            If ``True``, validate parameter constraints at construction time.
+
+        Raises
+        ------
+        ValueError
+            If ``reinterpreted_batch_ndims`` exceeds the number of batch
+            dimensions of ``base_distribution``.
+        """
         if reinterpreted_batch_ndims > len(base_distribution.batch_shape):
             raise ValueError(
                 f"Independent: reinterpreted_batch_ndims "
@@ -43,31 +136,113 @@ class Independent(Distribution):
 
     @property
     def has_rsample(self) -> bool:  # type: ignore[override]
+        """Whether reparameterised sampling is supported.
+
+        Mirrors ``base_dist.has_rsample``, so gradient flow is preserved
+        when the base distribution supports it.
+
+        Returns
+        -------
+        bool
+            ``True`` if and only if the base distribution supports
+            reparameterised sampling.
+        """
         return self.base_dist.has_rsample
 
     @property
     def support(self) -> object:  # type: ignore[override]
+        """Support of the distribution — delegates to ``base_dist.support``.
+
+        Returns
+        -------
+        object
+            The support constraint of the underlying base distribution.
+        """
         return self.base_dist.support
 
     @property
     def mean(self) -> Tensor:
+        """Mean of the distribution — delegates to ``base_dist.mean``.
+
+        Returns
+        -------
+        Tensor
+            Mean with the same shape as ``base_dist.mean``.
+        """
         return self.base_dist.mean
 
     @property
     def mode(self) -> Tensor:
+        """Mode of the distribution — delegates to ``base_dist.mode``.
+
+        Returns
+        -------
+        Tensor
+            Mode with the same shape as ``base_dist.mode``.
+        """
         return self.base_dist.mode
 
     @property
     def variance(self) -> Tensor:
+        """Variance of the distribution — delegates to ``base_dist.variance``.
+
+        Returns
+        -------
+        Tensor
+            Variance with the same shape as ``base_dist.variance``.
+        """
         return self.base_dist.variance
 
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Draw reparameterised samples — delegates to ``base_dist.rsample``.
+
+        Parameters
+        ----------
+        sample_shape : tuple[int, ...], optional
+            Leading shape of the output sample batch.
+
+        Returns
+        -------
+        Tensor
+            Samples of shape ``(*sample_shape, *batch_shape, *event_shape)``.
+        """
         return self.base_dist.rsample(sample_shape)
 
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Draw samples — delegates to ``base_dist.sample``.
+
+        Parameters
+        ----------
+        sample_shape : tuple[int, ...], optional
+            Leading shape of the output sample batch.
+
+        Returns
+        -------
+        Tensor
+            Samples of shape ``(*sample_shape, *batch_shape, *event_shape)``.
+        """
         return self.base_dist.sample(sample_shape)
 
     def log_prob(self, value: Tensor) -> Tensor:
+        r"""Log joint probability summed over re-interpreted event dimensions.
+
+        Computes the base distribution's log-probabilities and then sums
+        over the rightmost ``reinterpreted_batch_ndims`` axes:
+
+        .. math::
+
+            \log p(x_1, \ldots, x_D) = \sum_{i=1}^{D} \log p_i(x_i)
+
+        Parameters
+        ----------
+        value : Tensor
+            Observations of shape ``(*batch_shape, *event_shape)``.
+
+        Returns
+        -------
+        Tensor
+            Log joint probability values of shape ``batch_shape``.
+        """
         log_p = self.base_dist.log_prob(value)
         # Sum over the rightmost ``reinterpreted_batch_ndims`` axes.
         if self.reinterpreted_batch_ndims == 0:
@@ -77,6 +252,19 @@ class Independent(Distribution):
         return log_p.sum(dim=dims)
 
     def entropy(self) -> Tensor:
+        r"""Joint entropy summed over re-interpreted event dimensions.
+
+        Because the components are independent:
+
+        .. math::
+
+            H[X_1, \ldots, X_D] = \sum_{i=1}^{D} H[X_i]
+
+        Returns
+        -------
+        Tensor
+            Entropy values of shape ``batch_shape`` (nats).
+        """
         h = self.base_dist.entropy()
         if self.reinterpreted_batch_ndims == 0:
             return h

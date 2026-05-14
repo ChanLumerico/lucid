@@ -180,6 +180,7 @@ class TransformerEncoderLayer(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the TransformerEncoderLayer module. See the class docstring for parameter semantics."""
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
@@ -206,6 +207,7 @@ class TransformerEncoderLayer(Module):
         self.dropout3 = Dropout(dropout)
 
     def _ff(self, x: Tensor) -> Tensor:
+        """Internal helper for the TransformerEncoderLayer module."""
         act = gelu if self.activation == "gelu" else relu
         h = cast(Tensor, self.linear1(x))
         return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
@@ -217,6 +219,24 @@ class TransformerEncoderLayer(Module):
         src_key_padding_mask: Tensor | None = None,
         is_causal: bool = False,
     ) -> Tensor:
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        src : Tensor
+            See the class docstring.
+        src_mask : Tensor
+            See the class docstring.
+        src_key_padding_mask : Tensor
+            See the class docstring.
+        is_causal : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         if self.norm_first:
             normed: Tensor = cast(Tensor, self.norm1(src))
             src2, _ = self.self_attn(
@@ -249,6 +269,7 @@ class TransformerEncoderLayer(Module):
         return src
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"d_model={self.d_model}, nhead={self.nhead}, "
             f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}"
@@ -370,6 +391,7 @@ class TransformerEncoder(Module):
         num_layers: int,
         norm: Module | None = None,
     ) -> None:
+        """Initialise the TransformerEncoder module. See the class docstring for parameter semantics."""
         super().__init__()
         self.layers = [
             TransformerEncoderLayer(
@@ -396,6 +418,22 @@ class TransformerEncoder(Module):
         mask: Tensor | None = None,
         src_key_padding_mask: Tensor | None = None,
     ) -> Tensor:
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        src : Tensor
+            See the class docstring.
+        mask : Tensor
+            See the class docstring.
+        src_key_padding_mask : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         output = src
         for layer in self.layers:
             output = cast(
@@ -407,6 +445,7 @@ class TransformerEncoder(Module):
         return output
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"num_layers={self.num_layers}"
 
 
@@ -579,6 +618,7 @@ class TransformerDecoderLayer(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the TransformerDecoderLayer module. See the class docstring for parameter semantics."""
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
@@ -615,6 +655,7 @@ class TransformerDecoderLayer(Module):
         self.dropout4 = Dropout(dropout)
 
     def _ff(self, x: Tensor) -> Tensor:
+        """Internal helper for the TransformerDecoderLayer module."""
         act = gelu if self.activation == "gelu" else relu
         h = cast(Tensor, self.linear1(x))
         return self.linear2(cast(Tensor, self.dropout2(act(h))))  # type: ignore[return-value]
@@ -630,6 +671,32 @@ class TransformerDecoderLayer(Module):
         tgt_is_causal: bool = False,
         memory_is_causal: bool = False,
     ) -> Tensor:
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        tgt : Tensor
+            See the class docstring.
+        memory : Tensor
+            See the class docstring.
+        tgt_mask : Tensor
+            See the class docstring.
+        memory_mask : Tensor
+            See the class docstring.
+        tgt_key_padding_mask : Tensor
+            See the class docstring.
+        memory_key_padding_mask : Tensor
+            See the class docstring.
+        tgt_is_causal : Tensor
+            See the class docstring.
+        memory_is_causal : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         if self.norm_first:
             normed: Tensor = cast(Tensor, self.norm1(tgt))
             tgt2, _ = self.self_attn(
@@ -682,6 +749,7 @@ class TransformerDecoderLayer(Module):
         return tgt
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return (
             f"d_model={self.d_model}, nhead={self.nhead}, "
             f"dim_feedforward={self.dim_feedforward}, dropout={self.dropout_val}"
@@ -801,6 +869,7 @@ class TransformerDecoder(Module):
         num_layers: int,
         norm: Module | None = None,
     ) -> None:
+        """Initialise the TransformerDecoder module. See the class docstring for parameter semantics."""
         super().__init__()
         self.layers = [
             TransformerDecoderLayer(
@@ -830,6 +899,28 @@ class TransformerDecoder(Module):
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
     ) -> Tensor:
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        tgt : Tensor
+            See the class docstring.
+        memory : Tensor
+            See the class docstring.
+        tgt_mask : Tensor
+            See the class docstring.
+        memory_mask : Tensor
+            See the class docstring.
+        tgt_key_padding_mask : Tensor
+            See the class docstring.
+        memory_key_padding_mask : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         output = tgt
         for layer in self.layers:
             output = cast(
@@ -841,6 +932,7 @@ class TransformerDecoder(Module):
         return output
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"num_layers={self.num_layers}"
 
 
@@ -1006,6 +1098,7 @@ class Transformer(Module):
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
+        """Initialise the Transformer module. See the class docstring for parameter semantics."""
         super().__init__()
         enc_layer = TransformerEncoderLayer(
             d_model,
@@ -1045,6 +1138,32 @@ class Transformer(Module):
         tgt_key_padding_mask: Tensor | None = None,
         memory_key_padding_mask: Tensor | None = None,
     ) -> Tensor:
+        """Run the forward pass of the module.
+
+        Parameters
+        ----------
+        src : Tensor
+            See the class docstring.
+        tgt : Tensor
+            See the class docstring.
+        src_mask : Tensor
+            See the class docstring.
+        tgt_mask : Tensor
+            See the class docstring.
+        memory_mask : Tensor
+            See the class docstring.
+        src_key_padding_mask : Tensor
+            See the class docstring.
+        tgt_key_padding_mask : Tensor
+            See the class docstring.
+        memory_key_padding_mask : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor
+            Output tensor; refer to the class docstring for the exact shape.
+        """
         memory = cast(
             Tensor,
             self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask),
@@ -1055,4 +1174,5 @@ class Transformer(Module):
         )
 
     def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
         return f"d_model={self.d_model}, nhead={self.nhead}"

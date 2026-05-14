@@ -18,8 +18,11 @@ def checkpoint(
     """Run function without saving intermediate activations; recompute during backward."""
 
     class CheckpointFunction(Function):
+        """Custom autograd Function that runs the wrapped callable without saving intermediates, then re-executes it during backward to recompute the activations on demand."""
+
         @staticmethod
         def forward(ctx: FunctionCtx, *inputs: Tensor) -> Tensor | tuple[Tensor, ...]:
+            """Apply the layer / parametrization to the input."""
             ctx.function = function
             ctx.kwargs = kwargs
             ctx.num_inputs = len(inputs)
@@ -31,6 +34,7 @@ def checkpoint(
         def backward(
             ctx: FunctionCtx, *grad_outputs: Tensor
         ) -> Tensor | tuple[Tensor, ...]:
+            """Compute the gradient for the saved input(s)."""
             saved = ctx.saved_tensors
             inputs_detached = [
                 s.detach().requires_grad_(s.requires_grad) for s in saved
