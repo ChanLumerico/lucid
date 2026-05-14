@@ -13,7 +13,44 @@ from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__ini
 
 
 class PackedSequence(NamedTuple):
-    """Holds packed padded sequence data."""
+    r"""Compact representation of a batch of variable-length sequences.
+
+    A ``PackedSequence`` interleaves all surviving time-steps of every
+    sequence in the batch into a single flat tensor, dropping the
+    padding entries entirely.  RNN cells consume this form to avoid
+    wasting compute on padded positions.
+
+    Attributes
+    ----------
+    data : Tensor
+        Concatenation of the active features at each time-step in
+        descending-length order, shape ``(sum(batch_sizes), *feat)``.
+    batch_sizes : Tensor
+        1-D int tensor giving the number of sequences still alive at
+        each successive time-step.  Strictly non-increasing.
+    sorted_indices : Tensor or None
+        Permutation that took the original batch order to the packed
+        (descending-length) order; ``None`` if the input was already
+        sorted.
+    unsorted_indices : Tensor or None
+        Inverse of ``sorted_indices``; used by
+        :func:`pad_packed_sequence` to restore the caller's original
+        batch order on unpack.
+
+    Notes
+    -----
+    Conceptually, with sequence lengths :math:`\ell_1 \geq \dots \geq
+    \ell_B`, the packed layout walks time-major:
+
+    .. math::
+
+        \text{data} = \bigl[\,x^{(1)}_0, \dots, x^{(B)}_0,\;
+                            x^{(1)}_1, \dots, x^{(B_1)}_1,\;
+                            \dots\,\bigr],
+
+    where :math:`B_t` (= ``batch_sizes[t]``) is the count of sequences
+    with length :math:`> t`.
+    """
 
     data: Tensor
     batch_sizes: Tensor
@@ -27,7 +64,51 @@ def pack_padded_sequence(
     batch_first: bool = False,
     enforce_sorted: bool = True,
 ) -> PackedSequence:
-    """Pack a padded batch of variable-length sequences."""
+    r"""Pack a padded :math:`(T, B, *)` batch into a :class:`PackedSequence`.
+
+    Strips out the padding cells so downstream RNN kernels iterate only
+    over genuine time-steps.  Reduces both compute and (with masked
+    losses) accidental gradient flow through pad positions.
+
+    Parameters
+    ----------
+    input : Tensor
+        Padded batch.  Default layout is ``(T, B, *)`` with time on
+        axis 0; set ``batch_first=True`` for ``(B, T, *)``.
+    lengths : Tensor or list of int
+        Per-sequence true lengths.  Shape ``(B,)``.  When passed as a
+        tensor it must be a 1-D integer tensor.
+    batch_first : bool, optional
+        Whether ``input`` is laid out batch-first.  Default ``False``.
+    enforce_sorted : bool, optional
+        If ``True`` (the default), assume the caller already supplied
+        sequences in descending-length order — cheap but raises
+        :class:`ValueError` on violation.  Set to ``False`` to have the
+        function sort internally; the sort permutation is stored on the
+        returned :class:`PackedSequence` so :func:`pad_packed_sequence`
+        can undo it.
+
+    Returns
+    -------
+    PackedSequence
+        Packed view of the batch.
+
+    Raises
+    ------
+    ValueError
+        With ``enforce_sorted=True`` and an unsorted ``lengths``.
+
+    Notes
+    -----
+    Total packed length equals :math:`\sum_b \ell_b`, the sum of true
+    sequence lengths — strictly less than :math:`T \cdot B` whenever any
+    sequence is shorter than the max.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_padded_sequence
+    >>> packed = pack_padded_sequence(x, lengths=[5, 3, 2], batch_first=False)
+    """
     if batch_first:
         input = input.permute(1, 0, *range(2, input.ndim))
 
@@ -94,7 +175,49 @@ def pad_packed_sequence(
     padding_value: float = 0.0,
     total_length: int | None = None,
 ) -> tuple[Any, Any]:
-    """Unpack a PackedSequence to a padded tensor."""
+    r"""Inverse of :func:`pack_padded_sequence` — produce a padded tensor.
+
+    Re-inflates a :class:`PackedSequence` into a dense
+    :math:`(T_\text{max}, B, *)` (or :math:`(B, T_\text{max}, *)`)
+    tensor with the original batch order restored.  The freshly created
+    cells beyond each sequence's true length are filled with
+    ``padding_value``.
+
+    Parameters
+    ----------
+    sequence : PackedSequence
+        Packed batch to unpack.
+    batch_first : bool, optional
+        Output layout.  ``False`` (default) yields ``(T, B, *)``,
+        ``True`` yields ``(B, T, *)``.
+    padding_value : float, optional
+        Fill value for padded entries.  Default ``0.0``.
+    total_length : int, optional
+        If given, pad up to this length instead of the longest packed
+        sequence.  Useful when downstream code expects a fixed
+        ``T_max`` (e.g. fully-static export graphs).  Must be ``>=`` the
+        longest sequence.
+
+    Returns
+    -------
+    Tensor
+        Padded batch tensor.
+    Tensor
+        1-D tensor of per-sequence true lengths in the *original* batch
+        order.
+
+    Notes
+    -----
+    Output time dimension is :math:`\max_b \ell_b` (or ``total_length``
+    if larger).  The function honours ``unsorted_indices`` on the
+    packed sequence so the rows of the returned tensor match the order
+    the caller used at pack time.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pad_packed_sequence
+    >>> padded, lens = pad_packed_sequence(packed, batch_first=True)
+    """
     data = sequence.data
     # batch_sizes is a small 1-D int tensor — extract as Python list (metadata).
     bs_raw: Any = sequence.batch_sizes._impl.data_as_python()
@@ -155,15 +278,48 @@ def pad_sequence(
     batch_first: bool = False,
     padding_value: float = 0.0,
 ) -> Tensor:
-    """Pad a list of variable-length tensors.
+    r"""Stack a list of variable-length tensors into a padded batch.
 
-    Each sequence is padded along its leading dimension to the longest
-    length in ``sequences``, then stacked along a new batch axis.  The
-    older slice-and-copy implementation relied on view-based mutation
-    that didn't propagate through Lucid's autograd-aware Tensor — we now
-    build the padded outputs explicitly via ``cat`` over the time axis
-    and ``stack`` over the batch axis, which goes through proper
-    differentiable ops.
+    Each input is padded along its leading time dimension up to the
+    longest sequence in ``sequences``, then the padded versions are
+    stacked along a new batch axis.  Useful as the first step of an
+    RNN training loop when sequences are produced one at a time (per-
+    example tokenisation, audio framing, etc.).
+
+    Parameters
+    ----------
+    sequences : list of Tensor
+        Non-empty list of per-example tensors.  Each must share the
+        same trailing feature shape and dtype / device; only the
+        leading length axis may differ.
+    batch_first : bool, optional
+        Output layout.  ``False`` (default) yields ``(T_max, B, *feat)``,
+        ``True`` yields ``(B, T_max, *feat)``.
+    padding_value : float, optional
+        Fill value for padded entries.  Default ``0.0``.
+
+    Returns
+    -------
+    Tensor
+        Padded batch tensor.
+
+    Raises
+    ------
+    ValueError
+        If ``sequences`` is empty.
+
+    Notes
+    -----
+    Padding is constructed by concatenating a freshly allocated tail
+    of shape ``(T_max - T_i, *feat)`` onto each input — this keeps the
+    operation differentiable end-to-end (view-based mutation would
+    silently drop gradients through Lucid's autograd-aware
+    :class:`~lucid._tensor.tensor.Tensor`).
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pad_sequence
+    >>> batch = pad_sequence([a, b, c], batch_first=True)
     """
     if not sequences:
         raise ValueError("pad_sequence: empty input list")
@@ -194,18 +350,49 @@ def pack_sequence(
     sequences: list[Tensor],
     enforce_sorted: bool = True,
 ) -> PackedSequence:
-    """Pack a list of variable-length sequences into a ``PackedSequence``.
+    r"""One-shot pack-from-list — equivalent to :func:`pad_sequence` then :func:`pack_padded_sequence`.
 
-    This is the convenience wrapper around ``pad_sequence`` +
-    ``pack_padded_sequence`` that the reference framework exposes — useful
-    when you already have a list of per-example tensors and don't want to
-    pad them yourself.  Each entry's ``shape[0]`` is treated as the time
-    dimension; remaining axes carry the feature dimensions.
+    Convenience wrapper for the common case where a list of per-example
+    tensors needs to become a :class:`PackedSequence` without going
+    through an intermediate padded tensor.  Each entry's leading axis
+    is treated as the time dimension; remaining axes carry the feature
+    shape (which must be identical across the list).
 
-    When ``enforce_sorted=True`` (the default) the caller must pass the
-    sequences in non-increasing length order; otherwise ``ValueError`` is
-    raised.  We don't currently re-sort under the hood, so explicit ordering
-    is the only path for now.
+    Parameters
+    ----------
+    sequences : list of Tensor
+        Per-example tensors.  Leading axis is time; trailing axes are
+        the feature shape and must match across entries.
+    enforce_sorted : bool, optional
+        If ``True`` (the default), the caller must supply sequences in
+        non-increasing length order; mismatches raise
+        :class:`ValueError`.  ``False`` is *not* currently supported
+        and raises :class:`NotImplementedError` — sort externally for
+        now.
+
+    Returns
+    -------
+    PackedSequence
+        Packed view of the input list.
+
+    Raises
+    ------
+    ValueError
+        If ``sequences`` is empty, or if it is not sorted while
+        ``enforce_sorted=True``.
+    NotImplementedError
+        If ``enforce_sorted=False`` is requested.
+
+    Notes
+    -----
+    Implemented as :func:`pad_sequence` followed by
+    :func:`pack_padded_sequence`.  The intermediate padded tensor lives
+    only for the duration of the call.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_sequence
+    >>> packed = pack_sequence([long_seq, mid_seq, short_seq])
     """
     if not sequences:
         raise ValueError("pack_sequence: empty input list")

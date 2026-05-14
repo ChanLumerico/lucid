@@ -19,8 +19,71 @@ from lucid.distributions._util import as_tensor as _as_tensor
 
 
 class Transform:
-    """Abstract bijection.  Subclasses override ``_call``, ``_inverse``
-    and ``log_abs_det_jacobian``."""
+    r"""Abstract bijection between two measurable spaces.
+
+    A :class:`Transform` represents an invertible map
+    :math:`T : \mathcal{X} \to \mathcal{Y}` together with its
+    log-absolute-determinant Jacobian, used to push a base distribution
+    through a measurable bijection.  Composed with a base distribution
+    via :class:`TransformedDistribution`, it implements normalising flows,
+    coupling layers, and standard change-of-variable arguments.
+
+    The change-of-variable formula for densities is
+
+    .. math::
+
+        \log p_Y(\mathbf{y}) = \log p_X(\mathbf{x})
+        - \log \left|\det \frac{\partial T(\mathbf{x})}{\partial \mathbf{x}}\right|,
+        \quad \mathbf{y} = T(\mathbf{x})
+
+    so the per-transform Jacobian determinant must be tractable.
+
+    Subclasses must override:
+
+    * :meth:`_call` — forward map :math:`\mathbf{y} = T(\mathbf{x})`.
+    * :meth:`_inverse` — inverse map
+      :math:`\mathbf{x} = T^{-1}(\mathbf{y})`.
+    * :meth:`log_abs_det_jacobian` —
+      :math:`\log \bigl|\det \partial T / \partial \mathbf{x}\bigr|`,
+      broadcast over the batch dimensions of the input.
+
+    Attributes
+    ----------
+    bijective : bool
+        ``True`` if the transform is invertible (most are; notable
+        exception: :class:`AbsTransform`).
+    sign : int
+        :math:`+1` for monotone-increasing scalar bijections,
+        :math:`-1` for monotone-decreasing.  Used by the change-of-variable
+        machinery to track CDF orientation.
+    event_dim : int
+        Number of trailing tensor dimensions that the transform treats
+        as a single event.  ``0`` for element-wise maps,
+        :math:`\geq 1` for vector / matrix transforms (e.g.
+        :class:`SoftmaxTransform` has ``event_dim = 1``,
+        :class:`LowerCholeskyTransform` has ``event_dim = 2``).
+
+    Notes
+    -----
+    Composition and inversion are provided structurally:
+
+    * :class:`ComposeTransform` — :math:`T = T_n \circ \cdots \circ T_1`.
+    * ``~transform`` / :attr:`inv` — lazy :class:`_InverseTransform` view.
+
+    so users can build complex bijectors without manually tracking
+    Jacobian terms.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ExpTransform, AffineTransform, ComposeTransform
+    >>> # y = exp(2*x + 1) — a log-normal-like transform
+    >>> T = ComposeTransform([AffineTransform(loc=1.0, scale=2.0), ExpTransform()])
+    >>> x = lucid.tensor(0.0)
+    >>> y = T(x)
+    >>> T.log_abs_det_jacobian(x, y)
+    Tensor(...)
+    """
 
     bijective: bool = True
     sign: int = 1  # +1 if monotone increasing, −1 if decreasing.
@@ -96,7 +159,36 @@ class _InverseTransform(Transform):
 
 
 class ExpTransform(Transform):
-    """``y = exp(x)`` — maps ℝ → (0, ∞)."""
+    r"""Element-wise exponential bijection :math:`y = e^x`.
+
+    Maps :math:`\mathbb{R} \to (0, \infty)` element-wise; composed with a
+    Normal base distribution it yields a LogNormal.  Monotone increasing,
+    bijective, ``event_dim = 0``.
+
+    Notes
+    -----
+    Forward:  :math:`y = e^x`.
+
+    Inverse:  :math:`x = \log y` (defined for :math:`y > 0`).
+
+    Log Jacobian determinant (element-wise):
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right| = x
+
+    since :math:`|dy/dx| = e^x`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ExpTransform
+    >>> T = ExpTransform()
+    >>> x = lucid.tensor(0.0)
+    >>> y = T(x)
+    >>> T.log_abs_det_jacobian(x, y)
+    Tensor(0.0)
+    """
 
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = e^x`."""
@@ -112,7 +204,40 @@ class ExpTransform(Transform):
 
 
 class SigmoidTransform(Transform):
-    """``y = σ(x) = 1 / (1 + exp(−x))`` — maps ℝ → (0, 1)."""
+    r"""Element-wise sigmoid bijection :math:`y = \sigma(x) = 1/(1 + e^{-x})`.
+
+    Maps :math:`\mathbb{R} \to (0, 1)` element-wise.  The natural
+    unconstrained → probability transform — composed with a base
+    distribution on :math:`\mathbb{R}`, the pushforward lives on the
+    unit interval.  Monotone increasing, bijective, ``event_dim = 0``.
+
+    Notes
+    -----
+    Forward:  :math:`y = \sigma(x) = 1/(1 + e^{-x})`.
+
+    Inverse (logit):
+    :math:`x = \log\!\bigl(y/(1-y)\bigr)`.
+
+    Log Jacobian determinant:
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right|
+        = \log\bigl(\sigma(x)(1 - \sigma(x))\bigr)
+        = \log y + \log(1 - y)
+
+    The transform is closely related to the :class:`StickBreakingTransform`
+    (which generalises to the simplex) and to :class:`TanhTransform`
+    (which targets :math:`(-1, 1)`).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import SigmoidTransform
+    >>> T = SigmoidTransform()
+    >>> y = T(lucid.tensor(0.0))  # σ(0) = 0.5
+    Tensor(0.5)
+    """
 
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\sigma(x)`."""
@@ -129,7 +254,41 @@ class SigmoidTransform(Transform):
 
 
 class TanhTransform(Transform):
-    """``y = tanh(x)`` — maps ℝ → (−1, 1)."""
+    r"""Element-wise hyperbolic tangent bijection :math:`y = \tanh(x)`.
+
+    Maps :math:`\mathbb{R} \to (-1, 1)` element-wise.  Commonly used in
+    reinforcement learning to push a Normal policy through ``tanh`` so
+    actions live in a bounded box (SAC and friends).  Monotone
+    increasing, bijective, ``event_dim = 0``.
+
+    Notes
+    -----
+    Forward:  :math:`y = \tanh(x)`.
+
+    Inverse:
+    :math:`x = \tfrac{1}{2}\log\!\bigl((1+y)/(1-y)\bigr)`
+    (the inverse hyperbolic tangent).
+
+    Log Jacobian determinant (numerically stable form):
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right|
+        = \log\bigl(1 - \tanh^2(x)\bigr)
+        = 2 \bigl(\log 2 - x - \operatorname{softplus}(-2x)\bigr)
+
+    This formulation avoids overflow / underflow when :math:`|x|` is
+    large, which the naive form :math:`\log(1 - \tanh^2 x)` would suffer
+    (since :math:`\tanh(x) \to \pm 1`).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import TanhTransform
+    >>> T = TanhTransform()
+    >>> T(lucid.tensor(0.0))  # tanh(0) = 0
+    Tensor(0.0)
+    """
 
     def _call(self, x: Tensor) -> Tensor:
         """Forward: :math:`y = \\tanh(x)`."""
@@ -147,7 +306,47 @@ class TanhTransform(Transform):
 
 
 class AffineTransform(Transform):
-    """``y = loc + scale · x``."""
+    r"""Element-wise affine bijection :math:`y = \mathrm{loc} + \mathrm{scale}\cdot x`.
+
+    The fundamental location-scale transform.  Composing with a
+    standard Normal yields :math:`\mathcal{N}(\mathrm{loc},
+    \mathrm{scale}^2)`; it underpins virtually every reparameterised
+    sampler in the codebase.  Bijective with sign matching
+    ``sign(scale)``; the implementation fixes ``self.sign = +1``, so the
+    caller is responsible for ensuring ``scale > 0``.
+
+    Parameters
+    ----------
+    loc : Tensor or float
+        Additive offset :math:`b`.
+    scale : Tensor or float
+        Multiplicative slope :math:`a` (assumed positive).
+
+    Notes
+    -----
+    Forward:  :math:`y = b + a\,x`.
+
+    Inverse:  :math:`x = (y - b) / a`.
+
+    Log Jacobian determinant (broadcast to ``x.shape``):
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right|
+        = \log|a|
+
+    For element-wise application (``event_dim = 0``) this is summed by
+    :class:`IndependentTransform` if the caller reinterprets trailing
+    dims as event dims.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import AffineTransform
+    >>> T = AffineTransform(loc=1.0, scale=2.0)
+    >>> T(lucid.tensor(3.0))
+    Tensor(7.0)
+    """
 
     def __init__(self, loc: Tensor | float, scale: Tensor | float) -> None:
         """Store the affine offset ``loc`` and multiplier ``scale``.
@@ -176,7 +375,47 @@ class AffineTransform(Transform):
 
 
 class PowerTransform(Transform):
-    """``y = x^exponent`` (element-wise) for ``x > 0``."""
+    r"""Element-wise power bijection :math:`y = x^{\mathrm{exponent}}`.
+
+    Bijection on :math:`(0, \infty) \to (0, \infty)` (the input must be
+    positive; the implementation does not check this).  Useful for
+    Box–Cox-style reparameterisations and for mapping between Gamma
+    families with different shape parameters.
+
+    Parameters
+    ----------
+    exponent : Tensor or float
+        Power :math:`p` applied element-wise.  Sign-aware: negative
+        exponents are admissible but flip orientation, and zero
+        exponents are not invertible (excluded).
+
+    Notes
+    -----
+    Forward:  :math:`y = x^{p}`.
+
+    Inverse:  :math:`x = y^{1/p}`.
+
+    Log Jacobian determinant:
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right|
+        = \log|p| + (p - 1)\log x
+
+    Special cases:
+
+    * :math:`p = 1` → identity.
+    * :math:`p = -1` → reciprocal :math:`y = 1/x`.
+    * :math:`p = 2` → squaring on the positive half-line.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import PowerTransform
+    >>> T = PowerTransform(exponent=2.0)
+    >>> T(lucid.tensor(3.0))  # 3² = 9
+    Tensor(9.0)
+    """
 
     def __init__(self, exponent: Tensor | float) -> None:
         """Store the (element-wise) power ``exponent``."""
@@ -199,9 +438,53 @@ class PowerTransform(Transform):
 
 
 class SoftmaxTransform(Transform):
-    """``y = softmax(x)`` along the last axis — pushes ℝ^K onto the
-    open K-simplex.  Not a true bijection (loses 1-DOF to the
-    constraint), but standard in normalising-flow stacks."""
+    r"""Softmax transform mapping :math:`\mathbb{R}^K \to \Delta^{K-1}`.
+
+    Pushes an unconstrained vector :math:`\mathbf{x} \in \mathbb{R}^K`
+    onto the open :math:`K`-simplex via
+    :math:`\mathbf{y} = \mathrm{softmax}(\mathbf{x})`.  Operates on the
+    *last* axis; ``event_dim = 1``.
+
+    The transform is over-parameterised: any constant shift along the
+    softmax axis (:math:`\mathbf{x} \to \mathbf{x} + c\mathbf{1}`)
+    yields the same :math:`\mathbf{y}`, so it is not a true bijection.
+    The standard convention used here is to anchor the inverse at
+    :math:`\mathbf{x} = \log \mathbf{y}` (un-normalised
+    log-probabilities), which is one canonical preimage.
+
+    Notes
+    -----
+    Forward:
+
+    .. math::
+
+        y_k = \frac{e^{x_k}}{\sum_{j=1}^{K} e^{x_j}}
+
+    Inverse (canonical anchor):
+
+    .. math::
+
+        x_k = \log y_k
+
+    Pseudo-Jacobian used in change-of-variable bookkeeping:
+
+    .. math::
+
+        \log|\det J| = \sum_{k=1}^{K} \log y_k
+
+    This is the convention that keeps the simplex-valued pushforward
+    consistent in flow stacks; for a *true* bijection between
+    :math:`\mathbb{R}^{K-1}` and the simplex use
+    :class:`StickBreakingTransform` instead.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import SoftmaxTransform
+    >>> T = SoftmaxTransform()
+    >>> T(lucid.tensor([0.0, 1.0, 2.0]))
+    Tensor([...])
+    """
 
     event_dim: int = 1
 
@@ -229,11 +512,57 @@ class SoftmaxTransform(Transform):
 
 
 class StickBreakingTransform(Transform):
-    """Logistic stick-breaking from ℝ^(K-1) to the K-simplex.
+    r"""Logistic stick-breaking bijection :math:`\mathbb{R}^{K-1} \to \Delta^{K-1}`.
 
-    Maps ``x ∈ ℝ^(K-1)`` to ``y ∈ Δ^K`` by
-    ``y_k = σ(x_k − log(K−k)) · ∏_{j<k} (1 − y_j)``,
-    with the last component ``y_{K-1}`` taking the residual stick.
+    A **true** bijection between unconstrained :math:`(K-1)`-vectors and
+    the :math:`K`-simplex (i.e. one extra dimension is broken off as the
+    residual stick).  Unlike :class:`SoftmaxTransform` it has the
+    correct dimensionality and a tractable log-Jacobian determinant,
+    making it the preferred choice for normalising flows over
+    probability vectors and for unconstrained reparameterisations of
+    :class:`~lucid.distributions.Dirichlet` priors.  ``event_dim = 1``.
+
+    Notes
+    -----
+    Forward "stick breaking" (with :math:`z_k = \sigma(x_k - \log(K-k))`):
+
+    .. math::
+
+        y_k = z_k \prod_{j < k}(1 - z_j),
+        \quad
+        y_{K-1} = \prod_{j=0}^{K-2}(1 - z_j)
+
+    The last component is the residual stick remaining after the first
+    :math:`K - 1` breaks.  Each :math:`y_k > 0` and :math:`\sum_k y_k = 1`
+    by construction.
+
+    Inverse (back-solve the stick lengths):
+
+    .. math::
+
+        z_k = \frac{y_k}{1 - \sum_{j < k} y_j},
+        \qquad
+        x_k = \mathrm{logit}(z_k) + \log(K - k)
+
+    Log Jacobian determinant:
+
+    .. math::
+
+        \log|\det J| =
+        \sum_{k=0}^{K-2}
+        \bigl[\log y_k + \log(1 - \textstyle\sum_{j < k} y_j) + \log(1 - z_k)\bigr]
+
+    where the :math:`-\log(K-k)` shifts ensure the uniform Dirichlet
+    corresponds to :math:`\mathbf{x} = \mathbf{0}`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import StickBreakingTransform
+    >>> T = StickBreakingTransform()
+    >>> y = T(lucid.tensor([0.0, 0.0]))  # maps to a Dirichlet(1,1,1) sample
+    >>> y.sum()
+    Tensor(1.0)
     """
 
     event_dim: int = 1
@@ -318,12 +647,58 @@ class StickBreakingTransform(Transform):
 
 
 class LowerCholeskyTransform(Transform):
-    """ℝ^(D·(D+1)/2) → lower-triangular matrices with positive diagonal.
+    r"""Bijection mapping an unconstrained matrix to a positive-diagonal Cholesky factor.
 
-    The standard reparameterisation used to recover Cholesky factors
-    from an unconstrained vector: off-diagonal entries pass through
-    unchanged, diagonal entries go through ``softplus`` so they stay
-    positive.
+    The standard reparameterisation used to learn covariance / scale
+    matrices: a free :math:`D \times D` matrix is mapped to a lower
+    triangular matrix with strictly positive diagonal by zeroing the
+    strict upper triangle and applying ``softplus`` to the diagonal.
+    Composing with a base on :math:`\mathbb{R}^{D \times D}` produces a
+    pushforward over the cone of valid Cholesky factors.
+    ``event_dim = 2``.
+
+    Notes
+    -----
+    Forward (element-wise on a :math:`D \times D` input :math:`X`):
+
+    .. math::
+
+        L_{ij} =
+        \begin{cases}
+            \operatorname{softplus}(X_{ii}) & i = j \\
+            X_{ij} & i > j \\
+            0 & i < j
+        \end{cases}
+
+    Inverse:
+
+    .. math::
+
+        X_{ii} = \operatorname{softplus}^{-1}(L_{ii})
+               = \log(e^{L_{ii}} - 1),
+        \qquad
+        X_{ij} = L_{ij}\;\;(i > j)
+
+    Log Jacobian determinant (summed over the matrix event dims):
+
+    .. math::
+
+        \log|\det J| = \sum_{i=1}^{D} \log \sigma(X_{ii})
+                     = -\sum_{i=1}^{D} \operatorname{softplus}(-X_{ii})
+
+    Off-diagonal entries contribute unit Jacobian (identity map); only
+    the softplus applied to the diagonal carries a non-trivial factor.
+
+    For correlation-matrix factors (unit diagonal) use
+    :class:`CorrCholeskyTransform` instead.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import LowerCholeskyTransform
+    >>> T = LowerCholeskyTransform()
+    >>> X = lucid.tensor([[0.0, 0.0], [0.5, 0.0]])
+    >>> L = T(X)  # softplus on diagonal, raw on strict lower
     """
 
     event_dim: int = 2
@@ -400,13 +775,48 @@ def _tril_mask(D: int, dtype: DTypeLike, device: DeviceLike) -> Tensor:
 
 
 class AbsTransform(Transform):
-    """Element-wise absolute value ``y = |x|``.
+    r"""Element-wise absolute value :math:`y = |x|` (folded, **not** bijective).
 
-    Not bijective (both ``x`` and ``-x`` map to the same ``y``), so this
-    transform is non-invertible.  The inverse is defined as the identity
-    (convention: assume the input is non-negative).
+    Maps :math:`\mathbb{R} \to [0, \infty)` element-wise by folding the
+    sign.  Useful when composing with symmetric base distributions
+    (e.g. a Normal) to produce a half-Normal or folded-Normal
+    pushforward.  ``bijective = False`` and ``sign = +1``.
 
-    ``log_abs_det_jacobian`` returns ``0.`` everywhere (|J| = 1).
+    Because both :math:`x` and :math:`-x` map to the same :math:`y`,
+    the transform is non-invertible.  The pseudo-inverse used here is
+    the identity, under the convention that the preimage is assumed to
+    lie on the non-negative half-line.
+
+    Notes
+    -----
+    Forward:  :math:`y = |x|`.
+
+    Pseudo-inverse:  :math:`x = y` (assumes :math:`x \geq 0`).
+
+    Log Jacobian determinant:
+
+    .. math::
+
+        \log\!\left|\frac{\partial y}{\partial x}\right| = 0
+
+    everywhere off the measure-zero set :math:`\{x = 0\}` where the map
+    is non-differentiable.
+
+    Folding the sign halves the density: composing with a Normal(0,1)
+    base gives the half-Normal density :math:`p(y) = 2 \phi(y)` for
+    :math:`y \geq 0`, which requires special handling outside the
+    standard change-of-variable formula.  Lucid's
+    :class:`TransformedDistribution` does not currently correct for
+    this folding factor — apply the :math:`+\log 2` constant manually
+    when needed.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import AbsTransform
+    >>> T = AbsTransform()
+    >>> T(lucid.tensor(-3.0))
+    Tensor(3.0)
     """
 
     bijective: bool = False
@@ -426,18 +836,48 @@ class AbsTransform(Transform):
 
 
 class IndependentTransform(Transform):
-    """Wraps another :class:`Transform` and reinterprets ``n`` batch dims
-    as event dims.
+    r"""Reinterpret ``n`` trailing batch dimensions of an inner transform as event dims.
 
-    Useful when the inner transform operates element-wise but is applied to a
-    batch of independent events that should be treated as a single vector event.
+    A thin wrapper that does not modify the forward / inverse maps but
+    changes how the log-Jacobian-determinant is *aggregated*: the inner
+    transform's per-element :math:`\log|\det J|` is summed over the
+    reinterpreted trailing axes, producing a joint event Jacobian
+    instead of an element-wise one.  This is the bijection analogue of
+    :class:`~lucid.distributions.Independent` for distributions.
 
     Parameters
     ----------
     transform : Transform
-        The inner bijection applied to each element.
+        Inner bijection applied to each element.
     reinterpreted_batch_ndims : int
-        Number of batch dimensions to treat as event dimensions.
+        Number of trailing batch dimensions to promote to event
+        dimensions.
+
+    Notes
+    -----
+    Forward / inverse: unchanged from the inner transform.
+
+    Log Jacobian determinant (with :math:`n` =
+    ``reinterpreted_batch_ndims`` minus the inner ``event_dim``):
+
+    .. math::
+
+        \log|\det J|_{\text{outer}}
+        = \sum_{\text{last } n \text{ axes}}
+          \log|\det J|_{\text{inner}}
+
+    Use this whenever an element-wise transform (e.g. :class:`ExpTransform`)
+    is applied to a vector that you want treated as a single event for the
+    purposes of computing :math:`\log p(\mathbf{y})` under the pushforward
+    distribution.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ExpTransform, IndependentTransform
+    >>> T = IndependentTransform(ExpTransform(), reinterpreted_batch_ndims=1)
+    >>> T(lucid.tensor([0.0, 1.0, 2.0]))
+    Tensor([1.0, 2.7183, 7.3891])
     """
 
     def __init__(
@@ -469,16 +909,53 @@ class IndependentTransform(Transform):
 
 
 class ReshapeTransform(Transform):
-    """Reshape the event shape from ``in_shape`` to ``out_shape``.
+    r"""Pure-shape reinterpretation of the event shape :math:`y = \mathrm{reshape}(x)`.
 
-    The total number of elements must be the same.
+    Maps the trailing event tail of a tensor from ``in_shape`` to
+    ``out_shape``.  This is a *volume-preserving* bijection — the
+    underlying storage is unchanged, only the interpretation of which
+    axes constitute the event differs.  The product of dimensions must
+    match.
 
     Parameters
     ----------
     in_shape : tuple[int, ...]
-        Event shape of the input.
+        Event shape of the input tail.
     out_shape : tuple[int, ...]
-        Event shape of the output.
+        Event shape of the output tail.  Must satisfy
+        :math:`\prod_i \mathrm{in\_shape}_i = \prod_i \mathrm{out\_shape}_i`.
+
+    Raises
+    ------
+    ValueError
+        If ``prod(in_shape) != prod(out_shape)``.
+
+    Notes
+    -----
+    Forward:  :math:`\mathbf{y} = \mathrm{reshape}(\mathbf{x},
+    \mathrm{out\_shape})`.
+
+    Inverse:  :math:`\mathbf{x} = \mathrm{reshape}(\mathbf{y},
+    \mathrm{in\_shape})`.
+
+    Log Jacobian determinant:
+
+    .. math::
+
+        \log|\det J| = 0
+
+    everywhere — a reshape preserves Lebesgue measure exactly.  Useful
+    for stitching together transforms that expect different event
+    layouts (e.g. flatten a matrix event for a Cholesky-style
+    transform, then reshape back).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ReshapeTransform
+    >>> T = ReshapeTransform(in_shape=(2, 3), out_shape=(6,))
+    >>> T(lucid.zeros(2, 3)).shape
+    (6,)
     """
 
     def __init__(
@@ -524,20 +1001,64 @@ class ReshapeTransform(Transform):
 
 
 class CorrCholeskyTransform(Transform):
-    """Maps an unconstrained real vector of length ``d*(d-1)/2`` to the
-    lower Cholesky factor of a correlation matrix of size ``d×d``.
+    r"""Bijection from :math:`\mathbb{R}^{d(d-1)/2}` to Cholesky factors of correlation matrices.
 
-    The parameterisation applies ``tanh`` to the free parameters, then
-    normalises each row of the lower triangle so that each column of the
-    resulting matrix has unit 2-norm (i.e. ``L Lᵀ`` has unit diagonal).
+    Maps an unconstrained vector of length :math:`d(d-1)/2` to the
+    lower-triangular Cholesky factor :math:`L` of a :math:`d \times d`
+    correlation matrix (so :math:`L L^\top` is positive-definite with
+    **unit diagonal**).  This is the standard reparameterisation used by
+    Stan, by Lewandowski–Kurowicka–Joe (LKJ) priors, and by the reference
+    framework's correlation-matrix flow.  ``event_dim = 2``.
 
-    This is the standard unconstrained parameterisation used in Stan and
-    in the reference framework's ``CorrCholeskyTransform``.
+    The construction applies ``tanh`` to the free parameters, treats each
+    resulting value as a *partial correlation*, then normalises each row
+    of the lower triangle so the rows of :math:`L` have unit 2-norm
+    (which forces :math:`L L^\top` to have unit diagonal).
 
     Parameters
     ----------
     dim : int
-        Size of the square correlation matrix.
+        Size :math:`d \geq 2` of the square correlation matrix.  The
+        unconstrained input has trailing dimension :math:`d(d-1)/2`.
+
+    Notes
+    -----
+    Forward (row-by-row stick-breaking on the unit sphere):
+
+    .. math::
+
+        z_{ij} = \tanh(x_{ij}), \qquad
+        L_{ij} = z_{ij}\sqrt{1 - \sum_{k < j} L_{ik}^2}\;\;(i > j),
+        \qquad
+        L_{ii} = \sqrt{1 - \sum_{k < i} L_{ik}^2}
+
+    Inverse:
+
+    .. math::
+
+        z_{ij} = \frac{L_{ij}}{\sqrt{1 - \sum_{k < j} L_{ik}^2}},
+        \qquad
+        x_{ij} = \mathrm{arctanh}(z_{ij})
+
+    Log Jacobian determinant (closed form from Lewandowski et al., 2009):
+
+    .. math::
+
+        \log|\det J|
+        = \sum_{i>j} \log(1 - \tanh^2(x_{ij}))
+        + \sum_{i=1}^{d-1} (d - i)\log L_{ii}
+
+    Combine with the :class:`~lucid.distributions.relaxed.LKJCholesky`
+    distribution (or equivalent) to learn unconstrained correlation
+    matrices end-to-end.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import CorrCholeskyTransform
+    >>> T = CorrCholeskyTransform(dim=3)
+    >>> x = lucid.zeros(3)  # d*(d-1)/2 = 3 free params
+    >>> L = T(x)  # 3x3 lower-triangular Cholesky of identity
     """
 
     event_dim: int = 2
@@ -767,15 +1288,57 @@ class CorrCholeskyTransform(Transform):
 
 
 class CumulativeDistributionTransform(Transform):
-    """Applies a distribution's CDF as a bijection ``y = F(x)``.
+    r"""Probability-integral transform :math:`y = F(x)` via a base distribution's CDF.
 
-    The inverse is the quantile (ICDF) function.  Useful for turning an
-    arbitrary continuously distributed variable into a Uniform(0,1).
+    Pushes any continuous random variable through its own CDF to obtain
+    a :math:`\mathrm{Uniform}(0, 1)` random variable — the classical
+    *probability integral transform* of Smirnov.  Useful as a copula
+    building block, for goodness-of-fit testing, and for stitching
+    together heterogeneous flows.  ``event_dim = 0``.
 
     Parameters
     ----------
     distribution : Distribution
-        The distribution whose CDF/ICDF pair defines the transform.
+        Continuous distribution whose :meth:`~Distribution.cdf` and
+        :meth:`~Distribution.icdf` define the transform.  Both methods
+        must be implemented and the distribution must be continuous
+        (i.e., have a density) for the transform to be a true bijection.
+
+    Notes
+    -----
+    Forward (CDF):
+
+    .. math::
+
+        y = F(x)
+
+    Inverse (quantile / ICDF):
+
+    .. math::
+
+        x = F^{-1}(y)
+
+    Log Jacobian determinant equals the log-density of the base
+    distribution at :math:`x`:
+
+    .. math::
+
+        \log\!\left|\frac{\partial F(x)}{\partial x}\right| = \log p(x)
+
+    By the probability-integral transform, if :math:`X \sim p` then
+    :math:`F(X) \sim \mathrm{Uniform}(0, 1)`.  Conversely, if
+    :math:`U \sim \mathrm{Uniform}(0, 1)` then :math:`F^{-1}(U) \sim p`,
+    which is the inverse-CDF sampling identity used throughout
+    Lucid's :meth:`~Distribution.rsample` implementations.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.transforms import CumulativeDistributionTransform
+    >>> T = CumulativeDistributionTransform(Normal(loc=0.0, scale=1.0))
+    >>> T(lucid.tensor(0.0))  # F(0) = 0.5
+    Tensor(0.5)
     """
 
     event_dim: int = 0
@@ -799,18 +1362,59 @@ class CumulativeDistributionTransform(Transform):
 
 
 class StackTransform(Transform):
-    """Apply a list of transforms to corresponding slices along ``dim``.
+    r"""Apply a list of transforms to indexed slices along a stack axis.
 
-    ``y[..., k, ...] = transforms[k](x[..., k, ...])``
-
-    The number of slices must equal ``len(transforms)``.
+    The :math:`k`-th transform is applied to the :math:`k`-th slice
+    obtained by :meth:`~Tensor.unbind` along ``dim``, and the results
+    are stacked back along the same axis.  This is the heterogeneous
+    counterpart of :class:`IndependentTransform`: different bijections
+    can be applied to different coordinates of an event vector.
 
     Parameters
     ----------
     transforms : list[Transform]
-        One transform per slice.
-    dim : int
+        One transform per slice.  Must be non-empty and the same length
+        as ``x.shape[dim]``.
+    dim : int, optional
         Dimension along which to slice.  Default ``0``.
+
+    Raises
+    ------
+    ValueError
+        If ``transforms`` is empty, or if the size of ``dim`` does not
+        match ``len(transforms)`` at call time.
+
+    Notes
+    -----
+    Forward (with :math:`\mathbf{x}_k = \mathbf{x}[\ldots, k, \ldots]`):
+
+    .. math::
+
+        \mathbf{y}_k = T_k(\mathbf{x}_k)
+
+    Inverse:
+
+    .. math::
+
+        \mathbf{x}_k = T_k^{-1}(\mathbf{y}_k)
+
+    Log Jacobian determinant (per-slice values stacked back along ``dim``):
+
+    .. math::
+
+        \log|\det J|_k = \log|\det J_{T_k}|(\mathbf{x}_k, \mathbf{y}_k)
+
+    Useful for "block" flows where each coordinate of the latent vector
+    has its own bijection — e.g., applying :class:`ExpTransform` to
+    positive components and :class:`TanhTransform` to bounded ones.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ExpTransform, TanhTransform, StackTransform
+    >>> T = StackTransform([ExpTransform(), TanhTransform()], dim=-1)
+    >>> T(lucid.tensor([0.0, 0.0]))  # (exp(0), tanh(0)) = (1, 0)
+    Tensor([1.0, 0.0])
     """
 
     def __init__(self, transforms: list[Transform], dim: int = 0) -> None:
@@ -864,19 +1468,59 @@ class StackTransform(Transform):
 
 
 class CatTransform(Transform):
-    """Apply a list of transforms to contiguous slices along ``dim``,
-    where each transform handles ``lengths[i]`` elements.
+    r"""Apply different transforms to contiguous partitions along an axis.
 
-    ``y = cat([T_i(x_i) for i in range(n)], dim=dim)``
+    Splits the input along ``dim`` into contiguous chunks of size
+    ``lengths[i]`` (or equal partitions if ``lengths`` is ``None``),
+    applies the :math:`i`-th transform to the :math:`i`-th chunk, and
+    concatenates the results back along the same axis.  Differs from
+    :class:`StackTransform` in that each partition can have a different
+    *length*, not just a single index.
 
     Parameters
     ----------
     transforms : list[Transform]
         One transform per partition.
-    dim : int
+    dim : int, optional
         Concatenation dimension.  Default ``0``.
-    lengths : list[int] | None
-        Length of each slice.  If ``None``, slices are equal.
+    lengths : list[int], optional
+        Length of each partition.  If ``None`` the axis size must be
+        divisible by ``len(transforms)`` and equal partitions are used.
+
+    Raises
+    ------
+    ValueError
+        If ``transforms`` is empty, or if the axis size is not divisible
+        by ``len(transforms)`` when ``lengths`` is ``None``.
+
+    Notes
+    -----
+    Forward (with :math:`\mathbf{x}_i` the :math:`i`-th partition):
+
+    .. math::
+
+        \mathbf{y} = \mathrm{cat}\bigl([T_i(\mathbf{x}_i)]_{i=1}^{n},
+                                       \;\mathrm{dim}\bigr)
+
+    Inverse: split, invert, re-concatenate.
+
+    Log Jacobian determinant: per-partition Jacobians concatenated back
+    along ``dim``:
+
+    .. math::
+
+        \log|\det J| = \mathrm{cat}\bigl(
+            [\log|\det J_{T_i}|(\mathbf{x}_i, \mathbf{y}_i)]_{i=1}^{n},
+            \;\mathrm{dim}\bigr)
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import ExpTransform, AffineTransform, CatTransform
+    >>> T = CatTransform([ExpTransform(), AffineTransform(0.0, 2.0)],
+    ...                  dim=0, lengths=[2, 3])
+    >>> T(lucid.tensor([0.0, 0.0, 1.0, 2.0, 3.0])).shape
+    (5,)
     """
 
     def __init__(
@@ -947,7 +1591,63 @@ class CatTransform(Transform):
 
 
 class ComposeTransform(Transform):
-    """``T = T_n ∘ … ∘ T_2 ∘ T_1`` — applied left-to-right."""
+    r"""Function composition of a list of transforms — left-to-right.
+
+    Implements the composite map
+    :math:`T = T_n \circ T_{n-1} \circ \cdots \circ T_1` so that the
+    first transform in ``parts`` is applied first.  The composite
+    Jacobian is the sum of the per-step Jacobians along the trajectory,
+    by the chain rule.  This is the workhorse for stacking normalising
+    flows.
+
+    Parameters
+    ----------
+    parts : list[Transform]
+        Ordered list of sub-transforms.  Must be non-empty.  Their
+        ``event_dim`` values are reduced via :func:`max`.
+
+    Raises
+    ------
+    ValueError
+        If ``parts`` is empty.
+
+    Notes
+    -----
+    Forward:
+
+    .. math::
+
+        \mathbf{y} = T_n(T_{n-1}(\cdots T_1(\mathbf{x}) \cdots ))
+
+    Inverse (transforms run in reverse with each one inverted):
+
+    .. math::
+
+        \mathbf{x} = T_1^{-1}(T_2^{-1}(\cdots T_n^{-1}(\mathbf{y}) \cdots ))
+
+    Log Jacobian determinant (chain rule):
+
+    .. math::
+
+        \log|\det J_T(\mathbf{x})|
+        = \sum_{k=1}^{n}
+            \log|\det J_{T_k}(\mathbf{x}^{(k-1)})|
+
+    where :math:`\mathbf{x}^{(0)} = \mathbf{x}` and
+    :math:`\mathbf{x}^{(k)} = T_k(\mathbf{x}^{(k-1)})`.  The
+    implementation re-evaluates the forward chain to collect the
+    intermediate states needed by each sub-Jacobian.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions.transforms import (
+    ...     ExpTransform, AffineTransform, ComposeTransform)
+    >>> # Log-normal-like: y = exp(loc + scale * x)
+    >>> T = ComposeTransform([AffineTransform(loc=0.0, scale=1.0), ExpTransform()])
+    >>> T(lucid.tensor(0.0))
+    Tensor(1.0)
+    """
 
     def __init__(self, parts: list[Transform]) -> None:
         """Store the ordered list of sub-transforms.
@@ -997,10 +1697,67 @@ from lucid.distributions.distribution import Distribution
 
 
 class TransformedDistribution(Distribution):
-    """Push ``base_distribution`` through a (possibly composite) bijector.
+    r"""Pushforward of a base distribution through a (composite) bijector.
 
-    ``rsample = transform(base_dist.rsample())`` and ``log_prob`` accounts
-    for the Jacobian via the change-of-variable formula.
+    Constructs a new :class:`Distribution` whose samples are obtained by
+    pushing samples from ``base_distribution`` through the supplied
+    chain of :class:`Transform` instances, with :meth:`log_prob`
+    accounting for the Jacobian correction via the change-of-variable
+    formula.  This is the canonical way to build normalising flows in
+    Lucid: stack any number of bijections on top of a tractable base
+    (typically a Normal) to obtain expressive densities while retaining
+    exact log-likelihood evaluation and reparameterised sampling.
+
+    Parameters
+    ----------
+    base_distribution : Distribution
+        Underlying distribution whose samples will be pushed through
+        ``transforms``.
+    transforms : Transform or list[Transform]
+        A single transform or an ordered list applied left-to-right.
+        Internally wrapped in a list.
+    validate_args : bool, optional
+        Forwarded to :class:`Distribution`.
+
+    Notes
+    -----
+    Sampling (with :math:`T = T_n \circ \cdots \circ T_1` the composite
+    bijector):
+
+    .. math::
+
+        Y = T(X), \quad X \sim p_{\text{base}}
+
+    Reparameterised sampling is available iff the base distribution
+    supports it (``has_rsample`` is forwarded).
+
+    Density (change of variables):
+
+    .. math::
+
+        \log p_Y(\mathbf{y}) =
+            \log p_X(T^{-1}(\mathbf{y}))
+            - \sum_{i=1}^{n}
+                \log\!\left|\det
+                \frac{\partial T_i(\mathbf{x}_{i-1})}{\partial \mathbf{x}_{i-1}}\right|
+
+    where :math:`\mathbf{x}_0 = T^{-1}(\mathbf{y})` and
+    :math:`\mathbf{x}_i = T_i(\mathbf{x}_{i-1})`.  The implementation
+    walks the transforms in reverse, inverting one step at a time and
+    accumulating the Jacobian correction.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.transforms import (
+    ...     ExpTransform, TransformedDistribution)
+    >>> # LogNormal = ExpTransform(Normal(0, 1))
+    >>> log_normal = TransformedDistribution(Normal(loc=0.0, scale=1.0), [ExpTransform()])
+    >>> log_normal.rsample((4,))
+    Tensor([...])
+    >>> log_normal.log_prob(lucid.tensor(1.0))
+    Tensor(...)
     """
 
     def __init__(

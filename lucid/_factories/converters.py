@@ -150,7 +150,68 @@ def tensor(
     device: DeviceLike = None,
     requires_grad: bool = False,
 ) -> Tensor:
-    """Create a tensor from data (list, ndarray, scalar, or Tensor)."""
+    r"""Construct a new :class:`Tensor` from Python data, a NumPy array, or another Tensor.
+
+    Always allocates a fresh storage and **copies** the source bytes into
+    Lucid-owned memory.  This is the canonical entry point for creating
+    tensors from heterogeneous Python inputs: scalars (``int`` / ``float`` /
+    ``bool``), nested lists, NumPy ``ndarray``\s, and existing Lucid
+    ``Tensor``\s.  Dtype is inferred from the source unless ``dtype`` is
+    given; device defaults to the global default (typically ``"cpu"``) unless
+    overridden.
+
+    Parameters
+    ----------
+    data : object
+        Source data.  Accepted forms:
+
+        * Python scalar (``int``, ``float``, ``bool``) — produces a 0-d
+          tensor.
+        * Nested ``list`` / ``tuple`` — recursively converted; element type
+          must be uniform.
+        * ``numpy.ndarray`` — bridge boundary
+          (see :mod:`lucid._factories.converters`); the data is copied
+          regardless of the source array's contiguity.
+        * Existing :class:`Tensor` — copied to a new buffer (use
+          :func:`as_tensor` to avoid the copy when dtype/device match).
+    dtype : dtype | str | None, optional
+        Target element type.  ``None`` (default) infers from ``data``:
+        integers → ``int64``, floats → ``float32``, complex → ``complex64``.
+    device : device | str | None, optional
+        Target device (``"cpu"`` or ``"metal"``).  ``None`` uses
+        :func:`lucid.get_default_device`.
+    requires_grad : bool, optional
+        Whether the resulting tensor should record autograd operations.
+        Defaults to ``False``.
+
+    Returns
+    -------
+    Tensor
+        A freshly-allocated Lucid tensor.
+
+    Notes
+    -----
+    This factory is one of the six "bridge" entry points in the **H4** rule
+    — the only places where external libraries (NumPy here) may legitimately
+    cross into Lucid's compute path.  Outside the bridges, Lucid composites
+    must use engine primitives directly.
+
+    For zero-copy conversion when the source is already an ``ndarray`` on
+    CPU and shares dtype, prefer :func:`as_tensor`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.tensor([1.0, 2.0, 3.0])
+    Tensor([1., 2., 3.])
+    >>> lucid.tensor([[1, 2], [3, 4]], dtype=lucid.float32)
+    Tensor([[1., 2.],
+            [3., 4.]])
+    >>> import numpy as np
+    >>> lucid.tensor(np.arange(6).reshape(2, 3))
+    Tensor([[0, 1, 2],
+            [3, 4, 5]])
+    """
     from lucid._tensor.tensor import Tensor
 
     return Tensor.__new_from_impl__(
@@ -163,12 +224,103 @@ def as_tensor(
     dtype: DTypeLike = None,
     device: DeviceLike = None,
 ) -> Tensor:
-    """Convert data to a tensor, sharing memory where possible."""
+    r"""Convert data to a tensor, avoiding a copy when the source already matches.
+
+    Unlike :func:`tensor`, ``as_tensor`` is "best-effort no-copy":
+
+    * If ``data`` is already a :class:`Tensor` with the requested ``dtype``
+      and ``device``, it is returned unchanged.
+    * If ``data`` is a NumPy array on CPU and ``dtype`` matches (or is
+      ``None``), the resulting tensor shares its storage with the array —
+      mutations in either side are reflected in the other.
+    * Otherwise the call delegates to :func:`tensor`, which copies.
+
+    Parameters
+    ----------
+    data : object
+        Source data — Python scalar / list, NumPy array, or Tensor.
+    dtype : dtype | str | None, optional
+        Target element type.  ``None`` preserves the source dtype.
+    device : device | str | None, optional
+        Target device.  When the source already lives on a different device,
+        a copy across the device boundary is performed.
+
+    Returns
+    -------
+    Tensor
+        The input tensor or a freshly-constructed Lucid tensor.
+
+    Notes
+    -----
+    ``as_tensor`` is the right choice in performance-sensitive code paths
+    (e.g. DataLoader collate functions) where the input is already an
+    ``ndarray`` and copying would be wasteful.  For semantic clarity in
+    library code that should never share storage, use :func:`tensor`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import numpy as np
+    >>> arr = np.array([1.0, 2.0, 3.0])
+    >>> t = lucid.as_tensor(arr)            # no copy
+    >>> arr[0] = 99.0
+    >>> t                                    # reflects the mutation
+    Tensor([99.,  2.,  3.])
+    >>> x = lucid.tensor([1, 2, 3])
+    >>> lucid.as_tensor(x) is x              # already a Tensor, returned as-is
+    True
+    """
     return tensor(data, dtype=dtype, device=device)
 
 
 def from_numpy(arr: np.ndarray) -> Tensor:
-    """Create a CPU tensor from a NumPy array with automatic dtype mapping."""
+    r"""Create a CPU tensor from a NumPy ``ndarray`` with shared storage.
+
+    The returned tensor wraps the array's existing buffer — no data is
+    copied — and inherits the array's dtype according to the canonical
+    NumPy → Lucid mapping (``np.float32`` → ``lucid.float32``,
+    ``np.int64`` → ``lucid.int64``, etc.).  Because storage is shared,
+    mutations in the array are visible in the tensor and vice versa.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Source array.  Must reside in CPU memory.  Any layout (C / Fortran /
+        strided) is accepted; the resulting tensor preserves the array's
+        strides where possible.
+
+    Returns
+    -------
+    Tensor
+        A CPU tensor sharing storage with ``arr``.
+
+    Raises
+    ------
+    TypeError
+        If ``arr`` is not a NumPy ``ndarray``.
+    ValueError
+        If ``arr``\'s dtype has no corresponding Lucid dtype
+        (e.g. ``np.float128`` on some platforms).
+
+    Notes
+    -----
+    This is one of the documented **H4** bridge boundaries — the only places
+    where Lucid is allowed to take a NumPy array as input.  To move the
+    result onto a Metal device, chain :meth:`Tensor.to`::
+
+        t = lucid.from_numpy(arr).to("metal")
+
+    Examples
+    --------
+    >>> import lucid, numpy as np
+    >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    >>> t = lucid.from_numpy(arr)
+    >>> t.dtype
+    float32
+    >>> arr[0, 0] = 99.0          # mutate the source
+    >>> t[0, 0].item()            # change visible in the tensor
+    99.0
+    """
     return tensor(arr)
 
 

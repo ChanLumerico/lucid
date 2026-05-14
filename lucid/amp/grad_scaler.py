@@ -12,23 +12,78 @@ if TYPE_CHECKING:
 
 
 class GradScaler:
-    """Scale gradients to prevent underflow in mixed-precision training.
+    r"""Dynamic loss-scaling helper for mixed-precision training.
 
-    Usage:
-        scaler = GradScaler()
-        with autocast():
-            loss = model(x)
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+    Mixed-precision training keeps activations and weights in fp16 to
+    halve memory bandwidth and exploit fp16-fast hardware paths, but
+    fp16's narrow dynamic range causes small gradients to underflow to
+    zero — the network stops learning.  :class:`GradScaler` works
+    around this by multiplying the loss by a large constant :math:`s`
+    before backpropagation:
 
-    Args:
-        init_scale:       Initial gradient scale (default: 2**16).
-        growth_factor:    Multiply scale by this after growth_interval
-                          consecutive non-inf/nan steps (default: 2.0).
-        backoff_factor:   Multiply scale by this when inf/nan detected (default: 0.5).
-        growth_interval:  Steps of no overflow before scale is increased (default: 2000).
-        enabled:          If False, GradScaler is a pass-through no-op.
+    .. math::
+
+        \tilde{L} = s \cdot L, \qquad
+        \frac{\partial \tilde{L}}{\partial \theta}
+        = s \cdot \frac{\partial L}{\partial \theta}.
+
+    The scaled gradients sit comfortably inside fp16's representable
+    range; before the optimizer step they are unscaled by :math:`1/s`
+    in fp32 so the update is mathematically equivalent to ordinary
+    training.
+
+    The scale itself is adapted dynamically.  After every step the
+    unscaled gradients are checked for ``inf`` / ``NaN``:
+
+    * **Overflow detected** — the step is skipped and :math:`s` is
+      multiplied by ``backoff_factor`` (typically ``0.5``).
+    * **No overflow for ``growth_interval`` consecutive steps** —
+      :math:`s` is multiplied by ``growth_factor`` (typically ``2.0``).
+
+    This produces a sawtooth schedule that tracks the largest scale
+    the current gradient distribution can tolerate.
+
+    Parameters
+    ----------
+    init_scale : float, default=2**16
+        Initial loss scaling factor applied by :meth:`scale`.
+    growth_factor : float, default=2.0
+        Multiplier applied to the scale after ``growth_interval``
+        consecutive non-overflowing steps.  Must be ``> 1.0``.
+    backoff_factor : float, default=0.5
+        Multiplier applied when an ``inf`` / ``NaN`` gradient is
+        detected.  Must be in ``(0, 1)``.
+    growth_interval : int, default=2000
+        Number of overflow-free steps required before the scale grows.
+    enabled : bool, default=True
+        When ``False`` the scaler degenerates into a transparent
+        pass-through — :meth:`scale` returns its input unchanged,
+        :meth:`step` calls the optimizer directly, and :meth:`update`
+        is a no-op.
+
+    Notes
+    -----
+    The canonical training-loop pattern is *scale-loss, then step,
+    then update*:
+
+    1. :meth:`scale` multiplies the loss by :math:`s` before
+       ``backward()`` so the gradients land safely inside fp16 range.
+    2. :meth:`step` unscales the gradients, checks for ``inf`` /
+       ``NaN``, and either runs ``optimizer.step()`` or skips the
+       update.
+    3. :meth:`update` adjusts :math:`s` according to the
+       growth / backoff schedule for the next iteration.
+
+    Examples
+    --------
+    >>> scaler = GradScaler()
+    >>> for x, y in dataloader:
+    ...     with autocast():
+    ...         out = model(x)
+    ...         loss = loss_fn(out, y)
+    ...     scaler.scale(loss).backward()
+    ...     scaler.step(optimizer)
+    ...     scaler.update()
     """
 
     def __init__(

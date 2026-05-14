@@ -1263,6 +1263,76 @@ def randn_like(
 """
 
 
+def _format_with_docstring(
+    sig_line: str, fn_name: str, doc_map: dict[str, tuple[str, bool]]
+) -> str:
+    """Attach a preserved docstring (if any) to a ``def foo(...) -> R: ...`` line.
+
+    If ``doc_map`` has an entry for ``fn_name``, emit the multi-line form:
+
+        def foo(...) -> R:
+            r\"\"\"...preserved docstring...\"\"\"
+            ...
+
+    Otherwise return the single-line form unchanged.  ``doc_map`` values are
+    ``(docstring_text, is_raw_string)`` tuples — when ``is_raw_string=True``
+    the docstring is emitted with the ``r`` prefix so LaTeX backslashes
+    survive.
+    """
+    if fn_name not in doc_map:
+        return sig_line
+    doc_text, is_raw = doc_map[fn_name]
+    # sig_line ends with ': ...'; strip the trailing ' ...' and add body.
+    if sig_line.endswith(": ..."):
+        head = sig_line[:-4]  # keep the colon
+    else:
+        head = sig_line
+    indent = "    "
+    prefix = "r" if is_raw else ""
+    # Re-indent the docstring body
+    body_lines = [indent + l for l in doc_text.split("\n")]
+    body = "\n".join(body_lines)
+    return f'{head}\n{indent}{prefix}"""{body}\n{indent}"""\n{indent}...'
+
+
+def _load_existing_docstrings(path) -> dict[str, tuple[str, bool]]:
+    """Parse an existing ``.pyi`` file and return ``{fn_name: (doc, is_raw)}``.
+
+    Preserves manually-written docstrings across regenerations of the stub.
+    Detects raw-string prefixes by re-scanning the source text (AST loses
+    that information).
+    """
+    import ast as _ast
+    import re as _re
+
+    try:
+        src = path.read_text(encoding="utf-8")
+    except Exception:
+        return {}
+    try:
+        tree = _ast.parse(src)
+    except Exception:
+        return {}
+    # Map (line of docstring constant) → was-raw-prefixed?
+    raw_at_line: dict[int, bool] = {}
+    for m in _re.finditer(r'^[ \t]*([rR])?"""', src, _re.MULTILINE):
+        # convert byte offset to line number (1-based)
+        line = src.count("\n", 0, m.start()) + 1
+        raw_at_line[line] = bool(m.group(1))
+    out: dict[str, tuple[str, bool]] = {}
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.FunctionDef):
+            continue
+        doc = _ast.get_docstring(node)
+        if not doc:
+            continue
+        # Body's first stmt is the docstring Expr; check its line for raw-ness
+        first = node.body[0]
+        is_raw = raw_at_line.get(first.lineno, False)
+        out[node.name] = (doc, is_raw)
+    return out
+
+
 def _free_fn_sig(entry) -> str:
     """Generate a free function signature for a registry entry.
 
@@ -1801,6 +1871,12 @@ def gen_init_pyi() -> tuple[str, int]:
     import inspect
     from lucid._ops._registry import _REGISTRY
 
+    # Preserve any manually-written docstrings in the existing __init__.pyi.
+    # Without this, each regeneration would wipe out hand-crafted NumPy-style
+    # docstrings that the docs site (web/) relies on for the lucid.ops /
+    # lucid.creation / lucid.ops.composite pages.
+    _existing_docs = _load_existing_docstrings(ROOT / "lucid/__init__.pyi")
+
     # Names whose signatures are hand-crafted in the ``overrides`` list below.
     # Exclude them from the registry loop so the correct stub wins (registry
     # introspection yields pybind11 TensorImpl signatures, not Tensor).
@@ -1832,7 +1908,7 @@ def gen_init_pyi() -> tuple[str, int]:
         if fn is None or fn in seen or fn in _OVERRIDE_NAMES:
             continue
         seen.add(fn)
-        lines.append(_free_fn_sig(entry))
+        lines.append(_format_with_docstring(_free_fn_sig(entry), fn, _existing_docs))
         count += 1
 
     # Also include reference-compatible overrides defined directly in _ops/__init__.py.
@@ -1877,7 +1953,9 @@ def gen_init_pyi() -> tuple[str, int]:
         if fn is None or not callable(fn):
             continue
         seen.add(n)
-        composite_lines.append(_sig_from_callable(n, fn))
+        composite_lines.append(
+            _format_with_docstring(_sig_from_callable(n, fn), n, _existing_docs)
+        )
 
     # ── nn.functional / linalg / method aliases ───────────────────────────────
     import lucid
@@ -1895,10 +1973,21 @@ def gen_init_pyi() -> tuple[str, int]:
             if fn is None:
                 continue
             seen.add(n)
-            group.append(_sig_from_callable(n, fn))
+            group.append(
+                _format_with_docstring(_sig_from_callable(n, fn), n, _existing_docs)
+            )
         if group:
             alias_lines.append(f"\n# ── {group_label} ─────────────────")
             alias_lines.extend(group)
+
+    # Attach preserved docstrings to the hand-crafted overrides too (sum,
+    # mean, prod, var, std, argmax, argmin, squeeze, repeat, split, ...).
+    overrides = [
+        _format_with_docstring(
+            line, line.split("(")[0].removeprefix("def ").strip(), _existing_docs
+        )
+        for line in overrides
+    ]
 
     content = _INIT_HEADER + "\n".join(lines) + "\n\n"
     content += (

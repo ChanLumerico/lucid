@@ -19,17 +19,68 @@ def scaled_dot_product_attention(
     is_causal: bool = False,
     scale: float | None = None,
 ) -> Tensor:
-    """
-    Scaled dot-product attention.
+    r"""Scaled dot-product attention — the core of every Transformer block.
 
-    Args:
-        query:     (B, H, T, E)
-        key:       (B, H, S, E)
-        value:     (B, H, S, V)
-        attn_mask: optional additive mask (B, H, T, S)
-        dropout_p: dropout probability applied to attention weights
-        is_causal: apply causal (triangular) mask
-        scale:     optional softmax scale (default: 1/sqrt(E))
+    Computes the attention-weighted aggregation of value vectors using
+    query-key dot products as similarity scores:
+
+    .. math::
+
+        \mathrm{Attention}(Q, K, V) =
+            \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}} + M\right) V
+
+    where :math:`M` is an optional additive mask (``-inf`` to disallow
+    attention at a position, ``0`` to allow).  The :math:`1/\sqrt{d_k}`
+    factor keeps the softmax in a usable temperature regime as the head
+    dimension :math:`d_k` grows — without it, large dot products saturate
+    the softmax into a near one-hot distribution and gradients vanish.
+
+    Parameters
+    ----------
+    query : Tensor
+        Shape ``(B, H, T, E)``.  ``B`` batch, ``H`` heads, ``T`` query
+        positions, ``E`` head dimension :math:`d_k`.
+    key : Tensor
+        Shape ``(B, H, S, E)``.
+    value : Tensor
+        Shape ``(B, H, S, V)``.  ``V`` may differ from ``E``.
+    attn_mask : Tensor, optional
+        Additive mask broadcast-compatible with ``(B, H, T, S)``.  Use
+        large negative values (or ``-inf``) at positions to mask out.
+        Mutually exclusive with ``is_causal``.
+    dropout_p : float, optional
+        Dropout probability applied to attention weights during training.
+        Default ``0.0``.
+    is_causal : bool, optional
+        If ``True``, apply an upper-triangular causal mask so each query
+        position only attends to keys at the same or earlier positions
+        (autoregressive decoder self-attention).
+    scale : float, optional
+        Override the default :math:`1/\sqrt{d_k}` scale factor.
+
+    Returns
+    -------
+    Tensor
+        Attention output of shape ``(B, H, T, V)``.
+
+    Notes
+    -----
+    Introduced in *Attention Is All You Need* (Vaswani et al., 2017).
+    The implementation uses the log-sum-exp form of softmax for numerical
+    stability under aggressive masking, and fuses the scale into the
+    score matrix prior to softmax.  Causal masking enables efficient
+    autoregressive decoding when combined with a key/value cache.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional import scaled_dot_product_attention
+    >>> q = lucid.randn(2, 8, 16, 64)          # (B, H, T, E)
+    >>> k = lucid.randn(2, 8, 16, 64)
+    >>> v = lucid.randn(2, 8, 16, 64)
+    >>> out = scaled_dot_product_attention(q, k, v, is_causal=True)
+    >>> out.shape
+    (2, 8, 16, 64)
     """
     import math
 

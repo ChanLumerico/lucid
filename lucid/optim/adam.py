@@ -12,33 +12,70 @@ from lucid.optim.optimizer import Optimizer
 
 
 class Adam(Optimizer):
-    """Adaptive Moment Estimation optimizer.
+    r"""Adaptive Moment Estimation optimizer (Kingma & Ba, 2015).
 
-    Maintains per-parameter first and second moment estimates to adapt
-    the learning rate. See :cite:t:`Kingma2015Adam`.
+    Combines the benefits of two earlier adaptive methods — AdaGrad's
+    per-parameter learning rates derived from the running history of
+    gradients, and RMSProp's exponential moving average of squared
+    gradients — by maintaining two moment estimates and applying
+    **bias correction** to compensate for their zero initialisation.
+    The result is a near-parameterless optimiser that works well across
+    a remarkably wide range of architectures and is the de-facto default
+    for deep learning training.
 
     Parameters
     ----------
     params : iterable of Parameter
-        Iterable of parameters to optimize or dicts defining parameter groups.
+        Iterable of parameters to optimise, or dicts defining parameter
+        groups with their own per-group hyperparameters.
     lr : float, optional
-        Learning rate (default: 1e-3).
+        Learning rate :math:`\alpha` (default: ``1e-3``).
     betas : tuple of float, optional
-        Coefficients for computing running averages of gradient and its square
-        (default: ``(0.9, 0.999)``).
+        Decay rates :math:`(\beta_1, \beta_2)` for the first and second
+        moment running averages (default: ``(0.9, 0.999)``).
     eps : float, optional
-        Term added to the denominator for numerical stability (default: 1e-8).
+        Term :math:`\varepsilon` added to the denominator for numerical
+        stability (default: ``1e-8``).
     weight_decay : float, optional
-        L2 penalty coefficient (default: 0).
+        :math:`L_2` penalty coefficient.  Note that Adam folds this
+        directly into the gradient before the moment update, which
+        couples it with the adaptive learning rate; prefer
+        :class:`AdamW` for properly decoupled weight decay.
     amsgrad : bool, optional
-        Whether to use the AMSGrad variant (default: ``False``).
+        Whether to use the AMSGrad variant (Reddi et al., 2018), which
+        keeps the running max of the second moment to guarantee
+        convergence under non-convex settings (default: ``False``).
+
+    Notes
+    -----
+    The update rule for parameter :math:`\theta` with gradient
+    :math:`g_t` at step :math:`t` is:
+
+    .. math::
+
+        m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
+        v_t &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 \\
+        \hat{m}_t &= m_t / (1 - \beta_1^t) \\
+        \hat{v}_t &= v_t / (1 - \beta_2^t) \\
+        \theta_t &= \theta_{t-1} - \alpha \cdot \hat{m}_t / (\sqrt{\hat{v}_t} + \varepsilon)
+
+    where :math:`m_t` is the running first moment (mean of gradients),
+    :math:`v_t` is the running uncentered second moment (mean of squared
+    gradients), and the hat-quantities apply bias correction so that
+    :math:`\mathbb{E}[\hat{m}_t] = \mathbb{E}[g_t]` even at small
+    :math:`t`.  The effective per-parameter learning rate is
+    :math:`\alpha / (\sqrt{\hat{v}_t} + \varepsilon)` — small for
+    high-variance gradients, large for stable ones.
 
     Examples
     --------
+    >>> import lucid.optim as optim
     >>> optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    >>> optimizer.zero_grad()
-    >>> loss.backward()
-    >>> optimizer.step()
+    >>> for x, y in dataloader:
+    ...     optimizer.zero_grad()
+    ...     loss = loss_fn(model(x), y)
+    ...     loss.backward()
+    ...     optimizer.step()
     """
 
     def __init__(

@@ -40,17 +40,68 @@ _TENSOR_HOOKS: dict[int, tuple[list[Callable[..., object]], weakref.ref[object]]
 
 
 class RemovableHandle:
-    """Handle returned by :meth:`~lucid.Tensor.register_hook`.
+    r"""Handle returned by :meth:`~lucid.Tensor.register_hook`.
 
-    Call :meth:`remove` to de-register the hook; the handle can also be
-    used as a context manager:
+    A ``RemovableHandle`` keeps a reference to the list of hooks
+    attached to a tensor's gradient and to the specific callable
+    that was just registered, providing two ways to take the hook
+    back off:
 
-    .. code-block:: python
+    * Imperative — call :meth:`remove` whenever the hook is no
+      longer needed.
+    * RAII — bind the handle in a ``with`` block; the hook is
+      automatically removed when control leaves the block.
 
-        with x.register_hook(lambda g: print(g)) as h:
-            y = x.sum()
-            y.backward()
-        # hook is removed here
+    This class is *distinct* from
+    ``lucid.nn.hooks.RemovableHandle``: that one manages
+    forward/backward hooks on :class:`~lucid.nn.Module`, whereas
+    this one operates on the per-tensor hooks dispatched from
+    :meth:`~lucid.Tensor.backward` after the gradient has been
+    accumulated.
+
+    Parameters
+    ----------
+    hooks_list : list of callable
+        The underlying registry list owned by the tensor; on
+        :meth:`remove` the hook is dropped from this list.
+    hook : callable
+        The exact callable to remove. Identity (``is``) is used
+        for matching.
+
+    Attributes
+    ----------
+    _hooks_list : list of callable
+        The registry list (private).
+    _hook : callable
+        The registered hook (private).
+
+    Notes
+    -----
+    The post-backward hook contract is
+
+    .. math::
+
+        \bar x \leftarrow h(\bar x),
+
+    where :math:`\bar x = \partial \mathcal{L} / \partial x` is
+    the accumulated gradient and :math:`h` is the user-supplied
+    hook. A hook returning ``None`` leaves :math:`\bar x`
+    unchanged; returning a tensor replaces it.
+
+    :meth:`remove` is idempotent — calling it twice is harmless.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
+    >>> handle = x.register_hook(lambda g: print('grad =', g))
+    >>> (x * x).sum().backward()
+    >>> handle.remove()
+
+    As a context manager:
+
+    >>> with x.register_hook(lambda g: g * 2) as h:
+    ...     (x * x).sum().backward()
     """
 
     def __init__(

@@ -20,7 +20,61 @@ def clip_grad_norm_(
     norm_type: float = 2.0,
     error_if_nonfinite: bool = False,
 ) -> Tensor:
-    """Clip gradient norm of parameters in-place. Returns the total norm."""
+    r"""Clip the global gradient norm of ``parameters`` in place.
+
+    Rescales every gradient so that the total :math:`\ell_p` norm —
+    computed across all parameters jointly, as if they were one long
+    concatenated vector — is at most ``max_norm``.  A staple of stable
+    Transformer / RNN training: prevents the occasional huge gradient
+    from derailing optimisation.
+
+    Parameters
+    ----------
+    parameters : iterable of Parameter
+        Parameters whose ``.grad`` should be clipped.  Entries with
+        ``grad is None`` are silently skipped.
+    max_norm : float
+        Maximum allowed norm of the combined gradient vector.  The
+        scaling factor never exceeds ``1`` — gradients smaller than
+        ``max_norm`` are untouched.
+    norm_type : float, optional
+        Order :math:`p` of the norm.  Default ``2.0`` (Euclidean).  Pass
+        ``math.inf`` for the max-norm (element-wise absolute maximum
+        across all gradients).
+    error_if_nonfinite : bool, optional
+        If ``True``, raise :class:`RuntimeError` when the computed total
+        norm is ``inf`` or ``nan`` instead of silently scaling by a
+        non-finite coefficient.
+
+    Returns
+    -------
+    Tensor
+        Scalar tensor holding the *pre-clipping* total norm.  Useful for
+        logging the gradient magnitude during training even when no
+        actual clipping took place.
+
+    Notes
+    -----
+    With combined norm :math:`\|g\|_p = \left(\sum_i |g_i|^p\right)^{1/p}`
+    taken over every element of every gradient, the update is
+
+    .. math::
+
+        g \;\mapsto\; g \cdot \min\!\left(1,\,
+            \frac{\text{max\_norm}}{\|g\|_p + \epsilon}\right),
+
+    where the :math:`\epsilon = 10^{-6}` guards against division by zero
+    when all gradients vanish.  Because every parameter is scaled by the
+    *same* coefficient the direction of the global update is preserved —
+    only its magnitude is bounded.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.utils import clip_grad_norm_
+    >>> # after loss.backward() ...
+    >>> total_norm = clip_grad_norm_(model.parameters(), max_norm=1.0)
+    """
     params_with_grad = [p for p in parameters if p.grad is not None]
     if not params_with_grad:
         return zeros(1)
@@ -71,7 +125,47 @@ def clip_grad_value_(
     parameters: Iterable["Parameter"],
     clip_value: float,
 ) -> None:
-    """Clip each gradient element to [-clip_value, clip_value] in-place."""
+    r"""Clamp every gradient element to :math:`[-\text{clip\_value}, \text{clip\_value}]` in place.
+
+    Unlike :func:`clip_grad_norm_`, which preserves the direction of the
+    full gradient vector, this operates element-wise — each scalar entry
+    is independently clipped to the symmetric interval.  Cheap, and a
+    useful safety net when only a handful of weights tend to blow up
+    (e.g. embedding tables on rare tokens).
+
+    Parameters
+    ----------
+    parameters : iterable of Parameter
+        Parameters whose ``.grad`` should be clipped.  Entries with
+        ``grad is None`` are skipped.
+    clip_value : float
+        Symmetric magnitude bound.  Must be non-negative; gradients are
+        clamped to ``[-clip_value, +clip_value]``.
+
+    Returns
+    -------
+    None
+        The clipping happens in place via ``Parameter.grad``.
+
+    Notes
+    -----
+    The element-wise update is
+
+    .. math::
+
+        g_i \;\mapsto\; \mathrm{clip}(g_i,\, -c,\, +c),
+
+    with :math:`c = \text{clip\_value}`.  Because each component is
+    treated independently the direction of the gradient vector is *not*
+    preserved — large coordinates are flattened toward zero while small
+    ones pass through unchanged.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils import clip_grad_value_
+    >>> # after loss.backward() ...
+    >>> clip_grad_value_(model.parameters(), clip_value=0.5)
+    """
     for p in parameters:
         if p.grad is not None:
             assert p.grad is not None
@@ -85,10 +179,48 @@ def get_total_norm(
     error_if_nonfinite: bool = False,
     foreach: bool | None = None,
 ) -> Tensor:
-    """Compute the total gradient norm without clipping.
+    r"""Compute the global gradient :math:`\ell_p` norm without clipping.
 
-    ``foreach`` is accepted for API compatibility but ignored — Lucid
-    processes parameters sequentially via the C++ engine.
+    Mirrors the measurement step of :func:`clip_grad_norm_` but returns
+    the magnitude without rescaling any gradients — handy for logging
+    the gradient size every step regardless of whether you intend to
+    clip.
+
+    Parameters
+    ----------
+    parameters : iterable of Parameter
+        Parameters whose gradients participate in the norm computation.
+        Entries with ``grad is None`` are skipped; the empty case
+        returns a zero tensor.
+    norm_type : float, optional
+        Order :math:`p` of the norm.  Default ``2.0``; use ``math.inf``
+        for the max-norm.
+    error_if_nonfinite : bool, optional
+        Raise on ``inf`` / ``nan`` results instead of returning them.
+    foreach : bool, optional
+        Accepted for API compatibility; ignored — Lucid processes the
+        parameters sequentially through the C++ engine.
+
+    Returns
+    -------
+    Tensor
+        Scalar tensor with the combined gradient norm.
+
+    Notes
+    -----
+    The returned scalar is
+
+    .. math::
+
+        \|g\|_p \;=\; \left(\sum_i |g_i|^p\right)^{1/p}
+
+    taken over every element of every gradient — i.e. the same quantity
+    that :func:`clip_grad_norm_` thresholds against ``max_norm``.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.clip_grad import get_total_norm
+    >>> g_norm = get_total_norm(model.parameters())
     """
     params_with_grad = [p for p in parameters if p.grad is not None]
     if not params_with_grad:

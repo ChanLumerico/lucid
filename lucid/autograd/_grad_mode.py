@@ -12,19 +12,69 @@ _F = TypeVar("_F", bound=Callable[..., object])
 
 
 class no_grad:
-    """
-    Disable gradient computation.
+    r"""Context manager / decorator that disables gradient tracking.
 
-    Correctly restores the previous grad mode on exit (RAII).
-    Can be used as a context manager or function decorator.
+    Inside a ``no_grad`` scope every op skips the graph-building
+    bookkeeping that autograd normally performs: no autograd node
+    is registered, no activations are saved, and the produced
+    tensors carry ``requires_grad=False`` regardless of their
+    inputs. The flag is process-global, so this affects all code
+    running inside the scope.
 
-    Examples:
-        with lucid.no_grad():
-            y = model(x)
+    Use ``no_grad`` for inference, for validation loops, and for
+    parameter updates that should not themselves be differentiable
+    (e.g. EMA accumulation, optimizer steps if performed outside
+    an Optimizer object). The savings — fewer Python objects
+    allocated, no saved activations holding memory, no overhead
+    on each op — are typically large.
 
-        @lucid.no_grad()
-        def eval_step(x):
-            return model(x)
+    The previous gradient mode is restored on exit (RAII), so
+    ``no_grad`` may be safely nested inside :class:`enable_grad`
+    and vice-versa.
+
+    Parameters
+    ----------
+    None
+        ``no_grad`` takes no arguments; configure with
+        :func:`set_grad_enabled` if a dynamic flag is needed.
+
+    Attributes
+    ----------
+    _prev : bool
+        Internal — saved grad-mode flag captured at ``__enter__``
+        time and restored at ``__exit__``.
+
+    Notes
+    -----
+    Gradient mode controls whether autograd records the chain rule
+
+    .. math::
+
+        \frac{\partial \mathcal{L}}{\partial x}
+        = \sum_i \frac{\partial \mathcal{L}}{\partial y_i}
+          \cdot \frac{\partial y_i}{\partial x}.
+
+    With ``no_grad`` the graph that this sum is computed over is
+    never built, so calling :func:`backward` afterwards is a
+    no-op on tensors produced inside the scope.
+
+    Examples
+    --------
+    As a context manager:
+
+    >>> import lucid
+    >>> from lucid.autograd import no_grad
+    >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
+    >>> with no_grad():
+    ...     y = x * 2
+    >>> y.requires_grad
+    False
+
+    As a decorator:
+
+    >>> @no_grad()
+    ... def eval_step(x):
+    ...     return (x * x).sum()
     """
 
     _prev: bool
@@ -52,7 +102,54 @@ class no_grad:
 
 
 class enable_grad:
-    """Re-enable gradient computation, restoring previous mode on exit."""
+    r"""Context manager / decorator that (re-)enables gradient tracking.
+
+    Counterpart of :class:`no_grad`: turns gradient recording back
+    on inside the wrapped scope, even when an outer scope has
+    disabled it. Useful when a small differentiable subroutine
+    runs inside a larger ``no_grad`` block — for example, an
+    inner training step embedded in an outer evaluation loop, or
+    explicit gradient computation for diagnostic plots inside a
+    decorated inference function.
+
+    The previous gradient mode is restored on exit (RAII), so the
+    surrounding ``no_grad`` continues to apply once the inner
+    scope finishes.
+
+    Parameters
+    ----------
+    None
+
+    Attributes
+    ----------
+    _prev : bool
+        Internal — saved grad-mode flag captured at ``__enter__``
+        time and restored at ``__exit__``.
+
+    Notes
+    -----
+    Setting the flag back to ``True`` re-arms autograd to record
+    the chain rule
+
+    .. math::
+
+        \frac{\partial \mathcal{L}}{\partial x}
+        = \sum_i \frac{\partial \mathcal{L}}{\partial y_i}
+          \cdot \frac{\partial y_i}{\partial x}
+
+    for every op executed inside the scope.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import no_grad, enable_grad
+    >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
+    >>> with no_grad():
+    ...     with enable_grad():
+    ...         y = (x * x).sum()
+    >>> y.requires_grad
+    True
+    """
 
     _prev: bool
 
@@ -79,18 +176,127 @@ class enable_grad:
 
 
 def set_grad_enabled(flag: bool) -> None:
-    """Globally enable or disable gradient computation."""
+    r"""Globally set the autograd gradient-tracking flag.
+
+    Imperative counterpart of :class:`no_grad` and
+    :class:`enable_grad`: flips the process-wide flag without a
+    ``with`` block. Useful when the desired state is determined
+    by configuration (e.g. an inference server that disables
+    grad once at start-up).
+
+    Parameters
+    ----------
+    flag : bool
+        ``True`` to enable gradient tracking on subsequent ops,
+        ``False`` to disable it. The change persists until
+        another call to ``set_grad_enabled`` or until a
+        context-manager-based override.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    Unlike the context-manager forms, this function does not
+    stack previous states — repeated calls simply overwrite the
+    flag. Pair it with :func:`is_grad_enabled` to save and
+    restore manually if needed.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import set_grad_enabled, is_grad_enabled
+    >>> set_grad_enabled(False)
+    >>> is_grad_enabled()
+    False
+    >>> set_grad_enabled(True)
+    """
     _C_engine.set_grad_enabled(flag)
 
 
 def is_grad_enabled() -> bool:
-    """Return True if gradient computation is currently enabled."""
+    r"""Return whether autograd gradient tracking is currently enabled.
+
+    Reports the current state of the process-wide flag that
+    :class:`no_grad`, :class:`enable_grad`, and
+    :func:`set_grad_enabled` mutate. The result reflects whether
+    subsequent ops will register autograd nodes.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    bool
+        ``True`` if gradient tracking is enabled (the default
+        outside any ``no_grad`` scope); ``False`` otherwise.
+
+    Notes
+    -----
+    The flag is the same Boolean queried by the C++ engine at
+    op construction time — the result is therefore guaranteed
+    consistent with the actual behaviour of the next op.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import no_grad, is_grad_enabled
+    >>> is_grad_enabled()
+    True
+    >>> with no_grad():
+    ...     is_grad_enabled()
+    False
+    """
     return _C_engine.grad_enabled()
 
 
 @contextmanager
 def inference_mode() -> Iterator[None]:
-    """Context manager that disables gradient tracking (alias for no_grad)."""
+    r"""Context manager for inference-time autograd suppression.
+
+    Like :class:`no_grad` but reserved for fully read-only
+    inference paths: the user guarantees that no in-place
+    mutation of autograd-tracked tensors will occur inside the
+    scope. In the current Lucid implementation
+    ``inference_mode`` is an alias for ``no_grad``; the API
+    exists so that future versions can add stricter optimisations
+    (e.g. skipping version-counter tracking on in-place ops)
+    without changing user code.
+
+    Parameters
+    ----------
+    None
+
+    Yields
+    ------
+    None
+        ``inference_mode`` is intended for ``with`` usage; the
+        yielded value is unused.
+
+    Notes
+    -----
+    Mathematically equivalent to wrapping the inference forward
+    pass in
+
+    .. math::
+
+        y = f(x), \qquad \text{grad mode} = \text{off},
+
+    so no part of :math:`\partial \mathcal{L} / \partial \theta`
+    can be reconstructed afterwards.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import inference_mode
+    >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
+    >>> with inference_mode():
+    ...     y = x * 3
+    >>> y.requires_grad
+    False
+    """
     with no_grad():
         yield
 

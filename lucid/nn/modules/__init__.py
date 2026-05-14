@@ -94,6 +94,11 @@ from lucid.nn.modules.dropout import (
     FeatureAlphaDropout,
 )
 from lucid.nn.modules.sparse import Embedding, EmbeddingBag
+from lucid.nn.modules.positional import (
+    RotaryEmbedding,
+    SinusoidalEmbedding,
+    SinusoidalEmbedding2D,
+)
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
 from lucid.nn.modules.loss import (
@@ -253,6 +258,9 @@ __all__ = [
     "FeatureAlphaDropout",
     "Embedding",
     "EmbeddingBag",
+    "RotaryEmbedding",
+    "SinusoidalEmbedding",
+    "SinusoidalEmbedding2D",
     "MultiheadAttention",
     "LSTM",
     "GRU",

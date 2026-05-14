@@ -16,32 +16,48 @@ if TYPE_CHECKING:
 
 
 def skip_init(module_cls: type, *args: object, **kwargs: object) -> Module:
-    """Create an instance of ``module_cls`` with **uninitialized** parameters.
+    r"""Construct a module while skipping its parameter initialisation.
 
-    All learnable parameters are replaced with ``lucid.empty`` tensors of the
-    same shape, dtype, and device immediately after construction.  Buffer
-    tensors are left intact (they are typically non-learnable state such as
-    running statistics that need a defined initial value).
+    Instantiates ``module_cls(*args, **kwargs)`` and then immediately
+    replaces every learnable parameter with an *uninitialised* buffer
+    of the same shape / dtype / device.  The intended pattern is
+    "construct, then ``load_state_dict``": skipping the
+    :func:`xavier_uniform` / :func:`kaiming_normal` work that is about
+    to be overwritten saves measurable time on large models with many
+    layers.
 
     Parameters
     ----------
     module_cls : type
         A :class:`~lucid.nn.Module` subclass to instantiate.
-    *args, **kwargs
-        Forwarded verbatim to ``module_cls.__init__``.
+    *args
+        Positional arguments forwarded to ``module_cls.__init__``.
+    **kwargs
+        Keyword arguments forwarded to ``module_cls.__init__``.
 
     Returns
     -------
     Module
-        The constructed module with uninitialized parameter data.
+        Fully constructed module whose parameter data is undefined.
+        Buffers (running statistics, attention masks, etc.) are left
+        intact because they are typically not refreshed from a
+        checkpoint.
 
     Notes
     -----
-    Unlike the reference framework's implementation (which avoids allocation
-    via a ``meta`` device), Lucid allocates parameters normally and then
-    replaces the underlying storage with an uninitialised buffer.  The
-    semantic effect is identical: callers must not read parameter values
-    before loading a checkpoint.
+    Lucid allocates each parameter normally, then swaps its underlying
+    storage for the output of :func:`lucid.empty` — semantically
+    equivalent to the reference framework's ``meta``-device trick.
+    Callers **must not** inspect parameter values before loading a
+    checkpoint; the contents are unspecified and may contain ``nan``
+    or ``inf``.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import skip_init
+    >>> model = skip_init(nn.Linear, 1024, 1024)
+    >>> # ... immediately load a checkpoint ...
     """
     module: Module = module_cls(*args, **kwargs)
 

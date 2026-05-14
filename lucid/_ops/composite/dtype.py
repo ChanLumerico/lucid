@@ -47,18 +47,51 @@ def _promote(a_dtype: _DType, b_dtype: _DType) -> _DType:
 
 
 def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
-    """Determine the promoted dtype of an operation on ``a`` and ``b``.
+    r"""Compute the dtype that a binary operation on the inputs would produce.
+
+    Implements NumPy-style type promotion: tensors contribute their
+    declared dtype, while Python scalars are treated as having no dtype
+    of their own and follow whichever tensor operand they appear with.
 
     Parameters
     ----------
-    a, b : Tensor | Scalar
-        Operands. Python scalars do not contribute a dtype and are ignored
-        unless both arguments are scalar (in which case ``float32`` is used).
+    a : Tensor | Scalar
+        First operand. Tensor operands contribute their dtype; Python
+        scalars do not.
+    b : Tensor | Scalar
+        Second operand. Same convention as ``a``.
 
     Returns
     -------
     DType
-        The dtype that the binary operation would produce.
+        The dtype that an arithmetic operation on ``a`` and ``b`` would
+        produce.
+
+    Notes
+    -----
+    The promotion algorithm groups dtypes into four kinds — bool
+    :math:`< \text{int} < \text{float} < \text{complex}` — and uses
+    bit-width as a tiebreaker. Concretely:
+
+    .. math::
+
+        \text{result\_type}(a, b) =
+        \begin{cases}
+            \text{dtype}(a),                        & b\ \text{is scalar}, \\
+            \text{dtype}(b),                        & a\ \text{is scalar}, \\
+            \text{float32},                          & \text{both scalar}, \\
+            \operatorname{promote}(\text{dtype}(a), \text{dtype}(b)), & \text{otherwise}.
+        \end{cases}
+
+    See also :func:`promote_types` (operates directly on dtype objects).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> a = lucid.tensor([1, 2], dtype=lucid.int32)
+    >>> b = lucid.tensor([1., 2.], dtype=lucid.float32)
+    >>> lucid.result_type(a, b)
+    lucid.float32
     """
     da = a.dtype if _is_tensor(a) else None
     db = b.dtype if _is_tensor(b) else None
@@ -74,18 +107,51 @@ def result_type(a: Tensor | Scalar, b: Tensor | Scalar) -> _DType:
 
 
 def promote_types(a_dtype: _DType, b_dtype: _DType) -> _DType:
-    """Return the dtype that ``a_dtype`` and ``b_dtype`` jointly promote to.
+    r"""Compute the joint promotion of two dtypes.
+
+    Operates on dtype objects directly (no tensor required). Combines
+    the two dtypes according to the standard kind/width ordering:
+    higher kind (bool :math:`<` int :math:`<` float :math:`<` complex)
+    wins outright, and ties in kind are broken by the wider bit-width.
 
     Parameters
     ----------
-    a_dtype, b_dtype : DType
-        Operand dtypes.
+    a_dtype : DType
+        First dtype.
+    b_dtype : DType
+        Second dtype.
 
     Returns
     -------
     DType
-        Promoted dtype, equal to either input or the wider of the two
-        according to the standard kind/width ordering.
+        The dtype that values of either input dtype would be promoted to
+        in a binary operation.
+
+    Notes
+    -----
+    With ``kind(d)`` and ``width(d)`` denoting the kind and bit-width
+    of a dtype:
+
+    .. math::
+
+        \text{promote}(d_a, d_b) =
+        \begin{cases}
+            d_a, & \text{kind}(d_a) > \text{kind}(d_b), \\
+            d_b, & \text{kind}(d_a) < \text{kind}(d_b), \\
+            d_a, & \text{kind equal and width}(d_a) \geq \text{width}(d_b), \\
+            d_b, & \text{otherwise}.
+        \end{cases}
+
+    The relation is symmetric (up to ties) and commutative on the
+    output dtype.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.promote_types(lucid.int32, lucid.float32)
+    lucid.float32
+    >>> lucid.promote_types(lucid.int8, lucid.int64)
+    lucid.int64
     """
     if a_dtype == b_dtype:
         return a_dtype
@@ -93,11 +159,50 @@ def promote_types(a_dtype: _DType, b_dtype: _DType) -> _DType:
 
 
 def can_cast(from_dtype: _DType, to_dtype: _DType) -> bool:
-    """Return ``True`` if ``from_dtype`` can be cast to ``to_dtype`` without loss.
+    r"""Predicate: can ``from_dtype`` be safely cast to ``to_dtype``?
 
-    A cast is considered safe when promotion of the two dtypes equals
-    ``to_dtype`` — i.e. ``to_dtype`` already includes the value range and
-    precision of ``from_dtype``.
+    Returns ``True`` iff every value representable in ``from_dtype`` is
+    also representable in ``to_dtype`` without loss of range or
+    precision.  This is the "safe" casting policy of NumPy: it admits
+    widening conversions (e.g. ``int8 → int32``, ``float32 → float64``)
+    and rejects narrowing or sign-changing conversions.
+
+    Parameters
+    ----------
+    from_dtype : dtype-like
+        Source dtype.
+    to_dtype : dtype-like
+        Destination dtype.
+
+    Returns
+    -------
+    bool
+        ``True`` if the cast is safe, ``False`` otherwise.
+
+    Notes
+    -----
+    Implemented in terms of :func:`promote_types`: the cast is safe when
+
+    .. math::
+
+        \operatorname{promote\_types}(\text{from},\;\text{to})
+        \;=\; \text{to},
+
+    i.e. ``to_dtype`` already dominates ``from_dtype`` in the
+    promotion lattice.  Contrast with :func:`result_type`, which
+    returns the *target* dtype for a mixed-type expression rather than
+    a boolean — use ``can_cast`` for pre-flight checks, ``result_type``
+    for selecting an output dtype.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.can_cast(lucid.int8, lucid.int32)
+    True
+    >>> lucid.can_cast(lucid.float32, lucid.int32)
+    False
+    >>> lucid.can_cast(lucid.float32, lucid.float64)
+    True
     """
     return promote_types(from_dtype, to_dtype) == to_dtype
 

@@ -34,12 +34,66 @@ _EULER_GAMMA: float = 0.5772156649015329
 
 
 class Gumbel(Distribution):
-    """Gumbel (Type-I extreme value) distribution on ``ℝ``.
+    r"""Gumbel (Type-I extreme value) distribution on :math:`\mathbb{R}`.
 
-    ``Gumbel(loc, scale)`` — density:
-    ``(1/s) · exp(−(z + exp(−z)))``  where  ``z = (x − μ) / s``.
+    Continuous distribution that models the maximum (or minimum) of a
+    sample drawn from a number of distributions with exponential-like
+    tails.  It is the limiting distribution of the maximum of IID
+    exponential-tailed variables (Fisher–Tippett–Gnedenko theorem) and is
+    the basis of the celebrated **Gumbel-max trick** for differentiable
+    sampling from categorical distributions.
 
-    Widely used for Gumbel-softmax / top-k sampling tricks.
+    Parameters
+    ----------
+    loc : Tensor or float
+        Location parameter :math:`\mu \in \mathbb{R}` (mode of the
+        density).
+    scale : Tensor or float
+        Scale parameter :math:`s > 0`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density (with :math:`z = (x - \mu)/s`):
+
+    .. math::
+
+        p(x; \mu, s) = \frac{1}{s} \exp\!\bigl(-(z + e^{-z})\bigr)
+
+    Cumulative distribution:
+
+    .. math::
+
+        F(x; \mu, s) = \exp\!\bigl(-e^{-z}\bigr)
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \mu + s\,\gamma_{\mathrm{E}}, \qquad
+        \mathrm{Var}[X] = \frac{\pi^2 s^2}{6}
+
+    where :math:`\gamma_{\mathrm{E}} \approx 0.5772` is the
+    Euler–Mascheroni constant.  The mode is :math:`\mu` and the entropy
+    is :math:`\log s + \gamma_{\mathrm{E}} + 1`.
+
+    **Gumbel-softmax trick**: if :math:`g_i \sim \mathrm{Gumbel}(0, 1)`
+    IID and :math:`\pi_i` are category probabilities, then
+    :math:`\arg\max_i (\log \pi_i + g_i)` is a sample from
+    :math:`\mathrm{Categorical}(\pi)`.  Replacing the argmax with a
+    softmax yields a continuous relaxation that supports gradient flow
+    through discrete choices (Jang et al., 2017; Maddison et al., 2017).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Gumbel
+    >>> d = Gumbel(loc=0.0, scale=1.0)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.0))
+    Tensor(-1.0)
     """
 
     arg_constraints = {"loc": real, "scale": positive}
@@ -129,10 +183,64 @@ class Gumbel(Distribution):
 
 
 class InverseGamma(Distribution):
-    """Inverse-Gamma distribution: ``X = 1 / Y``  where  ``Y ~ Gamma(α, β)``.
+    r"""Inverse-Gamma distribution on :math:`(0, \infty)`.
 
-    ``InverseGamma(concentration=α, rate=β)`` — density on ``(0, ∞)``:
-    ``β^α / Γ(α) · x^(−α−1) · exp(−β / x)``.
+    Distribution of the reciprocal of a Gamma random variable: if
+    :math:`Y \sim \mathrm{Gamma}(\alpha, \beta)` then
+    :math:`X = 1/Y \sim \mathrm{InverseGamma}(\alpha, \beta)`.  Widely used
+    as the **conjugate prior** for the variance parameter of a Normal
+    distribution with known mean, and as a prior on positive scale
+    parameters more generally.
+
+    Parameters
+    ----------
+    concentration : Tensor or float
+        Shape parameter :math:`\alpha > 0`.
+    rate : Tensor or float
+        Rate (inverse-scale) parameter :math:`\beta > 0`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x > 0`:
+
+    .. math::
+
+        p(x; \alpha, \beta) =
+            \frac{\beta^\alpha}{\Gamma(\alpha)}
+            x^{-\alpha - 1} \exp\!\left(-\frac{\beta}{x}\right)
+
+    Moments (when defined):
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{\beta}{\alpha - 1}\;\;(\alpha > 1), \qquad
+        \mathrm{Var}[X] = \frac{\beta^2}{(\alpha - 1)^2 (\alpha - 2)}
+        \;\;(\alpha > 2)
+
+    Mode: :math:`\beta / (\alpha + 1)`.
+
+    **Conjugacy**: with a :math:`\mathrm{Normal}(\mu, \sigma^2)`
+    likelihood and known mean :math:`\mu`, the posterior over
+    :math:`\sigma^2` is again Inverse-Gamma with updated parameters
+    :math:`\alpha' = \alpha + n/2`,
+    :math:`\beta' = \beta + \tfrac{1}{2}\sum_i (x_i - \mu)^2`.
+
+    Because Lucid's :class:`~lucid.distributions.Gamma` sampler is
+    rejection-based, ``has_rsample`` is ``False`` here and
+    :meth:`sample` returns detached samples obtained by reciprocating
+    a Gamma draw.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import InverseGamma
+    >>> d = InverseGamma(concentration=3.0, rate=2.0)
+    >>> d.mean  # β / (α - 1) = 1.0
+    Tensor(1.0)
+    >>> d.sample((4,))
+    Tensor([...])
     """
 
     arg_constraints = {"concentration": positive, "rate": positive}
@@ -215,11 +323,69 @@ class InverseGamma(Distribution):
 
 
 class Kumaraswamy(Distribution):
-    """Kumaraswamy distribution on ``(0, 1)`` — a Beta-like family that
-    has a closed-form CDF and supports cheap reparameterised sampling.
+    r"""Kumaraswamy distribution on :math:`(0, 1)`.
 
-    ``Kumaraswamy(concentration1=a, concentration0=b)`` — density:
-    ``a · b · x^(a−1) · (1 − x^a)^(b−1)``.
+    Two-parameter continuous distribution on the unit interval that
+    mimics the shapes of the :class:`~lucid.distributions.Beta`
+    distribution but has a **closed-form CDF and inverse CDF**.  This
+    makes it a popular choice in variational autoencoders and normalising
+    flows where cheap, exact reparameterised sampling is needed and no
+    special functions are required.
+
+    Parameters
+    ----------
+    concentration1 : Tensor or float
+        First shape parameter :math:`a > 0`.
+    concentration0 : Tensor or float
+        Second shape parameter :math:`b > 0`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x \in (0, 1)`:
+
+    .. math::
+
+        p(x; a, b) = a\, b\, x^{a - 1} (1 - x^a)^{b - 1}
+
+    Cumulative distribution (closed form):
+
+    .. math::
+
+        F(x; a, b) = 1 - (1 - x^a)^b
+
+    Inverse CDF (used by :meth:`rsample`):
+
+    .. math::
+
+        F^{-1}(u; a, b) = (1 - (1 - u)^{1/b})^{1/a}
+
+    Moments are expressible in closed form via the Beta function:
+
+    .. math::
+
+        \mathbb{E}[X^n] = b\, B(1 + n/a,\, b)
+
+    Special cases:
+
+    * :math:`a = 1` → :math:`\mathrm{Beta}(1, b)`
+    * :math:`b = 1` → :math:`\mathrm{Beta}(a, 1)`
+
+    Unlike Beta, Kumaraswamy is *not* a member of the exponential family
+    and lacks an analytic normalising integral for sums.  Its main
+    advantage is the lack of any reliance on the gamma function in
+    forward or backward passes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Kumaraswamy
+    >>> d = Kumaraswamy(concentration1=2.0, concentration0=5.0)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.3))
+    Tensor(...)
     """
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
@@ -332,21 +498,74 @@ class Kumaraswamy(Distribution):
 
 
 class Multinomial(Distribution):
-    """Multinomial distribution over ``K`` categories.
+    r"""Multinomial distribution over :math:`K` categories.
 
-    ``Multinomial(total_count, probs)`` — counts of ``total_count`` draws
-    from a Categorical with ``probs``.  The event dimension is the last axis
-    of the probability vector.
+    Multivariate generalisation of the :class:`~lucid.distributions.Bernoulli`
+    /Binomial: the joint distribution of the counts
+    :math:`(k_1, \ldots, k_K)` obtained when :math:`n = \text{total\_count}`
+    independent draws are made from a Categorical with probabilities
+    :math:`(p_1, \ldots, p_K)`.  The :math:`k_i` are non-negative integers
+    summing to :math:`n`.
+
+    The event dimension is the last axis of ``probs`` / ``logits``; all
+    preceding axes form the batch shape.
 
     Parameters
     ----------
-    total_count : int | Tensor
-        Number of draws (scalar, non-negative integer).
-    probs : Tensor | None
-        Category probabilities (unnormalised; will be normalised internally).
-        Mutually exclusive with ``logits``.
-    logits : Tensor | None
-        Log-unnormalised category probabilities.
+    total_count : int or Tensor, optional
+        Total number of trials :math:`n \geq 0`.  Default ``1`` (a
+        one-hot Categorical sample).
+    probs : Tensor, optional
+        Unnormalised category probabilities of shape ``(..., K)`` —
+        normalised internally to sum to 1 along the last axis.  Mutually
+        exclusive with ``logits``.
+    logits : Tensor, optional
+        Unnormalised log-probabilities of shape ``(..., K)``, converted
+        via softmax.  Mutually exclusive with ``probs``.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability mass function (joint over the count vector
+    :math:`\mathbf{k}` with :math:`\sum_i k_i = n`):
+
+    .. math::
+
+        P(\mathbf{K} = \mathbf{k} \mid n, \mathbf{p}) =
+            \binom{n}{k_1, \ldots, k_K} \prod_{i=1}^{K} p_i^{k_i},
+        \qquad
+        \binom{n}{k_1, \ldots, k_K} = \frac{n!}{\prod_i k_i!}
+
+    Moments (per category):
+
+    .. math::
+
+        \mathbb{E}[K_i] = n p_i, \qquad
+        \mathrm{Var}[K_i] = n p_i (1 - p_i), \qquad
+        \mathrm{Cov}[K_i, K_j] = -n p_i p_j \;\; (i \neq j)
+
+    Special cases:
+
+    * :math:`K = 2` → :math:`\mathrm{Binomial}(n, p_1)`
+    * :math:`n = 1` → one-hot :class:`~lucid.distributions.Categorical`
+
+    **Conjugate prior**: :class:`~lucid.distributions.Dirichlet` —
+    observing counts :math:`\mathbf{k}` updates
+    ``Dirichlet(α) → Dirichlet(α + k)``.
+
+    Sampling is non-reparameterised (``has_rsample = False``) and
+    implemented by summing :math:`n` one-hot Categorical draws.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Multinomial
+    >>> d = Multinomial(total_count=10, probs=lucid.tensor([0.2, 0.3, 0.5]))
+    >>> d.mean  # n * p
+    Tensor([2., 3., 5.])
+    >>> d.sample((4,))
+    Tensor([...])
     """
 
     arg_constraints = {
@@ -498,16 +717,81 @@ class Multinomial(Distribution):
 
 
 class ContinuousBernoulli(Distribution):
-    """Continuous Bernoulli distribution on ``[0, 1]``.
+    r"""Continuous Bernoulli distribution on :math:`[0, 1]`.
 
-    Like a Bernoulli but with a normalising constant ``C(p)`` that makes the
-    density integrate to 1 over the continuous interval ``[0, 1]``:
+    A continuous relaxation of the :class:`~lucid.distributions.Bernoulli`
+    distribution introduced by Loaiza-Ganem & Cunningham (2019) to fix the
+    well-known bias incurred by VAE decoders that use a Bernoulli
+    likelihood on real-valued image pixels in :math:`[0, 1]`.  Unlike the
+    naive "Bernoulli on [0,1]" likelihood, the Continuous Bernoulli has a
+    proper normalising constant and yields unbiased ELBO gradients.
 
-    ``p(x | p) = C(p) · pˣ · (1−p)^(1−x)``
+    Parameters
+    ----------
+    probs : Tensor or float, optional
+        Parameter :math:`\lambda \in [0, 1]`.  Note that
+        :math:`\mathbb{E}[X] \neq \lambda` in general — see Notes for
+        the closed-form mean.  Mutually exclusive with ``logits``.
+    logits : Tensor or float, optional
+        Log-odds :math:`\ell = \log(\lambda / (1 - \lambda))`.  Mutually
+        exclusive with ``probs``.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
 
-    where ``C(p) = |logit(p)| / |2p − 1|`` for ``p ≠ ½``, ``C(½) = 2``.
+    Notes
+    -----
+    Probability density on :math:`x \in [0, 1]`:
 
-    Common in generative models with Bernoulli-like decoders over [0,1] data.
+    .. math::
+
+        p(x; \lambda) = C(\lambda)\, \lambda^x (1 - \lambda)^{1 - x}
+
+    where the normalising constant is
+
+    .. math::
+
+        C(\lambda) =
+        \begin{cases}
+            \dfrac{2 \tanh^{-1}(1 - 2\lambda)}{1 - 2\lambda}
+                & \lambda \neq \tfrac{1}{2} \\[4pt]
+            2 & \lambda = \tfrac{1}{2}
+        \end{cases}
+
+    Mean (closed form):
+
+    .. math::
+
+        \mathbb{E}[X] =
+        \begin{cases}
+            \dfrac{\lambda}{2\lambda - 1} +
+            \dfrac{1}{2 \tanh^{-1}(1 - 2\lambda)}
+                & \lambda \neq \tfrac{1}{2} \\[4pt]
+            \tfrac{1}{2} & \lambda = \tfrac{1}{2}
+        \end{cases}
+
+    Important properties:
+
+    * Support: :math:`[0, 1]` (continuous, not just :math:`\{0, 1\}`).
+    * Reduces to :math:`\mathrm{Uniform}(0, 1)` at :math:`\lambda = 1/2`.
+    * At :math:`\lambda \to 0` or :math:`\lambda \to 1` the density
+      concentrates near 0 or 1 respectively.
+    * Reparameterisable via inverse CDF.
+
+    The Continuous Bernoulli is the **correct** likelihood for decoders
+    that output a value in :math:`[0, 1]` (e.g. MNIST pixel intensities)
+    when the model is to remain a valid probabilistic model.  Using a
+    plain Bernoulli on continuous data produces an *improper* density and
+    a systematically biased ELBO.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import ContinuousBernoulli
+    >>> d = ContinuousBernoulli(probs=0.7)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.5))
+    Tensor(...)
     """
 
     arg_constraints = {"probs": unit_interval, "logits": real}

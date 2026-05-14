@@ -19,7 +19,63 @@ from lucid.distributions._util import (
 
 
 class Exponential(ExponentialFamily):
-    """``Exp(rate)`` with density ``rate · exp(-rate · x)`` on ``x ≥ 0``."""
+    r"""Exponential distribution on :math:`[0, \infty)`.
+
+    Continuous distribution describing the waiting time between events of
+    a Poisson process with rate :math:`\lambda`.  It is the continuous
+    analogue of the :class:`~lucid.distributions.Geometric` distribution
+    and the unique continuous distribution with the *memoryless* property.
+
+    Parameters
+    ----------
+    rate : Tensor or float
+        Rate parameter :math:`\lambda > 0`.  The mean of the distribution
+        is :math:`1/\lambda`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x \geq 0`:
+
+    .. math::
+
+        p(x; \lambda) = \lambda e^{-\lambda x}
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{1}{\lambda}, \qquad
+        \mathrm{Var}[X] = \frac{1}{\lambda^2}, \qquad
+        H[X] = 1 - \log \lambda
+
+    **Memoryless property:**
+
+    .. math::
+
+        P(X > s + t \mid X > s) = P(X > t)
+
+    Special cases / relations:
+
+    * :math:`\mathrm{Exponential}(\lambda) = \mathrm{Gamma}(1, \lambda)`
+    * The sum of :math:`k` IID :math:`\mathrm{Exponential}(\lambda)`
+      variables is :math:`\mathrm{Gamma}(k, \lambda)` (Erlang).
+    * :math:`-\log U / \lambda` with :math:`U \sim \mathrm{Uniform}(0, 1)`
+      is the inverse-CDF sampler used by :meth:`rsample`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Exponential
+    >>> d = Exponential(rate=2.0)
+    >>> d.mean  # 1/rate
+    Tensor(0.5)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(1.0))
+    Tensor(-1.3069)
+    """
 
     arg_constraints = {"rate": positive}
     support: Constraint | None = positive
@@ -264,7 +320,66 @@ class Exponential(ExponentialFamily):
 
 
 class Laplace(Distribution):
-    """``Laplace(loc, scale)`` — symmetric double-exponential."""
+    r"""Laplace (double-exponential) distribution on :math:`\mathbb{R}`.
+
+    Symmetric continuous distribution composed of two mirrored Exponential
+    densities placed back-to-back at the location :math:`\mu`.  It is the
+    maximum-entropy distribution with a given mean and a given mean
+    absolute deviation, and is the prior whose negative log-density induces
+    the L1 (Lasso) penalty.
+
+    Parameters
+    ----------
+    loc : Tensor or float
+        Location parameter :math:`\mu \in \mathbb{R}` (mean = median = mode).
+    scale : Tensor or float
+        Scale / diversity parameter :math:`b > 0`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density:
+
+    .. math::
+
+        p(x; \mu, b) = \frac{1}{2b} \exp\!\left(-\frac{|x - \mu|}{b}\right)
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \mu, \qquad
+        \mathrm{Var}[X] = 2 b^2, \qquad
+        H[X] = 1 + \log(2b)
+
+    The Laplace has heavier tails than the Normal: its kurtosis is 6 vs. 3
+    for the Normal, and its tails decay exponentially rather than
+    quadratically in log-space.
+
+    Sampling uses the closed-form inverse CDF:
+
+    .. math::
+
+        X = \mu - b \operatorname{sgn}(U - \tfrac{1}{2})
+            \log(1 - 2|U - \tfrac{1}{2}|),
+        \quad U \sim \mathrm{Uniform}(0, 1)
+
+    so :meth:`rsample` is exact and gradient-friendly through both
+    :math:`\mu` and :math:`b`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Laplace
+    >>> d = Laplace(loc=0.0, scale=1.0)
+    >>> d.mean
+    Tensor(0.0)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.0))
+    Tensor(-0.6931)
+    """
 
     arg_constraints = {"loc": real, "scale": positive}
     support: Constraint | None = real
@@ -460,7 +575,67 @@ class Laplace(Distribution):
 
 
 class Cauchy(Distribution):
-    """``Cauchy(loc, scale)`` — heavy-tailed; mean / variance undefined."""
+    r"""Cauchy distribution on :math:`\mathbb{R}` — heavy-tailed, all moments undefined.
+
+    The canonical example of a *pathological* heavy-tailed distribution:
+    its tails decay so slowly that no integer moment (mean, variance,
+    skew, kurtosis) is defined.  The Cauchy is the Student's-t
+    distribution with one degree of freedom and arises naturally as the
+    ratio of two independent standard Normals.
+
+    Parameters
+    ----------
+    loc : Tensor or float
+        Location parameter :math:`x_0 \in \mathbb{R}` (median and mode).
+        The "mean" does *not* exist.
+    scale : Tensor or float
+        Scale parameter :math:`\gamma > 0` (half-width at half-maximum).
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density:
+
+    .. math::
+
+        p(x; x_0, \gamma) =
+            \frac{1}{\pi \gamma}
+            \left[1 + \left(\frac{x - x_0}{\gamma}\right)^2\right]^{-1}
+
+    Cumulative distribution:
+
+    .. math::
+
+        F(x; x_0, \gamma) =
+            \frac{1}{\pi} \arctan\!\left(\frac{x - x_0}{\gamma}\right) + \frac{1}{2}
+
+    Properties (no moments — *all* are undefined or infinite):
+
+    * **Median / mode**: :math:`x_0`
+    * **Mean / variance**: undefined (integrals diverge)
+    * **Entropy**: :math:`H[X] = \log(4 \pi \gamma)`
+
+    **Sample mean does not converge** — the strong law of large numbers
+    fails for IID Cauchy variates.  Any finite-sample average of Cauchy
+    draws is itself Cauchy-distributed with the same parameters.
+
+    **Stability**: a sum of independent Cauchy variables remains Cauchy
+    (it is an :math:`\alpha`-stable distribution with stability index 1).
+
+    Reparameterised sampling uses the inverse-CDF
+    :math:`X = x_0 + \gamma \tan(\pi(U - \tfrac{1}{2}))`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Cauchy
+    >>> d = Cauchy(loc=0.0, scale=1.0)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.0))
+    Tensor(-1.1447)
+    """
 
     arg_constraints = {"loc": real, "scale": positive}
     support: Constraint | None = real

@@ -52,17 +52,70 @@ def register_parametrization(
     *,
     unsafe: bool = False,
 ) -> Module:
-    """Re-parametrise ``module.<tensor_name>`` through ``parametrization``.
+    r"""Install a parametrization on a parameter of ``module``.
 
-    After the call, ``module.<tensor_name>`` is no longer a leaf — every
-    access runs ``parametrization(original)`` where ``original`` is the
-    cached pre-transformation weight.  The cache lives at
-    ``module.parametrizations[tensor_name].original`` and is the actual
-    trainable Parameter.
+    After registration, ``module.<tensor_name>`` is no longer a leaf
+    parameter — every read invokes ``parametrization(original)`` where
+    ``original`` is the cached pre-transformation weight.  The original
+    becomes the actual trainable Parameter, exposed at
+    ``module.parametrizations[tensor_name].original``.  This is the
+    modern, general-purpose alternative to :func:`weight_norm` /
+    :func:`spectral_norm`: any differentiable transformation of a weight
+    can be installed.
 
-    Setting ``unsafe=True`` skips the post-registration sanity check that
-    the transformation produces a tensor with the same shape — useful for
-    transformations that change the shape on purpose.
+    Parameters
+    ----------
+    module : Module
+        Host module whose parameter is to be parametrised.  Mutated in
+        place.
+    tensor_name : str
+        Attribute name of the parameter to wrap.
+    parametrization : Module
+        A module whose ``forward(W) -> W'`` defines the transformation.
+        Its own parameters (if any) become trainable; ``W'`` is what
+        ``module.<tensor_name>`` returns at access time.
+    unsafe : bool, keyword-only, optional
+        If ``True``, skip the sanity check that
+        ``parametrization(original)`` produces the same shape as the
+        original.  Required for shape-changing parametrisations (e.g.
+        Householder factorisations).
+
+    Returns
+    -------
+    Module
+        The same ``module``, now with the parametrisation attached.
+
+    Raises
+    ------
+    AttributeError
+        If ``tensor_name`` is not present on the module.
+    RuntimeError
+        If a parametrisation is already registered on ``tensor_name``
+        (chaining is not yet supported) or, when ``unsafe`` is ``False``,
+        the produced tensor shape differs from the original.
+
+    Notes
+    -----
+    Mathematically, calling ``register_parametrization(m, 'weight', f)``
+    re-expresses the trained quantity as
+
+    .. math::
+
+        \mathbf{W} \;=\; f(\boldsymbol\theta), \qquad
+        \boldsymbol\theta \in \mathcal{M},
+
+    where :math:`\boldsymbol\theta` is the new ``original`` parameter
+    (now living on a possibly constrained manifold :math:`\mathcal{M}`)
+    and :math:`f` is the parametrisation module.  Gradients flow
+    through :math:`f` automatically during backprop.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.parametrize import register_parametrization
+    >>> class Symmetric(nn.Module):
+    ...     def forward(self, X):
+    ...         return 0.5 * (X + X.mT)
+    >>> register_parametrization(layer, "weight", Symmetric())
     """
     if not hasattr(module, tensor_name):
         raise AttributeError(f"module has no parameter '{tensor_name}'")
@@ -115,7 +168,41 @@ def register_parametrization(
 
 
 def is_parametrized(module: Module, tensor_name: str | None = None) -> bool:
-    """Return True if ``module`` has any parametrisation (or a specific one)."""
+    r"""Predicate: does ``module`` carry an active parametrisation?
+
+    Lightweight introspection — checks for the presence of the
+    ``parametrizations`` container without invoking any forward hook.
+    Use this in user code that needs to behave differently for raw vs
+    reparametrised layers (e.g. checkpoint serialisation, weight
+    initialisation utilities).
+
+    Parameters
+    ----------
+    module : Module
+        Module to inspect.
+    tensor_name : str, optional
+        If given, narrow the check to a specific parameter name.  When
+        ``None`` (the default), return ``True`` if *any* parameter on
+        the module is parametrised.
+
+    Returns
+    -------
+    bool
+        ``True`` if a parametrisation exists matching the query,
+        ``False`` otherwise.
+
+    Notes
+    -----
+    Cheap to call — runs in :math:`O(1)`; no tensor work is performed.
+
+    Examples
+    --------
+    >>> register_parametrization(m, "weight", Symmetric())
+    >>> is_parametrized(m)
+    True
+    >>> is_parametrized(m, "bias")
+    False
+    """
     container_dict: dict[str, object] = getattr(module, _PARAM_HOOK_ATTR, {})
     if not container_dict:
         return False
@@ -129,11 +216,49 @@ def remove_parametrizations(
     tensor_name: str,
     leave_parametrized: bool = True,
 ) -> Module:
-    """Reverse a previous ``register_parametrization`` call.
+    r"""Reverse :func:`register_parametrization` and restore a leaf parameter.
 
-    With ``leave_parametrized=True`` (the default) the most recent value
-    of the derived tensor is materialised into a fresh leaf Parameter;
-    otherwise the pre-transformation ``original`` weight is restored.
+    Detaches the forward pre-hook and reinstalls ``module.<tensor_name>``
+    as a plain :class:`~lucid.nn.parameter.Parameter`.  Choose whether to
+    keep the most recent *transformed* value or roll back to the raw
+    pre-parametrisation weight via ``leave_parametrized``.
+
+    Parameters
+    ----------
+    module : Module
+        Module previously passed through :func:`register_parametrization`.
+    tensor_name : str
+        Attribute name to un-parametrise.  Must match the name used at
+        registration.
+    leave_parametrized : bool, optional
+        If ``True`` (the default), the new leaf parameter is set to
+        :math:`f(\boldsymbol\theta)` — the most recent output of the
+        parametrisation.  If ``False``, the underlying
+        :math:`\boldsymbol\theta` (the ``original`` Parameter) is
+        restored as-is.
+
+    Returns
+    -------
+    Module
+        The same ``module`` with the parametrisation removed.
+
+    Raises
+    ------
+    ValueError
+        If no parametrisation is registered on ``tensor_name``.
+
+    Notes
+    -----
+    The restored Parameter is detached from the autograd graph — any
+    gradient history accumulated through the parametrisation is
+    discarded.  If multiple parametrisations are present, only the one
+    matching ``tensor_name`` is removed; the others remain attached.
+
+    Examples
+    --------
+    >>> remove_parametrizations(layer, "weight")
+    >>> is_parametrized(layer, "weight")
+    False
     """
     container_dict: dict[str, ParametrizationContainer] = getattr(
         module, _PARAM_HOOK_ATTR, {}

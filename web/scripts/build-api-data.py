@@ -430,8 +430,19 @@ def _rst_to_text(text: str) -> str:
       - ``:class:`Foo```, etc.         → `Foo`    (cross-references as inline code)
     """
     # Block math: .. math::\n\n   expr  →  $$\nexpr\n$$
+    # If the body uses `&` (column alignment) or contains an explicit `\\`
+    # line break, wrap it in an `aligned` environment — KaTeX requires the
+    # explicit environment for these alignment markers to parse, whereas
+    # docstrings in the wild tend to omit it.
     def _block_math(m: re.Match[str]) -> str:
         body = textwrap.dedent(m.group(1)).strip()
+        needs_aligned = (
+            "&" in body
+            and "\\begin{" not in body
+            and "\\end{" not in body
+        )
+        if needs_aligned:
+            body = f"\\begin{{aligned}}\n{body}\n\\end{{aligned}}"
         return f"$$\n{body}\n$$"
     text = re.sub(r"\.\. math::\n\n((?:[ \t]+.+\n?)+)", _block_math, text)
 
@@ -477,7 +488,10 @@ def _get_ast_docstring(fn_name: str) -> str | None:
         LUCID_SRC / "lucid",
     ]
     for impl_dir in IMPL_DIRS:
-        for fpath in sorted(impl_dir.glob("*.py")):
+        # rglob: recurse into subpackages.  This lets the lookup find e.g.
+        # composite ops in lucid/_ops/composite/{elementwise,blas,shape,...}.py
+        # without us having to enumerate every nested directory above.
+        for fpath in sorted(impl_dir.rglob("*.py")):
             try:
                 tree = ast.parse(fpath.read_text(encoding="utf-8"))
             except (SyntaxError, OSError):

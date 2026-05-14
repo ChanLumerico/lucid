@@ -101,11 +101,41 @@ class _LucidUnpickler(pickle.Unpickler):
 
 
 def save(obj: object, f: str | bytes | io.IOBase, *, pickle_protocol: int = 4) -> None:
-    """Save an object to a file or file-like object.
+    r"""Serialise ``obj`` to a Lucid-format checkpoint file.
 
-    If ``obj`` is a ``dict`` (or subclass) carrying a ``_metadata`` attribute
-    set by ``Module.state_dict()``, the metadata is preserved across the
-    round-trip and re-attached on ``load()``.
+    Writes a pickle stream augmented with a custom persistent-id
+    protocol that captures every embedded :class:`Tensor` as a typed
+    byte blob rather than a numpy array. The resulting ``.lucid`` file
+    can be reloaded in environments without numpy installed.
+
+    Parameters
+    ----------
+    obj : object
+        Object graph to serialise. ``dict`` / ``OrderedDict`` state
+        dicts are the primary use case; arbitrary picklable objects are
+        also supported.
+    f : str, bytes, or file-like
+        Destination path or open binary file handle.
+    pickle_protocol : int, optional
+        Pickle protocol version forwarded to the underlying
+        ``pickle.Pickler``. Default ``4``.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    State dicts produced by ``Module.state_dict()`` carry a hidden
+    ``_metadata`` attribute storing version information per submodule.
+    That attribute is detected, packed alongside ``obj`` in the
+    container, and reattached on :func:`load`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = {"w": lucid.randn(3, 3)}
+    >>> lucid.serialization.save(sd, "ckpt.lucid")
     """
     sd_metadata: object | None = getattr(obj, "_metadata", None)
     container: dict[str, object] = {"_lucid_format": 2, "obj": obj}
@@ -130,10 +160,44 @@ def load(
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
 ) -> object:
-    """Load an object saved with :func:`save`.
+    r"""Load an object saved by :func:`save` or :func:`save_safetensors`.
 
-    Automatically delegates to :func:`load_safetensors` when *f* ends in
-    ``'.safetensors'``, provided the ``safetensors`` package is installed.
+    By default uses a restricted unpickler that only permits a small
+    whitelist of safe primitive types — sufficient for state dicts but
+    not for arbitrary objects. Disable this with ``weights_only=False``
+    only for trusted files; arbitrary pickle deserialisation can execute
+    code.
+
+    Parameters
+    ----------
+    f : str, bytes, or file-like
+        Source path or open binary file handle. Paths ending in
+        ``.safetensors`` are delegated to :func:`load_safetensors`.
+    map_location : str, dict, callable, or None, optional
+        Device remapping applied to every loaded tensor. A bare string
+        moves all tensors to that device; a ``dict`` maps source device
+        names to targets; a callable receives ``(tensor, source_device)``
+        and returns the relocated tensor.
+    weights_only : bool, optional
+        If ``True`` (default), restrict deserialisation to a safe type
+        whitelist. Set to ``False`` only for fully trusted checkpoints.
+
+    Returns
+    -------
+    object
+        The deserialised object, with ``_metadata`` reattached for
+        state-dict round-trips.
+
+    Notes
+    -----
+    Implements two formats: the current persistent-id format
+    (``"tensor_v3"``) plus a backward-compatible path for v1/v2
+    checkpoints that previously round-tripped through numpy.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = lucid.serialization.load("ckpt.lucid")
     """
     if isinstance(f, (str, bytes)):
         path_str = f.decode() if isinstance(f, bytes) else str(f)
@@ -218,28 +282,45 @@ def save_sharded(
     shard_size_mb: float = 1024.0,
     pickle_protocol: int = 4,
 ) -> None:
-    """Save an object to a sharded checkpoint directory.
+    r"""Save ``obj`` as a sharded, self-describing checkpoint directory.
 
-    If *obj* is a ``dict`` (e.g. a Module ``state_dict()``) it is split into
-    multiple shard files so that each shard stays under *shard_size_mb* MiB.
-    A JSON index (``index.json``) records which keys live in which shard,
-    making the directory self-describing.
-
-    For non-dict objects the function falls back to a single-shard write that
-    is still compatible with ``load_sharded``.
+    Splits a state dict across multiple shard files capped at
+    ``shard_size_mb`` MiB each and emits a JSON index listing which keys
+    live in which shard. Useful for very large models where a single
+    monolithic file is impractical to host, partial-load, or
+    download-resume.
 
     Parameters
     ----------
-    obj:
-        Object to save.  State dicts (``OrderedDict`` / ``dict`` of tensors)
-        are the primary use-case.
-    path:
-        Destination *directory*.  Created if it does not exist.
-    shard_size_mb:
-        Target maximum size per shard file in MiB.  Tensors that individually
-        exceed this limit are placed in their own shard.
-    pickle_protocol:
-        Pickle protocol forwarded to each per-shard ``save()`` call.
+    obj : object
+        Object to save. ``dict`` / ``OrderedDict`` state dicts are
+        sharded; other types are written as a single shard for
+        compatibility with :func:`load_sharded`.
+    path : str or bytes
+        Destination *directory*. Created if it does not exist.
+    shard_size_mb : float, optional
+        Soft cap on per-shard size in MiB. A tensor exceeding the cap
+        gets its own shard. Default ``1024.0``.
+    pickle_protocol : int, optional
+        Pickle protocol forwarded to every per-shard :func:`save`.
+        Default ``4``.
+
+    Returns
+    -------
+    None
+
+    Notes
+    -----
+    The packing algorithm is a first-fit pass that never splits a
+    single tensor across shards — preserving the property that any
+    given key resolves to exactly one file. The index records the
+    optional ``_metadata`` attribute when present on a state dict.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = {"w": lucid.randn(4096, 4096)}
+    >>> lucid.serialization.save_sharded(sd, "ckpt_dir", shard_size_mb=64)
     """
     import json
     import os
@@ -307,20 +388,39 @@ def load_sharded(
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: bool = True,
 ) -> object:
-    """Load a sharded checkpoint saved with ``save_sharded``.
+    r"""Load a sharded checkpoint directory written by :func:`save_sharded`.
 
-    Reads ``index.json`` from *path*, then loads each shard file in order and
-    merges the results into a single ``OrderedDict``.  *map_location* and
-    *weights_only* are forwarded to every per-shard ``load()`` call.
+    Reads ``index.json``, then deserialises each shard with :func:`load`
+    and merges the results into a single ``OrderedDict`` preserving key
+    order. The ``_metadata`` attribute, if stored in the index, is
+    reattached to the merged dictionary.
 
     Parameters
     ----------
-    path:
-        Directory that contains ``index.json`` and the shard files.
-    map_location:
-        Device remapping forwarded to ``load()``.
-    weights_only:
-        If ``True`` (default) only tensor-safe types are deserialised.
+    path : str or bytes
+        Directory containing ``index.json`` and the per-shard files.
+    map_location : str, dict, callable, or None, optional
+        Device remapping forwarded to each per-shard :func:`load` call.
+    weights_only : bool, optional
+        If ``True`` (default), restrict deserialisation to a safe type
+        whitelist.
+
+    Returns
+    -------
+    OrderedDict or object
+        The merged state dict; for single-shard non-dict objects, the
+        underlying object as written.
+
+    Notes
+    -----
+    Shard order is taken from the index file — the function does not
+    rely on filesystem listing order, so reproducibility is preserved
+    across hosts.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = lucid.serialization.load_sharded("ckpt_dir")
     """
     import json
     import os
@@ -388,33 +488,43 @@ def save_safetensors(
     *,
     metadata: dict[str, str] | None = None,
 ) -> None:
-    """Save a state dict as a SafeTensors file (``.safetensors``).
+    r"""Save a flat state dict as a SafeTensors file.
 
-    SafeTensors is a safe, fast alternative to the default pickle-based
-    ``.lucid`` format — no arbitrary code execution is possible during load.
-
-    Requirements
-    ------------
-    ``pip install safetensors``  (optional dependency; not bundled with Lucid)
+    SafeTensors is the recommended interchange format for sharing model
+    weights: the file layout is a small JSON header followed by raw
+    tensor bytes, so loading is fast, zero-copy where possible, and free
+    of pickle's code-execution surface area. Use this whenever a
+    checkpoint may be shared with untrusted parties.
 
     Parameters
     ----------
-    state_dict:
-        Flat ``dict[str, Tensor]`` — the output of ``model.state_dict()``.
-        Only :class:`~lucid.Tensor` values are supported; nested dicts or
-        non-tensor entries will raise ``TypeError``.
-    path:
-        Destination file path.  By convention use a ``.safetensors`` suffix.
-    metadata:
-        Optional ``dict[str, str]`` stored in the file header (e.g.
-        ``{"model_type": "resnet", "lucid_version": "3.0"}``).
+    state_dict : dict of str to Tensor
+        Flat mapping from parameter name to :class:`Tensor`. Nested
+        dicts or non-tensor values raise ``TypeError``.
+    path : str
+        Destination file path; use a ``.safetensors`` suffix by
+        convention.
+    metadata : dict of str to str, optional
+        Free-form string metadata stored in the file header (model
+        version, training framework, etc.).
+
+    Returns
+    -------
+    None
 
     Notes
     -----
-    - **bfloat16** is not supported via the numpy backend used here.
-      Save as float32 first: ``tensor.to(lucid.float32)`` if needed.
-    - Only flat (non-nested) state dicts are supported — the same shape
-      that ``Module.state_dict()`` produces.
+    Requires the optional ``safetensors`` Python package
+    (``pip install safetensors``). The numpy backend used here does not
+    accept bfloat16 — cast such tensors to float32 first. Zero-rank
+    scalars are promoted to shape ``(1,)`` on write and squeezed back to
+    ``()`` on load via a private metadata key.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = {"w": lucid.randn(3, 3)}
+    >>> lucid.serialization.save_safetensors(sd, "weights.safetensors")
     """
     _st = _require_safetensors()
 
@@ -450,25 +560,37 @@ def load_safetensors(
     *,
     device: str = "cpu",
 ) -> dict[str, object]:
-    """Load a SafeTensors checkpoint into a ``dict[str, Tensor]``.
+    r"""Load a SafeTensors file into a flat state dict.
 
-    Requirements
-    ------------
-    ``pip install safetensors``  (optional dependency; not bundled with Lucid)
+    Reads the entire file lazily through the ``safetensors`` Python
+    package, converts each tensor to a Lucid :class:`Tensor`, optionally
+    relocates to the requested device, and restores any zero-rank
+    scalars that were promoted to shape ``(1,)`` during :func:`save_safetensors`.
 
     Parameters
     ----------
-    path:
+    path : str
         Path to a ``.safetensors`` file.
-    device:
-        Target device for the loaded tensors: ``"cpu"`` (default) or
+    device : str, optional
+        Target device for every loaded tensor: ``"cpu"`` (default) or
         ``"metal"``.
 
     Returns
     -------
-    dict[str, Tensor]
-        A flat state dict that can be passed directly to
-        ``model.load_state_dict()``.
+    dict of str to Tensor
+        Flat state dict suitable for ``model.load_state_dict()``.
+
+    Notes
+    -----
+    Requires the optional ``safetensors`` Python package
+    (``pip install safetensors``). The header metadata is consulted to
+    recover the original 0-d shape of scalar entries written through
+    :func:`save_safetensors`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> sd = lucid.serialization.load_safetensors("weights.safetensors")
     """
     from safetensors import safe_open as _safe_open
     from lucid._factories.converters import from_numpy as _from_numpy

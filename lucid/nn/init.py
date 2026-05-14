@@ -23,7 +23,47 @@ def _fill_from_impl(tensor: Tensor, src_impl: object) -> Tensor:
 
 
 def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
-    """Fill tensor in-place with values from U(a, b)."""
+    r"""Initialise ``tensor`` in-place with samples from a uniform distribution.
+
+    Each entry is drawn independently from :math:`\mathcal{U}(a, b)`.  The
+    function mutates ``tensor`` in place and returns the same object so
+    calls can be chained or used as a one-liner inside a model
+    constructor.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to fill in place; any shape is accepted.
+    a : float, optional
+        Lower bound of the uniform interval.  Default ``0.0``.
+    b : float, optional
+        Upper bound of the uniform interval.  Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    The resulting distribution has mean and variance
+
+    .. math::
+
+        \mathbb{E}[W] = \frac{a + b}{2}, \qquad
+        \mathrm{Var}(W) = \frac{(b - a)^2}{12}.
+
+    Higher-level schemes such as :func:`xavier_uniform_` and
+    :func:`kaiming_uniform_` are thin wrappers over this function with
+    bounds computed from the fan factors of ``tensor``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import uniform_
+    >>> w = lucid.empty(4, 4)
+    >>> uniform_(w, -0.1, 0.1)
+    """
     return _fill_from_impl(
         tensor,
         _C_engine.uniform(
@@ -33,7 +73,49 @@ def uniform_(tensor: Tensor, a: float = 0.0, b: float = 1.0) -> Tensor:
 
 
 def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
-    """Fill tensor in-place with values from N(mean, std²)."""
+    r"""Initialise ``tensor`` in-place with samples from a Gaussian distribution.
+
+    Each entry is drawn independently from
+    :math:`\mathcal{N}(\text{mean}, \text{std}^2)`.  This is the simplest
+    initialisation scheme and serves as the building block for
+    :func:`xavier_normal_` / :func:`kaiming_normal_`, which choose ``std``
+    so that the activation variance is preserved layer-by-layer.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to fill in place; any shape is accepted.
+    mean : float, optional
+        Mean of the Gaussian distribution.  Default ``0.0``.
+    std : float, optional
+        Standard deviation of the Gaussian distribution.  Must be
+        non-negative.  Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    The samples have
+
+    .. math::
+
+        \mathbb{E}[W] = \text{mean}, \qquad
+        \mathrm{Var}(W) = \text{std}^2.
+
+    For unbounded tails consider :func:`trunc_normal_` instead, which
+    truncates extreme draws and is often preferred in transformer
+    pre-training recipes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import normal_
+    >>> w = lucid.empty(64, 32)
+    >>> normal_(w, mean=0.0, std=0.02)
+    """
     return _fill_from_impl(
         tensor,
         _C_engine.normal(
@@ -43,7 +125,37 @@ def normal_(tensor: Tensor, mean: float = 0.0, std: float = 1.0) -> Tensor:
 
 
 def constant_(tensor: Tensor, val: float) -> Tensor:
-    """Fill tensor in-place with a constant value."""
+    r"""Fill ``tensor`` in-place with a single scalar value.
+
+    Every entry of ``tensor`` is overwritten with ``val``.  Most often
+    used to initialise bias terms to zero or to a small positive value
+    (e.g. ``0.01`` to keep ReLU units active at the start of training).
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to fill in place; any shape is accepted.
+    val : float
+        Scalar to broadcast into every entry.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    Constant-filling a weight matrix breaks the network's symmetry-breaking
+    property — every output unit would compute the same function and
+    learn identical gradients.  Use this for biases only.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import constant_
+    >>> b = lucid.empty(128)
+    >>> constant_(b, 0.0)
+    """
     return _fill_from_impl(
         tensor,
         _C_engine.full(
@@ -53,7 +165,34 @@ def constant_(tensor: Tensor, val: float) -> Tensor:
 
 
 def ones_(tensor: Tensor) -> Tensor:
-    """Fill tensor in-place with ones."""
+    r"""Fill ``tensor`` in-place with ones.
+
+    Convenience wrapper around :func:`constant_` with ``val=1.0``.  The
+    canonical use case is the gain (gamma) parameter of normalisation
+    layers (BatchNorm, LayerNorm, GroupNorm) so the layer initially acts
+    as the identity scaling.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to fill in place; any shape is accepted.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    Equivalent to :func:`constant_` ``(tensor, 1.0)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import ones_
+    >>> gamma = lucid.empty(64)
+    >>> ones_(gamma)
+    """
     return _fill_from_impl(
         tensor,
         _C_engine.ones(list(tensor.shape), tensor._impl.dtype, tensor._impl.device),
@@ -61,7 +200,35 @@ def ones_(tensor: Tensor) -> Tensor:
 
 
 def zeros_(tensor: Tensor) -> Tensor:
-    """Fill tensor in-place with zeros."""
+    r"""Fill ``tensor`` in-place with zeros.
+
+    Convenience wrapper around :func:`constant_` with ``val=0.0``.  The
+    canonical use case is bias initialisation in linear and convolution
+    layers, and the shift (beta) parameter of normalisation layers.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to fill in place; any shape is accepted.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    Equivalent to :func:`constant_` ``(tensor, 0.0)``.  Note that
+    zero-filling a *weight* matrix would prevent symmetry breaking and
+    block learning — use only for biases or normalisation shifts.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import zeros_
+    >>> bias = lucid.empty(128)
+    >>> zeros_(bias)
+    """
     return _fill_from_impl(
         tensor,
         _C_engine.zeros(list(tensor.shape), tensor._impl.dtype, tensor._impl.device),
@@ -69,7 +236,42 @@ def zeros_(tensor: Tensor) -> Tensor:
 
 
 def eye_(tensor: Tensor) -> Tensor:
-    """Fill a 2D tensor in-place as an identity matrix."""
+    r"""Fill a 2-D ``tensor`` in-place with the identity matrix.
+
+    Writes ones on the main diagonal and zeros elsewhere.  Identity
+    initialisation is useful for square linear layers in residual blocks
+    or for testing — at initialisation the layer is the identity map and
+    gradients propagate untransformed.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Two-dimensional tensor to fill in place.  Need not be square; the
+        identity is written into the leading ``min(n, m)`` diagonal
+        entries.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Raises
+    ------
+    ValueError
+        If ``tensor.ndim != 2``.
+
+    Notes
+    -----
+    For convolution weights that should act as the identity see
+    :func:`dirac_`, which is the spatial analogue.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import eye_
+    >>> w = lucid.empty(4, 4)
+    >>> eye_(w)
+    """
     if tensor.ndim != 2:
         raise ValueError("eye_() requires a 2D tensor")
     n, m = tensor.shape
@@ -79,7 +281,57 @@ def eye_(tensor: Tensor) -> Tensor:
 
 
 def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
-    """Fill tensor with Xavier uniform values."""
+    r"""Initialise ``tensor`` in-place with Xavier (Glorot) uniform initialisation.
+
+    Fills the tensor with values drawn uniformly from :math:`[-a, a]`
+    where the limit ``a`` is chosen so that the variance of activations
+    is preserved across a stack of linear / mildly-nonlinear layers.
+    Introduced in Glorot & Bengio (2010), this scheme is well-suited to
+    ``tanh`` and ``sigmoid`` networks; for ReLU networks prefer
+    :func:`kaiming_uniform_`, which corrects for the half-truncation of
+    negative pre-activations.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; must have at least 2 dimensions
+        so ``fan_in`` and ``fan_out`` can be computed.
+    gain : float, optional
+        Multiplicative gain factor — typically the value returned by
+        :func:`calculate_gain` for the downstream nonlinearity.
+        Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    Let :math:`n_\text{in}` and :math:`n_\text{out}` be the fan-in and
+    fan-out of ``tensor`` (see :func:`_calculate_fan_in_and_fan_out`).
+    The uniform range is
+
+    .. math::
+
+        a = \text{gain} \cdot \sqrt{\frac{6}{n_\text{in} + n_\text{out}}},
+
+    which yields variance
+
+    .. math::
+
+        \mathrm{Var}(W) = \frac{2 \cdot \text{gain}^2}{n_\text{in} + n_\text{out}}.
+
+    This is the value that approximately preserves the variance of
+    activations forwards and gradients backwards in a linear layer.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import xavier_uniform_, calculate_gain
+    >>> w = lucid.empty(64, 32)
+    >>> xavier_uniform_(w, gain=calculate_gain('tanh'))
+    """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
     a = math.sqrt(3.0) * std
@@ -87,7 +339,49 @@ def xavier_uniform_(tensor: Tensor, gain: float = 1.0) -> Tensor:
 
 
 def xavier_normal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
-    """Fill tensor with Xavier normal values."""
+    r"""Initialise ``tensor`` in-place with Xavier (Glorot) normal initialisation.
+
+    Gaussian counterpart of :func:`xavier_uniform_`.  Draws each entry
+    from :math:`\mathcal{N}(0, \sigma^2)` with a standard deviation
+    chosen to preserve activation variance through a stack of linear /
+    mildly-nonlinear layers, as proposed in Glorot & Bengio (2010).
+    Prefer this for ``tanh`` / ``sigmoid`` networks; use
+    :func:`kaiming_normal_` for ReLU networks.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; must have at least 2 dimensions.
+    gain : float, optional
+        Multiplicative gain factor — see :func:`calculate_gain`.
+        Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    The standard deviation is
+
+    .. math::
+
+        \sigma = \text{gain} \cdot \sqrt{\frac{2}{n_\text{in} + n_\text{out}}},
+
+    which yields variance
+
+    .. math::
+
+        \mathrm{Var}(W) = \frac{2 \cdot \text{gain}^2}{n_\text{in} + n_\text{out}}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import xavier_normal_, calculate_gain
+    >>> w = lucid.empty(64, 32)
+    >>> xavier_normal_(w, gain=calculate_gain('tanh'))
+    """
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / (fan_in + fan_out))
     return normal_(tensor, 0.0, std)
@@ -99,7 +393,58 @@ def kaiming_uniform_(
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
 ) -> Tensor:
-    """Fill tensor with Kaiming uniform values."""
+    r"""Initialise ``tensor`` in-place with Kaiming (He) uniform initialisation.
+
+    Draws each entry uniformly from :math:`[-b, b]` with the bound
+    chosen so that the variance of activations is preserved across a
+    stack of ReLU-family layers.  Introduced in He et al. (2015), this
+    scheme corrects the Xavier formula for the fact that ReLU zeroes
+    half of its pre-activations, which would otherwise halve the
+    forward variance at every layer.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; must have at least 2 dimensions.
+    a : float, optional
+        Negative slope of the rectifier used after this layer (only
+        used when ``nonlinearity='leaky_relu'``).  Default ``0``.
+    mode : {'fan_in', 'fan_out'}, optional
+        Which fan to use as the variance scaler.  ``'fan_in'`` (default)
+        preserves the magnitude of activations in the forward pass;
+        ``'fan_out'`` preserves the magnitude of gradients in the
+        backward pass.
+    nonlinearity : str, optional
+        Nonlinearity name forwarded to :func:`calculate_gain`.
+        Default ``'leaky_relu'``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    With :math:`n = \text{fan}` (selected by ``mode``) the bound is
+
+    .. math::
+
+        b = \sqrt{\frac{6}{n}} \cdot \text{gain},
+
+    giving variance
+
+    .. math::
+
+        \mathrm{Var}(W) = \frac{\text{gain}^2}{n} = \frac{2}{n}
+        \quad\text{for ReLU.}
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import kaiming_uniform_
+    >>> w = lucid.empty(64, 32)
+    >>> kaiming_uniform_(w, nonlinearity='relu')
+    """
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
@@ -113,7 +458,49 @@ def kaiming_normal_(
     mode: str = "fan_in",
     nonlinearity: str = "leaky_relu",
 ) -> Tensor:
-    """Fill tensor with Kaiming normal values."""
+    r"""Initialise ``tensor`` in-place with Kaiming (He) normal initialisation.
+
+    Gaussian counterpart of :func:`kaiming_uniform_`.  Draws each entry
+    from :math:`\mathcal{N}(0, \sigma^2)` with a standard deviation
+    chosen to preserve activation (or gradient) variance across a stack
+    of ReLU-family layers, as proposed in He et al. (2015).
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; must have at least 2 dimensions.
+    a : float, optional
+        Negative slope of the rectifier (only used when
+        ``nonlinearity='leaky_relu'``).  Default ``0``.
+    mode : {'fan_in', 'fan_out'}, optional
+        ``'fan_in'`` preserves forward-pass variance, ``'fan_out'``
+        preserves backward-pass gradient variance.  Default ``'fan_in'``.
+    nonlinearity : str, optional
+        Activation name forwarded to :func:`calculate_gain`.  Default
+        ``'leaky_relu'``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    With :math:`n = \text{fan}` the standard deviation is
+
+    .. math::
+
+        \sigma = \frac{\text{gain}}{\sqrt{n}},
+
+    so that for ReLU :math:`\mathrm{Var}(W) = 2 / n`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import kaiming_normal_
+    >>> w = lucid.empty(64, 32)
+    >>> kaiming_normal_(w, nonlinearity='relu')
+    """
     fan = _calculate_correct_fan(tensor, mode)
     gain = calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
@@ -127,7 +514,55 @@ def trunc_normal_(
     a: float = -2.0,
     b: float = 2.0,
 ) -> Tensor:
-    """Fill tensor with truncated normal values via rejection sampling."""
+    r"""Initialise ``tensor`` in-place with truncated normal samples.
+
+    Each entry is drawn from :math:`\mathcal{N}(\text{mean},
+    \text{std}^2)` and rejected if it falls outside ``[a, b]``;
+    rejection sampling is repeated until ``tensor`` is fully populated.
+    This is the preferred initialiser for transformer weights (e.g.
+    ViT, BERT) where unbounded Gaussian tails would otherwise produce
+    rare but disruptive activations.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; any shape is accepted.
+    mean : float, optional
+        Mean of the underlying (untruncated) Gaussian.  Default ``0.0``.
+    std : float, optional
+        Standard deviation of the underlying Gaussian.  Default ``1.0``.
+    a : float, optional
+        Lower truncation bound.  Default ``-2.0``.
+    b : float, optional
+        Upper truncation bound.  Default ``2.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Notes
+    -----
+    The conditional density is
+
+    .. math::
+
+        p(x \mid a \le x \le b) =
+        \frac{1}{Z}\,
+        \frac{1}{\sqrt{2\pi}\,\text{std}}\,
+        \exp\!\left(-\frac{(x - \text{mean})^2}{2\,\text{std}^2}\right),
+        \quad x \in [a, b],
+
+    where :math:`Z = \Phi((b - \text{mean})/\text{std}) -
+    \Phi((a - \text{mean})/\text{std})` is the normalising constant.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import trunc_normal_
+    >>> w = lucid.empty(64, 32)
+    >>> trunc_normal_(w, mean=0.0, std=0.02, a=-0.04, b=0.04)
+    """
     shape = list(tensor.shape) if tensor.shape else [1]
     total = 1
     for s in shape:
@@ -160,11 +595,50 @@ def trunc_normal_(
 
 
 def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
-    """Fill tensor with a (semi-)orthogonal matrix via QR.
+    r"""Initialise ``tensor`` in-place with a (semi-)orthogonal matrix.
 
-    For tensors with rank > 2 the leading axis is flattened against the
-    rest, the resulting 2-D matrix is made orthogonal, and the original
-    shape is restored — matching the reference framework.
+    A random Gaussian matrix is drawn and orthonormalised via QR
+    decomposition; the resulting matrix ``Q`` is multiplied by ``gain``
+    and written into ``tensor``.  For tensors with rank > 2 the leading
+    axis is flattened against the remaining axes, the 2-D matrix is
+    orthogonalised, and the original shape is restored.
+
+    Orthogonal initialisation, proposed by Saxe et al. (2013), preserves
+    vector norms exactly through deep *linear* networks
+    (:math:`\|Wx\|_2 = \|x\|_2` because ``W`` has orthonormal columns),
+    keeping the spectrum of the forward Jacobian on the unit sphere.
+    This is particularly valuable for RNNs and pre-norm transformer
+    blocks where activation magnitudes can otherwise drift exponentially
+    with depth.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Tensor to initialise in place; must have at least 2 dimensions.
+    gain : float, optional
+        Multiplicative scaling applied to ``Q``.  Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Raises
+    ------
+    ValueError
+        If ``tensor.ndim < 2``.
+
+    Notes
+    -----
+    The matrix satisfies :math:`Q^\top Q = \text{gain}^2 I` (or
+    :math:`Q Q^\top = \text{gain}^2 I` when fan-out exceeds fan-in).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import orthogonal_
+    >>> w = lucid.empty(64, 64)
+    >>> orthogonal_(w, gain=1.0)
     """
     if tensor.ndim < 2:
         raise ValueError("orthogonal_() requires at least a 2D tensor")
@@ -189,11 +663,51 @@ def orthogonal_(tensor: Tensor, gain: float = 1.0) -> Tensor:
 
 
 def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
-    """Fill a 2-D tensor in-place with a sparse matrix.
+    r"""Initialise a 2-D ``tensor`` in-place with a sparse random matrix.
 
-    Each column has ``floor(sparsity * rows)`` zero entries (drawn at
-    random); the remaining entries are sampled from ``N(0, std²)``.
-    Only 2-D tensors are supported, matching the reference framework.
+    For each column, a random subset of ``floor(sparsity * rows)`` rows
+    is set to zero; the remaining entries are drawn from
+    :math:`\mathcal{N}(0, \text{std}^2)`.  Sparse initialisation, due to
+    Martens (2010), encourages each output unit to depend on only a
+    small number of inputs at the start of training and helps in
+    ill-conditioned regimes — particularly for very wide layers where a
+    dense Gaussian would have an unfavourable condition number.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Two-dimensional tensor to fill in place.
+    sparsity : float
+        Fraction of entries in each column that are zeroed.  Must lie in
+        ``[0, 1]``.
+    std : float, optional
+        Standard deviation of the Gaussian used for the non-zero
+        entries.  Default ``0.01``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Raises
+    ------
+    ValueError
+        If ``tensor.ndim != 2`` or ``sparsity`` is outside ``[0, 1]``.
+
+    Notes
+    -----
+    The expected per-entry variance is
+
+    .. math::
+
+        \mathrm{Var}(W_{ij}) = (1 - \text{sparsity}) \cdot \text{std}^2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import sparse_
+    >>> w = lucid.empty(256, 256)
+    >>> sparse_(w, sparsity=0.9, std=0.01)
     """
     if tensor.ndim != 2:
         raise ValueError("sparse_() requires a 2D tensor")
@@ -222,11 +736,49 @@ def sparse_(tensor: Tensor, sparsity: float, std: float = 0.01) -> Tensor:
 
 
 def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
-    """Fill a 3/4/5-D tensor in-place with a Dirac-delta filter.
+    r"""Initialise a 3/4/5-D convolution weight in-place as a Dirac delta.
 
-    Conv weights of shape ``(out_channels, in_channels // groups, *K)``
-    are filled so the convolution acts as the identity (per group, with
-    the kernel centred).  Useful for residual / identity initialisation.
+    The kernel is filled with zeros except for a single ``1`` at the
+    spatial centre of each ``(out_channel, in_channel)`` matched pair,
+    so that — at initialisation — the convolution acts as the identity
+    function on its input channels (subject to channel-count matching
+    per group).  Useful for residual networks where one wants gradients
+    to flow unchanged through deep stacks at step 0.
+
+    Parameters
+    ----------
+    tensor : Tensor
+        Convolution weight of shape
+        ``(out_channels, in_channels // groups, *K)`` where ``K`` is
+        the 1-D, 2-D, or 3-D spatial kernel shape.
+    groups : int, optional
+        Number of groups in the convolution.  ``out_channels`` must be
+        divisible by ``groups``.  Default ``1``.
+
+    Returns
+    -------
+    Tensor
+        ``tensor`` (mutated) for chaining.
+
+    Raises
+    ------
+    ValueError
+        If ``tensor.ndim`` is not in ``{3, 4, 5}`` or if
+        ``out_channels`` is not divisible by ``groups``.
+
+    Notes
+    -----
+    For convolution input :math:`x` with the resulting weight,
+    :math:`(W \star x)_{:n} = x_{:n}` where
+    :math:`n = \min(\text{in\_channels}/\text{groups},\,
+    \text{out\_channels}/\text{groups})`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.init import dirac_
+    >>> w = lucid.empty(16, 16, 3, 3)  # (out, in, kH, kW)
+    >>> dirac_(w)
     """
     if tensor.ndim not in (3, 4, 5):
         raise ValueError(f"dirac_() expects a 3/4/5-D tensor; got ndim={tensor.ndim}")
@@ -271,7 +823,58 @@ def dirac_(tensor: Tensor, groups: int = 1) -> Tensor:
 
 
 def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
-    """Return the recommended gain for an activation function."""
+    r"""Return the recommended variance-preserving gain for an activation.
+
+    The gain is a multiplicative correction applied to the standard
+    deviation of Xavier / Kaiming initialisation so the per-layer
+    activation variance is preserved after the nonlinearity.  Values
+    follow the original recommendations in Glorot & Bengio (2010) and
+    He et al. (2015).
+
+    Parameters
+    ----------
+    nonlinearity : str
+        Name of the activation function.  One of ``'linear'``,
+        ``'conv1d'``, ``'conv2d'``, ``'conv3d'``, ``'sigmoid'``,
+        ``'tanh'``, ``'relu'``, ``'leaky_relu'``, ``'selu'``.
+    param : float, optional
+        Negative slope of the rectifier — only consulted when
+        ``nonlinearity='leaky_relu'``.  Default ``0.01``.
+
+    Returns
+    -------
+    float
+        Recommended gain factor.
+
+    Raises
+    ------
+    ValueError
+        If ``nonlinearity`` is not in the supported set.
+
+    Notes
+    -----
+    Mapping table:
+
+    ===============  ============================================
+    nonlinearity     gain
+    ===============  ============================================
+    ``linear``       :math:`1`
+    ``conv{1,2,3}d`` :math:`1`
+    ``sigmoid``      :math:`1`
+    ``tanh``         :math:`5/3 \approx 1.667`
+    ``relu``         :math:`\sqrt{2} \approx 1.414`
+    ``leaky_relu``   :math:`\sqrt{2 / (1 + a^2)}`
+    ``selu``         :math:`3/4`
+    ===============  ============================================
+
+    Examples
+    --------
+    >>> from lucid.nn.init import calculate_gain
+    >>> calculate_gain('relu')
+    1.4142135623730951
+    >>> calculate_gain('leaky_relu', 0.2)
+    1.3867504905630728
+    """
     _gains: dict[str, float] = {
         "linear": 1.0,
         "conv1d": 1.0,

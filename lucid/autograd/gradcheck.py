@@ -192,17 +192,89 @@ def gradgradcheck(
     rtol: float = 1e-3,
     raise_exception: bool = True,
 ) -> bool:
-    """Verify second-order gradients by gradchecking the gradient itself.
+    r"""Verify second-order gradients via finite differences.
 
-    Wraps ``func`` so its scalar output produces a first-order gradient
-    sum, then runs ``gradcheck`` on that wrapped function.  This catches
-    errors in custom ``Function.backward`` implementations that only show
-    up at the second-derivative level.
+    Most bugs in custom :class:`~lucid.autograd.Function.backward`
+    implementations show up at the *second*-derivative level —
+    the first-order gradient is consistent but the gradient of
+    the gradient is not. ``gradgradcheck`` constructs such a
+    test by wrapping ``func`` in a scalar-valued helper
 
-    The signature mirrors ``reference framework.autograd.gradgradcheck`` so
-    user code that imports ``from lucid.autograd import gradgradcheck``
-    works the same way.  ``grad_outputs`` is currently ignored — we always
-    use ``ones_like`` upstream gradients, matching the most common use.
+    .. math::
+
+        \tilde f(x) = \sum_i (\nabla f(x))_i,
+
+    differentiates it analytically with
+    ``create_graph=True``, and then runs :func:`gradcheck` on
+    :math:`\tilde f` so its gradient is compared against the
+    central finite-difference estimate
+
+    .. math::
+
+        \frac{\tilde f(x + \varepsilon e_k)
+              - \tilde f(x - \varepsilon e_k)}{2 \varepsilon}
+        \approx \frac{\partial^2 f(x)}{\partial x_k^2}.
+
+    Disagreement signals a bug in the analytic backward
+    formula that ordinary :func:`gradcheck` would miss.
+
+    Parameters
+    ----------
+    func : callable
+        Function mapping ``Tensor`` inputs to a ``Tensor`` (or
+        tuple of ``Tensor``). Must be twice differentiable.
+    inputs : sequence of Tensor
+        Input tensors at which to verify the gradient. Floating
+        dtype required.
+    grad_outputs : sequence of Tensor or None, optional
+        Reserved for custom upstream gradients in the inner
+        backward pass. Currently ignored — ``ones_like``
+        upstream gradients are always used.
+    eps : float, optional
+        Finite-difference step size used by the underlying
+        :func:`gradcheck`. Defaults to ``1e-6``.
+    atol : float, optional
+        Absolute tolerance for the comparison. Defaults to
+        ``1e-5``.
+    rtol : float, optional
+        Relative tolerance for the comparison. Defaults to
+        ``1e-3``.
+    raise_exception : bool, optional
+        If ``True`` (default) raise ``AssertionError`` on
+        mismatch; if ``False`` return ``False`` silently.
+
+    Returns
+    -------
+    bool
+        ``True`` iff all second-order gradients agree with the
+        finite-difference reference within the supplied
+        tolerances.
+
+    Notes
+    -----
+    The bound on the truncation error of central differences is
+
+    .. math::
+
+        \left|
+            \frac{\tilde f(x + \varepsilon) - \tilde f(x - \varepsilon)}
+                 {2 \varepsilon}
+            - \tilde f'(x)
+        \right|
+        = O(\varepsilon^2),
+
+    so tightening ``eps`` improves accuracy until round-off
+    error dominates.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import gradgradcheck
+    >>> x = lucid.randn(3, requires_grad=True, dtype=lucid.float64)
+    >>> def f(x):
+    ...     return (x ** 3).sum()
+    >>> gradgradcheck(f, [x])
+    True
     """
     if grad_outputs is not None:
         # The reference framework allows custom upstream gradients; we

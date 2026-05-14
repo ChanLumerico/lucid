@@ -53,8 +53,74 @@ def _logits_to_probs(logits: Tensor) -> Tensor:
 
 
 class Bernoulli(ExponentialFamily):
-    """Bernoulli distribution.  Specify *exactly one* of ``probs`` or
-    ``logits`` — the other is derived lazily."""
+    r"""Bernoulli distribution over :math:`\{0, 1\}`.
+
+    The Bernoulli is the simplest discrete distribution: a single coin
+    flip with success probability :math:`p \in [0, 1]`.  It models a binary
+    outcome and is the building block of the Binomial (sum of ``n`` IID
+    Bernoullis), the Categorical (its multinomial generalisation), and most
+    classification likelihoods in supervised learning.
+
+    Specify *exactly one* of ``probs`` or ``logits``; the other is derived
+    lazily via the sigmoid / logit transform so there is no redundant
+    storage and the parameterisation chosen at construction remains the
+    canonical one for autograd.
+
+    Parameters
+    ----------
+    probs : Tensor or float, optional
+        Success probability :math:`p \in [0, 1]`.  Mutually exclusive
+        with ``logits``.
+    logits : Tensor or float, optional
+        Log-odds :math:`\ell = \log(p / (1 - p)) \in \mathbb{R}`.
+        Mutually exclusive with ``probs``.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability mass function on :math:`x \in \{0, 1\}`:
+
+    .. math::
+
+        P(X = k \mid p) = p^k (1 - p)^{1-k}
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = p, \qquad
+        \mathrm{Var}[X] = p(1 - p), \qquad
+        H[X] = -p\log p - (1-p)\log(1-p)
+
+    The variance is maximised at :math:`p = 0.5` (maximum uncertainty) and
+    vanishes at the degenerate endpoints :math:`p \in \{0, 1\}`.
+
+    **Relation to other distributions:**
+
+    * :math:`\mathrm{Binomial}(n, p)` is the sum of :math:`n` independent
+      :math:`\mathrm{Bernoulli}(p)` draws.
+    * :math:`\mathrm{Geometric}(p)` counts Bernoulli failures before the
+      first success.
+    * :math:`\mathrm{Categorical}` generalises Bernoulli to :math:`K > 2`
+      categories.
+
+    Conjugate prior: :class:`~lucid.distributions.Beta` — observing
+    :math:`k` successes out of :math:`n` updates
+    ``Beta(α, β) → Beta(α + k, β + n - k)``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Bernoulli
+    >>> d = Bernoulli(probs=0.7)
+    >>> d.mean
+    Tensor(0.7)
+    >>> d.sample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(1.0))
+    Tensor(-0.3567)
+    """
 
     arg_constraints = {"probs": unit_interval, "logits": real}
     support: Constraint | None = boolean
@@ -308,9 +374,66 @@ class Bernoulli(ExponentialFamily):
 
 
 class Geometric(Distribution):
-    """``Geometric(probs)`` over ``{0, 1, 2, ...}`` — number of failures
-    before the first success of a series of Bernoulli trials with
-    success probability ``probs``."""
+    r"""Geometric distribution: number of failures before the first success.
+
+    Models the number of failed Bernoulli trials :math:`X \in \{0, 1, 2, \ldots\}`
+    preceding the first success in an unbounded sequence of independent
+    trials with success probability :math:`p`.  This is the *shifted*
+    convention (counting failures); the alternative convention counts trials
+    including the success and starts at :math:`1`.
+
+    Parameters
+    ----------
+    probs : Tensor or float, optional
+        Success probability :math:`p \in (0, 1)` per trial.  Mutually
+        exclusive with ``logits``.
+    logits : Tensor or float, optional
+        Log-odds :math:`\ell = \log(p/(1-p))`.  Converted to ``probs`` via
+        the sigmoid at construction.  Mutually exclusive with ``probs``.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability mass function:
+
+    .. math::
+
+        P(X = k \mid p) = p (1 - p)^k, \quad k = 0, 1, 2, \ldots
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{1 - p}{p}, \qquad
+        \mathrm{Var}[X] = \frac{1 - p}{p^2}
+
+    **Memoryless property** — the Geometric is the *only* discrete
+    distribution with the memoryless property:
+
+    .. math::
+
+        P(X \geq m + n \mid X \geq m) = P(X \geq n)
+
+    Continuous analogue: :class:`~lucid.distributions.Exponential`
+    (the only continuous memoryless distribution).
+
+    The expected number of *trials* (including the success) is
+    :math:`1/p`; entropy grows without bound as :math:`p \to 0` and is
+    zero at :math:`p = 1`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Geometric
+    >>> d = Geometric(probs=0.25)
+    >>> d.mean  # (1 - p)/p = 3.0
+    Tensor(3.0)
+    >>> d.sample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(2.0))
+    Tensor(...)
+    """
 
     arg_constraints = {"probs": open_unit_interval, "logits": real}
     support: Constraint | None = nonnegative_integer

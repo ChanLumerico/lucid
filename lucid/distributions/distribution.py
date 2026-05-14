@@ -567,6 +567,28 @@ class ExponentialFamily(Distribution):
 
     These properties underpin many elegant results in information geometry,
     variational inference, and natural gradient methods.
+
+    **Members of this family in lucid.distributions** include
+    :class:`~lucid.distributions.Normal`,
+    :class:`~lucid.distributions.Bernoulli`,
+    :class:`~lucid.distributions.Categorical`,
+    :class:`~lucid.distributions.Gamma`,
+    :class:`~lucid.distributions.Beta`,
+    :class:`~lucid.distributions.Dirichlet`,
+    :class:`~lucid.distributions.Exponential`, and
+    :class:`~lucid.distributions.Poisson`.  Heavy-tailed families such
+    as :class:`~lucid.distributions.Cauchy` and Student's-t are *not*
+    members.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Bernoulli
+    >>> d = Bernoulli(probs=0.7)  # ExponentialFamily subclass
+    >>> isinstance(d, lucid.distributions.distribution.ExponentialFamily)
+    True
+    >>> d.entropy()
+    Tensor(...)
     """
 
     @property

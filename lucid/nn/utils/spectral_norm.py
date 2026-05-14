@@ -62,16 +62,68 @@ def spectral_norm(
     eps: float = 1e-12,
     dim: int | None = None,
 ) -> Module:
-    """Apply spectral normalisation to ``module``'s ``name`` parameter in place.
+    r"""Constrain a weight's spectral norm via power iteration (Miyato et al. 2018).
 
-    After the call, ``module.{name}`` is no longer a leaf parameter — it's
-    a derived tensor recomputed before each forward as ``W / σ(W)``.  The
-    underlying matrix lives at ``module.{name}_orig``; the power-iteration
-    state lives in non-trainable buffers ``module.{name}_u`` / ``{name}_v``.
+    Reparametrises ``module.<name>`` as
 
-    ``dim`` selects which axis of ``W`` to treat as the row dimension; if
-    omitted it defaults to 0 for everything except ``ConvTranspose*``,
-    which uses the input-channel axis (1) instead.
+    .. math::
+
+        \mathbf{W} \;=\; \frac{\mathbf{W}_{\text{orig}}}{\sigma(\mathbf{W}_{\text{orig}})},
+
+    where :math:`\sigma(\mathbf{W})` is the largest singular value
+    (operator 2-norm) of the weight viewed as a matrix.  This bounds the
+    layer's Lipschitz constant by ``1`` and is the canonical
+    stabilisation trick for GAN discriminators; it also sees use in
+    certified-robust classifiers and contractive Transformer variants.
+
+    Parameters
+    ----------
+    module : Module
+        The module whose parameter is to be normalised.  Mutated in
+        place.
+    name : str, optional
+        Attribute name of the parameter.  Default ``"weight"``.
+    n_power_iterations : int, optional
+        Number of power-iteration updates of the ``u`` / ``v`` vectors
+        performed before each training-mode forward.  Defaults to ``1``
+        — sufficient because the state is preserved between calls and
+        converges over the course of training.
+    eps : float, optional
+        Numerical floor added inside the :math:`\ell_2` normalisation of
+        ``u`` and ``v``.  Default ``1e-12``.
+    dim : int, optional
+        Axis to treat as the row dimension of the flattened matrix.  If
+        ``None`` (the default), uses ``0`` for everything except
+        ``ConvTranspose*`` modules, which use ``1`` (so output channels
+        end up as rows).
+
+    Returns
+    -------
+    Module
+        The same module, with ``<name>_orig`` (the trainable underlying
+        matrix), ``<name>_u`` / ``<name>_v`` (buffers), and a forward
+        pre-hook performing the normalisation.
+
+    Notes
+    -----
+    Each forward in training mode runs ``n_power_iterations`` updates
+
+    .. math::
+
+        \mathbf{v} \leftarrow \frac{\mathbf{W}^{\!\top}\mathbf{u}}{\|\mathbf{W}^{\!\top}\mathbf{u}\|}, \qquad
+        \mathbf{u} \leftarrow \frac{\mathbf{W}\,\mathbf{v}}{\|\mathbf{W}\,\mathbf{v}\|},
+
+    estimates :math:`\sigma \approx \mathbf{u}^{\!\top}\mathbf{W}\mathbf{v}`,
+    and exposes :math:`\mathbf{W}_{\text{orig}} / \sigma` as the active
+    weight.  In eval mode no updates occur — the cached buffers are used
+    as-is for deterministic inference.  Invert with
+    :func:`remove_spectral_norm`.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import spectral_norm
+    >>> disc = spectral_norm(nn.Conv2d(3, 64, 3, padding=1))
     """
     if not isinstance(module, Module):
         raise TypeError(f"spectral_norm requires a Module, got {type(module).__name__}")
@@ -151,8 +203,44 @@ def spectral_norm(
 
 
 def remove_spectral_norm(module: Module, name: str = "weight") -> Module:
-    """Reverse ``spectral_norm``: collapse ``{name}_orig`` back into a
-    plain leaf parameter ``{name}`` and drop the iteration buffers."""
+    r"""Reverse :func:`spectral_norm` and restore a plain leaf parameter.
+
+    Copies ``module.<name>_orig`` back into a fresh leaf parameter
+    ``module.<name>``, removes the ``<name>_u`` / ``<name>_v`` power-
+    iteration buffers, and detaches the forward pre-hook.  Used before
+    exporting for inference when the normalisation overhead is no
+    longer wanted, or before fine-tuning without the spectral cap.
+
+    Parameters
+    ----------
+    module : Module
+        Module previously passed through :func:`spectral_norm`.
+    name : str, optional
+        Attribute name of the parameter to restore.  Default ``"weight"``.
+
+    Returns
+    -------
+    Module
+        The same module, with ``<name>`` as a plain
+        :class:`~lucid.nn.parameter.Parameter` carrying the *unnormalised*
+        weight that was being trained behind the parametrisation.
+
+    Raises
+    ------
+    ValueError
+        If no spectral-norm registration exists on ``<name>``.
+
+    Notes
+    -----
+    The restored parameter is :math:`\mathbf{W}_{\text{orig}}` — *not*
+    the rescaled :math:`\mathbf{W}_{\text{orig}} / \sigma` that was
+    visible during training.  If you want the normalised matrix in the
+    final checkpoint, copy it out *before* calling this function.
+
+    Examples
+    --------
+    >>> remove_spectral_norm(disc)
+    """
     hooks: dict[str, object] = getattr(module, _SN_HOOK_ATTR, {})
     if name not in hooks:
         raise ValueError(f"spectral_norm not registered on '{name}'")

@@ -24,24 +24,81 @@ class _FunctionClass(Protocol):
 
 
 class FunctionCtx:
-    """Per-call context shared between :meth:`Function.forward` and
+    r"""Per-call context shared between :meth:`Function.forward` and
     :meth:`Function.backward`.
 
     A fresh ``FunctionCtx`` is created on every :meth:`Function.apply`
-    invocation. ``forward`` populates it with anything ``backward`` will
-    need: saved tensors (via :meth:`save_for_backward`), non-differentiable
-    output markers (via :meth:`mark_non_differentiable`), and arbitrary
-    user-defined attributes (cached shapes, axis indices, scalar
-    hyperparameters, ...) set with ordinary attribute assignment.
+    invocation. ``forward`` populates it with anything ``backward``
+    will need: saved tensors (via :meth:`save_for_backward`),
+    non-differentiable output markers (via
+    :meth:`mark_non_differentiable`), and arbitrary user-defined
+    attributes (cached shapes, axis indices, scalar hyperparameters,
+    ...) set with ordinary attribute assignment. The context is the
+    only legal channel for passing state from forward to backward —
+    capturing tensors through Python closures bypasses autograd's
+    bookkeeping and leaks memory.
+
+    Parameters
+    ----------
+    None
+        ``FunctionCtx`` is instantiated by :meth:`Function.apply`
+        with no arguments. User code never constructs one
+        directly; it receives the instance as the first
+        positional argument of ``forward`` / ``backward``.
 
     Attributes
     ----------
     needs_input_grad : tuple of bool
-        One flag per positional Tensor input to ``forward``, indicating
-        whether autograd would propagate a gradient to that input. Useful
-        for skipping unneeded gradient computations.
+        One flag per positional ``Tensor`` input to ``forward``,
+        indicating whether autograd would propagate a gradient to
+        that input. Use this to skip unneeded branches in
+        ``backward``.
     saved_tensors : tuple of Tensor
-        Read-only view of tensors stored via :meth:`save_for_backward`.
+        Read-only view of the tensors stored via
+        :meth:`save_for_backward`, in registration order.
+
+    Methods
+    -------
+    save_for_backward(\*tensors)
+        Persist tensors needed for the backward pass.
+    mark_non_differentiable(\*outputs)
+        Declare specific outputs as carrying no gradient (e.g.
+        integer indices, masks).
+    set_materialize_grads(value)
+        Reserved hook for controlling whether ``None`` upstream
+        gradients are materialised as zero tensors before
+        ``backward`` is invoked.
+
+    Notes
+    -----
+    The context is what ties the forward and backward halves of a
+    custom node together in the chain rule:
+
+    .. math::
+
+        \mathbf{y} = f(\mathbf{x}; \text{ctx}),
+        \qquad
+        \bar{\mathbf{x}} = g(\mathbf{ctx}, \bar{\mathbf{y}}),
+
+    where :math:`\bar{\mathbf{y}} = \partial \mathcal{L} /
+    \partial \mathbf{y}` is the upstream gradient and the same
+    ``ctx`` object is passed to both halves so :math:`g` can read
+    back whatever :math:`f` saved.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import Function
+    >>> class Square(Function):
+    ...     @staticmethod
+    ...     def forward(ctx, x):
+    ...         ctx.save_for_backward(x)
+    ...         ctx.shape = x.shape
+    ...         return x * x
+    ...     @staticmethod
+    ...     def backward(ctx, grad_out):
+    ...         (x,) = ctx.saved_tensors
+    ...         return 2 * x * grad_out
     """
 
     def __init__(self) -> None:
@@ -169,22 +226,83 @@ class FunctionMeta(type):
 
 
 class Function(metaclass=FunctionMeta):
-    """
-    Base class for custom differentiable functions.
+    r"""Base class for custom differentiable operations.
 
-    Subclass this and implement forward() and backward() as static methods.
+    Subclass to define an operation whose forward and backward
+    passes Lucid's autograd cannot deduce automatically — for
+    example, an operation that wraps an external library, an op
+    with a custom backward formula for numerical stability, or a
+    piecewise-defined function whose gradient differs from naïve
+    autograd.
 
-    Example:
-        class MyReLU(lucid.autograd.Function):
-            @staticmethod
-            def forward(ctx, x):
-                ctx.save_for_backward(x)
-                return lucid.relu(x)
+    Define :py:meth:`forward` and :py:meth:`backward` as
+    ``@staticmethod`` on the subclass, then invoke the op via
+    :py:meth:`apply` (NOT by calling ``forward`` directly — that
+    would skip autograd registration).
 
-            @staticmethod
-            def backward(ctx, grad_output):
-                (x,) = ctx.saved_tensors
-                return grad_output * (x > 0)
+    Parameters
+    ----------
+    None
+        ``Function`` itself is never instantiated. Subclasses
+        are stateless — their behaviour is defined entirely by
+        the ``forward`` / ``backward`` static methods, and ops
+        are invoked through the :py:meth:`apply` classmethod
+        rather than ``__init__``.
+
+    Attributes
+    ----------
+    forward : staticmethod
+        ``forward(ctx, *args, **kwargs) -> Tensor or tuple[Tensor, ...]``.
+        Computes the primal value; stores anything ``backward`` will
+        need on ``ctx``.
+    backward : staticmethod
+        ``backward(ctx, *grad_outputs) -> tuple of Tensors (or None per
+        non-tensor input)``. Returns the cotangents matching the
+        positional inputs of ``forward``.
+    apply : classmethod
+        Bind ``forward`` to the autograd graph, returning the forward
+        output and registering ``backward`` as the gradient closure.
+
+    Notes
+    -----
+    The :py:class:`FunctionCtx` passed to ``forward`` carries the
+    bookkeeping autograd needs to call ``backward`` later — saved
+    tensors plus per-input non-differentiable flags.
+
+    Each :py:class:`Function` defines a node in the computation graph
+
+    .. math::
+
+        \mathbf{y} = f(\mathbf{x}_1, \ldots, \mathbf{x}_n; \theta)
+
+    and supplies the chain-rule contribution
+
+    .. math::
+
+        \frac{\partial \mathcal{L}}{\partial \mathbf{x}_i}
+        = \sum_j \frac{\partial \mathcal{L}}{\partial y_j}
+          \cdot \frac{\partial y_j}{\partial x_{i}}
+
+    for each input :math:`\mathbf{x}_i`. The ``backward`` method
+    implements precisely this Jacobian-vector product.
+
+    Examples
+    --------
+    Custom ReLU with an explicit backward:
+
+    >>> import lucid
+    >>> from lucid.autograd import Function
+    >>> class MyReLU(Function):
+    ...     @staticmethod
+    ...     def forward(ctx, x):
+    ...         ctx.save_for_backward(x)
+    ...         return x.clamp(min=0.0)
+    ...     @staticmethod
+    ...     def backward(ctx, grad_out):
+    ...         (x,) = ctx.saved_tensors
+    ...         return grad_out * (x > 0).float()
+    >>> y = MyReLU.apply(lucid.tensor([-1.0, 2.0], requires_grad=True))
+    >>> y.sum().backward()
     """
 
     @staticmethod

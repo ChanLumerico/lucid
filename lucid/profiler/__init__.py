@@ -18,7 +18,33 @@ from lucid._C import engine as _C_engine
 
 
 class OpEvent:
-    """A single recorded operation event."""
+    r"""A single recorded operation event captured by the profiler.
+
+    Each ``OpEvent`` corresponds to one C++ engine op invocation: name,
+    wall-clock duration, output tensor shape, an FLOP estimate, and the
+    net memory delta. Profilers expose lists of these events so that
+    per-op cost can be aggregated, exported, and visualised.
+
+    Parameters
+    ----------
+    impl : object
+        Underlying engine ``OpEvent`` handle returned from the C++
+        profiler.
+
+    Notes
+    -----
+    Durations are reported in nanoseconds at the source; helper
+    properties expose the same value in microseconds and milliseconds
+    for convenience.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)
+    >>> for ev in prof.events():
+    ...     print(ev.name, ev.time_us)
+    """
 
     def __init__(self, impl: _C_engine.OpEvent) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
@@ -68,7 +94,40 @@ class OpEvent:
 
 
 class ProfileSummary:
-    """Aggregated summary of a named operation across multiple calls."""
+    r"""Aggregated timing summary for a single op name across many calls.
+
+    Produced by :meth:`Profiler.key_averages`, which buckets the recorded
+    :class:`OpEvent` list by op name and exposes total time, average
+    time, call count, and cumulative FLOP estimate. This is the natural
+    object for a "top-k by self-time" performance report.
+
+    Parameters
+    ----------
+    name : str
+        Op name shared by all events in the summary.
+    events : list of OpEvent
+        Recorded events bucketed under ``name``.
+
+    Notes
+    -----
+    The average is computed as
+
+    .. math::
+
+        \bar{t} = \frac{1}{N} \sum_{i=1}^{N} t_i,
+
+    where :math:`N` is the call count and :math:`t_i` is the per-call
+    duration in microseconds.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     for _ in range(10):
+    ...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)
+    >>> for summary in prof.key_averages()[:3]:
+    ...     print(summary)
+    """
 
     def __init__(self, name: str, events: list[OpEvent]) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
@@ -104,7 +163,32 @@ class ProfileSummary:
 
 
 class MemoryStats:
-    """Memory usage snapshot."""
+    r"""Snapshot of allocator state at a single point in time.
+
+    Wraps the engine's memory tracker so user code can correlate peak
+    memory usage with specific phases of training or inference. Combined
+    with :class:`Profiler` events, this is sufficient to diagnose memory
+    regressions and validate the effect of activation checkpointing.
+
+    Parameters
+    ----------
+    impl : object
+        Underlying engine ``MemoryStats`` handle.
+
+    Notes
+    -----
+    Reported quantities are byte counts. The ratio
+    :math:`\text{peak} / \text{current}` is a coarse indicator of
+    fragmentation overhead.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     _ = lucid.randn(1024, 1024)
+    >>> stats = prof.memory_stats()
+    >>> stats and stats.peak_bytes
+    """
 
     def __init__(self, impl: _C_engine.MemoryStats) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
@@ -139,15 +223,38 @@ class MemoryStats:
 
 
 class Profiler:
-    """Profile operation execution times and memory usage.
+    r"""Record op-level timing and memory traces from the C++ engine.
 
-    Use as a context manager or call start()/stop() manually.
+    Drives the engine's profiling hook so that every dispatched op
+    becomes an :class:`OpEvent`. Suitable for both interactive use
+    (``with`` block) and programmatic control via explicit
+    :meth:`start` / :meth:`stop`. Recorded events can be exported as a
+    Chrome / Perfetto trace for visual inspection.
 
-    Example:
-        with lucid.profiler.profile() as prof:
-            y = model(x)
-        for ev in prof.events():
-            print(ev)
+    Parameters
+    ----------
+    with_memory : bool, optional
+        If ``True`` (default), also capture allocator stats via
+        :class:`MemoryStats`.
+
+    Notes
+    -----
+    Total recorded time can be summarised per op as
+
+    .. math::
+
+        T_{\text{op}} = \sum_{i : \text{name}(e_i) = \text{op}} t_i,
+
+    via :meth:`key_averages`. Only one :class:`Profiler` may be active
+    at a time; entering a nested instance overwrites the engine's
+    current profiler pointer until the outer context exits.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     y = lucid.randn(64, 64) @ lucid.randn(64, 64)
+    >>> top = prof.key_averages()[:5]
     """
 
     def __init__(self, with_memory: bool = True) -> None:
@@ -232,19 +339,45 @@ def profile(
     activities: list[str] | None = None,
     with_memory: bool = True,
 ) -> Iterator[Profiler]:
-    """Context manager for profiling a code block.
+    r"""Context manager that records ops executed within the ``with`` block.
 
-    Args:
-        activities:   Ignored (for API compatibility).
-        with_memory:  Include memory statistics.
+    The canonical entry point for ad-hoc profiling: enter the context,
+    run any Lucid computation, exit, then inspect ``prof.events()`` or
+    ``prof.key_averages()``. The ``activities`` parameter is accepted
+    for parity with the conventional profiling API but is not
+    interpreted.
 
-    Yields:
-        Profiler instance with recorded events.
+    Parameters
+    ----------
+    activities : list of str, optional
+        Currently ignored; reserved for future per-device filtering.
+    with_memory : bool, optional
+        Include memory statistics in the recorded trace. Default
+        ``True``.
 
-    Example:
-        with lucid.profiler.profile() as prof:
-            output = model(input)
-        print(prof.key_averages())
+    Yields
+    ------
+    Profiler
+        Active profiler instance whose events list grows as ops are
+        executed inside the block.
+
+    Notes
+    -----
+    Internally instantiates a :class:`Profiler` and routes its lifecycle
+    through ``__enter__`` / ``__exit__``. Equivalent to::
+
+        prof = Profiler(with_memory=with_memory)
+        prof.start()
+        try: ...
+        finally: prof.stop()
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     out = lucid.randn(128, 128) @ lucid.randn(128, 128)
+    >>> for row in prof.key_averages():
+    ...     print(row)
     """
     prof = Profiler(with_memory=with_memory)
     with prof:
@@ -253,16 +386,35 @@ def profile(
 
 @contextmanager
 def record_function(name: str) -> Iterator[None]:
-    """Mark a code block as a named event in the profiler.
+    r"""Annotate an enclosing region with a name visible to the profiler.
 
-    If no profiler is active, this is a no-op.
+    Lets user code carve the trace into semantically meaningful regions
+    (e.g. ``"encoder"``, ``"decoder"``, ``"loss"``) alongside the
+    automatic per-op events. The hook is a no-op when no profiler is
+    active and when the engine does not yet support named regions, so
+    its presence is always safe.
 
-    Args:
-        name: Label for this code block in the trace.
+    Parameters
+    ----------
+    name : str
+        Label to associate with the enclosed block in the trace.
 
-    Example:
-        with lucid.profiler.record_function('my_forward'):
-            y = model(x)
+    Yields
+    ------
+    None
+        The context manager does not bind a value.
+
+    Notes
+    -----
+    Intended placement is around coarse-grained phases — invoking it on
+    every micro-op would inflate trace size without aiding analysis.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.profiler.profile() as prof:
+    ...     with lucid.profiler.record_function("matmul-region"):
+    ...         y = lucid.randn(64, 64) @ lucid.randn(64, 64)
     """
     # If a profiler is active, we can't easily inject named regions without
     # engine support. This is a best-effort no-op that preserves the API.

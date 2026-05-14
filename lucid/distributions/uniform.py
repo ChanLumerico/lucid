@@ -18,7 +18,73 @@ from lucid.distributions._util import (
 
 
 class Uniform(Distribution):
-    """Uniform distribution on the interval ``[low, high)``."""
+    r"""Continuous Uniform distribution on the half-open interval :math:`[a, b)`.
+
+    Maximum-entropy distribution over a bounded interval of fixed length:
+    every point in :math:`[a, b)` is equally likely.  Widely used as a
+    non-informative prior, as the source of randomness for inverse-CDF
+    sampling of arbitrary distributions, and as a quasi-Monte-Carlo
+    integration measure.
+
+    Parameters
+    ----------
+    low : Tensor or float
+        Lower bound :math:`a \in \mathbb{R}`.
+    high : Tensor or float
+        Upper bound :math:`b \in \mathbb{R}` with :math:`b > a`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density (constant on the support):
+
+    .. math::
+
+        p(x; a, b) = \begin{cases}
+            \dfrac{1}{b - a} & x \in [a, b) \\[2pt]
+            0 & \text{otherwise}
+        \end{cases}
+
+    Cumulative distribution:
+
+    .. math::
+
+        F(x; a, b) = \mathrm{clip}\!\left(\frac{x - a}{b - a},\; 0,\; 1\right)
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{a + b}{2}, \qquad
+        \mathrm{Var}[X] = \frac{(b - a)^2}{12}, \qquad
+        H[X] = \log(b - a)
+
+    Higher moments (centred at the midpoint :math:`m = (a+b)/2`):
+    :math:`\mathbb{E}[(X-m)^{2k}] = (b-a)^{2k}/(2k+1)\,2^{2k}`; odd
+    central moments are zero by symmetry.
+
+    The Uniform is the **maximum-entropy distribution** over a bounded
+    interval of fixed length, and it underpins the inverse-CDF
+    (Smirnov) sampling identity: if :math:`U \sim \mathrm{Uniform}(0, 1)`
+    and :math:`F^{-1}` is the quantile function of any 1-D distribution,
+    then :math:`F^{-1}(U)` has that distribution.
+
+    Reparameterised sampling uses the location-scale transform
+    :math:`X = a + (b - a) U` so gradients flow through both endpoints.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Uniform
+    >>> d = Uniform(low=0.0, high=1.0)
+    >>> d.mean
+    Tensor(0.5)
+    >>> d.rsample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.5))
+    Tensor(0.0)
+    """
 
     arg_constraints = {"low": real, "high": real}
     has_rsample = True

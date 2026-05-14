@@ -22,8 +22,58 @@ _F = TypeVar("_F", bound=Callable[..., Tensor])
 
 
 def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
-    """Decorator that registers a closed-form ``KL(p || q)`` for the
-    pair ``(p_cls, q_cls)``.  Mirrors the reference framework's API."""
+    r"""Register a closed-form KL implementation for a distribution pair.
+
+    Decorator used to add an analytical
+    :math:`\mathrm{KL}(p \,\|\, q)` formula to the global dispatch
+    registry, keyed on the *exact* (or ancestor) types of the two
+    arguments.  Once registered, :func:`kl_divergence` will route calls
+    matching ``(p_cls, q_cls)`` (or any subclass thereof, via MRO walk)
+    to the decorated function.
+
+    Parameters
+    ----------
+    p_cls : type
+        Class of the "left" distribution :math:`p` (the reference
+        distribution in :math:`\mathrm{KL}(p \,\|\, q)`).
+    q_cls : type
+        Class of the "right" distribution :math:`q`.
+
+    Returns
+    -------
+    Callable[[F], F]
+        A decorator that takes a two-argument callable
+        ``fn(p, q) -> Tensor`` and registers it in the internal KL
+        registry, returning ``fn`` unchanged so the decorated function
+        remains directly callable.
+
+    Notes
+    -----
+    Dispatch precedence inside :func:`kl_divergence`:
+
+    1. Exact class match ``(type(p), type(q))``.
+    2. Most-derived ancestor pair found by walking the Cartesian product
+       of ``type(p).__mro__`` and ``type(q).__mro__`` in order.
+    3. Monte Carlo fall-back (single :meth:`rsample` draw) when
+       :math:`p` supports reparameterised sampling.
+    4. ``NotImplementedError`` otherwise.
+
+    Closed-form formulas are *strongly preferred* over Monte Carlo: they
+    are deterministic, zero-variance, and propagate gradients exactly.
+
+    Examples
+    --------
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.kl import register_kl, kl_divergence
+    >>> @register_kl(Normal, Normal)
+    ... def _kl_normal_normal(p, q):
+    ...     return (q.scale.log() - p.scale.log()
+    ...             + (p.variance + (p.loc - q.loc) ** 2) / (2.0 * q.variance)
+    ...             - 0.5)
+    >>> p = Normal(0.0, 1.0); q = Normal(0.0, 2.0)
+    >>> kl_divergence(p, q)
+    Tensor(...)
+    """
 
     def _decorator(fn: _F) -> _F:
         """Insert ``fn`` into the KL registry under ``(p_cls, q_cls)``."""
@@ -34,14 +84,78 @@ def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
 
 
 def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
-    """Compute ``KL(p || q)`` if a pairwise registration exists.
+    r"""Compute the Kullback–Leibler divergence :math:`\mathrm{KL}(p \,\|\, q)`.
 
-    Falls through to the most-derived registered ancestor — exact-class
-    matching is checked first, then walks the MRO of ``type(p)`` × ``type(q)``.
+    The KL divergence is the expected log-ratio of two probability
+    measures :math:`p` and :math:`q` defined on the same sample space:
 
-    If no analytical pair is registered and ``p`` supports ``rsample``,
-    a Monte Carlo estimate (1 sample) is returned as a fallback.  This
-    matches the reference framework's behaviour for rare distribution pairs.
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) =
+            \mathbb{E}_{x \sim p}\!\left[\log \frac{p(x)}{q(x)}\right]
+        = \int p(x) \log \frac{p(x)}{q(x)} \, dx
+
+    It is non-negative
+    (:math:`\mathrm{KL}(p \,\|\, q) \geq 0`, with equality iff
+    :math:`p = q` almost everywhere), is not symmetric in general
+    (:math:`\mathrm{KL}(p \,\|\, q) \neq \mathrm{KL}(q \,\|\, p)`), and
+    does not satisfy the triangle inequality — so it is a *divergence*,
+    not a metric.
+
+    Dispatch walks the registry built by :func:`register_kl`: first an
+    exact class match, then the MRO of ``type(p)`` × ``type(q)`` for the
+    most-derived registered ancestor pair.  Falls back to a single-sample
+    Monte Carlo estimate when :math:`p.\mathrm{has\_rsample}` is ``True``
+    and no analytical formula is registered.
+
+    Parameters
+    ----------
+    p : Distribution
+        Left-hand distribution.
+    q : Distribution
+        Right-hand distribution (must share the support / event shape
+        of ``p``).
+
+    Returns
+    -------
+    Tensor
+        Non-negative tensor of shape ``batch_shape`` giving the per-batch
+        KL divergence in nats.
+
+    Raises
+    ------
+    NotImplementedError
+        When no closed-form pair is registered and :math:`p` does not
+        support reparameterised sampling, so MC fall-back is unavailable.
+
+    Notes
+    -----
+    KL divergence appears throughout machine learning:
+
+    * **Variational inference**: the ELBO equals
+      :math:`\log p(\mathbf{x}) - \mathrm{KL}(q(\mathbf{z})\,\|\,
+      p(\mathbf{z} \mid \mathbf{x}))`.
+    * **VAE training**: the encoder regulariser is
+      :math:`\mathrm{KL}(q(\mathbf{z} \mid \mathbf{x})\,\|\,
+      p(\mathbf{z}))`, available analytically for
+      Normal-vs-Normal pairs.
+    * **Maximum likelihood**: minimising negative log-likelihood is
+      equivalent to minimising :math:`\mathrm{KL}(p_{\text{data}}
+      \,\|\, p_{\theta})`.
+    * **Mode-seeking vs mode-covering**:
+      :math:`\mathrm{KL}(p\,\|\,q)` is mode-covering in :math:`q`;
+      :math:`\mathrm{KL}(q\,\|\,p)` is mode-seeking — important for
+      variational approximations.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.kl import kl_divergence
+    >>> p = Normal(loc=0.0, scale=1.0)
+    >>> q = Normal(loc=1.0, scale=2.0)
+    >>> kl_divergence(p, q)
+    Tensor(...)
     """
     key = (type(p), type(q))
     if key in _KL_REGISTRY:

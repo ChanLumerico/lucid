@@ -40,16 +40,41 @@ def _is_ndarray(obj: object) -> bool:
 
 
 def default_convert(data: object) -> object:
-    """Recursively convert a single sample's elements to Lucid Tensors.
+    r"""Recursively convert a single sample's elements to Lucid Tensors.
 
-    The inverse-flavour partner of ``default_collate``: ``default_collate``
-    stacks a *batch list* into batched tensors, ``default_convert`` walks
-    a *single sample* (possibly nested in lists / tuples / dicts / named
-    tuples) and turns leaf ndarrays / scalars into Tensors.  Existing
+    The inverse-flavour partner of :func:`default_collate`:
+    :func:`default_collate` stacks a *batch list* into batched tensors,
+    while :func:`default_convert` walks a *single sample* (possibly
+    nested in lists / tuples / dicts / named tuples) and turns leaf
+    ndarrays / Python scalars into :class:`Tensor` leaves.  Existing
     Tensors / strings / bytes pass through unchanged.
 
-    Used by ``DataLoader`` when the dataset returns numpy arrays per
-    sample but the user wants Tensor leaves before batching.
+    Parameters
+    ----------
+    data : object
+        A sample, possibly nested.  Supported leaf types are
+        :class:`Tensor`, ``np.ndarray``, ``int``, ``float``, ``bool``,
+        ``str``, and ``bytes``.  Container types ``dict``, ``list``,
+        ``tuple``, and ``NamedTuple`` are walked recursively and their
+        original type is preserved.
+
+    Returns
+    -------
+    object
+        Same nested structure as ``data`` with leaf ndarrays / scalars
+        promoted to :class:`Tensor`.
+
+    Notes
+    -----
+    Used by :class:`DataLoader` when a dataset returns numpy arrays per
+    sample but the user wants Tensor leaves *before* collation.  Numpy
+    is imported lazily — this is one of the H4 bridge boundaries
+    (external data ingest).
+
+    Examples
+    --------
+    >>> default_convert({"x": 1.5, "y": [1, 2]})
+    {'x': <Tensor ...>, 'y': [<Tensor ...>, <Tensor ...>]}
     """
     if isinstance(data, Tensor):
         return data
@@ -74,17 +99,39 @@ def collate(
     *,
     collate_fn_map: dict[type, Callable[..., object]] | None = None,
 ) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
-    """Composable collate — same dispatch as ``default_collate`` plus an
-    optional ``collate_fn_map`` that overrides handling for specific types.
+    r"""Composable collate dispatcher with user-overridable type handlers.
 
-    When ``collate_fn_map`` is ``None`` this is exactly ``default_collate``.
-    Otherwise the first ``isinstance(elem, t)`` match in the map is used,
-    falling back to the default dispatch chain on miss.
+    Same dispatch behaviour as :func:`default_collate` plus an optional
+    ``collate_fn_map`` that overrides handling for specific element
+    types.  Use this when a custom record type needs special-case
+    batching while everything else (tensors, dicts, namedtuples, ...)
+    should follow the default rules.
 
-    Example::
+    Parameters
+    ----------
+    batch : list of object
+        Samples emitted by a dataset for a single mini-batch.
+    collate_fn_map : dict, optional
+        Mapping from element type to a callable
+        ``fn(batch, *, collate_fn_map=...)``.  The first
+        ``isinstance(batch[0], t)`` match wins; on miss the function
+        falls back to :func:`default_collate`'s dispatch chain.
 
-        loader = DataLoader(ds, collate_fn=lambda b: collate(
-            b, collate_fn_map={MyRecord: my_record_collate}))
+    Returns
+    -------
+    Tensor or list or dict or tuple
+        Collated batch.  Structure mirrors ``default_collate``'s output.
+
+    Notes
+    -----
+    When ``collate_fn_map is None`` this is exactly
+    :func:`default_collate`.  The recursive forwarding of
+    ``collate_fn_map`` lets nested containers reuse the same overrides.
+
+    Examples
+    --------
+    >>> loader = DataLoader(ds, collate_fn=lambda b: collate(
+    ...     b, collate_fn_map={MyRecord: my_record_collate}))
     """
     elem = batch[0]
     if collate_fn_map is not None:
@@ -97,7 +144,42 @@ def collate(
 def default_collate(
     batch: list[object],
 ) -> Tensor | list[object] | dict[str, object] | tuple[object, ...]:
-    """Collate a list of samples into a batched tensor or nested structure."""
+    r"""Collate a list of samples into a batched tensor or nested structure.
+
+    The default ``collate_fn`` used by :class:`DataLoader`.  Walks the
+    first element of ``batch`` to decide how to combine the remaining
+    elements, preserving the original nested container structure.
+
+    Parameters
+    ----------
+    batch : list of object
+        Samples (one per dataset item) to combine into a single batch.
+        Every element must share the same structure / type as
+        ``batch[0]``.
+
+    Returns
+    -------
+    Tensor or list or dict or tuple
+        * :class:`Tensor` leaves → stacked along a new leading axis.
+        * ``np.ndarray`` leaves → stacked then wrapped as :class:`Tensor`
+          (numpy bridge — :class:`DataLoader` is an H4 carve-out).
+        * ``int`` / ``float`` leaves → 1-D :class:`Tensor`.
+        * ``str`` / ``bytes`` leaves → kept as a Python list.
+        * ``dict`` / ``list`` / ``tuple`` / ``NamedTuple`` containers
+          → walked recursively; original container type is preserved.
+
+    Notes
+    -----
+    The recursion is structural: a batch of ``{"x": Tensor, "y": int}``
+    becomes ``{"x": stacked_Tensor, "y": 1d_Tensor}`` of the same dict
+    shape.  Heterogeneous batches (different keys / shapes) are not
+    supported — callers must normalise upstream.
+
+    Examples
+    --------
+    >>> default_collate([(t1, 0), (t2, 1), (t3, 2)])
+    (<Tensor shape=(3, ...)>, <Tensor shape=(3,)>)
+    """
     elem = batch[0]
 
     if isinstance(elem, Tensor):
@@ -333,44 +415,72 @@ class _MultiProcessDataLoaderIter:
 
 
 class DataLoader:
-    """Combine a dataset with a sampler to provide iteration over mini-batches.
+    r"""Combine a dataset with a sampler to provide iteration over mini-batches.
+
+    Wraps a :class:`Dataset` to provide batching, optional shuffling,
+    parallel data loading via worker processes, and customisable
+    collation.  Iteration yields one collated batch per step until the
+    underlying sampler is exhausted.
 
     Parameters
     ----------
     dataset : Dataset
-        Dataset to load data from.
-    batch_size : int, optional
-        Samples per batch (default: 1).
+        Dataset to load data from.  May be either map-style
+        (:class:`Dataset`) or iterable-style (:class:`IterableDataset`).
+    batch_size : int, default=1
+        Number of samples per batch.  Ignored when ``batch_sampler`` is
+        provided.
     shuffle : bool, optional
-        Shuffle at the start of each epoch (default: False).
+        If ``True``, the default sampler is :class:`RandomSampler`;
+        otherwise :class:`SequentialSampler`.  Mutually exclusive with
+        ``sampler``.
     sampler : Sampler, optional
-        Custom index sampler.
+        Custom per-sample index sampler.  Mutually exclusive with
+        ``shuffle``.
     batch_sampler : Sampler, optional
-        Custom batch sampler.
-    num_workers : int, optional
-        Worker processes for parallel data loading. ``0`` = single-process.
+        Custom batch sampler yielding lists of indices.  Mutually
+        exclusive with ``batch_size`` / ``shuffle`` / ``sampler`` /
+        ``drop_last``.
+    num_workers : int, default=0
+        Worker processes for parallel data loading.  ``0`` runs
+        single-process in the main thread; ``> 0`` spawns a worker pool.
     collate_fn : callable, optional
-        Merge a list of samples into a batch.
-    drop_last : bool, optional
-        Drop the last incomplete batch (default: False).
-    timeout : float, optional
-        Timeout for collecting a batch from workers (default: 0, unlimited).
+        Merge a list of samples into a batch (default:
+        :func:`default_collate`).
+    drop_last : bool, default=False
+        If ``True``, drop the trailing batch when the dataset length is
+        not divisible by ``batch_size``.
+    timeout : float, default=0.0
+        Seconds to wait for a worker to deliver a batch before raising
+        ``RuntimeError``.  ``0`` blocks indefinitely.
     worker_init_fn : callable, optional
-        Called as ``worker_init_fn(worker_id)`` at the start of each worker.
+        Called as ``worker_init_fn(worker_id)`` at the start of each
+        worker process — useful for per-worker RNG seeding.
     prefetch_factor : int, optional
-        Batches pre-loaded per worker (default: 2). Only used when
-        ``num_workers > 0``.
-    persistent_workers : bool, optional
-        Keep worker processes alive between epochs (default: False).
+        Batches pre-loaded per worker (default ``2`` when
+        ``num_workers > 0``).  Higher values trade memory for throughput.
+    persistent_workers : bool, default=False
+        Keep worker processes alive between epochs to avoid repeated
+        process-startup overhead.  Requires ``num_workers > 0``.
+    pin_memory : bool, default=False
+        Accepted for API compatibility.  Pinning is a no-op on Apple
+        Silicon (unified memory architecture).
     generator : optional
-        RNG for random sampler.
+        RNG handle forwarded to the default :class:`RandomSampler`.
+
+    Notes
+    -----
+    Worker processes communicate via ``multiprocessing.Queue``: each
+    worker owns one index queue, all workers share a single result
+    queue, and the main process reorders results back into sampler
+    order before yielding.  Sequence numbers ensure deterministic
+    delivery regardless of completion order across workers.
 
     Examples
     --------
-    >>> ds = TensorDataset(X, y)
-    >>> loader = DataLoader(ds, batch_size=32, shuffle=True, num_workers=4)
-    >>> for x_batch, y_batch in loader:
-    ...     loss = model(x_batch).mean()
+    >>> dl = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+    >>> for batch in dl:
+    ...     ...
     """
 
     def __init__(

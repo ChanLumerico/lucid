@@ -15,22 +15,71 @@ def jacobian(
     strict: bool = False,
     vectorize: bool = False,
 ) -> Tensor | tuple[Tensor, ...]:
-    """Compute the Jacobian of *func* w.r.t. each input.
+    r"""Compute the Jacobian matrix of ``func`` with respect to each input.
 
-    For scalar-valued functions this is equivalent to :func:`grad`.
-    For vector-valued functions returns a matrix J where J[i,j] = d out[i]/d in[j].
+    The Jacobian of a vector-valued function
+    :math:`f : \mathbb{R}^n \to \mathbb{R}^m` is
+
+    .. math::
+
+        J_{ij} = \frac{\partial f_i}{\partial x_j}, \qquad
+        J \in \mathbb{R}^{m \times n}.
+
+    Lucid evaluates it row-by-row by repeated reverse-mode
+    backward passes — one per output element — seeding each pass
+    with a one-hot cotangent so the resulting input gradient is
+    exactly the corresponding Jacobian row. The cost therefore
+    scales with the output dimension :math:`m`; prefer :func:`vjp`
+    when only :math:`v^\top J` is needed and :func:`jvp` when only
+    :math:`J v` is needed.
 
     Parameters
     ----------
     func : callable
-        Function to differentiate. Must take Tensor(s) and return a Tensor.
+        A function mapping ``Tensor`` inputs to a ``Tensor`` (or
+        tuple of ``Tensor``). Must be differentiable w.r.t. each
+        positional input.
     inputs : Tensor or tuple of Tensor
-        Input tensors at which to evaluate the Jacobian.
+        Input tensor(s) at which the Jacobian is evaluated. They
+        are silently promoted to ``requires_grad=True`` if needed.
+    create_graph : bool, optional
+        If ``True`` the Jacobian itself is differentiable, enabling
+        higher-order derivatives (e.g. building :func:`hessian` on
+        top). Defaults to ``False``.
+    strict : bool, optional
+        Reserved for stricter shape/dtype validation. Currently
+        unused.
+    vectorize : bool, optional
+        Reserved for a future vmap-based implementation. Currently
+        unused.
 
     Returns
     -------
     Tensor or tuple of Tensor
-        Jacobian matrix/matrices, one per input.
+        For a single input ``x`` the returned tensor has shape
+        ``(prod(out_shape), prod(x.shape))``. For multiple inputs
+        a tuple is returned, one Jacobian block per input.
+
+    Notes
+    -----
+    Reverse-mode differentiation makes the cost per row
+    :math:`O(\text{cost}(f))`; the full Jacobian therefore costs
+    :math:`O(m \cdot \text{cost}(f))`. For square or wide
+    Jacobians (:math:`m \ge n`) forward-mode would be cheaper —
+    Lucid does not yet ship a forward-mode implementation, so
+    this routine is preferred for tall Jacobians
+    (:math:`m \ll n`).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import jacobian
+    >>> x = lucid.tensor([1.0, 2.0, 3.0])
+    >>> def f(x):
+    ...     return x * x
+    >>> J = jacobian(f, x)
+    >>> J.shape
+    (3, 3)
     """
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
@@ -113,18 +162,66 @@ def hessian(
     strict: bool = False,
     vectorize: bool = False,
 ) -> Tensor | tuple[tuple[Tensor, ...], ...]:
-    """Compute the Hessian of a scalar-valued *func* w.r.t. each pair of inputs.
+    r"""Compute the Hessian matrix of a scalar-valued ``func``.
+
+    The Hessian of a scalar function
+    :math:`f : \mathbb{R}^n \to \mathbb{R}` is
+
+    .. math::
+
+        H_{ij} = \frac{\partial^2 f}{\partial x_i \, \partial x_j},
+        \qquad H \in \mathbb{R}^{n \times n}.
+
+    Implemented as :func:`jacobian` of the gradient of ``func`` —
+    a forward pass produces the loss, a first backward (with
+    ``create_graph=True``) builds the gradient graph, and a second
+    backward along each gradient coordinate yields the rows of
+    :math:`H`. Cost is therefore :math:`O(n \cdot
+    \text{cost}(\nabla f))`.
 
     Parameters
     ----------
     func : callable
-        Scalar-valued function to differentiate twice.
+        Scalar-valued function of one or more ``Tensor`` inputs.
     inputs : Tensor or tuple of Tensor
+        Inputs at which :math:`H` is evaluated. They are silently
+        promoted to ``requires_grad=True`` if necessary.
+    create_graph : bool, optional
+        If ``True`` the Hessian itself remains differentiable
+        (third-order derivatives). Defaults to ``False``.
+    strict : bool, optional
+        Reserved for stricter validation. Currently unused.
+    vectorize : bool, optional
+        Reserved for a future vmap-based implementation. Currently
+        unused.
 
     Returns
     -------
     Tensor or tuple of tuple of Tensor
-        Hessian matrix (or block-Hessian for multiple inputs).
+        For a single input the returned tensor has shape
+        ``(numel(x), numel(x))``. For multiple inputs a nested
+        tuple of cross-Hessian blocks is returned, with
+        ``H[i][j]`` containing :math:`\partial^2 f / (\partial
+        x_i \, \partial x_j)`.
+
+    Notes
+    -----
+    Symmetry :math:`H_{ij} = H_{ji}` holds in exact arithmetic
+    when :math:`f` is :math:`C^2`. In floating-point the result is
+    only approximately symmetric; symmetrize as
+    :math:`\tfrac{1}{2}(H + H^\top)` if a strictly symmetric
+    matrix is required.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import hessian
+    >>> x = lucid.tensor([1.0, 2.0])
+    >>> def f(x):
+    ...     return (x * x).sum()
+    >>> H = hessian(f, x)
+    >>> H.shape
+    (2, 2)
     """
     from lucid._dispatch import _wrap
     from lucid._C import engine as _C_engine
@@ -197,24 +294,68 @@ def vjp(
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple["Tensor", tuple["Tensor | None", ...]]:
-    """Vector-Jacobian product (reverse-mode): returns (outputs, vjp_tensors).
+    r"""Vector-Jacobian product :math:`v^\top J` (reverse-mode AD).
 
-    Computes  v^T @ J  where J is the Jacobian of func and v is the
-    "vector" (cotangent / grad_output).
+    Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian
+    :math:`J \in \mathbb{R}^{m \times n}` and a cotangent vector
+    :math:`v \in \mathbb{R}^m`, returns
+
+    .. math::
+
+        v^\top J \in \mathbb{R}^{n}
+
+    along with the primal output :math:`y = f(x)`. This is the
+    operation that backpropagation performs on every node: when
+    a scalar loss :math:`\mathcal{L}(y)` is being differentiated
+    against an intermediate :math:`y`, the upstream cotangent is
+    :math:`v = \partial \mathcal{L} / \partial y` and the result
+    is :math:`\partial \mathcal{L} / \partial x`.
+
+    Computing a full VJP costs the same as one backward pass —
+    much cheaper than materialising :math:`J` when only the
+    product is needed.
 
     Parameters
     ----------
     func : callable
-        Function to differentiate.
+        Function mapping ``Tensor`` inputs to a ``Tensor`` (or
+        tuple thereof).
     inputs : Tensor or tuple of Tensor
-        Input tensors.
+        Primal point :math:`x` at which :math:`J` is evaluated.
+        Silently promoted to ``requires_grad=True`` if needed.
     v : Tensor or tuple of Tensor
-        Cotangent vector(s) matching the output shape(s).
+        Cotangent vector(s) matching the output shape(s) of
+        ``func``. Scalar-valued ``v`` is broadcast for scalar
+        outputs.
+    create_graph : bool, optional
+        If ``True`` the returned VJP is itself differentiable,
+        enabling double-backward. Defaults to ``False``.
+    strict : bool, optional
+        Reserved for stricter validation. Currently unused.
 
     Returns
     -------
-    (output, vjp_grads) where output is func(*inputs) and vjp_grads are
-    gradients w.r.t. each input.
+    tuple of (Tensor, tuple of (Tensor or None))
+        ``(output, vjp_grads)`` where ``output = func(*inputs)``
+        and ``vjp_grads[i]`` is :math:`v^\top J` projected onto
+        input ``i`` (or ``None`` if that input has no gradient
+        path).
+
+    Notes
+    -----
+    The dual to :func:`vjp` is :func:`jvp`, which computes
+    :math:`J v` via forward-mode (or finite differences in
+    Lucid's current implementation).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import vjp
+    >>> x = lucid.tensor([1.0, 2.0, 3.0])
+    >>> v = lucid.tensor([1.0, 1.0, 1.0])
+    >>> def f(x):
+    ...     return x * x
+    >>> y, (grad_x,) = vjp(f, x, v)
     """
     from lucid.autograd._backward import grad as _grad
 
@@ -267,25 +408,73 @@ def jvp(
     create_graph: bool = False,
     strict: bool = False,
 ) -> tuple["Tensor", "Tensor"]:
-    """Jacobian-vector product (forward-mode via double-backward).
+    r"""Jacobian-vector product :math:`J v` (forward-mode directional derivative).
 
-    Computes  J @ v  using the forward-over-reverse trick:
-    create_graph=True backward, then backward again with the tangent.
+    Given :math:`f : \mathbb{R}^n \to \mathbb{R}^m` with Jacobian
+    :math:`J \in \mathbb{R}^{m \times n}` and a tangent vector
+    :math:`v \in \mathbb{R}^n`, returns
+
+    .. math::
+
+        J v = \left.\frac{d}{dt} f(x + t v)\right|_{t=0}
+            \in \mathbb{R}^{m}
+
+    along with the primal output :math:`y = f(x)`. JVPs are the
+    natural primitive of forward-mode AD and are useful for
+    propagating tangent information (sensitivities) through a
+    network in a single forward sweep, for computing directional
+    derivatives, and as a building block for second-order methods.
+
+    Lucid currently realises the JVP via a symmetric central
+    finite difference
+
+    .. math::
+
+        J v \approx \frac{f(x + \varepsilon v) - f(x - \varepsilon v)}
+                         {2 \varepsilon},
+
+    with :math:`\varepsilon = 10^{-4}`. This avoids the need for a
+    true forward-mode implementation while still being accurate
+    enough for testing and most applications.
 
     Parameters
     ----------
     func : callable
-        Function to differentiate.
+        Function mapping ``Tensor`` inputs to a ``Tensor`` (or
+        tuple thereof).
     inputs : Tensor or tuple of Tensor
-        Primal inputs.
+        Primal point :math:`x`.
     v : Tensor or tuple of Tensor
-        Tangent vectors matching the input shapes.
+        Tangent vector(s) matching the input shape(s).
+    create_graph : bool, optional
+        Reserved for the future native forward-mode implementation.
+        Currently unused.
+    strict : bool, optional
+        Reserved for stricter validation. Currently unused.
 
     Returns
     -------
-    (primals_out, tangents_out)
-        primals_out = func(*inputs),
-        tangents_out = J @ v  (shape = output shape).
+    tuple of (Tensor or tuple of Tensor, Tensor or tuple of Tensor)
+        ``(primals_out, tangents_out)`` where
+        ``primals_out = func(*inputs)`` and ``tangents_out`` has the
+        same shape as ``primals_out`` and holds :math:`J v`.
+
+    Notes
+    -----
+    The complementary operation is :func:`vjp`, which computes
+    :math:`v^\top J` cheaply via reverse-mode. Use :func:`jvp`
+    when the input dimension is small relative to the output
+    dimension; otherwise reverse-mode is more efficient.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.autograd import jvp
+    >>> x = lucid.tensor([1.0, 2.0, 3.0])
+    >>> v = lucid.tensor([1.0, 0.0, 0.0])
+    >>> def f(x):
+    ...     return x * x
+    >>> y, tangent = jvp(f, x, v)
     """
 
     scalar_input = not isinstance(inputs, (list, tuple))

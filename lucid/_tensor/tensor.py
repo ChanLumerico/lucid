@@ -73,7 +73,7 @@ class Tensor:
         device: device | str | None = None,
         requires_grad: bool = False,
     ) -> None:
-        """Construct a Tensor from Python data, a NumPy array, or another Tensor.
+        r"""Construct a Tensor from Python data, a NumPy array, or another Tensor.
 
         The data is funnelled through :func:`lucid._factories.converters._to_impl`,
         the canonical bridge between the outside world and Lucid's C++
@@ -104,6 +104,20 @@ class Tensor:
             A freshly constructed tensor whose storage is owned by the
             engine.
 
+        Notes
+        -----
+        Constructor is one of the six sanctioned host-to-engine bridge
+        boundaries (rule **H4**). NumPy arrays cross the bridge exactly
+        once here; afterwards the data is owned by Lucid's engine. The
+        resulting layout is C-contiguous row-major:
+
+        .. math::
+
+            \text{stride}[i] = e \cdot \prod_{j=i+1}^{d-1} s_j
+
+        where :math:`e` is the element size in bytes and :math:`s_j` are
+        the dimension sizes.
+
         Examples
         --------
         >>> import lucid
@@ -121,7 +135,7 @@ class Tensor:
 
     @classmethod
     def __new_from_impl__(cls, impl: _C_engine.TensorImpl) -> Self:
-        """Wrap an existing ``TensorImpl`` as a ``Tensor`` with zero copy.
+        r"""Wrap an existing ``TensorImpl`` as a ``Tensor`` with zero copy.
 
         Internal factory used pervasively by ops, autograd, and dispatch to
         promote a freshly-produced C++ ``TensorImpl`` into a Python
@@ -149,6 +163,9 @@ class Tensor:
         that the per-op overhead is one ``object.__new__`` plus one attribute
         assignment, rather than the full ``_to_impl`` validation pipeline.
 
+        On the hot dispatch path the asymptotic cost is
+        :math:`\mathcal{O}(1)` independent of ``numel``.
+
         Examples
         --------
         >>> import lucid
@@ -164,7 +181,7 @@ class Tensor:
 
     @property
     def impl(self) -> _C_engine.TensorImpl:
-        """Access the underlying C++ ``TensorImpl`` object.
+        r"""Access the underlying C++ ``TensorImpl`` object.
 
         Provides read-only access to the engine-side tensor that backs this
         Python wrapper. Used by ops and the autograd engine to fetch the
@@ -181,6 +198,9 @@ class Tensor:
         This is an internal accessor exposed for advanced use cases such as
         writing custom ops that bind directly against the engine. Public
         APIs should compose existing ``Tensor`` operations instead.
+        Logically the identity projection
+        :math:`\pi: \text{Tensor} \to \text{TensorImpl}` with
+        :math:`\pi(t) = t.\_impl`.
 
         Examples
         --------
@@ -264,7 +284,7 @@ class Tensor:
 
     @property
     def device(self) -> device:
-        """Device on which this tensor is stored.
+        r"""Device on which this tensor is stored.
 
         Lucid tensors reside on one of two devices:
 
@@ -281,7 +301,15 @@ class Tensor:
         On Apple Silicon the CPU and GPU share the same physical DRAM
         (unified memory architecture).  Moving a tensor between devices
         copies the *logical* dispatch target, not physical bytes, unless
-        the tensor is in a non-shared Metal buffer.
+        the tensor is in a non-shared Metal buffer. The dispatch routing
+        rule is
+
+        .. math::
+
+            \text{backend}(t) = \begin{cases}
+                \text{Accelerate} & \text{if } t.\text{device} = \text{cpu} \\
+                \text{MLX/Metal} & \text{if } t.\text{device} = \text{metal}.
+            \end{cases}
 
         Examples
         --------
@@ -296,7 +324,7 @@ class Tensor:
 
     @property
     def ndim(self) -> int:
-        """Number of dimensions (rank) of the tensor.
+        r"""Number of dimensions (rank) of the tensor.
 
         Equivalent to ``len(tensor.shape)``.  A scalar tensor has ``ndim == 0``,
         a vector has ``ndim == 1``, a matrix has ``ndim == 2``, and so on.
@@ -315,6 +343,14 @@ class Tensor:
         1
         >>> lucid.zeros(2, 3).ndim
         2
+
+        Notes
+        -----
+        For a shape tuple :math:`(s_0, \ldots, s_{d-1})` the rank is simply
+
+        .. math::
+
+            \text{ndim} = d = |\text{shape}|.
         """
         return len(self._impl.shape)
 
@@ -379,7 +415,7 @@ class Tensor:
 
     @property
     def is_metal(self) -> bool:
-        """Whether this tensor resides on the Metal (GPU) device.
+        r"""Whether this tensor resides on the Metal (GPU) device.
 
         On Apple Silicon the GPU backend is Apple Metal accessed through the
         MLX library.  CPU tensors use Apple Accelerate instead.
@@ -397,12 +433,18 @@ class Tensor:
         False
         >>> x.metal().is_metal
         True
+
+        Notes
+        -----
+        Equivalent predicate :math:`\text{is\_metal}(t) = (t.\text{device} = \text{GPU})`.
+        On Apple Silicon the Metal backend dispatches via MLX, which lazily
+        builds a graph and evaluates on the GPU when results are observed.
         """
         return self._impl.device == _C_engine.Device.GPU
 
     @property
     def is_shared(self) -> bool:
-        """True when backed by a Metal ``MTLResourceStorageModeShared`` buffer.
+        r"""True when backed by a Metal ``MTLResourceStorageModeShared`` buffer.
 
         Shared-memory tensors live in Apple Silicon unified DRAM and are
         simultaneously accessible from CPU and GPU without a ``memcpy``.
@@ -422,7 +464,8 @@ class Tensor:
         CPU and GPU code paths because both engines see the same physical
         DRAM page. The trade-off is that Metal's GPU caches cannot be used
         as aggressively as with private storage; for compute-bound GPU
-        kernels, private mode is often preferable.
+        kernels, private mode is often preferable. Predicate:
+        :math:`\text{is\_shared}(t) = \mathbf{1}\{\text{storage\_mode}(t) = \text{Shared}\}`.
 
         Examples
         --------
@@ -438,7 +481,7 @@ class Tensor:
 
     @property
     def is_leaf(self) -> bool:
-        """Whether this tensor is a leaf in the autograd computation graph.
+        r"""Whether this tensor is a leaf in the autograd computation graph.
 
         A tensor is a leaf if it was created directly by the user (not as the
         result of an operation) or if it does not require gradients.  Only
@@ -459,7 +502,11 @@ class Tensor:
         Tensors produced by differentiable operations on
         ``requires_grad=True`` inputs are *not* leaves — they are
         intermediate nodes and their ``.grad`` is not retained unless
-        :meth:`retain_grad` is called.
+        :meth:`retain_grad` is called. Predicate:
+
+        .. math::
+
+            \text{is\_leaf}(t) = \mathbf{1}\{\text{grad\_fn}(t) = \bot\}.
 
         Examples
         --------
@@ -500,6 +547,12 @@ class Tensor:
         >>> x.requires_grad = True
         >>> x.requires_grad
         True
+
+        Notes
+        -----
+        Tensors with ``requires_grad=True`` become nodes in the autograd DAG.
+        Operations consuming them produce non-leaf tensors that also require
+        gradients (transitive closure of the flag along the forward graph).
         """
         return self._impl.requires_grad
 
@@ -557,11 +610,17 @@ class Tensor:
         12
         >>> lucid.tensor(5.0).numel()
         1
+
+        Notes
+        -----
+        Used by the engine to allocate storage of size
+        :math:`N \cdot e` bytes, where :math:`e = \text{dtype.itemsize}`.
+        Convenient invariant: ``tensor.numel() == tensor.nbytes // tensor.itemsize``.
         """
         return int(self._impl.numel())
 
     def dim(self) -> int:
-        """Return the number of dimensions (rank) of the tensor.
+        r"""Return the number of dimensions (rank) of the tensor.
 
         This is identical to the :attr:`ndim` property.  It exists as a
         method for API compatibility with code that calls ``tensor.dim()``.
@@ -578,6 +637,11 @@ class Tensor:
         3
         >>> lucid.tensor(1.0).dim()
         0
+
+        Notes
+        -----
+        Equivalent to ``len(tensor.shape)``; matches the conventional rank
+        :math:`d` such that :math:`\text{shape} \in \mathbb{N}^d`.
         """
         return len(self._impl.shape)
 
@@ -592,7 +656,7 @@ class Tensor:
         ...
 
     def size(self, dim: int | None = None) -> int | tuple[int, ...]:
-        """Return the size of a specific dimension, or the full shape tuple.
+        r"""Return the size of a specific dimension, or the full shape tuple.
 
         Parameters
         ----------
@@ -617,6 +681,14 @@ class Tensor:
         3
         >>> x.size(-1)
         5
+
+        Notes
+        -----
+        The full shape and the element count are related by
+
+        .. math::
+
+            \text{numel} = \prod_{i=0}^{d-1} \text{size}(i).
         """
         s = tuple(self._impl.shape)
         if dim is not None:
@@ -624,7 +696,7 @@ class Tensor:
         return s
 
     def is_contiguous(self) -> bool:
-        """Return ``True`` if the tensor's data is stored contiguously in memory.
+        r"""Return ``True`` if the tensor's data is stored contiguously in memory.
 
         A contiguous tensor stores its elements in a single unbroken block of
         memory in C (row-major) order — i.e. the stride of each dimension equals
@@ -649,6 +721,19 @@ class Tensor:
         True
         >>> x.T.is_contiguous()   # transpose is not contiguous
         False
+
+        Notes
+        -----
+        A tensor of shape :math:`(s_0, \ldots, s_{d-1})` is contiguous iff
+        its strides satisfy the C-order recurrence
+
+        .. math::
+
+            \text{stride}[d-1] = 1, \quad
+            \text{stride}[i] = \text{stride}[i+1] \cdot s_{i+1}
+
+        (in element units). Many Accelerate/MLX kernels require contiguous
+        inputs; if not, call :meth:`contiguous` first.
         """
         return self._impl.is_contiguous()
 
@@ -757,7 +842,7 @@ class Tensor:
 
     @property
     def grad_fn(self) -> _C_engine.Node | None:
-        """The autograd graph node that created this tensor, or ``None``.
+        r"""The autograd graph node that created this tensor, or ``None``.
 
         Every tensor produced by a differentiable operation holds a reference
         to the C++ ``Node`` (gradient function) that can propagate gradients
@@ -783,11 +868,24 @@ class Tensor:
         >>> y = x * 3
         >>> y.grad_fn is None      # result of an op — has a grad_fn
         False
+
+        Notes
+        -----
+        The graph forms the chain-rule factorisation used by :meth:`backward`:
+
+        .. math::
+
+            \frac{\partial \mathcal{L}}{\partial \mathbf{x}}
+            = \frac{\partial \mathcal{L}}{\partial \mathbf{y}}
+              \cdot \frac{\partial \mathbf{y}}{\partial \mathbf{x}},
+
+        where :math:`\mathbf{y} = f(\mathbf{x})` and ``grad_fn`` carries the
+        Jacobian-vector product :math:`v \mapsto v \cdot J_f`.
         """
         return getattr(self._impl, "grad_fn", None)
 
     def requires_grad_(self, requires_grad: bool = True) -> Self:
-        """Enable or disable gradient tracking for this tensor, in-place.
+        r"""Enable or disable gradient tracking for this tensor, in-place.
 
         Unlike the :attr:`requires_grad` property setter, this method
         returns ``self`` so it can be chained inline:
@@ -812,12 +910,20 @@ class Tensor:
         >>> x = lucid.zeros(3)
         >>> x.requires_grad_(True).requires_grad
         True
+
+        Notes
+        -----
+        In-place flag flip: the underlying storage is preserved, but the
+        ``TensorImpl`` is replaced with one whose autograd flag is
+        :math:`\text{requires\_grad} \in \{\text{True}, \text{False}\}`.
+        Only valid on **leaf** tensors; non-leaf tensors inherit the flag
+        from their producing op and cannot be flipped on directly.
         """
         self._impl = _impl_with_grad(self._impl, requires_grad)
         return self
 
     def retain_grad(self) -> None:
-        """Retain the gradient on this non-leaf tensor after :meth:`backward`.
+        r"""Retain the gradient on this non-leaf tensor after :meth:`backward`.
 
         By default, gradients are only stored on **leaf** tensors.  Intermediate
         (non-leaf) results in the computation graph have their ``.grad``
@@ -830,7 +936,10 @@ class Tensor:
         -----
         This method must be called **before** the forward computation whose
         gradient you want to inspect.  Calling it after :meth:`backward` has
-        no effect.
+        no effect. Conceptually retains
+        :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{y}}` for
+        the intermediate node :math:`\mathbf{y}` instead of discarding it
+        after its parents have consumed it.
 
         Examples
         --------
@@ -848,7 +957,7 @@ class Tensor:
     def register_hook(
         self, hook: Callable[[Tensor], Tensor | None]
     ) -> _RemovableHandle:
-        """Register a hook that fires when this tensor's gradient is computed.
+        r"""Register a hook that fires when this tensor's gradient is computed.
 
         The hook receives the accumulated gradient tensor.  If it returns a
         non-``None`` :class:`~lucid.Tensor`, that value replaces the gradient.
@@ -873,6 +982,11 @@ class Tensor:
           pass so the gradient is preserved and available when hooks fire.
         * The hook must be registered **before** the forward computation for
           non-leaf tensors; for leaf tensors any timing works.
+
+        Chain-rule effect: if the hook returns a tensor :math:`\tilde g`,
+        the engine substitutes :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{x}}
+        \leftarrow \tilde g` before continuing backward propagation.
+        A returned ``None`` leaves the gradient untouched.
 
         Examples
         --------
@@ -1044,7 +1158,7 @@ class Tensor:
         _dispatch_tensor_grad_hooks()
 
     def detach(self) -> Self:
-        """Return a new tensor that shares data but is detached from the autograd graph.
+        r"""Return a new tensor that shares data but is detached from the autograd graph.
 
         The returned tensor has the same values as ``self`` but
         ``requires_grad=False`` and no ``grad_fn``.  It is treated as a
@@ -1068,6 +1182,14 @@ class Tensor:
         * Logging or visualising intermediate activations without affecting
           the graph.
 
+        Mathematically, detach is the identity on values but injects a
+        zero Jacobian into the backward pass:
+
+        .. math::
+
+            \text{detach}(\mathbf{x}) = \mathbf{x}, \quad
+            \frac{\partial \text{detach}(\mathbf{x})}{\partial \mathbf{x}} = \mathbf{0}.
+
         Examples
         --------
         >>> import lucid
@@ -1086,7 +1208,7 @@ class Tensor:
         )
 
     def detach_(self) -> Self:
-        """Detach this tensor from the autograd graph in-place.
+        r"""Detach this tensor from the autograd graph in-place.
 
         Clears ``requires_grad`` and removes the ``grad_fn`` so that future
         operations on ``self`` are not tracked.  Returns ``self`` for chaining.
@@ -1107,6 +1229,13 @@ class Tensor:
         >>> _ = y.detach_()
         >>> y.requires_grad
         False
+
+        Notes
+        -----
+        In-place counterpart of :meth:`detach`. Mutates ``self`` so future
+        ops are not tracked; equivalent to setting
+        :math:`\text{requires\_grad} \leftarrow \text{False}` and
+        clearing ``grad_fn``. Returns ``self`` to permit fluent chaining.
         """
         self._impl = _impl_with_grad(self._impl, False)
         return self
@@ -1156,7 +1285,7 @@ class Tensor:
         return self
 
     def clamp_min_(self, min: float) -> Self:
-        """Raise all elements below ``min`` to ``min``, in-place.
+        r"""Raise all elements below ``min`` to ``min``, in-place.
 
         Shorthand for ``clamp_(min=min)``.
 
@@ -1177,11 +1306,23 @@ class Tensor:
         >>> x = lucid.tensor([-1.0, 0.0, 1.0])
         >>> x.clamp_min_(0.0)
         tensor([0., 0., 1.])
+
+        Notes
+        -----
+        Pointwise rectification:
+
+        .. math::
+
+            x_i \leftarrow \max(\text{min}, x_i).
+
+        The non-smooth point at :math:`x = \text{min}` has subgradient
+        :math:`[0, 1]`; autograd selects ``1`` for :math:`x > \text{min}`
+        and ``0`` otherwise.
         """
         return self.clamp_(min=min)
 
     def clamp_max_(self, max: float) -> Self:
-        """Lower all elements above ``max`` to ``max``, in-place.
+        r"""Lower all elements above ``max`` to ``max``, in-place.
 
         Shorthand for ``clamp_(max=max)``.
 
@@ -1202,11 +1343,21 @@ class Tensor:
         >>> x = lucid.tensor([0.5, 1.5, 2.5])
         >>> x.clamp_max_(2.0)
         tensor([0.5, 1.5, 2. ])
+
+        Notes
+        -----
+        Pointwise saturation:
+
+        .. math::
+
+            x_i \leftarrow \min(\text{max}, x_i).
+
+        The gradient is the indicator :math:`\mathbf{1}\{x_i < \text{max}\}`.
         """
         return self.clamp_(max=max)
 
     def clone(self) -> Self:
-        """Return a deep copy of this tensor, preserving autograd history.
+        r"""Return a deep copy of this tensor, preserving autograd history.
 
         Unlike :meth:`detach`, the returned tensor **remains connected** to
         the computation graph.  Gradients flow through :meth:`clone` as if
@@ -1222,7 +1373,12 @@ class Tensor:
         Notes
         -----
         The clone operation inserts a trivial node into the graph whose
-        backward pass propagates the upstream gradient unchanged.
+        backward pass propagates the upstream gradient unchanged:
+
+        .. math::
+
+            \text{clone}(\mathbf{x}) = \mathbf{x}, \quad
+            \frac{\partial \text{clone}(\mathbf{x})}{\partial \mathbf{x}} = \mathbf{I}.
 
         Use :meth:`detach` (or ``clone().detach()``) when you want a copy
         that is *not* connected to the graph.
@@ -1243,7 +1399,7 @@ class Tensor:
     # ── conversion ───────────────────────────────────────────────────────────
 
     def item(self) -> float | int | bool:
-        """Return the value of a single-element tensor as a Python scalar.
+        r"""Return the value of a single-element tensor as a Python scalar.
 
         Delegates to the engine's ``TensorImpl::item`` which performs the
         single-element extraction (including IEEE-754 binary16 to float
@@ -1268,6 +1424,11 @@ class Tensor:
         computation has completed. Avoid calling in tight loops on GPU
         tensors; prefer ``tensor.cpu().tolist()`` for batch extraction.
 
+        Defined only when :math:`\text{numel} = \prod_i s_i = 1`. ``item``
+        is one of the sanctioned engine-to-host bridge points (rule **H4**)
+        and detaches from autograd: the returned Python scalar carries no
+        gradient information.
+
         Examples
         --------
         >>> import lucid
@@ -1279,7 +1440,7 @@ class Tensor:
         return self._impl.item()
 
     def numpy(self) -> np.ndarray:  # type: ignore[type-arg]
-        """Return the tensor as a NumPy array (CPU only).
+        r"""Return the tensor as a NumPy array (CPU only).
 
         Imports numpy lazily — the rest of Lucid stays numpy-free unless
         the user explicitly bridges through this method. When numpy is
@@ -1306,6 +1467,13 @@ class Tensor:
         outside world (see project rule **H4**). The returned ``ndarray``
         does **not** participate in autograd; downstream NumPy operations
         will not produce gradients.
+
+        Layout is C-contiguous; for a tensor of shape :math:`(s_0, \ldots, s_{d-1})`
+        and itemsize :math:`e`, the NumPy strides equal
+
+        .. math::
+
+            \text{nstride}[i] = e \cdot \prod_{j=i+1}^{d-1} s_j.
 
         Examples
         --------
@@ -1335,7 +1503,7 @@ class Tensor:
     # future work.
 
     def __dlpack__(self, stream: object | None = None) -> object:
-        """Export this tensor as a DLPack ``PyCapsule`` for zero-copy interop.
+        r"""Export this tensor as a DLPack ``PyCapsule`` for zero-copy interop.
 
         DLPack is the open cross-framework tensor exchange specification —
         any consumer implementing the protocol (the reference framework,
@@ -1368,6 +1536,11 @@ class Tensor:
         https://dmlc.github.io/dlpack/latest/ for the precise wire format
         and version semantics. Lucid follows the v0.8 protocol revision.
 
+        Bridge boundary (rule **H4**): no autograd information crosses the
+        capsule. Logically the export is the identity on values,
+        :math:`\text{dlpack}(\mathbf{x}) \equiv \mathbf{x}`, with the
+        consumer responsible for interpreting strides/dtype correctly.
+
         Examples
         --------
         >>> import lucid
@@ -1384,7 +1557,7 @@ class Tensor:
         )
 
     def __dlpack_device__(self) -> tuple[int, int]:
-        """Return ``(device_type, device_id)`` per the DLPack specification.
+        r"""Return ``(device_type, device_id)`` per the DLPack specification.
 
         Companion to :meth:`__dlpack__` — DLPack consumers query this method
         before calling ``__dlpack__`` so they know how to synchronise and
@@ -1407,7 +1580,9 @@ class Tensor:
         * ``8`` — ``kDLMetal``
 
         A future native Metal-side export will return ``(8, 0)`` when the
-        tensor resides on the GPU, avoiding the CPU round-trip.
+        tensor resides on the GPU, avoiding the CPU round-trip. The
+        device tag is therefore the constant pair
+        :math:`(\texttt{kDLCPU}, 0) = (1, 0)` for all current tensors.
 
         Examples
         --------
@@ -1418,7 +1593,7 @@ class Tensor:
         return (1, 0)
 
     def tolist(self) -> list[object] | int | float | bool:
-        """Return the tensor contents as a nested Python list (or scalar).
+        r"""Return the tensor contents as a nested Python list (or scalar).
 
         Converts the tensor to a standard Python object:
 
@@ -1442,6 +1617,14 @@ class Tensor:
         [[1, 2], [3, 4]]
         >>> lucid.tensor(3.14).tolist()
         3.14
+
+        Notes
+        -----
+        Routes through the NumPy bridge (rule **H4**) and forces a
+        device-to-host synchronisation for Metal tensors. The nested-list
+        depth equals the tensor rank :math:`d`; the total number of
+        leaves equals :math:`\prod_i s_i`. Autograd information is
+        dropped — the returned Python objects are pure value copies.
         """
         return self.numpy().tolist()
 
@@ -1475,6 +1658,12 @@ class Tensor:
         >>> y = x.contiguous()
         >>> y.is_contiguous()
         True
+
+        Notes
+        -----
+        Idempotent: ``x.contiguous().contiguous()`` performs at most one
+        copy. After the call ``is_contiguous() == True`` and strides match
+        the C-order recurrence shown above.
         """
         return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
 
@@ -1571,7 +1760,7 @@ class Tensor:
 
     @property
     def data(self) -> Self:
-        """The tensor's underlying data, detached from gradient tracking.
+        r"""The tensor's underlying data, detached from gradient tracking.
 
         Returns a view of the same storage as ``self`` but with
         ``requires_grad=False`` and no ``grad_fn``.  Assigning to
@@ -1592,6 +1781,15 @@ class Tensor:
         False
         >>> x.data
         tensor([1., 2.])
+
+        Notes
+        -----
+        Aliases the same storage as ``self`` with the gradient flag
+        cleared. Mathematically the same identity as :meth:`detach` —
+        equal values, zero Jacobian — but unlike :meth:`detach` writes
+        through ``data`` propagate back to ``self``'s underlying buffer
+        without participating in autograd. Prefer :meth:`detach` for new
+        code; ``data`` is retained for API compatibility.
         """
         return Tensor.__new_from_impl__(_impl_with_grad(self._impl, False))  # type: ignore[return-value]
 
@@ -1601,7 +1799,7 @@ class Tensor:
     # ── shape helpers ────────────────────────────────────────────────────────
 
     def __len__(self) -> int:
-        """Return the size of the first dimension (``shape[0]``).
+        r"""Return the size of the first dimension (``shape[0]``).
 
         Implements the standard Python ``len()`` protocol. Mirrors
         sequence semantics: the length is the number of top-level elements
@@ -1625,13 +1823,18 @@ class Tensor:
         5
         >>> len(lucid.zeros(7))
         7
+
+        Notes
+        -----
+        Mirrors NumPy/sequence semantics: :math:`\text{len}(t) = s_0`.
+        Iterating with :meth:`__iter__` yields exactly :math:`s_0` slices.
         """
         if not self._impl.shape:
             raise TypeError("len() of a 0-d tensor")
         return self._impl.shape[0]
 
     def __bool__(self) -> bool:
-        """Convert a single-element tensor to a Python ``bool``.
+        r"""Convert a single-element tensor to a Python ``bool``.
 
         Implements the truthiness protocol used by ``if t:``, ``while t:``,
         and ``bool(t)``. Only defined for single-element tensors because
@@ -1664,6 +1867,9 @@ class Tensor:
         True
         >>> bool(lucid.tensor(0))
         False
+        Mathematically: defined only when :math:`\prod_i s_i = 1`. The
+        single element :math:`x` maps to :math:`\text{bool}(x) = (x \neq 0)`.
+
         >>> bool(lucid.tensor([1.0, 0.0]))  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
             ...
@@ -1676,7 +1882,7 @@ class Tensor:
         return bool(self.item())
 
     def __repr__(self) -> str:
-        """Return a string representation suitable for debugging.
+        r"""Return a string representation suitable for debugging.
 
         Delegates to the formatted printer in :mod:`lucid._tensor._repr`,
         which renders shape, dtype, and (truncated) element values in a
@@ -1693,6 +1899,13 @@ class Tensor:
         >>> import lucid
         >>> repr(lucid.zeros(2, 3))  # doctest: +SKIP
         'tensor([[0., 0., 0.],\n        [0., 0., 0.]])'
+
+        Notes
+        -----
+        Display only — does **not** participate in autograd and is one of
+        the bridge boundaries permitted by rule **H4** (``_repr.py``).
+        For Metal-resident tensors this forces a host synchronisation to
+        materialise element values for printing.
         """
         return _tensor_repr(self)
 
@@ -1702,7 +1915,7 @@ class Tensor:
     # ── iteration & formatting ────────────────────────────────────────────────
 
     def __iter__(self) -> Iterator[Self]:
-        """Iterate over the first dimension of the tensor.
+        r"""Iterate over the first dimension of the tensor.
 
         Yields successive slices ``self[i]`` for ``i`` in ``range(shape[0])``,
         so iterating an :math:`N`-d tensor produces :math:`(N-1)`-d slices.
@@ -1727,6 +1940,12 @@ class Tensor:
         [0, 1]
         [2, 3]
         [4, 5]
+
+        Notes
+        -----
+        Yields :math:`s_0` slices each of shape :math:`(s_1, \ldots, s_{d-1})`.
+        For very large leading axes prefer chunked iteration via
+        :func:`lucid.split` to amortise per-slice overhead.
         """
         if not self._impl.shape:
             raise TypeError("iteration over a 0-d tensor")
@@ -1758,6 +1977,12 @@ class Tensor:
         '3.14'
         >>> f"{lucid.tensor(2.5):+.1e}"
         '+2.5e+00'
+
+        Notes
+        -----
+        For single-element tensors the call is equivalent to
+        ``format(t.item(), spec)``. For multi-element tensors the spec is
+        ignored to avoid ambiguous element-wise formatting semantics.
         """
         if self._impl.numel() == 1:
             return format(self.item(), format_spec)
@@ -1772,7 +1997,7 @@ class Tensor:
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
-        """Return an uninitialized tensor of the given shape.
+        r"""Return an uninitialized tensor of the given shape.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
         unless overridden.  The contents are **undefined** — do not read
@@ -1801,6 +2026,13 @@ class Tensor:
         >>> y = x.new_empty(4, 5)
         >>> y.shape, y.dtype
         ((4, 5), lucid.float64)
+
+        Notes
+        -----
+        Allocates :math:`\prod_i s_i \cdot e` bytes of uninitialised
+        memory where :math:`e` is ``dtype.itemsize``. Faster than
+        :meth:`new_zeros` because the engine skips the zero-fill kernel.
+        Must be followed by a write before any read.
         """
         _dtype = dtype or self.dtype
         _device = device or self.device
@@ -1847,6 +2079,12 @@ class Tensor:
         tensor([[0, 0, 0],
                 [0, 0, 0],
                 [0, 0, 0]])
+
+        Notes
+        -----
+        Initialises every element to the additive identity :math:`0`. The
+        zero-fill is delegated to a fused engine kernel — Accelerate
+        ``catlas_*set`` on CPU and MLX broadcast-fill on Metal.
         """
         _dtype = dtype or self.dtype
         _device = device or self.device
@@ -1892,6 +2130,11 @@ class Tensor:
         >>> x.new_ones(2, 4)
         tensor([[1., 1., 1., 1.],
                 [1., 1., 1., 1.]])
+
+        Notes
+        -----
+        Initialises every element to the multiplicative identity :math:`1`.
+        For arbitrary fill values use :meth:`new_full`.
         """
         _dtype = dtype or self.dtype
         _device = device or self.device
@@ -1910,7 +2153,7 @@ class Tensor:
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
     ) -> Self:
-        """Return a tensor of the given shape filled with a constant value.
+        r"""Return a tensor of the given shape filled with a constant value.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
         unless overridden.  Every element is set to ``fill_value``.
@@ -1940,6 +2183,13 @@ class Tensor:
         >>> x.new_full((2, 3), fill_value=7.0)
         tensor([[7., 7., 7.],
                 [7., 7., 7.]])
+
+        Notes
+        -----
+        Constant tensor :math:`f \cdot \mathbf{1}` where :math:`f` is
+        ``fill_value`` and :math:`\mathbf{1}` is the all-ones tensor of
+        the given shape. ``fill_value`` is promoted to ``dtype`` before
+        the broadcast fill.
         """
         _dtype = dtype or self.dtype
         _device = device or self.device
@@ -1988,6 +2238,12 @@ class Tensor:
         >>> t = proto.new_tensor([[1, 2], [3, 4]])
         >>> t.dtype
         lucid.float64
+
+        Notes
+        -----
+        Always copies — never aliases ``data``'s storage even when ``data``
+        is already a ``Tensor``. Routes through the same
+        ``_to_impl`` bridge boundary as the public constructor (rule **H4**).
         """
         _dtype = dtype or self.dtype
         _device = device or self.device
@@ -2036,7 +2292,7 @@ class Tensor:
 
     @property
     def itemsize(self) -> int:
-        """Bytes per element — alias for :meth:`element_size`.
+        r"""Bytes per element — alias for :meth:`element_size`.
 
         Provided as a property (rather than a method) for NumPy-style
         attribute access:  ``tensor.itemsize`` instead of
@@ -2052,6 +2308,11 @@ class Tensor:
         >>> import lucid
         >>> lucid.zeros(5, dtype=lucid.int16).itemsize
         2
+
+        Notes
+        -----
+        Total footprint of the tensor satisfies
+        :math:`\text{nbytes} = \text{numel} \cdot \text{itemsize}`.
         """
         return self.dtype.itemsize
 
@@ -2088,7 +2349,7 @@ class Tensor:
         return self._impl.numel() * self.dtype.itemsize
 
     def stride(self, dim: int | None = None) -> tuple[int, ...] | int:
-        """Return the strides of the tensor in *element* counts.
+        r"""Return the strides of the tensor in *element* counts.
 
         Parameters
         ----------
@@ -2099,6 +2360,28 @@ class Tensor:
         -------
         tuple[int, ...] or int
             Element-count strides (same semantics as the reference framework).
+
+        Notes
+        -----
+        For a C-contiguous tensor of shape :math:`(s_0, \ldots, s_{d-1})`
+        the element strides satisfy the row-major recurrence
+
+        .. math::
+
+            \text{stride}[d-1] = 1, \quad
+            \text{stride}[i] = \text{stride}[i+1] \cdot s_{i+1}.
+
+        Non-contiguous tensors (e.g. transposed or sliced views) may have
+        arbitrary strides; the address of element ``[i_0, \ldots, i_{d-1}]``
+        is ``base + \sum_k i_k \cdot \text{stride}[k]``.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.zeros(3, 4).stride()
+        (4, 1)
+        >>> lucid.zeros(3, 4).stride(0)
+        4
         """
         byte_strides: list[int] = list(self._impl.stride)
         itemsz: int = self.dtype.itemsize
@@ -2108,7 +2391,7 @@ class Tensor:
         return elem_strides[dim]
 
     def data_ptr(self) -> int:
-        """Return the address of the first element as an integer.
+        r"""Return the address of the first element as an integer.
 
         On Apple Silicon the tensor lives in unified memory; this method
         returns a best-effort identifier derived from the storage object.
@@ -2132,6 +2415,14 @@ class Tensor:
         >>> z = lucid.zeros(3)
         >>> x.data_ptr() != z.data_ptr()
         True
+
+        Notes
+        -----
+        On Apple Silicon CPU and GPU share unified DRAM, so the same
+        :math:`\text{data\_ptr}(t)` identifies a buffer addressable from
+        both backends. The value is stable for the lifetime of ``self``;
+        equality is the canonical aliasing predicate
+        :math:`t_1 \sim t_2 \iff \text{data\_ptr}(t_1) = \text{data\_ptr}(t_2)`.
         """
         # id() of the impl object is a stable, process-unique identifier
         # suitable for equality checks (e.g. detecting aliasing) even if not
@@ -2139,7 +2430,7 @@ class Tensor:
         return id(self._impl)
 
     def storage_offset(self) -> int:
-        """Return the offset (in elements) of the first element in storage.
+        r"""Return the offset (in elements) of the first element in storage.
 
         Contiguous tensors always return ``0``. Non-contiguous view tensors
         may return a non-zero offset in frameworks that support strided
@@ -2157,6 +2448,14 @@ class Tensor:
         >>> import lucid
         >>> lucid.zeros(3, 4).storage_offset()
         0
+
+        Notes
+        -----
+        In Lucid every tensor owns a fresh contiguous storage, so the
+        offset is identically zero: :math:`\text{offset}(t) \equiv 0`.
+        Frameworks that support sub-views over a shared buffer use this
+        for pointer arithmetic; for Lucid it is provided purely for API
+        compatibility.
         """
         return 0
 
@@ -2235,6 +2534,12 @@ class Tensor:
         'lucid.FloatTensor'
         >>> lucid.zeros(3).type('lucid.LongTensor').dtype
         lucid.int64
+
+        Notes
+        -----
+        Provided purely for API compatibility with code that uses legacy
+        type strings. New code should use :attr:`dtype` for inspection and
+        :meth:`to` for casting — both avoid stringly-typed dispatch.
         """
         _DTYPE_STR: dict[str, object] = {
             "lucid.FloatTensor": float32,
@@ -2257,7 +2562,7 @@ class Tensor:
         return self.to(_DTYPE_STR[dtype])  # type: ignore[arg-type]
 
     def get_device(self) -> int:
-        """Return the device index.
+        r"""Return the device index.
 
         Returns ``0`` for Metal (GPU) tensors and ``-1`` for CPU tensors,
         following the convention adopted by the reference framework.
@@ -2274,11 +2579,18 @@ class Tensor:
         -1
         >>> lucid.zeros(3).metal().get_device()  # doctest: +SKIP
         0
+
+        Notes
+        -----
+        Indicator-style encoding:
+        :math:`\text{idx}(t) = 0 \cdot \mathbf{1}\{\text{is\_metal}\} + (-1) \cdot \mathbf{1}\{\text{is\_cpu}\}`.
+        Lucid only supports a single Metal device on Apple Silicon, so a
+        positive index is always ``0``.
         """
         return 0 if self.is_metal else -1
 
     def pin_memory(self, device: object = None) -> Tensor:
-        """Return ``self`` — pinned memory is a no-op on Apple Silicon.
+        r"""Return ``self`` — pinned memory is a no-op on Apple Silicon.
 
         Apple Silicon uses unified memory: CPU and GPU share the same
         physical DRAM, so the "page-lock host memory to accelerate
@@ -2299,7 +2611,8 @@ class Tensor:
         Notes
         -----
         See also :meth:`is_pinned` (always ``False``) and
-        :meth:`share_memory_` (also a no-op).
+        :meth:`share_memory_` (also a no-op). The function is the
+        identity: :math:`\text{pin\_memory}(t) \equiv t`.
 
         Examples
         --------
@@ -2311,7 +2624,7 @@ class Tensor:
         return self  # type: ignore[return-value]
 
     def is_pinned(self, device: object = None) -> bool:
-        """Return ``False`` — pinned memory is not applicable on Apple Silicon.
+        r"""Return ``False`` — pinned memory is not applicable on Apple Silicon.
 
         Apple Silicon's unified-memory architecture makes the distinction
         between "pageable" and "page-locked" host memory irrelevant: CPU
@@ -2333,12 +2646,18 @@ class Tensor:
         >>> import lucid
         >>> lucid.zeros(3).is_pinned()
         False
+
+        Notes
+        -----
+        Identically false: :math:`\text{is\_pinned}(t) \equiv \text{False}`.
+        Unified memory makes the concept moot — all host buffers are
+        already DMA-accessible to the GPU without page-locking.
         """
         return False
 
     @property
     def is_cuda(self) -> bool:
-        """Return ``False`` — Lucid does not target NVIDIA GPUs.
+        r"""Return ``False`` — Lucid does not target NVIDIA GPUs.
 
         Lucid is Apple-Silicon-exclusive: the GPU stream is MLX-on-Metal,
         not NVIDIA's discrete GPU stack. Use :attr:`is_metal` to detect
@@ -2355,11 +2674,16 @@ class Tensor:
         >>> import lucid
         >>> lucid.zeros(3).is_cuda
         False
+
+        Notes
+        -----
+        Identically false: :math:`\text{is\_cuda}(t) \equiv \text{False}`.
+        Use :attr:`is_metal` to query GPU residency on Apple Silicon.
         """
         return False
 
     def reshape_as(self, other: Tensor) -> Tensor:
-        """Return a tensor with the same data reshaped to ``other.shape``.
+        r"""Return a tensor with the same data reshaped to ``other.shape``.
 
         Convenience wrapper around :func:`reshape` that takes the target
         shape from another tensor instead of as a tuple. Element count
@@ -2367,7 +2691,7 @@ class Tensor:
 
         .. math::
 
-            \\prod_i \\text{self.shape}[i] = \\prod_j \\text{other.shape}[j]
+            \prod_i \text{self.shape}[i] = \prod_j \text{other.shape}[j]
 
         Parameters
         ----------
@@ -2393,6 +2717,14 @@ class Tensor:
         >>> proto = lucid.zeros(3, 4)
         >>> x.reshape_as(proto).shape
         (3, 4)
+
+        Notes
+        -----
+        Reshape preserves element order under row-major (C) traversal;
+        the element at flat index :math:`k = \sum_i i_k \cdot \prod_{j>k} s_j`
+        in ``self`` becomes the element at the same flat index in the
+        result. A view is returned when the source is contiguous;
+        otherwise a contiguous copy is materialised first.
         """
         return Tensor.__new_from_impl__(  # type: ignore[return-value]
             _C_engine.reshape(self._impl, list(other._impl.shape))
@@ -2428,7 +2760,7 @@ class Tensor:
             )
 
     def untyped_storage(self) -> _UntypedStorage:
-        """Return a minimal storage view of the underlying data buffer.
+        r"""Return a minimal storage view of the underlying data buffer.
 
         The returned object exposes :meth:`data_ptr`, :meth:`size`,
         and :meth:`nbytes` — the subset needed for common introspection
@@ -2445,7 +2777,8 @@ class Tensor:
         -----
         Lucid does not currently expose a fully-featured ``Storage`` type;
         ``untyped_storage`` is the introspection-only minimum. Mutating
-        through this handle is not supported.
+        through this handle is not supported. The reported size satisfies
+        :math:`|\text{storage}| = \text{numel} \cdot \text{itemsize}`.
 
         Examples
         --------
@@ -2460,7 +2793,7 @@ class Tensor:
         return Tensor._UntypedStorage(self)
 
     def is_floating_point(self) -> bool:
-        """Return ``True`` if the dtype is a floating-point type.
+        r"""Return ``True`` if the dtype is a floating-point type.
 
         Floating-point dtypes recognised by Lucid are ``float16``,
         ``float32``, ``float64``, and ``bfloat16``.
@@ -2478,11 +2811,19 @@ class Tensor:
         True
         >>> lucid.zeros(3, dtype=lucid.int64).is_floating_point()
         False
+
+        Notes
+        -----
+        Set-membership predicate
+        :math:`\text{is\_float}(t) = (t.\text{dtype} \in \mathcal{F})`
+        with :math:`\mathcal{F} = \{\text{float16}, \text{float32}, \text{float64}, \text{bfloat16}\}`.
+        Many differentiable ops are only defined on :math:`\mathcal{F}`;
+        integer and boolean dtypes block autograd at the operator level.
         """
         return self.dtype in (float16, float32, float64, bfloat16)
 
     def is_complex(self) -> bool:
-        """Return ``True`` if the dtype is a complex type.
+        r"""Return ``True`` if the dtype is a complex type.
 
         Currently Lucid supports a single complex dtype, ``complex64``
         (two 32-bit floats per element). Future complex dtypes will also
@@ -2501,11 +2842,18 @@ class Tensor:
         True
         >>> lucid.zeros(3).is_complex()
         False
+
+        Notes
+        -----
+        Complex tensors store interleaved real/imag pairs:
+        :math:`z_i = a_i + b_i \mathrm{i}` with :math:`a_i, b_i \in \mathbb{R}`.
+        Lucid currently supports a single complex dtype (``complex64``),
+        backed by two 32-bit floats per element.
         """
         return self.dtype is complex64
 
     def share_memory_(self) -> Self:
-        """Mark storage as shareable across processes — a no-op on Apple Silicon.
+        r"""Mark storage as shareable across processes — a no-op on Apple Silicon.
 
         On platforms with separate CPU and GPU address spaces this method
         moves the storage into a shared-memory segment so that worker
@@ -2522,7 +2870,9 @@ class Tensor:
         Notes
         -----
         Provided for API compatibility. See also :meth:`is_pinned` and
-        :meth:`pin_memory`, which are no-ops for the same reason.
+        :meth:`pin_memory`, which are no-ops for the same reason. The
+        operation is the identity:
+        :math:`\text{share\_memory\_}(t) \equiv t`.
 
         Examples
         --------
@@ -2536,7 +2886,7 @@ class Tensor:
     # ── Phase N convenience methods ───────────────────────────────────────────
 
     def fill_(self, value: float) -> Self:
-        """Fill the tensor with a scalar value in-place.
+        r"""Fill the tensor with a scalar value in-place.
 
         Mutates the tensor's storage so every element becomes ``value``.
         Implemented by materialising a constant tensor with
@@ -2561,6 +2911,10 @@ class Tensor:
         ``requires_grad=True`` may raise a runtime error from the
         autograd engine.
 
+        Mathematically the result is the constant tensor
+        :math:`v \cdot \mathbf{1}` with the same shape as ``self``;
+        every entry satisfies :math:`x_i \leftarrow v`.
+
         Examples
         --------
         >>> import lucid
@@ -2576,7 +2930,7 @@ class Tensor:
         return self
 
     def copy_(self, other: Self) -> Self:
-        """Copy data from ``other`` into ``self`` in-place.
+        r"""Copy data from ``other`` into ``self`` in-place.
 
         Overwrites ``self``'s storage with ``other``'s values. Broadcasting
         is permitted: ``other`` may have a shape that broadcasts to
@@ -2598,7 +2952,14 @@ class Tensor:
         -----
         Unlike :meth:`clone`, ``copy_`` does not allocate a new tensor —
         only ``self``'s storage is written. The autograd graph is not
-        extended by this operation.
+        extended by this operation. Element-wise:
+
+        .. math::
+
+            \text{self}_i \leftarrow \text{cast}_{\text{self.dtype}}(\text{other}_i),
+
+        with standard right-aligned broadcasting from ``other.shape`` to
+        ``self.shape``.
 
         Examples
         --------
@@ -2671,7 +3032,7 @@ class Tensor:
         )
 
     def masked_select(self, mask: Self) -> Self:
-        """Flatten and select elements where ``mask`` is ``True``.
+        r"""Flatten and select elements where ``mask`` is ``True``.
 
         Returns a 1-D tensor containing the values of ``self`` at positions
         where ``mask`` is truthy, in row-major (C) order. The output
@@ -2694,6 +3055,15 @@ class Tensor:
         Because the output shape depends on the mask's runtime values,
         this is one of the "data-dependent output" carve-outs that may
         round-trip through CPU on Metal devices.
+
+        Defines
+
+        .. math::
+
+            \text{out} = (x_i \,:\, i \in \{i \mid \text{mask}_i\})
+
+        in row-major scan order; the output length equals
+        :math:`\sum_i \mathbf{1}\{\text{mask}_i\}`.
 
         Examples
         --------
@@ -2732,7 +3102,16 @@ class Tensor:
         each dimension of ``self.shape`` must either equal the
         corresponding entry of ``other.shape`` or be ``1``. Size-1 axes
         are stretched by setting the corresponding stride to zero, so the
-        resulting view aliases the source storage.
+        resulting view aliases the source storage. Formally, for each axis
+
+        .. math::
+
+            s'_i = \begin{cases}
+                s_i & \text{if } s_i = t_i \\
+                t_i & \text{if } s_i = 1
+            \end{cases}
+
+        with stride :math:`0` on stretched axes.
 
         Examples
         --------
@@ -2793,7 +3172,7 @@ class Tensor:
         )
 
     def type_as(self, other: Self) -> Self:
-        """Cast ``self`` to the dtype of ``other``.
+        r"""Cast ``self`` to the dtype of ``other``.
 
         Convenience wrapper around :meth:`to` that adopts the dtype of
         another tensor. Useful when two tensors must have matching
@@ -2817,6 +3196,14 @@ class Tensor:
         >>> y = lucid.zeros(1, dtype=lucid.float64)
         >>> x.type_as(y).dtype
         lucid.float64
+
+        Notes
+        -----
+        Values are cast element-wise:
+        :math:`x_i \leftarrow \text{cast}_{\tau}(x_i)` where
+        :math:`\tau = \text{other.dtype}`. Casts between floating-point
+        types preserve gradients; integer→float→integer round-trips lose
+        information in the integer truncation step.
         """
         return self.to(other.dtype)
 
@@ -3101,7 +3488,7 @@ class Tensor:
     # ── zero_() helper ───────────────────────────────────────────────────────
 
     def zero_(self) -> Self:
-        """Fill the tensor with zeros in-place.
+        r"""Fill the tensor with zeros in-place.
 
         Mutates ``self``'s storage so every element becomes ``0``,
         without allocating a new tensor. Equivalent to ``self.fill_(0.0)``
@@ -3118,6 +3505,10 @@ class Tensor:
         view tracking. Calling ``zero_`` on a leaf tensor with
         ``requires_grad=True`` may raise a runtime error from the
         autograd engine.
+
+        Element-wise: :math:`x_i \leftarrow 0` for every position. The
+        result is the additive identity of the tensor algebra at the
+        same shape and dtype.
 
         Examples
         --------
@@ -3137,7 +3528,7 @@ class Tensor:
     # ── pickling support (required for multiprocessing DataLoader) ────────────
 
     def __reduce__(self) -> tuple:
-        """Pickle hook for cross-process Tensor serialisation.
+        r"""Pickle hook for cross-process Tensor serialisation.
 
         Implements the Python pickle protocol (PEP 307). The returned
         ``(callable, args)`` pair is invoked by ``pickle.loads`` /
@@ -3163,7 +3554,9 @@ class Tensor:
 
         The pickle protocol requires the callable to be importable by
         fully qualified name — that is why :func:`_tensor_unpickle` is a
-        module-level function rather than a static method.
+        module-level function rather than a static method. Logically
+        :math:`\text{loads}(\text{dumps}(t)) = t` on values; autograd
+        history is **not** preserved across the boundary.
 
         Examples
         --------

@@ -41,11 +41,60 @@ def _compute_weight(g: Tensor, v: Tensor, dim: int) -> Tensor:
 
 
 def weight_norm(module: Module, name: str = "weight", dim: int = 0) -> Module:
-    """Apply weight normalisation to ``module``'s ``name`` parameter in-place.
+    r"""Reparametrise a weight as direction times magnitude (Salimans & Kingma 2016).
 
-    After the call, ``module.{name}`` is no longer a leaf parameter — it's
-    replaced with ``g * v / ||v||_dim`` recomputed from the new
-    ``module.{name}_g`` and ``module.{name}_v`` parameters before each forward.
+    Replaces ``module.<name>`` with the derived tensor
+
+    .. math::
+
+        \mathbf{W} \;=\; g \,\cdot\, \frac{\mathbf{v}}{\|\mathbf{v}\|}
+
+    where ``g`` is a learnable scale (one entry per slice along ``dim``)
+    and ``v`` is a learnable direction sharing the original weight's
+    shape.  Decoupling magnitude from direction often accelerates
+    convergence and improves conditioning, especially in deep
+    convolutional and recurrent networks.
+
+    Parameters
+    ----------
+    module : Module
+        The module whose parameter is to be reparametrised.  Mutated in
+        place — the original leaf parameter is removed and replaced with
+        a derived tensor recomputed before every forward call.
+    name : str, optional
+        Attribute name of the parameter to normalise.  Default ``"weight"``.
+    dim : int, optional
+        Axis along which the scale ``g`` has its own entry; norms are
+        reduced over every other axis.  ``0`` (the default) is correct
+        for ``Linear`` and ``Conv*`` (one scale per output channel).
+        Use ``-1`` for output-row Linear layouts.
+
+    Returns
+    -------
+    Module
+        The same module, now carrying ``<name>_g`` and ``<name>_v`` as
+        leaf parameters in place of the original ``<name>``.
+
+    Notes
+    -----
+    Two new parameters are registered:
+
+    * ``<name>_g`` — broadcast-shaped tensor (``1`` along every axis
+      except ``dim``) holding the per-slice magnitudes.
+    * ``<name>_v`` — same shape as the original weight, holding the
+      unnormalised direction.
+
+    A forward pre-hook recomputes :math:`\mathbf{W} = g \cdot \mathbf{v}/\|\mathbf{v}\|`
+    so subsequent autograd / inference sees the same shape as before.
+    Invert with :func:`remove_weight_norm`.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> from lucid.nn.utils import weight_norm
+    >>> layer = weight_norm(nn.Linear(128, 64))
+    >>> layer.weight_g.shape, layer.weight_v.shape
+    ((64, 1), (64, 128))
     """
     if not isinstance(module, Module):
         raise TypeError(f"weight_norm requires a Module, got {type(module).__name__}")
@@ -96,8 +145,47 @@ def weight_norm(module: Module, name: str = "weight", dim: int = 0) -> Module:
 
 
 def remove_weight_norm(module: Module, name: str = "weight") -> Module:
-    """Reverse ``weight_norm``: collapse ``g``/``v`` back into a single
-    leaf parameter ``name`` and detach the pre-hook."""
+    r"""Reverse :func:`weight_norm` and restore a plain leaf parameter.
+
+    Materialises :math:`\mathbf{W} = g \cdot \mathbf{v}/\|\mathbf{v}\|`
+    one last time, writes the result back as a single leaf parameter
+    ``module.<name>``, drops ``<name>_g`` / ``<name>_v``, and detaches
+    the forward pre-hook.  Typical use is right before exporting a model
+    for inference where the reparametrised form is not needed.
+
+    Parameters
+    ----------
+    module : Module
+        Module previously passed through :func:`weight_norm`.
+    name : str, optional
+        Attribute name of the parameter to un-normalise.  Must match the
+        ``name`` used at registration.  Default ``"weight"``.
+
+    Returns
+    -------
+    Module
+        The same module, with ``<name>`` restored as a plain
+        :class:`~lucid.nn.parameter.Parameter` and the ``g``/``v``
+        helpers removed.
+
+    Raises
+    ------
+    ValueError
+        If no weight-norm registration exists on ``<name>``.
+
+    Notes
+    -----
+    The materialised parameter is detached from the autograd graph — any
+    history accumulated through the reparametrisation is discarded.  If
+    you need the original ``v`` direction back, copy it out *before*
+    calling this.
+
+    Examples
+    --------
+    >>> remove_weight_norm(layer)
+    >>> "weight_g" in dict(layer.named_parameters())
+    False
+    """
     hooks: dict[str, Any] = getattr(module, _WN_HOOK_ATTR, {})
     if name not in hooks:
         raise ValueError(f"weight_norm not registered on '{name}'")

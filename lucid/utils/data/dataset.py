@@ -311,15 +311,44 @@ def random_split(
     lengths: list[int] | list[float],
     generator: object = None,
 ) -> list[Subset]:
-    """Randomly split a dataset into non-overlapping subsets.
+    r"""Randomly split a dataset into non-overlapping :class:`Subset` views.
 
-    Args:
-        dataset:   Dataset to split.
-        lengths:   Lengths of each split (ints) or fractions summing to 1 (floats).
-        generator: Optional random generator for reproducibility.
+    Shuffles ``range(len(dataset))`` and slices it into chunks of the
+    requested lengths, wrapping each slice in a :class:`Subset`.  The
+    children do not copy the underlying samples — they hold the parent
+    dataset by reference.
 
-    Returns:
-        List of Subsets.
+    Parameters
+    ----------
+    dataset : Dataset
+        Source dataset to split.
+    lengths : list of int or list of float
+        Either absolute split sizes summing to ``len(dataset)``, or
+        fractions in ``[0, 1]`` summing (approximately) to ``1.0``.  In
+        the fractional case, rounding error is absorbed by the final
+        split so the totals stay consistent.
+    generator : optional
+        Seed-like object forwarded to ``random.Random`` for
+        reproducibility.  If ``None``, the global ``random`` state is
+        used.
+
+    Returns
+    -------
+    list of Subset
+        One :class:`Subset` per requested split, in registration order.
+
+    Raises
+    ------
+    ValueError
+        If fractional ``lengths`` do not sum to ``1.0`` (within ``1e-6``)
+        or integer ``lengths`` do not sum to ``len(dataset)``.
+
+    Examples
+    --------
+    >>> full = TensorDataset(X, y)
+    >>> train, val, test = random_split(full, [0.8, 0.1, 0.1])
+    >>> len(train), len(val), len(test)
+    (80, 10, 10)
     """
     import random as _random
 
@@ -356,13 +385,38 @@ def random_split(
 
 
 class ChainDataset(IterableDataset):
-    """Concatenate multiple :class:`IterableDataset` instances end-to-end.
+    r"""Concatenate multiple :class:`IterableDataset` instances end-to-end.
 
-    Iteration yields every element from the first dataset, then every element
-    from the second, and so on. Mirrors ``reference framework.utils.data.ChainDataset``.
+    Iteration walks the chain in registration order: every element from
+    the first child is yielded first, then every element from the second,
+    and so on.  The iterable equivalent of :class:`ConcatDataset` for
+    map-style datasets.
 
-    Each child must be an :class:`IterableDataset`; map-style datasets must be
-    iterated through a sampler-driven DataLoader instead.
+    Each child must be an :class:`IterableDataset`; map-style datasets
+    must be iterated through a sampler-driven :class:`DataLoader`
+    instead.
+
+    Parameters
+    ----------
+    datasets : list of IterableDataset
+        Iterable datasets to chain in order.  Each element must be an
+        :class:`IterableDataset` instance — passing a :class:`Dataset`
+        raises ``TypeError`` at construction time.
+
+    Notes
+    -----
+    Unlike :class:`ConcatDataset`, no random access is possible: total
+    length is unknown a priori and the chain may be infinite if any
+    child is.  Useful for stitching together streaming shards
+    (e.g. multiple files in a sharded log) into one logical stream.
+
+    Examples
+    --------
+    >>> a = CountUp(3)              # yields 0, 1, 2
+    >>> b = CountUp(2)              # yields 0, 1
+    >>> chain = ChainDataset([a, b])
+    >>> list(chain)
+    [0, 1, 2, 0, 1]
     """
 
     def __init__(self, datasets: list[IterableDataset]) -> None:
@@ -401,16 +455,41 @@ class ChainDataset(IterableDataset):
 
 
 class StackDataset(Dataset):
-    """Bundle several map-style datasets so each index returns a stacked tuple.
+    r"""Bundle several map-style datasets so each index returns a stacked tuple.
 
-    The bundled datasets must agree in length. Item ``i`` is the tuple of
-    ``d[i]`` for each child dataset — handy when paired modalities (image,
-    caption, label) live in separate sources but share an index.
+    The bundled datasets must agree in length.  Item ``i`` is the tuple
+    ``(d_1[i], d_2[i], \dots, d_K[i])`` for each child dataset — handy
+    when paired modalities (image, caption, label) live in separate
+    sources but share a common index.
 
-    Mirrors ``reference framework.utils.data.StackDataset``. Accepts both positional
-    children (``StackDataset(d1, d2)``) and keyword children
-    (``StackDataset(image=d1, label=d2)``); positional and keyword forms are
-    mutually exclusive — match the reference framework's behaviour.
+    Accepts either positional children (``StackDataset(d1, d2)``) or
+    keyword children (``StackDataset(image=d1, label=d2)``); the two
+    forms are mutually exclusive.  Positional construction returns
+    tuples; keyword construction returns dicts keyed by the supplied
+    names.
+
+    Parameters
+    ----------
+    *args : Dataset
+        Positional child datasets.  Cannot be combined with ``**kwargs``.
+    **kwargs : Dataset
+        Keyword child datasets.  Cannot be combined with ``*args``.
+
+    Notes
+    -----
+    Equivalent in spirit to a per-index ``zip`` across child datasets,
+    but exposed as a :class:`Dataset` so it can drive a sampler-based
+    :class:`DataLoader`.  All children must satisfy ``len(d_k) == n``
+    for some shared ``n``; otherwise construction raises ``ValueError``.
+
+    Examples
+    --------
+    >>> images = TensorDataset(X_img)
+    >>> labels = TensorDataset(y_lbl)
+    >>> ds = StackDataset(image=images, label=labels)
+    >>> sample = ds[0]
+    >>> sorted(sample.keys())
+    ['image', 'label']
     """
 
     def __init__(self, *args: Dataset, **kwargs: Dataset) -> None:

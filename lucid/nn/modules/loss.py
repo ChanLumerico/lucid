@@ -1743,7 +1743,7 @@ class CTCLoss(Module):
       alphabet (including blank), typically output of ``LogSoftmax``.
       :math:`T` = input length, :math:`N` = batch size, :math:`C` = number
       of classes.
-    - **targets**        : :math:`(N, S)` or :math:`(\\sum S_n,)` — target
+    - **targets**        : :math:`(N, S)` or :math:`(\sum S_n,)` — target
       sequences (without blank labels).
     - **input_lengths**  : :math:`(N,)` — length of each input sequence.
     - **target_lengths** : :math:`(N,)` — length of each target sequence.

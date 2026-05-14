@@ -115,6 +115,11 @@ from lucid.nn.functional.loss import (
     multilabel_soft_margin_loss,
 )
 from lucid.nn.functional.sparse import embedding, one_hot
+from lucid.nn.functional.positional import (
+    apply_rotary_emb,
+    sinusoidal_embedding,
+    sinusoidal_embedding_2d,
+)
 from lucid.nn.functional.sampling import (
     interpolate,
     grid_sample,
@@ -237,6 +242,10 @@ __all__ = [
     # sparse
     "embedding",
     "one_hot",
+    # positional encodings
+    "apply_rotary_emb",
+    "sinusoidal_embedding",
+    "sinusoidal_embedding_2d",
     # sampling
     "interpolate",
     "grid_sample",

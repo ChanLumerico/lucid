@@ -72,7 +72,82 @@ def _sample_standard_gamma(
 
 
 class Gamma(ExponentialFamily):
-    """``Gamma(concentration, rate)`` — shape-rate parameterisation."""
+    r"""Gamma distribution on :math:`(0, \infty)` — shape/rate parameterisation.
+
+    Two-parameter continuous distribution that generalises the
+    :class:`~lucid.distributions.Exponential` (shape :math:`\alpha = 1`)
+    and :class:`~lucid.distributions.Chi2` (shape :math:`k/2`, rate
+    :math:`1/2`).  Widely used as the **conjugate prior** for the rate
+    parameter of a Poisson likelihood and for positive-valued
+    measurements such as waiting times, life-times, and rainfall amounts.
+
+    Parameters
+    ----------
+    concentration : Tensor or float
+        Shape (concentration) parameter :math:`\alpha > 0`.  Sometimes
+        called :math:`k`.  When :math:`\alpha` is a positive integer the
+        Gamma equals the **Erlang** distribution (sum of :math:`\alpha`
+        IID Exponentials).
+    rate : Tensor or float
+        Rate (inverse-scale) parameter :math:`\beta > 0`.  Equivalent
+        scale parameterisation: :math:`\theta = 1/\beta`.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x > 0`:
+
+    .. math::
+
+        p(x; \alpha, \beta) =
+            \frac{\beta^\alpha}{\Gamma(\alpha)}
+            x^{\alpha - 1} e^{-\beta x}
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{\alpha}{\beta}, \qquad
+        \mathrm{Var}[X] = \frac{\alpha}{\beta^2}, \qquad
+        \mathrm{Mode} = \frac{\max(\alpha - 1, 0)}{\beta}
+
+    Entropy:
+
+    .. math::
+
+        H[X] = \alpha - \log \beta + \log \Gamma(\alpha)
+        + (1 - \alpha)\psi(\alpha)
+
+    where :math:`\psi` is the digamma function.
+
+    Special cases and relations:
+
+    * :math:`\mathrm{Gamma}(1, \beta) = \mathrm{Exponential}(\beta)`
+    * :math:`\mathrm{Gamma}(k/2, 1/2) = \chi^2(k)`
+    * Sum of independent Gammas with the same rate adds shapes:
+      :math:`\mathrm{Gamma}(\alpha_1, \beta) + \mathrm{Gamma}(\alpha_2, \beta)
+      = \mathrm{Gamma}(\alpha_1 + \alpha_2, \beta)`.
+    * The ratio :math:`G_\alpha/(G_\alpha + G_\beta)` is
+      :math:`\mathrm{Beta}(\alpha, \beta)`.
+
+    Sampling uses Marsaglia–Tsang acceptance-rejection — accept rate is
+    consistently above 95 %, so eight retry rounds are more than enough.
+    Because the kernel is rejection-based, ``has_rsample = False`` and
+    samples are detached.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Gamma
+    >>> d = Gamma(concentration=2.0, rate=1.0)
+    >>> d.mean  # α/β
+    Tensor(2.0)
+    >>> d.sample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(1.5))
+    Tensor(...)
+    """
 
     arg_constraints = {"concentration": positive, "rate": positive}
     support: Constraint | None = positive
@@ -281,7 +356,61 @@ class Gamma(ExponentialFamily):
 
 
 class Chi2(Gamma):
-    """``Chi²(df)`` — equivalent to ``Gamma(df / 2, 1 / 2)``."""
+    r"""Chi-squared distribution with :math:`k` degrees of freedom.
+
+    Distribution of the sum of squares of :math:`k` independent standard
+    Normal random variables.  Foundational in classical statistics:
+    arises in the likelihood-ratio test (Wilks' theorem), Pearson's
+    goodness-of-fit, confidence intervals for variance, and many F-test
+    /t-test derivations.
+
+    Equivalent to a Gamma with shape :math:`k/2` and rate :math:`1/2`:
+    :math:`\chi^2(k) = \mathrm{Gamma}(k/2,\, 1/2)`.
+
+    Parameters
+    ----------
+    df : Tensor or float
+        Degrees of freedom :math:`k > 0`.  Need not be an integer.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x > 0`:
+
+    .. math::
+
+        p(x; k) = \frac{1}{2^{k/2} \Gamma(k/2)}
+                  x^{k/2 - 1} e^{-x/2}
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = k, \qquad
+        \mathrm{Var}[X] = 2k, \qquad
+        \mathrm{Mode} = \max(k - 2, 0)
+
+    Special cases:
+
+    * :math:`k = 1` → squared standard Normal.
+    * :math:`k = 2` → :math:`\mathrm{Exponential}(1/2)`.
+    * Sum: :math:`\chi^2(k_1) + \chi^2(k_2) \sim \chi^2(k_1 + k_2)`.
+
+    By the central limit theorem,
+    :math:`(\chi^2(k) - k)/\sqrt{2k} \to \mathcal{N}(0, 1)` as
+    :math:`k \to \infty`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Chi2
+    >>> d = Chi2(df=4.0)
+    >>> d.mean
+    Tensor(4.0)
+    >>> d.sample((4,))
+    Tensor([...])
+    """
 
     arg_constraints = {"df": positive}
 
@@ -331,7 +460,74 @@ class Chi2(Gamma):
 
 
 class Beta(ExponentialFamily):
-    """``Beta(α, β)`` on ``[0, 1]``."""
+    r"""Beta distribution on the open interval :math:`(0, 1)`.
+
+    Two-parameter continuous distribution that is the **conjugate prior**
+    of the :class:`~lucid.distributions.Bernoulli` / Binomial likelihoods.
+    When :math:`\alpha = \beta = 1` it reduces to a Uniform on
+    :math:`(0, 1)`; for large :math:`\alpha + \beta` it concentrates
+    around :math:`\alpha/(\alpha + \beta)`.
+
+    Parameters
+    ----------
+    concentration1 : Tensor or float
+        First shape parameter :math:`\alpha > 0` (sometimes called *a*).
+    concentration0 : Tensor or float
+        Second shape parameter :math:`\beta > 0` (sometimes called *b*).
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on :math:`x \in (0, 1)`:
+
+    .. math::
+
+        p(x; \alpha, \beta) =
+            \frac{x^{\alpha - 1} (1 - x)^{\beta - 1}}{B(\alpha, \beta)}
+
+    where :math:`B(\alpha, \beta) = \Gamma(\alpha)\Gamma(\beta)/\Gamma(\alpha + \beta)`.
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[X] = \frac{\alpha}{\alpha + \beta}, \qquad
+        \mathrm{Var}[X] = \frac{\alpha \beta}
+                               {(\alpha + \beta)^2 (\alpha + \beta + 1)}
+
+    Mode: :math:`(\alpha - 1) / (\alpha + \beta - 2)` for
+    :math:`\alpha, \beta > 1`.
+
+    Special cases / shapes:
+
+    * :math:`\alpha = \beta = 1` → :math:`\mathrm{Uniform}(0, 1)`.
+    * :math:`\alpha = \beta` → symmetric around :math:`0.5`.
+    * :math:`\alpha, \beta \to \infty` with fixed mean → concentrates as
+      a Gaussian about the mean.
+    * Bimodal (U-shaped) when both :math:`\alpha, \beta < 1`.
+
+    **Conjugacy**: observing :math:`k` successes out of :math:`n`
+    Bernoulli trials updates ``Beta(α, β) → Beta(α + k, β + n - k)``.
+
+    Sampling uses the ratio-of-Gammas method:
+    :math:`X = G_\alpha / (G_\alpha + G_\beta)` with independent
+    :math:`G_\alpha \sim \mathrm{Gamma}(\alpha, 1)`,
+    :math:`G_\beta \sim \mathrm{Gamma}(\beta, 1)`.  Since the underlying
+    Gamma sampler is rejection-based, samples are detached.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Beta
+    >>> d = Beta(concentration1=2.0, concentration0=5.0)
+    >>> d.mean  # 2/(2+5) ≈ 0.2857
+    Tensor(0.2857)
+    >>> d.sample((4,))
+    Tensor([...])
+    >>> d.log_prob(lucid.tensor(0.3))
+    Tensor(...)
+    """
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
     support: Constraint | None = unit_interval
@@ -522,7 +718,83 @@ class Beta(ExponentialFamily):
 
 
 class Dirichlet(ExponentialFamily):
-    """``Dirichlet(α)`` on the K-simplex along the last axis."""
+    r"""Dirichlet distribution on the :math:`K`-simplex.
+
+    Multivariate generalisation of the :class:`~lucid.distributions.Beta`
+    distribution: a distribution over probability vectors
+    :math:`\mathbf{x} \in \Delta^{K-1}` with :math:`x_i \geq 0` and
+    :math:`\sum_i x_i = 1`.  It is the **conjugate prior** of the
+    :class:`~lucid.distributions.Categorical` /
+    :class:`~lucid.distributions.Multinomial` likelihoods and a foundational
+    building block in topic models (LDA), Bayesian mixture models, and
+    population genetics.
+
+    The last dimension of ``concentration`` is the simplex/event
+    dimension; all preceding dimensions form the batch shape.
+
+    Parameters
+    ----------
+    concentration : Tensor
+        Concentration vector :math:`\boldsymbol{\alpha}` with all
+        entries :math:`\alpha_i > 0`.  Shape ``(..., K)``.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on the :math:`K`-simplex
+    (:math:`x_i > 0,\;\sum_i x_i = 1`):
+
+    .. math::
+
+        p(\mathbf{x}; \boldsymbol{\alpha}) =
+            \frac{1}{B(\boldsymbol{\alpha})}
+            \prod_{i=1}^{K} x_i^{\alpha_i - 1},
+        \qquad
+        B(\boldsymbol{\alpha}) =
+            \frac{\prod_i \Gamma(\alpha_i)}{\Gamma(\alpha_0)},
+        \quad \alpha_0 = \sum_i \alpha_i
+
+    Moments (with :math:`\alpha_0 = \sum_i \alpha_i`,
+    :math:`\mu_i = \alpha_i/\alpha_0`):
+
+    .. math::
+
+        \mathbb{E}[X_i] = \mu_i, \qquad
+        \mathrm{Var}[X_i] = \frac{\mu_i (1 - \mu_i)}{\alpha_0 + 1},
+        \qquad
+        \mathrm{Cov}[X_i, X_j] = -\frac{\mu_i \mu_j}{\alpha_0 + 1}
+        \;\;(i \neq j)
+
+    Special cases:
+
+    * :math:`K = 2` → :math:`\mathrm{Beta}(\alpha_1, \alpha_2)`
+      (after dropping one redundant coordinate).
+    * :math:`\boldsymbol{\alpha} = \mathbf{1}` → uniform over the
+      simplex.
+    * :math:`\alpha_0 \to \infty` with fixed
+      :math:`\boldsymbol{\mu}` → mass concentrates at
+      :math:`\boldsymbol{\mu}`.
+
+    **Conjugacy**: observing categorical counts
+    :math:`\mathbf{n} = (n_1, \ldots, n_K)` updates
+    :math:`\mathrm{Dirichlet}(\boldsymbol{\alpha}) \to
+    \mathrm{Dirichlet}(\boldsymbol{\alpha} + \mathbf{n})`.
+
+    Sampling uses the normalised-Gamma method: draw independent
+    :math:`G_i \sim \mathrm{Gamma}(\alpha_i, 1)` and set
+    :math:`X_i = G_i / \sum_j G_j`.  Samples are detached.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Dirichlet
+    >>> d = Dirichlet(lucid.tensor([1.0, 2.0, 3.0]))
+    >>> d.mean  # α / Σ α
+    Tensor([0.1667, 0.3333, 0.5000])
+    >>> d.sample((4,))
+    Tensor([...])
+    """
 
     arg_constraints = {"concentration": positive}
     support: Constraint | None = simplex

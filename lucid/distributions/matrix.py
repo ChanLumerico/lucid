@@ -26,22 +26,86 @@ from lucid.distributions.gamma import Beta, _sample_standard_gamma
 
 
 class Wishart(Distribution):
-    """Wishart distribution over symmetric positive-definite matrices.
+    r"""Wishart distribution over symmetric positive-definite matrices.
 
-    ``Wishart(df, covariance_matrix=Σ)`` models sample covariance matrices
-    arising from ``df`` independent draws from ``Normal(0, Σ)``.
+    Matrix-variate generalisation of the
+    :class:`~lucid.distributions.Chi2` / Gamma distribution: the
+    distribution of the (unnormalised) sample covariance matrix
+    :math:`S = \sum_{i=1}^{\nu} \mathbf{z}_i \mathbf{z}_i^\top` formed
+    from :math:`\nu` independent Multivariate Normal draws
+    :math:`\mathbf{z}_i \sim \mathcal{N}(\mathbf{0}, \Sigma)`.  It is the
+    **conjugate prior** of the precision matrix of a Multivariate Normal
+    with known mean.
+
+    Specify exactly one of ``covariance_matrix``, ``precision_matrix``, or
+    ``scale_tril`` — the other parameterisations are derived internally
+    via Cholesky factorisation.
 
     Parameters
     ----------
-    df : Tensor | float
-        Degrees of freedom.  Must satisfy ``df > dim - 1``.
-    covariance_matrix : Tensor | None
-        Positive-definite scale matrix ``Σ``.  Mutually exclusive with
-        ``precision_matrix`` and ``scale_tril``.
-    precision_matrix : Tensor | None
-        Positive-definite precision matrix ``Σ⁻¹``.
-    scale_tril : Tensor | None
-        Lower Cholesky factor ``L`` of ``Σ`` (``Σ = L Lᵀ``).
+    df : Tensor or float
+        Degrees of freedom :math:`\nu > D - 1` where :math:`D` is the
+        matrix dimension.  Values :math:`\nu \leq D - 1` violate the
+        positive-definiteness guarantee.
+    covariance_matrix : Tensor, optional
+        Positive-definite scale matrix :math:`\Sigma` of shape
+        ``(..., D, D)``.
+    precision_matrix : Tensor, optional
+        Positive-definite precision matrix :math:`\Sigma^{-1}` of shape
+        ``(..., D, D)``.
+    scale_tril : Tensor, optional
+        Lower-triangular Cholesky factor :math:`L` of :math:`\Sigma`
+        (so :math:`\Sigma = L L^\top`), shape ``(..., D, D)`` with
+        positive diagonal.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction time.
+
+    Notes
+    -----
+    Probability density on the cone of symmetric positive-definite
+    :math:`D \times D` matrices:
+
+    .. math::
+
+        p(\mathbf{X}; \nu, \Sigma) =
+            \frac{|\mathbf{X}|^{(\nu - D - 1)/2}
+                  \exp\!\bigl(-\tfrac{1}{2}\,\mathrm{tr}(\Sigma^{-1}\mathbf{X})\bigr)}
+                 {2^{\nu D / 2} |\Sigma|^{\nu/2} \Gamma_D(\nu/2)}
+
+    where :math:`\Gamma_D` is the multivariate gamma function:
+
+    .. math::
+
+        \Gamma_D(a) = \pi^{D(D-1)/4} \prod_{i=1}^{D} \Gamma\!\left(a + \tfrac{1 - i}{2}\right)
+
+    Moments:
+
+    .. math::
+
+        \mathbb{E}[\mathbf{X}] = \nu \Sigma, \qquad
+        \mathrm{Var}[X_{ij}] =
+            \nu (\Sigma_{ij}^2 + \Sigma_{ii} \Sigma_{jj})
+
+    Special cases / relations:
+
+    * :math:`D = 1` → :math:`\mathrm{Wishart}(\nu, \sigma^2) =
+      \sigma^2 \chi^2(\nu)`.
+    * Inverse: if :math:`\mathbf{X} \sim \mathrm{Wishart}(\nu, \Sigma)`
+      then :math:`\mathbf{X}^{-1}` follows the inverse-Wishart
+      distribution, the conjugate prior of the **covariance** (not
+      precision) matrix.
+    * Bartlett decomposition: :math:`\mathbf{X} = L A A^\top L^\top`
+      with :math:`A` lower-triangular containing :math:`\chi^2` draws on
+      the diagonal and standard Normals below — used for sampling.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Wishart
+    >>> Sigma = lucid.tensor([[2.0, 0.5], [0.5, 1.0]])
+    >>> d = Wishart(df=5.0, covariance_matrix=Sigma)
+    >>> d.sample((4,))
+    Tensor([...])
     """
 
     arg_constraints = {"df": positive}
@@ -214,28 +278,68 @@ class Wishart(Distribution):
 
 
 class LKJCholesky(Distribution):
-    """LKJ distribution over Cholesky factors of correlation matrices.
+    r"""LKJ distribution over Cholesky factors of correlation matrices.
 
-    ``LKJCholesky(dim, concentration=η)`` places probability proportional to
-    ``det(R)^(η−1)`` over correlation matrices ``R``.  This distribution
-    operates on the **lower Cholesky factor** ``L`` of ``R`` (``R = L Lᵀ``).
-
-    When ``concentration == 1`` the distribution is uniform over Cholesky
-    factors of correlation matrices.
+    Generative prior for the lower-triangular Cholesky factor :math:`L`
+    of a correlation matrix :math:`R = L L^\top` of size :math:`D \times D`.
+    Density is proportional to :math:`\det(R)^{\eta - 1}` so the
+    :math:`\eta` parameter ("concentration") controls how concentrated
+    the prior is around the identity (uncorrelated).  Widely used as a
+    weakly-informative prior on correlation structure in Bayesian
+    hierarchical models — replacing an inverse-Wishart prior (which
+    couples scale and correlation) with a clean separation.
 
     Parameters
     ----------
     dim : int
-        Size of the square matrix (must be ≥ 2).
-    concentration : Tensor | float
-        Shape parameter ``η > 0``.  Larger values concentrate mass near the
-        identity matrix (low correlation).
+        Size :math:`D` of the correlation matrix (must be :math:`\geq 2`).
+    concentration : Tensor or float, optional
+        Shape parameter :math:`\eta > 0`.  Default ``1.0`` (uniform over
+        the space of correlation matrices).  :math:`\eta > 1` concentrates
+        mass near the identity (low correlation), :math:`\eta < 1`
+        favours high-correlation factors.
+    validate_args : bool, optional
+        If ``True``, validate parameter constraints at construction.
 
-    Sampling
+    Notes
+    -----
+    Probability density on the manifold of valid Cholesky factors
+    :math:`L`:
+
+    .. math::
+
+        p(L; \eta) \propto |\det R(L)|^{\eta - 1}
+        = \prod_{i=1}^{D-1} L_{ii}^{D - i + 2(\eta - 1)}
+
+    where the second equality follows from the Jacobian of the
+    transformation between :math:`R` and its Cholesky factor.
+
+    **Sampling** uses the vectorised **Onion method** (Lewandowski,
+    Kurowicka & Joe, 2009, §3) — row :math:`i` is built incrementally so
+    that its squared norm equals one, with off-diagonal magnitude drawn
+    from a Beta and angular components from a uniform on the sphere.
+    The full sampler runs in :math:`\mathcal{O}(D^2)` per draw with no
+    rejections.
+
+    For :math:`\eta = 1` the distribution is uniform over valid
+    correlation matrices (specifically, over the set of valid Cholesky
+    factors).
+
+    Examples
     --------
-    Uses the vectorised Onion method from Lewandowski et al. (2009),
-    §3.  Each off-diagonal element of row ``i`` is constructed so that the
-    partial row has the correct norm.
+    >>> import lucid
+    >>> from lucid.distributions import LKJCholesky
+    >>> dist = LKJCholesky(dim=4, concentration=2.0)
+    >>> L = dist.sample()           # (4, 4) lower-triangular Cholesky factor
+    >>> R = L @ L.T                 # implied correlation matrix
+    >>> R.diagonal()                # diagonal of R is all 1's
+    Tensor([1., 1., 1., 1.])
+
+    Use as a Bayesian prior over correlation structure:
+
+    >>> prior = LKJCholesky(dim=8, concentration=1.5)
+    >>> # ... pair with marginal scales / standard deviations to form a
+    >>> #     covariance prior: Σ = diag(σ) · R · diag(σ)
     """
 
     arg_constraints = {"concentration": positive}
