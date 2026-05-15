@@ -1,0 +1,735 @@
+// lucid/_C/ops/gfunc/Gfunc.cpp
+//
+// Implementations of tensor-creation ("generator") ops.
+//
+// Shared implementation pattern:
+//   1. Validate arguments (shape non-negative, step non-zero, etc.).
+//   2. Construct an OpScopeFull for profiling and debug instrumentation.
+//   3. Allocate or fill storage via the backend or Allocator:
+//        - Constant fills (zeros, ones, full, empty): use make_zero_storage /
+//          make_ones_storage / IBackend::full.
+//        - Structured fills (eye): delegate entirely to IBackend::eye.
+//        - Sequential fills (arange, linspace): fill a CPU buffer inline and
+//          upload with IBackend::from_cpu so both CPU and GPU output work
+//          without separate backend implementations.
+//   4. Wrap the resulting Storage and metadata into a TensorImpl via finalize().
+//
+// The finalize() helper creates a TensorImpl from Storage + Shape + Dtype +
+// Device + requires_grad.  It is used by every op in this file; factoring it
+// out avoids repeating the make_shared<TensorImpl>(...) boilerplate.
+//
+// arange and linspace are implemented directly in C++ because expressing
+// sequential fills through the backend interface would require either:
+//   (a) a special-purpose IBackend::arange() that every backend must implement,
+//   or (b) an MLX arange call that would require bridging to MLX array on the
+//       CPU path even when the device is CPU.
+// The CPU-fill-then-from_cpu approach is simpler, portable, and fast enough
+// for the typical sizes involved.
+//
+// Note on empty_op: despite the name "empty", the current implementation
+// zero-fills the buffer to prevent undefined reads.  This is a deliberate
+// conservative choice; callers must not rely on the values being zero.
+
+#include "Gfunc.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <stdexcept>
+#include <variant>
+
+#include "../../autograd/AccumulateGrad.h"
+#include "../../autograd/Helpers.h"
+#include "../../autograd/Node.h"
+#include "../../backend/Dispatcher.h"
+#include "../../core/Allocator.h"
+#include "../../core/Error.h"
+#include "../../core/ErrorBuilder.h"
+#include "../../core/GradMode.h"
+#include "../../core/Helpers.h"
+#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
+#include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
+#include "../../kernel/BinaryKernel.h"
+#include "../../ops/bfunc/Add.h"
+#include "../../ops/bfunc/Compare.h"
+#include "../../ops/bfunc/Div.h"
+#include "../../ops/bfunc/Mul.h"
+#include "../../ops/utils/Select.h"
+
+namespace lucid {
+
+namespace {
+
+using helpers::allocate_cpu;
+
+// Wrap storage and metadata into a TensorImpl.
+//
+// All generator ops in this file reduce to a single finalize() call at the
+// end, which keeps the pattern uniform and makes it easy to spot-check that
+// requires_grad, dtype, and device are forwarded correctly.
+inline TensorImplPtr
+finalize(Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_grad) {
+    return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device,
+                                        requires_grad);
+}
+
+}  // namespace
+
+// Create a zero-filled tensor on the requested device.
+//
+// Delegates to make_zero_storage, which uses calloc-style zeroing on the CPU
+// and MLX zeros on the GPU, both of which are more efficient than filling
+// after allocation.
+TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
+    OpScopeFull scope{"zeros", device, dt, shape};
+    auto s = make_zero_storage(shape, dt, device);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
+}
+
+// Create a ones-filled tensor on the requested device.
+//
+// Delegates to make_ones_storage, which on the CPU allocates then memsets,
+// and on the GPU uses MLX ones or from_cpu with a pre-filled buffer.
+TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
+    OpScopeFull scope{"ones", device, dt, shape};
+    auto s = make_ones_storage(shape, dt, device);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
+}
+
+// Create a constant-filled tensor by delegating to IBackend::full().
+//
+// IBackend::full() handles dtype conversion (the fill_value is a double;
+// the backend casts to the target dtype) and device placement in one call,
+// avoiding a CPU alloc + upload round-trip for the GPU path.
+TensorImplPtr
+full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
+    OpScopeFull scope{"full", device, dt, shape};
+    auto s = backend::Dispatcher::for_device(device).full(shape, dt, fill_value);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
+}
+
+// Create a zero-filled tensor; semantically "uninitialised" but safe.
+//
+// Zero-fills rather than leaving the memory uninitialised to prevent
+// undefined-behaviour reads if a caller forgets to fill before use.
+// The "empty" name signals contract: callers must not depend on the values.
+TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
+    OpScopeFull scope{"empty", device, dt, shape};
+    auto s = make_zero_storage(shape, dt, device);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
+}
+
+// Create an N×M matrix with ones on diagonal k.
+//
+// Defaults M to N when M <= 0 to match numpy.eye behaviour.
+// k=0 is the main diagonal; k>0 places ones above; k<0 places ones below.
+// Both N and M must be non-negative.  IBackend::eye handles the actual fill.
+TensorImplPtr eye_op(
+    std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt, Device device, bool requires_grad) {
+    if (M <= 0)
+        M = N;
+    if (N < 0 || M < 0)
+        ErrorBuilder("eye").fail("N and M must be >= 0");
+    Shape shape{N, M};
+    OpScopeFull scope{"eye", device, dt, shape};
+    auto s = backend::Dispatcher::for_device(device).eye(N, M, k, dt);
+    return finalize(std::move(s), shape, dt, device, requires_grad);
+}
+
+// Create a 1-D tensor with arithmetic progression values.
+//
+// Computes the element count as ceil((stop - start) / step) and fills a CPU
+// buffer with typed values, then routes through from_cpu so the result lands
+// on the right device.  The element count formula matches numpy.arange exactly.
+//
+// When diff and step have opposite signs (e.g. start=5, stop=0, step=1), the
+// range is empty and n=0, producing an empty 1-D tensor — not an error.
+//
+// The compute_cpu lambda is templated on pointer type via CTAD, avoiding
+// a separate switch-inside-switch to handle the float/int cases.  Each case
+// of the outer switch simply casts the raw buffer pointer to the correct type.
+TensorImplPtr
+arange_op(double start, double stop, double step, Dtype dt, Device device, bool requires_grad) {
+    if (step == 0.0)
+        ErrorBuilder("arange").fail("step must be non-zero");
+    const double diff = stop - start;
+    // If diff and step have opposite signs the range is empty; emit 0 elements.
+    const std::int64_t n =
+        (diff * step <= 0) ? 0 : static_cast<std::int64_t>(std::ceil(diff / step));
+    Shape shape{n};
+    OpScopeFull scope{"arange", device, dt, shape};
+
+    // Fill p[i] = start + i * step, cast to the target element type.
+    auto compute_cpu = [&](auto* p) {
+        using T = std::remove_pointer_t<decltype(p)>;
+        for (std::int64_t i = 0; i < n; ++i) {
+            p[i] = static_cast<T>(start + static_cast<double>(i) * step);
+        }
+    };
+
+    auto cpu = allocate_cpu(shape, dt);
+    switch (dt) {
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("arange").not_implemented("dtype not supported");
+    }
+    // from_cpu uploads the filled buffer to the requested device.
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
+}
+
+// Create a 1-D tensor with num evenly spaced values between start and stop
+// (inclusive on both ends).
+//
+// The last element is explicitly pinned to stop to prevent floating-point
+// drift: computing start + (num-1) * step can accumulate error that causes
+// the last element to differ slightly from stop.  Pinning matches the
+// numpy.linspace and linspace behaviour.
+//
+// Special cases:
+//   num == 0: returns an empty tensor (shape {0}).
+//   num == 1: returns a tensor containing exactly [start]; stop is ignored
+//             for the value computation and step is defined as 0.
+TensorImplPtr linspace_op(
+    double start, double stop, std::int64_t num, Dtype dt, Device device, bool requires_grad) {
+    if (num < 0)
+        ErrorBuilder("linspace").fail("num must be >= 0");
+    Shape shape{num};
+    OpScopeFull scope{"linspace", device, dt, shape};
+    // step is only meaningful when num > 1; defined as 0 otherwise to avoid
+    // division by zero when num == 1.
+    const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;
+
+    auto compute_cpu = [&](auto* p) {
+        using T = std::remove_pointer_t<decltype(p)>;
+        for (std::int64_t i = 0; i < num; ++i) {
+            // For num == 1, always emit start regardless of step.
+            const double v = (num == 1) ? start : start + static_cast<double>(i) * step;
+            p[i] = static_cast<T>(v);
+        }
+        // Pin the last element to stop to eliminate floating-point drift.
+        if (num >= 2)
+            p[num - 1] = static_cast<T>(stop);
+    };
+
+    auto cpu = allocate_cpu(shape, dt);
+    switch (dt) {
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("linspace").not_implemented("dtype not supported");
+    }
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
+}
+
+// Extract a diagonal from a 2-D matrix, or construct a 2-D matrix from a
+// 1-D diagonal vector.
+//
+// Follows numpy.diag semantics:
+//   - 1-D input of length m: output is (m+|k|) × (m+|k|) matrix with v on
+//     diagonal k (zeros elsewhere).
+//   - 2-D input of shape (r, c): output is the k-th diagonal as a 1-D vector
+//     of length min(r, c, r-k, c+k) (clipped to the valid range).
+//
+// The actual shape computation and fill logic lives in IBackend::diag().
+// out_shape is passed by reference and filled by the backend so this wrapper
+// can create the TensorImpl with the correct shape without recomputing it.
+// requires_grad is always false because diag is not differentiable through
+// autograd in the current implementation.
+TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
+    if (!v)
+        ErrorBuilder("diag").fail("input is null");
+    const Dtype dt = v->dtype();
+    const Device device = v->device();
+    const auto& sh = v->shape();
+    if (sh.size() != 1 && sh.size() != 2) {
+        ErrorBuilder("diag").fail("input must be 1-D or 2-D");
+    }
+
+    Shape out_shape;
+    // The backend fills out_shape to reflect the actual output dimensions.
+    auto s = backend::Dispatcher::for_device(device).diag(v->storage(), sh, k, dt, out_shape);
+    return std::make_shared<TensorImpl>(std::move(s), std::move(out_shape), dt, device, false);
+}
+
+// Create a zero tensor with the same shape, dtype, and device as a.
+//
+// Delegates to zeros_op with the metadata extracted from a.
+TensorImplPtr zeros_like_op(const TensorImplPtr& a, bool requires_grad) {
+    Validator::input(a, "zeros_like.a").non_null();
+    return zeros_op(a->shape(), a->dtype(), a->device(), requires_grad);
+}
+
+// Create a ones tensor with the same shape, dtype, and device as a.
+TensorImplPtr ones_like_op(const TensorImplPtr& a, bool requires_grad) {
+    Validator::input(a, "ones_like.a").non_null();
+    return ones_op(a->shape(), a->dtype(), a->device(), requires_grad);
+}
+
+// Create an uninitialised (zero-filled in practice) tensor with the same
+// shape, dtype, and device as a.
+TensorImplPtr empty_like_op(const TensorImplPtr& a, bool requires_grad) {
+    Validator::input(a, "empty_like.a").non_null();
+    return empty_op(a->shape(), a->dtype(), a->device(), requires_grad);
+}
+
+// Create a constant-filled tensor with the same shape, dtype, and device as a.
+TensorImplPtr full_like_op(const TensorImplPtr& a, double fill_value, bool requires_grad) {
+    Validator::input(a, "full_like.a").non_null();
+    return full_op(a->shape(), fill_value, a->dtype(), a->device(), requires_grad);
+}
+
+// ── logspace ──────────────────────────────────────────────────────────────────
+
+TensorImplPtr logspace_op(double start,
+                          double stop,
+                          std::int64_t num,
+                          double base,
+                          Dtype dt,
+                          Device device,
+                          bool requires_grad) {
+    if (num < 0)
+        ErrorBuilder("logspace").fail("num must be >= 0");
+    Shape shape{num};
+    OpScopeFull scope{"logspace", device, dt, shape};
+
+    const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;
+
+    auto compute_cpu = [&](auto* p) {
+        using T = std::remove_pointer_t<decltype(p)>;
+        for (std::int64_t i = 0; i < num; ++i) {
+            const double exp_v = (num == 1) ? start : start + static_cast<double>(i) * step;
+            p[i] = static_cast<T>(std::pow(base, exp_v));
+        }
+        if (num >= 2)
+            p[num - 1] = static_cast<T>(std::pow(base, stop));
+    };
+
+    auto cpu = allocate_cpu(shape, dt);
+    switch (dt) {
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("logspace").not_implemented("dtype not supported");
+    }
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
+}
+
+// ── scatter_add ───────────────────────────────────────────────────────────────
+// Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
+
+TensorImplPtr scatter_add_op(const TensorImplPtr& base,
+                             const TensorImplPtr& indices,
+                             const TensorImplPtr& src,
+                             int dim) {
+    Validator::input(base, "scatter_add.base").non_null();
+    Validator::input(indices, "scatter_add.indices").non_null();
+    Validator::input(src, "scatter_add.src").non_null();
+
+    const Dtype dt = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+
+    OpScopeFull scope{"scatter_add", dv, dt, bs};
+
+    // Normalise dim
+    const int ndim = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s =
+        be.scatter_add(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    // Autograd wiring
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
+
+    // base_edge: gradient = grad_out  (identity)
+    // src_edge:  gradient = gather(grad_out, indices, dim)
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAddNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_add"; }
+        void release_saved() override { saved_indices_.reset(); }
+
+        std::vector<Storage> apply(Storage g) override {
+            Storage grad_base = g;  // d/d(base) = identity
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            // gather_op(a, indices, axis) — select along axis at index positions
+            auto grad_src_impl = gather_op(g_impl, saved_indices_, dim_);
+            Storage grad_src = grad_src_impl->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAddNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_amax / scatter_amin / scatter_prod ────────────────────────────────
+//
+// Shared helper: dispatch the backend call, wire autograd using the mask-based
+// rule described in Gfunc.h.
+
+namespace {
+
+// Build "winner" mask: 1.0 where `lhs == rhs`, 0.0 elsewhere (as float).
+// Uses where_op to avoid bool * float dtype mismatch in the multiply path.
+TensorImplPtr winner_mask(const TensorImplPtr& lhs, const TensorImplPtr& rhs) {
+    auto eq = equal_op(lhs, rhs);  // bool
+    return where_op(eq, ones_like_op(lhs), zeros_like_op(lhs));
+}
+
+}  // anonymous namespace
+
+// ── scatter_amax ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_amax.base").non_null();
+    Validator::input(indices, "scatter_amax.indices").non_null();
+    Validator::input(src, "scatter_amax.src").non_null();
+
+    const Dtype dt = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_amax", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s =
+        be.scatter_amax(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAmaxNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_amax"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        // Gradient is split equally among all tied winners at each output
+        // position (matches the reference framework's scatter_reduce
+        // backward convention).
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+
+            // 1. Winner masks (float 0/1 per element)
+            auto mask_base_f = winner_mask(saved_base_, saved_out_);
+            auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
+            auto mask_src_f = winner_mask(saved_src_, gathered_out);
+
+            // 2. Count total tied winners per output position:
+            //    winners_from_src[i] = Σ mask_src_f[j]  (over j where idx[j]==i)
+            auto zeros_out = zeros_like_op(saved_out_);
+            auto wins_from_src = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
+            auto total_wins = add_op(mask_base_f, wins_from_src);  // per-output count
+            // Clamp to avoid divide-by-zero at non-participating positions
+            auto safe_wins = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                      ones_like_op(total_wins), total_wins);
+
+            // 3. grad_base = g * mask_base_f / safe_wins
+            Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
+
+            // 4. grad_src = gather(g / safe_wins) * mask_src_f
+            auto g_normed = div_op(g_impl, safe_wins);
+            auto gathered_gn = gather_op(g_normed, saved_indices_, dim_);
+            Storage grad_src = mul_op(gathered_gn, mask_src_f)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAmaxNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_amin ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_amin.base").non_null();
+    Validator::input(indices, "scatter_amin.indices").non_null();
+    Validator::input(src, "scatter_amin.src").non_null();
+
+    const Dtype dt = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_amin", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s =
+        be.scatter_amin(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
+
+    struct ScatterAminNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_amin"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            auto mask_base_f = winner_mask(saved_base_, saved_out_);
+            auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
+            auto mask_src_f = winner_mask(saved_src_, gathered_out);
+            auto zeros_out = zeros_like_op(saved_out_);
+            auto wins_src = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
+            auto total_wins = add_op(mask_base_f, wins_src);
+            auto safe_wins = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                      ones_like_op(total_wins), total_wins);
+            Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
+            auto g_normed = div_op(g_impl, safe_wins);
+            auto gathered_gn = gather_op(g_normed, saved_indices_, dim_);
+            Storage grad_src = mul_op(gathered_gn, mask_src_f)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterAminNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── scatter_prod ──────────────────────────────────────────────────────────────
+TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_prod.base").non_null();
+    Validator::input(indices, "scatter_prod.indices").non_null();
+    Validator::input(src, "scatter_prod.src").non_null();
+
+    const Dtype dt = base->dtype();
+    const Device dv = base->device();
+    const Shape& bs = base->shape();
+    const Shape& is = indices->shape();
+    const int ndim = static_cast<int>(bs.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    OpScopeFull scope{"scatter_prod", dv, dt, bs};
+
+    auto& be = backend::Dispatcher::for_device(dv);
+    Storage out_s =
+        be.scatter_prod(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
+    auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
+
+    auto base_edge = lucid::detail::ensure_grad_fn(base);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
+
+    // Gradient of scatter_prod:
+    //   d/d(src[j])  = grad[idx[j]] * out[idx[j]] / src[j]   (product rule)
+    //   d/d(base[i]) = grad[i]      * out[i]      / base[i]  (if base ≠ 0)
+    // Both formulas involve dividing by the input, which is numerically unsafe
+    // near zero but correct elsewhere.
+    struct ScatterProdNode : Node {
+        int dim_;
+        std::shared_ptr<TensorImpl> saved_indices_;
+        std::shared_ptr<TensorImpl> saved_out_;
+        std::shared_ptr<TensorImpl> saved_base_;
+        std::shared_ptr<TensorImpl> saved_src_;
+        Shape base_shape_;
+        Dtype dtype_;
+        Device device_;
+        std::string node_name() const override { return "scatter_prod"; }
+        void release_saved() override {
+            saved_indices_.reset();
+            saved_out_.reset();
+            saved_base_.reset();
+            saved_src_.reset();
+        }
+
+        std::vector<Storage> apply(Storage g) override {
+            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+            // grad_base = g * out / base
+            auto grad_base_impl = mul_op(g_impl, div_op(saved_out_, saved_base_));
+            Storage grad_base = grad_base_impl->storage();
+            // grad_src: gather (g * out), then divide by src
+            auto g_times_out = mul_op(g_impl, saved_out_);
+            auto gathered_g_out = gather_op(g_times_out, saved_indices_, dim_);
+            Storage grad_src = div_op(gathered_g_out, saved_src_)->storage();
+            return {std::move(grad_base), std::move(grad_src)};
+        }
+    };
+
+    auto bwd = std::make_shared<ScatterProdNode>();
+    bwd->dim_ = d;
+    bwd->saved_indices_ = indices;
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
+    bwd->set_saved_versions({base->version(), src->version()});
+    out->set_grad_fn(std::move(bwd));
+    out->set_leaf(false);
+    out->set_requires_grad(true);
+    return out;
+}
+
+// ── unfold_dim ─────────────────────────────────────────────────────────────────
+// No autograd (view-like: callers compose with existing autograd-tracked ops).
+
+TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step) {
+    Validator::input(a, "unfold_dim.a").non_null();
+    if (size <= 0 || step <= 0)
+        ErrorBuilder("unfold_dim").fail("size and step must be positive");
+
+    const Shape& in_shape = a->shape();
+    const int ndim = static_cast<int>(in_shape.size());
+    int d = dim < 0 ? dim + ndim : dim;
+    const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(d)]);
+    if (size > dim_size)
+        ErrorBuilder("unfold_dim").fail("size > dimension size");
+
+    const int L = (dim_size - size) / step + 1;
+    Shape out_shape;
+    for (int i = 0; i < d; ++i)
+        out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    out_shape.push_back(static_cast<std::int64_t>(L));
+    for (int i = d + 1; i < ndim; ++i)
+        out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    out_shape.push_back(static_cast<std::int64_t>(size));
+
+    OpScopeFull scope{"unfold_dim", a->device(), a->dtype(), out_shape};
+    auto& be = backend::Dispatcher::for_device(a->device());
+    Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
+    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
+                                        false);
+}
+
+}  // namespace lucid

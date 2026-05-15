@@ -1,0 +1,96 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "lucid/**/*.py"
+      - "lucid/**/*.pyi"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python — Griffe API data ───────────────────────────────────────────
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # Griffe parses Python source statically — we don't need to install
+      # Lucid (and can't, since setup.py enforces Apple Silicon). PYTHONPATH
+      # in the next step exposes the source tree to Griffe.
+      - name: Install Griffe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install griffe
+
+      - name: Generate API data (Griffe → JSON)
+        run: python web/scripts/build-api-data.py
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      # ── Node.js — Next.js static export ───────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Next.js static export)
+        working-directory: web
+        run: pnpm build
+        env:
+          NODE_ENV: production
+          SKIP_API_BUILD: "1"   # already generated above
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

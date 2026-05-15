@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg — Lucid CHANGELOG hygiene check.
+#
+# Fires BEFORE the commit is finalized.  If the staged commit looks user-facing
+# (conventional-commit prefixes feat / fix / perf / refactor / revert / remove
+# / deprec / sec) but the commit doesn't touch CHANGELOG.md, prints a warning
+# and asks the developer to confirm.  Set ``LUCID_SKIP_CHANGELOG_CHECK=1`` to
+# bypass for a single commit, or use ``--no-verify`` (discouraged).
+#
+# Activate hooks for this repo with:
+#   git config core.hooksPath .githooks
+
+set -u
+
+MSG_FILE="${1:-}"
+[[ -z "${MSG_FILE}" || ! -f "${MSG_FILE}" ]] && exit 0
+
+# Read the first line of the commit message (subject).
+SUBJECT="$(head -n 1 "${MSG_FILE}")"
+
+# Skip merge / fixup / revert system commits — they aren't user-authored.
+case "${SUBJECT}" in
+    Merge\ * | merge\ * | fixup!\ * | squash!\ * | "Revert \""*) exit 0 ;;
+esac
+
+# Honor explicit opt-out.
+if [[ "${LUCID_SKIP_CHANGELOG_CHECK:-0}" == "1" ]]; then
+    exit 0
+fi
+
+# Conventional-commit prefix detection.
+USER_FACING_RE='^(feat|fix|perf|refactor|revert|remove|deprec|sec)(\([^)]*\))?!?:[[:space:]]'
+if ! [[ "${SUBJECT}" =~ ${USER_FACING_RE} ]]; then
+    # Not a user-facing prefix → no CHANGELOG required.
+    exit 0
+fi
+
+# Check whether the staged change touches CHANGELOG.md.
+if git diff --cached --name-only | grep -qx "CHANGELOG.md"; then
+    exit 0
+fi
+
+# Warn but don't block (interactive terminal users will see this; CI won't).
+cat <<EOF >&2
+
+  ⚠️   CHANGELOG hygiene reminder
+      ──────────────────────────
+      Commit subject:  ${SUBJECT}
+      This looks like a user-facing change (feat/fix/perf/...) but
+      CHANGELOG.md was NOT updated.
+
+      To add an entry now (recommended):
+          python tools/changelog.py propose      # auto-suggest from this commit
+          python tools/changelog.py add <category> "<message>"
+
+      Categories: added | changed | deprecated | removed | fixed | security
+                  performance | tooling | documentation
+
+      To bypass for this single commit:
+          LUCID_SKIP_CHANGELOG_CHECK=1 git commit ...
+      Or use --no-verify (discouraged).
+
+EOF
+
+# Don't block — only warn.  CI can run \`tools/changelog.py check --strict\`
+# at PR time to enforce.
+exit 0

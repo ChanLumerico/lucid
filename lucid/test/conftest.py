@@ -1,56 +1,52 @@
-import importlib
-import numpy as np
+"""Lucid test suite — root pytest configuration.
+
+This file wires the per-area fixtures into pytest's discovery, sets
+the autouse determinism hook, and registers a single
+``configure_markers`` step that mirrors the marker matrix declared in
+``pyproject.toml``.
+
+What you get for free in any test:
+
+* ``device`` — parametrize over CPU and (when present) Metal.
+* ``device_cpu_only`` / ``device_gpu_only`` / ``cross_device_pair``.
+* ``float_dtype`` — parametrize over float32 + float64.
+* ``int_dtype`` — parametrize over int8/16/32/64.
+* ``ref`` — lazy reference framework module (skips test if missing).
+* ``tensor_factory`` — device-aware ``make_tensor`` shorthand.
+* ``bench`` — ``pytest-benchmark``-compatible benchmark callable
+  (degrades gracefully when the dep is missing).
+* Autouse ``manual_seed(0)`` per test.
+"""
+
 import pytest
 
-try:
-    importlib.import_module("lucid")
-    _LUCID_IMPORT_ERROR = None
-except Exception as exc:
-    _LUCID_IMPORT_ERROR = exc
+import lucid
 
-
-def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line("markers", "parity: lucid↔torch numerical parity test")
-    config.addinivalue_line(
-        "markers", "slow: slow test (model forwards, long trajectories)"
-    )
-    config.addinivalue_line("markers", "smoke: quick sanity test")
-
-
-@pytest.fixture(scope="session", autouse=True)
-def require_lucid_package() -> None:
-    if _LUCID_IMPORT_ERROR is not None:
-        pytest.skip(
-            f"lucid import failed during collection: {_LUCID_IMPORT_ERROR}",
-            allow_module_level=True,
-        )
+# Re-export every fixture from the per-area modules so test files just
+# need to declare the fixture name in their argument list.
+from lucid.test._fixtures.devices import (  # noqa: F401
+    device,
+    device_cpu_only,
+    device_gpu_only,
+    cross_device_pair,
+    skip_if_unsupported,
+)
+from lucid.test._fixtures.dtypes import (  # noqa: F401
+    float_dtype,
+    float_dtype_extended,
+    int_dtype,
+)
+from lucid.test._fixtures.ref_framework import ref  # noqa: F401
+from lucid.test._fixtures.tensors import tensor_factory  # noqa: F401
+from lucid.test._fixtures.perf import bench  # noqa: F401
 
 
 @pytest.fixture(autouse=True)
-def _reset_numpy_global_seed():
-    state = np.random.get_state()
-    try:
-        np.random.seed(0)
-        yield
-    finally:
-        np.random.set_state(state)
+def _seed_per_test() -> None:
+    """Seed Lucid's default RNG to 0 before every test for
+    bit-reproducibility of any sampling op.
 
-
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
-    _ = config
-    parity_models_full = "parity/models/test_models_full.py"
-    integration_marker = "parity/integration/"
-    prior: list[pytest.Item] = []
-    trailing: list[pytest.Item] = []
-    very_trailing: list[pytest.Item] = []
-    for item in items:
-        file_path, _, _ = item.location
-        if parity_models_full in file_path:
-            very_trailing.append(item)
-        elif integration_marker in file_path:
-            trailing.append(item)
-        else:
-            prior.append(item)
-    items[:] = prior + trailing + very_trailing
+    Reference-framework seeding (when applicable) is handled inside
+    parity tests via ``lucid.test._helpers.seeding.seed_all``.
+    """
+    lucid.manual_seed(0)

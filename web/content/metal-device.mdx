@@ -1,0 +1,104 @@
+---
+title: Metal Device
+description: Leverage the MLX GPU backend on Apple Silicon for accelerated training and inference.
+category: Guides
+order: 4
+---
+
+Lucid has two compute backends that map directly to Apple Silicon's hardware:
+
+| Backend | Device string | Powered by | When to use |
+|---|---|---|---|
+| **GPU** | `"metal"` | Apple MLX | Training, large tensor ops |
+| **CPU** | `"cpu"` | Apple Accelerate | Small ops, data preprocessing |
+
+<Callout variant="info">
+`"metal"` is the default device. You rarely need to specify it explicitly unless you are mixing CPU and GPU tensors.
+</Callout>
+
+## Moving tensors
+
+```python
+import lucid
+
+# Create on Metal (GPU)
+x = lucid.randn(256, 256, device="metal")
+
+# Move to CPU
+x_cpu = x.cpu()
+
+# Move back to Metal
+x_gpu = x_cpu.to("metal")
+```
+
+## Moving models
+
+```python
+model = MyModel()
+
+model.to("metal")   # all parameters → Metal
+model.cpu()         # all parameters → CPU
+```
+
+## Mixed-device pitfall
+
+Lucid will raise if you mix devices in a binary op:
+
+```python
+a = lucid.ones(4, device="metal")
+b = lucid.ones(4, device="cpu")
+a + b   # RuntimeError: device mismatch
+```
+
+Keep inputs and model on the same device.
+
+## MLX lazy evaluation
+
+MLX uses **lazy evaluation** — computations are queued and executed in batches. This is transparent for most use cases but has two implications:
+
+1. **`.item()` forces evaluation.** Calling `.item()` or converting to NumPy triggers a synchronisation point.
+2. **Memory grows silently** if you accumulate many lazy ops without `.item()` calls to flush them. In long loops, call `loss.item()` at least once per step.
+
+```python
+for step in range(steps):
+    loss = compute_loss(model, batch)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if step % 10 == 0:
+        print(loss.item())   # forces flush — keep this
+```
+
+## Linear algebra on CPU
+
+`lucid.linalg` dispatches through MLX even on the CPU backend, because MLX's LAPACK bindings are available CPU-side. All other CPU ops use Apple Accelerate (vDSP / vForce / BLAS).
+
+```python
+A = lucid.randn(512, 512, device="cpu")
+U, S, Vh = lucid.linalg.svd(A)   # uses MLX on CPU — correct
+```
+
+## Checking memory
+
+There is currently no per-tensor memory query API. For system-level Metal memory, use macOS Activity Monitor or the `mlx` profiling API directly.
+
+## AMP (Automatic Mixed Precision)
+
+<Callout variant="warning" title="Experimental">
+AMP is available via `lucid.amp` but is not yet recommended for production training runs. The API is stable but numerical accuracy on edge cases is still being validated.
+</Callout>
+
+```python
+from lucid.amp import autocast, GradScaler
+
+scaler = GradScaler()
+
+with autocast():
+    output = model(x)
+    loss   = criterion(output, y)
+
+scaler.scale(loss).backward()
+scaler.step(optimizer)
+scaler.update()
+```

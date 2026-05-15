@@ -1,0 +1,52 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^lucid/
+
+  - repo: local
+    hooks:
+      - id: mypy-strict
+        name: mypy strict
+        entry: mypy --strict lucid/
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        files: ^lucid/_C/.*\.(h|hpp|cpp|cc)$
+
+  - repo: local
+    hooks:
+      - id: lucid-check-layers
+        name: lucid layer dependency check
+        entry: python tools/check_layers.py
+        language: system
+        pass_filenames: false
+
+      - id: lucid-check-format
+        name: lucid clang-format check
+        entry: tools/check_format.sh --format-only
+        language: system
+        pass_filenames: false
+
+      - id: lucid-stub-freshness
+        name: lucid .pyi stub freshness
+        entry: python tools/check_stubs.py
+        language: system
+        pass_filenames: false
+        files: |
+          (?x)^(
+            lucid/_ops/_registry\.py |
+            lucid/_tensor/tensor\.py |
+            lucid/_tensor/_methods\.py |
+            lucid/_tensor/_dunders\.py |
+            lucid/_tensor/_to\.py |
+            lucid/__init__\.py
+          )$

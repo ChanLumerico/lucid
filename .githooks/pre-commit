@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — update Lines of Code badge in README.md
+#
+# Runs `cloc lucid/` before every commit, extracts the total code line count,
+# and rewrites the static shield badge in README.md.  The updated README is
+# re-staged so the badge is always in sync with the committed source.
+#
+# Requires: cloc (brew install cloc)
+# Skip:     LUCID_SKIP_LOC_BADGE=1 git commit ...
+
+set -uo pipefail
+
+if [[ "${LUCID_SKIP_LOC_BADGE:-0}" == "1" ]]; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+README="${REPO_ROOT}/README.md"
+
+if ! command -v cloc &>/dev/null; then
+    echo "  ⚠️  cloc not found — skipping LOC badge update (brew install cloc)" >&2
+    exit 0
+fi
+
+LOC="$(cloc "${REPO_ROOT}/lucid" --quiet 2>/dev/null | awk '/^SUM:/{print $NF}')"
+
+if [[ -z "$LOC" || "$LOC" == "0" ]]; then
+    echo "  ⚠️  cloc returned no result — skipping LOC badge update" >&2
+    exit 0
+fi
+
+NEW_BADGE="![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-${LOC}-purple)"
+
+sed -i '' \
+    "s|!\[Lines of Code\](https://img\.shields\.io/badge/Lines%20of%20Code-[^)]*)|${NEW_BADGE}|g" \
+    "${README}"
+
+git add "${README}"

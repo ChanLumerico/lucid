@@ -1,0 +1,15 @@
+"""DETR — DEtection TRansformer (Carion et al., ECCV 2020).
+
+Paper: "End-to-End Object Detection with Transformers"
+"""
+
+from lucid.models.vision.detr._config import DETRConfig
+from lucid.models.vision.detr._model import DETRForObjectDetection
+from lucid.models.vision.detr._pretrained import detr_resnet50, detr_resnet101
+
+__all__ = [
+    "DETRConfig",
+    "DETRForObjectDetection",
+    "detr_resnet50",
+    "detr_resnet101",
+]

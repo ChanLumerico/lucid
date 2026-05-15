@@ -1,491 +1,607 @@
 """
-# `Lucid `
-
-**Lucid** is an educational deep learning framework developed to help users understand
-the underlying mechanics of deep learning models and tensor operations.
-
-It is designed to provide a simple yet powerful environment to experiment with neural networks,
-optimization, and backpropagation using only `NumPy`.
-
-Lucid is ideal for those who want to learn about the inner workings of deep learning
-algorithms and operations without the complexity of high-level frameworks.
-
-[📑 Lucid Documentation](https://chanlumerico.github.io/lucid/build/html/index.html)
+Lucid — Apple Silicon ML framework.
 """
 
-from contextlib import contextmanager, AbstractContextManager
-from typing import Any, Generator, SupportsIndex, Callable, Self, Optional, Type
-from types import TracebackType, ModuleType
-from functools import wraps
-from pathlib import Path
-import inspect
+from typing import Callable
 
-import os
-import sys
-import json
-import math
-import numpy as np
+# ── Save Python builtins before dtype aliases shadow them ────────────────────
+_py_int = int
+_py_float = float
+_py_bool = bool
 
-_GlobalFlag = bool
+from lucid.version import __version__, _EXPECTED_ABI
+from lucid._C import engine as _C_engine
 
-USE_CPP_FUNC_OP: _GlobalFlag = False
-USE_BAKCWARD_FUSION: _GlobalFlag = True
+try:
+    _abi = _py_int(_C_engine.ABI_VERSION)
+    if _abi != _EXPECTED_ABI:
+        raise RuntimeError(
+            f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
+            f"got {_abi}. Rebuild the engine."
+        )
+except (TypeError, ValueError):
+    pass  # Mocked during docs build — skip ABI check
 
-from lucid._tensor import *
-from lucid._func import *
-from lucid._utils import *
-
-from lucid._backend.metal import mx
-
-from lucid.types import (
-    _ArrayOrScalar,
-    _NumPyArray,
-    _MLXArray,
-    _ArrayLike,
-    _ShapeLike,
-    _DeviceType,
-    _BuiltinNumeric,
-    Numeric,
+# fmt: off
+from lucid._dtype import (
+    dtype,
+    float16,
+    float32,
+    float64,
+    bfloat16,
+    int8,
+    int16,
+    int32,
+    int64,
+    bool_,
+    complex64,
+    # Existing aliases kept for backward compat
+    half,
+    double,
+    short,
+    long,
+    # New API-compatible module-level aliases
+    # lucid.float / lucid.int / lucid.bool shadow Python builtins
+    # only as module attributes — no impact on user code
+    float32 as float,   # lucid.float  == float32  == float32
+    int32   as int,     # lucid.int    == int32    == int32
+    bool_   as bool,    # lucid.bool   == bool_   == bool_
 )
-from lucid.error import *
-from lucid.port import *
-
-import lucid.linalg as linalg
-import lucid.random as random
-import lucid.einops as einops
-import lucid.nn as nn
-import lucid.types as types
-import lucid.autograd as autograd
-import lucid.visual as visual
-
-from lucid._jit.api import compile
-
-_grad_enabled: bool = True
-_flops_enabled: bool = False
-
-newaxis = None
-
-pi = math.pi
-inf = math.inf
-
-Int = types.Int
-Int8, Int16, Int32, Int64 = (types.Int8, types.Int16, types.Int32, types.Int64)
-Char, Short, Long = (Int8, Int16, Int64)
-
-Float = types.Float
-Float16, Float32, Float64 = (types.Float16, types.Float32, types.Float64)
-Half, Double = (Float16, Float64)
-
-Complex = types.Complex
-Complex64 = types.Complex64
-
-
-def tensor(
-    data: Tensor | _ArrayOrScalar,
-    requires_grad: bool = False,
-    keep_grad: bool = False,
-    dtype: _BuiltinNumeric | Numeric | None = None,
-    device: _DeviceType = "cpu",
-) -> Tensor:
-    if isinstance(data, Tensor):
-        data = data.data
-    return Tensor(data, requires_grad, keep_grad, dtype, device)
-
-
-def to_tensor(
-    a: _ArrayLike,
-    requires_grad: bool = False,
-    keep_grad: bool = False,
-    dtype: _BuiltinNumeric | Numeric | None = None,
-    device: _DeviceType = "cpu",
-) -> Tensor:
-    return tensor(a, requires_grad, keep_grad, dtype, device)
-
-
-class _NoGrad(AbstractContextManager):
-    __slots__ = ("_prev_state",)
-
-    def __enter__(self) -> Self:
-        global _grad_enabled
-        self._prev_state = _grad_enabled
-
-        _grad_enabled = False
-        return self
-
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_value: Optional[BaseException],
-        traceback: Optional[TracebackType],
-    ) -> bool:
-        _ = (exc_type, exc_value, traceback)
-        global _grad_enabled
-
-        _grad_enabled = self._prev_state
-        return False
-
-    def __call__(self, func: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            with _NoGrad():
-                return func(*args, **kwargs)
-
-        return wrapper
-
-
-no_grad = _NoGrad
-
-
-def grad_enabled() -> bool:
-    return _grad_enabled
-
-
-@contextmanager
-def count_flops() -> Generator:
-    global _flops_enabled
-    prev_state = _flops_enabled
-    _flops_enabled = True
-    try:
-        yield
-    finally:
-        _flops_enabled = prev_state
-
-
-def flops_enabled() -> bool:
-    return _flops_enabled
-
-
-def shape(a: Tensor | _NumPyArray | _MLXArray) -> _ShapeLike:
-    if hasattr(a, "shape"):
-        return a.shape
-    raise ValueError(f"The argument must be a Tensor or a NumPy array.")
-
-
-def _check_input_dim(tensor: Tensor, dim: int) -> None:
-    if tensor.ndim != dim:
-        raise ValueError(f"expected {dim}D input (got {tensor.ndim}D input).")
-
-
-def _set_tensor_grad(
-    tensor: Tensor, grad: _NumPyArray | _MLXArray, at: SupportsIndex = ...
-) -> None:
-    if not tensor.requires_grad:
-        return
-    if tensor.grad is None:
-        tensor.grad = grad
-    else:
-        if tensor.is_cpu() and not tensor.grad.flags.writeable:
-            tensor.grad = tensor.grad.copy()
-
-        if tensor.is_gpu():
-            if at == Ellipsis:
-                at = slice(None, None, None)
-
-        if tensor.grad.ndim == 0:
-            tensor.grad += grad
-        else:
-            tensor.grad[at] = tensor.grad[at] + grad
-
-
-def _check_is_tensor(
-    any: Tensor | _ArrayOrScalar,
-    device: _DeviceType = "cpu",
-    dtype: _BuiltinNumeric | Numeric | None = None,
-) -> Tensor:
-    if isinstance(any, Tensor):
-        return any
-
-    is_scalar = not isinstance(any, (_NumPyArray, _MLXArray, list, tuple))
-    if dtype is not None and is_scalar:
-        return Tensor(any, device=device, dtype=dtype)
-
-    return Tensor(any, device=device)
-
-
-def _match_grad_shape(
-    data: _NumPyArray | _MLXArray,
-    grad: _NumPyArray | _MLXArray,
-    device: _DeviceType = "cpu",
-) -> _NumPyArray | _MLXArray:
-    if data.shape == grad.shape:
-        return grad
-    if data.ndim == 0:
-        return grad.sum()
-    lib = np if device == "cpu" else mx
-    if grad.ndim == 0:
-        return lib.broadcast_to(grad, data.shape)
-
-    data_shape = tuple(data.shape)
-    grad_shape = tuple(grad.shape)
-
-    if len(grad_shape) < len(data_shape):
-        grad = lib.reshape(
-            grad, (1,) * (len(data_shape) - len(grad_shape)) + grad_shape
-        )
-        grad_shape = tuple(grad.shape)
-
-    aligned_data_shape = data_shape
-    if len(data_shape) < len(grad_shape):
-        aligned_data_shape = (1,) * (len(grad_shape) - len(data_shape)) + data_shape
-
-    if len(aligned_data_shape) != len(grad_shape):
-        raise ValueError("Unknown error occurred.")
-
-    reduce_axes: list[int] = []
-    for axis, (d_dim, g_dim) in enumerate(zip(aligned_data_shape, grad_shape)):
-        if d_dim == g_dim:
-            continue
-        if d_dim == 1 and g_dim != 1:
-            reduce_axes.append(axis)
-        elif g_dim == 1:
-            continue
-        else:
-            raise ValueError(
-                f"Cannot reduce grad of {grad.shape} to data of {data.shape}."
-            )
-
-    if reduce_axes:
-        grad = lib.sum(grad, axis=tuple(reduce_axes), keepdims=True)
-
-    if grad.shape != aligned_data_shape:
-        grad = lib.broadcast_to(grad, aligned_data_shape)
-
-    if len(aligned_data_shape) > len(data_shape):
-        if grad.size != data.size:
-            raise ValueError(
-                f"Cannot collapse grad of {grad_shape} to data of {data.shape}."
-            )
-        return lib.reshape(grad, data_shape)
-
-    return grad
-
-
-def _get_overloaded_shape(args: int | _ShapeLike) -> _ShapeLike:
-    if len(args) == 1 and isinstance(args[0], (tuple, list)):
-        shape = tuple(args[0])
-    else:
-        shape = tuple(args)
-    return shape
-
-
-_PACKAGE_DIR: Path = Path(__file__).resolve().parent
-MODELS_REGISTRY_PATH: Path = _PACKAGE_DIR / "models" / "registry.json"
-
-_ModuleReturnFunc = Callable[[Any], nn.Module]
-_ModuleClass = type[nn.Module]
-
-
-def _load_models_registry(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump({}, f)
-        return {}
-
-    try:
-        with open(path, "r") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
-
-
-def _is_legacy_flat_registry(registry: dict[str, Any]) -> bool:
-    for value in registry.values():
-        if not isinstance(value, dict):
-            continue
-        if "name" in value and ("param_size" in value or "parameter_size" in value):
-            return True
-    return False
-
-
-def _migrate_flat_registry(registry: dict[str, Any]) -> dict[str, Any]:
-    nested: dict[str, Any] = {}
-
-    for model_name, info in registry.items():
-        if not isinstance(info, dict):
-            continue
-
-        category = info.get("category")
-        if isinstance(category, str) and category:
-            category_parts = [category]
-        elif isinstance(category, list) and category:
-            category_parts = [str(part) for part in category]
-        else:
-            category_parts = ["uncategorized"]
-
-        cursor = nested
-        for part in category_parts:
-            cursor = cursor.setdefault(part, {})
-
-        cursor[model_name] = {
-            "parameter_size": int(
-                info.get("param_size", info.get("parameter_size", 0))
-            ),
-            "submodule_count": int(info.get("submodule_count", 0)),
-        }
-
-    return nested
-
-
-def _get_registry_category_path(func: _ModuleReturnFunc) -> list[str]:
-    module = sys.modules.get(func.__module__)
-    module_file = getattr(module, "__file__", None)
-    models_dir = _PACKAGE_DIR / "models"
-
-    if module_file:
-        try:
-            rel = Path(module_file).resolve().relative_to(models_dir).with_suffix("")
-            parts = list(rel.parts)
-            if parts and parts[-1] == "__init__":
-                parts = parts[:-1]
-            if parts:
-                return parts
-        except ValueError:
-            pass
-
-    module_parts = func.__module__.split(".")
-    if "models" in module_parts:
-        parts = module_parts[module_parts.index("models") + 1 :]
-        return parts if parts else ["uncategorized"]
-    return ["uncategorized"]
-
-
-def _has_model_entry(
-    registry: dict[str, Any], path: list[str], model_name: str
-) -> bool:
-    cursor: Any = registry
-    for part in path:
-        if not isinstance(cursor, dict) or part not in cursor:
-            return False
-        cursor = cursor[part]
-    return isinstance(cursor, dict) and model_name in cursor
-
-
-def _upsert_model_entry(
-    registry: dict[str, Any], path: list[str], model_name: str, entry: dict[str, int]
-) -> None:
-    cursor = registry
-    for part in path:
-        cursor = cursor.setdefault(part, {})
-    cursor[model_name] = entry
-
-
-def _build_registry_entry(model: nn.Module, *, is_class: bool) -> dict[str, Any]:
-    submodule_count = 0
-    for _ in model.modules():
-        submodule_count += 1
-
-    entry: dict[str, Any] = {
-        "parameter_size": int(model.parameter_size),
-        "submodule_count": submodule_count - 1 if submodule_count > 0 else 0,
+from lucid._device import device
+from lucid._dtype import finfo, iinfo
+from lucid._globals import (
+    set_default_dtype,
+    get_default_dtype,
+    set_default_device,
+    get_default_device,
+)
+from lucid._threads import (
+    set_num_threads,
+    get_num_threads,
+    set_num_interop_threads,
+    get_num_interop_threads,
+)
+
+
+# ── Determinism (top-level reference-framework names) ───────────────────────
+# The engine already exposes ``set_deterministic`` / ``is_deterministic``;
+# wrap them under the standard ``use_deterministic_algorithms`` /
+# ``are_deterministic_algorithms_enabled`` names without an alias hop.
+def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # noqa: F821
+    """Globally toggle deterministic kernel selection.
+
+    Lucid does not ship a separate ``warn_only`` mode — callers either get
+    deterministic kernels or they don't.  The kwarg is accepted for API
+    compatibility and ignored.
+    """
+    # ``bool`` here resolves to ``lucid.bool`` (the dtype alias) — use the
+    # builtin saved at module top.
+    _C_engine.set_deterministic(_py_bool(mode))
+
+
+def are_deterministic_algorithms_enabled() -> bool:  # noqa: F821
+    """Return whether deterministic kernel selection is currently active."""
+    return _py_bool(_C_engine.is_deterministic())
+
+# ── Public API ────────────────────────────────────────────────────────────────
+# Organised by category — mirrors the standard tensor framework surface.
+# Invariant: no Tier-2 symbols (Module, Parameter, Linear, Adam, ...) here.
+
+__all__ = [
+    # ── metadata ──────────────────────────────────────────────────────────
+    "__version__",
+    # ── dtype ─────────────────────────────────────────────────────────────
+    "dtype", "dtypes",
+    "float16", "bfloat16", "float32", "float64",
+    "int8", "int16", "int32", "int64",
+    "bool_", "complex64",
+    "half", "double", "short", "long",   # aliases (excluded from import *)
+    # ── device / defaults ─────────────────────────────────────────────────
+    "device",
+    "set_default_dtype", "get_default_dtype",
+    "set_default_device", "get_default_device",
+    # ── dtype info ────────────────────────────────────────────────────────
+    "finfo", "iinfo",
+    # ── threading (advisory — see lucid/_threads.py) ──────────────────────
+    "set_num_threads", "get_num_threads",
+    "set_num_interop_threads", "get_num_interop_threads",
+    # ── determinism ───────────────────────────────────────────────────────
+    "use_deterministic_algorithms", "are_deterministic_algorithms_enabled",
+    # ── core tensor ───────────────────────────────────────────────────────
+    "Tensor",
+    # ── factory — deterministic ───────────────────────────────────────────
+    "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
+    "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
+    "zeros_like", "ones_like", "empty_like", "full_like",
+    # ── factory — random ──────────────────────────────────────────────────
+    "rand", "randn", "randint", "bernoulli", "normal",
+    "rand_like", "randn_like", "manual_seed", "randperm",
+    "Generator", "seed", "initial_seed", "get_rng_state", "set_rng_state",
+    # ── ops — unary ───────────────────────────────────────────────────────
+    "neg", "sign",
+    "exp", "exp2", "log", "log2", "log10", "log1p",
+    "sqrt", "square", "reciprocal", "rsqrt",
+    "floor", "ceil", "trunc", "frac",
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan",
+    "asin", "acos", "atan",
+    "sinh", "cosh", "tanh",
+    "relu", "sigmoid",
+    "clip", "clamp",
+    "isinf", "isnan", "isfinite", "nan_to_num",
+    # ── ops — binary ──────────────────────────────────────────────────────
+    "add", "sub", "mul", "div",
+    "matmul", "mm", "bmm", "tensordot", "kron",
+    "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
+    "maximum", "minimum",
+    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
+    "eq", "ne", "lt", "le", "gt", "ge", "isclose",
+    "logical_and", "logical_or", "logical_xor", "logical_not",
+    "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+    "bitwise_left_shift", "bitwise_right_shift",
+    # ── ops — reduction ───────────────────────────────────────────────────
+    "mean", "prod",
+    "argmax", "argmin", "cumsum", "cumprod",
+    "std", "var", "trace",
+    "logsumexp",
+    # ── tensor manipulation ───────────────────────────────────────────────
+    "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
+    "unflatten", "narrow", "movedim",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
+    "cat", "concat", "stack", "hstack", "vstack",
+    "split", "chunk", "unbind",
+    "gather", "scatter", "scatter_add", "take", "index_select", "masked_select",
+    "kthvalue",
+    "where", "masked_fill", "pad", "roll", "flip", "fliplr", "flipud",
+    "sort", "argsort", "topk",
+    "nonzero", "unique", "meshgrid",
+    "tril", "triu",
+    "contiguous", "detach", "clone",
+    # ── stats / search ────────────────────────────────────────────────────
+    "searchsorted", "bucketize", "histc", "cartesian_prod",
+    # ── Tensor-method ops surfaced as free functions ──────────────────────
+    "lerp", "diff",
+    # ── extras: constants ─────────────────────────────────────────────────
+    "pi", "e", "inf", "nan", "newaxis",
+    # ── extras: aliases / dtype promotion ─────────────────────────────────
+    "absolute", "negative", "positive",
+    "subtract", "multiply", "divide", "true_divide", "rsub",
+    "arccosh", "acosh", "arcsinh", "asinh", "arctanh", "atanh", "arctan2",
+    "swapaxes", "swapdims", "moveaxis", "adjoint", "t",
+    "real", "imag", "angle", "polar",
+    "view_as_real", "view_as_complex",
+    "conj", "conj_physical", "resolve_conj", "resolve_neg",
+    "result_type", "promote_types", "can_cast",
+    # ── extras: special elementwise ───────────────────────────────────────
+    "expm1", "sinc", "heaviside", "xlogy", "logit", "signbit",
+    "float_power", "fmax", "fmin",
+    # ── extras: nan-safe reductions ───────────────────────────────────────
+    "nansum", "nanmean", "nanmedian",
+    # ── extras: BLAS variants ─────────────────────────────────────────────
+    "addmm", "addbmm", "baddbmm", "addmv", "addr", "addcmul", "addcdiv",
+    "mv", "ger", "vdot", "block_diag",
+    # ── extras: shape ─────────────────────────────────────────────────────
+    "column_stack", "row_stack", "dstack",
+    "atleast_1d", "atleast_2d", "atleast_3d",
+    "vsplit", "hsplit", "dsplit", "tensor_split",
+    "take_along_dim", "rot90",
+    # ── extras: predicates / introspection ────────────────────────────────
+    "numel", "is_storage", "is_nonzero", "is_same_size", "is_neg", "is_conj",
+    "isin", "isneginf", "isposinf", "isreal",
+    # ── grad control ──────────────────────────────────────────────────────
+    "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled", "inference_mode",
+    # ── type predicates ───────────────────────────────────────────────────
+    "is_tensor", "is_floating_point", "is_complex", "is_signed",
+    # ── serialization ─────────────────────────────────────────────────────
+    "save", "load", "save_sharded", "load_sharded",
+    "save_safetensors", "load_safetensors",
+    # ── ops reachable via lazy __getattr__ but previously missing from
+    # __all__ / dir() (IDE autocomplete + ``from lucid import *``) ────────
+    "abs", "all", "any", "complex", "cummax", "cummin", "diagonal",
+    "erf", "erfinv", "max", "min", "pow", "ravel", "round", "sum",
+    # ── subpackages ───────────────────────────────────────────────────────
+    "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
+    "utils", "amp", "profiler", "einops",
+    "metal", "backends", "test",
+    # ── public type aliases ───────────────────────────────────────────────
+    "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
+    "StateDict", "TensorOrScalar",
+    "HasShape", "SupportsNumpyConversion", "SupportsGrad", "TensorLikeProtocol",
+]
+
+# ── Name sets used by the dispatch table ─────────────────────────────────────
+_FACTORY_NAMES: frozenset[str] = frozenset([
+    # ── deterministic ─────────────────────────────────────────────────────
+    "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
+    "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
+    "zeros_like", "ones_like", "empty_like", "full_like",
+    # ── random ────────────────────────────────────────────────────────────
+    "rand", "randn", "randint", "bernoulli", "normal",
+    "rand_like", "randn_like", "manual_seed", "randperm",
+    "Generator", "seed", "initial_seed", "get_rng_state", "set_rng_state",
+])
+
+_SCATTER_NAMES: frozenset[str] = frozenset(["scatter_add"])
+
+_OPS_NAMES: frozenset[str] = frozenset([
+    # ── unary math ────────────────────────────────────────────────────────
+    "abs", "neg", "sign",
+    "exp", "exp2", "log", "log2", "log10", "log1p",
+    "sqrt", "square", "reciprocal", "rsqrt",
+    "floor", "ceil", "round", "trunc", "frac",
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan", "asin", "acos", "atan",
+    "sinh", "cosh", "tanh",
+    "relu", "sigmoid",
+    "clip", "clamp",
+    "isinf", "isnan", "isfinite", "nan_to_num",
+    "erf", "erfinv",
+    # ── binary math ───────────────────────────────────────────────────────
+    "add", "sub", "mul", "div", "pow",
+    "atan2", "fmod", "remainder", "hypot", "logaddexp", "nextafter",
+    "maximum", "minimum",
+    # ── linear algebra ────────────────────────────────────────────────────
+    "matmul", "mm", "bmm", "tensordot", "kron",
+    # ── complex viewing (engine ops) ──────────────────────────────────────
+    "real", "imag", "complex", "conj",
+    # ── comparison ────────────────────────────────────────────────────────
+    "equal", "not_equal", "greater", "greater_equal", "less", "less_equal",
+    "eq", "ne", "lt", "le", "gt", "ge", "isclose",
+    # ── logical / bitwise ─────────────────────────────────────────────────
+    "logical_and", "logical_or", "logical_xor", "logical_not",
+    "bitwise_and", "bitwise_or", "bitwise_xor", "bitwise_not",
+    "bitwise_left_shift", "bitwise_right_shift",
+    # ── reduction ─────────────────────────────────────────────────────────
+    "sum", "mean", "max", "min", "prod",
+    "argmax", "argmin", "cumsum", "cumprod", "cummax", "cummin",
+    "std", "var", "trace", "any", "all", "logsumexp",
+    # ── shape / view ──────────────────────────────────────────────────────
+    "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
+    "unflatten", "narrow", "movedim",
+    "expand", "broadcast_to", "repeat", "repeat_interleave", "tile",
+    "cat", "concat", "stack", "hstack", "vstack",
+    "split", "chunk", "unbind",
+    "ravel", "diagonal", "tril", "triu",
+    "flip", "fliplr", "flipud", "roll", "pad",
+    "contiguous", "detach", "clone",
+    # ── indexing / scatter ────────────────────────────────────────────────
+    "gather", "scatter", "scatter_add",
+    "take", "index_select", "masked_select",
+    "where", "masked_fill",
+    # ── sort / search ─────────────────────────────────────────────────────
+    "sort", "argsort", "topk", "kthvalue",
+    "nonzero", "unique", "meshgrid",
+    "searchsorted", "bucketize", "histc", "cartesian_prod",
+])
+
+_GRAD_NAMES: frozenset[str] = frozenset([
+    "no_grad", "enable_grad", "is_grad_enabled", "set_grad_enabled", "inference_mode",
+])
+
+_PREDICATE_NAMES: frozenset[str] = frozenset([
+    "is_tensor", "is_floating_point", "is_complex", "is_signed",
+])
+
+_SERIALIZATION_NAMES: frozenset[str] = frozenset([
+    "save", "load", "save_sharded", "load_sharded",
+    "save_safetensors", "load_safetensors",
+])
+
+_SUBPKG_NAMES: frozenset[str] = frozenset([
+    # ── core ML stack ─────────────────────────────────────────────────────
+    "nn", "optim", "autograd", "func",
+    # ── numerical sub-packages ────────────────────────────────────────────
+    "linalg", "fft", "signal", "special", "distributions",
+    # ── infra / tooling ───────────────────────────────────────────────────
+    "utils", "amp", "profiler", "einops",
+    "metal", "backends", "test",
+])
+
+_METHOD_ALIASES: frozenset[str] = frozenset(["lerp", "diff"])
+
+_TYPE_ALIAS_NAMES: frozenset[str] = frozenset([
+    "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
+    "StateDict", "TensorOrScalar",
+    "HasShape", "SupportsNumpyConversion", "SupportsGrad", "TensorLikeProtocol",
+])
+
+# ── Lazy group loaders ────────────────────────────────────────────────────────
+# Each loader is called at most once per interpreter session: it populates
+# globals() for every name in the group, then is never called again.
+#
+# To add a new lazily-imported group:
+#   1. Define its name frozenset above.
+#   2. Write a _load_<group>() function below.
+#   3. Register it via @_register(<frozenset>).
+#
+# fmt: on
+
+_GROUP_LOADERS: dict[str, Callable[[], dict[str, object]]] = {}
+
+
+def _register(
+    names: frozenset[str],
+) -> Callable[[Callable[[], dict[str, object]]], Callable[[], dict[str, object]]]:
+    """Register a batch loader for a set of lazily-imported names."""
+
+    def decorator(
+        fn: Callable[[], dict[str, object]],
+    ) -> Callable[[], dict[str, object]]:
+        """Bind ``fn`` as the loader for every name in the enclosing group."""
+        for name in names:
+            _GROUP_LOADERS[name] = fn
+        return fn
+
+    return decorator
+
+
+@_register(_FACTORY_NAMES)
+def _load_factories() -> dict[str, object]:
+    """Lazy loader for tensor factory functions (zeros / ones / arange / …)."""
+    import lucid._factories as _fac
+
+    return {n: getattr(_fac, n) for n in _FACTORY_NAMES}
+
+
+@_register(_OPS_NAMES)
+def _load_ops() -> dict[str, object]:
+    """Lazy loader for the core engine-backed op surface (add / matmul / …)."""
+    import lucid._ops as _ops
+
+    return {n: getattr(_ops, n) for n in _OPS_NAMES}
+
+
+@_register(_SCATTER_NAMES)
+def _load_scatter() -> dict[str, object]:
+    """Lazy loader for ``scatter_add`` (split out so it imports independently)."""
+    from lucid._ops import scatter_add
+
+    return {"scatter_add": scatter_add}
+
+
+@_register(_GRAD_NAMES)
+def _load_grad() -> dict[str, object]:
+    """Lazy loader for autograd mode helpers (``no_grad`` / ``enable_grad`` / …)."""
+    from lucid.autograd._grad_mode import (
+        no_grad,
+        enable_grad,
+        is_grad_enabled,
+        set_grad_enabled,
+        inference_mode,
+    )
+
+    return dict(
+        no_grad=no_grad,
+        enable_grad=enable_grad,
+        is_grad_enabled=is_grad_enabled,
+        set_grad_enabled=set_grad_enabled,
+        inference_mode=inference_mode,
+    )
+
+
+@_register(_PREDICATE_NAMES)
+def _load_predicates() -> dict[str, object]:
+    """Lazy loader for dtype predicate helpers (``is_tensor`` / ``is_floating_point`` / …)."""
+    from lucid._C import engine as _C_engine
+
+    _FLOAT_DTYPES = frozenset([_C_engine.F16, _C_engine.F32, _C_engine.F64])
+    _COMPLEX_DTYPES = frozenset([_C_engine.C64])
+    _SIGNED_DTYPES = frozenset(
+        [
+            _C_engine.F16,
+            _C_engine.F32,
+            _C_engine.F64,
+            _C_engine.C64,
+            _C_engine.I8,
+            _C_engine.I16,
+            _C_engine.I32,
+            _C_engine.I64,
+        ]
+    )
+
+    def is_tensor(obj: object) -> bool:  # type: ignore
+        """Return True if *obj* is a lucid Tensor."""
+        from lucid._tensor.tensor import Tensor as _T
+
+        return isinstance(obj, _T)
+
+    def is_floating_point(t: object) -> bool:  # type: ignore
+        """Return True if *t* has a floating-point dtype."""
+        from lucid._dispatch import _unwrap
+
+        return _unwrap(t).dtype in _FLOAT_DTYPES  # type: ignore[arg-type]
+
+    def is_complex(t: object) -> bool:  # type: ignore
+        """Return True if *t* has a complex dtype."""
+        from lucid._dispatch import _unwrap
+
+        return _unwrap(t).dtype in _COMPLEX_DTYPES  # type: ignore[arg-type]
+
+    def is_signed(t: object) -> bool:  # type: ignore
+        """Return True if *t* has a signed numeric dtype."""
+        from lucid._dispatch import _unwrap
+
+        return _unwrap(t).dtype in _SIGNED_DTYPES  # type: ignore[arg-type]
+
+    return dict(
+        is_tensor=is_tensor,
+        is_floating_point=is_floating_point,
+        is_complex=is_complex,
+        is_signed=is_signed,
+    )
+
+
+@_register(_SERIALIZATION_NAMES)
+def _load_serialization() -> dict[str, object]:
+    """Lazy loader for ``save`` / ``load`` (sharded and safetensors variants)."""
+    import lucid.serialization as _ser
+
+    return {
+        "save": _ser.save,
+        "load": _ser.load,
+        "save_sharded": _ser.save_sharded,
+        "load_sharded": _ser.load_sharded,
+        "save_safetensors": _ser.save_safetensors,
+        "load_safetensors": _ser.load_safetensors,
     }
-    if is_class:
-        entry["factory_type"] = "class"
-    return entry
 
 
-def _maybe_register_model(target: Any, model: nn.Module, *, is_class: bool) -> None:
-    registry = _load_models_registry(MODELS_REGISTRY_PATH)
-    if _is_legacy_flat_registry(registry):
-        registry = _migrate_flat_registry(registry)
+def _get_composite_names() -> frozenset[str]:
+    """Lazily query ``lucid._ops.composite`` for its export set (avoids cycles)."""
+    from lucid._ops.composite import COMPOSITE_NAMES
 
-    model_name = target.__name__
-    category_path = _get_registry_category_path(target)
+    return COMPOSITE_NAMES
 
-    if not _has_model_entry(registry, category_path, model_name):
-        _upsert_model_entry(
-            registry,
-            category_path,
-            model_name,
-            _build_registry_entry(model, is_class=is_class),
+
+# Pre-populate the loader registry for the composite ops surface.  The actual
+# loader runs once on first attribute access.
+_COMPOSITE_NAMES_CACHED: frozenset[str] = _get_composite_names()
+
+
+@_register(_COMPOSITE_NAMES_CACHED)
+def _load_composite_ops() -> dict[str, object]:
+    """Pure-Python composites layered on engine primitives."""
+    import lucid._ops.composite as _comp
+
+    return {n: getattr(_comp, n) for n in _COMPOSITE_NAMES_CACHED}
+
+
+@_register(_METHOD_ALIASES)
+def _load_method_aliases() -> dict[str, object]:
+    """Surface select Tensor methods as free functions (reference-framework parity).
+
+    ``lerp(a, b, w)`` etc. are commonly used standalone — we wrap each
+    method so the call ``lucid.lerp(a, b, w)`` dispatches to ``a.lerp(b, w)``.
+    """
+    from lucid._tensor.tensor import Tensor as _T
+
+    def _make(method_name: str) -> Callable[..., object]:
+        """Build a free-function wrapper that forwards to ``Tensor.<method_name>``."""
+
+        def _fn(input: object, *args: object, **kwargs: object) -> object:
+            """Dispatch ``lucid.<method_name>(input, ...)`` to ``input.<method_name>(...)``."""
+            if not isinstance(input, _T):
+                raise TypeError(
+                    f"lucid.{method_name}() expects a Tensor as the first "
+                    f"argument, got {type(input).__name__}"
+                )
+            return getattr(input, method_name)(*args, **kwargs)
+
+        _fn.__name__ = method_name
+        _fn.__qualname__ = method_name
+        _fn.__doc__ = (
+            f"Free-function alias for ``Tensor.{method_name}``. "
+            f"Equivalent to ``input.{method_name}(*args, **kwargs)``."
         )
-        with open(MODELS_REGISTRY_PATH, "w") as f:
-            json.dump(registry, f, indent=4)
+        return _fn
+
+    return {n: _make(n) for n in _METHOD_ALIASES}
 
 
-def register_model(
-    target: _ModuleReturnFunc | _ModuleClass,
-) -> _ModuleReturnFunc | _ModuleClass:
-    if inspect.isclass(target):
-        if not issubclass(target, nn.Module):
-            raise TypeError("@register_model class target must inherit from nn.Module.")
+@_register(_TYPE_ALIAS_NAMES)
+def _load_type_aliases() -> dict[str, object]:
+    """Lazy loader for the public type aliases / protocols re-exported from :mod:`lucid._types`."""
+    from lucid._types import (
+        Scalar,
+        TensorLike,
+        DeviceLike,
+        DTypeLike,
+        ShapeLike,
+        StateDict,
+        TensorOrScalar,
+        HasShape,
+        SupportsNumpyConversion,
+        SupportsGrad,
+        TensorLikeProtocol,
+    )
 
-        original_init = target.__init__
-
-        @wraps(original_init)
-        def wrapped_init(self, *args, **kwargs) -> None:
-            weights = kwargs.pop("weights", None)
-            original_init(self, *args, **kwargs)
-
-            if os.environ.get("SPHINX_BUILD"):
-                return
-
-            _maybe_register_model(target, self, is_class=True)
-
-            if weights is not None:
-                import lucid.weights as W
-
-                try:
-                    W.apply(self, weights)
-                except Exception as e:
-                    raise RuntimeError(
-                        f"Failed to apply pre-trained weights: {e}"
-                    ) from e
-
-        target.__init__ = wrapped_init
-        return target
-
-    func = target
-
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> nn.Module:
-        weights = kwargs.pop("weights", None)
-
-        if os.environ.get("SPHINX_BUILD"):
-            return func(*args, **kwargs)
-
-        model = func(*args, **kwargs)
-        model._alt_name = func.__name__
-        _maybe_register_model(func, model, is_class=False)
-
-        if weights is not None:
-            import lucid.weights as W
-
-            try:
-                W.apply(model, weights)
-            except Exception as e:
-                raise RuntimeError(f"Failed to apply pre-trained weights: {e}") from e
-
-        return model
-
-    return wrapper
+    return dict(
+        Scalar=Scalar,
+        TensorLike=TensorLike,
+        DeviceLike=DeviceLike,
+        DTypeLike=DTypeLike,
+        ShapeLike=ShapeLike,
+        StateDict=StateDict,
+        TensorOrScalar=TensorOrScalar,
+        HasShape=HasShape,
+        SupportsNumpyConversion=SupportsNumpyConversion,
+        SupportsGrad=SupportsGrad,
+        TensorLikeProtocol=TensorLikeProtocol,
+    )
 
 
-def _conv_view_limit_mb() -> int:
-    from lucid.nn._kernel import conv as _conv_kernel
-
-    return _conv_kernel.get_conv_view_limit_mb()
+# ── lucid.eval(*tensors) ──────────────────────────────────────────────────────
 
 
-def __getattr__(name: str) -> Any:
-    if name == "CONV_VIEW_LIMIT_MB":
-        return _conv_view_limit_mb()
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+def eval(*tensors: object) -> None:  # type: ignore[override]
+    """Force immediate evaluation of one or more tensors.
+
+    On Metal (MLX backend) this flushes the lazy computation graph for all
+    supplied tensors in a single ``mlx.core.eval()`` call — more efficient
+    than calling ``.eval()`` on each tensor individually because MLX can
+    schedule them together.
+
+    On CPU this is a no-op.
+
+    Recommended training-loop pattern on Metal::
+
+        loss.eval()                          # flush forward graph BEFORE backward
+        loss.backward()
+        optimizer.step()
+        lucid.eval(*model.parameters())      # flush param updates AFTER step
+
+    Flushing the forward graph before backward keeps each MLX evaluation
+    scope small.  Deferring both flushes into one call after the optimizer
+    step causes the forward + backward + optimizer graph to accumulate as a
+    single large graph, which is significantly slower to schedule.
+    """
+    from lucid._C import engine as _C_engine
+    from lucid._tensor.tensor import Tensor as _T
+
+    impls = [t._impl for t in tensors if isinstance(t, _T)]
+    if impls:
+        _C_engine.eval_tensors(impls)  # C++ batch eval — no mlx import
 
 
-def __dir__() -> list[str]:
-    return sorted(list(globals().keys()) + ["CONV_VIEW_LIMIT_MB"])
+# ── Module __getattr__ ────────────────────────────────────────────────────────
 
 
-class _LucidModule(ModuleType):
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "CONV_VIEW_LIMIT_MB":
-            raise AttributeError(
-                "CONV_VIEW_LIMIT_MB is read-only; set LUCID_CONV_VIEW_LIMIT_MB "
-                "before importing lucid."
-            )
-        super().__setattr__(name, value)
+def __getattr__(name: str) -> object:
+    """Lazy attribute resolver for the top-level :mod:`lucid` namespace.
 
+    Implements PEP 562 lazy imports — names listed in the lazy-loader
+    registries are not imported at package init time, but only on first
+    attribute access (e.g. ``lucid.zeros`` triggers the factories loader).
+    Subsequent accesses go through the regular module ``__dict__``.
+    """
+    _g = globals()
 
-if not isinstance(sys.modules[__name__], _LucidModule):
-    sys.modules[__name__].__class__ = _LucidModule
+    # Tensor is special-cased: it lives in a TYPE_CHECKING-guarded module.
+    if name == "Tensor":
+        from lucid._tensor.tensor import Tensor
+
+        _g["Tensor"] = Tensor
+        return Tensor
+
+    # All other lazily-imported groups share the same dispatch pattern.
+    loader = _GROUP_LOADERS.get(name)
+    if loader is not None:
+        _g.update(loader())
+        return _g[name]
+
+    # Subpackages: import on demand and cache.
+    if name in _SUBPKG_NAMES:
+        import importlib
+        import sys as _sys
+
+        pkg_key = f"lucid.{name}"
+        mod = _sys.modules.get(pkg_key) or importlib.import_module(pkg_key)
+        _g[name] = mod
+        return mod
+
+    # dtypes namespace object (separate from the dtype class).
+    if name == "dtypes":
+        import lucid.dtypes as _dtypes
+
+        _g["dtypes"] = _dtypes
+        return _dtypes
+
+    raise AttributeError(f"module 'lucid' has no attribute '{name}'")

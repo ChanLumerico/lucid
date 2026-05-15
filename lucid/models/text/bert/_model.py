@@ -1,120 +1,49 @@
+"""BERT model (Devlin et al., 2018) — encoder-only Transformer.
+
+Module / parameter naming matches HuggingFace Transformers' ``BertModel`` so
+state dicts can be ported with a flat key rename.  Top-level layout:
+
+    bert.embeddings.{word, position, token_type}_embeddings
+    bert.embeddings.LayerNorm
+    bert.encoder.layer.{i}.attention.self.{query, key, value}
+    bert.encoder.layer.{i}.attention.output.{dense, LayerNorm}
+    bert.encoder.layer.{i}.intermediate.dense
+    bert.encoder.layer.{i}.output.{dense, LayerNorm}
+    bert.pooler.dense
+    cls.predictions.{transform.{dense, LayerNorm}, decoder}   (MLM head)
+    classifier                                                (cls / token / qa)
+"""
+
+import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import ClassVar, cast
 
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
+from lucid._tensor.tensor import Tensor
+from lucid.models._base import PretrainedModel
+from lucid.models._mixins import MaskedLMMixin
+from lucid.models._output import (
+    BaseModelOutputWithPooling,
+    CausalLMOutput,
+    MaskedLMOutput,
+    ModelOutput,
+)
+from lucid.models._utils._text import extended_attention_mask, text_activation
+from lucid.models.text.bert._config import BertConfig
 
-from lucid._tensor import Tensor
-from lucid.models.base import PreTrainedModelMixin
-
-__all__ = ["BERTConfig", "BERT"]
-
-
-@dataclass
-class BERTConfig:
-    vocab_size: int
-    hidden_size: int
-    num_attention_heads: int
-    num_hidden_layers: int
-    intermediate_size: int
-
-    hidden_act: Callable[[Tensor], Tensor] | str
-    hidden_dropout_prob: float
-    attention_probs_dropout_prob: float
-
-    max_position_embeddings: int
-    tie_word_embedding: bool
-    type_vocab_size: int
-
-    initializer_range: float
-    layer_norm_eps: float
-
-    use_cache: bool
-    is_decoder: bool
-    add_cross_attention: bool
-    chunk_size_feed_forward: int
-
-    pad_token_id: int = 0
-    bos_token_id: int | None = None
-    eos_token_id: int | None = None
-
-    classifier_dropout: float | None = None
-    add_pooling_layer: bool = True
-
-    @classmethod
-    def base(
-        cls,
-        *,
-        is_decoder: bool = False,
-        use_cache: bool = False,
-        add_pooling_layer: bool = True,
-        vocab_size: int = 30522,
-        **kwargs,
-    ) -> BERTConfig:
-        defaults = dict(
-            vocab_size=vocab_size,
-            hidden_size=768,
-            num_attention_heads=12,
-            num_hidden_layers=12,
-            intermediate_size=3072,
-            hidden_act=F.gelu,
-            hidden_dropout_prob=0.1,
-            attention_probs_dropout_prob=0.1,
-            max_position_embeddings=512,
-            tie_word_embedding=True,
-            type_vocab_size=2,
-            initializer_range=0.02,
-            layer_norm_eps=1e-12,
-            use_cache=use_cache,
-            is_decoder=is_decoder,
-            add_cross_attention=False,
-            chunk_size_feed_forward=0,
-            pad_token_id=0,
-            classifier_dropout=None,
-            add_pooling_layer=add_pooling_layer,
-        )
-        defaults.update(kwargs)
-        return cls(**defaults)
-
-    @classmethod
-    def large(
-        cls,
-        *,
-        is_decoder: bool = False,
-        use_cache: bool = False,
-        add_pooling_layer: bool = True,
-        vocab_size: int = 30522,
-        **kwargs,
-    ) -> BERTConfig:
-        defaults = dict(
-            vocab_size=vocab_size,
-            hidden_size=1024,
-            num_attention_heads=16,
-            num_hidden_layers=24,
-            intermediate_size=4096,
-            hidden_act=F.gelu,
-            hidden_dropout_prob=0.1,
-            attention_probs_dropout_prob=0.1,
-            max_position_embeddings=512,
-            tie_word_embedding=True,
-            type_vocab_size=2,
-            initializer_range=0.02,
-            layer_norm_eps=1e-12,
-            use_cache=use_cache,
-            is_decoder=is_decoder,
-            add_cross_attention=False,
-            chunk_size_feed_forward=0,
-            pad_token_id=0,
-            classifier_dropout=None,
-            add_pooling_layer=add_pooling_layer,
-        )
-        defaults.update(kwargs)
-        return cls(**defaults)
+# ─────────────────────────────────────────────────────────────────────────────
+# Embeddings
+# ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BERTEmbeddings(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+class _BertEmbeddings(nn.Module):
+    """Word + position + token-type embedding sum, then LN + Dropout."""
+
+    position_ids: Tensor
+
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id
@@ -125,802 +54,692 @@ class _BERTEmbeddings(nn.Module):
         self.token_type_embeddings = nn.Embedding(
             config.type_vocab_size, config.hidden_size
         )
+        # HF names: ``LayerNorm`` (capitalised) so checkpoints port directly.
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(p=config.hidden_dropout)
 
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        # Position ids are deterministic [0, max_pos) — register as a buffer so
+        # they ride along with .to(device=...).
+        pos = lucid.arange(config.max_position_embeddings).long().unsqueeze(0)
+        self.register_buffer("position_ids", pos, persistent=False)
 
-        self.position_ids: nn.Buffer
-        self.token_type_ids: nn.Buffer
-        self.register_buffer(
-            "position_ids",
-            nn.Buffer(
-                lucid.arange(config.max_position_embeddings, dtype=lucid.Long).expand(
-                    1, -1
-                )
-            ),
-        )
-        self.register_buffer(
-            "token_type_ids",
-            nn.Buffer(lucid.zeros(*self.position_ids.shape, dtype=lucid.Long)),
-        )
-
-    def forward(
+    def forward(  # type: ignore[override]
         self,
-        input_ids: lucid.LongTensor | None = None,
-        token_type_ids: lucid.LongTensor | None = None,
-        position_ids: lucid.LongTensor | None = None,
-        inputs_embeds: lucid.FloatTensor | None = None,
-        past_key_values_length: int = 0,
-        cache_position: Tensor | None = None,
+        input_ids: Tensor,
+        token_type_ids: Tensor | None = None,
     ) -> Tensor:
-        if input_ids is not None:
-            input_shape = input_ids.shape
-        else:
-            input_shape = inputs_embeds.shape[:-1]
+        B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
+        dev = input_ids.device.type
 
-        batch_size, seq_length = input_shape
-        if position_ids is None:
-            if cache_position is not None:
-                if cache_position.ndim != 1 or cache_position.shape[0] != seq_length:
-                    raise ValueError(
-                        "cache_position must be 1-D with length == seq_length "
-                        f"(got shape={cache_position.shape}, seq_length={seq_length})."
-                    )
-                position_ids = cache_position.reshape(1, seq_length)
-            else:
-                position_ids = self.position_ids[
-                    :, past_key_values_length : seq_length + past_key_values_length
-                ]
-        elif (
-            position_ids.ndim != 2
-            or position_ids.shape[1] != seq_length
-            or position_ids.shape[0] not in (1, batch_size)
-        ):
-            raise ValueError(
-                "position_ids must be 2-D with shape "
-                "[batch_or_1, seq_length] where batch_or_1 is 1 or batch_size "
-                f"(got shape={position_ids.shape}, batch_size={batch_size}, "
-                f"seq_length={seq_length})."
-            )
+        words = cast(Tensor, self.word_embeddings(input_ids))
+        pos_ids = self.position_ids[:, :T]
+        positions = cast(Tensor, self.position_embeddings(pos_ids))
 
         if token_type_ids is None:
-            if hasattr(self, "token_type_ids"):
-                buffered_token_type_ids = self.token_type_ids.expand(
-                    position_ids.shape[0], -1
-                )
-                buffered_token_type_ids = lucid.gather(
-                    buffered_token_type_ids, dim=1, index=position_ids
-                )
-                token_type_ids = buffered_token_type_ids.expand(batch_size, seq_length)
-            else:
-                token_type_ids = lucid.zeros(
-                    *input_shape, dtype=lucid.Long, device=self.position_ids.device
-                )
+            token_type_ids = lucid.zeros((B, T), device=dev).long()
+        types = cast(Tensor, self.token_type_embeddings(token_type_ids))
 
-        if inputs_embeds is None:
-            inputs_embeds = self.word_embeddings(input_ids)
-
-        token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        embeddings = inputs_embeds + token_type_embeddings
-
-        position_embeddings = self.position_embeddings(position_ids)
-        embeddings = embeddings + position_embeddings
-
-        embeddings = self.layernorm(embeddings)
-        embeddings = self.dropout(embeddings)
-
-        return embeddings
+        emb = words + positions + types
+        emb = cast(Tensor, self.LayerNorm(emb))
+        return cast(Tensor, self.dropout(emb))
 
 
-class _BERTSelfAttention(nn.Module):
-    def __init__(
-        self,
-        config: BERTConfig,
-        /,
-        layer_idx: int | None = None,
-    ) -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Multi-head self-attention
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _BertSelfAttention(nn.Module):
+    """Multi-head self-attention with separate Q / K / V projections.
+
+    HF stores Q/K/V as three independent ``Linear``s (not fused), which is the
+    convention we mirror here so weight porting is a direct rename.
+    """
+
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
-        if config.hidden_size % config.num_attention_heads != 0:
-            raise ValueError(
-                f"hidden_size {config.hidden_size} is not a multiple "
-                f"of num_attention_heads {config.num_attention_heads}."
-            )
+        self.num_heads = config.num_attention_heads
+        self.head_dim = config.hidden_size // config.num_attention_heads
+        self.scale = math.sqrt(self.head_dim)
 
-        self.num_attention_heads = config.num_attention_heads
-        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
+        self.query = nn.Linear(config.hidden_size, config.hidden_size, bias=True)
+        self.key = nn.Linear(config.hidden_size, config.hidden_size, bias=True)
+        self.value = nn.Linear(config.hidden_size, config.hidden_size, bias=True)
+        self.dropout = nn.Dropout(p=config.attention_dropout)
 
-        self.all_head_size = self.num_attention_heads * self.attention_head_size
-        self.scaling = self.attention_head_size**-0.5
+    def _shape(self, x: Tensor, B: int, T: int) -> Tensor:
+        # (B, T, hidden) → (B, H, T, head_dim)
+        return x.reshape(B, T, self.num_heads, self.head_dim).permute(0, 2, 1, 3)
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
-
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
-
-        self.is_decoder = config.is_decoder
-        self.layer_idx = layer_idx
-
-    def forward(
+    def forward(  # type: ignore[override]
         self,
-        hidden_states: Tensor,
-        attention_mask: lucid.FloatTensor | None = None,
-        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
-        cache_position: Tensor | None = None,
-        **kwargs,
+        hidden: Tensor,
+        attention_mask: Tensor | None = None,
     ) -> Tensor:
-        input_shape = hidden_states.shape[:-1]
-        hidden_shape = (*input_shape, -1, self.attention_head_size)
+        B, T, _ = hidden.shape
+        q = self._shape(cast(Tensor, self.query(hidden)), B, T)
+        k = self._shape(cast(Tensor, self.key(hidden)), B, T)
+        v = self._shape(cast(Tensor, self.value(hidden)), B, T)
 
-        query_layer = self.query(hidden_states).reshape(*hidden_shape).swapaxes(1, 2)
-        key_layer = self.key(hidden_states).reshape(*hidden_shape).swapaxes(1, 2)
-        value_layer = self.value(hidden_states).reshape(*hidden_shape).swapaxes(1, 2)
+        # (B, H, T, T)
+        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
+        if attention_mask is not None:
+            scores = scores + attention_mask
+        probs = F.softmax(scores, dim=-1)
+        probs = cast(Tensor, self.dropout(probs))
 
-        if past_key_values is not None:
-            if self.layer_idx is None:
-                raise ValueError(f"past_key_values requires layer_idx")
-
-            current_past_key_value = past_key_values
-            if isinstance(past_key_values, nn.EncoderDecoderCache):
-                current_past_key_value = past_key_values.self_attention_cache
-
-            key_layer, value_layer = current_past_key_value.update(
-                key_layer,
-                value_layer,
-                layer_idx=self.layer_idx,
-                cache_position=cache_position,
-            )
-
-        attn_output = F.scaled_dot_product_attention(
-            query_layer,
-            key_layer,
-            value_layer,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout.p if self.training else 0.0,
-            is_causal=False,
-            scale=self.scaling,
-        )
-        attn_output = attn_output.swapaxes(1, 2).reshape(
-            *input_shape, self.all_head_size
-        )
-        return attn_output
+        # (B, H, T, D) → (B, T, H*D)
+        ctx: Tensor = probs @ v
+        ctx = ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
+        return ctx
 
 
-class _BERTCrossAttention(nn.Module):
-    def __init__(
-        self,
-        config: BERTConfig,
-        /,
-        is_causal: bool = False,
-        layer_idx: int | None = None,
-    ) -> None:
-        super().__init__()
-        if config.hidden_size % config.num_attention_heads != 0:
-            raise ValueError(
-                f"hidden_size '{config.hidden_size}' must be a "
-                f"multiple of num_attention_heads '{config.num_attention_heads}'."
-            )
+class _BertSelfOutput(nn.Module):
+    """Post-attention dense + LN + residual."""
 
-        self.num_attention_heads = config.num_attention_heads
-        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
-        self.all_head_size = config.num_attention_heads * self.attention_head_size
-        self.scaling = self.attention_head_size**-0.5
-
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
-
-        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
-
-        self.is_causal = is_causal
-        self.layer_idx = layer_idx
-
-    def forward(
-        self,
-        hidden_states: Tensor,
-        encoder_hidden_states: lucid.FloatTensor | None = None,
-        attention_mask: lucid.FloatTensor | None = None,
-        past_key_values: nn.EncoderDecoderCache | None = None,
-        **kwargs,
-    ) -> Tensor:
-        bsz, tgt_len = hidden_states.shape[:-1]
-        src_len = (
-            encoder_hidden_states.shape[1]
-            if encoder_hidden_states is not None
-            else None
-        )
-        q_input_shape = (bsz, tgt_len, -1, self.attention_head_size)
-
-        if past_key_values is not None and self.layer_idx is None:
-            raise ValueError(f"past_key_values requires layer_idx")
-
-        query_layer = self.query(hidden_states).reshape(*q_input_shape).swapaxes(1, 2)
-
-        is_updated = (
-            past_key_values.is_updated.get(self.layer_idx)
-            if past_key_values is not None
-            else False
-        )
-        if past_key_values is not None and is_updated:
-            cached = past_key_values.cross_attention_cache.get(self.layer_idx)
-            if cached is None:
-                raise ValueError(
-                    f"cross-attention cache is missing for layer_idx={self.layer_idx}."
-                )
-            key_layer, value_layer = cached
-            src_len = key_layer.shape[-2]
-
-        else:
-            if encoder_hidden_states is None:
-                raise ValueError(
-                    "encoder_hidden_states is required when cache is empty."
-                )
-            src_len = encoder_hidden_states.shape[1]
-            kv_input_shape = (bsz, src_len, -1, self.attention_head_size)
-
-            key_layer = (
-                self.key(encoder_hidden_states).reshape(*kv_input_shape).swapaxes(1, 2)
-            )
-            value_layer = (
-                self.value(encoder_hidden_states)
-                .reshape(*kv_input_shape)
-                .swapaxes(1, 2)
-            )
-            if past_key_values is not None:
-                key_layer, value_layer = past_key_values.update(
-                    key_layer,
-                    value_layer,
-                    layer_idx=self.layer_idx,
-                    is_cross_attention=True,
-                )
-
-        attn_output = F.scaled_dot_product_attention(
-            query_layer,
-            key_layer,
-            value_layer,
-            attn_mask=attention_mask,
-            dropout_p=self.dropout.p if self.training else 0.0,
-            scale=self.scaling,
-            is_causal=self.is_causal,
-        )
-        attn_output = attn_output.swapaxes(1, 2).reshape(
-            bsz, tgt_len, self.all_head_size
-        )
-        return attn_output
-
-
-class _BERTSelfOutput(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(p=config.hidden_dropout)
 
-    def forward(self, hidden_states: Tensor, input_: Tensor) -> Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-        hidden_states = self.layernorm(hidden_states + input_)
-
-        return hidden_states
-
-
-class _BERTAttention(nn.Module):
-    def __init__(
-        self,
-        config: BERTConfig,
-        /,
-        is_causal: bool = False,
-        layer_idx: int | None = None,
-        is_cross_attention: bool = False,
-    ) -> None:
-        super().__init__()
-        self.is_cross_attention = is_cross_attention
-        if is_cross_attention:
-            self.self = _BERTCrossAttention(
-                config, is_causal=is_causal, layer_idx=layer_idx
-            )
-        else:
-            self.self = _BERTSelfAttention(config, layer_idx=layer_idx)
-        self.output = _BERTSelfOutput(config)
-
-    def forward(
-        self,
-        hidden_states: Tensor,
-        attention_mask: lucid.FloatTensor | None = None,
-        encoder_hidden_states: lucid.FloatTensor | None = None,
-        encoder_attention_mask: lucid.FloatTensor | None = None,
-        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
-        cache_position: Tensor | None = None,
-        **kwargs,
+    def forward(  # type: ignore[override]
+        self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
-        attention_mask = (
-            attention_mask if not self.is_cross_attention else encoder_attention_mask
-        )
-        if (
-            self.is_cross_attention
-            and past_key_values is not None
-            and not isinstance(past_key_values, nn.EncoderDecoderCache)
-        ):
-            raise TypeError(
-                "Cross-attention requires past_key_values to be "
-                "nn.EncoderDecoderCache."
-            )
-
-        attn_output = self.self(
-            hidden_states,
-            encoder_hidden_states=encoder_hidden_states,
-            attention_mask=attention_mask,
-            past_key_values=past_key_values,
-            cache_position=cache_position,
-            **kwargs,
-        )
-        attn_output = self.output(attn_output, hidden_states)
-        return attn_output
+        h = cast(Tensor, self.dropout(cast(Tensor, self.dense(hidden))))
+        return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
-class _BERTIntermediate(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+class _BertAttention(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        # HF names ``self`` for the projection block — keep the same key.
+        self.self = _BertSelfAttention(config)
+        self.output = _BertSelfOutput(config)
+
+    def forward(  # type: ignore[override]
+        self,
+        hidden: Tensor,
+        attention_mask: Tensor | None = None,
+    ) -> Tensor:
+        attn_out = cast(Tensor, self.self(hidden, attention_mask=attention_mask))
+        return cast(Tensor, self.output(attn_out, hidden))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Feed-forward block
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _BertIntermediate(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.intermediate_act_fn = (
-            config.hidden_act
-            if callable(config.hidden_act)
-            else nn.utils.get_activation_from_name(config.hidden_act)
-        )
-        if self.intermediate_act_fn is None:
-            raise ValueError(f"Invalid config.hidden_act name '{config.hidden_act}'")
+        self._act_name = config.hidden_act
 
-    def forward(self, hidden_states: Tensor) -> Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.intermediate_act_fn(hidden_states)
-        return hidden_states
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return text_activation(self._act_name, cast(Tensor, self.dense(x)))
 
 
-class _BERTOutput(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+class _BertOutput(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
-        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(p=config.hidden_dropout)
 
-    def forward(self, hidden_states: Tensor, input_: Tensor) -> Tensor:
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
-        hidden_states = self.layernorm(hidden_states + input_)
-
-        return hidden_states
-
-
-class _BERTLayer(nn.Module):
-    def __init__(self, config: BERTConfig, layer_idx: int | None = None) -> None:
-        super().__init__()
-        self.chunk_size_feed_forward = config.chunk_size_feed_forward
-        self.seq_len_dim = 1
-
-        self.attention = _BERTAttention(
-            config, is_causal=config.is_decoder, layer_idx=layer_idx
-        )
-        self.is_decoder = config.is_decoder
-        self.add_cross_attention = config.add_cross_attention
-
-        if self.add_cross_attention:
-            if not self.is_decoder:
-                raise ValueError(
-                    f"{self} should be used as a decoder if cross attention is added."
-                )
-            self.crossattention = _BERTAttention(
-                config, is_causal=False, layer_idx=layer_idx, is_cross_attention=True
-            )
-
-        self.intermediate = _BERTIntermediate(config)
-        self.output = _BERTOutput(config)
-
-    def forward(
-        self,
-        hidden_states: Tensor,
-        attention_mask: lucid.FloatTensor | None = None,
-        encoder_hidden_states: lucid.FloatTensor | None = None,
-        encoder_attention_mask: lucid.FloatTensor | None = None,
-        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
-        cache_position: Tensor | None = None,
-        **kwargs,
+    def forward(  # type: ignore[override]
+        self, hidden: Tensor, input_tensor: Tensor
     ) -> Tensor:
-        self_attention_output = self.attention(
-            hidden_states,
-            attention_mask,
-            past_key_values=past_key_values,
-            cache_position=cache_position,
-            **kwargs,
-        )
-        attention_output = self_attention_output
-
-        if self.is_decoder and encoder_hidden_states is not None:
-            if not hasattr(self, "crossattention"):
-                raise RuntimeError(
-                    "If encoder_hidden_states is passed, "
-                    "config.add_cross_attention must be set to True."
-                )
-
-            cross_attention_output = self.crossattention(
-                self_attention_output,
-                attention_mask=None,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=encoder_attention_mask,
-                past_key_values=past_key_values,
-                **kwargs,
-            )
-            attention_output = cross_attention_output
-
-        layer_output = nn.utils.apply_chunking_to_forward(
-            self.forward_chunk,
-            self.chunk_size_feed_forward,
-            self.seq_len_dim,
-            attention_output,
-        )
-        return layer_output
-
-    def forward_chunk(self, attention_output: Tensor) -> Tensor:
-        intermediate_output = self.intermediate(attention_output)
-        layer_output = self.output(intermediate_output, attention_output)
-
-        return layer_output
+        h = cast(Tensor, self.dropout(cast(Tensor, self.dense(hidden))))
+        return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
-class _BERTEncoder(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Transformer layer + encoder stack
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _BertLayer(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
-        self.config = config
+        self.attention = _BertAttention(config)
+        self.intermediate = _BertIntermediate(config)
+        self.output = _BertOutput(config)
+
+    def forward(  # type: ignore[override]
+        self,
+        hidden: Tensor,
+        attention_mask: Tensor | None = None,
+    ) -> Tensor:
+        attn_out = cast(Tensor, self.attention(hidden, attention_mask=attention_mask))
+        inter = cast(Tensor, self.intermediate(attn_out))
+        return cast(Tensor, self.output(inter, attn_out))
+
+
+class _BertEncoder(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
         self.layer = nn.ModuleList(
-            [_BERTLayer(config, layer_idx=i) for i in range(config.num_hidden_layers)]
+            [_BertLayer(config) for _ in range(config.num_hidden_layers)]
         )
 
-    def forward(
+    def forward(  # type: ignore[override]
         self,
-        hidden_states: Tensor,
-        attention_mask: lucid.FloatTensor | None = None,
-        encoder_hidden_states: lucid.FloatTensor | None = None,
-        encoder_attention_mask: lucid.FloatTensor | None = None,
-        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
-        use_cache: bool | None = None,
-        cache_position: Tensor | None = None,
-        **kwargs,
+        hidden: Tensor,
+        attention_mask: Tensor | None = None,
     ) -> Tensor:
-        effective_use_cache = (
-            use_cache if use_cache is not None else self.config.use_cache
-        )
-        if not self.config.is_decoder:
-            effective_use_cache = False
-
-        if (
-            self.config.add_cross_attention
-            and past_key_values is not None
-            and not isinstance(past_key_values, nn.EncoderDecoderCache)
-        ):
-            raise TypeError(
-                "When add_cross_attention=True, past_key_values must be "
-                "nn.EncoderDecoderCache."
-            )
-
-        if not effective_use_cache:
-            past_key_values = None
-            cache_position = None
-        elif past_key_values is None:
-            raise ValueError(
-                "use_cache=True requires a persistent past_key_values cache "
-                "instance from the caller."
-            )
-
-        for layer_module in self.layer:
-            hidden_states = layer_module(
-                hidden_states,
-                attention_mask,
-                encoder_hidden_states,
-                encoder_attention_mask=encoder_attention_mask,
-                past_key_values=past_key_values,
-                cache_position=cache_position,
-                **kwargs,
-            )
-
-        return hidden_states
+        for layer in self.layer:
+            hidden = cast(Tensor, layer(hidden, attention_mask=attention_mask))
+        return hidden
 
 
-class _BERTPooler(nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Pooler — first-token tanh projection feeding sentence-level heads
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _BertPooler(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.activation = nn.Tanh()
 
-    def forward(self, hidden_states: Tensor) -> Tensor:
-        first_token_tensor = hidden_states[:, 0]
-        pooled_output = self.dense(first_token_tensor)
-        pooled_output = self.activation(pooled_output)
-
-        return pooled_output
+    def forward(self, hidden: Tensor) -> Tensor:  # type: ignore[override]
+        # CLS token is position 0 by tokenization convention.
+        cls_hidden = hidden[:, 0]
+        return F.tanh(cast(Tensor, self.dense(cls_hidden)))
 
 
-class BERT(PreTrainedModelMixin, nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
-        super().__init__()
-        self.config = config
+# ─────────────────────────────────────────────────────────────────────────────
+# Top-level encoder model
+# ─────────────────────────────────────────────────────────────────────────────
 
-        self.embeddings = _BERTEmbeddings(config)
-        self.encoder = _BERTEncoder(config)
-        self.pooler = _BERTPooler(config) if config.add_pooling_layer else None
-        self.output_embeddings: nn.Linear | None = None
 
-        self.apply(self._init_weights)
-        self.tie_weights()
+class BertModel(PretrainedModel):
+    """Bare BERT encoder returning hidden states + pooled CLS embedding."""
 
-    def _init_weights(self, module: nn.Module) -> None:
-        if isinstance(module, nn.Linear):
-            nn.init.normal(module.weight, mean=0.0, std=self.config.initializer_range)
-            if module.bias is not None:
-                nn.init.constant(module.bias, 0.0)
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
 
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal(module.weight, mean=0.0, std=self.config.initializer_range)
-            if module.padding_idx is not None:
-                module.weight.data[module.padding_idx] = 0
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.embeddings = _BertEmbeddings(config)
+        self.encoder = _BertEncoder(config)
+        self.pooler = _BertPooler(config)
 
-        elif isinstance(module, nn.LayerNorm):
-            nn.init.constant(module.bias, 0.0)
-            nn.init.constant(module.weight, 1.0)
-
-    def get_input_embeddings(self) -> nn.Embedding:
+    def get_input_embeddings(self) -> nn.Module:
         return self.embeddings.word_embeddings
 
-    def set_input_embeddings(self, value: nn.Embedding) -> None:
+    def set_input_embeddings(self, value: nn.Module) -> None:
+        if not isinstance(value, nn.Embedding):
+            raise TypeError(
+                f"BertModel input embeddings must be nn.Embedding, got {type(value).__name__}"
+            )
         self.embeddings.word_embeddings = value
-        self.tie_weights()
 
-    def get_output_embeddings(self) -> nn.Linear | None:
-        return self.output_embeddings
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+    ) -> BaseModelOutputWithPooling:
+        B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
 
-    def set_output_embeddings(self, value: nn.Linear) -> None:
-        self.output_embeddings = value
-        self.tie_weights()
+        ext_mask = extended_attention_mask(attention_mask, (B, T))
 
-    def tie_weights(self) -> None:
-        if not self.config.tie_word_embedding:
-            return
+        hidden = cast(Tensor, self.embeddings(input_ids, token_type_ids=token_type_ids))
+        sequence_output = cast(Tensor, self.encoder(hidden, attention_mask=ext_mask))
+        pooled_output = cast(Tensor, self.pooler(sequence_output))
 
-        output_embeddings = self.get_output_embeddings()
-        if output_embeddings is None:
-            return
+        return BaseModelOutputWithPooling(
+            last_hidden_state=sequence_output,
+            pooler_output=pooled_output,
+        )
 
-        output_embeddings.weight = self.get_input_embeddings().weight
 
-    def _to_4d_attention_mask(
+# ─────────────────────────────────────────────────────────────────────────────
+# MLM head — used by BertForMaskedLM
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _BertPredictionHeadTransform(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self._act_name = config.hidden_act
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.dense(x))
+        x = text_activation(self._act_name, x)
+        return cast(Tensor, self.LayerNorm(x))
+
+
+class _BertLMPredictionHead(nn.Module):
+    """Decoder linear (weight tied to input embeddings) + standalone bias."""
+
+    bias: Tensor
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        self.transform = _BertPredictionHeadTransform(config)
+        # Decoder is created untied; ``BertForMaskedLM`` re-binds the weight to
+        # the input embedding table when ``tie_word_embeddings`` is set.
+        self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        # HF keeps the output bias as a standalone parameter on the head, not on
+        # the Linear — so checkpoint keys are ``cls.predictions.bias`` /
+        # ``cls.predictions.decoder.weight``.
+        self.bias = nn.Parameter(lucid.zeros(config.vocab_size))
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.transform(x))
+        logits = cast(Tensor, self.decoder(x))
+        return logits + self.bias
+
+
+class _BertOnlyMLMHead(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        self.predictions = _BertLMPredictionHead(config)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(Tensor, self.predictions(x))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task heads
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
+    """BERT + tied MLM head (the pre-training objective)."""
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.cls = _BertOnlyMLMHead(config)
+        if config.tie_word_embeddings:
+            self._tie_decoder_to_input_embeddings()
+
+    def _tie_decoder_to_input_embeddings(self) -> None:
+        # Bind the decoder weight to the input embedding matrix so the two
+        # share storage and gradients.  HF does the same thing.
+        self.cls.predictions.decoder.weight = (
+            self.bert.embeddings.word_embeddings.weight
+        )
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+    ) -> MaskedLMOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        prediction_scores = cast(Tensor, self.cls(outputs.last_hidden_state))
+
+        loss: Tensor | None = None
+        if labels is not None:
+            loss = self.compute_lm_loss(prediction_scores, labels)
+
+        return MaskedLMOutput(logits=prediction_scores, loss=loss)
+
+
+class BertForSequenceClassification(PretrainedModel):
+    """BERT + pooled-CLS linear classifier (GLUE-style fine-tunes)."""
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        drop = (
+            config.classifier_dropout
+            if config.classifier_dropout is not None
+            else config.hidden_dropout
+        )
+        self.dropout = nn.Dropout(p=drop)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+    ) -> MaskedLMOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        pooled = cast(Tensor, self.dropout(outputs.pooler_output))
+        logits = cast(Tensor, self.classifier(pooled))
+
+        loss: Tensor | None = None
+        if labels is not None:
+            loss = F.cross_entropy(logits, labels)
+
+        # We reuse MaskedLMOutput here since it only carries logits + loss; a
+        # dedicated SequenceClassificationOutput can be added later if any
+        # caller actually needs the extra metadata.
+        return MaskedLMOutput(logits=logits, loss=loss)
+
+
+class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
+    """BERT + per-token linear classifier (NER, POS tagging)."""
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        drop = (
+            config.classifier_dropout
+            if config.classifier_dropout is not None
+            else config.hidden_dropout
+        )
+        self.dropout = nn.Dropout(p=drop)
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+    ) -> MaskedLMOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        seq = cast(Tensor, self.dropout(outputs.last_hidden_state))
+        logits = cast(Tensor, self.classifier(seq))
+
+        loss: Tensor | None = None
+        if labels is not None:
+            loss = self.compute_lm_loss(logits, labels)
+
+        return MaskedLMOutput(logits=logits, loss=loss)
+
+
+class BertForQuestionAnswering(PretrainedModel):
+    """BERT + 2-way linear (start / end span logits) — SQuAD-style fine-tunes."""
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.qa_outputs = nn.Linear(config.hidden_size, 2)
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        start_positions: Tensor | None = None,
+        end_positions: Tensor | None = None,
+    ) -> MaskedLMOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        logits = cast(Tensor, self.qa_outputs(outputs.last_hidden_state))
+        # ``logits`` is (B, T, 2); split along the last dim into start / end.
+        # We stack them along a new dim so downstream code can index ``[..., 0]``
+        # for start and ``[..., 1]`` for end while keeping a single return.
+
+        loss: Tensor | None = None
+        if start_positions is not None and end_positions is not None:
+            start_logits = logits[..., 0]  # (B, T)
+            end_logits = logits[..., 1]  # (B, T)
+            # Callers are responsible for keeping span positions inside [0, T).
+            loss = (
+                F.cross_entropy(start_logits, start_positions.long())
+                + F.cross_entropy(end_logits, end_positions.long())
+            ) / 2.0
+
+        return MaskedLMOutput(logits=logits, loss=loss)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Additional task heads — pre-training, NSP, causal-LM
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class BertForPreTrainingOutput(ModelOutput):
+    """Joint MLM + NSP output for :class:`BertForPreTraining`."""
+
+    prediction_logits: Tensor
+    seq_relationship_logits: Tensor
+    loss: Tensor | None = None
+    mlm_loss: Tensor | None = None
+    nsp_loss: Tensor | None = None
+
+
+class _BertOnlyNSPHead(nn.Module):
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+    def forward(self, pooled_output: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(Tensor, self.seq_relationship(pooled_output))
+
+
+class _BertPreTrainingHeads(nn.Module):
+    """MLM prediction head + NSP head — used by :class:`BertForPreTraining`."""
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__()
+        self.predictions = _BertLMPredictionHead(config)
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+    def forward(  # type: ignore[override]
+        self, sequence_output: Tensor, pooled_output: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        prediction_scores = cast(Tensor, self.predictions(sequence_output))
+        seq_relationship_score = cast(Tensor, self.seq_relationship(pooled_output))
+        return prediction_scores, seq_relationship_score
+
+
+class BertForPreTraining(PretrainedModel, MaskedLMMixin):
+    """BERT + the original Devlin et al. pre-training objective.
+
+    Combines the masked-LM head (tied to input embeddings when
+    ``config.tie_word_embeddings`` is True) with the next-sentence-prediction
+    head.  Supply ``labels`` (MLM targets) and / or ``next_sentence_label``
+    (binary NSP target) to compute the corresponding losses; their sum is
+    exposed as ``output.loss``.
+    """
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.cls = _BertPreTrainingHeads(config)
+        if config.tie_word_embeddings:
+            self.cls.predictions.decoder.weight = (
+                self.bert.embeddings.word_embeddings.weight
+            )
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+        next_sentence_label: Tensor | None = None,
+    ) -> BertForPreTrainingOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        prediction_scores, seq_relationship_score = self.cls(
+            outputs.last_hidden_state, outputs.pooler_output
+        )
+
+        mlm_loss: Tensor | None = None
+        nsp_loss: Tensor | None = None
+        total_loss: Tensor | None = None
+        if labels is not None:
+            mlm_loss = self.compute_lm_loss(prediction_scores, labels)
+        if next_sentence_label is not None:
+            nsp_loss = F.cross_entropy(
+                seq_relationship_score, next_sentence_label.long()
+            )
+        if mlm_loss is not None and nsp_loss is not None:
+            total_loss = mlm_loss + nsp_loss
+        elif mlm_loss is not None:
+            total_loss = mlm_loss
+        elif nsp_loss is not None:
+            total_loss = nsp_loss
+
+        return BertForPreTrainingOutput(
+            prediction_logits=prediction_scores,
+            seq_relationship_logits=seq_relationship_score,
+            loss=total_loss,
+            mlm_loss=mlm_loss,
+            nsp_loss=nsp_loss,
+        )
+
+
+class BertForNextSentencePrediction(PretrainedModel):
+    """BERT + standalone NSP head (Devlin et al. §3.1 pretraining task 2).
+
+    Note: NSP was abandoned by RoBERTa / ALBERT / DeBERTa as adding no
+    downstream value, so this class is kept mostly for parity with the
+    original BERT release and historical experiments.
+    """
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.cls = _BertOnlyNSPHead(config)
+
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+    ) -> MaskedLMOutput:
+        outputs = cast(
+            BaseModelOutputWithPooling,
+            self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+            ),
+        )
+        seq_relationship_score = cast(Tensor, self.cls(outputs.pooler_output))
+
+        loss: Tensor | None = None
+        if labels is not None:
+            loss = F.cross_entropy(seq_relationship_score, labels.long())
+
+        return MaskedLMOutput(logits=seq_relationship_score, loss=loss)
+
+
+class BertForCausalLM(PretrainedModel):
+    """BERT trunk used as a left-to-right LM.
+
+    Standard BERT attends bidirectionally; this wrapper injects a causal mask
+    on top of the existing additive attention mask so the encoder behaves as
+    a decoder.  The LM head is the same tied projection used by
+    :class:`BertForMaskedLM`.
+    """
+
+    config_class: ClassVar[type[BertConfig]] = BertConfig
+    base_model_prefix: ClassVar[str] = "bert"
+
+    def __init__(self, config: BertConfig) -> None:
+        super().__init__(config)
+        self.bert = BertModel(config)
+        self.cls = _BertOnlyMLMHead(config)
+        if config.tie_word_embeddings:
+            self.cls.predictions.decoder.weight = (
+                self.bert.embeddings.word_embeddings.weight
+            )
+
+    def _causal_attention_mask(
         self,
         attention_mask: Tensor | None,
-        target_length: int,
-        source_length: int,
+        B: int,
+        T: int,
         device: str,
-    ) -> Tensor | None:
-        if attention_mask is None:
-            return None
-
-        if attention_mask.device != device:
-            attention_mask = attention_mask.to(device)
-
-        if attention_mask.ndim == 2:
-            if attention_mask.shape[1] != source_length:
-                raise ValueError(
-                    f"attention_mask has invalid source length: "
-                    f"{attention_mask.shape[1]} != {source_length}"
-                )
-            attention_mask = attention_mask[:, None, None, :]
-        elif attention_mask.ndim == 3:
-            if attention_mask.shape[-1] != source_length:
-                raise ValueError(
-                    f"attention_mask has invalid source length: "
-                    f"{attention_mask.shape[-1]} != {source_length}"
-                )
-            attention_mask = attention_mask[:, None, :, :]
-        elif attention_mask.ndim == 4:
-            if attention_mask.shape[-1] != source_length:
-                raise ValueError(
-                    f"attention_mask has invalid source length: "
-                    f"{attention_mask.shape[-1]} != {source_length}"
-                )
-        else:
-            raise ValueError(
-                f"attention_mask must be 2-D, 3-D, or 4-D (got {attention_mask.ndim})."
-            )
-
-        if attention_mask.shape[-2] not in (1, target_length):
-            raise ValueError(
-                f"attention_mask has invalid target length axis: "
-                f"{attention_mask.shape[-2]} not in (1, {target_length})"
-            )
-
-        attention_mask = attention_mask.astype(lucid.Float32)
-        mask_min = float(lucid.min(attention_mask).item())
-        mask_max = float(lucid.max(attention_mask).item())
-
-        if mask_min >= 0.0 and mask_max <= 1.0:
-            return (1.0 - attention_mask) * -1e12
-        if mask_max <= 0.0:
-            return attention_mask
-
-        raise ValueError(
-            "attention_mask values must be binary (0/1) or additive (<= 0 values)."
-        )
-
-    def _build_decoder_causal_mask(
-        self,
-        *,
-        batch_size: int,
-        target_length: int,
-        source_length: int,
-        device: str,
-        past_key_values_length: int,
-        position_ids: Tensor | None = None,
-        cache_position: Tensor | None = None,
     ) -> Tensor:
-        if position_ids is not None:
-            query_positions = position_ids
-
-        elif cache_position is not None:
-            if cache_position.ndim != 1 or cache_position.shape[0] != target_length:
-                raise ValueError(
-                    "cache_position must be 1-D with length == target_length "
-                    f"(got shape={cache_position.shape}, target_length={target_length})."
-                )
-            query_positions = cache_position.reshape(1, target_length)
-
-        else:
-            query_positions = lucid.arange(
-                past_key_values_length,
-                past_key_values_length + target_length,
-                device=device,
-            )
-            query_positions = query_positions.reshape(1, target_length)
-
-        if query_positions.ndim != 2 or query_positions.shape[1] != target_length:
-            raise ValueError(
-                "query positions must be 2-D with shape [batch_or_1, target_length] "
-                f"(got shape={query_positions.shape}, target_length={target_length})."
-            )
-
-        if query_positions.shape[0] == 1:
-            query_positions = query_positions.expand(batch_size, target_length)
-        elif query_positions.shape[0] != batch_size:
-            raise ValueError(
-                "query positions batch axis must be 1 or batch_size "
-                f"(got {query_positions.shape[0]} vs {batch_size})."
-            )
-
-        if query_positions.device != device:
-            query_positions = query_positions.to(device)
-
-        query_positions = query_positions.reshape(batch_size, target_length, 1)
-        key_positions = lucid.arange(source_length, device=device).reshape(1, 1, -1)
-
-        causal_mask = (key_positions > query_positions).astype(lucid.Float32) * -1e12
-        return causal_mask[:, None, :, :]
-
-    def forward(
-        self,
-        input_ids: lucid.LongTensor | None = None,
-        attention_mask: Tensor | None = None,
-        token_type_ids: lucid.LongTensor | None = None,
-        position_ids: lucid.LongTensor | None = None,
-        inputs_embeds: lucid.FloatTensor | None = None,
-        encoder_hidden_states: lucid.FloatTensor | None = None,
-        encoder_attention_mask: Tensor | None = None,
-        past_key_values: nn.KVCache | nn.EncoderDecoderCache | None = None,
-        use_cache: bool | None = None,
-        cache_position: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor | None]:
-        if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("Only one of input_ids or inputs_embeds can be provided.")
-
-        if input_ids is None and inputs_embeds is None:
-            raise ValueError("Either input_ids or inputs_embeds must be provided.")
-
-        if input_ids is not None:
-            input_shape = input_ids.shape
-            device = input_ids.device
-        else:
-            input_shape = inputs_embeds.shape[:-1]
-            device = inputs_embeds.device
-
-        if len(input_shape) != 2:
-            raise ValueError(
-                f"BERT expects 2-D token inputs [batch, seq] (got {input_shape})."
-            )
-
-        effective_use_cache = (
-            use_cache if use_cache is not None else self.config.use_cache
-        )
-        if not self.config.is_decoder:
-            effective_use_cache = False
-
-        if not effective_use_cache:
-            past_key_values = None
-            cache_position = None
-
-        past_key_values_length = 0
-        if effective_use_cache and past_key_values is not None:
-            if isinstance(past_key_values, nn.EncoderDecoderCache):
-                self_cache = past_key_values.self_attention_cache
-                if len(self_cache.key_cache) > 0:
-                    past_key_values_length = self_cache.get_seq_length()
-            else:
-                if len(past_key_values.key_cache) > 0:
-                    past_key_values_length = past_key_values.get_seq_length()
-
-        embedding_output = self.embeddings(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            past_key_values_length=past_key_values_length,
-            cache_position=cache_position,
-        )
-
-        source_length = input_shape[1] + past_key_values_length
+        """Combine a ``(B, T)`` padding mask with a lower-triangular causal
+        mask, returning the additive ``(B, 1, T, T)`` form.
+        """
+        causal = lucid.tril(lucid.ones((T, T), device=device))  # (T, T)
+        causal_add = (1.0 - causal) * -1e4  # 0 / -1e4
+        causal_add = causal_add.reshape(1, 1, T, T)
         if attention_mask is None:
-            attention_mask = lucid.ones((input_shape[0], source_length), device=device)
+            return causal_add
+        pad_add = (1.0 - attention_mask.float()) * -1e4  # (B, T)
+        pad_add = pad_add.reshape(B, 1, 1, T)
+        return causal_add + pad_add
 
-        elif attention_mask.ndim == 2 and attention_mask.shape[1] == input_shape[1]:
-            if past_key_values_length > 0:
-                past_attention = lucid.ones(
-                    (input_shape[0], past_key_values_length), device=device
-                )
-                attention_mask = lucid.concatenate(
-                    [past_attention, attention_mask], axis=1
-                )
+    def forward(  # type: ignore[override]
+        self,
+        input_ids: Tensor,
+        attention_mask: Tensor | None = None,
+        token_type_ids: Tensor | None = None,
+        labels: Tensor | None = None,
+    ) -> CausalLMOutput:
+        B, T = int(input_ids.shape[0]), int(input_ids.shape[1])
+        dev = input_ids.device.type
+        ext_mask = self._causal_attention_mask(attention_mask, B, T, dev)
 
-        extended_attention_mask = self._to_4d_attention_mask(
-            attention_mask=attention_mask,
-            target_length=input_shape[1],
-            source_length=source_length,
-            device=device,
+        hidden = cast(
+            Tensor, self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
         )
-        if self.config.is_decoder:
-            causal_attention_mask = self._build_decoder_causal_mask(
-                batch_size=input_shape[0],
-                target_length=input_shape[1],
-                source_length=source_length,
-                device=device,
-                past_key_values_length=past_key_values_length,
-                position_ids=position_ids,
-                cache_position=cache_position,
-            )
-            if extended_attention_mask is None:
-                extended_attention_mask = causal_attention_mask
-            else:
-                extended_attention_mask = (
-                    extended_attention_mask + causal_attention_mask
-                )
-
-        if encoder_hidden_states is None:
-            if encoder_attention_mask is not None:
-                raise ValueError(
-                    "encoder_attention_mask requires encoder_hidden_states."
-                )
-            extended_encoder_attention_mask = None
-        else:
-            extended_encoder_attention_mask = self._to_4d_attention_mask(
-                attention_mask=encoder_attention_mask,
-                target_length=input_shape[1],
-                source_length=encoder_hidden_states.shape[1],
-                device=device,
-            )
-
-        sequence_output = self.encoder(
-            embedding_output,
-            attention_mask=extended_attention_mask,
-            encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=extended_encoder_attention_mask,
-            past_key_values=past_key_values,
-            use_cache=use_cache,
-            cache_position=cache_position,
+        sequence_output = cast(
+            Tensor, self.bert.encoder(hidden, attention_mask=ext_mask)
         )
-        pooled_output = (
-            self.pooler(sequence_output) if self.pooler is not None else None
-        )
+        prediction_scores = cast(Tensor, self.cls(sequence_output))
 
-        return sequence_output, pooled_output
+        loss: Tensor | None = None
+        if labels is not None:
+            # Standard causal-LM shift: predict token t+1 from positions [0..t].
+            B_, T_, V = prediction_scores.shape
+            shift_logits = prediction_scores[:, :-1, :].reshape(B_ * (T_ - 1), V)
+            shift_labels = labels[:, 1:].reshape(B_ * (T_ - 1)).long()
+            loss = F.cross_entropy(shift_logits, shift_labels, ignore_index=-100)
+
+        return CausalLMOutput(logits=prediction_scores, loss=loss)

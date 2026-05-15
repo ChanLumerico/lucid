@@ -1,0 +1,570 @@
+"""``kl_divergence`` registry — pairwise dispatch keyed on distribution
+type, mirroring the reference framework's ``register_kl`` mechanism.
+"""
+
+from collections.abc import Callable
+from typing import TypeVar, cast
+
+import lucid
+from lucid._tensor.tensor import Tensor
+from lucid.distributions.bernoulli import Bernoulli
+from lucid.distributions.categorical import Categorical
+from lucid.distributions.distribution import Distribution
+from lucid.distributions.exponential import Cauchy, Exponential, Laplace
+from lucid.distributions.gamma import Beta, Gamma
+from lucid.distributions.normal import Normal
+from lucid.distributions.student import StudentT
+
+_KLFn = Callable[[Distribution, Distribution], Tensor]
+_KL_REGISTRY: dict[tuple[type, type], _KLFn] = {}
+
+_F = TypeVar("_F", bound=Callable[..., Tensor])
+
+
+def register_kl(p_cls: type, q_cls: type) -> Callable[[_F], _F]:
+    r"""Register a closed-form KL implementation for a distribution pair.
+
+    Decorator used to add an analytical
+    :math:`\mathrm{KL}(p \,\|\, q)` formula to the global dispatch
+    registry, keyed on the *exact* (or ancestor) types of the two
+    arguments.  Once registered, :func:`kl_divergence` will route calls
+    matching ``(p_cls, q_cls)`` (or any subclass thereof, via MRO walk)
+    to the decorated function.
+
+    Parameters
+    ----------
+    p_cls : type
+        Class of the "left" distribution :math:`p` (the reference
+        distribution in :math:`\mathrm{KL}(p \,\|\, q)`).
+    q_cls : type
+        Class of the "right" distribution :math:`q`.
+
+    Returns
+    -------
+    Callable[[F], F]
+        A decorator that takes a two-argument callable
+        ``fn(p, q) -> Tensor`` and registers it in the internal KL
+        registry, returning ``fn`` unchanged so the decorated function
+        remains directly callable.
+
+    Notes
+    -----
+    Dispatch precedence inside :func:`kl_divergence`:
+
+    1. Exact class match ``(type(p), type(q))``.
+    2. Most-derived ancestor pair found by walking the Cartesian product
+       of ``type(p).__mro__`` and ``type(q).__mro__`` in order.
+    3. Monte Carlo fall-back (single :meth:`rsample` draw) when
+       :math:`p` supports reparameterised sampling.
+    4. ``NotImplementedError`` otherwise.
+
+    Closed-form formulas are *strongly preferred* over Monte Carlo: they
+    are deterministic, zero-variance, and propagate gradients exactly.
+
+    Examples
+    --------
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.kl import register_kl, kl_divergence
+    >>> @register_kl(Normal, Normal)
+    ... def _kl_normal_normal(p, q):
+    ...     return (q.scale.log() - p.scale.log()
+    ...             + (p.variance + (p.loc - q.loc) ** 2) / (2.0 * q.variance)
+    ...             - 0.5)
+    >>> p = Normal(0.0, 1.0); q = Normal(0.0, 2.0)
+    >>> kl_divergence(p, q)
+    Tensor(...)
+    """
+
+    def _decorator(fn: _F) -> _F:
+        """Insert ``fn`` into the KL registry under ``(p_cls, q_cls)``."""
+        _KL_REGISTRY[(p_cls, q_cls)] = fn
+        return fn
+
+    return _decorator
+
+
+def kl_divergence(p: Distribution, q: Distribution) -> Tensor:
+    r"""Compute the Kullback–Leibler divergence :math:`\mathrm{KL}(p \,\|\, q)`.
+
+    The KL divergence is the expected log-ratio of two probability
+    measures :math:`p` and :math:`q` defined on the same sample space:
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) =
+            \mathbb{E}_{x \sim p}\!\left[\log \frac{p(x)}{q(x)}\right]
+        = \int p(x) \log \frac{p(x)}{q(x)} \, dx
+
+    It is non-negative
+    (:math:`\mathrm{KL}(p \,\|\, q) \geq 0`, with equality iff
+    :math:`p = q` almost everywhere), is not symmetric in general
+    (:math:`\mathrm{KL}(p \,\|\, q) \neq \mathrm{KL}(q \,\|\, p)`), and
+    does not satisfy the triangle inequality — so it is a *divergence*,
+    not a metric.
+
+    Dispatch walks the registry built by :func:`register_kl`: first an
+    exact class match, then the MRO of ``type(p)`` × ``type(q)`` for the
+    most-derived registered ancestor pair.  Falls back to a single-sample
+    Monte Carlo estimate when :math:`p.\mathrm{has\_rsample}` is ``True``
+    and no analytical formula is registered.
+
+    Parameters
+    ----------
+    p : Distribution
+        Left-hand distribution.
+    q : Distribution
+        Right-hand distribution (must share the support / event shape
+        of ``p``).
+
+    Returns
+    -------
+    Tensor
+        Non-negative tensor of shape ``batch_shape`` giving the per-batch
+        KL divergence in nats.
+
+    Raises
+    ------
+    NotImplementedError
+        When no closed-form pair is registered and :math:`p` does not
+        support reparameterised sampling, so MC fall-back is unavailable.
+
+    Notes
+    -----
+    KL divergence appears throughout machine learning:
+
+    * **Variational inference**: the ELBO equals
+      :math:`\log p(\mathbf{x}) - \mathrm{KL}(q(\mathbf{z})\,\|\,
+      p(\mathbf{z} \mid \mathbf{x}))`.
+    * **VAE training**: the encoder regulariser is
+      :math:`\mathrm{KL}(q(\mathbf{z} \mid \mathbf{x})\,\|\,
+      p(\mathbf{z}))`, available analytically for
+      Normal-vs-Normal pairs.
+    * **Maximum likelihood**: minimising negative log-likelihood is
+      equivalent to minimising :math:`\mathrm{KL}(p_{\text{data}}
+      \,\|\, p_{\theta})`.
+    * **Mode-seeking vs mode-covering**:
+      :math:`\mathrm{KL}(p\,\|\,q)` is mode-covering in :math:`q`;
+      :math:`\mathrm{KL}(q\,\|\,p)` is mode-seeking — important for
+      variational approximations.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.distributions import Normal
+    >>> from lucid.distributions.kl import kl_divergence
+    >>> p = Normal(loc=0.0, scale=1.0)
+    >>> q = Normal(loc=1.0, scale=2.0)
+    >>> kl_divergence(p, q)
+    Tensor(...)
+    """
+    key = (type(p), type(q))
+    if key in _KL_REGISTRY:
+        return _KL_REGISTRY[key](p, q)
+    for p_base in type(p).__mro__:
+        for q_base in type(q).__mro__:
+            if (p_base, q_base) in _KL_REGISTRY:
+                return _KL_REGISTRY[(p_base, q_base)](p, q)
+    # MC fallback for distributions with rsample.
+    if p.has_rsample:
+        s = p.rsample()
+        return p.log_prob(s) - q.log_prob(s)
+    raise NotImplementedError(
+        f"kl_divergence({type(p).__name__}, {type(q).__name__}) "
+        f"is not registered and p does not support rsample for MC estimation."
+    )
+
+
+# ── concrete pairs ────────────────────────────────────────────────────────
+
+
+@register_kl(Normal, Normal)
+def _kl_normal_normal(p: Normal, q: Normal) -> Tensor:
+    r"""Closed-form KL divergence between two univariate Normals.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \log\frac{\sigma_q}{\sigma_p}
+            + \frac{\sigma_p^2 + (\mu_p - \mu_q)^2}{2\sigma_q^2} - \frac{1}{2}
+    """
+    var_p = p.variance
+    var_q = q.variance
+    return (
+        (q.scale.log() - p.scale.log())
+        + (var_p + (p.loc - q.loc) ** 2) / (2.0 * var_q)
+        - 0.5
+    )
+
+
+@register_kl(Bernoulli, Bernoulli)
+def _kl_bernoulli_bernoulli(p: Bernoulli, q: Bernoulli) -> Tensor:
+    r"""Closed-form KL divergence between two Bernoulli distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = p \log\frac{p}{q} + (1-p) \log\frac{1-p}{1-q}
+
+    Probabilities are clipped to ``[1e-7, 1 - 1e-7]`` for numerical safety.
+    """
+    p_p = p._probs.clip(1e-7, 1.0 - 1e-7)
+    p_q = q._probs.clip(1e-7, 1.0 - 1e-7)
+    return p_p * (p_p.log() - p_q.log()) + (1.0 - p_p) * (
+        (1.0 - p_p).log() - (1.0 - p_q).log()
+    )
+
+
+@register_kl(Categorical, Categorical)
+def _kl_categorical_categorical(p: Categorical, q: Categorical) -> Tensor:
+    r"""Closed-form KL divergence between two Categorical distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \sum_k p_k (\log p_k - \log q_k)
+    """
+    p_log = p._log_probs
+    q_log = q._log_probs
+    return (p._probs * (p_log - q_log)).sum(dim=-1)
+
+
+@register_kl(Exponential, Exponential)
+def _kl_exponential_exponential(p: Exponential, q: Exponential) -> Tensor:
+    r"""Closed-form KL divergence between two Exponential distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \frac{\lambda_q}{\lambda_p} - 1
+            - \log\frac{\lambda_q}{\lambda_p}
+    """
+    rate_ratio = q.rate / p.rate
+    return rate_ratio - 1.0 - rate_ratio.log()
+
+
+@register_kl(Gamma, Gamma)
+def _kl_gamma_gamma(p: Gamma, q: Gamma) -> Tensor:
+    r"""Closed-form KL divergence between two Gamma distributions.
+
+    With shape :math:`\alpha` and rate :math:`\beta`:
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \alpha_q \log\frac{\beta_p}{\beta_q}
+            + \log\frac{\Gamma(\alpha_q)}{\Gamma(\alpha_p)}
+            + (\alpha_p - \alpha_q)\,\psi(\alpha_p)
+            + (\beta_q - \beta_p)\,\frac{\alpha_p}{\beta_p}
+    """
+    a_p, b_p = p.concentration, p.rate
+    a_q, b_q = q.concentration, q.rate
+    t1 = a_q * (b_p / b_q).log()
+    t2 = lucid.lgamma(a_q) - lucid.lgamma(a_p)
+    t3 = (a_p - a_q) * lucid.digamma(a_p)
+    t4 = (b_q - b_p) * (a_p / b_p)
+    return t1 + t2 + t3 + t4
+
+
+@register_kl(Beta, Beta)
+def _kl_beta_beta(p: Beta, q: Beta) -> Tensor:
+    r"""Closed-form KL divergence between two Beta distributions.
+
+    Uses the digamma/log-gamma identity with shape parameters
+    :math:`(\alpha_1, \alpha_0)` and :math:`(\beta_1, \beta_0)`.
+    """
+    sum_p = p.concentration1 + p.concentration0
+    sum_q = q.concentration1 + q.concentration0
+    t1 = lucid.lgamma(sum_p) - lucid.lgamma(sum_q)
+    t2 = (
+        lucid.lgamma(q.concentration1)
+        - lucid.lgamma(p.concentration1)
+        + lucid.lgamma(q.concentration0)
+        - lucid.lgamma(p.concentration0)
+    )
+    t3 = (p.concentration1 - q.concentration1) * (
+        lucid.digamma(p.concentration1) - lucid.digamma(sum_p)
+    )
+    t4 = (p.concentration0 - q.concentration0) * (
+        lucid.digamma(p.concentration0) - lucid.digamma(sum_p)
+    )
+    return t1 + t2 + t3 + t4
+
+
+# ── P8-C: extended pairwise registrations ────────────────────────────────
+
+
+from lucid.distributions.discrete import Poisson
+
+
+@register_kl(Poisson, Poisson)
+def _kl_poisson_poisson(p: Poisson, q: Poisson) -> Tensor:
+    r"""Closed-form KL divergence between two Poisson distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \lambda_p \log\frac{\lambda_p}{\lambda_q}
+            - \lambda_p + \lambda_q
+    """
+    # KL(Pois(λ_p) || Pois(λ_q)) = λ_p · log(λ_p / λ_q) − λ_p + λ_q.
+    return p.rate * (p.rate.log() - q.rate.log()) - p.rate + q.rate
+
+
+from lucid.distributions.gamma import Dirichlet
+
+
+@register_kl(Dirichlet, Dirichlet)
+def _kl_dirichlet_dirichlet(p: Dirichlet, q: Dirichlet) -> Tensor:
+    r"""Closed-form KL divergence between two Dirichlet distributions.
+
+    Uses the standard digamma + log-gamma form, summed over the K simplex
+    components along the last axis.
+    """
+    # KL(Dir(α) || Dir(β)) closed form using digamma + lgamma.
+    a = p.concentration
+    b = q.concentration
+    sum_a = a.sum(dim=-1, keepdim=True)
+    sum_b = b.sum(dim=-1, keepdim=True)
+    t1 = (
+        lucid.lgamma(sum_a).squeeze(-1)
+        - lucid.lgamma(a).sum(dim=-1)
+        - lucid.lgamma(sum_b).squeeze(-1)
+        + lucid.lgamma(b).sum(dim=-1)
+    )
+    t2 = ((a - b) * (lucid.digamma(a) - lucid.digamma(sum_a))).sum(dim=-1)
+    return t1 + t2
+
+
+from lucid.distributions.multivariate import MultivariateNormal
+from lucid.distributions.continuous_extra import HalfNormal
+from lucid.distributions.normal import LogNormal
+from lucid.distributions.uniform import Uniform
+from lucid.distributions.bernoulli import Geometric
+from lucid.distributions.independent import Independent
+from lucid.distributions.extra import Gumbel
+
+_EULER_GAMMA: float = 0.5772156649015329
+
+
+@register_kl(MultivariateNormal, MultivariateNormal)
+def _kl_mvn_mvn(p: MultivariateNormal, q: MultivariateNormal) -> Tensor:
+    r"""Closed-form KL divergence between two multivariate Normals.
+
+    .. math::
+
+        2\,\mathrm{KL} = \operatorname{tr}(\Sigma_q^{-1}\Sigma_p)
+            + (\mu_q - \mu_p)^{\top}\Sigma_q^{-1}(\mu_q - \mu_p)
+            - D + \log\frac{|\Sigma_q|}{|\Sigma_p|}
+
+    All operations work on the lower-triangular Cholesky factors to avoid
+    forming explicit inverses.
+    """
+    # KL(N(μ_p, Σ_p) || N(μ_q, Σ_q))
+    #   = 0.5·[tr(Σ_q⁻¹ Σ_p) + (μ_q − μ_p)ᵀ Σ_q⁻¹ (μ_q − μ_p)
+    #          − D + log(|Σ_q| / |Σ_p|)]
+    # All work on the lower-triangular factors to avoid forming Σ⁻¹.
+    Lp, Lq = p.scale_tril, q.scale_tril
+    D = int(p._D)
+
+    diag_p = Lp.diagonal(dim1=-2, dim2=-1)
+    diag_q = Lq.diagonal(dim1=-2, dim2=-1)
+    log_det_p = 2.0 * diag_p.log().sum(dim=-1)
+    log_det_q = 2.0 * diag_q.log().sum(dim=-1)
+
+    M = lucid.linalg.solve_triangular(Lq, Lp, upper=False)
+    trace_term = (M * M).sum(dim=(-2, -1))
+
+    diff = (q.loc - p.loc).unsqueeze(-1)
+    z = lucid.linalg.solve_triangular(Lq, diff, upper=False)
+    maha = (z * z).sum(dim=(-2, -1))
+
+    return 0.5 * (trace_term + maha - float(D) + log_det_q - log_det_p)
+
+
+# ── Additional closed-form KL pairs ──────────────────────────────────────────
+
+
+@register_kl(Laplace, Laplace)
+def _kl_laplace_laplace(p: Laplace, q: Laplace) -> Tensor:
+    r"""Closed-form KL divergence between two Laplace distributions.
+
+    Uses the formula from Gil et al. (2011) §3.2:
+
+    .. math::
+
+        \mathrm{KL} = -\log\frac{b_p}{b_q} + \frac{|\mu_p - \mu_q|}{b_q}
+            + \frac{b_p}{b_q}\,\exp\!\left(-\frac{|\mu_p - \mu_q|}{b_p}\right) - 1
+    """
+    # From Gil et al. 2011 §3.2
+    # KL = -log(b1/b2) + |μ1-μ2|/b2 + (b1/b2)·exp(-|μ1-μ2|/b1) - 1
+    scale_ratio: Tensor = p.scale / q.scale
+    loc_diff: Tensor = (p.loc - q.loc).abs()
+    return (
+        -scale_ratio.log()
+        + loc_diff / q.scale
+        + scale_ratio * (-(loc_diff / p.scale)).exp()
+        - 1.0
+    )
+
+
+@register_kl(HalfNormal, HalfNormal)
+def _kl_halfnormal_halfnormal(p: HalfNormal, q: HalfNormal) -> Tensor:
+    """KL divergence between two HalfNormal distributions.
+
+    Reduces to the KL of the underlying zero-centred Normal distributions
+    since :math:`\\text{HalfNormal}(\\sigma) = |\\text{Normal}(0, \\sigma)|`.
+    """
+    # HalfNormal(σ) = |Normal(0, σ)|; KL reduces to the underlying Normals.
+    return _kl_normal_normal(p._base, q._base)
+
+
+@register_kl(LogNormal, LogNormal)
+def _kl_lognormal_lognormal(p: LogNormal, q: LogNormal) -> Tensor:
+    """KL divergence between two LogNormal distributions.
+
+    Equal to the KL of the underlying Normals because the log-transform is
+    measure-preserving.
+    """
+    # LogNormal(μ, σ²) = exp(Normal(μ, σ²)); KL equals KL of the underlying.
+    return _kl_normal_normal(p._base, q._base)
+
+
+@register_kl(Gumbel, Gumbel)
+def _kl_gumbel_gumbel(p: Gumbel, q: Gumbel) -> Tensor:
+    r"""Closed-form KL divergence between two Gumbel distributions.
+
+    With location :math:`\mu` and scale :math:`\beta`, lets
+    :math:`c_1 = \beta_p / \beta_q`, :math:`c_2 = \mu_q / \beta_q`,
+    :math:`c_3 = \mu_p / \beta_q`, and uses the Euler–Mascheroni constant
+    :math:`\gamma`.
+    """
+    # KL(Gumbel(μ1,β1) || Gumbel(μ2,β2))
+    # ct1 = β1/β2,  ct2 = μ2/β2,  ct3 = μ1/β2
+    # KL = -log(ct1) - ct2 + ct3
+    #     + ct1 · euler_gamma
+    #     + exp(ct2 + lgamma(1 + ct1) - ct3)
+    #     - (1 + euler_gamma)
+    ct1: Tensor = p.scale / q.scale
+    ct2: Tensor = q.loc / q.scale
+    ct3: Tensor = p.loc / q.scale
+    t1 = -ct1.log() - ct2 + ct3
+    t2 = ct1 * _EULER_GAMMA
+    t3 = ((ct2 + lucid.lgamma(1.0 + ct1) - ct3)).exp()
+    return t1 + t2 + t3 - (1.0 + _EULER_GAMMA)
+
+
+@register_kl(Uniform, Uniform)
+def _kl_uniform_uniform(p: Uniform, q: Uniform) -> Tensor:
+    r"""Closed-form KL divergence between two Uniform distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = \begin{cases}
+            \log\dfrac{b_q - a_q}{b_p - a_p} & \text{if } [a_p, b_p]
+                \subseteq [a_q, b_q] \\
+            +\infty & \text{otherwise}
+        \end{cases}
+    """
+    # KL = log((b2-a2)/(b1-a1)) if [a1,b1] ⊆ [a2,b2], else +∞
+    result: Tensor = ((q.high - q.low) / (p.high - p.low)).log()
+    # Mask entries where p is not supported inside q
+    p_outside_q = (q.low > p.low) | (q.high < p.high)
+    inf_val = lucid.full_like(result, float("inf"))
+    return lucid.where(p_outside_q, inf_val, result)
+
+
+@register_kl(Geometric, Geometric)
+def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
+    r"""Closed-form KL divergence between two Geometric distributions.
+
+    .. math::
+
+        \mathrm{KL}(p \,\|\, q) = -H(p)
+            - \frac{\log(1 - p_q)}{p_p} - \log\!\bigl(p_q / (1 - p_q)\bigr)
+    """
+    # KL(Geom(p1) || Geom(p2)) = -H(p) - log(1-p2)/p1 - log(p2)
+    p_logits: Tensor = p.probs.log() - (1.0 - p.probs).log()  # log(p/(1-p))
+    q_logits: Tensor = q.probs.log() - (1.0 - q.probs).log()
+    return -p.entropy() - lucid.log1p(-q.probs) / p.probs - q_logits
+
+
+@register_kl(Independent, Independent)
+def _kl_independent_independent(p: Independent, q: Independent) -> Tensor:
+    """KL divergence between two ``Independent`` wrappers.
+
+    Delegates to ``kl_divergence`` on the base distributions and sums the
+    result over the ``reinterpreted_batch_ndims`` trailing dimensions. The
+    two operands must reinterpret the same number of batch dims.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims``.
+    """
+    # KL sums over the reinterpreted batch dims.
+    if p.reinterpreted_batch_ndims != q.reinterpreted_batch_ndims:
+        raise NotImplementedError(
+            "kl_divergence(Independent, Independent) requires equal "
+            "reinterpreted_batch_ndims."
+        )
+    kl: Tensor = kl_divergence(p.base_dist, q.base_dist)
+    # Sum over the last `reinterpreted_batch_ndims` dims.
+    n = p.reinterpreted_batch_ndims
+    for _ in range(n):
+        kl = kl.sum(dim=-1)
+    return kl
+
+
+# ── MC-based KL pairs (no closed form) ───────────────────────────────────────
+
+
+def _kl_monte_carlo(p: Distribution, q: Distribution, n_samples: int = 1) -> Tensor:
+    """Monte Carlo estimate of KL(p||q) using a single ``rsample``.
+
+    Requires ``p`` to support ``rsample``.
+    """
+    if not p.has_rsample:
+        raise NotImplementedError(
+            f"kl_divergence({type(p).__name__}, {type(q).__name__}): "
+            "no closed-form KL and p does not support rsample for MC estimation."
+        )
+    samples = p.rsample((n_samples,))
+    return (p.log_prob(samples) - q.log_prob(samples)).mean(0)
+
+
+@register_kl(StudentT, StudentT)
+def _kl_studentt_studentt(p: StudentT, q: StudentT) -> Tensor:
+    """Monte-Carlo KL for StudentT — no closed form exists."""
+    return _kl_monte_carlo(p, q)
+
+
+@register_kl(Cauchy, Cauchy)
+def _kl_cauchy_cauchy(p: Cauchy, q: Cauchy) -> Tensor:
+    """Monte-Carlo KL for Cauchy (df=1 StudentT) — no closed form exists."""
+    return _kl_monte_carlo(p, q)
+
+
+@register_kl(Normal, Laplace)
+def _kl_normal_laplace(p: Normal, q: Laplace) -> Tensor:
+    """KL(Normal(μ,σ²) || Laplace(m,b)).
+
+    Computed analytically via the moment-generating function of a folded Normal.
+    """
+    # E_p[log p(X)] = -0.5*(1 + log(2π) + log(σ²))  (normal entropy, negated)
+    # E_p[log q(X)] = -log(2b) - E_p[|X - m|] / b
+    # E_p[|X - m|] = σ * sqrt(2/π) * exp(-z²/2) + (μ - m) * erf(z/sqrt(2))
+    #   where z = (μ - m) / σ
+    import math
+
+    mu, sigma = p.loc, p.scale
+    m, b = q.loc, q.scale
+    z = (mu - m) / sigma
+    # E[|X - m|] where X ~ N(mu, sigma^2)
+    # = sigma * sqrt(2/pi) * exp(-z^2/2) + (mu - m) * erf(z / sqrt(2))
+    _sqrt2 = math.sqrt(2.0)
+    _sqrt2pi = math.sqrt(2.0 * math.pi)
+    exp_term = sigma * (2.0 / math.pi) ** 0.5 * (-0.5 * z * z).exp()
+    erf_term = (mu - m) * lucid.erf(z / _sqrt2)
+    e_abs = exp_term + erf_term
+
+    log_p = p.entropy().neg() - 0.5 * (2.0 * math.pi * math.e)  # -H(p)
+    # Actually compute directly:
+    # KL = H_cross(p, q) - H(p)  where H(p) = 0.5*(1 + log(2πσ²))
+    # H_cross = log(2b) + e_abs / b
+    h_cross = (2.0 * b).log() + e_abs / b
+    h_p = 0.5 * (1.0 + math.log(2.0 * math.pi) + (sigma * sigma).log())
+    return cast(Tensor, h_cross - h_p)

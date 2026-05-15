@@ -1,888 +1,1214 @@
-from typing import (
-    Any,
-    Callable,
-    ItemsView,
-    Iterator,
-    KeysView,
-    Self,
-    Type,
-    TypeVar,
-    ValuesView,
-    overload,
-)
+"""
+nn.Module: base class for all neural network layers.
+"""
+
 from collections import OrderedDict
+from typing import Callable, ClassVar, Iterator, Self, TYPE_CHECKING, cast
 
-try:
-    from tqdm.auto import tqdm
-except Exception:
-    tqdm = None
+if TYPE_CHECKING:
+    from lucid.autograd.function import FunctionCtx
 
-from lucid._tensor import Tensor
-from lucid.types import (
-    _ArrayOrScalar,
-    _BackwardHook,
-    _DeviceType,
-    _ForwardHook,
-    _ForwardHookKwargs,
-    _ForwardPreHook,
-    _ForwardPreHookKwargs,
-    _FullBackwardHook,
-    _FullBackwardPreHook,
-    _LoadStateDictPostHook,
-    _LoadStateDictPreHook,
-    _NumPyArray,
-    _StateDictHook,
-    _StateDictPreHook,
+from lucid._C import engine as _C_engine
+from lucid._tensor.tensor import Tensor
+from lucid._dispatch import _unwrap, _wrap
+from lucid.nn.parameter import Parameter
+from lucid.nn.hooks import (
+    _GLOBAL_BACKWARD_HOOKS,
+    _GLOBAL_BACKWARD_PRE_HOOKS,
+    _GLOBAL_FORWARD_HOOKS,
+    _GLOBAL_FORWARD_PRE_HOOKS,
+    RemovableHandle,
 )
+from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
 
-import lucid.nn as nn
+# _state_dict is imported lazily inside state_dict()/load_state_dict() to
+# break the Module ↔ _state_dict circular dependency.
 
-from lucid._jit.api import JITModule
 
-__all__ = [
-    "Module",
-    "Sequential",
-    "ModuleList",
-    "ModuleDict",
-    "ParameterList",
-    "ParameterDict",
-    "auto_repr",
-    "set_state_dict_pass_attr",
-]
+_HOOK_ID: int = 0
+
+
+def _next_hook_id() -> int:
+    global _HOOK_ID
+    _HOOK_ID += 1
+    return _HOOK_ID
 
 
 class Module:
-    _registry_map: dict[Type, OrderedDict[str, Any]] = {}
-    _alt_name: str = ""
+    """Base class for all neural network modules.
+
+    Every custom model should subclass this and implement :meth:`forward`.
+    Submodules assigned as attributes are tracked automatically.
+
+    Notes
+    -----
+    **Attribute routing**: Setting an attribute follows this priority order:
+
+    1. If the value is a :class:`~lucid.nn.Parameter` → stored in ``_parameters``.
+    2. If the value is a :class:`Module` → stored in ``_modules``.
+    3. Otherwise → plain Python attribute.
+
+    To register a non-parameter tensor (e.g. a running mean), call
+    :meth:`register_buffer` explicitly.
+
+    Examples
+    --------
+    >>> class MLP(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.fc1 = nn.Linear(10, 20)
+    ...         self.fc2 = nn.Linear(20, 1)
+    ...
+    ...     def forward(self, x):
+    ...         return self.fc2(lucid.relu(self.fc1(x)))
+    ...
+    >>> model = MLP()
+    >>> model(lucid.randn(4, 10)).shape
+    (4, 1)
+    """
+
+    training: bool
+    _parameters: OrderedDict[str, Parameter | None]
+    _buffers: OrderedDict[str, Tensor | None]
+    _modules: OrderedDict[str, "Module | None"]
+    _non_persistent_buffers: set[str]
+    _forward_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _forward_hooks: OrderedDict[int, Callable[..., object]]
+    _forward_pre_hooks_with_kwargs: set[int]
+    _forward_hooks_with_kwargs: set[int]
+    _forward_hooks_always_called: set[int]
+    _backward_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _backward_hooks: OrderedDict[int, Callable[..., object]]
+    _load_state_dict_pre_hooks: OrderedDict[int, Callable[..., object]]
+    _load_state_dict_post_hooks: OrderedDict[int, Callable[..., object]]
 
     def __init__(self) -> None:
-        self._parameters: OrderedDict[str, nn.Parameter]
-        self._buffers: OrderedDict[str, nn.Buffer]
-        self._modules: OrderedDict[str, Self]
-
+        """Initialise the instance.  See the class docstring for parameter semantics."""
         object.__setattr__(self, "_parameters", OrderedDict())
         object.__setattr__(self, "_buffers", OrderedDict())
         object.__setattr__(self, "_modules", OrderedDict())
+        object.__setattr__(self, "_non_persistent_buffers", set())
+        object.__setattr__(self, "_forward_pre_hooks", OrderedDict())
+        object.__setattr__(self, "_forward_hooks", OrderedDict())
+        object.__setattr__(self, "_forward_pre_hooks_with_kwargs", set())
+        object.__setattr__(self, "_forward_hooks_with_kwargs", set())
+        object.__setattr__(self, "_forward_hooks_always_called", set())
+        object.__setattr__(self, "_backward_pre_hooks", OrderedDict())
+        object.__setattr__(self, "_backward_hooks", OrderedDict())
+        object.__setattr__(self, "_load_state_dict_pre_hooks", OrderedDict())
+        object.__setattr__(self, "_load_state_dict_post_hooks", OrderedDict())
+        object.__setattr__(self, "training", True)
 
-        self.training = True
-        self.device: _DeviceType = "cpu"
+    def forward(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
+        """Override in subclasses to define the computation."""
+        raise NotImplementedError(f"{type(self).__name__}.forward() not implemented")
 
-        self._forward_pre_hooks: list[
-            tuple[_ForwardPreHook | _ForwardPreHookKwargs, bool]
-        ] = []
-        self._forward_hooks: list[tuple[_ForwardHook | _ForwardHookKwargs, bool]] = []
+    def __call__(self, *args: Tensor, **kwargs: object) -> _ModuleOutput:
+        """Forward to the underlying callable (see class docstring)."""
+        for hook, with_kwargs in _GLOBAL_FORWARD_PRE_HOOKS.values():
+            args, kwargs = self._call_forward_pre_hook(
+                hook, args, kwargs, with_kwargs=with_kwargs
+            )
+        for key, hook in self._forward_pre_hooks.items():
+            args, kwargs = self._call_forward_pre_hook(
+                hook,
+                args,
+                kwargs,
+                with_kwargs=key in self._forward_pre_hooks_with_kwargs,
+            )
 
-        self._backward_hooks: list[_BackwardHook] = []
-        self._full_backward_pre_hooks: list[_FullBackwardPreHook] = []
-        self._full_backward_hooks: list[_FullBackwardHook] = []
+        backward_state = None
+        if self._has_backward_hooks():
+            args, backward_state = self._prepare_backward_hooks(args)
 
-        self._state_dict_pre_hooks: list[_StateDictPreHook] = []
-        self._state_dict_hooks: list[_StateDictHook] = []
+        output: _ModuleOutput | None = None
+        try:
+            output = self.forward(*args, **kwargs)
+        except Exception:
+            self._call_always_forward_hooks(args, kwargs, output)
+            raise
 
-        self._load_state_dict_pre_hooks: list[_LoadStateDictPreHook] = []
-        self._load_state_dict_post_hooks: list[_LoadStateDictPostHook] = []
+        for hook, with_kwargs, _ in _GLOBAL_FORWARD_HOOKS.values():
+            output = self._call_forward_hook(
+                hook, args, kwargs, output, with_kwargs=with_kwargs
+            )
+        for key, hook in self._forward_hooks.items():
+            output = self._call_forward_hook(
+                hook,
+                args,
+                kwargs,
+                output,
+                with_kwargs=key in self._forward_hooks_with_kwargs,
+            )
+        if backward_state is not None:
+            output = self._attach_output_backward_hooks(output, backward_state)
+        return output
 
-        self._state_dict_pass_attr = set()
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        registry_map: dict[Type, OrderedDict[str, Any]] = {
-            nn.Parameter: self._parameters,
-            nn.Buffer: self._buffers,
-            Module: self._modules,
-        }
-
-        target_registry = None
-        for cls, registry in registry_map.items():
-            if isinstance(value, cls):
-                target_registry = registry
-                break
-
-        if target_registry is not None:
-            for registry in registry_map.values():
-                if registry is not target_registry and name in registry:
-                    del registry[name]
-            target_registry[name] = value
-        else:
-            for registry in registry_map.values():
-                if name in registry:
-                    del registry[name]
-
-        super().__setattr__(name, value)
-
-    def setattr_raw(self, name: str, value: Any) -> None:
-        object.__setattr__(self, name, value)
-
-    def add_module(self, name: str, module: Self) -> None:
-        if not isinstance(module, Module) and module is not None:
-            raise TypeError(f"{module} is not a Module.")
-
-        self.__setattr__(name, module)
-
-    def register_parameter(self, name: str, param: nn.Parameter | None) -> None:
-        if not isinstance(param, nn.Parameter) and param is not None:
-            raise TypeError(f"{param} is not a nn.Parameter.")
-
-        self.__setattr__(name, param)
-
-    def register_buffer(
+    def _call_forward_pre_hook(
         self,
-        name: str,
-        buffer: nn.Buffer | _ArrayOrScalar | None,
-        dtype: type | None = None,
-    ) -> None:
-        if buffer is not None:
-            if not isinstance(buffer, nn.Buffer):
-                buffer = nn.Buffer(buffer, dtype=dtype, device=self.device)
-
-        self.__setattr__(name, buffer)
-
-    def register_forward_pre_hook(
-        self,
-        hook: _ForwardPreHook | _ForwardPreHookKwargs,
+        hook: Callable[..., object],
+        args: tuple[Tensor, ...],
+        kwargs: dict[str, object],
         *,
-        with_kwargs: bool = False,
-    ) -> Callable:
-        self._forward_pre_hooks.append((hook, with_kwargs))
-        return lambda: self._forward_pre_hooks.remove((hook, with_kwargs))
+        with_kwargs: bool,
+    ) -> tuple[tuple[Tensor, ...], dict[str, object]]:
+        if with_kwargs:
+            result = hook(self, args, kwargs)
+            if result is None:
+                return args, kwargs
+            if (
+                not isinstance(result, tuple)
+                or len(result) != 2
+                or not isinstance(result[1], dict)
+            ):
+                raise RuntimeError(
+                    "forward pre-hook with kwargs must return None or (args, kwargs)"
+                )
+            new_args = result[0]
+            if not isinstance(new_args, tuple):
+                new_args = (new_args,)
+            return new_args, result[1]
 
-    def register_forward_hook(
-        self, hook: _ForwardHook | _ForwardHookKwargs, *, with_kwargs: bool = False
-    ) -> Callable:
-        self._forward_hooks.append((hook, with_kwargs))
-        return lambda: self._forward_hooks.remove((hook, with_kwargs))
+        result = hook(self, args)
+        if result is None:
+            return args, kwargs
+        if not isinstance(result, tuple):
+            result = (result,)
+        return result, kwargs
 
-    def register_backward_hook(self, hook: _BackwardHook) -> Callable:
-        self._backward_hooks.append(hook)
-        return lambda: self._backward_hooks.remove(hook)
+    def _call_forward_hook(
+        self,
+        hook: Callable[..., object],
+        args: tuple[Tensor, ...],
+        kwargs: dict[str, object],
+        output: _ModuleOutput,
+        *,
+        with_kwargs: bool,
+    ) -> _ModuleOutput:
+        if with_kwargs:
+            hook_out = hook(self, args, kwargs, output)
+        else:
+            hook_out = hook(self, args, output)
+        return output if hook_out is None else hook_out  # type: ignore[return-value]  # hook returns object; runtime guarantees _ModuleOutput
 
-    def register_full_backward_pre_hook(self, hook: _FullBackwardPreHook) -> Callable:
-        self._full_backward_pre_hooks.append(hook)
-        return lambda: self._full_backward_pre_hooks.remove(hook)
+    def _call_always_forward_hooks(
+        self,
+        args: tuple[Tensor, ...],
+        kwargs: dict[str, object],
+        output: _ModuleOutput | None,
+    ) -> None:
+        for hook, with_kwargs, always_call in _GLOBAL_FORWARD_HOOKS.values():
+            if not always_call:
+                continue
+            if with_kwargs:
+                hook(self, args, kwargs, output)
+            else:
+                hook(self, args, output)
+        for key, hook in self._forward_hooks.items():
+            if key not in self._forward_hooks_always_called:
+                continue
+            if key in self._forward_hooks_with_kwargs:
+                hook(self, args, kwargs, output)
+            else:
+                hook(self, args, output)
 
-    def register_full_backward_hook(self, hook: _FullBackwardHook) -> Callable:
-        self._full_backward_hooks.append(hook)
-        return lambda: self._full_backward_hooks.remove(hook)
-
-    def register_state_dict_pre_hook(self, hook: _StateDictPreHook) -> Callable:
-        self._state_dict_pre_hooks.append(hook)
-        return lambda: self._state_dict_pre_hooks.remove(hook)
-
-    def register_state_dict_hook(self, hook: _StateDictHook) -> Callable:
-        self._state_dict_hooks.append(hook)
-        return lambda: self._state_dict_hooks.remove(hook)
-
-    def register_load_state_dict_pre_hook(
-        self, hook: _LoadStateDictPreHook
-    ) -> Callable:
-        self._load_state_dict_pre_hooks.append(hook)
-        return lambda: self._load_state_dict_pre_hooks.remove(hook)
-
-    def register_load_state_dict_post_hook(
-        self, hook: _LoadStateDictPostHook
-    ) -> Callable:
-        self._load_state_dict_post_hooks.append(hook)
-        return lambda: self._load_state_dict_post_hooks.remove(hook)
-
-    def reset_parameters(self) -> None:
-        for param in self.parameters():
-            param.zero()
-
-    def forward(self) -> Tensor | tuple[Tensor, ...]:
-        raise NotImplementedError(
-            "The forward method must be implemented by the subclass."
+    def _has_backward_hooks(self) -> bool:
+        return (
+            bool(_GLOBAL_BACKWARD_PRE_HOOKS)
+            or bool(_GLOBAL_BACKWARD_HOOKS)
+            or bool(self._backward_pre_hooks)
+            or bool(self._backward_hooks)
         )
 
-    def train(self, mode: bool = True) -> Self:
-        self.training = mode
+    def _prepare_backward_hooks(
+        self,
+        args: tuple[Tensor, ...],
+    ) -> tuple[tuple[Tensor, ...], _ModuleBackwardState]:
+        state = _ModuleBackwardState(self, len(args))
+        if hasattr(_C_engine, "_create_module_backward_hook_state"):
+            state.C_engine_state = _C_engine._create_module_backward_hook_state(
+                len(args),
+                state.apply_backward_pre_hooks_from_C_engine,
+                state.apply_full_backward_hooks_from_C_engine,
+            )
+            entries: list[tuple[int, _C_engine.TensorImpl]] = []
+            for idx, arg in enumerate(args):
+                if isinstance(arg, Tensor) and arg.requires_grad:
+                    entries.append((idx, _unwrap(arg)))
+                    state.input_tensor_indices.append(idx)
+            if not entries:
+                return args, state
+            wrapped_impls = _C_engine._wrap_module_backward_inputs(  # type: ignore[attr-defined]  # optional C++ extension method, guarded by hasattr above
+                state.C_engine_state, entries
+            )
+            wrapped_args = list(args)
+            for (idx, _), impl in zip(entries, wrapped_impls, strict=True):
+                wrapped_args[idx] = _wrap(impl)
+            return tuple(wrapped_args), state
+
+        wrapped: list[Tensor] = []
+        for idx, arg in enumerate(args):
+            if isinstance(arg, Tensor) and arg.requires_grad:
+                wrapped.append(_ModuleInputBackwardHookFunction.apply(arg, state, idx))
+                state.input_tensor_indices.append(idx)
+            else:
+                wrapped.append(arg)
+        return tuple(wrapped), state
+
+    def _attach_output_backward_hooks(
+        self,
+        output: _ModuleOutput,
+        state: _ModuleBackwardState,
+    ) -> _ModuleOutput:
+        if state.C_engine_state is not None:
+            return self._attach_C_engine_output_backward_hooks(output, state)
+
+        if isinstance(output, tuple):
+            state.n_outputs = sum(1 for item in output if isinstance(item, Tensor))
+            output_idx = 0
+            wrapped_output: list[Tensor] = []
+            for item in output:
+                if isinstance(item, Tensor):
+                    wrapped_output.append(
+                        _ModuleOutputBackwardHookFunction.apply(item, state, output_idx)
+                    )
+                    output_idx += 1
+                else:
+                    wrapped_output.append(item)
+            return tuple(wrapped_output)
+        if not isinstance(output, Tensor):
+            return output
+        state.n_outputs = 1
+        return _ModuleOutputBackwardHookFunction.apply(output, state, 0)
+
+    def _attach_C_engine_output_backward_hooks(
+        self,
+        output: _ModuleOutput,
+        state: _ModuleBackwardState,
+    ) -> _ModuleOutput:
+        if isinstance(output, tuple):
+            n_outputs = sum(1 for item in output if isinstance(item, Tensor))
+            state.n_outputs = n_outputs
+            entries: list[tuple[int, _C_engine.TensorImpl]] = []
+            output_idx = 0
+            positions: list[int] = []
+            for pos, item in enumerate(output):
+                if isinstance(item, Tensor):
+                    if item.requires_grad:
+                        entries.append((output_idx, _unwrap(item)))
+                        positions.append(pos)
+                    output_idx += 1
+            if not entries:
+                return output
+            wrapped_impls = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
+                state.C_engine_state, entries, n_outputs
+            )
+            wrapped_output = list(output)
+            for pos, impl in zip(positions, wrapped_impls, strict=True):
+                wrapped_output[pos] = _wrap(impl)
+            return tuple(wrapped_output)
+
+        if not isinstance(output, Tensor):
+            return output
+        state.n_outputs = 1
+        if not output.requires_grad:
+            return output
+        wrapped_impl = _C_engine._wrap_module_backward_outputs(  # type: ignore[attr-defined]  # optional C++ extension method
+            state.C_engine_state, [(0, _unwrap(output))], 1
+        )[
+            0
+        ]
+        return _wrap(wrapped_impl)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        """Attribute setter; routes Tensor / Parameter / Module assignments to the proper internal registries."""
+        if not isinstance(name, str):
+            raise TypeError("module attribute name must be a string")
+        if "." in name:
+            raise KeyError("module attribute name cannot contain '.'")
+        if name == "":
+            raise KeyError("module attribute name cannot be empty")
+
+        # Remove from existing dicts before re-routing
+        for d in (self._parameters, self._buffers, self._modules):
+            if name in d:
+                del d[name]
+        if name in self._non_persistent_buffers:
+            self._non_persistent_buffers.remove(name)
+
+        if isinstance(value, Parameter) and value._is_parameter:
+            # When promoting an attribute into ``_parameters``, also remove
+            # any plain entry from ``__dict__`` — otherwise ``self.<name>``
+            # short-circuits via ``__dict__`` and silently returns the old
+            # value.  This commonly bit ``Conv2d(bias=False)`` where
+            # ``self.bias`` was first set to ``None`` (landing in ``__dict__``)
+            # and a later ``self.bias = Parameter(...)`` failed to take effect.
+            self.__dict__.pop(name, None)
+            self._parameters[name] = value
+        elif isinstance(value, Module):
+            self.__dict__.pop(name, None)
+            self._modules[name] = value
+        else:
+            object.__setattr__(self, name, value)
+
+    def __getattr__(self, name: str) -> Tensor | Parameter | Module:
+        """Attribute lookup fallback; resolves Parameter / buffer / submodule registries when ordinary lookup fails."""
+        p = object.__getattribute__(self, "_parameters")
+        if name in p:
+            return cast(Tensor | Parameter | Module, p[name])
+        b = object.__getattribute__(self, "_buffers")
+        if name in b:
+            return cast(Tensor | Parameter | Module, b[name])
+        m = object.__getattribute__(self, "_modules")
+        if name in m:
+            return cast(Tensor | Parameter | Module, m[name])
+        raise AttributeError(f"'{type(self).__name__}' has no attribute '{name}'")
+
+    def __delattr__(self, name: str) -> None:
+        """Attribute deletion; mirrors :meth:`__setattr__` by removing the entry from the corresponding registry."""
+        if name in self._parameters:
+            del self._parameters[name]
+            return
+        if name in self._buffers:
+            del self._buffers[name]
+            self._non_persistent_buffers.discard(name)
+            return
+        if name in self._modules:
+            del self._modules[name]
+            return
+        object.__delattr__(self, name)
+
+    # ── parameter / module / buffer traversal ─────────────────────────────
+
+    def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
+        """Yield all Parameters in this module (and children if recurse=True)."""
+        for _, p in self.named_parameters(recurse=recurse):
+            yield p
+
+    def named_parameters(
+        self,
+        prefix: str = "",
+        recurse: bool = True,
+        remove_duplicate: bool = True,
+    ) -> Iterator[tuple[str, Parameter]]:
+        """Yield (name, Parameter) pairs.
+
+        Parameters
+        ----------
+        remove_duplicate:
+            If True (default), each unique Parameter object is yielded only
+            once, even if referenced by multiple attributes. Mirrors reference framework.
+        """
+        seen: set[int] = set()
+        for name, p in self._parameters.items():
+            if p is not None:
+                if remove_duplicate:
+                    if id(p) in seen:
+                        continue
+                    seen.add(id(p))
+                yield (f"{prefix}.{name}" if prefix else name), p
+        if recurse:
+            for mname, m in self._modules.items():
+                if m is None:
+                    continue
+                subprefix = f"{prefix}.{mname}" if prefix else mname
+                for full_name, p in m.named_parameters(
+                    subprefix, recurse=True, remove_duplicate=False
+                ):
+                    if remove_duplicate:
+                        if id(p) in seen:
+                            continue
+                        seen.add(id(p))
+                    yield full_name, p
+
+    def buffers(self, recurse: bool = True) -> Iterator[Tensor]:
+        """Yield all buffer tensors."""
+        for _, b in self.named_buffers(recurse=recurse):
+            yield b
+
+    def named_buffers(
+        self,
+        prefix: str = "",
+        recurse: bool = True,
+        remove_duplicate: bool = True,
+    ) -> Iterator[tuple[str, Tensor]]:
+        """Yield (name, buffer) pairs."""
+        seen: set[int] = set()
+        for name, b in self._buffers.items():
+            if b is not None:
+                if remove_duplicate:
+                    if id(b) in seen:
+                        continue
+                    seen.add(id(b))
+                yield (f"{prefix}.{name}" if prefix else name), b
+        if recurse:
+            for mname, m in self._modules.items():
+                if m is None:
+                    continue
+                subprefix = f"{prefix}.{mname}" if prefix else mname
+                for full_name, b in m.named_buffers(
+                    subprefix, recurse=True, remove_duplicate=False
+                ):
+                    if remove_duplicate:
+                        if id(b) in seen:
+                            continue
+                        seen.add(id(b))
+                    yield full_name, b
+
+    def modules(self) -> Iterator[Module]:
+        """Yield this module and all submodules (depth-first)."""
+        for _, module in self.named_modules():
+            yield module
+
+    def named_modules(
+        self,
+        memo: set[int] | None = None,
+        prefix: str = "",
+        remove_duplicate: bool = True,
+    ) -> Iterator[tuple[str, Module]]:
+        """Yield (name, module) pairs."""
+        if memo is None:
+            memo = set()
+        if remove_duplicate and id(self) in memo:
+            return
+        memo.add(id(self))
+        yield prefix, self
+        for name, m in self._modules.items():
+            if m is None:
+                continue
+            subprefix = f"{prefix}.{name}" if prefix else name
+            yield from m.named_modules(
+                memo=memo, prefix=subprefix, remove_duplicate=remove_duplicate
+            )
+
+    def children(self) -> Iterator[Module]:
+        """Yield direct child modules."""
         for module in self._modules.values():
-            module.train(mode)
+            if module is not None:
+                yield module
+
+    def named_children(self) -> Iterator[tuple[str, Module]]:
+        """Yield (name, child_module) pairs."""
+        for name, module in self._modules.items():
+            if module is not None:
+                yield name, module
+
+    # ── dotted-path accessors ─────────────────────────────────────────────
+
+    def get_submodule(self, target: str) -> Module:
+        """Return submodule at dotted path, e.g. 'encoder.layer.0'."""
+        if not target:
+            return self
+        parts = target.split(".")
+        mod: Module = self
+        for part in parts:
+            if not isinstance(mod, Module):
+                raise AttributeError(f"'{type(mod).__name__}' is not a Module")
+            if part not in mod._modules:
+                raise AttributeError(
+                    f"'{type(mod).__name__}' has no submodule '{part}'"
+                )
+            next_mod = mod._modules[part]
+            if next_mod is None:
+                raise AttributeError(
+                    f"'{type(mod).__name__}' submodule '{part}' is None"
+                )
+            mod = next_mod
+        return mod
+
+    def get_parameter(self, target: str) -> Parameter:
+        """Return parameter at dotted path, e.g. 'fc.weight'."""
+        parts = target.split(".")
+        mod = self.get_submodule(".".join(parts[:-1])) if len(parts) > 1 else self
+        name = parts[-1]
+        if name not in mod._parameters:
+            raise AttributeError(f"'{type(mod).__name__}' has no parameter '{name}'")
+        p = mod._parameters[name]
+        if p is None:
+            raise AttributeError(f"Parameter '{target}' is None")
+        return p
+
+    def get_buffer(self, target: str) -> Tensor:
+        """Return buffer at dotted path, e.g. 'bn.running_mean'."""
+        parts = target.split(".")
+        mod = self.get_submodule(".".join(parts[:-1])) if len(parts) > 1 else self
+        name = parts[-1]
+        if name not in mod._buffers:
+            raise AttributeError(f"'{type(mod).__name__}' has no buffer '{name}'")
+        b = mod._buffers[name]
+        if b is None:
+            raise AttributeError(f"Buffer '{target}' is None")
+        return b
+
+    # ── registration ─────────────────────────────────────────────────────
+
+    def register_parameter(self, name: str, param: Parameter | None) -> None:
+        """Register a Parameter under the given name."""
+        self._validate_child_name(name, "parameter")
+        if hasattr(self, name) and name not in self._parameters:
+            raise KeyError(f"attribute '{name}' already exists")
+        if param is not None and not isinstance(param, Parameter):
+            raise TypeError(
+                f"cannot assign '{type(param).__name__}' object as parameter '{name}'"
+            )
+        if name in self._buffers:
+            del self._buffers[name]
+            self._non_persistent_buffers.discard(name)
+        if name in self._modules:
+            del self._modules[name]
+        if param is None:
+            self._parameters[name] = None
+        else:
+            self._parameters[name] = param
+
+    def register_buffer(
+        self, name: str, tensor: Tensor | None, persistent: bool = True
+    ) -> None:
+        """Register a buffer tensor. Non-persistent buffers are excluded from state_dict."""
+        self._validate_child_name(name, "buffer")
+        if hasattr(self, name) and name not in self._buffers:
+            raise KeyError(f"attribute '{name}' already exists")
+        if tensor is not None and not isinstance(tensor, Tensor):
+            raise TypeError(
+                f"cannot assign '{type(tensor).__name__}' object as buffer '{name}'"
+            )
+        if name in self._parameters:
+            del self._parameters[name]
+        if name in self._modules:
+            del self._modules[name]
+        if not persistent:
+            self._non_persistent_buffers.add(name)
+        else:
+            self._non_persistent_buffers.discard(name)
+        self._buffers[name] = tensor
+
+    def add_module(self, name: str, module: Module | None) -> None:
+        """Add a child module."""
+        self._validate_child_name(name, "module")
+        if hasattr(self, name) and name not in self._modules:
+            raise KeyError(f"attribute '{name}' already exists")
+        if module is not None and not isinstance(module, Module):
+            raise TypeError(
+                f"cannot assign '{type(module).__name__}' object as child module '{name}'"
+            )
+        if name in self._parameters:
+            del self._parameters[name]
+        if name in self._buffers:
+            del self._buffers[name]
+            self._non_persistent_buffers.discard(name)
+        if module is None:
+            self._modules[name] = None
+        else:
+            self._modules[name] = module
+
+    def register_module(self, name: str, module: Module | None) -> None:
+        """Alias for add_module."""
+        self.add_module(name, module)
+
+    def _validate_child_name(self, name: str, kind: str) -> None:
+        if not isinstance(name, str):
+            raise TypeError(f"{kind} name must be a string")
+        if name == "":
+            raise KeyError(f"{kind} name cannot be empty")
+        if "." in name:
+            raise KeyError(f"{kind} name cannot contain '.'")
+
+    # ── training mode ────────────────────────────────────────────────────
+
+    def train(self, mode: bool = True) -> Self:
+        """Set this module and all children to training mode."""
+        if not isinstance(mode, bool):
+            raise TypeError(f"train() requires a bool, got {type(mode).__name__}")
+        self.training = mode
+        for m in self._modules.values():
+            if m is not None:
+                m.train(mode)
         return self
 
     def eval(self) -> Self:
-        return self.train(mode=False)
+        """Set this module and all children to evaluation mode."""
+        return self.train(False)
 
-    def to(self, device: _DeviceType) -> Self:
-        if device == self.device:
-            return self
-        self.device = device
+    # ── device / dtype conversion via _apply ─────────────────────────────
 
-        for param in self.parameters(recurse=False):
-            param.to(device)
-
-        for buffer in self.buffers(recurse=False):
-            buffer.to(device)
-
-        for module in self.modules():
-            module.to(device)
-
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        """Apply fn to every parameter/buffer in-place (preserves object identity)."""
+        for module in self.children():
+            module._apply(fn)
+        for key, param in self._parameters.items():
+            if param is None:
+                continue
+            new_impl = fn(param)._impl
+            param._impl = new_impl  # mutate in-place — keeps Python object identity
+        for key, buf in self._buffers.items():
+            if buf is None:
+                continue
+            self._buffers[key] = fn(buf)
         return self
 
-    def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
-        seen_param_ids: set[int] = set()
+    def to(self, *args: object, **kwargs: object) -> Self:
+        """Move/cast all parameters and buffers, preserving Parameter object identity.
 
-        def _iter_parameters(module: Self) -> Iterator[nn.Parameter]:
-            for _, param in module._parameters.items():
-                param_id = id(param)
-                if param_id in seen_param_ids:
-                    continue
-                seen_param_ids.add(param_id)
-                yield param
+        Floating-point dtype casts (``.float()``, ``.double()``,
+        ``.half()``, ``.bfloat16()``) skip integer buffers — e.g.
+        ``BatchNorm.num_batches_tracked`` stays int64 — matching the
+        reference framework so checkpoint round-trips don't quietly
+        widen / narrow the counter type.  Device moves still apply to
+        every tensor.
+        """
+        from lucid._dtype import (
+            float16,
+            bfloat16,
+            float32,
+            float64,
+            complex64,
+            dtype as _DT,
+        )
 
-            if recurse:
-                for child_module in module._modules.values():
-                    yield from _iter_parameters(child_module)
+        # Detect "this call is a pure-float dtype change".  Mixed args
+        # like ``.to(device, dtype)`` still apply normally.
+        target_dtype: object | None = kwargs.get("dtype")
+        for a in args:
+            if isinstance(a, _DT):
+                target_dtype = a
+                break
+        skip_int_buffers: bool = (
+            target_dtype is not None
+            and target_dtype in (float16, bfloat16, float32, float64, complex64)
+            and "device" not in kwargs
+            and not any(isinstance(a, str) for a in args)
+        )
 
-        yield from _iter_parameters(self)
+        def _convert(t: Tensor) -> Tensor:
+            if skip_int_buffers and t.dtype not in (
+                float16,
+                bfloat16,
+                float32,
+                float64,
+                complex64,
+            ):
+                # Integer / bool buffer — leave dtype alone.
+                return t
+            return t.to(*args, **kwargs)  # type: ignore[arg-type]  # Module.to() accepts *object/**object; Tensor.to() has specific types — safe at runtime
 
-    def buffers(self, recurse: bool = True) -> Iterator[nn.Buffer]:
-        for buffer in self._buffers.values():
-            yield buffer
-        if recurse:
-            for module in self._modules.values():
-                yield from module.buffers(recurse=recurse)
+        return self._apply(_convert)
 
-    def modules(self) -> Iterator[Self]:
-        yield self
-        for module in self._modules.values():
-            yield from module.modules()
+    def metal(self) -> Self:
+        """Move all parameters and buffers to Apple Metal GPU."""
+        return self.to("metal")
 
-    def children(self: Self) -> Iterator[Self]:
-        return iter(self._modules.values())
+    def cpu(self) -> Self:
+        """Move all parameters and buffers to CPU."""
+        return self.to("cpu")
 
-    def count_parameters(self, recurse: bool = True) -> int:
-        total_params = sum(p.size for p in self.parameters(recurse=recurse))
-        return total_params
+    def half(self) -> Self:
+        """Cast all parameters and buffers to float16."""
+        from lucid._dtype import float16
 
-    @property
-    def parameter_size(self) -> int:
-        return self.count_parameters(recurse=True)
+        return self.to(float16)
 
-    def apply(self, fn: Callable[[Self, Any], None]) -> Self:
+    def float(self) -> Self:
+        """Cast all parameters and buffers to float32."""
+        from lucid._dtype import float32
+
+        return self.to(float32)
+
+    def double(self) -> Self:
+        """Cast all parameters and buffers to float64."""
+        from lucid._dtype import float64
+
+        return self.to(float64)
+
+    def bfloat16(self) -> Self:
+        """Cast all parameters and buffers to bfloat16."""
+        from lucid._dtype import bfloat16
+
+        return self.to(bfloat16)
+
+    def type(self, dst_type: object) -> Self:
+        """Cast all parameters and buffers to *dst_type*.
+
+        *dst_type* may be a :class:`lucid.dtype`, a Python type (``float``,
+        ``int``), or a string (``"float32"``, ``"float16"``, etc.).
+        Delegates to :meth:`to`, which handles the conversion.
+        """
+        return self.to(dst_type)
+
+    def apply(self, fn: Callable[[Module], None]) -> Self:
+        """Apply fn recursively to every submodule (including self)."""
+        for m in self.children():
+            m.apply(fn)
         fn(self)
-        for module in self._modules.values():
-            module.apply(fn)
         return self
+
+    def zero_grad(self, set_to_none: bool = True) -> None:
+        """Zero gradients of all parameters."""
+        for p in self.parameters():
+            if p.grad is not None:
+                if set_to_none:
+                    p.grad = None
+                else:
+                    p._impl.zero_grad()
+
+    def requires_grad_(self, requires_grad: bool = True) -> Self:
+        """Set requires_grad for all parameters."""
+        for p in self.parameters():
+            p.requires_grad_(requires_grad)
+        return self
+
+    def share_memory(self) -> Self:
+        """No-op on Apple Silicon (unified memory is always shared)."""
+        return self
+
+    def compile(self, *args: object, **kwargs: object) -> Self:
+        """No-op compatibility stub.
+
+        External codepaths often call ``model.compile()`` to opt into JIT
+        acceleration; Lucid has no such layer, so this returns ``self``
+        unchanged rather than crashing the caller.  Any positional or
+        keyword arguments are accepted and ignored.
+        """
+        return self
+
+    def to_empty(
+        self,
+        *,
+        device: object = None,
+        recurse: bool = True,
+    ) -> Self:
+        """Move parameters and buffers to ``device`` without copying data.
+
+        The reference framework uses ``to_empty`` to materialise a model
+        constructed on the meta device.  Lucid has no meta device, but
+        falls back to the standard :meth:`to` when called for parity with
+        external code.  ``recurse`` is honoured by :meth:`to` already.
+        """
+        if device is None:
+            return self
+        return self.to(device)
+
+    # ── extra state ───────────────────────────────────────────────────────
+
+    def get_extra_state(self) -> object:
+        """Return extra state to include in state_dict. Override in subclasses."""
+        return None
+
+    def set_extra_state(self, state: object) -> None:
+        """Restore extra state loaded from state_dict. Override in subclasses."""
+        pass
+
+    # ── state_dict ────────────────────────────────────────────────────────
+
+    # Per-class version tag.  The base class starts at 1 (matching the
+    # reference framework), so every module appears in ``_metadata`` with at
+    # least ``{"version": 1}``.  Subclasses override to a higher integer when
+    # they need backward-compatible key migration in _load_from_state_dict.
+    _version: ClassVar[int] = 1
 
     def state_dict(
         self,
-        destination: OrderedDict[str, Any] | None = None,
+        destination: dict[str, Tensor] | None = None,
         prefix: str = "",
         keep_vars: bool = False,
-    ) -> OrderedDict:
-        for hook in self._state_dict_pre_hooks:
-            hook(self, prefix, keep_vars)
+    ) -> dict[str, Tensor]:
+        """Return a dict mapping parameter/buffer names to tensors.
+
+        The returned OrderedDict carries a `_metadata` attribute:
+        ``{module_path: {"version": <int>}}`` for every module that defines
+        a `_version` class attribute.  `lucid.save` preserves this attribute
+        across disk round-trips.
+        """
+        from lucid.nn._state_dict import _save_to_state_dict, _build_metadata
 
         if destination is None:
             destination = OrderedDict()
-
-        for name, param in self._parameters.items():
-            destination[prefix + name] = param if keep_vars else param.numpy()
-
-        for name, buffer in self._buffers.items():
-            destination[prefix + name] = buffer if keep_vars else buffer.numpy()
-
-        for name, module in self._modules.items():
-            module.state_dict(
-                destination=destination, prefix=prefix + name + ".", keep_vars=keep_vars
-            )
-
-        for key in list(destination.keys()):
-            if key in self._state_dict_pass_attr:
-                del destination[key]
-
-        for hook in self._state_dict_hooks:
-            hook(self, destination, prefix, keep_vars)
-
+            destination._metadata = _build_metadata(self, prefix)  # type: ignore[attr-defined]
+        _save_to_state_dict(self, destination, prefix=prefix, keep_vars=keep_vars)
         return destination
+
+    def _save_to_state_dict(
+        self,
+        destination: dict[str, Tensor],
+        prefix: str,
+        keep_vars: bool,
+    ) -> None:
+        """Write this module's own params + persistent buffers into destination.
+
+        Default implementation iterates `_parameters` and persistent buffers.
+        Subclasses may override for custom save logic.  Recursion into
+        children is handled by the top-level walker, not by this method.
+        """
+        for name, p in self._parameters.items():
+            if p is not None:
+                destination[f"{prefix}{name}"] = p if keep_vars else p.detach()
+        for name, b in self._buffers.items():
+            if b is not None and name not in self._non_persistent_buffers:
+                destination[f"{prefix}{name}"] = b if keep_vars else b.detach()
+        extra = self.get_extra_state()
+        if extra is not None:
+            destination[f"{prefix}_extra_state"] = extra  # type: ignore[assignment]  # extra_state is object; caller accepts Tensor | object in practice
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Default per-module loader.
+
+        Mutates state_dict / missing_keys / unexpected_keys / error_msgs
+        in place.  Override in subclasses for custom migration logic
+        (e.g. lazy materialization, buffer rename, version migration).
+        Recursion into children is handled by the top-level driver.
+        """
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def load_state_dict(
         self,
-        state_dict: OrderedDict,
+        state_dict: dict[str, Tensor],
         strict: bool = True,
+        assign: bool = False,
+    ) -> object:
+        """Load parameters from a state_dict.
+
+        Calls each module's ``_load_from_state_dict`` recursively.
+        Returns ``IncompatibleKeys(missing_keys, unexpected_keys)`` on success.
+        Raises ``RuntimeError`` if ``strict=True`` and any keys are missing
+        or unexpected, or if any error_msgs accumulated during loading.
+
+        Parameters
+        ----------
+        state_dict : dict
+            A mapping from parameter/buffer names to tensors.
+        strict : bool
+            If ``True`` (default) require an exact key match; raise on any
+            missing or unexpected keys.
+        assign : bool
+            If ``True`` replace each parameter/buffer object with the
+            loaded tensor directly (allows shape/dtype changes).  If
+            ``False`` (default) copy data into the existing parameter
+            preserving its dtype and device.
+        """
+        from lucid.nn._state_dict import load_state_dict as _driver
+
+        return _driver(self, state_dict, strict=strict, assign=assign)
+
+    def register_load_state_dict_pre_hook(
+        self,
+        hook: Callable[..., object],
+    ) -> RemovableHandle:
+        """Register a pre-hook called when this module loads state_dict.
+
+        Hook signature:
+            hook(module, state_dict, prefix, local_metadata, strict,
+                 missing_keys, unexpected_keys, error_msgs) -> None
+
+        The hook may mutate state_dict/missing/unexpected/error_msgs.
+        """
+        key = _next_hook_id()
+        self._load_state_dict_pre_hooks[key] = hook
+        return RemovableHandle(self._load_state_dict_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+
+    def register_load_state_dict_post_hook(
+        self,
+        hook: Callable[..., object],
+    ) -> RemovableHandle:
+        """Register a post-hook called after this module loads state_dict.
+
+        Hook signature: ``hook(module, incompatible_keys) -> None``.
+        """
+        key = _next_hook_id()
+        self._load_state_dict_post_hooks[key] = hook
+        return RemovableHandle(self._load_state_dict_post_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+
+    # ── hooks ─────────────────────────────────────────────────────────────
+
+    def register_forward_pre_hook(
+        self,
+        hook: _ForwardPreHook,
         *,
-        verbose: bool = False,
-        progress_desc: str | None = None,
-    ) -> None:
-        for hook in self._load_state_dict_pre_hooks:
-            hook(self, state_dict, strict)
-
-        own_state = self.state_dict(keep_vars=True)
-
-        missing_keys = set(own_state.keys()) - set(state_dict.keys())
-        unexpected_keys = set(state_dict.keys()) - set(own_state.keys())
-
-        if strict:
-            msg = ""
-            if missing_keys:
-                msg += f"Missing keys in state_dict: {missing_keys}\n"
-            if unexpected_keys:
-                msg += f"Unexpected keys in state_dict: {unexpected_keys}\n"
-            if msg:
-                raise KeyError("Error(s) in loading state_dict:\n" + msg)
-
-        keys_to_migrate = [k for k in state_dict.keys() if k in own_state]
-        total_params = len(keys_to_migrate)
-        migrated = 0
-
-        use_progress = verbose and tqdm is not None and total_params > 0
-        pbar = (
-            tqdm(
-                total=total_params,
-                desc=(
-                    progress_desc
-                    if progress_desc is not None
-                    else "Applying state-dict"
-                ),
-                unit="param",
-                leave=False,
-            )
-            if use_progress
-            else None
+        prepend: bool = False,
+        with_kwargs: bool = False,
+    ) -> RemovableHandle:
+        """Register a hook called before forward()."""
+        key = _next_hook_id()
+        self._forward_pre_hooks[key] = hook
+        if with_kwargs:
+            self._forward_pre_hooks_with_kwargs.add(key)
+        if prepend:
+            self._forward_pre_hooks.move_to_end(key, last=False)
+        return RemovableHandle(
+            self._forward_pre_hooks,  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+            key,
+            (self._forward_pre_hooks_with_kwargs,),
         )
 
-        try:
-            for key in keys_to_migrate:
-                value = state_dict[key]
-                attr = own_state[key]
-                if isinstance(attr, (nn.Parameter, nn.Buffer)):
-                    value_t = Tensor(value, device=self.device)
-                    attr.data = value_t.data
-                else:
-                    setattr(self, key, value)
+    def register_forward_hook(
+        self,
+        hook: _ForwardHook,
+        *,
+        prepend: bool = False,
+        with_kwargs: bool = False,
+        always_call: bool = False,
+    ) -> RemovableHandle:
+        """Register a hook called after forward()."""
+        key = _next_hook_id()
+        self._forward_hooks[key] = hook
+        if with_kwargs:
+            self._forward_hooks_with_kwargs.add(key)
+        if always_call:
+            self._forward_hooks_always_called.add(key)
+        if prepend:
+            self._forward_hooks.move_to_end(key, last=False)
+        return RemovableHandle(
+            self._forward_hooks,  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
+            key,
+            (self._forward_hooks_with_kwargs, self._forward_hooks_always_called),
+        )
 
-                migrated += 1
-                if pbar is not None:
-                    shape = getattr(value, "shape", None)
-                    shape_str = str(tuple(shape)) if shape is not None else "-"
-                    pbar.set_postfix_str(
-                        f"params={migrated}/{total_params}, shape={shape_str}, key={key}"
-                    )
-                    pbar.update(1)
-        finally:
-            if pbar is not None:
-                pbar.close()
+    def register_full_backward_pre_hook(
+        self,
+        hook: _BackwardHook,
+        *,
+        prepend: bool = False,
+    ) -> RemovableHandle:
+        """Register a hook to be called before backward hooks."""
+        key = _next_hook_id()
+        self._backward_pre_hooks[key] = hook
+        if prepend:
+            self._backward_pre_hooks.move_to_end(key, last=False)
+        return RemovableHandle(self._backward_pre_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
-        for hook in self._load_state_dict_post_hooks:
-            hook(self, missing_keys, unexpected_keys, strict)
+    def register_full_backward_hook(
+        self,
+        hook: _BackwardHook,
+        *,
+        prepend: bool = False,
+    ) -> RemovableHandle:
+        """Register a backward hook. Returns a RemovableHandle."""
+        key = _next_hook_id()
+        self._backward_hooks[key] = hook
+        if prepend:
+            self._backward_hooks.move_to_end(key, last=False)
+        return RemovableHandle(self._backward_hooks, key)  # type: ignore[arg-type]  # safe: RemovableHandle only pops by key
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Tensor | tuple[Tensor, ...]:
-        for hook, with_kwargs in self._forward_pre_hooks:
-            if with_kwargs:
-                result = hook(self, args, kwargs)
-                if result is not None:
-                    args, kwargs = result
-            else:
-                result = hook(self, args)
-                if result is not None:
-                    args = result
+    def register_backward_hook(self, hook: _BackwardHook) -> RemovableHandle:
+        """Deprecated alias for register_full_backward_hook."""
+        return self.register_full_backward_hook(hook)
 
-        output = self.forward(*args, **kwargs)
-
-        for hook, with_kwargs in self._forward_hooks:
-            if with_kwargs:
-                result = hook(self, args, kwargs, output)
-            else:
-                result = hook(self, args, output)
-            if result is not None:
-                output = result
-
-        if isinstance(output, Tensor) and self._backward_hooks:
-            for hook in self._backward_hooks:
-                output.register_hook(hook)
-
-        if self._full_backward_pre_hooks or self._full_backward_hooks:
-            outputs = output if isinstance(output, tuple) else (output,)
-            output_tensors = [out for out in outputs if isinstance(out, Tensor)]
-
-            if output_tensors:
-                grad_outputs: list[_NumPyArray | None] = [None] * len(output_tensors)
-                called = False
-
-                def _call_full_backward_hooks() -> None:
-                    nonlocal called, grad_outputs
-                    if called:
-                        return
-                    called = True
-
-                    grad_output_tuple = tuple(grad_outputs)
-                    for hook in self._full_backward_pre_hooks:
-                        result = hook(self, grad_output_tuple)
-                        if result is not None:
-                            grad_output_tuple = result
-
-                    grad_input_tuple = tuple(
-                        arg.grad if isinstance(arg, Tensor) else None for arg in args
-                    )
-                    for hook in self._full_backward_hooks:
-                        hook(self, grad_input_tuple, grad_output_tuple)
-
-                for idx, out in enumerate(output_tensors):
-
-                    def _make_hook(index: int) -> Callable:
-                        def _hook(_, grad: _NumPyArray) -> None:
-                            grad_outputs[index] = grad
-                            if all(g is not None for g in grad_outputs):
-                                _call_full_backward_hooks()
-
-                        return _hook
-
-                    out.register_hook(_make_hook(idx))
-
-        return output
-
-    def compile(self, **kwargs) -> JITModule:
-        return JITModule(self, **kwargs)
+    # ── repr ──────────────────────────────────────────────────────────────
 
     def __repr__(self) -> str:
+        """Return a developer-facing string representation of the instance."""
         extra = self.extra_repr()
-        child_lines = []
-        for name, module in self._modules.items():
-            mod_str = repr(module)
-            mod_str = _add_indent(mod_str, 2)
-            child_lines.append(f"({name}): {mod_str}")
-
-        main_str = self._get_name() + "("
+        cls_name = type(self).__name__
+        if not self._modules:
+            return f"{cls_name}({extra})" if extra else f"{cls_name}()"
+        lines = [f"{cls_name}("]
         if extra:
-            main_str += extra
-
-        if child_lines:
-            if extra:
-                main_str += "\n"
-            main_str += "\n  " + "\n  ".join(child_lines) + "\n"
-
-        main_str += ")"
-        return main_str
+            lines.append(f"  {extra}")
+        for name, m in self._modules.items():
+            mod_repr = repr(m).replace("\n", "\n  ")
+            lines.append(f"  ({name}): {mod_repr}")
+        lines.append(")")
+        return "\n".join(lines)
 
     def extra_repr(self) -> str:
-        exclude = {"training", "device"}
-        attrs = []
-        for name, value in vars(self).items():
-            if name.startswith("_") or name in exclude:
-                continue
-            if (
-                name in self._parameters
-                or name in self._buffers
-                or name in self._modules
-            ):
-                continue
-            attrs.append(f"{name}={value}")
-        return ", ".join(attrs)
-
-    def _get_name(self) -> str:
-        return self._alt_name or type(self).__name__
-
-
-def _add_indent(s: str, num_spaces: int) -> str:
-    lines = s.splitlines()
-    if len(lines) <= 1:
-        return s
-    first = lines[0]
-    indented = [" " * num_spaces + line for line in lines[1:]]
-    return "\n".join([first, *indented])
-
-
-T = TypeVar("T", bound=Type[Module])
-
-
-def auto_repr(*attr_names: str) -> Callable[[T], T]:
-    def wrapper(cls: T) -> T:
-        def extra_repr(self: Module) -> str:
-            parts = []
-            for name in attr_names:
-                val = getattr(self, name, None)
-                parts.append(f"{name}={val}")
-            return ", ".join(parts)
-
-        cls.extra_repr = extra_repr
-        return cls
-
-    return wrapper
-
-
-def set_state_dict_pass_attr(*attr_names: str) -> Callable[[T], T]:
-    def wrapper(cls: T) -> T:
-        cls._state_dict_pass_attr = set(attr_names)
-        return cls
-
-    return wrapper
-
-
-class Sequential(Module):
-    @overload
-    def __init__(self, *modules: Module) -> None: ...
-
-    @overload
-    def __init__(self, ordered_dict: OrderedDict[str, Module]) -> None: ...
-
-    def __init__(self, *args: Module | OrderedDict[str, Module]) -> None:
-        super().__init__()
-        if len(args) == 1 and isinstance(args[0], OrderedDict):
-            for name, module in args[0].items():
-                self.add_module(name, module)
-        else:
-            for idx, module in enumerate(args):
-                self.add_module(str(idx), module)
-
-    def forward(self, input: Tensor) -> Tensor:
-        for module in self._modules.values():
-            input = module(input)
-        return input
-
-    def __getitem__(self, idx: int | slice) -> Module | Self:
-        if isinstance(idx, slice):
-            modules_slice = list(self._modules.items())[idx]
-            return Sequential(OrderedDict(modules_slice))
-
-        elif isinstance(idx, int):
-            if idx < 0:
-                idx += len(self._modules)
-            keys = list(self._modules.keys())
-
-            if idx < 0 or idx >= len(keys):
-                raise IndexError("Index out of range")
-
-            return self._modules[keys[idx]]
-        else:
-            raise TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
-
-    def __setitem__(self, idx: int, module: Module) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers for __setitem__.")
-
-        keys = list(self._modules.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range")
-
-        old_key = keys[idx]
-        del self._modules[old_key]
-        self._modules[old_key] = module
-
-    def __delitem__(self, idx: int) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers for __delitem__.")
-
-        keys = list(self._modules.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range")
-
-        del self._modules[keys[idx]]
-
-    def __len__(self) -> int:
-        return len(self._modules)
-
-    def append(self, module: Module) -> None:
-        self.add_module(str(len(self._modules)), module)
-
-    def extend(self, modules: Iterator[Module]) -> None:
-        for module in modules:
-            self.append(module)
-
-    @classmethod
-    def from_ordered_dict(cls: type[Self], odict: OrderedDict[str, Module]) -> Self:
-        return cls(odict)
-
-    @classmethod
-    def from_modules(cls: type[Self], *modules: Module) -> Self:
-        return cls(*modules)
-
-
-class ModuleList(Module):
-    def __init__(self, modules: list[Module] | None = None) -> None:
-        super().__init__()
-        if modules is not None:
-            self.extend(modules)
-
-    def __getitem__(self, idx: int | slice) -> Module | Self:
-        if isinstance(idx, slice):
-            mod_slice = list(self._modules.items())[idx]
-            ml = ModuleList()
-            for i, (_, m) in enumerate(mod_slice):
-                ml.add_module(str(i), m)
-            return ml
-
-        elif isinstance(idx, int):
-            if idx < 0:
-                idx += len(self._modules)
-            keys = list(self._modules.keys())
-            if idx < 0 or idx >= len(keys):
-                raise IndexError("Index out of range.")
-
-            return self._modules[keys[idx]]
-        else:
-            raise TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
-
-    def __setitem__(self, idx: int, module: Module) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers.")
-
-        keys = list(self._modules.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range.")
-
-        old_key = keys[idx]
-        del self._modules[old_key]
-        self.add_module(old_key, module)
-
-    def __delitem__(self, idx: int) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers.")
-
-        keys = list(self._modules.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range.")
-
-        items = list(self._modules.items())
-        self._modules.clear()
-        for i, (_, m) in enumerate(items):
-            self._modules[str(i)] = m
-
-    def __len__(self) -> int:
-        return len(self._modules)
-
-    def __iter__(self) -> Iterator[Module]:
-        return iter(self._modules.values())
-
-    def append(self, module: Module) -> None:
-        self.add_module(str(len(self._modules)), module)
-
-    def extend(self, modules: list[Module]) -> None:
-        for m in modules:
-            self.append(m)
-
-    def insert(self, index: int, module: Module) -> None:
-        if not isinstance(index, int):
-            raise TypeError("Index should be an integer.")
-
-        total = len(self._modules)
-        if index < 0:
-            index += total
-        if index < 0:
-            index = 0
-        if index > total:
-            index = total
-
-        items = list(self._modules.items())
-        items.insert(index, (str(index), module))
-
-        self._modules.clear()
-        for i, (_, m) in enumerate(items):
-            self._modules[str(i)] = m
-
-
-class ModuleDict(Module):
-    def __init__(self, modules: dict[str, Module] | None = None) -> None:
-        super().__init__()
-        if modules is not None:
-            self.update(modules)
-
-    def update(self, modules: dict[str, Module]) -> None:
-        for k, m in modules.items():
-            self[k] = m
-
-    def clear(self) -> None:
-        self._modules.clear()
-
-    def pop(self, key: str) -> Module:
-        module = self._modules[key]
-        del self._modules[key]
-        return module
-
-    def __getitem__(self, key: str) -> Module:
-        return self._modules[key]
-
-    def __setitem__(self, key: str, module: Module) -> None:
-        if not isinstance(module, Module):
-            raise TypeError(f"Expected Module, got {type(module)}.")
-        self.add_module(key, module)
-
-    def __delitem__(self, key: str) -> None:
-        del self._modules[key]
-
-    def __len__(self) -> int:
-        return len(self._modules)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._modules)
-
-    def keys(self) -> KeysView[str]:
-        return self._modules.keys()
-
-    def values(self) -> ValuesView[Module]:
-        return self._modules.values()
-
-    def items(self) -> ItemsView[str, Module]:
-        return self._modules.items()
-
-
-class ParameterList(Module):
-    def __init__(self, parameters: list[nn.Parameter] | None = None) -> None:
-        super().__init__()
-        if parameters is not None:
-            self.extend(parameters)
-
-    def __getitem__(self, idx: int | slice) -> nn.Parameter | Self:
-        if isinstance(idx, slice):
-            items = list(self._parameters.items())[idx]
-            plist = ParameterList()
-
-            for i, (_, p) in enumerate(items):
-                plist.register_parameter(str(i), p)
-            return plist
-
-        elif isinstance(idx, int):
-            if idx < 0:
-                idx += len(self._parameters)
-            keys = list(self._parameters.keys())
-
-            if idx < 0 or idx >= len(keys):
-                raise IndexError("Index out of range.")
-            return self._parameters[keys[idx]]
-
-        else:
-            return TypeError(f"Invalid index type: {type(idx)}. Must be int or slice.")
-
-    def __setitem__(self, idx: int, param: nn.Parameter) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers.")
-        if not isinstance(param, nn.Parameter):
-            raise TypeError("Can only set Parameter in ParameterList.")
-
-        keys = list(self._parameters.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range.")
-
-        old_key = keys[idx]
-        del self._parameters[old_key]
-        self.register_parameter(old_key, param)
-
-    def __delitem__(self, idx: int) -> None:
-        if not isinstance(idx, int):
-            raise TypeError("Indices should be integers.")
-
-        keys = list(self._parameters.keys())
-        if idx < 0:
-            idx += len(keys)
-        if idx < 0 or idx >= len(keys):
-            raise IndexError("Index out of range")
-
-        del self._parameters[keys[idx]]
-
-        items = list(self._parameters.items())
-        self._parameters.clear()
-        for i, (_, p) in enumerate(items):
-            self._parameters[str(i)] = p
-
-    def __len__(self) -> int:
-        return len(self._parameters)
-
-    def __iter__(self) -> Iterator[nn.Parameter]:
-        return iter(self._parameters.values())
-
-    def append(self, param: nn.Parameter) -> None:
-        if not isinstance(param, nn.Parameter):
-            raise TypeError("Can only append Parameter to ParameterList.")
-        self.register_parameter(str(len(self._parameters)), param)
-
-    def extend(self, parameters) -> None:
-        for p in parameters:
-            self.append(p)
-
-    def insert(self, index: int, param: nn.Parameter) -> None:
-        if not isinstance(index, int):
-            raise TypeError("Index should be an integer for insert.")
-        if not isinstance(param, nn.Parameter):
-            raise TypeError("Can only insert Parameter into ParameterList.")
-
-        total = len(self._parameters)
-        if index < 0:
-            index += total
-        if index < 0:
-            index = 0
-        if index > total:
-            index = total
-
-        items = list(self._parameters.items())
-        items.insert(index, (str(index), param))
-
-        self._parameters.clear()
-        for i, (_, p) in enumerate(items):
-            self._parameters[str(i)] = p
-
-    def __repr__(self) -> str:
-        lines = []
-        for i, (_, p) in enumerate(self._parameters.items()):
-            param_str = _add_indent(repr(p), 2)
-            lines.append(f"({i}): {param_str}")
-
-        main_str = self._get_name() + "("
-        if lines:
-            main_str += "\n  " + "\n  ".join(lines) + "\n"
-        main_str += ")"
-        return main_str
-
-
-class ParameterDict(Module):
-    def __init__(self, parameters: dict[str, nn.Parameter] | None = None) -> None:
-        super().__init__()
-        if parameters is not None:
-            self.update(parameters)
-
-    def update(self, parameters: dict[str, nn.Parameter]) -> None:
-        for k, p in parameters.items():
-            self[k] = p
-
-    def clear(self) -> None:
-        self._parameters.clear()
-
-    def pop(self, key: str) -> nn.Parameter:
-        param = self._parameters[key]
-        del self._parameters[key]
-        return param
-
-    def __getitem__(self, key: str) -> nn.Parameter:
-        return self._parameters[key]
-
-    def __setitem__(self, key: str, param: nn.Parameter) -> None:
-        if not isinstance(param, nn.Parameter):
-            raise TypeError(f"Expected nn.Parameter, got {type(param)}")
-        self.register_parameter(key, param)
-
-    def __delitem__(self, key: str) -> None:
-        del self._parameters[key]
-
-    def __len__(self) -> int:
-        return len(self._parameters)
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._parameters)
-
-    def keys(self) -> KeysView[str]:
-        return self._parameters.keys()
-
-    def values(self) -> ValuesView[nn.Parameter]:
-        return self._parameters.values()
-
-    def items(self) -> ItemsView[str, nn.Parameter]:
-        return self._parameters.items()
-
-    def __repr__(self) -> str:
-        lines = []
-        for name, param in self._parameters.items():
-            param_str = _add_indent(repr(param), 2)
-            lines.append(f"({name}): {param_str}")
-
-        main_str = self._get_name() + "("
-        if lines:
-            main_str += "\n  " + "\n  ".join(lines) + "\n"
-        main_str += ")"
-        return main_str
+        """Override to add extra repr info (e.g. Linear shows in_features, etc.)."""
+        return ""
+
+
+class _ModuleBackwardState:
+    def __init__(self, module: Module, n_inputs: int) -> None:
+        self.module = module
+        self.n_inputs = n_inputs
+        self.n_outputs = 0
+        self.input_tensor_indices: list[int] = []
+        self.grad_inputs: list[Tensor | None] = [None] * n_inputs
+        self.grad_outputs: list[Tensor | None] = []
+        self.pre_hooks_ran = False
+        self.full_hooks_ran = False
+        self.C_engine_state: object | None = None
+
+    def set_num_outputs(self, n_outputs: int) -> None:
+        if not self.grad_outputs:
+            self.grad_outputs = [None] * n_outputs
+
+    def apply_backward_pre_hooks(self, index: int, grad_output: Tensor) -> Tensor:
+        self.set_num_outputs(max(self.n_outputs, index + 1))
+        self.grad_outputs[index] = grad_output
+
+        # For a single Tensor output, pre-hooks can transform the actual
+        # gradient flowing into the module. For multiple outputs, each output
+        # edge arrives separately; apply the hook to the currently available
+        # slot while preserving other slots as None.
+        grad_outputs = tuple(self.grad_outputs)
+        for hook in _GLOBAL_BACKWARD_PRE_HOOKS.values():
+            result = hook(self.module, grad_outputs)
+            if result is not None:
+                grad_outputs = result if isinstance(result, tuple) else (result,)
+        for hook in self.module._backward_pre_hooks.values():
+            result = hook(self.module, grad_outputs)
+            if result is not None:
+                grad_outputs = result if isinstance(result, tuple) else (result,)
+
+        self.pre_hooks_ran = True
+        updated = grad_outputs[index] if index < len(grad_outputs) else None
+        return updated if isinstance(updated, Tensor) else grad_output
+
+    def apply_backward_pre_hooks_from_C_engine(
+        self, grad_output_impls: tuple[_C_engine.TensorImpl | None, ...]
+    ) -> tuple[_C_engine.TensorImpl | None, ...] | None:
+        self.grad_outputs = [
+            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
+            for g in grad_output_impls
+        ]
+        grad_outputs = tuple(self.grad_outputs)
+        for hook in _GLOBAL_BACKWARD_PRE_HOOKS.values():
+            result = hook(self.module, grad_outputs)
+            if result is not None:
+                grad_outputs = result if isinstance(result, tuple) else (result,)
+        for hook in self.module._backward_pre_hooks.values():
+            result = hook(self.module, grad_outputs)
+            if result is not None:
+                grad_outputs = result if isinstance(result, tuple) else (result,)
+        self.pre_hooks_ran = True
+        self.grad_outputs = [
+            item if isinstance(item, Tensor) else None for item in grad_outputs
+        ]
+        return tuple(
+            _unwrap(item) if isinstance(item, Tensor) else None for item in grad_outputs
+        )
+
+    def apply_full_backward_hooks_for_input(
+        self,
+        index: int,
+        grad_input: Tensor,
+    ) -> Tensor:
+        self.grad_inputs[index] = grad_input
+        grad_inputs = tuple(self.grad_inputs)
+        grad_outputs = tuple(self.grad_outputs)
+
+        for hook in _GLOBAL_BACKWARD_HOOKS.values():
+            result = hook(self.module, grad_inputs, grad_outputs)
+            if result is not None:
+                grad_inputs = result if isinstance(result, tuple) else (result,)
+        for hook in self.module._backward_hooks.values():
+            result = hook(self.module, grad_inputs, grad_outputs)
+            if result is not None:
+                grad_inputs = result if isinstance(result, tuple) else (result,)
+
+        self.full_hooks_ran = True
+        updated = grad_inputs[index] if index < len(grad_inputs) else None
+        return updated if isinstance(updated, Tensor) else grad_input
+
+    def apply_full_backward_hooks_from_C_engine(
+        self,
+        grad_input_impls: tuple[_C_engine.TensorImpl | None, ...],
+        grad_output_impls: tuple[_C_engine.TensorImpl | None, ...],
+    ) -> tuple[_C_engine.TensorImpl | None, ...] | None:
+        grad_inputs = tuple(
+            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
+            for g in grad_input_impls
+        )
+        grad_outputs = tuple(
+            _wrap(g) if isinstance(g, _C_engine.TensorImpl) else None
+            for g in grad_output_impls
+        )
+        for hook in _GLOBAL_BACKWARD_HOOKS.values():
+            result = hook(self.module, grad_inputs, grad_outputs)
+            if result is not None:
+                grad_inputs = result if isinstance(result, tuple) else (result,)
+        for hook in self.module._backward_hooks.values():
+            result = hook(self.module, grad_inputs, grad_outputs)
+            if result is not None:
+                grad_inputs = result if isinstance(result, tuple) else (result,)
+        self.full_hooks_ran = True
+        self.grad_inputs = [
+            item if isinstance(item, Tensor) else None for item in grad_inputs
+        ]
+        self.grad_outputs = [
+            item if isinstance(item, Tensor) else None for item in grad_outputs
+        ]
+        return tuple(
+            _unwrap(item) if isinstance(item, Tensor) else None for item in grad_inputs
+        )
+
+    def apply_full_backward_hooks_without_inputs(self) -> None:
+        if self.full_hooks_ran or self.input_tensor_indices:
+            return
+        grad_inputs: tuple[Tensor | None, ...] = ()
+        grad_outputs = tuple(self.grad_outputs)
+        for hook in _GLOBAL_BACKWARD_HOOKS.values():
+            hook(self.module, grad_inputs, grad_outputs)
+        for hook in self.module._backward_hooks.values():
+            hook(self.module, grad_inputs, grad_outputs)
+        self.full_hooks_ran = True
+
+
+class _ModuleInputBackwardHookFunction:
+    @staticmethod
+    def apply(x: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
+        from lucid.autograd import Function
+
+        class _InputHook(Function):
+            @staticmethod
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific than Function.forward(*args)
+                ctx.state = state
+                ctx.index = index
+                return x
+
+            @staticmethod
+            def backward(ctx: FunctionCtx, grad_input: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                return cast(
+                    Tensor,
+                    ctx.state.apply_full_backward_hooks_for_input(  # type: ignore[attr-defined]
+                        ctx.index, grad_input
+                    ),
+                )
+
+        result = _InputHook.apply(x)
+        assert isinstance(
+            result, Tensor
+        )  # Function.apply returns object but forward() returns Tensor
+        return result
+
+
+class _ModuleOutputBackwardHookFunction:
+    @staticmethod
+    def apply(output: Tensor, state: _ModuleBackwardState, index: int) -> Tensor:
+        from lucid.autograd import Function
+
+        class _OutputHook(Function):
+            @staticmethod
+            def forward(ctx: FunctionCtx, x: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                ctx.state = state
+                ctx.index = index
+                return x
+
+            @staticmethod
+            def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:  # type: ignore[override]  # intentionally more specific
+                updated = ctx.state.apply_backward_pre_hooks(ctx.index, grad_output)  # type: ignore[attr-defined]
+                ctx.state.apply_full_backward_hooks_without_inputs()  # type: ignore[attr-defined]
+                return cast(Tensor, updated)
+
+        result = _OutputHook.apply(output)
+        assert isinstance(
+            result, Tensor
+        )  # Function.apply returns object but forward() returns Tensor
+        return result

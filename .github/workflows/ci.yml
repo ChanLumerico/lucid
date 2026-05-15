@@ -1,0 +1,159 @@
+name: Lucid C++ Engine CI
+
+on:
+  # PR gate: every push to a branch with an open PR runs the full matrix.
+  pull_request:
+  # Post-merge: only explicit release tags retrigger the gate. Routine
+  # `git push origin main` does not — main is assumed already green from
+  # the PR check, and tagged releases are the meaningful republish point
+  # (matches `release-testpypi.yml`).
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"
+
+# Cancel any in-flight run on the same ref when a new push lands, so
+# rapid successive pushes don't pile up 7–9 min jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phase-gate:
+    name: Phase gate / Python ${{ matrix.python-version }}
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        # Lucid is Python 3.14 only: TYPE_CHECKING annotations rely on
+        # PEP 649 lazy evaluation (H1 + H7 forbid the alternatives).
+        python-version: ["3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Enforce Apple Silicon runner
+        run: |
+          python - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid CI supports macOS arm64 only, got {system}/{machine}")
+          print(f"runner={system}/{machine}")
+          PY
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      - name: Run full local gate
+        run: ./scripts/ci_full.sh
+
+      # `ci_full.sh` step 9 (`scripts/ci_publish.sh`) already builds + verifies
+      # the wheel into `dist/`, so we just upload the artifact here.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lucid-wheel-py${{ matrix.python-version }}
+          path: dist/*.whl
+
+  coverage:
+    name: Coverage
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Enforce Apple Silicon runner
+        run: |
+          python - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid CI supports macOS arm64 only, got {system}/{machine}")
+          PY
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      - name: Run coverage
+        # Model-zoo tests are excluded — they use 50–60 GB locally, far
+        # past any hosted runner. Coverage on engine / nn / optim /
+        # autograd / linalg / fft / etc. fits fine.
+        run: |
+          python -m pip install coverage
+          mkdir -p build/coverage
+          python -m coverage run --source=lucid -m pytest lucid/test/ \
+              --ignore=lucid/test/parity \
+              --ignore=lucid/test/integration \
+              --ignore=lucid/test/perf \
+              --ignore=lucid/test/unit/models \
+              -q
+          python -m coverage xml -o build/coverage/coverage.xml
+          python -m coverage report
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lucid-coverage-xml
+          path: build/coverage/coverage.xml
+
+  nightly-perf:
+    name: Nightly perf placeholder
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
+          python -m pip install --no-build-isolation -e ".[test]"
+
+      - name: Run perf placeholder
+        run: python -m pytest lucid/test/perf/ -q
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-history
+          path: docs/perf/history.json

@@ -1,0 +1,49 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++20
+
+ColumnLimit: 100
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<pybind11/'
+    Priority: 2
+  - Regex: '^<[a-z_]+>$'
+    Priority: 3
+  - Regex: '^<.+\.h>$'
+    Priority: 4
+  - Regex: '.*'
+    Priority: 5
+SortIncludes: CaseSensitive
+
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+BinPackParameters: false
+BinPackArguments: true
+AlwaysBreakTemplateDeclarations: Yes
+AllowAllParametersOfDeclarationOnNextLine: true
+
+ConstructorInitializerIndentWidth: 4
+PackConstructorInitializers: NextLine
+
+ReflowComments: false
+SpacesBeforeTrailingComments: 2
+
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+EmptyLineBeforeAccessModifier: LogicalBlock

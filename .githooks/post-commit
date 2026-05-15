@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# .githooks/post-commit — Lucid auto-CHANGELOG amend.
+#
+# Fires AFTER a successful commit.  If the just-landed commit uses a
+# user-facing conventional-commit prefix (feat / fix / perf / refactor /
+# revert / remove / deprec / sec) and the commit did *not* touch
+# CHANGELOG.md, automatically:
+#
+#   1. Calls ``tools/changelog.py propose --auto --message-file <msg>``
+#      to inject an entry into the [Unreleased] section.
+#   2. ``git commit --amend --no-edit --no-verify`` to fold CHANGELOG.md
+#      into the same commit (preserving subject/body/author/date).
+#
+# Why post-commit and not prepare-commit-msg / pre-commit?
+#   * pre-commit runs before the commit message is finalised, so it
+#     can't tell whether the upcoming commit is user-facing.
+#   * prepare-commit-msg can read the message file but git locks the
+#     commit's tree from the *pre-commit* end state — index changes
+#     made later don't make it into the commit.
+#   * post-commit can both read the actual landed commit AND amend it
+#     in place before push.  Since the commit hash hasn't been
+#     published yet, the rewrite is safe.
+#
+# Result: ``[Unreleased]`` stays in sync with the conventional-commit
+# history with zero human intervention.  Manual ``tools/changelog.py
+# add`` is reserved for entries that don't map 1-to-1 to a commit
+# subject.
+#
+# Opt-out for a single commit:
+#     LUCID_SKIP_CHANGELOG_CHECK=1 git commit ...
+
+set -uo pipefail
+
+# Honor opt-out.
+if [[ "${LUCID_SKIP_CHANGELOG_CHECK:-0}" == "1" ]]; then
+    exit 0
+fi
+
+# Guard against recursion: when we ``git commit --amend`` below, this
+# hook fires again.  The amend includes CHANGELOG.md so the second
+# invocation falls through to the "already updated" branch and exits.
+if [[ "${LUCID_CHANGELOG_AMEND_IN_PROGRESS:-0}" == "1" ]]; then
+    exit 0
+fi
+
+SUBJECT="$(git log -1 --format=%s)"
+
+# Skip merges / fixups / reverts.
+case "${SUBJECT}" in
+    Merge\ * | merge\ * | fixup!\ * | squash!\ * | "Revert \""*) exit 0 ;;
+esac
+
+USER_FACING_RE='^(feat|fix|perf|refactor|revert|remove|deprec|sec)(\([^)]*\))?!?:[[:space:]]'
+if ! [[ "${SUBJECT}" =~ ${USER_FACING_RE} ]]; then
+    exit 0
+fi
+
+# Did this commit already include CHANGELOG.md?  If so, nothing to do.
+if git show --stat --name-only --format='' HEAD | grep -qx "CHANGELOG.md"; then
+    echo "  📝  CHANGELOG.md updated alongside this commit ✓" >&2
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+CHANGELOG_TOOL="${REPO_ROOT}/tools/changelog.py"
+
+if [[ ! -f "${CHANGELOG_TOOL}" ]]; then
+    # Tool missing — fall back to a passive nudge.
+    cat <<EOF >&2
+
+  📝  Reminder: this commit looks user-facing but CHANGELOG.md was not
+      updated and tools/changelog.py is missing.  Add an entry manually
+      and amend.
+
+      (Set LUCID_SKIP_CHANGELOG_CHECK=1 to silence.)
+
+EOF
+    exit 0
+fi
+
+# Auto-inject the entry from the just-landed commit subject.  We use the
+# commit message file that git left at .git/COMMIT_EDITMSG so propose
+# parses exactly what landed, including any body lines.
+MSG_FILE="${REPO_ROOT}/.git/COMMIT_EDITMSG"
+if [[ ! -f "${MSG_FILE}" ]]; then
+    # Fallback to HEAD log (no body context, but subject is enough).
+    if ! python3 "${CHANGELOG_TOOL}" propose --auto >/dev/null 2>&1; then
+        exit 0
+    fi
+else
+    if ! python3 "${CHANGELOG_TOOL}" propose --auto --message-file "${MSG_FILE}" >/dev/null 2>&1; then
+        exit 0
+    fi
+fi
+
+# Amend the commit to include CHANGELOG.md.  Re-export the guard so the
+# recursive post-commit invocation skips itself.
+git add "${REPO_ROOT}/CHANGELOG.md"
+LUCID_CHANGELOG_AMEND_IN_PROGRESS=1 \
+    git commit --amend --no-edit --no-verify >/dev/null
+
+echo "  📝  CHANGELOG.md auto-injected and folded into HEAD via amend ✓" >&2
+exit 0

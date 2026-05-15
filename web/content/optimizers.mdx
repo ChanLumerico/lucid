@@ -1,0 +1,144 @@
+---
+title: Optimizers
+description: Updating model parameters with lucid.optim — optimizers, schedulers, and gradient utilities.
+category: Concepts
+order: 7
+---
+
+`lucid.optim` provides all standard gradient-based optimizers plus learning-rate schedulers. The interface mirrors that of major ML frameworks.
+
+## Basic usage
+
+```python
+import lucid.optim as optim
+
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+for x, y in dataloader:
+    pred  = model(x)
+    loss  = criterion(pred, y)
+
+    optimizer.zero_grad()   # 1. clear gradients
+    loss.backward()         # 2. compute gradients
+    optimizer.step()        # 3. update parameters
+```
+
+<Callout variant="warning">
+Always call `zero_grad()` before `backward()`. Gradients accumulate by default — skipping this step adds gradients across batches.
+</Callout>
+
+## Available optimizers
+
+| Class | Algorithm | Key hyperparameters |
+|---|---|---|
+| `SGD` | Stochastic gradient descent | `lr`, `momentum`, `weight_decay`, `nesterov` |
+| `Adam` | Adaptive moment estimation | `lr`, `betas`, `eps`, `weight_decay` |
+| `AdamW` | Adam + decoupled weight decay | `lr`, `betas`, `eps`, `weight_decay` |
+| `RMSprop` | Root mean square propagation | `lr`, `alpha`, `eps`, `momentum` |
+| `Adagrad` | Adaptive gradient | `lr`, `eps`, `weight_decay` |
+| `Adadelta` | Adaptive learning rate | `rho`, `eps`, `weight_decay` |
+| `Adamax` | Adam with ∞-norm | `lr`, `betas`, `eps` |
+| `NAdam` | Nesterov Adam | `lr`, `betas`, `eps` |
+| `RAdam` | Rectified Adam | `lr`, `betas`, `eps` |
+| `ASGD` | Averaged SGD | `lr`, `lambd`, `alpha`, `t0` |
+| `LBFGS` | Limited-memory BFGS | `lr`, `max_iter`, `history_size` |
+| `SparseAdam` | Adam for sparse gradients | `lr`, `betas`, `eps` |
+| `Rprop` | Resilient backpropagation | `lr`, `etas`, `step_sizes` |
+
+## Parameter groups
+
+Different parts of a model can have different learning rates:
+
+```python
+optimizer = optim.AdamW([
+    {"params": model.backbone.parameters(), "lr": 1e-4},
+    {"params": model.head.parameters(),     "lr": 1e-3},
+], weight_decay=1e-2)
+```
+
+## Gradient clipping
+
+Clip gradients before the optimizer step to stabilise training:
+
+```python
+loss.backward()
+lucid.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+optimizer.step()
+```
+
+## Learning rate schedulers
+
+Schedulers adjust `lr` after each epoch (or step).
+
+| Class | Schedule |
+|---|---|
+| `StepLR` | Multiply by `gamma` every `step_size` epochs |
+| `MultiStepLR` | Multiply at specified milestone epochs |
+| `ExponentialLR` | Multiply by `gamma` every epoch |
+| `CosineAnnealingLR` | Cosine decay to `eta_min` |
+| `CosineAnnealingWarmRestarts` | Cosine with periodic warm restarts |
+| `ReduceLROnPlateau` | Reduce on validation metric stall |
+| `OneCycleLR` | 1-cycle policy (warm-up + cosine decay) |
+| `LinearLR` | Linear interpolation between start and end factors |
+| `PolynomialLR` | Polynomial decay |
+| `CyclicLR` | Triangular / triangular2 / exp_range cycle |
+
+```python
+scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=100, eta_min=1e-6
+)
+
+for epoch in range(100):
+    train_one_epoch(model, optimizer)
+    scheduler.step()
+    print(f"epoch {epoch}  lr {scheduler.get_last_lr()[0]:.2e}")
+```
+
+### ReduceLROnPlateau
+
+```python
+scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode="min", factor=0.5, patience=5
+)
+
+val_loss = evaluate(model, val_loader)
+scheduler.step(val_loss)   # pass the metric, not epoch
+```
+
+## Chaining schedulers
+
+```python
+warmup = optim.lr_scheduler.LinearLR(
+    optimizer, start_factor=0.1, total_iters=5
+)
+cosine = optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=95
+)
+scheduler = optim.lr_scheduler.SequentialLR(
+    optimizer, schedulers=[warmup, cosine], milestones=[5]
+)
+```
+
+## Optimizer state dict
+
+```python
+import lucid.serialization as ser
+
+# Save
+checkpoint = {
+    "model":     model.state_dict(),
+    "optimizer": optimizer.state_dict(),
+    "scheduler": scheduler.state_dict(),
+    "epoch":     epoch,
+}
+ser.save(checkpoint, "checkpoint.pkl")
+
+# Resume
+checkpoint = ser.load("checkpoint.pkl")
+model.load_state_dict(checkpoint["model"])
+optimizer.load_state_dict(checkpoint["optimizer"])
+scheduler.load_state_dict(checkpoint["scheduler"])
+start_epoch = checkpoint["epoch"] + 1
+```
+
+Full reference: [`lucid.optim`](/api/lucid.optim)

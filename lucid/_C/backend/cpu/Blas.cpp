@@ -1,0 +1,81 @@
+// lucid/_C/backend/cpu/Blas.cpp
+//
+// Implements the BLAS wrapper functions declared in Blas.h by delegating
+// directly to cblas_sgemm, cblas_dgemm, cblas_sgemv, and cblas_dgemv from
+// Apple Accelerate.  All calls use CblasRowMajor storage order because
+// Lucid tensors are row-major by default.
+
+#include "Blas.h"
+
+#include <Accelerate/Accelerate.h>
+
+namespace lucid::backend::cpu {
+
+namespace {
+// Converts a bool transpose flag to the CBLAS enum expected by Accelerate.
+inline CBLAS_TRANSPOSE T(bool t) {
+    return t ? CblasTrans : CblasNoTrans;
+}
+}  // namespace
+
+void sgemm(bool transA,
+           bool transB,
+           int M,
+           int N,
+           int K,
+           float alpha,
+           const float* A,
+           int lda,
+           const float* B,
+           int ldb,
+           float beta,
+           float* C,
+           int ldc) {
+    cblas_sgemm(CblasRowMajor, T(transA), T(transB), M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
+}
+
+void dgemm(bool transA,
+           bool transB,
+           int M,
+           int N,
+           int K,
+           double alpha,
+           const double* A,
+           int lda,
+           const double* B,
+           int ldb,
+           double beta,
+           double* C,
+           int ldc) {
+    cblas_dgemm(CblasRowMajor, T(transA), T(transB), M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
+}
+
+void sgemv(bool transA,
+           int M,
+           int N,
+           float alpha,
+           const float* A,
+           int lda,
+           const float* x,
+           int incx,
+           float beta,
+           float* y,
+           int incy) {
+    cblas_sgemv(CblasRowMajor, T(transA), M, N, alpha, A, lda, x, incx, beta, y, incy);
+}
+
+void dgemv(bool transA,
+           int M,
+           int N,
+           double alpha,
+           const double* A,
+           int lda,
+           const double* x,
+           int incx,
+           double beta,
+           double* y,
+           int incy) {
+    cblas_dgemv(CblasRowMajor, T(transA), M, N, alpha, A, lda, x, incx, beta, y, incy);
+}
+
+}  // namespace lucid::backend::cpu

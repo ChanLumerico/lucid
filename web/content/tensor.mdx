@@ -1,0 +1,157 @@
+---
+title: Tensor
+description: The core data structure in Lucid — a multidimensional array with autograd support.
+category: Concepts
+order: 5
+---
+
+`lucid.Tensor` is the fundamental data structure in Lucid. Every computation — from a simple addition to a full forward pass — operates on tensors.
+
+## Creating tensors
+
+The factory functions cover the most common initialization patterns:
+
+```python
+import lucid
+
+# From Python data
+a = lucid.tensor([1.0, 2.0, 3.0])
+b = lucid.tensor([[1, 2], [3, 4]], dtype=lucid.float32)
+
+# Filled tensors
+z = lucid.zeros(3, 4)         # shape (3, 4), all zeros
+o = lucid.ones(2, 2, 2)       # shape (2, 2, 2), all ones
+f = lucid.full((3,), 7.0)     # shape (3,), all 7.0
+
+# Identity / range
+eye = lucid.eye(4)
+idx = lucid.arange(0, 10, 2)  # [0, 2, 4, 6, 8]
+lin = lucid.linspace(0, 1, 5) # [0.0, 0.25, 0.5, 0.75, 1.0]
+
+# Random
+r = lucid.randn(3, 3)         # standard normal
+u = lucid.rand(3, 3)          # uniform [0, 1)
+```
+
+## Shape and dtype
+
+```python
+t = lucid.randn(2, 3, 4)
+
+print(t.shape)   # (2, 3, 4)
+print(t.ndim)    # 3
+print(t.numel)   # 24
+print(t.dtype)   # float32
+```
+
+### Dtype table
+
+| Lucid dtype | Bits | Notes |
+|---|---|---|
+| `lucid.float16` | 16 | half precision |
+| `lucid.float32` | 32 | default |
+| `lucid.float64` | 64 | double precision |
+| `lucid.int32` | 32 | |
+| `lucid.int64` | 64 | |
+| `lucid.bool_` | 1 | |
+
+## Device
+
+```python
+# Metal (MLX GPU — default)
+t_gpu = lucid.randn(4, 4, device="metal")
+
+# Accelerate CPU
+t_cpu = lucid.randn(4, 4, device="cpu")
+
+# Move between devices
+t_cpu = t_gpu.cpu()
+t_gpu = t_cpu.to("metal")
+```
+
+## Indexing and slicing
+
+Lucid supports standard NumPy-style indexing:
+
+```python
+t = lucid.arange(12).reshape(3, 4)
+
+t[0]        # first row — shape (4,)
+t[:, 1]     # second column — shape (3,)
+t[1:, 2:]   # submatrix — shape (2, 2)
+t[0, -1]    # scalar at row 0, last column
+```
+
+### Boolean indexing
+
+```python
+mask = t > 5
+print(t[mask])   # all elements > 5, flattened
+```
+
+## Reshaping
+
+```python
+t = lucid.randn(2, 12)
+
+t.reshape(4, 6)     # explicit shape
+t.reshape(4, -1)    # infer last dim
+t.flatten()         # (24,)
+t.squeeze()         # remove size-1 dims
+t.unsqueeze(0)      # add dim at axis 0
+```
+
+## Arithmetic and broadcasting
+
+All arithmetic ops follow NumPy broadcasting rules:
+
+```python
+a = lucid.ones(3, 1)
+b = lucid.ones(1, 4)
+
+(a + b).shape   # (3, 4)
+(a * b).shape   # (3, 4)
+```
+
+## Autograd integration
+
+```python
+x = lucid.randn(4, requires_grad=True)
+y = (x ** 2).sum()
+y.backward()
+print(x.grad)   # 2 * x
+```
+
+Set `requires_grad=False` (the default) for inference-only tensors to avoid building the computation graph.
+
+## Conversion
+
+```python
+# To NumPy (CPU only, forces evaluation)
+arr = t.cpu().numpy()
+
+# From NumPy
+t2 = lucid.from_numpy(arr)
+```
+
+<Callout variant="note">
+`.numpy()` requires the tensor to be on the CPU backend. Call `.cpu()` first if the tensor is on Metal.
+</Callout>
+
+## Common methods quick reference
+
+| Method | Description |
+|---|---|
+| `t.sum(dim)` | Sum along dimension |
+| `t.mean(dim)` | Mean along dimension |
+| `t.max(dim)` | Max value (and optionally index) |
+| `t.min(dim)` | Min value |
+| `t.abs()` | Element-wise absolute value |
+| `t.sqrt()` | Element-wise square root |
+| `t.clamp(min, max)` | Clip values to range |
+| `t.contiguous()` | Ensure contiguous memory layout |
+| `t.detach()` | New tensor sharing data, no gradient |
+| `t.item()` | Python scalar (forces evaluation) |
+| `t.T` | Transpose (2-D shorthand) |
+
+Full reference: [`lucid.Tensor`](/api/lucid.tensor)

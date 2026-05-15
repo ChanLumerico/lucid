@@ -1,0 +1,324 @@
+"""Pruning utilities — minimal entry-point parity with the reference framework.
+
+The reference framework's ``nn.utils.prune`` is a large module with many
+pruning methods (``L1Unstructured``, ``RandomStructured``, ``RandomUnstructured``,
+``LnStructured``, custom pruners, ``global_unstructured`` ...).  We expose
+the most-used pieces — ``identity`` / ``random_unstructured`` /
+``l1_unstructured`` / ``remove`` / ``is_pruned`` — as a thin layer on top of
+forward-pre-hooks so common ``prune.l1_unstructured(layer, 'weight', amount=0.5)``
+usage works.  More exotic methods raise ``NotImplementedError`` rather than
+silently misbehaving.
+
+The mask is registered as a buffer ``{name}_mask``; the original Parameter
+is preserved as ``{name}_orig`` (matching upstream's naming so checkpoints
+are wire-compatible).  Each forward call rebuilds ``{name} = {name}_orig *
+{name}_mask`` via a pre-hook.
+"""
+
+import lucid
+from lucid._tensor.tensor import Tensor
+from lucid.nn.module import Module
+from lucid.nn.parameter import Parameter
+
+# Sentinel attribute mapping ``tensor_name`` → handle so ``remove`` /
+# ``is_pruned`` can find the registration.
+_PRUNE_HOOK_ATTR: str = "_prune_hooks"
+
+
+def _install_mask(module: Module, name: str, mask: Tensor) -> Module:
+    """Shared backend for the various pruning methods.
+
+    Captures the original Parameter as ``{name}_orig``, registers ``mask``
+    as a buffer ``{name}_mask``, and installs a forward-pre-hook that
+    materialises ``{name} = {name}_orig * {name}_mask`` before each call.
+    """
+    if not hasattr(module, name):
+        raise AttributeError(f"module has no parameter '{name}'")
+    weight: Parameter = getattr(module, name)
+    if not isinstance(weight, Parameter):
+        raise TypeError(
+            f"'{name}' must be a Parameter to prune, got {type(weight).__name__}"
+        )
+    if tuple(mask.shape) != tuple(weight.shape):
+        raise ValueError(
+            f"prune mask shape {tuple(mask.shape)} does not match weight "
+            f"shape {tuple(weight.shape)}"
+        )
+
+    # Preserve the original; install the mask as a non-trainable buffer.
+    del module._parameters[name]
+    module.register_parameter(name + "_orig", Parameter(weight.detach()))
+    module.register_buffer(name + "_mask", mask)
+
+    def _pre_hook(mod: Module, inputs: object) -> None:  # noqa: ANN401
+        w: Parameter = getattr(mod, name + "_orig")
+        m: Tensor = getattr(mod, name + "_mask")
+        object.__setattr__(mod, name, w * m)
+
+    handle = module.register_forward_pre_hook(_pre_hook)  # type: ignore[arg-type]
+    hooks: dict[str, object] = getattr(module, _PRUNE_HOOK_ATTR, {})
+    hooks[name] = handle
+    object.__setattr__(module, _PRUNE_HOOK_ATTR, hooks)
+
+    # Materialise ``{name}`` immediately so attribute access works without
+    # waiting for the first forward.
+    object.__setattr__(module, name, weight.detach() * mask)
+    return module
+
+
+def identity(module: Module, name: str = "weight") -> Module:
+    r"""Install a no-op pruning mask (all ones) on ``module.<name>``.
+
+    Registers the pruning hooks and buffers without zeroing any
+    elements — the resulting weight is bitwise identical to the input
+    but goes through the same ``W = W_orig * mask`` plumbing as any
+    other prune method.  Useful as a baseline, as a sanity check that
+    the pruning infrastructure is wired up correctly, and as the
+    starting point when you intend to compose multiple pruning rounds.
+
+    Parameters
+    ----------
+    module : Module
+        Host module.  Mutated in place.
+    name : str, optional
+        Parameter to prune.  Default ``"weight"``.
+
+    Returns
+    -------
+    Module
+        The same module, with ``<name>_orig`` (original weight),
+        ``<name>_mask`` (all-ones buffer), and a forward pre-hook.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils import prune
+    >>> prune.identity(layer)
+    >>> prune.is_pruned(layer)
+    True
+    """
+    weight: Parameter = getattr(module, name)
+    mask: Tensor = lucid.ones_like(weight)
+    return _install_mask(module, name, mask)
+
+
+def random_unstructured(
+    module: Module, name: str = "weight", amount: float = 0.5
+) -> Module:
+    r"""Prune a uniformly random ``amount`` fraction of weight elements.
+
+    Each scalar entry of ``module.<name>`` is independently masked to
+    zero with probability ``amount``.  Surviving entries retain their
+    original value — no compensatory rescaling is applied.  The
+    cheapest pruning baseline; useful as a control when evaluating
+    smarter methods like :func:`l1_unstructured`.
+
+    Parameters
+    ----------
+    module : Module
+        Host module.  Mutated in place.
+    name : str, optional
+        Parameter to prune.  Default ``"weight"``.
+    amount : float, optional
+        Bernoulli probability of dropping each element.  Must satisfy
+        :math:`0 \leq \text{amount} \leq 1`.  Default ``0.5``.
+
+    Returns
+    -------
+    Module
+        The module with the pruning hooks installed.
+
+    Raises
+    ------
+    ValueError
+        If ``amount`` is outside :math:`[0, 1]`.
+
+    Notes
+    -----
+    Mask is generated by sampling :math:`u_i \sim \mathcal{U}[0, 1)` for
+    every element and setting ``mask[i] = 1`` iff :math:`u_i \geq
+    \text{amount}`.  The expected sparsity matches ``amount`` but the
+    realised sparsity varies by chance.
+
+    Examples
+    --------
+    >>> prune.random_unstructured(layer, amount=0.3)
+    """
+    if not 0.0 <= amount <= 1.0:
+        raise ValueError(f"amount must be in [0, 1], got {amount}")
+    weight: Parameter = getattr(module, name)
+    rand_t: Tensor = lucid.rand(*weight.shape, dtype=weight.dtype)
+    mask: Tensor = rand_t >= amount  # True where we keep
+    # bool -> dtype conversion via where + ones/zeros so multiplication works.
+    mask = lucid.where(mask, lucid.ones_like(weight), lucid.zeros_like(weight))
+    return _install_mask(module, name, mask)
+
+
+def l1_unstructured(
+    module: Module, name: str = "weight", amount: float = 0.5
+) -> Module:
+    r"""Prune the smallest-magnitude ``amount`` fraction of weight elements.
+
+    The classical "magnitude pruning" heuristic of Han et al. (2015):
+    rank every entry of ``|W|`` and zero out the lowest fraction.
+    Surprisingly effective for compressing well-trained networks
+    because small-magnitude weights tend to carry little information.
+
+    Parameters
+    ----------
+    module : Module
+        Host module.  Mutated in place.
+    name : str, optional
+        Parameter to prune.  Default ``"weight"``.
+    amount : float, optional
+        Fraction of elements to zero, in :math:`[0, 1]`.  Default
+        ``0.5``.  ``0`` is a no-op (falls back to :func:`identity`);
+        ``1`` zeros every weight.
+
+    Returns
+    -------
+    Module
+        The module with the pruning hooks installed.
+
+    Raises
+    ------
+    ValueError
+        If ``amount`` is outside :math:`[0, 1]`.
+
+    Notes
+    -----
+    Threshold :math:`\tau` is the ``k``-th smallest of :math:`|W_i|`
+    where :math:`k = \lfloor \text{amount} \cdot N \rceil` and ``N`` is
+    the total element count; the mask is
+
+    .. math::
+
+        m_i \;=\; \begin{cases} 1 & |W_i| > \tau \\ 0 & |W_i| \leq \tau. \end{cases}
+
+    Realised sparsity is exact up to ties at the threshold.
+
+    Examples
+    --------
+    >>> prune.l1_unstructured(layer, amount=0.7)
+    """
+    if not 0.0 <= amount <= 1.0:
+        raise ValueError(f"amount must be in [0, 1], got {amount}")
+    weight: Parameter = getattr(module, name)
+    abs_w: Tensor = lucid.abs(weight.detach())
+    flat: Tensor = abs_w.reshape([-1])
+    n_total: int = int(flat._impl.numel())
+    n_drop: int = int(round(amount * n_total))
+    if n_drop == 0:
+        # Identity behaviour when amount rounds to nothing.
+        return identity(module, name)
+
+    # The reference framework uses the (n_drop)-th smallest as the cutoff;
+    # ``kthvalue`` returns the k-th smallest (1-indexed), so n_drop is the
+    # right argument.  The bare comparison op doesn't broadcast a 0-d
+    # tensor against a multi-D one, so materialise the threshold as a
+    # ``full_like`` tensor that already shares the weight's shape.
+    threshold_scalar: float = float(lucid.kthvalue(flat, n_drop).item())  # type: ignore[arg-type]
+    threshold_t: Tensor = lucid.full_like(abs_w, threshold_scalar)
+    keep: Tensor = abs_w > threshold_t
+    mask: Tensor = lucid.where(keep, lucid.ones_like(weight), lucid.zeros_like(weight))
+    return _install_mask(module, name, mask)
+
+
+def remove(module: Module, name: str = "weight") -> Module:
+    r"""Bake the pruning mask into the parameter and detach the hook.
+
+    Computes ``W_orig * mask`` once, writes the result back as a single
+    leaf :class:`~lucid.nn.parameter.Parameter` ``module.<name>``, and
+    cleans up the ``<name>_orig``, ``<name>_mask``, and forward pre-hook
+    bookkeeping.  After this, ``module`` looks identical to a freshly
+    constructed one — except the zeroed entries are now permanent.
+
+    Parameters
+    ----------
+    module : Module
+        Module previously passed through one of the prune methods.
+    name : str, optional
+        Parameter name to finalise.  Default ``"weight"``.
+
+    Returns
+    -------
+    Module
+        The same module with the sparsity now embedded directly in the
+        weight and the prune infrastructure removed.
+
+    Raises
+    ------
+    ValueError
+        If no pruning registration exists on ``<name>``.
+
+    Notes
+    -----
+    The baked weight is detached from the autograd graph — gradient
+    history accumulated through the masking hook is dropped.  Useful
+    immediately before export / quantisation, where the masking
+    indirection is wasteful overhead.
+
+    Examples
+    --------
+    >>> prune.l1_unstructured(layer, amount=0.5)
+    >>> prune.remove(layer)
+    >>> prune.is_pruned(layer)
+    False
+    """
+    hooks: dict[str, object] = getattr(module, _PRUNE_HOOK_ATTR, {})
+    if name not in hooks:
+        raise ValueError(f"prune not registered on '{name}'")
+    handle = hooks.pop(name)
+    handle.remove()  # type: ignore[attr-defined]
+
+    w_orig: Parameter = getattr(module, name + "_orig")
+    mask: Tensor = getattr(module, name + "_mask")
+    final: Tensor = (w_orig.detach() * mask).detach()
+    del module._parameters[name + "_orig"]
+    if name + "_mask" in module._buffers:
+        del module._buffers[name + "_mask"]
+    if name in module.__dict__:
+        del module.__dict__[name]
+    module.register_parameter(name, Parameter(final))
+
+    if not hooks:
+        try:
+            object.__delattr__(module, _PRUNE_HOOK_ATTR)
+        except AttributeError:
+            pass
+    return module
+
+
+def is_pruned(module: Module) -> bool:
+    r"""Predicate: does ``module`` carry an active pruning registration?
+
+    Lightweight introspection used by serialisation utilities,
+    model-summary tools, and user code that needs to branch on whether
+    pruning is in effect.  Checks for the sentinel ``_prune_hooks``
+    attribute without invoking any forward.
+
+    Parameters
+    ----------
+    module : Module
+        Module to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` if at least one parameter on ``module`` is currently
+        wrapped by a pruning mask, ``False`` otherwise.
+
+    Notes
+    -----
+    Runs in :math:`O(1)`; no tensor work is performed.  Returns ``False``
+    after a call to :func:`remove` that drains the last registration.
+
+    Examples
+    --------
+    >>> prune.is_pruned(layer)
+    False
+    >>> prune.l1_unstructured(layer, amount=0.2)
+    >>> prune.is_pruned(layer)
+    True
+    """
+    hooks: dict[str, object] = getattr(module, _PRUNE_HOOK_ATTR, {})
+    return bool(hooks)

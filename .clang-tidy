@@ -1,0 +1,29 @@
+# Lucid C++ engine static-analysis policy.
+# Run on the whole engine tree:
+#   tools/check_format.sh --tidy
+#
+# Checks chosen for the Phase 0 CI gate. This is intentionally a pragmatic
+# subset: real bug catchers and low-noise modernization/performance checks.
+# Broad readability/naming passes are deferred until after Phase 2's
+# TensorImpl encapsulation and Phase 3's kernel churn.
+
+Checks: >
+    cppcoreguidelines-slicing,
+    bugprone-dangling-handle,
+    bugprone-suspicious-memory-comparison,
+    bugprone-use-after-move,
+    modernize-use-nullptr,
+    modernize-use-override,
+    performance-move-const-arg,
+    performance-unnecessary-copy-initialization
+
+WarningsAsErrors: '
+    bugprone-use-after-move,
+    bugprone-dangling-handle,
+    bugprone-suspicious-memory-comparison,
+    cppcoreguidelines-slicing,
+    performance-move-const-arg,
+    performance-unnecessary-copy-initialization
+'
+
+HeaderFilterRegex: '^lucid/_C/.*'

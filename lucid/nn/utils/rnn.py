@@ -1,236 +1,421 @@
-from dataclasses import dataclass
-from typing import Iterable, Sequence
+"""
+RNN sequence packing utilities.
+All computation uses the C++ engine — no numpy.
+"""
+
+from typing import Any, NamedTuple, cast
 
 import lucid
-
-from lucid._tensor import Tensor
-from lucid.types import _Scalar
-
-__all__ = [
-    "PackedSequence",
-    "pad_sequence",
-    "pack_padded_sequence",
-    "pad_packed_sequence",
-    "pack_sequence",
-    "unpack_sequence",
-]
+from lucid._tensor.tensor import Tensor as _Tensor
+from lucid._tensor.tensor import Tensor  # public alias for NamedTuple field annotations
+from lucid._C import engine as _C_engine
+from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__init__ but not re-exported with __all__
 
 
-@dataclass(frozen=True)
-class PackedSequence:
+class PackedSequence(NamedTuple):
+    r"""Compact representation of a batch of variable-length sequences.
+
+    A ``PackedSequence`` interleaves all surviving time-steps of every
+    sequence in the batch into a single flat tensor, dropping the
+    padding entries entirely.  RNN cells consume this form to avoid
+    wasting compute on padded positions.
+
+    Attributes
+    ----------
+    data : Tensor
+        Concatenation of the active features at each time-step in
+        descending-length order, shape ``(sum(batch_sizes), *feat)``.
+    batch_sizes : Tensor
+        1-D int tensor giving the number of sequences still alive at
+        each successive time-step.  Strictly non-increasing.
+    sorted_indices : Tensor or None
+        Permutation that took the original batch order to the packed
+        (descending-length) order; ``None`` if the input was already
+        sorted.
+    unsorted_indices : Tensor or None
+        Inverse of ``sorted_indices``; used by
+        :func:`pad_packed_sequence` to restore the caller's original
+        batch order on unpack.
+
+    Notes
+    -----
+    Conceptually, with sequence lengths :math:`\ell_1 \geq \dots \geq
+    \ell_B`, the packed layout walks time-major:
+
+    .. math::
+
+        \text{data} = \bigl[\,x^{(1)}_0, \dots, x^{(B)}_0,\;
+                            x^{(1)}_1, \dots, x^{(B_1)}_1,\;
+                            \dots\,\bigr],
+
+    where :math:`B_t` (= ``batch_sizes[t]``) is the count of sequences
+    with length :math:`> t`.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+    >>> # padded (B=3, T=4, F=5), sorted-by-length [4, 3, 2]
+    >>> packed = pack_padded_sequence(x_padded, lengths=[4, 3, 2], batch_first=True)
+    >>> # ... feed to RNN ...
+    >>> unpacked, lengths = pad_packed_sequence(packed, batch_first=True)
+    """
+
     data: Tensor
     batch_sizes: Tensor
-    sorted_indices: Tensor | None = None
-    unsorted_indices: Tensor | None = None
-
-
-def pad_sequence(
-    sequences: Iterable[Tensor], batch_first: bool = False, padding_value: _Scalar = 0
-) -> Tensor:
-    seq_list = list(sequences)
-    if not seq_list:
-        raise ValueError("pad_sequence expected a non-empty iterable of Tensors")
-
-    first = seq_list[0]
-    if not isinstance(first, Tensor):
-        raise TypeError("pad_sequence expects Tensor elements")
-
-    ndim = first.ndim
-    if ndim < 1:
-        raise ValueError("pad_sequence expects tensors with at least 1 dimension")
-
-    trailing_shape = first.shape[1:]
-    device = first.device
-    dtype = first.dtype
-
-    lengths: list[int] = []
-    for idx, seq in enumerate(seq_list):
-        if not isinstance(seq, Tensor):
-            raise TypeError("pad_sequence expects Tensor elements")
-        if seq.ndim != ndim:
-            raise ValueError(
-                f"pad_sequence expects tensors with {ndim} dimensions, "
-                f"got {seq.ndim} at index {idx}"
-            )
-        if seq.shape[1:] != trailing_shape:
-            raise ValueError(
-                "pad_sequence expects all tensors to share the same trailing shape"
-            )
-        if seq.device != device:
-            raise ValueError("pad_sequence expects all tensors on the same device")
-        if seq.dtype != dtype:
-            raise ValueError("pad_sequence expects all tensors with the same dtype")
-        lengths.append(seq.shape[0])
-
-    max_len = max(lengths)
-    batch_size = len(seq_list)
-
-    if batch_first:
-        out_shape = (batch_size, max_len, *trailing_shape)
-    else:
-        out_shape = (max_len, batch_size, *trailing_shape)
-
-    output = lucid.full(out_shape, padding_value, dtype=dtype, device=device)
-    for i, seq in enumerate(seq_list):
-        length = lengths[i]
-        if length == 0:
-            continue
-        if batch_first:
-            output[i, :length] = seq
-        else:
-            output[:length, i] = seq
-
-    return output
-
-
-def _as_lengths(lengths: Sequence[int] | Tensor, *, device: str) -> Tensor:
-    if isinstance(lengths, Tensor):
-        return lengths
-    return Tensor(list(lengths), device=device)
-
-
-def _invert_permutation(indices: Tensor) -> Tensor:
-    return lucid.argsort(indices, axis=0)
+    sorted_indices: Tensor | None
+    unsorted_indices: Tensor | None
 
 
 def pack_padded_sequence(
-    input_: Tensor,
-    lengths: Sequence[int] | Tensor,
+    input: Tensor,
+    lengths: Tensor | list[int],
     batch_first: bool = False,
     enforce_sorted: bool = True,
 ) -> PackedSequence:
-    if input_.ndim < 2:
-        raise ValueError(
-            f"pack_padded_sequence expected input with at least 2 dims, got {input_.ndim}"
-        )
+    r"""Pack a padded :math:`(T, B, *)` batch into a :class:`PackedSequence`.
 
+    Strips out the padding cells so downstream RNN kernels iterate only
+    over genuine time-steps.  Reduces both compute and (with masked
+    losses) accidental gradient flow through pad positions.
+
+    Parameters
+    ----------
+    input : Tensor
+        Padded batch.  Default layout is ``(T, B, *)`` with time on
+        axis 0; set ``batch_first=True`` for ``(B, T, *)``.
+    lengths : Tensor or list of int
+        Per-sequence true lengths.  Shape ``(B,)``.  When passed as a
+        tensor it must be a 1-D integer tensor.
+    batch_first : bool, optional
+        Whether ``input`` is laid out batch-first.  Default ``False``.
+    enforce_sorted : bool, optional
+        If ``True`` (the default), assume the caller already supplied
+        sequences in descending-length order — cheap but raises
+        :class:`ValueError` on violation.  Set to ``False`` to have the
+        function sort internally; the sort permutation is stored on the
+        returned :class:`PackedSequence` so :func:`pad_packed_sequence`
+        can undo it.
+
+    Returns
+    -------
+    PackedSequence
+        Packed view of the batch.
+
+    Raises
+    ------
+    ValueError
+        With ``enforce_sorted=True`` and an unsorted ``lengths``.
+
+    Notes
+    -----
+    Total packed length equals :math:`\sum_b \ell_b`, the sum of true
+    sequence lengths — strictly less than :math:`T \cdot B` whenever any
+    sequence is shorter than the max.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_padded_sequence
+    >>> packed = pack_padded_sequence(x, lengths=[5, 3, 2], batch_first=False)
+    """
     if batch_first:
-        input_ = input_.swapaxes(0, 1)
+        input = input.permute(1, 0, *range(2, input.ndim))
 
-    seq_len, batch_size = input_.shape[0], input_.shape[1]
-    lengths_t = _as_lengths(lengths, device=input_.device)
-    if lengths_t.ndim != 1:
-        raise ValueError("lengths must be a 1D sequence or tensor")
-    if lengths_t.shape[0] != batch_size:
-        raise ValueError(
-            f"lengths size {lengths_t.shape[0]} does not match batch size {batch_size}"
-        )
+    T, B = int(input.shape[0]), int(input.shape[1])
 
-    sorted_indices = None
-    unsorted_indices = None
+    # Extract lengths as a plain Python list of ints (small metadata, not tensor math).
+    if hasattr(lengths, "_impl"):
+        # Lucid Tensor: download via data_as_python (interop boundary — no computation)
+        raw: Any = lengths._impl.data_as_python()
+        lengths_list: list[int] = [int(raw.flat[i]) for i in range(len(raw.flat))]
+    else:
+        lengths_list = [int(v) for v in lengths]
+
+    # Sort by descending length with Python builtins — no numpy argsort.
+    sorted_idx = sorted(range(B), key=lambda i: -lengths_list[i])
+    unsorted_idx = [0] * B
+    for new_pos, orig_pos in enumerate(sorted_idx):
+        unsorted_idx[orig_pos] = new_pos
 
     if enforce_sorted:
-        sorted_lengths = lengths_t
-    else:
-        sorted_indices = lucid.argsort(lengths_t, descending=True, axis=0)
-        unsorted_indices = _invert_permutation(sorted_indices)
+        for i in range(len(lengths_list) - 1):
+            if lengths_list[i] < lengths_list[i + 1]:
+                raise ValueError(
+                    "pack_padded_sequence: sequences must be sorted by length in "
+                    "descending order or pass enforce_sorted=False."
+                )
 
-        lengths_t = lengths_t[sorted_indices]
-        input_ = input_[:, sorted_indices]
-        sorted_lengths = lengths_t
+    # Reorder input along batch dim using engine gather.
+    if not enforce_sorted:
+        # Build sorted-index TensorImpl from Python list (interop boundary — metadata only).
+        _sorted_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+        si_impl_i32 = _C_engine.astype(_sorted_t._impl, _C_engine.I32)
+        bcast_shape = [1, B] + [1] * (input.ndim - 2)
+        full_shape = list(input.shape)
+        idx_rs = _C_engine.reshape(si_impl_i32, bcast_shape)
+        idx_bc = _C_engine.broadcast_to(idx_rs, full_shape)
+        input = _Tensor.__new_from_impl__(_C_engine.gather(input._impl, idx_bc, 1))
+        lengths_list = [lengths_list[i] for i in sorted_idx]
 
-    max_len = int(sorted_lengths[0].item())
-    if max_len > seq_len:
-        raise ValueError(
-            f"lengths has max {max_len} but input has sequence length {seq_len}"
-        )
-
-    batch_sizes: list[int] = []
-    chunks: list[Tensor] = []
-    for t in range(max_len):
-        bs = int((sorted_lengths > t).sum().item())
-        batch_sizes.append(bs)
+    # Pack: collect active elements per timestep.
+    packed_list = []
+    batch_sizes_list = []
+    for t in range(T):
+        bs = sum(1 for l in lengths_list if l > t)
         if bs == 0:
             break
-        chunks.append(input_[t, :bs])
+        packed_list.append(input[t, :bs])
+        batch_sizes_list.append(bs)
 
-    if not chunks:
-        data = input_[:0]
-    else:
-        data = lucid.concatenate(tuple(chunks), axis=0)
+    data_tensor = cat(packed_list, 0)
 
-    return PackedSequence(
-        data=data,
-        batch_sizes=Tensor(batch_sizes, device=input_.device),
-        sorted_indices=sorted_indices,
-        unsorted_indices=unsorted_indices,
-    )
+    # Build int tensors for batch_sizes, sorted_indices, unsorted_indices.
+    # These are metadata (tiny 1-D integer arrays) — construct via Tensor([...]) interop.
+    bs_t = _Tensor(batch_sizes_list)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+    si_t = _Tensor(sorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+    ui_t = _Tensor(unsorted_idx)  # type: ignore[arg-type]  # list[int] is list[object] at runtime
+
+    return PackedSequence(data_tensor, bs_t, si_t, ui_t)
 
 
 def pad_packed_sequence(
-    sequence: PackedSequence, batch_first: bool = False, padding_value: _Scalar = 0
-) -> tuple[Tensor, Tensor]:
+    sequence: PackedSequence,
+    batch_first: bool = False,
+    padding_value: float = 0.0,
+    total_length: int | None = None,
+) -> tuple[Any, Any]:
+    r"""Inverse of :func:`pack_padded_sequence` — produce a padded tensor.
+
+    Re-inflates a :class:`PackedSequence` into a dense
+    :math:`(T_\text{max}, B, *)` (or :math:`(B, T_\text{max}, *)`)
+    tensor with the original batch order restored.  The freshly created
+    cells beyond each sequence's true length are filled with
+    ``padding_value``.
+
+    Parameters
+    ----------
+    sequence : PackedSequence
+        Packed batch to unpack.
+    batch_first : bool, optional
+        Output layout.  ``False`` (default) yields ``(T, B, *)``,
+        ``True`` yields ``(B, T, *)``.
+    padding_value : float, optional
+        Fill value for padded entries.  Default ``0.0``.
+    total_length : int, optional
+        If given, pad up to this length instead of the longest packed
+        sequence.  Useful when downstream code expects a fixed
+        ``T_max`` (e.g. fully-static export graphs).  Must be ``>=`` the
+        longest sequence.
+
+    Returns
+    -------
+    Tensor
+        Padded batch tensor.
+    Tensor
+        1-D tensor of per-sequence true lengths in the *original* batch
+        order.
+
+    Notes
+    -----
+    Output time dimension is :math:`\max_b \ell_b` (or ``total_length``
+    if larger).  The function honours ``unsorted_indices`` on the
+    packed sequence so the rows of the returned tensor match the order
+    the caller used at pack time.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pad_packed_sequence
+    >>> padded, lens = pad_packed_sequence(packed, batch_first=True)
+    """
     data = sequence.data
-    batch_sizes = sequence.batch_sizes
-    if batch_sizes.ndim != 1:
-        raise ValueError("batch_sizes must be 1D")
+    # batch_sizes is a small 1-D int tensor — extract as Python list (metadata).
+    bs_raw: Any = sequence.batch_sizes._impl.data_as_python()
+    batch_sizes_list = [int(bs_raw.flat[i]) for i in range(len(bs_raw.flat))]
 
-    max_len = int(batch_sizes.shape[0])
-    if max_len == 0:
-        raise ValueError("batch_sizes must be non-empty")
+    T = len(batch_sizes_list)
+    B = int(batch_sizes_list[0])
+    feat_shape = list(data.shape[1:])
 
-    batch_size = int(batch_sizes[0].item())
-    trailing_shape = data.shape[1:]
+    if total_length is not None and total_length > T:
+        T = total_length
+
+    # Create padded output with engine full, then fill via copy_from per timestep.
+    out_shape = [T, B] + feat_shape
+    out_impl = _C_engine.full(
+        out_shape, padding_value, data._impl.dtype, data._impl.device
+    )
+    out_t = _Tensor.__new_from_impl__(out_impl)
+
+    offset = 0
+    for t, bs in enumerate(batch_sizes_list):
+        # data[offset:offset+bs] → place into out_t[t, :bs]
+        src = data[offset : offset + bs]  # (bs, *feat)
+        # Assign via index (Python-level setitem calls copy_from internally)
+        out_t[t, :bs].copy_(src)
+        offset += bs
+
+    # Compute lengths from batch_sizes.
+    lengths_list = [0] * B
+    for t in range(len(batch_sizes_list) - 1, -1, -1):
+        bs = batch_sizes_list[t]
+        for k in range(bs):
+            if lengths_list[k] < t + 1:
+                lengths_list[k] = t + 1
+
+    if sequence.unsorted_indices is not None:
+        # Reorder batch dim by unsorted_indices.
+        ui_raw: Any = sequence.unsorted_indices._impl.data_as_python()
+        ui_list = [int(ui_raw.flat[i]) for i in range(len(ui_raw.flat))]
+        ui_t = _Tensor(cast(list[object], ui_list))
+        ui_impl_i32 = _C_engine.astype(ui_t._impl, _C_engine.I32)
+        full_shape = list(out_t.shape)
+        bcast_shape = [1, B] + [1] * (out_t.ndim - 2)
+        idx_rs = _C_engine.reshape(ui_impl_i32, bcast_shape)
+        idx_bc = _C_engine.broadcast_to(idx_rs, full_shape)
+        out_t = _Tensor.__new_from_impl__(_C_engine.gather(out_t._impl, idx_bc, 1))
+        lengths_list = [lengths_list[ui_list[i]] for i in range(B)]
 
     if batch_first:
-        out_shape = (batch_size, max_len, *trailing_shape)
-    else:
-        out_shape = (max_len, batch_size, *trailing_shape)
+        out_t = out_t.permute(1, 0, *range(2, out_t.ndim))
 
-    output = lucid.full(out_shape, padding_value, dtype=data.dtype, device=data.device)
+    len_t = _Tensor(cast(list[object], lengths_list))
+    return out_t, len_t
 
-    lengths = [0] * batch_size
-    offset = 0
-    for t in range(max_len):
-        bs = int(batch_sizes[t].item())
-        if bs == 0:
-            break
 
-        chunk = data[offset : offset + bs]
-        offset += bs
-        for i in range(bs):
-            lengths[i] += 1
-        if batch_first:
-            output[:bs, t] = chunk
-        else:
-            output[t, :bs] = chunk
+def pad_sequence(
+    sequences: list[Tensor],
+    batch_first: bool = False,
+    padding_value: float = 0.0,
+) -> Tensor:
+    r"""Stack a list of variable-length tensors into a padded batch.
 
-    lengths_t = Tensor(lengths, device=data.device)
-    if sequence.unsorted_indices is not None:
-        if batch_first:
-            output = output[sequence.unsorted_indices]
-        else:
-            output = output[:, sequence.unsorted_indices]
-        lengths_t = lengths_t[sequence.unsorted_indices]
+    Each input is padded along its leading time dimension up to the
+    longest sequence in ``sequences``, then the padded versions are
+    stacked along a new batch axis.  Useful as the first step of an
+    RNN training loop when sequences are produced one at a time (per-
+    example tokenisation, audio framing, etc.).
 
-    return output, lengths_t
+    Parameters
+    ----------
+    sequences : list of Tensor
+        Non-empty list of per-example tensors.  Each must share the
+        same trailing feature shape and dtype / device; only the
+        leading length axis may differ.
+    batch_first : bool, optional
+        Output layout.  ``False`` (default) yields ``(T_max, B, *feat)``,
+        ``True`` yields ``(B, T_max, *feat)``.
+    padding_value : float, optional
+        Fill value for padded entries.  Default ``0.0``.
+
+    Returns
+    -------
+    Tensor
+        Padded batch tensor.
+
+    Raises
+    ------
+    ValueError
+        If ``sequences`` is empty.
+
+    Notes
+    -----
+    Padding is constructed by concatenating a freshly allocated tail
+    of shape ``(T_max - T_i, *feat)`` onto each input — this keeps the
+    operation differentiable end-to-end (view-based mutation would
+    silently drop gradients through Lucid's autograd-aware
+    :class:`~lucid._tensor.tensor.Tensor`).
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pad_sequence
+    >>> batch = pad_sequence([a, b, c], batch_first=True)
+    """
+    if not sequences:
+        raise ValueError("pad_sequence: empty input list")
+    T_max: int = max(int(s.shape[0]) for s in sequences)
+    feat_shape: list[int] = list(sequences[0].shape[1:])
+    dtype = sequences[0].dtype
+    device = sequences[0]._impl.device
+
+    padded_each: list[Tensor] = []
+    for s in sequences:
+        T_i: int = int(s.shape[0])
+        if T_i == T_max:
+            padded_each.append(s)
+            continue
+        # Build a constant-fill tail and concat.
+        tail_shape: list[int] = [T_max - T_i] + feat_shape
+        tail_impl = _C_engine.full(tail_shape, padding_value, s._impl.dtype, device)
+        tail: Tensor = _Tensor.__new_from_impl__(tail_impl)
+        padded_each.append(lucid.cat([s, tail], 0))
+
+    # Stack along axis 1 (T_max, B, *feat) or axis 0 with batch_first.
+    if batch_first:
+        return lucid.stack(padded_each, 0)
+    return lucid.stack(padded_each, 1)
 
 
 def pack_sequence(
-    sequences: Iterable[Tensor], enforce_sorted: bool = True
+    sequences: list[Tensor],
+    enforce_sorted: bool = True,
 ) -> PackedSequence:
-    seq_list = list(sequences)
-    if not seq_list:
-        raise ValueError("pack_sequence expected a non-empty iterable of Tensors")
+    r"""One-shot pack-from-list — equivalent to :func:`pad_sequence` then :func:`pack_padded_sequence`.
 
-    lengths = [seq.shape[0] for seq in seq_list]
-    padded = pad_sequence(seq_list, batch_first=False, padding_value=0.0)
-    return pack_padded_sequence(
-        padded, lengths, batch_first=False, enforce_sorted=enforce_sorted
-    )
+    Convenience wrapper for the common case where a list of per-example
+    tensors needs to become a :class:`PackedSequence` without going
+    through an intermediate padded tensor.  Each entry's leading axis
+    is treated as the time dimension; remaining axes carry the feature
+    shape (which must be identical across the list).
 
+    Parameters
+    ----------
+    sequences : list of Tensor
+        Per-example tensors.  Leading axis is time; trailing axes are
+        the feature shape and must match across entries.
+    enforce_sorted : bool, optional
+        If ``True`` (the default), the caller must supply sequences in
+        non-increasing length order; mismatches raise
+        :class:`ValueError`.  ``False`` is *not* currently supported
+        and raises :class:`NotImplementedError` — sort externally for
+        now.
 
-def unpack_sequence(
-    sequence: PackedSequence, batch_first: bool = False
-) -> list[Tensor]:
-    padded, lengths = pad_packed_sequence(
-        sequence, batch_first=batch_first, padding_value=0.0
-    )
-    result: list[Tensor] = []
-    for i, length in enumerate(lengths):
-        l = int(length.item())
-        if batch_first:
-            result.append(padded[i, :l])
-        else:
-            result.append(padded[:l, i])
-    return result
+    Returns
+    -------
+    PackedSequence
+        Packed view of the input list.
+
+    Raises
+    ------
+    ValueError
+        If ``sequences`` is empty, or if it is not sorted while
+        ``enforce_sorted=True``.
+    NotImplementedError
+        If ``enforce_sorted=False`` is requested.
+
+    Notes
+    -----
+    Implemented as :func:`pad_sequence` followed by
+    :func:`pack_padded_sequence`.  The intermediate padded tensor lives
+    only for the duration of the call.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_sequence
+    >>> packed = pack_sequence([long_seq, mid_seq, short_seq])
+    """
+    if not sequences:
+        raise ValueError("pack_sequence: empty input list")
+    lengths: list[int] = [int(s.shape[0]) for s in sequences]
+    if enforce_sorted:
+        for i in range(1, len(lengths)):
+            if lengths[i] > lengths[i - 1]:
+                raise ValueError(
+                    "pack_sequence: lengths must be sorted in decreasing order "
+                    "when enforce_sorted=True"
+                )
+    elif sorted(lengths, reverse=True) != lengths:
+        raise NotImplementedError(
+            "pack_sequence: enforce_sorted=False not yet implemented; "
+            "sort sequences by descending length before calling"
+        )
+    padded: Tensor = pad_sequence(sequences, batch_first=False)
+    return pack_padded_sequence(padded, lengths, batch_first=False)

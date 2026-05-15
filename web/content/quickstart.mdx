@@ -1,0 +1,101 @@
+---
+title: Quickstart
+description: Train your first model with Lucid in under 5 minutes.
+category: Getting Started
+order: 2
+---
+
+This guide walks through the core primitives — tensors, autograd, modules, and an optimizer — using a small linear regression example.
+
+## Tensors
+
+Everything in Lucid starts with `lucid.Tensor`.
+
+```python
+import lucid
+
+# Create tensors on the MLX GPU backend
+x = lucid.randn(4, 8, device="metal")
+y = lucid.zeros(4, 1, device="metal")
+
+print(x.shape)   # (4, 8)
+print(x.device)  # metal
+```
+
+<Callout variant="info">
+Use `device="metal"` for the MLX GPU backend (default on Apple Silicon) or `device="cpu"` for the Accelerate CPU backend.
+</Callout>
+
+## Autograd
+
+Lucid tracks operations automatically when `requires_grad=True`.
+
+```python
+w = lucid.randn(8, 1, device="metal", requires_grad=True)
+b = lucid.zeros(1,    device="metal", requires_grad=True)
+
+pred = x @ w + b       # (4, 1)
+loss = ((pred - y) ** 2).mean()
+
+loss.backward()
+
+print(w.grad.shape)    # (8, 1)
+print(b.grad.shape)    # (1,)
+```
+
+## nn.Module
+
+For reusable models, subclass `lucid.nn.Module`.
+
+```python
+import lucid.nn as nn
+
+class LinearModel(nn.Module):
+    def __init__(self, in_features: int, out_features: int) -> None:
+        super().__init__()
+        self.linear = nn.Linear(in_features, out_features)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.linear(x)
+
+model = LinearModel(8, 1).to("metal")
+```
+
+## Optimizer
+
+Use any optimizer from `lucid.optim`:
+
+```python
+import lucid.optim as optim
+
+optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+for step in range(100):
+    pred = model(x)
+    loss = ((pred - y) ** 2).mean()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if step % 20 == 0:
+        print(f"step {step:3d}  loss {loss.item():.4f}")
+```
+
+## What's next?
+
+<Tabs>
+<Tab label="Learn more">
+
+- [Autograd in depth](/docs/guides/autograd) — computation graphs, custom `Function`, `vmap`
+- [Metal device](/docs/guides/metal-device) — MLX backend details and performance tips
+
+</Tab>
+<Tab label="API Reference">
+
+- [`lucid.Tensor`](/api/lucid.tensor) — all 309 methods
+- [`lucid.nn`](/api/lucid.nn) — 151 layer classes
+- [`lucid.optim`](/api/lucid.optim) — 13 optimizers + 16 schedulers
+
+</Tab>
+</Tabs>

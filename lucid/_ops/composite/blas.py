@@ -1,0 +1,639 @@
+"""BLAS-level composites (``addmm``, ``addbmm``, ``mv``, ``ger``, ...)."""
+
+from typing import TYPE_CHECKING
+
+import lucid
+import lucid.linalg as _la
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+
+
+def addmm(
+    input: Tensor,
+    mat1: Tensor,
+    mat2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    r"""General matrix multiply with a scaled accumulator (GEMM).
+
+    Computes :math:`\beta \cdot \text{input} + \alpha \cdot (\text{mat1} \times \text{mat2})`,
+    the canonical BLAS-3 ``gemm`` operation. Useful for fused linear
+    layers: an output bias plus a weight multiplication in one call.
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator of shape ``(M, N)`` (or broadcastable to it).
+    mat1 : Tensor
+        Left matrix of shape ``(M, K)``.
+    mat2 : Tensor
+        Right matrix of shape ``(K, N)``.
+    beta : float, optional
+        Scalar multiplier on ``input``. Defaults to ``1.0``.
+    alpha : float, optional
+        Scalar multiplier on ``mat1 @ mat2``. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor of shape ``(M, N)``.
+
+    Notes
+    -----
+    Mathematical definition:
+
+    .. math::
+
+        \text{out} = \beta \cdot \text{input}
+        + \alpha \cdot (\text{mat1} \cdot \text{mat2}).
+
+    The inner dimension ``K`` must match between ``mat1`` and ``mat2``.
+    Standard dtype promotion applies; the matmul itself uses Accelerate
+    (CPU stream) or MLX (GPU stream).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> M = lucid.zeros((2, 2))
+    >>> a = lucid.tensor([[1., 2.], [3., 4.]])
+    >>> b = lucid.tensor([[5., 6.], [7., 8.]])
+    >>> lucid.addmm(M, a, b, beta=0.0, alpha=1.0)
+    Tensor([[19., 22.],
+            [43., 50.]])
+    """
+    return input * beta + lucid.matmul(mat1, mat2) * alpha
+
+
+def addbmm(
+    input: Tensor,
+    batch1: Tensor,
+    batch2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    r"""Batched matmul with reduction over the batch axis.
+
+    Computes
+    :math:`\beta \cdot \text{input} + \alpha \cdot \sum_{k} (\text{batch1}[k] \cdot \text{batch2}[k])`.
+    Useful for accumulating multiple parallel matrix products into a
+    single output matrix (e.g. summing per-head attention contributions).
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator of shape ``(M, N)``.
+    batch1 : Tensor
+        Batched left matrices of shape ``(B, M, K)``.
+    batch2 : Tensor
+        Batched right matrices of shape ``(B, K, N)``.
+    beta : float, optional
+        Scalar multiplier on ``input``. Defaults to ``1.0``.
+    alpha : float, optional
+        Scalar multiplier on the batched matmul sum. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor of shape ``(M, N)``.
+
+    Notes
+    -----
+    Mathematical definition:
+
+    .. math::
+
+        \text{out} = \beta \cdot \text{input}
+        + \alpha \sum_{k = 0}^{B - 1}
+        (\text{batch1}[k] \cdot \text{batch2}[k]).
+
+    Differs from :func:`baddbmm` in that the batch dimension is reduced
+    away; :func:`baddbmm` keeps the per-batch results.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> b1 = lucid.ones((3, 2, 4))
+    >>> b2 = lucid.ones((3, 4, 2))
+    >>> M = lucid.zeros((2, 2))
+    >>> lucid.addbmm(M, b1, b2)
+    Tensor([[12., 12.],
+            [12., 12.]])
+    """
+    return input * beta + lucid.sum(lucid.bmm(batch1, batch2), 0) * alpha
+
+
+def baddbmm(
+    input: Tensor,
+    batch1: Tensor,
+    batch2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    r"""Batched GEMM with a batched accumulator.
+
+    Computes
+    :math:`\beta \cdot \text{input} + \alpha \cdot \operatorname{bmm}(\text{batch1}, \text{batch2})`
+    where the batch axis is preserved (unlike :func:`addbmm` which reduces
+    it).
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator of shape ``(B, M, N)``.
+    batch1 : Tensor
+        Batched left matrices of shape ``(B, M, K)``.
+    batch2 : Tensor
+        Batched right matrices of shape ``(B, K, N)``.
+    beta : float, optional
+        Scalar multiplier on ``input``. Defaults to ``1.0``.
+    alpha : float, optional
+        Scalar multiplier on ``bmm(batch1, batch2)``. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor of shape ``(B, M, N)``.
+
+    Notes
+    -----
+    Per-batch definition:
+
+    .. math::
+
+        \text{out}[k] = \beta \cdot \text{input}[k]
+        + \alpha \cdot (\text{batch1}[k] \cdot \text{batch2}[k]).
+
+    The implementation defers to :func:`lucid.bmm`, which dispatches to
+    Accelerate-batched GEMM on CPU and MLX on GPU.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> b1 = lucid.ones((3, 2, 4))
+    >>> b2 = lucid.ones((3, 4, 2))
+    >>> M = lucid.zeros((3, 2, 2))
+    >>> lucid.baddbmm(M, b1, b2).shape
+    (3, 2, 2)
+    """
+    return input * beta + lucid.bmm(batch1, batch2) * alpha
+
+
+def addmv(
+    input: Tensor,
+    mat: Tensor,
+    vec: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    r"""Matrix-vector multiply with a scaled accumulator (BLAS-2 gemv).
+
+    Computes
+    :math:`\beta \cdot \text{input} + \alpha \cdot (\text{mat} \cdot \text{vec})`,
+    the canonical BLAS-2 ``gemv`` operation.
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator vector of shape ``(M,)``.
+    mat : Tensor
+        Matrix of shape ``(M, N)``.
+    vec : Tensor
+        Vector of shape ``(N,)``.
+    beta : float, optional
+        Scalar multiplier on ``input``. Defaults to ``1.0``.
+    alpha : float, optional
+        Scalar multiplier on ``mat @ vec``. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Vector of shape ``(M,)``.
+
+    Notes
+    -----
+    Mathematical definition:
+
+    .. math::
+
+        \text{out}_i = \beta \cdot \text{input}_i
+        + \alpha \cdot \sum_{j = 0}^{N - 1} \text{mat}_{ij} \cdot \text{vec}_j.
+
+    Implemented by promoting ``vec`` to a column ``(N, 1)``, calling
+    :func:`lucid.matmul`, and squeezing the trailing axis.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> M = lucid.zeros(2)
+    >>> A = lucid.tensor([[1., 2.], [3., 4.]])
+    >>> v = lucid.tensor([5., 6.])
+    >>> lucid.addmv(M, A, v)
+    Tensor([17., 39.])
+    """
+    mv_out = lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
+    return input * beta + mv_out * alpha
+
+
+def addr(
+    input: Tensor,
+    vec1: Tensor,
+    vec2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    r"""Rank-1 update of a matrix by an outer product (BLAS-2 ger).
+
+    Computes
+    :math:`\beta \cdot \text{input} + \alpha \cdot (\text{vec1} \otimes \text{vec2})`,
+    i.e. updates the matrix ``input`` by adding the (scaled) outer product
+    of two vectors. The classical BLAS ``ger`` routine.
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator matrix of shape ``(M, N)``.
+    vec1 : Tensor
+        First vector of length ``M``.
+    vec2 : Tensor
+        Second vector of length ``N``.
+    beta : float, optional
+        Scalar multiplier on ``input``. Defaults to ``1.0``.
+    alpha : float, optional
+        Scalar multiplier on the outer product. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Updated matrix of shape ``(M, N)``.
+
+    Notes
+    -----
+    Element-wise:
+
+    .. math::
+
+        \text{out}_{ij} = \beta \cdot \text{input}_{ij}
+        + \alpha \cdot \text{vec1}_i \cdot \text{vec2}_j.
+
+    The outer product is a rank-1 matrix, so this update can be used to
+    build rank-1 corrections in optimisation algorithms (Broyden / BFGS).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> M = lucid.zeros((2, 3))
+    >>> u = lucid.tensor([1., 2.])
+    >>> v = lucid.tensor([3., 4., 5.])
+    >>> lucid.addr(M, u, v)
+    Tensor([[ 3.,  4.,  5.],
+            [ 6.,  8., 10.]])
+    """
+    out = lucid.matmul(vec1.unsqueeze(-1), vec2.unsqueeze(0))
+    return input * beta + out * alpha
+
+
+def addcmul(
+    input: Tensor,
+    t1: Tensor,
+    t2: Tensor,
+    *,
+    value: float = 1.0,
+) -> Tensor:
+    r"""Element-wise fused multiply-add with a scalar weight.
+
+    Computes :math:`\text{input} + \text{value} \cdot (t_1 \odot t_2)`
+    element-wise, where :math:`\odot` denotes the Hadamard (element-wise)
+    product.  Provided as a single named op for readability and to give
+    the dispatcher the chance to fuse the three steps into one kernel on
+    backends that support it.
+
+    Parameters
+    ----------
+    input : Tensor
+        Tensor that is added to the scaled element-wise product.
+    t1 : Tensor
+        Left operand of the element-wise product.  Must broadcast with
+        ``input`` and ``t2``.
+    t2 : Tensor
+        Right operand of the element-wise product.  Must broadcast with
+        ``input`` and ``t1``.
+    value : float, optional
+        Scalar multiplier applied to the product ``t1 * t2`` before
+        addition.  Defaults to ``1.0`` (plain multiply-and-add).
+
+    Returns
+    -------
+    Tensor
+        Element-wise result with the broadcast shape of the three input
+        tensors.
+
+    Notes
+    -----
+    Mathematical definition:
+
+    .. math::
+
+        \text{out}_i =
+        \text{input}_i + \text{value} \cdot (t_{1,i} \cdot t_{2,i}).
+
+    Sister op of :func:`addcdiv` (``input + value * t1 / t2``).  Common
+    in optimisers (e.g. running-mean / running-variance updates) where a
+    bias-correction term is added to an existing accumulator.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> a = lucid.tensor([1.0, 2.0, 3.0])
+    >>> b = lucid.tensor([4.0, 5.0, 6.0])
+    >>> c = lucid.tensor([0.5, 0.5, 0.5])
+    >>> lucid.addcmul(a, b, c, value=2.0)
+    Tensor([5., 7., 9.])
+    """
+    return input + (t1 * t2) * value
+
+
+def addcdiv(
+    input: Tensor,
+    t1: Tensor,
+    t2: Tensor,
+    *,
+    value: float = 1.0,
+) -> Tensor:
+    r"""Element-wise fused divide-add.
+
+    Computes :math:`\text{input} + \text{value} \cdot (t_1 / t_2)` in
+    one expression. Common in optimiser updates (e.g. Adam's
+    parameter step uses the form ``param -= lr * m / sqrt(v)``).
+
+    Parameters
+    ----------
+    input : Tensor
+        Accumulator tensor.
+    t1 : Tensor
+        Numerator. Must broadcast with ``input`` and ``t2``.
+    t2 : Tensor
+        Denominator. Must broadcast with ``input`` and ``t1``.
+    value : float, optional
+        Scalar multiplier on the quotient. Defaults to ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Tensor with the broadcast shape of the inputs.
+
+    Notes
+    -----
+    Element-wise definition:
+
+    .. math::
+
+        \text{out}_i = \text{input}_i
+        + \text{value} \cdot \frac{(t_1)_i}{(t_2)_i}.
+
+    Division by zero follows standard IEEE 754 rules — no clamping is
+    applied. Gradients flow through all three tensor operands.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> a = lucid.tensor([1.0, 2.0])
+    >>> t1 = lucid.tensor([4.0, 9.0])
+    >>> t2 = lucid.tensor([2.0, 3.0])
+    >>> lucid.addcdiv(a, t1, t2, value=0.5)
+    Tensor([2. , 3.5])
+    """
+    return input + (t1 / t2) * value
+
+
+def mv(mat: Tensor, vec: Tensor) -> Tensor:
+    r"""Matrix-vector product.
+
+    Computes the standard matrix-vector product
+    :math:`y = M v`. Equivalent to ``M @ v`` for 2-D / 1-D inputs.
+
+    Parameters
+    ----------
+    mat : Tensor
+        2-D matrix of shape ``(M, N)``.
+    vec : Tensor
+        1-D vector of shape ``(N,)``.
+
+    Returns
+    -------
+    Tensor
+        1-D tensor of shape ``(M,)``.
+
+    Notes
+    -----
+    Element-wise definition:
+
+    .. math::
+
+        y_i = \sum_{j = 0}^{N - 1} \text{mat}_{ij} \cdot \text{vec}_j.
+
+    Implemented by promoting ``vec`` to a column vector, calling
+    :func:`lucid.matmul`, and then squeezing the trailing axis. Dispatches
+    to BLAS-2 ``gemv`` on the CPU stream and the matmul kernel on the
+    GPU stream.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> M = lucid.tensor([[1., 2.], [3., 4.]])
+    >>> v = lucid.tensor([5., 6.])
+    >>> lucid.mv(M, v)
+    Tensor([17., 39.])
+    """
+    return lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
+
+
+def ger(vec1: Tensor, vec2: Tensor) -> Tensor:
+    r"""Outer product of two 1-D tensors.
+
+    Forwards to :func:`lucid.linalg.outer`. Provided under the legacy BLAS
+    name (``ger`` = "general rank-one update") for API parity.
+
+    Parameters
+    ----------
+    vec1 : Tensor
+        1-D tensor of length ``M``.
+    vec2 : Tensor
+        1-D tensor of length ``N``.
+
+    Returns
+    -------
+    Tensor
+        2-D tensor of shape ``(M, N)`` holding the outer product.
+
+    Notes
+    -----
+    Mathematical definition:
+
+    .. math::
+
+        \text{out}_{ij} = \text{vec1}_i \cdot \text{vec2}_j.
+
+    The result is always rank-1 (in the linear-algebra sense). Use
+    :func:`addr` to perform a rank-1 update in place of an accumulator.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> u = lucid.tensor([1., 2., 3.])
+    >>> v = lucid.tensor([4., 5.])
+    >>> lucid.ger(u, v)
+    Tensor([[ 4.,  5.],
+            [ 8., 10.],
+            [12., 15.]])
+    """
+    return lucid.linalg.outer(vec1, vec2)
+
+
+def vdot(a: Tensor, b: Tensor) -> Tensor:
+    r"""Vector dot product (complex-conjugating on the first argument).
+
+    Forwards to :func:`lucid.linalg.dot`. For real tensors this is the
+    usual inner product; for complex tensors (when supported) the first
+    argument is conjugated, matching NumPy's ``vdot`` convention.
+
+    Parameters
+    ----------
+    a : Tensor
+        1-D tensor.
+    b : Tensor
+        1-D tensor of the same length as ``a``.
+
+    Returns
+    -------
+    Tensor
+        0-D scalar tensor holding the dot product.
+
+    Notes
+    -----
+    Mathematical definition (general case):
+
+    .. math::
+
+        \text{out} = \sum_{i = 0}^{N - 1} \overline{a_i} \cdot b_i.
+
+    For real ``a`` this reduces to the standard inner product
+    :math:`\sum_i a_i b_i`. Tensors must be 1-D and of equal length.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> a = lucid.tensor([1., 2., 3.])
+    >>> b = lucid.tensor([4., 5., 6.])
+    >>> lucid.vdot(a, b)
+    Tensor(32.)
+    """
+    return lucid.linalg.dot(a, b)
+
+
+def block_diag(*tensors: Tensor) -> Tensor:
+    r"""Construct a block-diagonal matrix from a sequence of blocks.
+
+    Each input is placed on the diagonal of a larger matrix, with zeros
+    everywhere off-block. Scalars (0-D) become :math:`1 \times 1` blocks
+    and 1-D inputs become :math:`1 \times n` blocks before stacking.
+
+    Parameters
+    ----------
+    *tensors : Tensor
+        One or more 0-, 1-, or 2-D tensors to place on the diagonal,
+        in order from top-left to bottom-right.
+
+    Returns
+    -------
+    Tensor
+        2-D block-diagonal matrix of shape
+        ``(sum(h_i), sum(w_i))`` where ``h_i, w_i`` are the (promoted)
+        block heights and widths.
+
+    Notes
+    -----
+    For blocks :math:`A_1, A_2, \dots, A_k`, the result is
+
+    .. math::
+
+        \operatorname{blockdiag}(A_1, A_2, \dots, A_k) =
+        \begin{pmatrix}
+            A_1 & 0 & \cdots & 0 \\
+            0 & A_2 & \cdots & 0 \\
+            \vdots & & \ddots & \vdots \\
+            0 & 0 & \cdots & A_k
+        \end{pmatrix}.
+
+    Called with zero arguments, returns an empty ``(0, 0)`` matrix.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> A = lucid.tensor([[1., 2.], [3., 4.]])
+    >>> B = lucid.tensor([[5.]])
+    >>> lucid.block_diag(A, B)
+    Tensor([[1., 2., 0.],
+            [3., 4., 0.],
+            [0., 0., 5.]])
+    """
+    if not tensors:
+        return lucid.zeros(0, 0)
+
+    parts: list[Tensor] = []
+    for t_i in tensors:
+        if t_i.ndim == 0:
+            t_i = t_i.reshape(1, 1)
+        elif t_i.ndim == 1:
+            t_i = t_i.unsqueeze(0)
+        parts.append(t_i)
+
+    total_cols = sum(t_i.shape[1] for t_i in parts)
+    rows: list[Tensor] = []
+    cum = 0
+    for blk in parts:
+        h, w = blk.shape
+        pieces: list[Tensor] = []
+        if cum:
+            pieces.append(lucid.zeros(h, cum, dtype=blk.dtype, device=blk.device))
+        pieces.append(blk)
+        right = total_cols - cum - w
+        if right:
+            pieces.append(lucid.zeros(h, right, dtype=blk.dtype, device=blk.device))
+        rows.append(lucid.cat(pieces, 1))
+        cum += w
+    return lucid.cat(rows, 0)
+
+
+def logdet(x: Tensor) -> Tensor:
+    """Log-determinant of a square matrix (or batch).
+
+    Returns ``log(det(A))``.  Defined only for matrices with ``det > 0``;
+    returns NaN otherwise.  Uses ``linalg.slogdet`` internally.
+    """
+    sign, logabsdet = _la.slogdet(x)
+    zero = lucid.zeros_like(sign)
+    nan = lucid.full_like(logabsdet, float("nan"))
+    return lucid.where(sign > zero, logabsdet, nan)
+
+
+__all__ = [
+    "addmm",
+    "addbmm",
+    "baddbmm",
+    "addmv",
+    "addr",
+    "addcmul",
+    "addcdiv",
+    "mv",
+    "ger",
+    "vdot",
+    "block_diag",
+    "logdet",
+]

@@ -1,0 +1,75 @@
+---
+title: Installation
+description: Get Lucid installed on your Apple Silicon Mac.
+category: Getting Started
+order: 1
+---
+
+<Callout variant="info" title="Apple Silicon only">
+Lucid targets macOS on M1–M4 chips exclusively. Linux, Windows, and x86 are not supported.
+</Callout>
+
+## Requirements
+
+| Requirement | Version |
+|---|---|
+| macOS | 13 Ventura or later |
+| Apple chip | M1 / M2 / M3 / M4 |
+| Python | 3.12 – 3.14 |
+| Xcode Command Line Tools | latest |
+
+## Install
+
+```bash
+pip install lucid
+```
+
+If you manage multiple Python versions with [pyenv](https://github.com/pyenv/pyenv) or Conda, make sure you're on 3.12+:
+
+```bash
+python --version   # Python 3.12.x or later
+pip install lucid
+```
+
+## Verify
+
+```python
+import lucid
+print(lucid.__version__)  # 3.0.0
+
+t = lucid.ones(3, 3, device="metal")
+print(t.device)  # metal
+```
+
+<Callout variant="success" title="All good">
+If both lines print without error, Lucid is installed correctly and the MLX GPU backend is active.
+</Callout>
+
+## Optional extras
+
+```bash
+# Development tools (ruff, mypy, pytest)
+pip install "lucid[dev]"
+
+# Parity test suite against reference framework
+pip install "lucid[test]"
+```
+
+## Upgrading
+
+```bash
+pip install --upgrade lucid
+```
+
+## Building from source
+
+```bash
+git clone https://github.com/ChanLumerico/lucid.git
+cd lucid
+pip install -e ".[dev]"
+cmake --build build/ -j$(sysctl -n hw.ncpu)
+```
+
+<Callout variant="note">
+Building from source requires CMake ≥ 3.21, pybind11, and the full Xcode toolchain.
+</Callout>

@@ -1,0 +1,161 @@
+/* --- Fonts ---------------------------------------------------------------- */
+@import "@fontsource/pretendard/400.css";
+@import "@fontsource/pretendard/500.css";
+@import "@fontsource/pretendard/600.css";
+@import "@fontsource/pretendard/700.css";
+@import "@fontsource/pretendard/800.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/400-italic.css";
+@import "@fontsource/jetbrains-mono/500.css";
+
+/* --- Tailwind ------------------------------------------------------------- */
+@import "tailwindcss";
+
+/* --- Design Tokens -------------------------------------------------------- */
+@theme {
+  /* Typography */
+  --font-sans: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+
+  /* Background / Surface */
+  --color-lucid-bg:       #0d0c15;
+  --color-lucid-surface:  #14121f;
+  --color-lucid-elevated: #1e1c30;
+  --color-lucid-border:   #2a2845;
+  --color-lucid-border-subtle: #1e1c30;
+
+  /* Primary — light violet + indigo */
+  --color-lucid-primary:       #9580ff;
+  --color-lucid-primary-dark:  #7b63f0;
+  --color-lucid-primary-light: #b8abff;
+  --color-lucid-primary-pale:  #d4ceff;
+
+  /* Blue accent — Obsidian 청색 언더톤 */
+  --color-lucid-blue:       #6b8aff;
+  --color-lucid-blue-dark:  #4d6fef;
+  --color-lucid-blue-light: #a3b8ff;
+
+  /* Text hierarchy */
+  --color-lucid-text-high:     #f0eeff;
+  --color-lucid-text-mid:      #b4afce;
+  --color-lucid-text-low:      #6e6a8a;
+  --color-lucid-text-disabled: #3d3a55;
+
+  /* Semantic */
+  --color-lucid-success: #7ee8a2;
+  --color-lucid-warning: #ffb86c;
+  --color-lucid-error:   #ff6e87;
+  --color-lucid-info:    #6b8aff;
+
+  /* Spacing extras */
+  --spacing-18: 4.5rem;
+  --spacing-88: 22rem;
+  --spacing-112: 28rem;
+
+  /* Border radius extras */
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+
+  /* Timing */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── API Kind Colors (semantic layer) ─────────────────────────────────────
+   * Single source of truth for all API reference color coding.
+   * All components MUST reference these variables — never use raw
+   * lucid-primary / lucid-blue / etc. directly for API kind styling.
+   *
+   * To retheme: change only this block. Every badge, name, and section
+   * header in the API docs will update automatically.
+   * ─────────────────────────────────────────────────────────────────────── */
+  /* Function / method kinds */
+  --color-api-fn:       var(--color-lucid-blue);       /* regular function / method  */
+  --color-api-prop:     var(--color-lucid-success);    /* @property                  */
+  --color-api-cls:      var(--color-lucid-warning);    /* @classmethod               */
+  --color-api-static:   var(--color-lucid-text-low);   /* @staticmethod              */
+  --color-api-abstract: var(--color-lucid-error);      /* @abstractmethod            */
+  --color-api-dunder:   #8b7fd4;                       /* __dunder__ methods         */
+
+  /* Class kinds */
+  --color-api-class:          var(--color-lucid-primary);  /* concrete class   */
+  --color-api-class-abstract: #e879f9;                     /* abstract class   */
+  --color-api-class-dataclass: #22d3ee;                    /* @dataclass       */
+}
+
+/* --- Base (inside @layer base so utilities can override) ----------------- */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: #0d0c15;
+    color: #f0eeff;
+    font-family: "Pretendard", system-ui, -apple-system, sans-serif;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  :focus-visible {
+    outline: 2px solid #9580ff;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #0d0c15; }
+  ::-webkit-scrollbar-thumb { background: #2a2845; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d3a55; }
+
+  ::selection {
+    background-color: rgba(149, 128, 255, 0.25);
+    color: #f0eeff;
+  }
+}
+
+/* --- Gradient utilities --------------------------------------------------- */
+.gradient-primary {
+  background: linear-gradient(135deg, #9580ff 0%, #6b8aff 100%);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #b8abff 0%, #a3b8ff 60%, #9580ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-hero-text {
+  background: linear-gradient(
+    135deg,
+    #f0eeff 0%,
+    #b8abff 40%,
+    #9580ff 70%,
+    #6b8aff 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Noise overlay for surfaces */
+.surface-noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  border-radius: inherit;
+  pointer-events: none;
+}

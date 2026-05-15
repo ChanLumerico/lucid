@@ -3,20 +3,104 @@ requires = [
     "setuptools>=68",
     "wheel",
     "pybind11>=2.10",
+    "cmake>=3.24",
+    "ninja>=1.11",
+    # setup.py imports mlx at build time to detect Metal sources, so it
+    # must be available in the isolated build environment.
+    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0",
-    "torch>=2.3,<2.7",
-    "einops>=0.8",
-    "tqdm",
+[project]
+name = "lucid-dl"
+version = "3.0.0"
+description = "Apple Silicon ML framework"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "ChanLumerico", email = "greensox284@gmail.com" }]
+# Lucid relies on PEP 649 lazy annotations (Python 3.14) to make
+# TYPE_CHECKING-only imports work in `|`-union annotations without
+# string-quoting (H7) or `from __future__ import annotations` (H1).
+# 3.12/3.13 would raise NameError on every such annotation at import
+# time, so we declare 3.14 as the minimum supported version.
+requires-python = ">=3.14"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: MacOS :: MacOS X",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-[tool.pytest.ini_options]
-markers = [
-    "parity: lucid<->torch numerical parity test",
-    "smoke: quick sanity test",
-    "slow: slow test (model forwards, long trajectories)",
+# Lucid is self-contained: ``import lucid`` and the full forward + backward +
+# optimizer + save/load lifecycle work without numpy installed.  NumPy is
+# only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
+# ``.numpy()``, ``from_numpy``, DLPack interop) and inside the test tier.
+# Declare it as an optional extra rather than a hard runtime dep.
+#
+# MLX *is* a hard runtime dep — engine.so links against libmlx.dylib and the
+# CMake RPATH is baked in at build time. Mirror it in [build-system].requires
+# and use `pip install --no-build-isolation` so the build-env path matches
+# the runtime path.
+dependencies = [
+    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ChanLumerico/lucid"
+Documentation = "https://chanlumerico.github.io/lucid/"
+Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ChanLumerico/lucid/issues"
+
+[project.optional-dependencies]
+numpy = ["numpy>=1.24"]
+dev = [
+    "pytest>=7",
+    "ruff>=0.4",
+    "mypy>=1.8",
+    "numpy>=1.24",
+]
+test = [
+    "pytest>=7",
+    "pytest-benchmark>=4",
+    "numpy>=1.24",
+    # Used by models serialization round-trip tests.
+    "safetensors>=0.4",
+    # The reference framework is *intentionally* not declared here —
+    # parity tests use a lazy import and skip cleanly when missing.
+    # Install it separately when running parity / perf comparisons.
+]
+docs = [
+    # Sphinx 9.x has a circular-import regression with Python 3.14.
+    # Pin to 8.x until the upstream fix lands.
+    "sphinx>=7.4,<9",
+    "sphinx-autobuild>=2024.4",
+    "pydata-sphinx-theme>=0.15",
+    "breathe>=4.35",
+    "exhale>=0.3.7",
+    "myst-parser>=3.0,<5",
+    "sphinx-design>=0.6",
+    "sphinxcontrib-mermaid>=0.9",
+    "sphinx-copybutton>=0.5",
+    "sphinx-notfound-page>=1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["lucid.test*", "lucid.benchmarks*"]
+
+[tool.setuptools.package-data]
+lucid = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["lucid/test"]
+markers = [
+    "parity:    numerical parity vs reference framework (auto-skip when missing)",
+    "smoke:     quick sanity test (< 1s)",
+    "slow:      end-to-end, > 5s (model forwards, training loops)",
+    "heavy:     very large model (> 100M params); skip unless -m heavy is passed",
+    "gpu:       requires Apple Silicon GPU (Metal); auto-skip otherwise",
+    "perf:      pytest-benchmark timing test (opt-in via --benchmark-only)",
+    "stability: numerical-edge / extreme-value coverage (inf / nan / subnormal)",
+    "f64_only:  float64-only path; skipped when only f32 is available",
+]
+addopts = "-v --tb=short -m 'not heavy'"

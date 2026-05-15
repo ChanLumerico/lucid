@@ -1,9 +1,0 @@
-Utility Functions
-=================
-
-.. toctree::
-    :maxdepth: 1
-
-    interpolate.rst
-    rotate.rst
-    one_hot.rst
