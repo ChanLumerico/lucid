@@ -89,23 +89,18 @@ jobs:
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run coverage
-        # 42 model-zoo test files OOM the 14 GB runner when run in one
-        # process, so we coverage-run each file separately (with `-p` so
-        # each writes its own `.coverage.*` file) and combine at the end.
+        # Model-zoo tests are excluded — they use 50–60 GB locally, far
+        # past any hosted runner. Coverage on engine / nn / optim /
+        # autograd / linalg / fft / etc. fits fine.
         run: |
           python -m pip install coverage
           mkdir -p build/coverage
-          python -m coverage run -p --source=lucid -m pytest lucid/test/ \
+          python -m coverage run --source=lucid -m pytest lucid/test/ \
               --ignore=lucid/test/parity \
               --ignore=lucid/test/integration \
               --ignore=lucid/test/perf \
               --ignore=lucid/test/unit/models \
               -q
-          for t in lucid/test/unit/models/test_models_*.py; do
-              echo "  coverage ▸ $t"
-              python -m coverage run -p --source=lucid -m pytest "$t" -q
-          done
-          python -m coverage combine
           python -m coverage xml -o build/coverage/coverage.xml
           python -m coverage report
 
