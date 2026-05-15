@@ -5,6 +5,9 @@ requires = [
     "pybind11>=2.10",
     "cmake>=3.24",
     "ninja>=1.11",
+    # setup.py imports mlx at build time to detect Metal sources, so it
+    # must be available in the isolated build environment.
+    "mlx>=0.18; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
