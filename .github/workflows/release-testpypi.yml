@@ -41,8 +41,10 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11 mlx
-          python -m pip install -e ".[test]"
+          # See ci.yml for why --no-build-isolation matters here (libmlx.dylib
+          # RPATH must match between build env and runtime env).
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Build + verify wheel
         # `scripts/ci_publish.sh` builds the wheel into `dist/` and verifies

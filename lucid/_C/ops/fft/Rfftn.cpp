@@ -33,10 +33,12 @@ TensorImplPtr rfftn_op(const TensorImplPtr& a,
     const Shape out_shape = fft_detail::rfft_out_shape(a->shape(), n, axes, "rfftn");
 
     auto in_arr = fft_detail::as_mlx_input(a);
+    using ::mlx::core::fft::FFTNorm;
     ::mlx::core::array out_arr = n.empty()
-        ? ::mlx::core::fft::rfftn(in_arr, axes, fft_detail::kMlxFftStream)
+        ? ::mlx::core::fft::rfftn(in_arr, axes, FFTNorm::Backward,
+                                  fft_detail::kMlxFftStream)
         : ::mlx::core::fft::rfftn(in_arr, fft_detail::mlx_n_from_lucid(n), axes,
-                                  fft_detail::kMlxFftStream);
+                                  FFTNorm::Backward, fft_detail::kMlxFftStream);
 
     Storage out = fft_detail::finalise_result(std::move(out_arr), out_dtype, out_shape, a->device());
     return fft_detail::fresh(std::move(out), out_shape, out_dtype, a->device());

@@ -16,7 +16,7 @@ from lucid.models.generative._config import (
     GenerativeActivation,
     GenerativeModelConfig,
 )
-from lucid.models.generative._schedulers import DDPMScheduler, Scheduler
+from lucid.models.generative._schedulers import DDPMScheduler, DiffusionScheduler
 
 __all__ = [
     "BetaSchedule",
@@ -24,5 +24,5 @@ __all__ = [
     "DiffusionModelConfig",
     "GenerativeActivation",
     "GenerativeModelConfig",
-    "Scheduler",
+    "DiffusionScheduler",
 ]

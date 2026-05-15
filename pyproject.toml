@@ -5,13 +5,9 @@ requires = [
     "pybind11>=2.10",
     "cmake>=3.24",
     "ninja>=1.11",
-    # setup.py imports mlx at build time to detect Metal sources, and
-    # lucid/_C/ops/fft/*.cpp uses the pre-0.21 `fftn(array, vector<int>
-    # axes, StreamOrDevice)` overload. MLX 0.21+ replaced it with
-    # `fftn(array, Shape, vector<int>, FFTNorm, StreamOrDevice)` so we
-    # pin to the last compatible release line. TODO: port FFT ops to
-    # the new API in a follow-up PR.
-    "mlx>=0.18,<0.21; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # setup.py imports mlx at build time to detect Metal sources, so it
+    # must be available in the isolated build environment.
+    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -26,7 +22,14 @@ requires-python = ">=3.12"
 # only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
 # ``.numpy()``, ``from_numpy``, DLPack interop) and inside the test tier.
 # Declare it as an optional extra rather than a hard runtime dep.
-dependencies = []
+#
+# MLX *is* a hard runtime dep — engine.so links against libmlx.dylib and the
+# CMake RPATH is baked in at build time. Mirror it in [build-system].requires
+# and use `pip install --no-build-isolation` so the build-env path matches
+# the runtime path.
+dependencies = [
+    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.24"]

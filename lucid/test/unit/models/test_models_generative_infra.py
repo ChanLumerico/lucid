@@ -16,7 +16,7 @@ from lucid.models import (
     DiffusionModelOutput,
     GenerationOutput,
     GenerativeModelConfig,
-    Scheduler,
+    DiffusionScheduler,
     VAEOutput,
 )
 from lucid.models._base import PretrainedModel
@@ -318,7 +318,7 @@ class TestGenerativeOutputs:
 class TestSchedulerABC:
     def test_cannot_instantiate_abstract(self) -> None:
         with pytest.raises(TypeError):
-            Scheduler()  # type: ignore[abstract]
+            DiffusionScheduler()  # type: ignore[abstract]
 
     def test_ddpm_satisfies_contract(self) -> None:
-        assert issubclass(DDPMScheduler, Scheduler)
+        assert issubclass(DDPMScheduler, DiffusionScheduler)

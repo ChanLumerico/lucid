@@ -18,7 +18,7 @@ from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
     from lucid.models._output import GenerationOutput
-    from lucid.models.generative._schedulers import Scheduler
+    from lucid.models.generative._schedulers import DiffusionScheduler
 
 
 @dataclass(frozen=True)
@@ -409,7 +409,7 @@ class DiffusionMixin:
     @lucid.no_grad()
     def generate(
         self,
-        scheduler: Scheduler,
+        scheduler: DiffusionScheduler,
         *,
         n_samples: int = 1,
         num_inference_steps: int | None = None,

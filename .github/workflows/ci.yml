@@ -40,8 +40,11 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11 mlx
-          python -m pip install -e ".[test]"
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run full local gate
         run: ./scripts/ci_full.sh
@@ -78,8 +81,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11 mlx
-          python -m pip install -e ".[test]"
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run coverage
         run: |
@@ -113,8 +119,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11 mlx
-          python -m pip install -e ".[test]"
+          # Install build deps + mlx in the host env, then `--no-build-isolation`
+          # so the editable build links against the *runtime* libmlx.dylib
+          # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run perf placeholder
         run: python -m pytest lucid/test/perf/ -q

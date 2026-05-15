@@ -7,7 +7,7 @@ DDPM vs DDIM vs Karras only requires re-instantiating the scheduler.
 
 Today this module ships:
 
-    * :class:`Scheduler` — abstract base (contract every scheduler honours)
+    * :class:`DiffusionScheduler` — abstract base (contract every scheduler honours)
     * :class:`DDPMScheduler` — Ho et al. (2020) ancestral sampler
 """
 
@@ -17,10 +17,10 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._generative import extract_into_tensor, make_beta_schedule
 
-__all__ = ["Scheduler", "DDPMScheduler"]
+__all__ = ["DiffusionScheduler", "DDPMScheduler"]
 
 
-class Scheduler(ABC):
+class DiffusionScheduler(ABC):
     """Abstract base — every diffusion scheduler honours this contract.
 
     Attributes
@@ -53,7 +53,7 @@ class Scheduler(ABC):
         """One reverse-process step: ``x_t → x_{t-1}`` given the network output."""
 
 
-class DDPMScheduler(Scheduler):
+class DDPMScheduler(DiffusionScheduler):
     """Ho et al. (2020) ancestral DDPM sampler.
 
     Reverse process:

@@ -34,7 +34,7 @@ from lucid.models.text import LanguageModelConfig, TextActivation
 from lucid.models.generative import (
     BetaSchedule, DDPMScheduler,
     DiffusionModelConfig, GenerativeActivation, GenerativeModelConfig,
-    Scheduler,
+    DiffusionScheduler,
 )
 # 2013 — VAE (Kingma & Welling)
 from lucid.models.generative.vae import (
@@ -397,7 +397,7 @@ __all__ = [
     "LanguageModelConfig", "TextActivation",
     "GenerativeModelConfig", "DiffusionModelConfig",
     "GenerativeActivation", "BetaSchedule",
-    "Scheduler", "DDPMScheduler",
+    "DiffusionScheduler", "DDPMScheduler",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",

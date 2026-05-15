@@ -5,6 +5,6 @@
     "python.analysis.ignore": [
         "**/*.pyi"
     ],
-    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
     "cmake.cmakePath": "/opt/homebrew/bin/cmake"
 }
