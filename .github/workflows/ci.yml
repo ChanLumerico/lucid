@@ -44,7 +44,10 @@ jobs:
           # Install build deps + mlx in the host env, then `--no-build-isolation`
           # so the editable build links against the *runtime* libmlx.dylib
           # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
-          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run full local gate
@@ -85,7 +88,10 @@ jobs:
           # Install build deps + mlx in the host env, then `--no-build-isolation`
           # so the editable build links against the *runtime* libmlx.dylib
           # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
-          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run coverage
@@ -127,7 +133,10 @@ jobs:
           # Install build deps + mlx in the host env, then `--no-build-isolation`
           # so the editable build links against the *runtime* libmlx.dylib
           # (PEP 517 build-env paths get baked into the .so RPATH otherwise).
-          python -m pip install setuptools wheel cmake ninja pybind11 mlx
+          # `clang-format==22.*` pinned to match local dev (Homebrew LLVM 22)
+          # — the system clang-format on macos-14 differs in style output.
+          python -m pip install setuptools wheel cmake ninja pybind11 mlx \
+              "clang-format>=22,<23"
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run perf placeholder
