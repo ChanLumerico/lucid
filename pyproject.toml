@@ -43,6 +43,8 @@ test = [
     "pytest>=7",
     "pytest-benchmark>=4",
     "numpy>=1.24",
+    # Used by models serialization round-trip tests.
+    "safetensors>=0.4",
     # The reference framework is *intentionally* not declared here —
     # parity tests use a lazy import and skip cleanly when missing.
     # Install it separately when running parity / perf comparisons.
