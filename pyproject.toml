@@ -28,11 +28,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-[project.urls]
-Homepage = "https://github.com/ChanLumerico/lucid"
-Documentation = "https://chanlumerico.github.io/lucid/"
-Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
-Issues = "https://github.com/ChanLumerico/lucid/issues"
 # Lucid is self-contained: ``import lucid`` and the full forward + backward +
 # optimizer + save/load lifecycle work without numpy installed.  NumPy is
 # only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
@@ -46,6 +41,12 @@ Issues = "https://github.com/ChanLumerico/lucid/issues"
 dependencies = [
     "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ChanLumerico/lucid"
+Documentation = "https://chanlumerico.github.io/lucid/"
+Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ChanLumerico/lucid/issues"
 
 [project.optional-dependencies]
 numpy = ["numpy>=1.24"]
