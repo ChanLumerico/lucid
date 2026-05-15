@@ -18,11 +18,14 @@ description = "Apple Silicon ML framework"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "ChanLumerico", email = "greensox284@gmail.com" }]
-requires-python = ">=3.12"
+# Lucid relies on PEP 649 lazy annotations (Python 3.14) to make
+# TYPE_CHECKING-only imports work in `|`-union annotations without
+# string-quoting (H7) or `from __future__ import annotations` (H1).
+# 3.12/3.13 would raise NameError on every such annotation at import
+# time, so we declare 3.14 as the minimum supported version.
+requires-python = ">=3.14"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Operating System :: MacOS :: MacOS X",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",

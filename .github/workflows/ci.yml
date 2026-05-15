@@ -15,8 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Lucid requires Python ≥ 3.12 (pyproject.toml + CLAUDE.md).
-        python-version: ["3.12", "3.13", "3.14"]
+        # Lucid is Python 3.14 only: TYPE_CHECKING annotations rely on
+        # PEP 649 lazy evaluation (H1 + H7 forbid the alternatives).
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@v4

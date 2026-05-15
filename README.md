@@ -405,7 +405,7 @@ ctest --test-dir build/temp.macosx-*/lucid__C_engine/ --output-on-failure
 |-------------|---------|
 | Hardware | Apple Silicon (M1 or later) |
 | OS | macOS 13 Ventura or later |
-| Python | 3.12 – 3.14 |
+| Python | 3.14 only (PEP 649 lazy annotations) |
 | Build tools | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
 | Runtime deps | None (standalone binary) |
 
