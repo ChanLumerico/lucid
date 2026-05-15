@@ -19,10 +19,10 @@ For static type-checking, the same per-op signatures are emitted into
 ``_signature_for_entry`` below to keep them in sync.
 """
 
-import annotationlib
 import builtins
 import inspect
 import re
+import sys
 from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
@@ -33,7 +33,15 @@ from lucid._ops._registry import OpEntry, _REGISTRY
 # ``ForwardRef`` objects instead of raising ``NameError``.  Used when
 # introspecting adapter signatures whose annotations reference symbols
 # that live behind ``TYPE_CHECKING`` (e.g. ``Tensor`` in ``_adapters``).
-_FORWARDREF = annotationlib.Format.FORWARDREF
+# Falls back to plain ``inspect.signature`` on 3.13 where ``annotationlib``
+# (PEP 649 stdlib module) does not yet exist; the try/except in the
+# adapter path picks up any resulting ``NameError``.
+if sys.version_info >= (3, 14):
+    import annotationlib
+
+    _FORWARDREF: object | None = annotationlib.Format.FORWARDREF
+else:
+    _FORWARDREF = None
 
 # Builtins we need are saved up front because we register ops named ``min`` /
 # ``max`` / ``sum`` / ``any`` / ``all`` into module ``globals()`` before this
@@ -188,7 +196,10 @@ def _signature_for_entry(entry: OpEntry) -> inspect.Signature:
         )
         return _rename_leading_tensor_params(sig, entry.n_tensor_args)
     try:
-        sig = inspect.signature(fn, annotation_format=_FORWARDREF)
+        if _FORWARDREF is not None:
+            sig = inspect.signature(fn, annotation_format=_FORWARDREF)
+        else:
+            sig = inspect.signature(fn)
     except (TypeError, ValueError, NameError):
         sig = _parse_pybind_signature(fn) or inspect.Signature(
             parameters=[
