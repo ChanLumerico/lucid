@@ -14,14 +14,24 @@ export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-26.0}"
 export _PYTHON_HOST_PLATFORM="${_PYTHON_HOST_PLATFORM:-macosx-26.0-arm64}"
 export ARCHFLAGS="${ARCHFLAGS:--arch arm64}"
 
-echo "==> Building wheel (target=$MACOSX_DEPLOYMENT_TARGET, plat=$_PYTHON_HOST_PLATFORM)"
-"$PYTHON_BIN" -m pip wheel . -w dist/ --no-deps --no-build-isolation -q
-
-WHEEL=$(ls dist/lucid*.whl 2>/dev/null | sort -V | tail -1)
-if [ -z "$WHEEL" ]; then
-    echo "ERROR: no wheel found in dist/" >&2; exit 1
+# Reuse an existing wheel if one is already in dist/. This matters for
+# the production publish.yml flow: that workflow builds the wheel via
+# `python -m build`, then strips host MLX before running this script
+# for a clean-machine smoke. With MLX gone from the host, re-building
+# here would fail at setup.py's `_mlx_paths()` import. So if dist/
+# already has a lucid wheel, we reuse it and only smoke-test.
+WHEEL=$(ls dist/lucid*.whl 2>/dev/null | sort -V | tail -1 || true)
+if [ -n "$WHEEL" ]; then
+    echo "==> Reusing existing wheel: $WHEEL"
+else
+    echo "==> Building wheel (target=$MACOSX_DEPLOYMENT_TARGET, plat=$_PYTHON_HOST_PLATFORM)"
+    "$PYTHON_BIN" -m pip wheel . -w dist/ --no-deps --no-build-isolation -q
+    WHEEL=$(ls dist/lucid*.whl 2>/dev/null | sort -V | tail -1)
+    if [ -z "$WHEEL" ]; then
+        echo "ERROR: no wheel found in dist/ after build" >&2; exit 1
+    fi
+    echo "    Built: $WHEEL"
 fi
-echo "    Built: $WHEEL"
 
 echo "==> Installing wheel into temp venv (with deps — mlx must live in this venv)"
 TMPDIR=$(mktemp -d)
