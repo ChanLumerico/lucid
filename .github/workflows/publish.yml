@@ -1,58 +1,172 @@
+name: Publish to PyPI
+
+# Production PyPI release pipeline.
+#
+# Triggered two ways:
+#
+#   1. `git tag v3.0.0 && git push origin v3.0.0` — full automated release.
+#   2. Manual `workflow_dispatch` with an explicit `version` input — for
+#      re-runs after a partial failure (artifact already built, etc.).
+#
+# Test PyPI publishing is handled by `release-testpypi.yml` and runs on
+# the same `v*` tag push — Test PyPI is intended to be a *gating* step
+# before this workflow is allowed to publish to real PyPI.
+#
+# Authentication uses PyPI Trusted Publishing (OIDC), not an API token,
+# so no `secrets.PYPI_API_TOKEN` is required as long as the
+# `lucid-dl` PyPI project is configured to trust this workflow.
+
 on:
-  workflow_dispatch: # Allow manual triggering via GitHub Actions UI
+  push:
+    tags:
+      # Production releases only — pure semver `vMAJOR.MINOR.PATCH`. This
+      # deliberately excludes pre-release tags like `v3.0.0-rc1` (those
+      # only trigger `release-testpypi.yml` for Test PyPI staging).
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (without leading 'v', e.g. 3.0.0). If empty, derived from the git tag."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  pypi-publish:
-    name: Upload release to PyPI
-    runs-on: macos-14
-    environment: release
-    permissions:
-      id-token: write
+  # ── Build wheel + sdist on Apple Silicon ────────────────────────────
+  build:
+    name: Build wheel + sdist
+    runs-on: macos-26
+    outputs:
+      version: ${{ steps.derive-version.outputs.version }}
+
     steps:
-      - name: Check out the code
-        uses: actions/checkout@v3
-
-      # Extract the commit message
-      - name: Get commit message
-        id: get-commit-message
-        run: echo "COMMIT_MESSAGE=$(git log -1 --pretty=%B)" >> "$GITHUB_OUTPUT"
-
-      # Extract version from commit message
-      - name: Extract version from commit message
-        id: extract-version
-        run: |
-          COMMIT_MESSAGE=${{ steps.get-commit-message.outputs.COMMIT_MESSAGE }}
-          if [[ "$COMMIT_MESSAGE" =~ release-([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-            echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-          else
-            echo "Commit message does not match the release pattern. Exiting."
-            exit 1
-          fi
-
-      - name: Set up Python
-        uses: actions/setup-python@v3
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.12'
+          fetch-depth: 0   # Need tags for version derivation
 
-      - name: Install dependencies
+      - name: Enforce Apple Silicon runner
+        run: |
+          python3 - <<'PY'
+          import platform
+
+          system = platform.system()
+          machine = platform.machine()
+          if system != "Darwin" or machine != "arm64":
+              raise SystemExit(f"Lucid release supports macOS arm64 only, got {system}/{machine}")
+          print(f"runner={system}/{machine}")
+          PY
+
+      - name: Derive version (from input, tag, or lucid/version.py)
+        id: derive-version
+        run: |
+          # Priority: workflow_dispatch input > git tag > lucid/version.py
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+            SOURCE="workflow_dispatch input"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            SOURCE="git tag"
+          else
+            VERSION=$(python3 -c "import re, pathlib; m = re.search(r'__version__: str = \"([^\"]+)\"', pathlib.Path('lucid/version.py').read_text()); print(m.group(1))")
+            SOURCE="lucid/version.py"
+          fi
+          echo "Resolved version=$VERSION (source: $SOURCE)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version consistency
+        env:
+          RESOLVED_VERSION: ${{ steps.derive-version.outputs.version }}
+        run: |
+          # pyproject.toml [project].version, lucid/version.py __version__,
+          # and the resolved release version must all agree.
+          python3 - <<'PY'
+          import os, re, sys, pathlib, tomllib
+          resolved = os.environ["RESOLVED_VERSION"]
+          pyproj = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          py_version = pyproj["project"]["version"]
+          m = re.search(r'__version__: str = "([^"]+)"', pathlib.Path("lucid/version.py").read_text())
+          src_version = m.group(1)
+          print(f"resolved={resolved}  pyproject={py_version}  source={src_version}")
+          if not (resolved == py_version == src_version):
+              print("ERROR: version mismatch — bump all three before tagging.", file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install setuptools wheel twine pybind11
+          # MLX must be installed in the *host* env (not just the build
+          # isolation env) so the .so RPATH baked at build time matches
+          # the libmlx.dylib path the runtime resolver will see.
+          python -m pip install setuptools wheel cmake ninja pybind11 \
+              "mlx>=0.31" build
 
-      - name: Update version in setup.py
-        run: |
-          VERSION=${{ steps.extract-version.outputs.VERSION }}
-          sed -i '' "s|{{VERSION_PLACEHOLDER}}|$VERSION|g" setup.py
-
-      - name: Build the package
+      - name: Build wheel + sdist
         env:
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          # Match the default in setup.py — keep them in sync.
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          # python.org's Python 3.14 is a universal2 build, so without
+          # this override sysconfig.get_platform() returns
+          # `macosx-10.15-universal2` and the wheel ships with a
+          # `universal2` plat tag — incorrectly advertising x86_64
+          # compatibility for an arm64-only engine. Forcing the host
+          # platform fixes the tag without affecting compilation.
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
+          ARCHFLAGS: "-arch arm64"
         run: |
-          python setup.py sdist bdist_wheel
+          # `python -m build --no-isolation` builds both wheel and sdist
+          # using the host env's mlx (preserves RPATH), unlike legacy
+          # `python setup.py sdist bdist_wheel` which uses build isolation
+          # and breaks the dylib resolution chain.
+          python -m build --no-isolation
+          ls -lh dist/
 
-      - name: Publish package distributions to PyPI
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          python -m twine upload dist/* -u __token__ -p $PYPI_TOKEN
+      - name: Verify wheel installs + imports
+        run: ./scripts/ci_publish.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lucid-pypi-dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Publish to PyPI (Trusted Publishing / OIDC) ─────────────────────
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/project/lucid-dl/${{ needs.build.outputs.version }}/
+    permissions:
+      contents: read
+      id-token: write   # Required for OIDC trusted publishing
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lucid-pypi-dist
+          path: dist
+
+      - name: List release artifacts
+        run: ls -lh dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          # `skip-existing` is OFF for production: re-uploading the same
+          # version is almost always a mistake. Bump the version instead.
+          skip-existing: false

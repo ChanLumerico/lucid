@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-wheels:
     name: Build wheel / Python ${{ matrix.python-version }}
-    runs-on: macos-14
+    runs-on: macos-26
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +48,14 @@ jobs:
 
       - name: Build + verify wheel
         # `scripts/ci_publish.sh` builds the wheel into `dist/` and verifies
-        # it installs + imports inside a clean venv.
+        # it installs + imports inside a clean venv. The env vars below
+        # force the wheel platform tag to `macosx_26_0_arm64` — without
+        # them python.org's universal2 Python interpreter would produce
+        # a `universal2` tag that lies about x86_64 compatibility.
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
+          ARCHFLAGS: "-arch arm64"
         run: ./scripts/ci_publish.sh
 
       - uses: actions/upload-artifact@v4

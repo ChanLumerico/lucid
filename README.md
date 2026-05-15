@@ -404,12 +404,13 @@ ctest --test-dir build/temp.macosx-*/lucid__C_engine/ --output-on-failure
 | Requirement | Minimum |
 |-------------|---------|
 | Hardware | Apple Silicon (M1 or later) |
-| OS | macOS 13 Ventura or later |
+| OS | macOS 26 Tahoe or later |
 | Python | 3.14 only (PEP 649 lazy annotations) |
+| MLX | ≥ 0.31 (bundled — provides `macosx_26_0_arm64` wheel + `mlx-metal` split) |
 | Build tools | CMake ≥ 3.24, Ninja ≥ 1.11, Xcode CLT |
-| Runtime deps | None (standalone binary) |
+| Runtime deps | MLX (Python `mlx` package; engine links against `libmlx.dylib`) |
 
-Linux, Windows, and x86-64 are not supported.
+Linux, Windows, x86-64, and macOS ≤ 15 are not supported.
 
 ---
 

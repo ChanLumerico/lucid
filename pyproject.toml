@@ -7,7 +7,10 @@ requires = [
     "ninja>=1.11",
     # setup.py imports mlx at build time to detect Metal sources, so it
     # must be available in the isolated build environment.
-    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # 0.31 is the first release that ships native macOS 26 wheels
+    # (mlx-0.31.x-...-macosx_26_0_arm64.whl + mlx-metal split package),
+    # matching our MACOSX_DEPLOYMENT_TARGET=26.0 build target.
+    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -28,7 +31,12 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.14",
     "Operating System :: MacOS :: MacOS X",
+    "Environment :: GPU",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+    # Note: SPDX `license = "MIT"` above replaces the legacy
+    # `License :: OSI Approved :: MIT License` classifier (PEP 639).
 ]
 
 # Lucid is self-contained: ``import lucid`` and the full forward + backward +
@@ -42,7 +50,7 @@ classifiers = [
 # and use `pip install --no-build-isolation` so the build-env path matches
 # the runtime path.
 dependencies = [
-    "mlx>=0.29; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx>=0.31; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.urls]
@@ -85,11 +93,25 @@ docs = [
 ]
 
 [tool.setuptools.packages.find]
+# Only ship the `lucid` package tree itself — dev tooling (`tools/`,
+# `scripts/`, `web/`, `obsidian/`, `benchmarks/`) and the test tier
+# (`lucid.test*`) must never end up in the published wheel. Without
+# `include` the default discovery walks the whole repo root and pulls
+# in `web/node_modules/...` via the `*.py` files inside katex, plus
+# every script under `tools/`.
 where = ["."]
+include = ["lucid*"]
 exclude = ["lucid.test*", "lucid.benchmarks*"]
 
 [tool.setuptools.package-data]
-lucid = ["py.typed"]
+# py.typed: PEP 561 marker — required for type checkers (mypy / pyright)
+#           to recognise lucid as a typed package.
+# *.pyi:    type stubs for the C++ engine + dynamically-bound Tensor /
+#           top-level surfaces. Hand-written modules pick up inline
+#           annotations directly; stubs only exist where introspection
+#           can't see signatures (C extensions, registry-injected methods).
+# *.json:   model + weight registry payloads loaded at import time.
+lucid = ["py.typed", "*.pyi", "**/*.pyi", "**/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["lucid/test"]

@@ -72,8 +72,9 @@ bindings → ops → kernel → autograd → backend → tensor → core
 
 ### Requirements
 
-- macOS arm64 (M1 or later)
-- Python 3.12–3.14
+- macOS 26 Tahoe (arm64) or later, M1 or later
+- Python 3.14 only (PEP 649 lazy annotations — H1/H7 require it)
+- MLX ≥ 0.31 (matches the `macosx_26_0_arm64` wheel + `mlx-metal` split package)
 - CMake ≥ 3.24
 - Ninja ≥ 1.11
 - Xcode Command Line Tools

@@ -51,6 +51,13 @@ target_compile_options(
         -Wpedantic
         -Werror
         -Wno-unused-parameter
+        # macOS 15 SDK deprecated the legacy BNNS scalar API (BNNSFilter,
+        # BNNSLayerParameters*, BNNSDirectApplyLSTM*, etc.) in favour of
+        # the new BNNSGraph* surface. The legacy APIs still WORK on
+        # macOS 26 — Apple has not removed them — but every call site
+        # in `backend/cpu/CpuBackend.h` would otherwise trip -Werror.
+        # Migration to BNNSGraph is tracked separately; suppress for now.
+        -Wno-deprecated-declarations
         -fvisibility=hidden)
 
 if(LUCID_BUILD_MODE STREQUAL "release")
