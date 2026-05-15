@@ -5,9 +5,16 @@ This is one of the H4 numpy bridge sites — the only place where a
 ``np.ndarray`` is allowed to enter Lucid.  NumPy is imported lazily
 (inside the functions that need it) so ``import lucid`` works
 without numpy installed.
+
+3.0.2: pure-Python inputs (``list``, ``tuple``, scalar) now take a
+numpy-free fast path through ``struct.pack`` + ``TensorImpl.from_bytes``.
+``lucid.tensor([1, 2, 3])`` no longer pulls numpy into the dependency
+graph — only ``lucid.tensor(np_array)`` and explicit ``from_numpy``
+keep the numpy bridge.
 """
 
-from typing import TYPE_CHECKING
+import struct
+from typing import TYPE_CHECKING, Sequence
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs
@@ -16,6 +23,126 @@ from lucid._types import DeviceLike, DTypeLike
 if TYPE_CHECKING:
     import numpy as np
     from lucid._tensor.tensor import Tensor
+
+
+# struct format code + element size for each engine dtype that has a
+# direct CPython struct representation.  BF16 and C64 are absent — they
+# need numpy / explicit conversion, so the fast path falls through to
+# the existing numpy bridge when those are the target dtype.
+_DTYPE_STRUCT: dict[_C_engine.Dtype, tuple[str, int]] = {
+    _C_engine.Dtype.F16: ("e", 2),
+    _C_engine.Dtype.F32: ("f", 4),
+    _C_engine.Dtype.F64: ("d", 8),
+    _C_engine.Dtype.I8: ("b", 1),
+    _C_engine.Dtype.I16: ("h", 2),
+    _C_engine.Dtype.I32: ("i", 4),
+    _C_engine.Dtype.I64: ("q", 8),
+    _C_engine.Dtype.Bool: ("?", 1),
+}
+
+
+def _flatten_with_shape(data: object) -> tuple[list[int], list[object]] | None:
+    """Walk a (possibly nested) list/tuple, returning ``(shape, flat)``.
+
+    Returns ``None`` when the structure is ragged (different sub-lengths
+    at the same level), signalling the caller to fall back to numpy.
+    """
+    if not isinstance(data, (list, tuple)):
+        # Scalar — 0-d tensor.
+        return [], [data]
+    shape: list[int] = [len(data)]
+    if len(data) == 0:
+        return shape, []
+    if isinstance(data[0], (list, tuple)):
+        # Nested — recurse on first element to pick up the sub-shape,
+        # then validate every sibling against it.
+        first = _flatten_with_shape(data[0])
+        if first is None:
+            return None
+        sub_shape, _ = first
+        flat: list[object] = []
+        for item in data:
+            sub = _flatten_with_shape(item)
+            if sub is None or sub[0] != sub_shape:
+                return None
+            flat.extend(sub[1])
+        return shape + sub_shape, flat
+    # Leaf row — must be uniform scalars.
+    for item in data:
+        if isinstance(item, (list, tuple)):
+            return None
+    return shape, list(data)
+
+
+def _infer_engine_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
+    """Default-dtype inference for Python scalars.
+
+    Matches numpy's behaviour at the call site:
+      * any ``float`` element → ``F32`` (lucid's default float dtype)
+      * all ``bool`` elements → ``Bool``
+      * otherwise (ints) → ``I64``  (numpy uses platform int, but
+        lucid + reference frameworks both pin int → int64 for tensor
+        literals to avoid 32-bit-vs-64-bit footguns).
+    """
+    if not flat:
+        return _C_engine.Dtype.F32  # zero-length tensor — match numpy default
+    has_float = any(isinstance(v, float) and not isinstance(v, bool) for v in flat)
+    if has_float:
+        return _C_engine.Dtype.F32
+    # bool is a subclass of int in Python, check it first.
+    if all(isinstance(v, bool) for v in flat):
+        return _C_engine.Dtype.Bool
+    return _C_engine.Dtype.I64
+
+
+def _coerce_for_struct(v: object, dtype: _C_engine.Dtype) -> object:
+    """Cast a Python scalar so ``struct.pack`` accepts it for ``dtype``."""
+    if dtype == _C_engine.Dtype.Bool:
+        return bool(v)
+    if dtype in (
+        _C_engine.Dtype.I8,
+        _C_engine.Dtype.I16,
+        _C_engine.Dtype.I32,
+        _C_engine.Dtype.I64,
+    ):
+        return int(v)  # type: ignore[arg-type]
+    # F16 / F32 / F64
+    return float(v)  # type: ignore[arg-type]
+
+
+def _try_numpy_free_to_impl(
+    data: object,
+    dtype_eng: _C_engine.Dtype | None,
+    device_eng: _C_engine.Device,
+    requires_grad: bool,
+) -> _C_engine.TensorImpl | None:
+    """Build a TensorImpl from Python scalars/lists/tuples without numpy.
+
+    Returns ``None`` when the input or target dtype can't be handled by
+    ``struct.pack`` (e.g. BF16, complex64, ragged nesting); the caller
+    then falls through to the numpy bridge.
+    """
+    if isinstance(data, (list, tuple)) or isinstance(data, (int, float, bool)):
+        unpacked = _flatten_with_shape(data)
+        if unpacked is None:
+            return None  # ragged → numpy
+        shape, flat = unpacked
+        target = dtype_eng if dtype_eng is not None else _infer_engine_dtype(flat)
+        fmt_entry = _DTYPE_STRUCT.get(target)
+        if fmt_entry is None:
+            return None  # BF16 / C64 → numpy
+        fmt, _ = fmt_entry
+        n = len(flat)
+        if n == 0:
+            packed = b""
+        else:
+            packed = struct.pack(
+                f"={n}{fmt}", *(_coerce_for_struct(v, target) for v in flat)
+            )
+        return _C_engine.TensorImpl.from_bytes(
+            packed, shape, target, device_eng, requires_grad
+        )
+    return None
 
 
 _NP_TO_ENGINE_DTYPE: dict[str, _C_engine.Dtype] = {
@@ -98,10 +225,20 @@ def _to_impl(
             data = _impl_with_grad(data, _rg)
         return data
 
-    # Numpy is the sanctioned conversion library for Python-data → engine.
-    # Imported lazily so ``import lucid`` doesn't need numpy installed —
-    # only the explicit ``tensor(...)`` call at this site does.  When numpy
-    # is missing, ``_require_numpy`` raises a guidance-rich ImportError.
+    # 3.0.2: numpy-free fast path for pure-Python scalars / lists / tuples.
+    # Uses ``struct.pack`` + ``TensorImpl.from_bytes`` so the most common
+    # ``lucid.tensor([1, 2, 3])`` pattern doesn't transitively import
+    # numpy.  Returns None for inputs the fast path can't handle (ragged
+    # lists, BF16 / C64 dtype targets, ndarray) — caller falls through.
+    fast = _try_numpy_free_to_impl(data, _dtype_eng if dtype is not None else None,
+                                   _device_eng, _rg)
+    if fast is not None:
+        return fast
+
+    # Numpy is the sanctioned conversion library for the remaining inputs
+    # (ndarray, BF16/C64 targets, ragged sequences).  Imported lazily so
+    # ``import lucid`` doesn't need numpy installed.  When numpy is
+    # missing, ``_require_numpy`` raises a guidance-rich ImportError.
     np = _require_numpy("lucid.tensor() with non-Tensor input")
 
     numpy_input = isinstance(data, np.ndarray)  # type: ignore[attr-defined]

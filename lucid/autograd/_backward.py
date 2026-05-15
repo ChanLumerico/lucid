@@ -211,9 +211,13 @@ def grad(
 
     # Save existing .grad values so we can restore them after
     saved_grads: list[Tensor | None] = [inp.grad for inp in inputs]
-    # Zero out existing grads on inputs so we can read the fresh ones
+    # Zero out existing grads on inputs so we can read the fresh ones.
+    # ``grad_to_tensor`` is the numpy-free probe — returns a TensorImpl
+    # for any accumulated grad (graph-mode or detached), or ``None`` when
+    # truly absent.  ``grad_as_impl`` alone would be too strict (it only
+    # finds graph-mode grads).
     for inp in inputs:
-        if inp._impl.grad_as_python() is not None:
+        if inp._impl.grad_to_tensor() is not None:
             inp._impl.zero_grad()
 
     _retain = retain_graph if retain_graph is not None else create_graph
@@ -226,28 +230,30 @@ def grad(
         for out, g in zip(outputs, grad_outputs):
             out.backward(gradient=g, retain_graph=_retain, create_graph=create_graph)
 
-    # Collect computed gradients.  When create_graph=True we must preserve the
-    # grad-of-grad graph, so prefer grad_as_impl() (returns the actual TensorImpl
-    # with grad_fn intact) and only fall back to the python-buffer path when no
-    # graph-mode gradient is available.
+    # Collect computed gradients.  Two numpy-free accessors, used in order:
+    #   1. ``grad_as_impl()`` — graph-mode grad with ``grad_fn`` intact
+    #      (needed when ``create_graph=True`` so the grad-of-grad graph
+    #      isn't severed).  Returns None for detached / non-graph grads.
+    #   2. ``grad_to_tensor()`` — wraps the accumulated grad Storage as a
+    #      fresh TensorImpl regardless of graph-mode tracking.  Returns
+    #      None only when no grad was accumulated.
+    # Both replace the prior ``grad_as_python()`` + ``TensorImpl(np.ndarray,
+    # ...)`` round-trip, which forced numpy in even for detached grads.
     result: list[Tensor | None] = []
     for inp in inputs:
         g_impl = inp._impl.grad_as_impl()
+        if g_impl is None:
+            g_impl = inp._impl.grad_to_tensor()
         if g_impl is not None:
             result.append(_wrap(g_impl))
             continue
-        g_raw = inp._impl.grad_as_python()
-        if g_raw is None:
-            if not allow_unused:
-                raise RuntimeError(
-                    "One of the differentiated tensors does not require grad "
-                    "and is not reachable from outputs. "
-                    "Set allow_unused=True to suppress this error."
-                )
-            result.append(None)
-        else:
-            impl = _C_engine.TensorImpl(g_raw, inp._impl.device, False)
-            result.append(_wrap(impl))
+        if not allow_unused:
+            raise RuntimeError(
+                "One of the differentiated tensors does not require grad "
+                "and is not reachable from outputs. "
+                "Set allow_unused=True to suppress this error."
+            )
+        result.append(None)
 
     # Restore original .grad values using set_grad (no numpy).
     for inp, saved in zip(inputs, saved_grads):

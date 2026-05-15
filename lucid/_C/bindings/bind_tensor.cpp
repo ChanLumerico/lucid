@@ -152,6 +152,13 @@ void register_tensor_impl(py::module_& m) {
                     "Reconstruct a TensorImpl from a raw bytes blob + "
                     "metadata.  ``len(data)`` must equal "
                     "``prod(shape) * dtype_size(dtype)``.")
+        .def("transfer_to_device", &TensorImpl::transfer_to_device, py::arg("target"),
+             py::arg("requires_grad"),
+             "Cross-device copy (CPU↔GPU) without going through numpy.  "
+             "Used by ``Tensor.to(device=...)`` so the .to() call stays "
+             "numpy-free for ``import lucid`` users who didn't install the "
+             "``[numpy]`` extra.  SharedStorage tensors should use "
+             "``transfer_storage`` instead — that path is zero-copy relabel.")
         .def("to_string", &TensorImpl::to_string, py::arg("precision") = 4,
              py::arg("threshold") = 1000, py::arg("edgeitems") = 3,
              "Render the tensor's data as a human-readable string.  "

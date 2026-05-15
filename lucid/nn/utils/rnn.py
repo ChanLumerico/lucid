@@ -3,13 +3,53 @@ RNN sequence packing utilities.
 All computation uses the C++ engine — no numpy.
 """
 
-from typing import Any, NamedTuple, cast
+import struct
+from typing import NamedTuple, cast
 
 import lucid
 from lucid._tensor.tensor import Tensor as _Tensor
 from lucid._tensor.tensor import Tensor  # public alias for NamedTuple field annotations
 from lucid._C import engine as _C_engine
 from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__init__ but not re-exported with __all__
+
+
+# Integer-dtype → struct format-code map, used by _int_tensor_to_list to
+# unpack a 1-D int tensor's raw bytes into a Python list without going
+# through numpy.  Apple Silicon is little-endian; ``=`` uses native byte
+# order without struct padding, which matches the engine's contiguous
+# bytes layout exactly.
+_INT_DTYPE_STRUCT: dict[_C_engine.Dtype, str] = {
+    _C_engine.Dtype.I8: "b",
+    _C_engine.Dtype.I16: "h",
+    _C_engine.Dtype.I32: "i",
+    _C_engine.Dtype.I64: "q",
+    _C_engine.Dtype.Bool: "?",
+}
+
+
+def _int_tensor_to_list(t: Tensor) -> list[int]:
+    """Convert a 1-D integer tensor to a flat Python list of ints — numpy-free.
+
+    Reads the tensor's contiguous bytes through ``to_bytes`` (which exists
+    precisely to keep paths off the numpy bridge) and unpacks them with
+    ``struct.unpack``.  Used by ``pack_padded_sequence`` /
+    ``pad_packed_sequence`` to inspect ``lengths`` / ``batch_sizes`` /
+    ``unsorted_indices`` — small metadata tensors where numpy was vastly
+    overkill.
+
+    Raises ``TypeError`` for non-integer dtypes (we intentionally don't
+    silently coerce floats — the caller should pass an int tensor).
+    """
+    n = t._impl.numel()
+    if n == 0:
+        return []
+    fmt = _INT_DTYPE_STRUCT.get(t._impl.dtype)
+    if fmt is None:
+        raise TypeError(
+            f"_int_tensor_to_list expects an integer tensor; got dtype {t._impl.dtype!r}"
+        )
+    raw = t._impl.to_bytes()
+    return list(struct.unpack(f"={n}{fmt}", raw))
 
 
 class PackedSequence(NamedTuple):
@@ -124,9 +164,8 @@ def pack_padded_sequence(
 
     # Extract lengths as a plain Python list of ints (small metadata, not tensor math).
     if hasattr(lengths, "_impl"):
-        # Lucid Tensor: download via data_as_python (interop boundary — no computation)
-        raw: Any = lengths._impl.data_as_python()
-        lengths_list: list[int] = [int(raw.flat[i]) for i in range(len(raw.flat))]
+        # Lucid Tensor: read raw bytes + struct.unpack (numpy-free path).
+        lengths_list: list[int] = _int_tensor_to_list(cast(Tensor, lengths))
     else:
         lengths_list = [int(v) for v in lengths]
 
@@ -228,8 +267,8 @@ def pad_packed_sequence(
     """
     data = sequence.data
     # batch_sizes is a small 1-D int tensor — extract as Python list (metadata).
-    bs_raw: Any = sequence.batch_sizes._impl.data_as_python()
-    batch_sizes_list = [int(bs_raw.flat[i]) for i in range(len(bs_raw.flat))]
+    # Uses to_bytes + struct.unpack so this code path stays numpy-free.
+    batch_sizes_list = _int_tensor_to_list(sequence.batch_sizes)
 
     T = len(batch_sizes_list)
     B = int(batch_sizes_list[0])
@@ -262,9 +301,8 @@ def pad_packed_sequence(
                 lengths_list[k] = t + 1
 
     if sequence.unsorted_indices is not None:
-        # Reorder batch dim by unsorted_indices.
-        ui_raw: Any = sequence.unsorted_indices._impl.data_as_python()
-        ui_list = [int(ui_raw.flat[i]) for i in range(len(ui_raw.flat))]
+        # Reorder batch dim by unsorted_indices (numpy-free metadata read).
+        ui_list = _int_tensor_to_list(sequence.unsorted_indices)
         ui_t = _Tensor(cast(list[object], ui_list))
         ui_impl_i32 = _C_engine.astype(ui_t._impl, _C_engine.I32)
         full_shape = list(out_t.shape)

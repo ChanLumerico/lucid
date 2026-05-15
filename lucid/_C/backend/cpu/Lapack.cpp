@@ -23,8 +23,10 @@ namespace lucid::backend::cpu {
 
 namespace {
 
-// __CLPK_integer is the Accelerate typedef for LAPACK's INTEGER argument type.
-using i32 = __CLPK_integer;
+// Accelerate's new LAPACK interface (-DACCELERATE_NEW_LAPACK) exposes
+// __LAPACK_int as the INTEGER argument type — int in LP64 mode, long in
+// ILP64. The legacy __CLPK_integer alias is gone in the new headers.
+using i32 = __LAPACK_int;
 
 // Transposes a rows×cols row-major matrix to cols×rows column-major layout.
 // vDSP_mtrans(src, 1, dst, 1, cols, rows) reads rows rows of length cols

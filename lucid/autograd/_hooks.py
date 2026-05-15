@@ -170,13 +170,19 @@ def _dispatch_tensor_grad_hooks() -> None:
             continue
 
         t_tensor = cast(Tensor, t)
-        # Retrieve the current gradient.
+        # Retrieve the current gradient — both accessors below are
+        # numpy-free, used in order:
+        #   1. ``grad_as_impl`` — graph-mode grad (with ``grad_fn``).
+        #   2. ``grad_to_tensor`` — wraps the accumulated grad Storage
+        #      whether or not graph-mode tracking is in place.
+        # Previously this branched to ``grad_as_python`` + ``TensorImpl
+        # (np.ndarray, ...)`` for the detached case, which pulled numpy
+        # in for every hook fire.
         g_impl = t_tensor._impl.grad_as_impl()
         if g_impl is None:
-            g_raw = t_tensor._impl.grad_as_python()
-            if g_raw is None:
-                continue  # no grad for this tensor yet
-            g_impl = _C_engine.TensorImpl(g_raw, t_tensor._impl.device, False)
+            g_impl = t_tensor._impl.grad_to_tensor()
+        if g_impl is None:
+            continue  # no grad for this tensor yet
 
         grad = _wrap(g_impl)
 

@@ -139,10 +139,15 @@ def jacobian(
                         gradient=seed_t, retain_graph=True, create_graph=create_graph
                     )
 
-                g_raw = x._impl.grad_as_python()
-                if g_raw is not None:
-                    row_impl = _C_engine.TensorImpl(g_raw, x._impl.device, False)
-                    J_rows.append(_C_engine.reshape(row_impl, [x_numel]))
+                # ``grad_as_impl`` (graph-mode grad) → ``grad_to_tensor``
+                # (detached grad fallback) — both numpy-free accessors that
+                # together replace the prior ``grad_as_python`` +
+                # ``TensorImpl(np.ndarray, ...)`` round-trip.
+                g_impl = x._impl.grad_as_impl()
+                if g_impl is None:
+                    g_impl = x._impl.grad_to_tensor()
+                if g_impl is not None:
+                    J_rows.append(_C_engine.reshape(g_impl, [x_numel]))
                 else:
                     J_rows.append(
                         _C_engine.zeros([x_numel], _C_engine.F32, x._impl.device)

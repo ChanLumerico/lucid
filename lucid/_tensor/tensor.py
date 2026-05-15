@@ -288,7 +288,7 @@ class Tensor:
 
         Lucid tensors reside on one of two devices:
 
-        * ``cpu`` — Apple Accelerate (vDSP / BNNS / BLAS / LAPACK).
+        * ``cpu`` — Apple Accelerate (vDSP / vForce / BLAS / LAPACK).
         * ``metal`` — Apple Metal GPU via the MLX backend.
 
         Returns

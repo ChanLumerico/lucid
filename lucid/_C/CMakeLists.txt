@@ -43,6 +43,12 @@ target_include_directories(
         "${LUCID_PYBIND11_INCLUDE_DIR}"
         "${LUCID_MLX_INCLUDE_DIR}")
 target_compile_definitions(lucid_compile_options INTERFACE LUCID_BUILDING_ENGINE=1)
+# Apple deprecated the legacy CBLAS / CLAPACK Fortran-name interfaces in
+# macOS 13.3 in favour of a new header layout (cblas_sgemm, sgetrf_, …).
+# ACCELERATE_NEW_LAPACK opts into the new symbol routing without changing
+# index width (LP64); add ACCELERATE_LAPACK_ILP64 alongside if 64-bit
+# indices are ever required.
+target_compile_definitions(lucid_compile_options INTERFACE ACCELERATE_NEW_LAPACK)
 target_compile_options(
     lucid_compile_options
     INTERFACE
@@ -51,13 +57,6 @@ target_compile_options(
         -Wpedantic
         -Werror
         -Wno-unused-parameter
-        # macOS 15 SDK deprecated the legacy BNNS scalar API (BNNSFilter,
-        # BNNSLayerParameters*, BNNSDirectApplyLSTM*, etc.) in favour of
-        # the new BNNSGraph* surface. The legacy APIs still WORK on
-        # macOS 26 — Apple has not removed them — but every call site
-        # in `backend/cpu/CpuBackend.h` would otherwise trip -Werror.
-        # Migration to BNNSGraph is tracked separately; suppress for now.
-        -Wno-deprecated-declarations
         -fvisibility=hidden)
 
 if(LUCID_BUILD_MODE STREQUAL "release")
@@ -126,7 +125,6 @@ lucid_object_library(
     backend/cpu/Shape.cpp
     backend/cpu/Vdsp.cpp
     backend/cpu/Vforce.cpp)
-target_compile_options(lucid_backend_cpu PRIVATE -Wno-deprecated-declarations)
 
 # Phase 9.1 + 18: Objective-C++ files require ARC and the Metal framework.
 lucid_object_library(
@@ -323,24 +321,33 @@ set_target_properties(
         # `import lucid` works directly out of the build tree during
         # `pip install -e .` (no install step copies the .so anywhere).
         BUILD_RPATH "${LUCID_MLX_LIBRARY_DIR}"
-        # INSTALL_RPATH = relative path baked into the *wheel* .so. The
-        # wheel layout is:
-        #     site-packages/lucid/_C/engine.cpython-*.so   ← @loader_path
-        #     site-packages/mlx/lib/libmlx.dylib
-        # so two `..` levels reach site-packages, then `mlx/lib/`.
-        # Using an absolute path here (the 3.0.0 bug) bakes the build
-        # machine's filesystem into the wheel — dyld then follows it
-        # blindly, ignoring the user's venv mlx, and resolves to
-        # whatever happens to be at that absolute path on the user's
-        # machine (often a different MLX version → ABI mismatch on
-        # import). `@loader_path` is .so-position-relative and works
-        # regardless of venv vs system Python install.
-        INSTALL_RPATH "@loader_path/../../mlx/lib"
-        # Use INSTALL_RPATH at link time too, so the wheel's .so never
-        # ships with the build-tree absolute path even transiently.
+        # INSTALL_RPATH = the path list dyld searches for ``@rpath/``
+        # references at runtime.  Two entries, tried in order:
+        #
+        #   1. ``@loader_path/../../mlx/lib`` — the canonical wheel layout:
+        #         site-packages/lucid/_C/engine.cpython-*.so   ← @loader_path
+        #         site-packages/mlx/lib/libmlx.dylib           ← target
+        #      Two ``..`` levels reach site-packages, then ``mlx/lib/``.
+        #      Resolves correctly inside any venv or system Python that
+        #      has MLX installed via pip.
+        #
+        #   2. ``${LUCID_MLX_LIBRARY_DIR}`` — the build-env's absolute MLX
+        #      path.  Used by editable installs (``pip install -e .``),
+        #      where the .so lives in the source tree and entry 1 falls
+        #      through (no site-packages mlx alongside the source tree).
+        #
+        # 3.0.0 had only entry 2, so dyld followed the absolute build-
+        # machine path verbatim on every user machine — ignoring the
+        # user's venv mlx and hitting ABI mismatches when the build path
+        # happened to coincide with a different MLX version.  Listing
+        # entry 1 FIRST means wheels resolve correctly on any machine,
+        # while entry 2 remains a safety net for in-tree development.
+        INSTALL_RPATH "@loader_path/../../mlx/lib;${LUCID_MLX_LIBRARY_DIR}"
+        # Use INSTALL_RPATH at link time too, so the build artifact has
+        # both entries (no separate install relink step).
         BUILD_WITH_INSTALL_RPATH ON
-        # Don't auto-add the linker's search path to RPATH — that path
-        # is build-env-specific and would re-introduce the same bug.
+        # Don't auto-add the linker's search path to RPATH — that would
+        # add an unintended third entry pointing into the build directory.
         INSTALL_RPATH_USE_LINK_PATH OFF)
 
 # ── Optional C++ unit tests (Google Test) ────────────────────────────────────

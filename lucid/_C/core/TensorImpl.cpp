@@ -534,6 +534,67 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
                                         requires_grad);
 }
 
+// Numpy-free cross-device copy used by ``Tensor.to(device=...)``.
+// Mirrors the structure of ``to_bytes``+``from_bytes`` but skips the
+// intermediate ``py::bytes`` round-trip — the contiguous-snapshot vector
+// is reused directly as the new CpuStorage backing, so the data moves
+// exactly once between source and destination storage.
+std::shared_ptr<TensorImpl>
+TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
+    auto build_cpu_from_view = [&](const CpuStorage& src) {
+        auto snap = contig_snapshot_cpu(src, meta_.shape, meta_.stride, offset_);
+        const std::size_t total = snap.size();
+        CpuStorage out;
+        out.ptr = allocate_aligned_bytes(total);
+        out.nbytes = total;
+        out.dtype = meta_.dtype;
+        if (total > 0) {
+            std::memcpy(out.ptr.get(), snap.data(), total);
+        }
+        return out;
+    };
+
+    return std::visit(
+        overloaded{
+            [&](const CpuStorage& s) -> std::shared_ptr<TensorImpl> {
+                CpuStorage cpu = build_cpu_from_view(s);
+                if (target == Device::GPU) {
+                    return std::make_shared<TensorImpl>(
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
+                        meta_.shape, meta_.dtype, target, requires_grad);
+                }
+                return std::make_shared<TensorImpl>(
+                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+            },
+            [&](const GpuStorage& g) -> std::shared_ptr<TensorImpl> {
+                CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                if (target == Device::GPU) {
+                    // GPU → GPU: rare path; round-trip through CPU rather than
+                    // adding an MLX-level array clone helper just for this.
+                    return std::make_shared<TensorImpl>(
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
+                        meta_.shape, meta_.dtype, target, requires_grad);
+                }
+                return std::make_shared<TensorImpl>(
+                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+            },
+            [&](const SharedStorage& sh) -> std::shared_ptr<TensorImpl> {
+                // _to.py routes is_metal_shared tensors through transfer_storage()
+                // — that path is zero-copy relabel.  We provide this fallthrough
+                // for safety: contiguous CPU snapshot then route as CPU storage.
+                CpuStorage cpu = build_cpu_from_view(sh.cpu_view());
+                if (target == Device::GPU) {
+                    return std::make_shared<TensorImpl>(
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
+                        meta_.shape, meta_.dtype, target, requires_grad);
+                }
+                return std::make_shared<TensorImpl>(
+                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+            },
+        },
+        storage_);
+}
+
 py::object TensorImpl::item() const {
     if (numel() != 1) {
         ErrorBuilder("item").fail("item() can only be called on a tensor with one element");

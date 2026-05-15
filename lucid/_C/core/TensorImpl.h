@@ -220,6 +220,18 @@ public:
     static std::shared_ptr<TensorImpl>
     from_bytes(py::bytes data, Shape shape, Dtype dtype, Device device, bool requires_grad);
 
+    // Cross-device copy without round-tripping through Python / NumPy.
+    // CPU → GPU: contiguous-snapshot of the source view, then
+    //            ``gpu::upload_cpu_to_gpu`` into a GPU-private MLX array.
+    // GPU → CPU: ``gpu::download_gpu_to_cpu`` into a fresh CpuStorage.
+    // The returned TensorImpl preserves shape + dtype and adopts
+    // ``requires_grad`` from the caller.  SharedStorage is handled by the
+    // separate ``transfer_storage`` API (zero-copy relabel); calling this
+    // method on a SharedStorage tensor falls back to a contiguous CPU
+    // snapshot path.
+    std::shared_ptr<TensorImpl>
+    transfer_to_device(Device target, bool requires_grad) const;
+
     // Extracts a single-element tensor's value as a Python scalar object
     // (int / float / bool / complex).  Throws when ``numel() != 1``.  GPU
     // tensors are downloaded to CPU; the F16 IEEE-754 binary16 → float

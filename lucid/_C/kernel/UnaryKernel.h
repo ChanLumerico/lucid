@@ -57,8 +57,8 @@ concept HasUnaryGpuKernel = requires(GpuStorage a, Shape s, Dtype d) {
 };
 
 // Satisfied when Derived provides a dispatch static method that routes
-// through the IBackend abstraction (used by ops with Accelerate BNNS
-// or other backend-specific implementations).
+// through the IBackend abstraction (used by ops with backend-specific
+// implementations).
 template <class T>
 concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
     { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;

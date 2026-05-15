@@ -4,8 +4,8 @@
 //
 // forward() decides between two backend paths based on whether any input
 // requires a gradient:
-//   Inference (no grad): IBackend::lstm_forward  (BNNS on CPU).
-//   Training   (grad):   IBackend::lstm_forward_train  (BLAS, saves gates/cells).
+//   Inference (no grad): IBackend::lstm_forward (returns just output/hn/cn).
+//   Training   (grad):   IBackend::lstm_forward_train (saves gates/cells for BPTT).
 //
 // The training path returns 5 Storage objects:
 //   res[0] – output sequence (T, B, H).
@@ -91,9 +91,9 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
                    static_cast<std::int64_t>(H)};
 
     if (!needs_grad) {
-        // BNNS inference path has no LSTMP support, so when projection is
-        // requested fall through to the hand-rolled training kernel and
-        // discard the saved gates/cells outputs.
+        // Backends that don't implement projection in lstm_forward route
+        // through the training kernel for proj_size > 0 and discard the
+        // saved gates/cells outputs.
         if (opts.proj_size > 0) {
             auto res_p = be.lstm_forward_train(input->storage(), h0->storage(), c0->storage(),
                                                w_storages, opts, dt);

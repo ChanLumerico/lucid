@@ -19,6 +19,100 @@ _No changes yet._
 
 ---
 
+## [3.0.2] — 2026-05-16
+
+Standalone-mode hotfix.  The core Lucid lifecycle — `import lucid`,
+tensor construction, forward, backward, optimiser step, device
+transfer, RNN pack/unpack, autograd.grad, lucid.func transforms,
+register_hook — now runs without numpy installed.  NumPy is reduced
+to a strict opt-in extra (`pip install lucid-dl[numpy]`) used only at
+its documented bridge methods: `Tensor.numpy()`, `from_numpy`,
+`from_dlpack`, and `lucid.tensor(np_array)` with an actual ndarray
+input.  Also drops the BNNS scalar API + legacy CBLAS / CLAPACK
+deprecations the 3.0.x line had been silencing under
+`-Wno-deprecated-declarations`.
+
+### Fixed
+
+- **`Tensor.to(device=...)` no longer requires numpy.**  The 3.0.x
+  ``_to.py`` path called ``data_as_python()`` (returns a numpy view)
+  then ``TensorImpl(np.ndarray, ...)`` to round-trip across devices,
+  which forced ``import numpy`` on every device transfer.  Replaced
+  with a new C++ method ``TensorImpl.transfer_to_device(target,
+  requires_grad)`` that runs the copy inside the engine via
+  ``mlx::core::copy()`` (CPU→GPU) or ``gpu::download_gpu_to_cpu()``
+  (GPU→CPU).  SharedStorage tensors still use ``transfer_storage``
+  for zero-copy relabelling.
+- **`lucid.tensor([list])` no longer requires numpy.**  Pure-Python
+  scalars / lists / tuples now build a TensorImpl directly via
+  ``struct.pack`` + ``TensorImpl.from_bytes``, with dtype inference
+  matching numpy semantics (`float → F32`, `int → I64`, `bool → Bool`).
+  Ragged sequences, BF16 / complex64 target dtypes, and ``ndarray``
+  inputs still go through the numpy bridge (with the existing
+  ``pip install lucid[numpy]`` ImportError guidance when missing).
+- **`lucid.autograd.{grad, backward}`, `Tensor.register_hook`, and the
+  `lucid.func.{grad, jacrev, jacfwd, hessian}` family** no longer pull
+  numpy in.  Internal grad accessors switched from
+  ``grad_as_python()`` (returns numpy ndarray) to the existing
+  ``grad_as_impl()`` (graph-mode grad) / ``grad_to_tensor()`` (detached
+  grad) pair, which produce TensorImpls directly.
+- **`lucid.nn.utils.rnn.pack_padded_sequence` /
+  `pad_packed_sequence`** read `lengths` / `batch_sizes` /
+  `unsorted_indices` via a new module-private helper that
+  `struct.unpack`s the integer tensor's raw bytes — no numpy.
+- **Wheel `LC_RPATH` dual-entry layout.**  3.0.1 set
+  `INSTALL_RPATH "@loader_path/../../mlx/lib"` and
+  `BUILD_WITH_INSTALL_RPATH ON`, which broke editable installs
+  (`pip install -e .`): the build artifact's lone RPATH pointed at a
+  wheel-style site-packages layout that doesn't exist in the source
+  tree.  3.0.2 lists `@loader_path/../../mlx/lib` *first* (correct for
+  wheels) and ``${LUCID_MLX_LIBRARY_DIR}`` *second* (correct for
+  editable installs), tried in order by dyld.
+
+### Changed
+
+- **macOS Accelerate modernisation.**  The 3.0.x compile options
+  carried `-Wno-deprecated-declarations` to silence the BNNS scalar API
+  deprecation Apple introduced in macOS 15 SDK.  That flag was
+  simultaneously hiding the *separate* CBLAS / CLAPACK legacy
+  Fortran-name interface deprecation Apple introduced in macOS 13.3,
+  which would surface the moment we removed the BNNS workaround.
+  Resolved both in one pass:
+  - **BNNS scalar API**: removed the Conv2d / BatchNorm2d / LSTM fast
+    paths that called `BNNSFilter*`, `BNNSLayerParameters*`, and
+    `BNNSDirectApplyLSTM*`.  Conv and BatchNorm fall through to the
+    existing CPU im2col / column reduction paths.  LSTM inference now
+    delegates to ``CpuBackend::lstm_forward_train`` and trims the
+    returned tuple to ``[out, hn, cn]`` (the proj_size > 0 branch
+    already used this pattern).  Side-effect: F64 / bidirectional /
+    multi-layer / no-bias LSTM inference, which previously failed the
+    fast-path guards and threw ``not_implemented``, now works correctly.
+  - **CBLAS / LAPACK new interface**: defined
+    ``ACCELERATE_NEW_LAPACK`` globally on
+    ``lucid_compile_options`` so all ``cblas_*`` and ``*_`` calls
+    route to the new symbol layout, and switched ``Lapack.cpp``'s
+    ``using i32 = __CLPK_integer`` to ``__LAPACK_int`` (the new
+    typedef, ABI-identical on LP64 macOS).
+  - With both fixed, ``-Wno-deprecated-declarations`` is dropped —
+    future Accelerate deprecations now surface immediately.
+
+### Tooling
+
+- **Smoke step doesn't silently rebuild after host MLX strip.**
+  `scripts/ci_publish.sh` detects an already-built wheel in `dist/`
+  and reuses it instead of running `pip wheel .` again.  Required by
+  `publish.yml`'s new flow: build → strip host MLX from runner →
+  smoke against the artefact in a fresh venv (catches RPATH absolute-
+  path regressions like 3.0.0's).
+
+### Documentation
+
+- `obsidian/api/api-cpp-tree.md` lists `TensorImpl.transfer_to_device`.
+- `obsidian/api/api-python-toplevel.md` notes the `lucid.tensor()`
+  numpy-free fast path.
+
+---
+
 ## [3.0.1] — 2026-05-16
 
 Hotfix for a dylib RPATH bug in 3.0.0 that made the wheel unusable on

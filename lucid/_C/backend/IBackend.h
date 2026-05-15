@@ -1399,7 +1399,7 @@ public:
 
     // Optional fused kernels; default implementations call the base backend's
     // linear() followed by relu/gelu and throw if the dtype is unsupported.
-    // Backends that can fuse these two ops (e.g. BNNS, ANE) override them.
+    // Backends that can fuse these two ops (e.g. ANE) override them.
     virtual Storage fused_linear_relu_forward(
         const Storage& x, const Storage& w, const Storage& b, const Shape& out_shape, Dtype dt) {
         (void)x;

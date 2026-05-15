@@ -59,7 +59,7 @@ target_link_libraries(lucid_test PRIVATE
     lucid_random
     Python3::Python                # pybind11 C API symbols (set_error etc.)
     "${LUCID_MLX_LIBRARY}"         # MLX symbols used by GpuBackend
-    "-framework Accelerate"        # BLAS / BNNS / vDSP / vForce
+    "-framework Accelerate"        # BLAS / LAPACK / vDSP / vForce
     "-framework Metal"             # Metal API (MetalAllocator, MetalKernelRunner)
     "-framework Foundation"        # NSString etc. (required by Metal on macOS)
 )

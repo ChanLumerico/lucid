@@ -119,10 +119,17 @@ def _inject_to(cls: type) -> None:
                 # Zero-copy: SharedStorage tensor re-labeled as the target device.
                 impl = _C_engine.transfer_storage(impl, target_device)
             else:
-                # Native engine path: CPU→GPU uses mlx::core::copy() → GPU-private.
-                # GPU→CPU forces eval then downloads to CPU-managed memory.
-                raw = impl.data_as_python()
-                impl = _C_engine.TensorImpl(raw, target_device, rg)
+                # Native engine path: CPU→GPU uses ``mlx::core::copy()`` into a
+                # GPU-private buffer; GPU→CPU downloads via the MLX bridge.
+                # ``transfer_to_device`` runs the whole copy inside the C++
+                # engine — no numpy intermediate.  Prior to 3.0.2 this path
+                # called ``data_as_python()`` + ``TensorImpl(np.ndarray, ...)``,
+                # which forced ``import numpy`` on every ``.to(device=...)``
+                # call even though the data never participated in any numpy
+                # computation.  Keeping ``.to()`` numpy-free lets ``import
+                # lucid`` users skip the ``[numpy]`` extra entirely for
+                # CPU↔GPU workloads.
+                impl = impl.transfer_to_device(target_device, rg)
             if impl.requires_grad != rg:
                 impl = impl.clone_with_grad(rg)
         else:
@@ -163,7 +170,7 @@ def _inject_to(cls: type) -> None:
         No-op when the tensor is already on CPU.  On Apple Silicon both
         CPU and Metal share the same physical DRAM (unified memory); this
         call relabels the dispatch target so subsequent ops route through
-        Apple Accelerate (vDSP / BNNS / BLAS / LAPACK).
+        Apple Accelerate (vDSP / vForce / BLAS / LAPACK).
         """
         return to(self, _C_engine.Device.CPU)
 

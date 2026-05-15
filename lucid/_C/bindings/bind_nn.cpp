@@ -535,8 +535,8 @@ void register_nn(py::module_& m) {
         py::arg("batch_first") = false, py::arg("bidirectional") = false,
         py::arg("has_bias") = true, py::arg("proj_size") = 0,
         "LSTM forward with autograd support.\n"
-        "Inference (no requires_grad): uses BNNS fast path; falls back to BLAS "
-        "when proj_size > 0 (BNNS has no LSTMP support).\n"
+        "Inference (no requires_grad): uses the backend's lstm_forward "
+        "(BLAS-backed on CPU; proj_size > 0 routes through lstm_forward_train).\n"
         "Training  (requires_grad=True): uses BLAS path + saves gates/cells for BPTT.\n"
         "Returns (output, h_n, c_n).  weights = [wih, whh, bih, bhh] for the standard\n"
         "LSTM, with one extra W_hr (proj_size, hidden_size) appended when proj_size > 0.");

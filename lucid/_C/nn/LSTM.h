@@ -2,8 +2,9 @@
 //
 // Autograd-aware single-layer LSTM.
 //
-// Inference path (no grad required): delegates to IBackend::lstm_forward,
-// which uses BNNS (BNNSComputeInference) on CPU for maximum throughput.
+// Inference path (no grad required): delegates to IBackend::lstm_forward.
+// On CPU this routes through lstm_forward_train and discards the saved
+// gates/cells; other backends may provide a dedicated inference kernel.
 //
 // Training path: delegates to IBackend::lstm_forward_train, which uses
 // hand-rolled BLAS and returns two extra Storage tensors:
