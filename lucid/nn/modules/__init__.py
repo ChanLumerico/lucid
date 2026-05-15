@@ -98,6 +98,7 @@ from lucid.nn.modules.positional import (
     RotaryEmbedding,
     SinusoidalEmbedding,
     SinusoidalEmbedding2D,
+    TimestepEmbedding,
 )
 from lucid.nn.modules.attention import MultiheadAttention
 from lucid.nn.modules.rnn import LSTM, GRU, RNN, LSTMCell, GRUCell, RNNCell
@@ -261,6 +262,7 @@ __all__ = [
     "RotaryEmbedding",
     "SinusoidalEmbedding",
     "SinusoidalEmbedding2D",
+    "TimestepEmbedding",
     "MultiheadAttention",
     "LSTM",
     "GRU",

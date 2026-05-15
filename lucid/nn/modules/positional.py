@@ -47,6 +47,25 @@ class SinusoidalEmbedding(Module):
         Returns the full ``(num_positions, embedding_dim)`` table.  Callers
         typically slice it with ``pe()[:seq_len]`` and broadcast against
         their batched hidden states.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> pe = nn.SinusoidalEmbedding(num_positions=512, embedding_dim=64)
+    >>> table = pe()
+    >>> table.shape
+    (512, 64)
+
+    Notes
+    -----
+    The encoding table is materialised once in ``__init__`` and registered
+    as a non-persistent buffer; it is therefore not learnable and is not
+    saved in ``state_dict`` (but moves with ``.to(device=...)``).  Prefer
+    the module form when the same maximum sequence length is reused across
+    many forward passes; use the functional
+    :func:`lucid.nn.functional.sinusoidal_embedding` form for one-shot or
+    variable-length encodings where caching is wasteful.  See that function
+    for the underlying sin/cos formula.
     """
 
     pe: Tensor
@@ -96,6 +115,24 @@ class SinusoidalEmbedding2D(Module):
 
     Forward:
         Returns the ``(H * W, embedding_dim)`` table in row-major order.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> pe = nn.SinusoidalEmbedding2D(height=16, width=24, embedding_dim=128)
+    >>> pe().shape
+    (384, 128)
+
+    Notes
+    -----
+    The table is built once in ``__init__`` and registered as a
+    non-persistent buffer, so it travels with ``.to(device=...)`` but is
+    omitted from ``state_dict``.  Use the module form when ``(H, W)`` is
+    fixed across forward passes (typical for DETR-style decoders fed by a
+    fixed-size CNN feature map); fall back to the functional
+    :func:`lucid.nn.functional.sinusoidal_embedding_2d` when the spatial
+    grid varies per batch.  See that function for the row / column
+    encoding split.
     """
 
     pe: Tensor
@@ -150,6 +187,26 @@ class RotaryEmbedding(Module):
         ``forward()`` returns the precomputed ``(cos, sin)`` pair.  Callers
         pass them into :func:`lucid.nn.functional.apply_rotary_emb`
         along with the query / key tensors.
+
+    Examples
+    --------
+    >>> import lucid.nn as nn
+    >>> rope = nn.RotaryEmbedding(head_dim=64, max_position_embeddings=2048)
+    >>> cos, sin = rope()
+    >>> cos.shape, sin.shape
+    ((2048, 64), (2048, 64))
+
+    Notes
+    -----
+    The ``cos_cached`` / ``sin_cached`` tables are built once at
+    construction and registered as non-persistent buffers.  They follow
+    ``.to(device=...)`` automatically but are not saved in ``state_dict``
+    (RoPE has no learnable state — regenerate at load time).  The module
+    form is the right choice for any transformer that reuses the same
+    ``max_position_embeddings`` across calls; the functional
+    :func:`lucid.nn.functional.apply_rotary_pos_emb` consumes the cached
+    pair and applies the rotation in place to ``q`` and ``k``.  See that
+    function for the rotation math.
     """
 
     cos_cached: Tensor
@@ -226,6 +283,25 @@ class TimestepEmbedding(Module):
         ``forward(timesteps)`` — ``timesteps`` is an integer tensor of
         arbitrary shape (typically ``(B,)``); returns the projected
         embedding of shape ``(*timesteps.shape, out_dim)``.
+
+    Notes
+    -----
+    The output is **not** a learnable position table — only the two
+    linear layers of the MLP are trainable.  Different ``timesteps``
+    values produce different conditioning vectors via the deterministic
+    sinusoidal lookup followed by the learned projection.  For DDPM-style
+    training where each step samples a random ``t``, the layer adds
+    ``2 * in_dim * out_dim`` parameters total.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn import TimestepEmbedding
+    >>> emb = TimestepEmbedding(in_dim=128, out_dim=512)
+    >>> t = lucid.tensor([0, 250, 500, 999])         # batch of 4 timesteps
+    >>> cond = emb(t)
+    >>> cond.shape
+    (4, 512)
     """
 
     def __init__(
@@ -237,9 +313,7 @@ class TimestepEmbedding(Module):
     ) -> None:
         super().__init__()
         if in_dim % 2 != 0:
-            raise ValueError(
-                f"TimestepEmbedding requires an even in_dim, got {in_dim}"
-            )
+            raise ValueError(f"TimestepEmbedding requires an even in_dim, got {in_dim}")
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.base = base
@@ -269,7 +343,7 @@ class TimestepEmbedding(Module):
         ]
         inv_freq = lucid.tensor(inv_freq_vals, device=timesteps.device.type)
         # outer product (* …, half)
-        t = timesteps.float().unsqueeze(-1)                 # (*shape, 1)
+        t = timesteps.float().unsqueeze(-1)  # (*shape, 1)
         # broadcast (*shape, 1) × (half,) → (*shape, half)
         while inv_freq.ndim < t.ndim:
             inv_freq = inv_freq.unsqueeze(0)

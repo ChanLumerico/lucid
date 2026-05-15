@@ -158,6 +158,15 @@ class TensorDataset(Dataset):
     >>> y = lucid.randint(0, 3, (100,))
     >>> ds = TensorDataset(X, y)
     >>> x_i, y_i = ds[0]
+
+    Notes
+    -----
+    All wrapped tensors must share the same length along axis 0 — that
+    shared length defines :meth:`__len__`.  The underlying tensors are
+    held *by reference* rather than copied, so any mutation visible on
+    the source tensors is also visible through the dataset.  This keeps
+    construction O(1) but means the caller is responsible for not
+    invalidating the buffers (e.g. by resizing) during iteration.
     """
 
     def __init__(self, *tensors: Tensor) -> None:
@@ -210,6 +219,14 @@ class ConcatDataset(Dataset):
     >>> combined = ConcatDataset([ds_a, ds_b, ds_c])
     >>> len(combined) == len(ds_a) + len(ds_b) + len(ds_c)
     True
+
+    Notes
+    -----
+    A list of cumulative length offsets is maintained internally at
+    construction time so that index resolution reduces to a single
+    bounded scan (and could be upgraded to a binary search for O(log n)
+    lookup on large child lists).  Children are stored by reference;
+    no per-sample copy is made.
     """
 
     def __init__(self, datasets: list[Dataset]) -> None:
@@ -279,6 +296,13 @@ class Subset(Dataset):
     >>> full = TensorDataset(X, y)
     >>> train = Subset(full, list(range(0, 80)))
     >>> val = Subset(full, list(range(80, 100)))
+
+    Notes
+    -----
+    A :class:`Subset` is purely an index-restricted *view* — the parent
+    dataset is held by reference and no sample is copied.  Subsets may
+    be nested freely (a :class:`Subset` of a :class:`Subset`) because
+    the parent only needs to satisfy the map-style protocol.
     """
 
     def __init__(self, dataset: Dataset, indices: list[int]) -> None:
@@ -349,6 +373,14 @@ def random_split(
     >>> train, val, test = random_split(full, [0.8, 0.1, 0.1])
     >>> len(train), len(val), len(test)
     (80, 10, 10)
+
+    Notes
+    -----
+    The split is permutation-based: ``range(len(dataset))`` is shuffled
+    once and then sliced into the requested chunks.  Reproducibility is
+    obtained by seeding the global RNG via :func:`lucid.manual_seed`, or
+    by passing an explicit ``generator`` seed; the same generator state
+    always yields the same partition.
     """
     import random as _random
 

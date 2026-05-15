@@ -2088,6 +2088,20 @@ class MultiLabelMarginLoss(MultilabelMarginLoss):
     >>> c1 = nn.MultilabelMarginLoss()
     >>> c2 = nn.MultiLabelMarginLoss()
     >>> # Both produce identical results for the same inputs.
+
+    Notes
+    -----
+    Identical loss formula to :class:`MultilabelMarginLoss`:
+
+    .. math::
+
+        \text{loss}(x, y) = \sum_{ij}
+            \frac{\max\!\bigl(0,\; 1 - (x[y[j]] - x[i])\bigr)}{|x|}
+
+    where the sum is taken over all pairs :math:`(i, j)` such that
+    :math:`i \notin \{y[0], y[1], \ldots\}`.  Targets are padded with
+    :math:`-1` to mark end-of-list; entries at or beyond the first
+    :math:`-1` are ignored.
     """
 
 

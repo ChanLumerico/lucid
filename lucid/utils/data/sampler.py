@@ -14,6 +14,23 @@ class Sampler:
     A sampler iterates over integer indices into a map-style dataset.
     Subclasses must implement :meth:`__iter__` (yielding indices) and
     :meth:`__len__` (total number of indices produced per epoch).
+
+    Notes
+    -----
+    Samplers decouple *which* samples are visited from *how* they are
+    fetched — the dataset answers ``__getitem__(i)`` and the sampler
+    decides the sequence of ``i`` values.  This separation is what lets
+    :class:`DataLoader` swap iteration policies (sequential / random /
+    weighted / distributed) without touching the dataset.
+
+    Examples
+    --------
+    >>> class Even(Sampler):
+    ...     def __init__(self, n): self.n = n
+    ...     def __iter__(self): return iter(range(0, self.n, 2))
+    ...     def __len__(self): return (self.n + 1) // 2
+    >>> list(Even(6))
+    [0, 2, 4]
     """
 
     def __iter__(self) -> Iterator[int]:
@@ -42,6 +59,19 @@ class SequentialSampler(Sampler):
     ----------
     data_source : Dataset
         Dataset whose ``__len__`` determines the index range.
+
+    Notes
+    -----
+    Order is fully deterministic — no RNG is consulted — so two passes
+    over the sampler always yield the same index sequence.  This is the
+    right choice for evaluation / inference loops where ordering must
+    line up with external bookkeeping (e.g. per-row metric arrays).
+
+    Examples
+    --------
+    >>> sampler = SequentialSampler(my_dataset)
+    >>> list(sampler)[:5]
+    [0, 1, 2, 3, 4]
     """
 
     def __init__(self, data_source: Dataset) -> None:
@@ -82,6 +112,20 @@ class RandomSampler(Sampler):
     generator : optional
         Seed-like object forwarded to ``random.Random`` for reproducibility
         when ``replacement=True``.
+
+    Notes
+    -----
+    Without replacement, each epoch is a fresh uniform permutation of
+    ``range(n)`` — equivalent to shuffling.  With replacement, indices
+    are i.i.d. uniform draws and ``num_samples`` controls the per-epoch
+    budget independently of ``n``; this lets the caller oversample
+    (``num_samples > n``) for stochastic training regimes.
+
+    Examples
+    --------
+    >>> sampler = RandomSampler(my_dataset)
+    >>> for idx in sampler:
+    ...     x = my_dataset[idx]
     """
 
     def __init__(
@@ -161,6 +205,20 @@ class SubsetRandomSampler(Sampler):
     generator : optional
         Seed-like object accepted for API compatibility; the current
         implementation defers to the global ``random`` state.
+
+    Notes
+    -----
+    The index pool itself is fixed at construction time; only the
+    *order* changes between epochs.  Useful with precomputed
+    cross-validation folds — store the per-fold index list once, then
+    instantiate one :class:`SubsetRandomSampler` per fold.
+
+    Examples
+    --------
+    >>> fold_indices = [3, 5, 7, 9, 11]
+    >>> sampler = SubsetRandomSampler(fold_indices)
+    >>> sorted(list(sampler)) == fold_indices
+    True
     """
 
     def __init__(self, indices: list[int], generator: object = None) -> None:
@@ -210,6 +268,30 @@ class WeightedRandomSampler(Sampler):
         len(weights)`` and validate downstream.
     generator : optional
         Seed-like object forwarded to ``random.Random`` for reproducibility.
+
+    Notes
+    -----
+    Each index :math:`i` is selected with probability
+
+    .. math::
+
+        P(i) = \frac{w_i}{\sum_j w_j},
+
+    so the user-supplied weights need not be normalised.  The classic
+    use case is *class-imbalance correction*: set ``w_i = 1 /
+    class_count[label_i]`` so under-represented classes are upsampled
+    to roughly uniform frequency.  Sampling with replacement is the
+    default — it preserves the target marginal exactly and is the only
+    fully consistent option when ``num_samples`` exceeds the number of
+    nonzero-weight indices.
+
+    Examples
+    --------
+    >>> # 3 classes, counts [900, 90, 10]; upweight rare classes
+    >>> weights = [1/900]*900 + [1/90]*90 + [1/10]*10
+    >>> sampler = WeightedRandomSampler(weights, num_samples=1000)
+    >>> for idx in sampler:
+    ...     x, y = my_dataset[idx]
     """
 
     def __init__(
@@ -288,6 +370,24 @@ class BatchSampler(Sampler):
         If ``True``, drop the trailing batch when the inner sampler's
         length is not divisible by ``batch_size``. If ``False``, yield
         the short final batch.
+
+    Notes
+    -----
+    The inner sampler is consumed lazily — :class:`BatchSampler` simply
+    accumulates ``batch_size`` indices then yields the list and starts a
+    new batch.  ``drop_last=True`` produces ``floor(n / batch_size)``
+    batches of uniform size (the usual choice for training, where
+    short batches mess with BatchNorm statistics); ``drop_last=False``
+    produces ``ceil(n / batch_size)`` batches with the final one
+    possibly short (the usual choice for evaluation, where every sample
+    must be visited).
+
+    Examples
+    --------
+    >>> inner = SequentialSampler(my_dataset)   # 10 items
+    >>> bs = BatchSampler(inner, batch_size=4, drop_last=False)
+    >>> [b for b in bs]
+    [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]
     """
 
     def __init__(self, sampler: Sampler, batch_size: int, drop_last: bool) -> None:
@@ -350,6 +450,24 @@ class DistributedSampler(Sampler):
 
     A multi-process backend would require a process group + collective
     communication; the surface stays compatible should that land later.
+
+    Notes
+    -----
+    The index range ``range(len(dataset))`` is partitioned into
+    ``num_replicas`` interleaved slabs — rank ``r`` receives every
+    ``num_replicas``-th index starting at ``r``.  Per-epoch shuffles
+    are driven by ``random.Random(seed + epoch)``, so every replica
+    sees a different slab while remaining globally deterministic.
+    Call :meth:`set_epoch` once per epoch to rotate the shuffle —
+    forgetting to do so produces identical orderings each pass.
+
+    Examples
+    --------
+    >>> sampler = DistributedSampler(my_dataset, num_replicas=4, rank=2)
+    >>> for epoch in range(num_epochs):
+    ...     sampler.set_epoch(epoch)
+    ...     for idx in sampler:
+    ...         x = my_dataset[idx]
     """
 
     def __init__(

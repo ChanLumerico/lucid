@@ -774,6 +774,15 @@ def rand_like(
     >>> noise = lucid.rand_like(x)
     >>> noise.shape, noise.device
     ((3, 4), lucid.device('metal'))
+
+    Notes
+    -----
+    The returned tensor mirrors ``t``'s ``shape``, ``dtype``, and
+    ``device`` exactly unless overridden via the corresponding keyword
+    arguments.  Sampling follows the same dtype-default rule as
+    :func:`lucid.rand`: only floating-point dtypes are supported.  Calling
+    this on an integer tensor without overriding ``dtype`` raises — use
+    :func:`lucid.randint_like` for integer noise.
     """
     _check_random()
     _dt, _dev, _ = normalize_factory_kwargs(

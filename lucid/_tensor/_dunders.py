@@ -1079,6 +1079,12 @@ def _inject_dunders(cls: type) -> None:
         ``False``.  Not differentiable; the output tensor never carries
         gradient.
 
+        Returns an element-wise boolean Tensor when ``other`` is a Tensor
+        or numeric scalar (broadcast against ``self``).  For arguments
+        that are neither (e.g. ``None``, lists, arbitrary objects),
+        Python's ``==`` falls back to object identity and yields a plain
+        ``bool`` rather than a Tensor.
+
         Examples
         --------
         >>> import lucid

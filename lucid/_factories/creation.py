@@ -288,6 +288,19 @@ def full(
     Mask of a fixed value (e.g. $-\infty$ for attention masking):
 
     >>> mask = lucid.full((4, 4), float("-inf"))
+
+    Notes
+    -----
+    Every output element is assigned ``fill_value`` exactly — there is no
+    broadcasting needed once the scalar reaches the engine.  When
+    ``dtype`` is omitted, the type is inferred from the Python type of
+    ``fill_value``: ``int`` literals promote to ``int64`` and ``float``
+    literals to the global default floating dtype (``lucid.float32`` by
+    default).  If ``fill_value`` is a 0-d tensor (``Tensor`` of shape
+    ``()``), its scalar value is extracted via :meth:`Tensor.item` and
+    broadcast across the full tensor; element-wise broadcasting from a
+    larger tensor is not supported here (use :func:`lucid.broadcast_to`
+    instead).
     """
     _dt, _dev, _rg = normalize_factory_kwargs(dtype, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]

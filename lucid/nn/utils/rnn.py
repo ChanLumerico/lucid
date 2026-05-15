@@ -50,6 +50,14 @@ class PackedSequence(NamedTuple):
 
     where :math:`B_t` (= ``batch_sizes[t]``) is the count of sequences
     with length :math:`> t`.
+
+    Examples
+    --------
+    >>> from lucid.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+    >>> # padded (B=3, T=4, F=5), sorted-by-length [4, 3, 2]
+    >>> packed = pack_padded_sequence(x_padded, lengths=[4, 3, 2], batch_first=True)
+    >>> # ... feed to RNN ...
+    >>> unpacked, lengths = pad_packed_sequence(packed, batch_first=True)
     """
 
     data: Tensor

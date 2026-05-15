@@ -31,6 +31,14 @@ def copy_parameters_and_buffers(source: Module, dest: Module) -> None:
     Shape and dtype of corresponding entries must match.  Devices may
     differ — the source values are routed through ``.to(device)`` to
     land on ``dest``'s device first.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.utils import copy_parameters_and_buffers
+    >>> src = MyModel()
+    >>> dst = MyModel()
+    >>> copy_parameters_and_buffers(src, dst)   # dst now mirrors src's weights + buffers
     """
     src_params = dict(source.named_parameters())
     dst_params = dict(dest.named_parameters())

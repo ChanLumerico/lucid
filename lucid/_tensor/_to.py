@@ -34,6 +34,23 @@ def _inject_to(cls: type) -> None:
           .to(device, dtype)           → both
           .to(other_tensor)            → match other's device & dtype
           .to(device=, dtype=, copy=)
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(3)
+        >>> x.to(lucid.float64).dtype
+        lucid.float64
+        >>> x.to("metal").device
+        device(type='metal')
+
+        Notes
+        -----
+        No-op when the source already matches the target device and dtype,
+        unless ``copy=True``; in that case the same Tensor instance is
+        returned without allocation.  Apple Silicon's unified memory means
+        device transfers between CPU and Metal copy the dispatch label but
+        share physical DRAM when the underlying buffer is a SharedStorage.
         """
         target_device = self._impl.device
         target_dtype = self._impl.dtype
@@ -113,35 +130,144 @@ def _inject_to(cls: type) -> None:
         return _wrap(impl)
 
     def metal(self: Tensor) -> Tensor:
-        """Move this tensor to Apple Metal GPU."""
+        """Move this tensor to Apple Metal GPU.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(3)
+        >>> x.metal().device
+        device(type='metal')
+
+        Notes
+        -----
+        No-op when the tensor is already on Metal.  Under Apple Silicon's
+        unified memory architecture the physical DRAM is shared with the
+        CPU; this call only updates the dispatch target so subsequent ops
+        run through the MLX/Metal backend.
+        """
         return to(self, _C_engine.Device.GPU)
 
     def cpu(self: Tensor) -> Tensor:
-        """Move this tensor to CPU."""
+        """Move this tensor to CPU.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> x = lucid.zeros(3).metal()
+        >>> x.cpu().device
+        device(type='cpu')
+
+        Notes
+        -----
+        No-op when the tensor is already on CPU.  On Apple Silicon both
+        CPU and Metal share the same physical DRAM (unified memory); this
+        call relabels the dispatch target so subsequent ops route through
+        Apple Accelerate (vDSP / BNNS / BLAS / LAPACK).
+        """
         return to(self, _C_engine.Device.CPU)
 
     def float(self: Tensor) -> Tensor:
-        """Cast to float32."""
+        """Cast to float32.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.zeros(3, dtype=lucid.int64).float().dtype
+        lucid.float32
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``float32``.  Otherwise performs a copy-cast via the engine's
+        ``astype`` op; the device is preserved.
+        """
         return to(self, float32)
 
     def double(self: Tensor) -> Tensor:
-        """Cast to float64."""
+        """Cast to float64.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.zeros(3).double().dtype
+        lucid.float64
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``float64``.  Otherwise allocates a new tensor with widened
+        precision; device is preserved.
+        """
         return to(self, float64)
 
     def half(self: Tensor) -> Tensor:
-        """Cast to float16."""
+        """Cast to float16.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.zeros(3).half().dtype
+        lucid.float16
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``float16``.  Lossy narrowing from float32/float64 may overflow to
+        ``inf`` for magnitudes above ~65504 and underflow to 0 for
+        magnitudes below ~6e-5.
+        """
         return to(self, float16)
 
     def int(self: Tensor) -> Tensor:
-        """Cast to int32."""
+        """Cast to int32.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([1.7, 2.3]).int().dtype
+        lucid.int32
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``int32``.  Casts from floating point truncate toward zero;
+        values outside ``[-2**31, 2**31 - 1]`` produce undefined results.
+        """
         return to(self, int32)
 
     def long(self: Tensor) -> Tensor:
-        """Cast to int64."""
+        """Cast to int64.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([1.7, 2.3]).long().dtype
+        lucid.int64
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``int64``.  Casts from floating point truncate toward zero.
+        Typically used for index tensors (e.g. ``gather`` / ``scatter``).
+        """
         return to(self, int64)
 
     def bool(self: Tensor) -> Tensor:
-        """Cast to bool."""
+        """Cast to bool.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> lucid.tensor([0.0, 1.5, -2.0]).bool()
+        Tensor([False, True, True])
+
+        Notes
+        -----
+        Returns ``self`` unchanged when the source dtype is already
+        ``bool``.  Otherwise each element is reduced to ``True`` if
+        nonzero and ``False`` if zero.
+        """
         return to(self, bool_)
 
     for _name, _fn in [
