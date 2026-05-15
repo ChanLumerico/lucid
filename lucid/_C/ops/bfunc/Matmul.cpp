@@ -87,15 +87,15 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     // dA opts: grad_out [batch, M, N] @ B^T [batch, N, K] → [batch, M, K]
     backend::MatmulOpts dA_opts;
     dA_opts.M = info.M;
-    dA_opts.K = info.N;   // grad_out inner dim is N
-    dA_opts.N = info.K;   // output inner dim recovers K
+    dA_opts.K = info.N;  // grad_out inner dim is N
+    dA_opts.N = info.K;  // output inner dim recovers K
     dA_opts.batch = info.batch;
     dA_opts.transB = true;
 
     // dB opts: A^T [batch, K, M] @ grad_out [batch, M, N] → [batch, K, N]
     backend::MatmulOpts dB_opts;
-    dB_opts.M = info.K;   // output leading dim is K
-    dB_opts.K = info.M;   // inner dim is M
+    dB_opts.M = info.K;  // output leading dim is K
+    dB_opts.K = info.M;  // inner dim is M
     dB_opts.N = info.N;
     dB_opts.batch = info.batch;
     dB_opts.transA = true;
@@ -156,8 +156,7 @@ std::vector<TensorImplPtr> MatmulBackward::apply_for_graph(const TensorImplPtr& 
     auto& a = saved_impl_inputs_[0];
     auto& b = saved_impl_inputs_[1];
     if (!a || !b) {
-        throw std::runtime_error(
-            "apply_for_graph: saved_impl_inputs_ not set for matmul.");
+        throw std::runtime_error("apply_for_graph: saved_impl_inputs_ not set for matmul.");
     }
 
     extern TensorImplPtr mT_op(const TensorImplPtr&);
@@ -168,18 +167,22 @@ std::vector<TensorImplPtr> MatmulBackward::apply_for_graph(const TensorImplPtr& 
     auto db = matmul_op(mT_op(a), grad_out);
 
     auto reduce = [&](TensorImplPtr g, const Shape& target) -> TensorImplPtr {
-        if (g->shape() == target) return g;
+        if (g->shape() == target)
+            return g;
         std::vector<int> axes;
         const int ng = static_cast<int>(g->shape().size());
         const int nt = static_cast<int>(target.size());
-        for (int i = 0; i < ng - nt; ++i) axes.push_back(i);
+        for (int i = 0; i < ng - nt; ++i)
+            axes.push_back(i);
         for (int i = 0; i < nt; ++i) {
             if (target[static_cast<std::size_t>(i)] == 1 &&
                 g->shape()[static_cast<std::size_t>(i + ng - nt)] != 1)
                 axes.push_back(i + ng - nt);
         }
-        if (!axes.empty()) g = sum_op(g, axes, false);
-        if (g->shape() != target) g = reshape_op(g, target);
+        if (!axes.empty())
+            g = sum_op(g, axes, false);
+        if (g->shape() != target)
+            g = reshape_op(g, target);
         return g;
     };
 

@@ -25,7 +25,6 @@ LUCID_API TensorImplPtr movedim_op(const TensorImplPtr& a,
 // Inverse of ``flatten`` — split ``dim`` into ``sizes``.  The product of
 // ``sizes`` must equal the original size at ``dim``.  Composes with
 // ``reshape_op``.
-LUCID_API TensorImplPtr
-unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes);
+LUCID_API TensorImplPtr unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes);
 
 }  // namespace lucid

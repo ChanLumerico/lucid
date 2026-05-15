@@ -12,7 +12,7 @@ namespace {
 // Process-wide counter.  Relaxed ordering is sufficient because the only
 // guarantee needed is uniqueness, not synchronisation with other memory.
 std::atomic<std::uint64_t> g_seq{0};
-}
+}  // namespace
 
 std::uint64_t next_sequence_nr() {
     return g_seq.fetch_add(1, std::memory_order_relaxed);

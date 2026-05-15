@@ -47,31 +47,29 @@ TensorImplPtr isfinite_op(const TensorImplPtr& a) {
     return predicate_dispatch(a, "isfinite", 2);
 }
 
-TensorImplPtr nan_to_num_op(const TensorImplPtr& a,
-                             double nan_val,
-                             double posinf_val,
-                             double neginf_val) {
+TensorImplPtr
+nan_to_num_op(const TensorImplPtr& a, double nan_val, double posinf_val, double neginf_val) {
     Validator::input(a, "nan_to_num.a").non_null();
     OpScopeFull scope{"nan_to_num", a->device(), a->dtype(), a->shape()};
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .nan_to_num(a->storage(), a->shape(), a->dtype(),
-                                  nan_val, posinf_val, neginf_val);
+    Storage out =
+        backend::Dispatcher::for_device(a->device())
+            .nan_to_num(a->storage(), a->shape(), a->dtype(), nan_val, posinf_val, neginf_val);
     return fresh(std::move(out), a->shape(), a->dtype(), a->device());
 }
 
 TensorImplPtr any_op(const TensorImplPtr& a) {
     Validator::input(a, "any.a").non_null();
     OpScopeFull scope{"any", a->device(), a->dtype(), a->shape()};
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .any(a->storage(), a->shape(), a->dtype());
+    Storage out =
+        backend::Dispatcher::for_device(a->device()).any(a->storage(), a->shape(), a->dtype());
     return fresh(std::move(out), {}, Dtype::Bool, a->device());
 }
 
 TensorImplPtr all_op(const TensorImplPtr& a) {
     Validator::input(a, "all.a").non_null();
     OpScopeFull scope{"all", a->device(), a->dtype(), a->shape()};
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .all(a->storage(), a->shape(), a->dtype());
+    Storage out =
+        backend::Dispatcher::for_device(a->device()).all(a->storage(), a->shape(), a->dtype());
     return fresh(std::move(out), {}, Dtype::Bool, a->device());
 }
 

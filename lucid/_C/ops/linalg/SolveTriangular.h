@@ -22,8 +22,8 @@ namespace lucid {
 // Solve A X = B for X where A is triangular.
 // Output shape equals the shape of B.
 LUCID_API TensorImplPtr solve_triangular_op(const TensorImplPtr& a,
-                                             const TensorImplPtr& b,
-                                             bool upper = true,
-                                             bool unitriangular = false);
+                                            const TensorImplPtr& b,
+                                            bool upper = true,
+                                            bool unitriangular = false);
 
 }  // namespace lucid

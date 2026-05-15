@@ -18,9 +18,7 @@
 
 namespace lucid {
 
-TensorImplPtr logsumexp_op(const TensorImplPtr& a,
-                           const std::vector<int>& axes,
-                           bool keepdims) {
+TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
     // Reduce with keepdims=true so the subtraction broadcasts naturally.
     auto m_keep = max_op(a, axes, true);
     auto shifted = sub_op(a, m_keep);

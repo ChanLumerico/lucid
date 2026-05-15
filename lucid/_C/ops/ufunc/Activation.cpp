@@ -40,8 +40,9 @@ Storage ReluBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, mask, n, dtype_, device_);
 }
 
-TensorImplPtr ReluBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr& x,
+                                              const TensorImplPtr&) {
     // mask = (x > 0): sign(relu(x)) gives 0 for x<=0 and 1 for x>0
     auto mask = sign_op(relu_op(x));
     return mul_op(g, mask);
@@ -67,8 +68,9 @@ Storage SigmoidBackward::grad_formula(const Storage& g) {
     return multiply_storages(z_omz, g, n, dtype_, device_);
 }
 
-TensorImplPtr SigmoidBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+TensorImplPtr SigmoidBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                 const TensorImplPtr&,
+                                                 const TensorImplPtr& out) {
     // dx = out*(1-out)*g
     auto one_minus_out = sub_op(ones_like_op(out), out);
     return mul_op(mul_op(out, one_minus_out), g);

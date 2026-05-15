@@ -64,10 +64,10 @@ LUCID_API TensorImplPtr batch_norm_eval_op(const TensorImplPtr& x,
 class LUCID_API LpNormalizeBackward : public FuncOp<LpNormalizeBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    double ord_ = 2.0;     // Norm order (e.g. 2.0 for L2).
-    int axis_ = 1;         // Axis along which to normalize (negative allowed).
-    double eps_ = 1e-12;   // Minimum denominator to avoid division by zero.
-    Storage saved_norm_;   // Per-slice norm values needed for backward.
+    double ord_ = 2.0;    // Norm order (e.g. 2.0 for L2).
+    int axis_ = 1;        // Axis along which to normalize (negative allowed).
+    double eps_ = 1e-12;  // Minimum denominator to avoid division by zero.
+    Storage saved_norm_;  // Per-slice norm values needed for backward.
 
     // axis is resolved to a non-negative index inside forward.
     static TensorImplPtr forward(const TensorImplPtr& x, double ord, int axis, double eps);

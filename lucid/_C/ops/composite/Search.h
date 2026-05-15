@@ -20,10 +20,12 @@
 
 namespace lucid {
 
-LUCID_API TensorImplPtr
-searchsorted_op(const TensorImplPtr& sorted_1d, const TensorImplPtr& values, bool right);
+LUCID_API TensorImplPtr searchsorted_op(const TensorImplPtr& sorted_1d,
+                                        const TensorImplPtr& values,
+                                        bool right);
 
-LUCID_API TensorImplPtr
-bucketize_op(const TensorImplPtr& values, const TensorImplPtr& boundaries, bool right);
+LUCID_API TensorImplPtr bucketize_op(const TensorImplPtr& values,
+                                     const TensorImplPtr& boundaries,
+                                     bool right);
 
 }  // namespace lucid

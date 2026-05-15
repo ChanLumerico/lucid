@@ -139,10 +139,10 @@ LUCID_API TensorImplPtr unfold_op(const TensorImplPtr& x,
 // Input: (N, C*kH*kW, L) → Output: (N, C, outH, outW).
 // Overlapping positions are summed.
 LUCID_API TensorImplPtr fold_op(const TensorImplPtr& x,
-                                 const std::vector<int>& output_size,
-                                 const std::vector<int>& kernel_size,
-                                 const std::vector<int>& stride,
-                                 const std::vector<int>& padding,
-                                 const std::vector<int>& dilation);
+                                const std::vector<int>& output_size,
+                                const std::vector<int>& kernel_size,
+                                const std::vector<int>& stride,
+                                const std::vector<int>& padding,
+                                const std::vector<int>& dilation);
 
 }  // namespace lucid

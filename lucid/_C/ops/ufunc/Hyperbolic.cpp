@@ -59,8 +59,9 @@ Storage TanhBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, one_minus, n, dtype_, device_);
 }
 
-TensorImplPtr TanhBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+TensorImplPtr TanhBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr&,
+                                              const TensorImplPtr& out) {
     // dx = (1 - out^2) * g
     auto out_sq = mul_op(out, out);
     auto one_minus = sub_op(ones_like_op(out), out_sq);

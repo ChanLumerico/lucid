@@ -276,9 +276,8 @@ TensorImplPtr attach_where_grad(const TensorImplPtr& cond,
     bwd->cond_tensor_ = cond;
     bwd->x_tensor_ = x;
     bwd->y_tensor_ = y;
-    bwd->set_next_edges(
-        std::vector<Edge>{Edge(detail::ensure_grad_fn(x), x->grad_output_nr()),
-                          Edge(detail::ensure_grad_fn(y), y->grad_output_nr())});
+    bwd->set_next_edges(std::vector<Edge>{Edge(detail::ensure_grad_fn(x), x->grad_output_nr()),
+                                          Edge(detail::ensure_grad_fn(y), y->grad_output_nr())});
     bwd->set_saved_versions({cond->version(), x->version(), y->version()});
 
     out->set_grad_fn(std::move(bwd));
@@ -523,8 +522,7 @@ public:
     std::vector<int> dims_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        return {backend::Dispatcher::for_device(device_).flip(
-            grad_out, out_shape_, dims_, dtype_)};
+        return {backend::Dispatcher::for_device(device_).flip(grad_out, out_shape_, dims_, dtype_)};
     }
 };
 
@@ -536,7 +534,8 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
     const int ndim = static_cast<int>(sh.size());
 
     for (auto& d : dims) {
-        if (d < 0) d += ndim;
+        if (d < 0)
+            d += ndim;
         if (d < 0 || d >= ndim)
             ErrorBuilder("flip").fail("dim out of range");
     }
@@ -561,7 +560,7 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
 // ── masked_select ─────────────────────────────────────────────────────────────
 
 TensorImplPtr masked_select_op(const TensorImplPtr& a, const TensorImplPtr& mask) {
-    Validator::input(a,    "masked_select.a").non_null();
+    Validator::input(a, "masked_select.a").non_null();
     Validator::input(mask, "masked_select.mask").non_null();
 
     auto& be = backend::Dispatcher::for_device(a->device());
@@ -572,8 +571,8 @@ TensorImplPtr masked_select_op(const TensorImplPtr& a, const TensorImplPtr& mask
         std::memcpy(&n, cs.ptr.get(), sizeof(std::int64_t));
     }
     Shape out_shape{n};
-    Storage out = be.masked_select(a->storage(), mask->storage(),
-                                    a->shape(), mask->shape(), n, a->dtype());
+    Storage out =
+        be.masked_select(a->storage(), mask->storage(), a->shape(), mask->shape(), n, a->dtype());
     return std::make_shared<TensorImpl>(std::move(out), out_shape, a->dtype(), a->device(), false);
 }
 

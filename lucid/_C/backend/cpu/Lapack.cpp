@@ -588,33 +588,39 @@ void lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, 
 //   LU_out  : n×n row-major packed LU  (L below diagonal, U on/above diagonal,
 //             implicit unit diagonal of L)
 //   ipiv_out: n int32_t pivot indices (1-based, matching LAPACK convention)
-void lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out,
-                          int* info_out) {
+void lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out, int* info_out) {
     std::vector<float> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
 
     std::vector<i32> ipiv_local(n);
     i32 N = n, lda = n, info = 0;
     sgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
-    if (info < 0) { *info_out = info; return; }
+    if (info < 0) {
+        *info_out = info;
+        return;
+    }
 
     colmajor_to_rowmajor_f32(Ac.data(), LU_out, n, n);
-    for (int i = 0; i < n; ++i) ipiv_out[i] = static_cast<int>(ipiv_local[i]);
+    for (int i = 0; i < n; ++i)
+        ipiv_out[i] = static_cast<int>(ipiv_local[i]);
     *info_out = info;
 }
 
-void lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out,
-                          int* info_out) {
+void lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out, int* info_out) {
     std::vector<double> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
 
     std::vector<i32> ipiv_local(n);
     i32 N = n, lda = n, info = 0;
     dgetrf_(&N, &N, Ac.data(), &lda, ipiv_local.data(), &info);
-    if (info < 0) { *info_out = info; return; }
+    if (info < 0) {
+        *info_out = info;
+        return;
+    }
 
     colmajor_to_rowmajor_f64(Ac.data(), LU_out, n, n);
-    for (int i = 0; i < n; ++i) ipiv_out[i] = static_cast<int>(ipiv_local[i]);
+    for (int i = 0; i < n; ++i)
+        ipiv_out[i] = static_cast<int>(ipiv_local[i]);
     *info_out = info;
 }
 
@@ -623,10 +629,10 @@ void lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out,
 // upper=true  → A is upper triangular; upper=false → lower triangular.
 // unit=true   → diagonal of A is treated as all-ones (unit triangular).
 // Uses LAPACK strtrs_ / dtrtrs_.
-void lapack_solve_triangular_f32(const float* A, float* B, int n, int nrhs,
-                                 bool upper, bool unit, int* info_out) {
+void lapack_solve_triangular_f32(
+    const float* A, float* B, int n, int nrhs, bool upper, bool unit, int* info_out) {
     char uplo = upper ? 'U' : 'L';
-    char diag = unit  ? 'U' : 'N';
+    char diag = unit ? 'U' : 'N';
     char trans = 'N';
 
     // LAPACK expects column-major input.
@@ -637,16 +643,19 @@ void lapack_solve_triangular_f32(const float* A, float* B, int n, int nrhs,
 
     i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
     strtrs_(&uplo, &trans, &diag, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &info);
-    if (info != 0) { *info_out = info; return; }
+    if (info != 0) {
+        *info_out = info;
+        return;
+    }
 
     colmajor_to_rowmajor_f32(Bc.data(), B, n, nrhs);
     *info_out = 0;
 }
 
-void lapack_solve_triangular_f64(const double* A, double* B, int n, int nrhs,
-                                 bool upper, bool unit, int* info_out) {
+void lapack_solve_triangular_f64(
+    const double* A, double* B, int n, int nrhs, bool upper, bool unit, int* info_out) {
     char uplo = upper ? 'U' : 'L';
-    char diag = unit  ? 'U' : 'N';
+    char diag = unit ? 'U' : 'N';
     char trans = 'N';
 
     std::vector<double> Ac(static_cast<std::size_t>(n) * n);
@@ -656,7 +665,10 @@ void lapack_solve_triangular_f64(const double* A, double* B, int n, int nrhs,
 
     i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
     dtrtrs_(&uplo, &trans, &diag, &N, &NRHS, Ac.data(), &lda, Bc.data(), &ldb, &info);
-    if (info != 0) { *info_out = info; return; }
+    if (info != 0) {
+        *info_out = info;
+        return;
+    }
 
     colmajor_to_rowmajor_f64(Bc.data(), B, n, nrhs);
     *info_out = 0;
@@ -709,17 +721,18 @@ void lapack_lstsq_f64(const double* A, double* B, int m, int n, int nrhs, int* i
 // Solve AX=B given LU packed matrix and 1-based pivot vector from lu_factor.
 // Uses sgetrs_/dgetrs_. B is overwritten with X.
 
-void lapack_lu_solve_f32(const float* LU, const int* ipiv,
-                         float* B, int n, int nrhs, int* info_out) {
+void lapack_lu_solve_f32(
+    const float* LU, const int* ipiv, float* B, int n, int nrhs, int* info_out) {
     char trans = 'N';
     std::vector<float> LUc(static_cast<std::size_t>(n) * n);
     std::vector<float> Bc(static_cast<std::size_t>(n) * nrhs);
     rowmajor_to_colmajor_f32(LU, LUc.data(), n, n);
-    rowmajor_to_colmajor_f32(B,  Bc.data(),  n, nrhs);
+    rowmajor_to_colmajor_f32(B, Bc.data(), n, nrhs);
 
     // Convert 1-based int32 ipiv to LAPACK i32 (also 1-based)
     std::vector<i32> piv(static_cast<std::size_t>(n));
-    for (int i = 0; i < n; ++i) piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
+    for (int i = 0; i < n; ++i)
+        piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
 
     i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
     sgetrs_(&trans, &N, &NRHS, LUc.data(), &lda, piv.data(), Bc.data(), &ldb, &info);
@@ -728,16 +741,17 @@ void lapack_lu_solve_f32(const float* LU, const int* ipiv,
         colmajor_to_rowmajor_f32(Bc.data(), B, n, nrhs);
 }
 
-void lapack_lu_solve_f64(const double* LU, const int* ipiv,
-                         double* B, int n, int nrhs, int* info_out) {
+void lapack_lu_solve_f64(
+    const double* LU, const int* ipiv, double* B, int n, int nrhs, int* info_out) {
     char trans = 'N';
     std::vector<double> LUc(static_cast<std::size_t>(n) * n);
     std::vector<double> Bc(static_cast<std::size_t>(n) * nrhs);
     rowmajor_to_colmajor_f64(LU, LUc.data(), n, n);
-    rowmajor_to_colmajor_f64(B,  Bc.data(),  n, nrhs);
+    rowmajor_to_colmajor_f64(B, Bc.data(), n, nrhs);
 
     std::vector<i32> piv(static_cast<std::size_t>(n));
-    for (int i = 0; i < n; ++i) piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
+    for (int i = 0; i < n; ++i)
+        piv[static_cast<std::size_t>(i)] = static_cast<i32>(ipiv[i]);
 
     i32 N = n, NRHS = nrhs, lda = n, ldb = n, info = 0;
     dgetrs_(&trans, &N, &NRHS, LUc.data(), &lda, piv.data(), Bc.data(), &ldb, &info);
@@ -750,8 +764,8 @@ void lapack_lu_solve_f64(const double* LU, const int* ipiv,
 // Reconstruct Q (m×k) from Householder reflectors stored in H and tau.
 // H is m×n (geqrf output), tau is length k=min(m,n). Uses sorgqr_/dorgqr_.
 
-void lapack_householder_product_f32(const float* H, const float* tau,
-                                    float* Q_out, int m, int n, int k, int* info_out) {
+void lapack_householder_product_f32(
+    const float* H, const float* tau, float* Q_out, int m, int n, int k, int* info_out) {
     std::vector<float> Hc(static_cast<std::size_t>(m) * n);
     rowmajor_to_colmajor_f32(H, Hc.data(), m, n);
 
@@ -767,8 +781,8 @@ void lapack_householder_product_f32(const float* H, const float* tau,
         colmajor_to_rowmajor_f32(Hc.data(), Q_out, m, k);
 }
 
-void lapack_householder_product_f64(const double* H, const double* tau,
-                                    double* Q_out, int m, int n, int k, int* info_out) {
+void lapack_householder_product_f64(
+    const double* H, const double* tau, double* Q_out, int m, int n, int k, int* info_out) {
     std::vector<double> Hc(static_cast<std::size_t>(m) * n);
     rowmajor_to_colmajor_f64(H, Hc.data(), m, n);
 
@@ -803,7 +817,8 @@ void lapack_ldl_factor_f32(const float* A, float* A_out, int* ipiv, int n, int* 
     *info_out = info;
     if (info == 0) {
         colmajor_to_rowmajor_f32(Ac.data(), A_out, n, n);
-        for (int i = 0; i < n; ++i) ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
+        for (int i = 0; i < n; ++i)
+            ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
     }
 }
 
@@ -822,7 +837,8 @@ void lapack_ldl_factor_f64(const double* A, double* A_out, int* ipiv, int n, int
     *info_out = info;
     if (info == 0) {
         colmajor_to_rowmajor_f64(Ac.data(), A_out, n, n);
-        for (int i = 0; i < n; ++i) ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
+        for (int i = 0; i < n; ++i)
+            ipiv[i] = static_cast<int>(piv[static_cast<std::size_t>(i)]);
     }
 }
 

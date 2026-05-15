@@ -100,8 +100,8 @@ GpuStorage nextafter_gpu_f32(const GpuStorage& a, const GpuStorage& b) {
     auto a_nan = mx::not_equal(af, af);
     auto b_nan = mx::not_equal(bf, bf);
     auto any_nan = mx::logical_or(a_nan, b_nan);
-    auto nan_bits = mx::view(
-        mx::array(std::numeric_limits<float>::quiet_NaN(), mx::float32), mx::int32);
+    auto nan_bits =
+        mx::view(mx::array(std::numeric_limits<float>::quiet_NaN(), mx::float32), mx::int32);
     step = mx::where(any_nan, nan_bits, step);
 
     auto out = mx::view(step, mx::float32);
@@ -127,8 +127,7 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (a->device() == Device::GPU && a->dtype() == Dtype::F32) {
         const auto& ga = std::get<GpuStorage>(a->storage());
         const auto& gb = std::get<GpuStorage>(b->storage());
-        return fresh(Storage{nextafter_gpu_f32(ga, gb)}, a->shape(),
-                     a->dtype(), Device::GPU);
+        return fresh(Storage{nextafter_gpu_f32(ga, gb)}, a->shape(), a->dtype(), Device::GPU);
     }
 
     // CPU fallback (and F64 on either device — MLX doesn't support F64).

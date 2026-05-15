@@ -106,8 +106,7 @@ void register_linalg(py::module_& m) {
         "(LAPACK dgetrf format) and pivots is an int32 vector of 1-based pivot indices.");
 
     // solve_triangular: triangular system solve.
-    m.def("solve_triangular", &solve_triangular_op,
-          py::arg("a"), py::arg("b"),
+    m.def("solve_triangular", &solve_triangular_op, py::arg("a"), py::arg("b"),
           py::arg("upper") = true, py::arg("unitriangular") = false,
           "Triangular solve: compute X such that A X = B.\n"
           "upper=True  → A is upper triangular.\n"
@@ -127,14 +126,12 @@ void register_linalg(py::module_& m) {
         "Returns the solution tensor X with shape (N, NRHS).");
 
     // lu_solve: solve AX = B given the packed LU factorisation from lu_factor.
-    m.def("lu_solve", &lu_solve_op,
-          py::arg("LU"), py::arg("pivots"), py::arg("b"),
+    m.def("lu_solve", &lu_solve_op, py::arg("LU"), py::arg("pivots"), py::arg("b"),
           "Solve AX = B given packed LU (from lu_factor) and pivot vector.\n"
           "CPU: LAPACK sgetrs/dgetrs.  GPU: CPU fallback.");
 
     // householder_product: recover Q from the compact Householder reflectors.
-    m.def("householder_product", &householder_product_op,
-          py::arg("H"), py::arg("tau"),
+    m.def("householder_product", &householder_product_op, py::arg("H"), py::arg("tau"),
           "Reconstruct Q from Householder reflectors (H, tau) as returned by\n"
           "LAPACK dgeqrf.  CPU: LAPACK sorgqr/dorgqr.  GPU: CPU fallback.");
 

@@ -41,12 +41,6 @@
 #include "../../autograd/AccumulateGrad.h"
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
-#include "../../kernel/BinaryKernel.h"
-#include "../../ops/utils/Select.h"
-#include "../../ops/bfunc/Add.h"
-#include "../../ops/bfunc/Compare.h"
-#include "../../ops/bfunc/Mul.h"
-#include "../../ops/bfunc/Div.h"
 #include "../../backend/Dispatcher.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
@@ -57,6 +51,12 @@
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
+#include "../../kernel/BinaryKernel.h"
+#include "../../ops/bfunc/Add.h"
+#include "../../ops/bfunc/Compare.h"
+#include "../../ops/bfunc/Div.h"
+#include "../../ops/bfunc/Mul.h"
+#include "../../ops/utils/Select.h"
 
 namespace lucid {
 
@@ -305,9 +305,13 @@ TensorImplPtr full_like_op(const TensorImplPtr& a, double fill_value, bool requi
 
 // ── logspace ──────────────────────────────────────────────────────────────────
 
-TensorImplPtr logspace_op(
-    double start, double stop, std::int64_t num, double base,
-    Dtype dt, Device device, bool requires_grad) {
+TensorImplPtr logspace_op(double start,
+                          double stop,
+                          std::int64_t num,
+                          double base,
+                          Dtype dt,
+                          Device device,
+                          bool requires_grad) {
     if (num < 0)
         ErrorBuilder("logspace").fail("num must be >= 0");
     Shape shape{num};
@@ -327,28 +331,37 @@ TensorImplPtr logspace_op(
 
     auto cpu = allocate_cpu(shape, dt);
     switch (dt) {
-    case Dtype::F32: compute_cpu(reinterpret_cast<float*>(cpu.ptr.get())); break;
-    case Dtype::F64: compute_cpu(reinterpret_cast<double*>(cpu.ptr.get())); break;
-    case Dtype::I32: compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get())); break;
-    case Dtype::I64: compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get())); break;
-    default: ErrorBuilder("logspace").not_implemented("dtype not supported");
+    case Dtype::F32:
+        compute_cpu(reinterpret_cast<float*>(cpu.ptr.get()));
+        break;
+    case Dtype::F64:
+        compute_cpu(reinterpret_cast<double*>(cpu.ptr.get()));
+        break;
+    case Dtype::I32:
+        compute_cpu(reinterpret_cast<std::int32_t*>(cpu.ptr.get()));
+        break;
+    case Dtype::I64:
+        compute_cpu(reinterpret_cast<std::int64_t*>(cpu.ptr.get()));
+        break;
+    default:
+        ErrorBuilder("logspace").not_implemented("dtype not supported");
     }
-    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape),
-                    shape, dt, device, requires_grad);
+    return finalize(backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape), shape,
+                    dt, device, requires_grad);
 }
 
 // ── scatter_add ───────────────────────────────────────────────────────────────
 // Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
 
 TensorImplPtr scatter_add_op(const TensorImplPtr& base,
-                              const TensorImplPtr& indices,
-                              const TensorImplPtr& src,
-                              int dim) {
-    Validator::input(base,    "scatter_add.base").non_null();
+                             const TensorImplPtr& indices,
+                             const TensorImplPtr& src,
+                             int dim) {
+    Validator::input(base, "scatter_add.base").non_null();
     Validator::input(indices, "scatter_add.indices").non_null();
-    Validator::input(src,     "scatter_add.src").non_null();
+    Validator::input(src, "scatter_add.src").non_null();
 
-    const Dtype dt  = base->dtype();
+    const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
@@ -360,19 +373,20 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     int d = dim < 0 ? dim + ndim : dim;
 
     auto& be = backend::Dispatcher::for_device(dv);
-    Storage out_s = be.scatter_add(base->storage(), indices->storage(), src->storage(),
-                                    bs, is, d, dt);
+    Storage out_s =
+        be.scatter_add(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
 
     // Autograd wiring
-    const bool needs_grad = GradMode::is_enabled() &&
-                            (base->requires_grad() || src->requires_grad());
-    if (!needs_grad) return out;
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
 
     // base_edge: gradient = grad_out  (identity)
     // src_edge:  gradient = gather(grad_out, indices, dim)
     auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
 
     struct ScatterAddNode : Node {
         int dim_;
@@ -399,7 +413,8 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     bwd->base_shape_ = bs;
     bwd->dtype_ = dt;
     bwd->device_ = dv;
-    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
 
     out->set_grad_fn(std::move(bwd));
@@ -426,32 +441,33 @@ TensorImplPtr winner_mask(const TensorImplPtr& lhs, const TensorImplPtr& rhs) {
 
 // ── scatter_amax ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
-                               const TensorImplPtr& indices,
-                               const TensorImplPtr& src,
-                               int dim) {
-    Validator::input(base,    "scatter_amax.base").non_null();
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_amax.base").non_null();
     Validator::input(indices, "scatter_amax.indices").non_null();
-    Validator::input(src,     "scatter_amax.src").non_null();
+    Validator::input(src, "scatter_amax.src").non_null();
 
-    const Dtype dt  = base->dtype();
+    const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim  = static_cast<int>(bs.size());
+    const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amax", dv, dt, bs};
 
     auto& be = backend::Dispatcher::for_device(dv);
-    Storage out_s = be.scatter_amax(base->storage(), indices->storage(),
-                                    src->storage(), bs, is, d, dt);
+    Storage out_s =
+        be.scatter_amax(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
 
-    const bool needs_grad = GradMode::is_enabled() &&
-                            (base->requires_grad() || src->requires_grad());
-    if (!needs_grad) return out;
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
 
     auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
 
     struct ScatterAmaxNode : Node {
         int dim_;
@@ -477,26 +493,24 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
 
             // 1. Winner masks (float 0/1 per element)
-            auto mask_base_f  = winner_mask(saved_base_, saved_out_);
+            auto mask_base_f = winner_mask(saved_base_, saved_out_);
             auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
-            auto mask_src_f   = winner_mask(saved_src_, gathered_out);
+            auto mask_src_f = winner_mask(saved_src_, gathered_out);
 
             // 2. Count total tied winners per output position:
             //    winners_from_src[i] = Σ mask_src_f[j]  (over j where idx[j]==i)
-            auto zeros_out      = zeros_like_op(saved_out_);
-            auto wins_from_src  = scatter_add_op(zeros_out, saved_indices_,
-                                                  mask_src_f, dim_);
-            auto total_wins     = add_op(mask_base_f, wins_from_src);  // per-output count
+            auto zeros_out = zeros_like_op(saved_out_);
+            auto wins_from_src = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
+            auto total_wins = add_op(mask_base_f, wins_from_src);  // per-output count
             // Clamp to avoid divide-by-zero at non-participating positions
-            auto safe_wins      = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
-                                           ones_like_op(total_wins),
-                                           total_wins);
+            auto safe_wins = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                      ones_like_op(total_wins), total_wins);
 
             // 3. grad_base = g * mask_base_f / safe_wins
             Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
 
             // 4. grad_src = gather(g / safe_wins) * mask_src_f
-            auto g_normed    = div_op(g_impl, safe_wins);
+            auto g_normed = div_op(g_impl, safe_wins);
             auto gathered_gn = gather_op(g_normed, saved_indices_, dim_);
             Storage grad_src = mul_op(gathered_gn, mask_src_f)->storage();
             return {std::move(grad_base), std::move(grad_src)};
@@ -504,16 +518,16 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
     };
 
     auto bwd = std::make_shared<ScatterAmaxNode>();
-    bwd->dim_           = d;
+    bwd->dim_ = d;
     bwd->saved_indices_ = indices;
-    bwd->saved_out_     = out;
-    bwd->saved_base_    = base;
-    bwd->saved_src_     = src;
-    bwd->base_shape_    = bs;
-    bwd->dtype_         = dt;
-    bwd->device_        = dv;
-    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
-                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -523,32 +537,33 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
 
 // ── scatter_amin ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
-                               const TensorImplPtr& indices,
-                               const TensorImplPtr& src,
-                               int dim) {
-    Validator::input(base,    "scatter_amin.base").non_null();
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_amin.base").non_null();
     Validator::input(indices, "scatter_amin.indices").non_null();
-    Validator::input(src,     "scatter_amin.src").non_null();
+    Validator::input(src, "scatter_amin.src").non_null();
 
-    const Dtype dt  = base->dtype();
+    const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim  = static_cast<int>(bs.size());
+    const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amin", dv, dt, bs};
 
     auto& be = backend::Dispatcher::for_device(dv);
-    Storage out_s = be.scatter_amin(base->storage(), indices->storage(),
-                                    src->storage(), bs, is, d, dt);
+    Storage out_s =
+        be.scatter_amin(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
 
-    const bool needs_grad = GradMode::is_enabled() &&
-                            (base->requires_grad() || src->requires_grad());
-    if (!needs_grad) return out;
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
 
     auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
 
     struct ScatterAminNode : Node {
         int dim_;
@@ -569,33 +584,33 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
 
         std::vector<Storage> apply(Storage g) override {
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
-            auto mask_base_f  = winner_mask(saved_base_, saved_out_);
+            auto mask_base_f = winner_mask(saved_base_, saved_out_);
             auto gathered_out = gather_op(saved_out_, saved_indices_, dim_);
-            auto mask_src_f   = winner_mask(saved_src_, gathered_out);
-            auto zeros_out    = zeros_like_op(saved_out_);
-            auto wins_src     = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
-            auto total_wins   = add_op(mask_base_f, wins_src);
-            auto safe_wins    = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
-                                         ones_like_op(total_wins), total_wins);
+            auto mask_src_f = winner_mask(saved_src_, gathered_out);
+            auto zeros_out = zeros_like_op(saved_out_);
+            auto wins_src = scatter_add_op(zeros_out, saved_indices_, mask_src_f, dim_);
+            auto total_wins = add_op(mask_base_f, wins_src);
+            auto safe_wins = where_op(equal_op(total_wins, zeros_like_op(total_wins)),
+                                      ones_like_op(total_wins), total_wins);
             Storage grad_base = div_op(mul_op(g_impl, mask_base_f), safe_wins)->storage();
-            auto g_normed     = div_op(g_impl, safe_wins);
-            auto gathered_gn  = gather_op(g_normed, saved_indices_, dim_);
-            Storage grad_src  = mul_op(gathered_gn, mask_src_f)->storage();
+            auto g_normed = div_op(g_impl, safe_wins);
+            auto gathered_gn = gather_op(g_normed, saved_indices_, dim_);
+            Storage grad_src = mul_op(gathered_gn, mask_src_f)->storage();
             return {std::move(grad_base), std::move(grad_src)};
         }
     };
 
     auto bwd = std::make_shared<ScatterAminNode>();
-    bwd->dim_           = d;
+    bwd->dim_ = d;
     bwd->saved_indices_ = indices;
-    bwd->saved_out_     = out;
-    bwd->saved_base_    = base;
-    bwd->saved_src_     = src;
-    bwd->base_shape_    = bs;
-    bwd->dtype_         = dt;
-    bwd->device_        = dv;
-    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
-                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -605,32 +620,33 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
 
 // ── scatter_prod ──────────────────────────────────────────────────────────────
 TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
-                               const TensorImplPtr& indices,
-                               const TensorImplPtr& src,
-                               int dim) {
-    Validator::input(base,    "scatter_prod.base").non_null();
+                              const TensorImplPtr& indices,
+                              const TensorImplPtr& src,
+                              int dim) {
+    Validator::input(base, "scatter_prod.base").non_null();
     Validator::input(indices, "scatter_prod.indices").non_null();
-    Validator::input(src,     "scatter_prod.src").non_null();
+    Validator::input(src, "scatter_prod.src").non_null();
 
-    const Dtype dt  = base->dtype();
+    const Dtype dt = base->dtype();
     const Device dv = base->device();
     const Shape& bs = base->shape();
     const Shape& is = indices->shape();
-    const int ndim  = static_cast<int>(bs.size());
+    const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_prod", dv, dt, bs};
 
     auto& be = backend::Dispatcher::for_device(dv);
-    Storage out_s = be.scatter_prod(base->storage(), indices->storage(),
-                                    src->storage(), bs, is, d, dt);
+    Storage out_s =
+        be.scatter_prod(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
 
-    const bool needs_grad = GradMode::is_enabled() &&
-                            (base->requires_grad() || src->requires_grad());
-    if (!needs_grad) return out;
+    const bool needs_grad =
+        GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
+    if (!needs_grad)
+        return out;
 
     auto base_edge = lucid::detail::ensure_grad_fn(base);
-    auto src_edge  = lucid::detail::ensure_grad_fn(src);
+    auto src_edge = lucid::detail::ensure_grad_fn(src);
 
     // Gradient of scatter_prod:
     //   d/d(src[j])  = grad[idx[j]] * out[idx[j]] / src[j]   (product rule)
@@ -658,26 +674,26 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
             // grad_base = g * out / base
             auto grad_base_impl = mul_op(g_impl, div_op(saved_out_, saved_base_));
-            Storage grad_base   = grad_base_impl->storage();
+            Storage grad_base = grad_base_impl->storage();
             // grad_src: gather (g * out), then divide by src
-            auto g_times_out     = mul_op(g_impl, saved_out_);
-            auto gathered_g_out  = gather_op(g_times_out, saved_indices_, dim_);
-            Storage grad_src     = div_op(gathered_g_out, saved_src_)->storage();
+            auto g_times_out = mul_op(g_impl, saved_out_);
+            auto gathered_g_out = gather_op(g_times_out, saved_indices_, dim_);
+            Storage grad_src = div_op(gathered_g_out, saved_src_)->storage();
             return {std::move(grad_base), std::move(grad_src)};
         }
     };
 
     auto bwd = std::make_shared<ScatterProdNode>();
-    bwd->dim_           = d;
+    bwd->dim_ = d;
     bwd->saved_indices_ = indices;
-    bwd->saved_out_     = out;
-    bwd->saved_base_    = base;
-    bwd->saved_src_     = src;
-    bwd->base_shape_    = bs;
-    bwd->dtype_         = dt;
-    bwd->device_        = dv;
-    bwd->set_next_edges({Edge(base_edge, base->grad_output_nr()),
-                         Edge(src_edge,  src->grad_output_nr())});
+    bwd->saved_out_ = out;
+    bwd->saved_base_ = base;
+    bwd->saved_src_ = src;
+    bwd->base_shape_ = bs;
+    bwd->dtype_ = dt;
+    bwd->device_ = dv;
+    bwd->set_next_edges(
+        {Edge(base_edge, base->grad_output_nr()), Edge(src_edge, src->grad_output_nr())});
     bwd->set_saved_versions({base->version(), src->version()});
     out->set_grad_fn(std::move(bwd));
     out->set_leaf(false);
@@ -702,15 +718,18 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
 
     const int L = (dim_size - size) / step + 1;
     Shape out_shape;
-    for (int i = 0; i < d; ++i) out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    for (int i = 0; i < d; ++i)
+        out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
     out_shape.push_back(static_cast<std::int64_t>(L));
-    for (int i = d + 1; i < ndim; ++i) out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
+    for (int i = d + 1; i < ndim; ++i)
+        out_shape.push_back(in_shape[static_cast<std::size_t>(i)]);
     out_shape.push_back(static_cast<std::int64_t>(size));
 
     OpScopeFull scope{"unfold_dim", a->device(), a->dtype(), out_shape};
     auto& be = backend::Dispatcher::for_device(a->device());
     Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
-    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(), false);
+    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
+                                        false);
 }
 
 }  // namespace lucid

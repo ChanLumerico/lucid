@@ -32,8 +32,8 @@ class Generator;
 class LUCID_API DropoutBackward : public FuncOp<DropoutBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    double p_ = 0.0;      // Drop probability (0 = pass-through).
-    Storage mask_;         // Scaled Bernoulli mask saved for backward.
+    double p_ = 0.0;  // Drop probability (0 = pass-through).
+    Storage mask_;    // Scaled Bernoulli mask saved for backward.
 
     // Apply Bernoulli mask to a, scale surviving elements by 1/(1-p).
     // gen may be null (uses default_generator()); throws under deterministic
@@ -68,7 +68,7 @@ public:
     static const OpSchema schema_v1;
     double p_ = 0.0;
     double a_coef_ = 1.0;  // Affine scale factor saved for backward.
-    Storage mask_;          // Raw Bernoulli mask (0/1, before scaling).
+    Storage mask_;         // Raw Bernoulli mask (0/1, before scaling).
 
     static TensorImplPtr forward(const TensorImplPtr& a, double p, bool training, Generator* gen);
 

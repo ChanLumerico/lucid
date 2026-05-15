@@ -40,8 +40,8 @@ namespace {
 
 // Size-class boundaries — the smallest pooled allocation is kMinClass bytes
 // (equal to kCpuAlignment so every block satisfies the alignment requirement).
-constexpr std::size_t kMinClass = kCpuAlignment;   // 64 B — one cache line
-constexpr std::size_t kMaxClass = 4 * 1024 * 1024; // 4 MB — above this, bypass pool
+constexpr std::size_t kMinClass = kCpuAlignment;    // 64 B — one cache line
+constexpr std::size_t kMaxClass = 4 * 1024 * 1024;  // 4 MB — above this, bypass pool
 // Maximum number of free blocks retained per size class per thread.  Higher
 // values reduce posix_memalign calls at the cost of more virtual-memory
 // retention; 32 was chosen to keep total retained memory below ~100 MB

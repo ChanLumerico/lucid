@@ -42,8 +42,7 @@ std::vector<Storage> LstmBackward::apply(Storage grad_out) {
     // the output sequence is connected in the graph for the single-layer case.
     // ``hn`` lives in the recurrent dim (proj_size when projection is on),
     // ``cn`` always lives in the cell-state dim (hidden_size).
-    const std::int64_t Hrec =
-        (opts.proj_size > 0) ? opts.proj_size : opts.hidden_size;
+    const std::int64_t Hrec = (opts.proj_size > 0) ? opts.proj_size : opts.hidden_size;
     const Shape zero_hn_shape{static_cast<std::int64_t>(opts.batch_size), Hrec};
     const Shape zero_cn_shape{static_cast<std::int64_t>(opts.batch_size),
                               static_cast<std::int64_t>(opts.hidden_size)};

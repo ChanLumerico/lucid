@@ -35,9 +35,9 @@ template <int N>
 class LUCID_API MaxPoolNdBackward : public FuncOp<MaxPoolNdBackward<N>, 1> {
 public:
     static const OpSchema schema_v1;
-    int K_[N];        // Pooling window size per axis.
-    int stride_[N];   // Stride per axis (already resolved from 0 in forward).
-    int pad_[N];      // Zero-padding per axis.
+    int K_[N];              // Pooling window size per axis.
+    int stride_[N];         // Stride per axis (already resolved from 0 in forward).
+    int pad_[N];            // Zero-padding per axis.
     Storage saved_argmax_;  // Flat argmax indices, same shape as output.
 
     // If stride_in[i] == 0 the stride defaults to K[i] (non-overlapping).

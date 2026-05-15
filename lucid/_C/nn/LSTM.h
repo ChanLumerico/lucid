@@ -39,12 +39,12 @@ namespace lucid {
 // Edge order: {input, h0, c0, wih, whh, bih, bhh} (indices 0–6).
 class LUCID_API LstmBackward : public Node {
 public:
-    Storage saved_input;                  // Original input sequence (T, B, input_size).
-    Storage saved_h0;                     // Initial hidden state (1, B, H).
-    std::vector<Storage> saved_weights;   // {wih, whh, bih, bhh}.
+    Storage saved_input;                 // Original input sequence (T, B, input_size).
+    Storage saved_h0;                    // Initial hidden state (1, B, H).
+    std::vector<Storage> saved_weights;  // {wih, whh, bih, bhh}.
 
-    Storage gates_all;   // All gate pre-activations, shape (T, B, 4H).
-    Storage cells_all;   // All cell states (including c_0), shape (T+1, B, H).
+    Storage gates_all;  // All gate pre-activations, shape (T, B, 4H).
+    Storage cells_all;  // All cell states (including c_0), shape (T+1, B, H).
 
     backend::IBackend::LstmOpts opts;
     Dtype dtype = Dtype::F32;

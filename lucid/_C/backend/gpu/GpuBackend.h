@@ -319,8 +319,7 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::F32)};
     }
 
-    Storage complex_combine(
-        const Storage& re, const Storage& im, const Shape&) override {
+    Storage complex_combine(const Storage& re, const Storage& im, const Shape&) override {
         const auto& re_g = std::get<GpuStorage>(re);
         const auto& im_g = std::get<GpuStorage>(im);
         // ``re + 1j * im``: cast both to complex64, scale imag by ``j``,
@@ -329,8 +328,7 @@ public:
         auto re_c = ::mlx::core::astype(*re_g.arr, ::mlx::core::complex64);
         auto im_c = ::mlx::core::astype(*im_g.arr, ::mlx::core::complex64);
         ::mlx::core::array j(std::complex<float>(0.0f, 1.0f));
-        auto out = ::mlx::core::contiguous(
-            ::mlx::core::add(re_c, ::mlx::core::multiply(im_c, j)));
+        auto out = ::mlx::core::contiguous(::mlx::core::add(re_c, ::mlx::core::multiply(im_c, j)));
         return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::C64)};
     }
 
@@ -432,7 +430,7 @@ public:
                          double alpha) override {
         return mlx_binary(a, grad, shape, dt, [dt, alpha](auto& x, auto& g) {
             ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));   // scalar — no full-tensor alloc
+            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));  // scalar — no full-tensor alloc
             ::mlx::core::array alpha_arr(alpha, gpu::to_mlx_dtype(dt));
             auto pos_mask = ::mlx::core::greater_equal(x, zero);
             auto neg_branch = ::mlx::core::multiply(alpha_arr, ::mlx::core::exp(x));
@@ -573,32 +571,31 @@ public:
     }
 
     Storage any(const Storage& a, const Shape&, Dtype dt) override {
-        return mlx_unary(a, {}, Dtype::Bool,
-                         [](auto& x) { return ::mlx::core::any(x); });
+        return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::any(x); });
     }
 
     Storage all(const Storage& a, const Shape&, Dtype dt) override {
-        return mlx_unary(a, {}, Dtype::Bool,
-                         [](auto& x) { return ::mlx::core::all(x); });
+        return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::all(x); });
     }
 
     Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, Dtype::Bool,
-                         [](auto& x) { return ::mlx::core::isinf(x); });
+        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) { return ::mlx::core::isinf(x); });
     }
 
     Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, Dtype::Bool,
-                         [](auto& x) { return ::mlx::core::isnan(x); });
+        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) { return ::mlx::core::isnan(x); });
     }
 
     Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
-        return mlx_unary(a, shape, Dtype::Bool,
-                         [](auto& x) { return ::mlx::core::isfinite(x); });
+        return mlx_unary(a, shape, Dtype::Bool, [](auto& x) { return ::mlx::core::isfinite(x); });
     }
 
-    Storage nan_to_num(const Storage& a, const Shape& shape, Dtype dt,
-                       double nan_val, double posinf_val, double neginf_val) override {
+    Storage nan_to_num(const Storage& a,
+                       const Shape& shape,
+                       Dtype dt,
+                       double nan_val,
+                       double posinf_val,
+                       double neginf_val) override {
         return mlx_unary(a, shape, dt, [dt, nan_val, posinf_val, neginf_val](auto& x) {
             auto mdt = gpu::to_mlx_dtype(dt);
             ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
@@ -606,12 +603,10 @@ public:
             ::mlx::core::array ni_a(static_cast<float>(neginf_val), mdt);
             auto out = ::mlx::core::where(::mlx::core::isnan(x), nan_a, x);
             auto pos_inf = ::mlx::core::logical_and(
-                ::mlx::core::isinf(out),
-                ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
+                ::mlx::core::isinf(out), ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
             out = ::mlx::core::where(pos_inf, pi_a, out);
             auto neg_inf = ::mlx::core::logical_and(
-                ::mlx::core::isinf(out),
-                ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
+                ::mlx::core::isinf(out), ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
             return ::mlx::core::where(neg_inf, ni_a, out);
         });
     }
@@ -693,8 +688,8 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
-    Storage log_softmax_backward(const Storage& y, const Storage& grad_out,
-                                  const Shape&, int axis, Dtype dt) override {
+    Storage log_softmax_backward(
+        const Storage& y, const Storage& grad_out, const Shape&, int axis, Dtype dt) override {
         const auto& yg = std::get<GpuStorage>(y);
         const auto& gg = std::get<GpuStorage>(grad_out);
         auto p = ::mlx::core::exp(*yg.arr);
@@ -1139,12 +1134,10 @@ private:
         // Normalise negative indices for the scatter axis the same way the
         // gradient path does.
         auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]),
-            idx_in.dtype());
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), idx_in.dtype());
         auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), idx_in.dtype());
-        auto fixed = ::mlx::core::where(
-            ::mlx::core::less(idx_in, zero),
-            ::mlx::core::add(idx_in, axis_len), idx_in);
+        auto fixed = ::mlx::core::where(::mlx::core::less(idx_in, zero),
+                                        ::mlx::core::add(idx_in, axis_len), idx_in);
 
         // MLX multi-axis scatter with K=1, axes=[d] expects ``indices`` to
         // have shape ``idx_shape[d] = (idx_shape[d],)`` (just the scatter
@@ -1168,9 +1161,13 @@ private:
     // Updates then has shape == idx_shape (same as the broadcast index
     // shape), satisfying MLX's "updates.ndim == K + (ndim - K)" invariant.
     template <typename ScatterFn>
-    Storage axis_scatter_via_multiaxis(const Storage& base, const Storage& indices,
-                                       const Storage& src, const Shape& base_shape,
-                                       const Shape& idx_shape, int dim, Dtype dt,
+    Storage axis_scatter_via_multiaxis(const Storage& base,
+                                       const Storage& indices,
+                                       const Storage& src,
+                                       const Shape& base_shape,
+                                       const Shape& idx_shape,
+                                       int dim,
+                                       Dtype dt,
                                        ScatterFn scatter_fn) {
         const auto& gb = std::get<GpuStorage>(base);
         const auto& gi = std::get<GpuStorage>(indices);
@@ -1179,12 +1176,10 @@ private:
         const int d = dim < 0 ? dim + ndim : dim;
 
         auto axis_len = ::mlx::core::array(
-            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]),
-            gi.arr->dtype());
+            static_cast<std::int32_t>(base_shape[static_cast<std::size_t>(d)]), gi.arr->dtype());
         auto zero = ::mlx::core::array(static_cast<std::int32_t>(0), gi.arr->dtype());
-        auto fixed = ::mlx::core::where(
-            ::mlx::core::less(*gi.arr, zero),
-            ::mlx::core::add(*gi.arr, axis_len), *gi.arr);
+        auto fixed = ::mlx::core::where(::mlx::core::less(*gi.arr, zero),
+                                        ::mlx::core::add(*gi.arr, axis_len), *gi.arr);
 
         std::vector<::mlx::core::array> index_list;
         std::vector<int> axes_v;
@@ -1215,61 +1210,72 @@ private:
             upd_shape.push_back(static_cast<int>(idx_shape[static_cast<std::size_t>(a)]));
         for (int a = 0; a < ndim; ++a)
             upd_shape.push_back(1);
-        auto updates = ::mlx::core::reshape(
-            *gs.arr, ::mlx::core::Shape(upd_shape.begin(), upd_shape.end()));
+        auto updates =
+            ::mlx::core::reshape(*gs.arr, ::mlx::core::Shape(upd_shape.begin(), upd_shape.end()));
 
         auto out = scatter_fn(*gb.arr, index_list, updates, axes_v);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
 public:
-    Storage scatter_amax(const Storage& base, const Storage& indices, const Storage& src,
-                         const Shape& base_shape, const Shape& idx_shape,
-                         int dim, Dtype dt) override {
-        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+    Storage scatter_amax(const Storage& base,
+                         const Storage& indices,
+                         const Storage& src,
+                         const Shape& base_shape,
+                         const Shape& idx_shape,
+                         int dim,
+                         Dtype dt) override {
+        return axis_scatter_via_multiaxis(
+            base, indices, src, base_shape, idx_shape, dim, dt,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_max(a, idxs, upd, axes);
             });
     }
 
-    Storage scatter_amin(const Storage& base, const Storage& indices, const Storage& src,
-                         const Shape& base_shape, const Shape& idx_shape,
-                         int dim, Dtype dt) override {
-        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+    Storage scatter_amin(const Storage& base,
+                         const Storage& indices,
+                         const Storage& src,
+                         const Shape& base_shape,
+                         const Shape& idx_shape,
+                         int dim,
+                         Dtype dt) override {
+        return axis_scatter_via_multiaxis(
+            base, indices, src, base_shape, idx_shape, dim, dt,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_min(a, idxs, upd, axes);
             });
     }
 
-    Storage scatter_prod(const Storage& base, const Storage& indices, const Storage& src,
-                         const Shape& base_shape, const Shape& idx_shape,
-                         int dim, Dtype dt) override {
-        return axis_scatter_via_multiaxis(base, indices, src, base_shape, idx_shape, dim, dt,
+    Storage scatter_prod(const Storage& base,
+                         const Storage& indices,
+                         const Storage& src,
+                         const Shape& base_shape,
+                         const Shape& idx_shape,
+                         int dim,
+                         Dtype dt) override {
+        return axis_scatter_via_multiaxis(
+            base, indices, src, base_shape, idx_shape, dim, dt,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd, const std::vector<int>& axes) {
                 return ::mlx::core::scatter_prod(a, idxs, upd, axes);
             });
     }
 
-    Storage unfold_dim(const Storage& a,
-                       const Shape& in_shape,
-                       int dim,
-                       int size,
-                       int step,
-                       Dtype dt) override {
+    Storage unfold_dim(
+        const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const int ndim = static_cast<int>(in_shape.size());
-        if (dim < 0) const_cast<int&>(dim) += ndim;
+        if (dim < 0)
+            const_cast<int&>(dim) += ndim;
         const int dim_size = static_cast<int>(in_shape[static_cast<std::size_t>(dim)]);
         const int L = (dim_size - size) / step + 1;
 
         // Build index array of shape (*in_shape[:dim], L, *in_shape[dim+1:], size)
         // indices[..., l, ..., s] = l * step + s  (broadcast over other dims)
         auto starts = ::mlx::core::arange(0, L, 1, ::mlx::core::int32);  // (L,)
-        starts = ::mlx::core::multiply(starts,
-            ::mlx::core::array(step, ::mlx::core::int32));
+        starts = ::mlx::core::multiply(starts, ::mlx::core::array(step, ::mlx::core::int32));
         auto offsets = ::mlx::core::arange(0, size, 1, ::mlx::core::int32);  // (size,)
         // starts: (L,1) + offsets: (1,size) → (L, size)
         starts = ::mlx::core::reshape(starts, {L, 1});
@@ -1279,12 +1285,14 @@ public:
         // Reshape to be broadcastable for gather: insert leading dims for outer
         // and trailing dims for inner
         std::vector<int> idx_shape_v;
-        for (int d = 0; d < dim; ++d) idx_shape_v.push_back(1);
+        for (int d = 0; d < dim; ++d)
+            idx_shape_v.push_back(1);
         idx_shape_v.push_back(L);
-        for (int d = dim + 1; d < ndim; ++d) idx_shape_v.push_back(1);
+        for (int d = dim + 1; d < ndim; ++d)
+            idx_shape_v.push_back(1);
         idx_shape_v.push_back(size);
         auto idx = ::mlx::core::reshape(idx_2d,
-            ::mlx::core::Shape(idx_shape_v.begin(), idx_shape_v.end()));
+                                        ::mlx::core::Shape(idx_shape_v.begin(), idx_shape_v.end()));
 
         // Gather along dim
         auto out = ::mlx::core::take(*ga.arr, idx, dim);
@@ -1830,8 +1838,8 @@ public:
             float* lu_p = reinterpret_cast<float*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f32(src + b * per_mat, n,
-                                          lu_p + b * per_mat, ipiv_local.data(), &info);
+                cpu::lapack_lu_factor_f32(src + b * per_mat, n, lu_p + b * per_mat,
+                                          ipiv_local.data(), &info);
                 for (int i = 0; i < n; ++i)
                     ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
@@ -1840,8 +1848,8 @@ public:
             double* lu_p = reinterpret_cast<double*>(lu_ptr.get());
             for (std::int64_t b = 0; b < batch; ++b) {
                 std::vector<int> ipiv_local(n);
-                cpu::lapack_lu_factor_f64(src + b * per_mat, n,
-                                          lu_p + b * per_mat, ipiv_local.data(), &info);
+                cpu::lapack_lu_factor_f64(src + b * per_mat, n, lu_p + b * per_mat,
+                                          ipiv_local.data(), &info);
                 for (int i = 0; i < n; ++i)
                     ipiv_out[b * n + i] = static_cast<std::int32_t>(ipiv_local[i]);
             }
@@ -1852,16 +1860,18 @@ public:
 
     // solve_triangular: delegate to CPU LAPACK (MLX has no native dtrtrs).
     Storage linalg_solve_triangular(const Storage& a,
-                                     const Storage& b,
-                                     const Shape& a_shape,
-                                     const Shape& b_shape,
-                                     bool upper,
-                                     bool unitriangular,
-                                     Dtype dt) override {
+                                    const Storage& b,
+                                    const Shape& a_shape,
+                                    const Shape& b_shape,
+                                    bool upper,
+                                    bool unitriangular,
+                                    Dtype dt) override {
         const auto& ga_a = std::get<GpuStorage>(a);
         const auto& ga_b = std::get<GpuStorage>(b);
-        auto ca = ::mlx::core::contiguous(*ga_a.arr); ca.eval();
-        auto cb = ::mlx::core::contiguous(*ga_b.arr); cb.eval();
+        auto ca = ::mlx::core::contiguous(*ga_a.arr);
+        ca.eval();
+        auto cb = ::mlx::core::contiguous(*ga_b.arr);
+        cb.eval();
         const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
         const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
         const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
@@ -1878,68 +1888,84 @@ public:
             const float* a_p = ca.data<float>();
             float* x_p = reinterpret_cast<float*>(out_ptr.get());
             for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per,
-                                                 n, nrhs, upper, unitriangular, &info);
+                cpu::lapack_solve_triangular_f32(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
+                                                 unitriangular, &info);
         } else {
             const double* a_p = ca.data<double>();
             double* x_p = reinterpret_cast<double*>(out_ptr.get());
             for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per,
-                                                 n, nrhs, upper, unitriangular, &info);
+                cpu::lapack_solve_triangular_f64(a_p + bi * a_per, x_p + bi * b_per, n, nrhs, upper,
+                                                 unitriangular, &info);
         }
         return Storage{CpuStorage{out_ptr, out_bytes, dt}};
     }
 
     // lstsq: fall back to CPU LAPACK (MLX has no lstsq)
-    std::vector<Storage> linalg_lstsq(const Storage& a, const Storage& b,
-                                       const Shape& a_shape, const Shape& b_shape,
-                                       Dtype dt) override {
+    std::vector<Storage> linalg_lstsq(const Storage& a,
+                                      const Storage& b,
+                                      const Shape& a_shape,
+                                      const Shape& b_shape,
+                                      Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gb = std::get<GpuStorage>(b);
-        auto ca_mlx = ::mlx::core::contiguous(*ga.arr); ca_mlx.eval();
-        auto cb_mlx = ::mlx::core::contiguous(*gb.arr); cb_mlx.eval();
+        auto ca_mlx = ::mlx::core::contiguous(*ga.arr);
+        ca_mlx.eval();
+        auto cb_mlx = ::mlx::core::contiguous(*gb.arr);
+        cb_mlx.eval();
         const std::size_t a_nb = ca_mlx.nbytes(), b_nb = cb_mlx.nbytes();
         auto a_cpu = allocate_aligned_bytes(a_nb, Device::CPU);
         auto b_cpu = allocate_aligned_bytes(b_nb, Device::CPU);
         std::memcpy(a_cpu.get(), ca_mlx.data<void>(), a_nb);
         std::memcpy(b_cpu.get(), cb_mlx.data<void>(), b_nb);
         CpuStorage a_cs{a_cpu, a_nb, dt}, b_cs{b_cpu, b_nb, dt};
-        return Dispatcher::for_device(Device::CPU).linalg_lstsq(
-            Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
+        return Dispatcher::for_device(Device::CPU)
+            .linalg_lstsq(Storage{a_cs}, Storage{b_cs}, a_shape, b_shape, dt);
     }
 
     // lu_solve: fall back to CPU LAPACK
-    Storage linalg_lu_solve(const Storage& LU, const Storage& pivots, const Storage& b,
-                             const Shape& lu_shape, const Shape& b_shape, Dtype dt) override {
+    Storage linalg_lu_solve(const Storage& LU,
+                            const Storage& pivots,
+                            const Storage& b,
+                            const Shape& lu_shape,
+                            const Shape& b_shape,
+                            Dtype dt) override {
         // Download LU and B from GPU
         const auto& glu = std::get<GpuStorage>(LU);
         const auto& gpiv = std::get<GpuStorage>(pivots);
-        const auto& gb   = std::get<GpuStorage>(b);
-        auto clu = ::mlx::core::contiguous(*glu.arr);  clu.eval();
-        auto cpiv = ::mlx::core::contiguous(*gpiv.arr); cpiv.eval();
-        auto cb   = ::mlx::core::contiguous(*gb.arr);   cb.eval();
-        auto lu_cpu  = allocate_aligned_bytes(clu.nbytes(),  Device::CPU);
+        const auto& gb = std::get<GpuStorage>(b);
+        auto clu = ::mlx::core::contiguous(*glu.arr);
+        clu.eval();
+        auto cpiv = ::mlx::core::contiguous(*gpiv.arr);
+        cpiv.eval();
+        auto cb = ::mlx::core::contiguous(*gb.arr);
+        cb.eval();
+        auto lu_cpu = allocate_aligned_bytes(clu.nbytes(), Device::CPU);
         auto piv_cpu = allocate_aligned_bytes(cpiv.nbytes(), Device::CPU);
-        auto b_cpu   = allocate_aligned_bytes(cb.nbytes(),   Device::CPU);
-        std::memcpy(lu_cpu.get(),  clu.data<void>(),  clu.nbytes());
+        auto b_cpu = allocate_aligned_bytes(cb.nbytes(), Device::CPU);
+        std::memcpy(lu_cpu.get(), clu.data<void>(), clu.nbytes());
         std::memcpy(piv_cpu.get(), cpiv.data<void>(), cpiv.nbytes());
-        std::memcpy(b_cpu.get(),   cb.data<void>(),   cb.nbytes());
-        CpuStorage lu_cs{lu_cpu,  clu.nbytes(),  dt};
+        std::memcpy(b_cpu.get(), cb.data<void>(), cb.nbytes());
+        CpuStorage lu_cs{lu_cpu, clu.nbytes(), dt};
         CpuStorage piv_cs{piv_cpu, cpiv.nbytes(), Dtype::I32};
-        CpuStorage b_cs{b_cpu,   cb.nbytes(),   dt};
-        auto result = Dispatcher::for_device(Device::CPU).linalg_lu_solve(
-            Storage{lu_cs}, Storage{piv_cs}, Storage{b_cs}, lu_shape, b_shape, dt);
+        CpuStorage b_cs{b_cpu, cb.nbytes(), dt};
+        auto result = Dispatcher::for_device(Device::CPU)
+                          .linalg_lu_solve(Storage{lu_cs}, Storage{piv_cs}, Storage{b_cs}, lu_shape,
+                                           b_shape, dt);
         const auto& res_cpu = std::get<CpuStorage>(result);
         return Storage{gpu::upload_cpu_to_gpu(res_cpu, b_shape)};
     }
 
     // householder_product: fall back to CPU LAPACK
-    Storage linalg_householder_product(const Storage& H, const Storage& tau,
-                                        const Shape& h_shape, Dtype dt) override {
+    Storage linalg_householder_product(const Storage& H,
+                                       const Storage& tau,
+                                       const Shape& h_shape,
+                                       Dtype dt) override {
         const auto& gh = std::get<GpuStorage>(H);
         const auto& gt = std::get<GpuStorage>(tau);
-        auto ch = ::mlx::core::contiguous(*gh.arr); ch.eval();
-        auto ct = ::mlx::core::contiguous(*gt.arr); ct.eval();
+        auto ch = ::mlx::core::contiguous(*gh.arr);
+        ch.eval();
+        auto ct = ::mlx::core::contiguous(*gt.arr);
+        ct.eval();
         auto h_cpu = allocate_aligned_bytes(ch.nbytes(), Device::CPU);
         auto t_cpu = allocate_aligned_bytes(ct.nbytes(), Device::CPU);
         std::memcpy(h_cpu.get(), ch.data<void>(), ch.nbytes());
@@ -1949,8 +1975,8 @@ public:
         const int k = std::min(m, n);
         Shape tau_shape{static_cast<std::int64_t>(k)};
         CpuStorage h_cs{h_cpu, ch.nbytes(), dt}, t_cs{t_cpu, ct.nbytes(), dt};
-        auto result = Dispatcher::for_device(Device::CPU).linalg_householder_product(
-            Storage{h_cs}, Storage{t_cs}, h_shape, dt);
+        auto result = Dispatcher::for_device(Device::CPU)
+                          .linalg_householder_product(Storage{h_cs}, Storage{t_cs}, h_shape, dt);
         Shape q_shape{static_cast<std::int64_t>(m), static_cast<std::int64_t>(k)};
         const auto& res_cpu = std::get<CpuStorage>(result);
         return Storage{gpu::upload_cpu_to_gpu(res_cpu, q_shape)};
@@ -1959,18 +1985,19 @@ public:
     // ldl_factor: fall back to CPU LAPACK
     StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto ca = ::mlx::core::contiguous(*ga.arr); ca.eval();
+        auto ca = ::mlx::core::contiguous(*ga.arr);
+        ca.eval();
         auto a_cpu = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
         std::memcpy(a_cpu.get(), ca.data<void>(), ca.nbytes());
         CpuStorage a_cs{a_cpu, ca.nbytes(), dt};
-        auto [ld_s, piv_s] = Dispatcher::for_device(Device::CPU).linalg_ldl_factor(
-            Storage{a_cs}, shape, dt);
+        auto [ld_s, piv_s] =
+            Dispatcher::for_device(Device::CPU).linalg_ldl_factor(Storage{a_cs}, shape, dt);
         // Re-upload both to GPU
-        const auto& ld_cpu  = std::get<CpuStorage>(ld_s);
+        const auto& ld_cpu = std::get<CpuStorage>(ld_s);
         const auto& piv_cpu = std::get<CpuStorage>(piv_s);
         const int n = static_cast<int>(shape[shape.size() - 1]);
         Shape piv_shape{static_cast<std::int64_t>(n)};
-        Storage ld_gpu  = Storage{gpu::upload_cpu_to_gpu(ld_cpu,  shape)};
+        Storage ld_gpu = Storage{gpu::upload_cpu_to_gpu(ld_cpu, shape)};
         Storage piv_gpu = Storage{gpu::upload_cpu_to_gpu(piv_cpu, piv_shape)};
         return {std::move(ld_gpu), std::move(piv_gpu)};
     }
@@ -1985,23 +2012,23 @@ public:
     // Invalid (out-of-bounds) source elements are zeroed via the mask, so
     // they scatter +0 to position 0 and have no effect on the result.
     Storage nn_fold(const Storage& x,
-                     const Shape& x_shape,
-                     const Shape& out_shape,
-                     const std::vector<int>& kernel_size,
-                     const std::vector<int>& stride,
-                     const std::vector<int>& padding,
-                     const std::vector<int>& dilation,
-                     Dtype dt) override {
+                    const Shape& x_shape,
+                    const Shape& out_shape,
+                    const std::vector<int>& kernel_size,
+                    const std::vector<int>& stride,
+                    const std::vector<int>& padding,
+                    const std::vector<int>& dilation,
+                    Dtype dt) override {
         const auto& gx = std::get<GpuStorage>(x);
 
-        const int N    = static_cast<int>(x_shape[0]);
-        const int CKK  = static_cast<int>(x_shape[1]);
-        const int L    = static_cast<int>(x_shape[2]);
-        const int kH   = kernel_size[0], kW = kernel_size[1];
-        const int sH   = stride[0],      sW = stride[1];
-        const int pH   = padding[0],     pW = padding[1];
-        const int dH   = dilation[0],    dW = dilation[1];
-        const int C    = CKK / (kH * kW);
+        const int N = static_cast<int>(x_shape[0]);
+        const int CKK = static_cast<int>(x_shape[1]);
+        const int L = static_cast<int>(x_shape[2]);
+        const int kH = kernel_size[0], kW = kernel_size[1];
+        const int sH = stride[0], sW = stride[1];
+        const int pH = padding[0], pW = padding[1];
+        const int dH = dilation[0], dW = dilation[1];
+        const int C = CKK / (kH * kW);
         const int outH = static_cast<int>(out_shape[2]);
         const int outW = static_cast<int>(out_shape[3]);
         const int H_pad = outH + 2 * pH;
@@ -2037,15 +2064,12 @@ public:
 
         namespace mx = ::mlx::core;
         // Upload index + mask as small (M,) MLX arrays.
-        mx::array idx_mlx(idx_host.data(),
-                          mx::Shape{static_cast<int>(M)}, mx::int32);
-        mx::array mask_mlx(mask_host.data(),
-                           mx::Shape{static_cast<int>(M)}, mx::float32);
+        mx::array idx_mlx(idx_host.data(), mx::Shape{static_cast<int>(M)}, mx::int32);
+        mx::array mask_mlx(mask_host.data(), mx::Shape{static_cast<int>(M)}, mx::float32);
 
         // x_reshaped: (N, CKK, L) → (N, C, K, L) → (N, C, M).  C is the
         // outer of CKK so this is a pure reshape with no transpose.
-        auto xr = mx::reshape(*gx.arr,
-            mx::Shape{N, C, M});
+        auto xr = mx::reshape(*gx.arr, mx::Shape{N, C, M});
 
         // Mask invalid positions: cast mask to dt to avoid implicit promote.
         auto mask_dt = mx::astype(mask_mlx, gpu::to_mlx_dtype(dt));
@@ -2092,7 +2116,8 @@ public:
     // ---------------------------------------------------------------------
 
 private:
-    bool lstm_metal_supported(const LstmOpts& opts, const std::vector<Storage>& weights,
+    bool lstm_metal_supported(const LstmOpts& opts,
+                              const std::vector<Storage>& weights,
                               Dtype dt) const {
         const int min_w = (opts.proj_size > 0) ? 5 : 4;
         return dt == Dtype::F32 && !opts.bidirectional && opts.num_layers == 1 &&
@@ -2120,13 +2145,13 @@ public:
         // restricted to num_layers == 1; reshape to (B, …) for the
         // per-step recurrence.
         const int Hrec = (P > 0) ? P : H;
-        auto X   = *std::get<GpuStorage>(input).arr;       // (T, B, I)
-        auto h   = mx::reshape(*std::get<GpuStorage>(h0).arr,
-                               mx::Shape{static_cast<SE_>(B), static_cast<SE_>(Hrec)});
-        auto c   = mx::reshape(*std::get<GpuStorage>(c0).arr,
-                               mx::Shape{static_cast<SE_>(B), static_cast<SE_>(H)});
-        auto Wih = *std::get<GpuStorage>(weights[0]).arr;   // (4H, I)
-        auto Whh = *std::get<GpuStorage>(weights[1]).arr;   // (4H, Hrec)
+        auto X = *std::get<GpuStorage>(input).arr;  // (T, B, I)
+        auto h = mx::reshape(*std::get<GpuStorage>(h0).arr,
+                             mx::Shape{static_cast<SE_>(B), static_cast<SE_>(Hrec)});
+        auto c = mx::reshape(*std::get<GpuStorage>(c0).arr,
+                             mx::Shape{static_cast<SE_>(B), static_cast<SE_>(H)});
+        auto Wih = *std::get<GpuStorage>(weights[0]).arr;  // (4H, I)
+        auto Whh = *std::get<GpuStorage>(weights[1]).arr;  // (4H, Hrec)
         auto bias = mx::add(*std::get<GpuStorage>(weights[2]).arr,
                             *std::get<GpuStorage>(weights[3]).arr);  // (4H,)
 
@@ -2136,7 +2161,7 @@ public:
         auto Whh_T = mx::transpose(Whh, std::vector<int>{1, 0});  // (Hrec, 4H)
         std::optional<mx::array> Whr_T;
         if (P > 0) {
-            auto Whr = *std::get<GpuStorage>(weights[4]).arr;  // (P, H)
+            auto Whr = *std::get<GpuStorage>(weights[4]).arr;    // (P, H)
             Whr_T = mx::transpose(Whr, std::vector<int>{1, 0});  // (H, P)
         }
 
@@ -2150,31 +2175,25 @@ public:
 
         using SE = mx::ShapeElem;
         for (int t = 0; t < T; ++t) {
-            auto X_t = mx::slice(X,
-                mx::Shape{static_cast<SE>(t), 0, 0},
-                mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
-                          static_cast<SE>(opts.input_size)});
-            X_t = mx::reshape(X_t, mx::Shape{static_cast<SE>(B),
-                                             static_cast<SE>(opts.input_size)});
+            auto X_t = mx::slice(X, mx::Shape{static_cast<SE>(t), 0, 0},
+                                 mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                           static_cast<SE>(opts.input_size)});
+            X_t = mx::reshape(X_t, mx::Shape{static_cast<SE>(B), static_cast<SE>(opts.input_size)});
 
             // raw = X_t @ W_ih.T + h @ W_hh.T + bias  (B, 4H)
-            auto raw = mx::add(
-                mx::add(mx::matmul(X_t, Wih_T), mx::matmul(h, Whh_T)),
-                bias);
+            auto raw = mx::add(mx::add(mx::matmul(X_t, Wih_T), mx::matmul(h, Whh_T)), bias);
 
             // Slice gates: order matches the reference framework convention
             // (i, f, g, o).
-            auto i_g = mx::sigmoid(mx::slice(
-                raw, mx::Shape{0, 0}, mx::Shape{static_cast<SE>(B), static_cast<SE>(H)}));
-            auto f_g = mx::sigmoid(mx::slice(
-                raw, mx::Shape{0, static_cast<SE>(H)},
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(2 * H)}));
-            auto g_g = mx::tanh(mx::slice(
-                raw, mx::Shape{0, static_cast<SE>(2 * H)},
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(3 * H)}));
-            auto o_g = mx::sigmoid(mx::slice(
-                raw, mx::Shape{0, static_cast<SE>(3 * H)},
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)}));
+            auto i_g = mx::sigmoid(
+                mx::slice(raw, mx::Shape{0, 0}, mx::Shape{static_cast<SE>(B), static_cast<SE>(H)}));
+            auto f_g =
+                mx::sigmoid(mx::slice(raw, mx::Shape{0, static_cast<SE>(H)},
+                                      mx::Shape{static_cast<SE>(B), static_cast<SE>(2 * H)}));
+            auto g_g = mx::tanh(mx::slice(raw, mx::Shape{0, static_cast<SE>(2 * H)},
+                                          mx::Shape{static_cast<SE>(B), static_cast<SE>(3 * H)}));
+            auto o_g = mx::sigmoid(mx::slice(raw, mx::Shape{0, static_cast<SE>(3 * H)},
+                                             mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)}));
 
             auto gates_t = mx::concatenate(std::vector<mx::array>{i_g, f_g, g_g, o_g}, /*axis=*/1);
             gates_steps.push_back(gates_t);
@@ -2184,7 +2203,7 @@ public:
 
             auto h_raw = mx::multiply(o_g, mx::tanh(c));
             if (P > 0) {
-                h = mx::matmul(h_raw, *Whr_T);   // (B, P)
+                h = mx::matmul(h_raw, *Whr_T);  // (B, P)
             } else {
                 h = h_raw;
             }
@@ -2244,13 +2263,13 @@ public:
         const int fH = 4 * H;
         using SE = mx::ShapeElem;
 
-        auto dY  = *std::get<GpuStorage>(grad_output).arr;  // (T, B, Hrec)
+        auto dY = *std::get<GpuStorage>(grad_output).arr;  // (T, B, Hrec)
         // grad_hn / grad_cn / h0 arrive 3-D as (num_layers=1, B, …).
         auto dHn = mx::reshape(*std::get<GpuStorage>(grad_hn).arr,
                                mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
         auto dCn = mx::reshape(*std::get<GpuStorage>(grad_cn).arr,
                                mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
-        auto X   = *std::get<GpuStorage>(input).arr;        // (T, B, I)
+        auto X = *std::get<GpuStorage>(input).arr;  // (T, B, I)
         auto H0arr = mx::reshape(*std::get<GpuStorage>(h0).arr,
                                  mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
         auto Wih = *std::get<GpuStorage>(weights[0]).arr;   // (4H, I)
@@ -2262,16 +2281,16 @@ public:
             Whr_arr = *std::get<GpuStorage>(weights[4]).arr;  // (P, H)
 
         // Accumulators init to zero.
-        auto dWih = mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(I)},
-                              gpu::to_mlx_dtype(dt));
-        auto dWhh = mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(Hrec)},
-                              gpu::to_mlx_dtype(dt));
+        auto dWih =
+            mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(I)}, gpu::to_mlx_dtype(dt));
+        auto dWhh =
+            mx::zeros(mx::Shape{static_cast<SE>(fH), static_cast<SE>(Hrec)}, gpu::to_mlx_dtype(dt));
         auto dBih = mx::zeros(mx::Shape{static_cast<SE>(fH)}, gpu::to_mlx_dtype(dt));
         auto dBhh = dBih;
         std::optional<mx::array> dWhr;
         if (P > 0)
-            dWhr = mx::zeros(mx::Shape{static_cast<SE>(P), static_cast<SE>(H)},
-                             gpu::to_mlx_dtype(dt));
+            dWhr =
+                mx::zeros(mx::Shape{static_cast<SE>(P), static_cast<SE>(H)}, gpu::to_mlx_dtype(dt));
 
         auto dh_next = dHn;  // (B, Hrec)
         auto dc_next = dCn;  // (B, H)
@@ -2283,26 +2302,23 @@ public:
 
         for (int t = T - 1; t >= 0; --t) {
             // Slice this step's saved tensors.
-            auto X_t = mx::reshape(
-                mx::slice(X, mx::Shape{static_cast<SE>(t), 0, 0},
-                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
-                                    static_cast<SE>(I)}),
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(I)});
-            auto gates_t = mx::reshape(
-                mx::slice(Gates, mx::Shape{static_cast<SE>(t), 0, 0},
-                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
-                                    static_cast<SE>(fH)}),
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
-            auto c_t = mx::reshape(
-                mx::slice(Cells, mx::Shape{static_cast<SE>(t + 1), 0, 0},
-                          mx::Shape{static_cast<SE>(t + 2), static_cast<SE>(B),
-                                    static_cast<SE>(H)}),
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
-            auto c_prev = mx::reshape(
-                mx::slice(Cells, mx::Shape{static_cast<SE>(t), 0, 0},
-                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
-                                    static_cast<SE>(H)}),
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+            auto X_t = mx::reshape(mx::slice(X, mx::Shape{static_cast<SE>(t), 0, 0},
+                                             mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                                       static_cast<SE>(I)}),
+                                   mx::Shape{static_cast<SE>(B), static_cast<SE>(I)});
+            auto gates_t =
+                mx::reshape(mx::slice(Gates, mx::Shape{static_cast<SE>(t), 0, 0},
+                                      mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                                static_cast<SE>(fH)}),
+                            mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+            auto c_t = mx::reshape(mx::slice(Cells, mx::Shape{static_cast<SE>(t + 1), 0, 0},
+                                             mx::Shape{static_cast<SE>(t + 2), static_cast<SE>(B),
+                                                       static_cast<SE>(H)}),
+                                   mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
+            auto c_prev = mx::reshape(mx::slice(Cells, mx::Shape{static_cast<SE>(t), 0, 0},
+                                                mx::Shape{static_cast<SE>(t + 1),
+                                                          static_cast<SE>(B), static_cast<SE>(H)}),
+                                      mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
 
             auto i_g = mx::slice(gates_t, mx::Shape{0, 0},
                                  mx::Shape{static_cast<SE>(B), static_cast<SE>(H)});
@@ -2318,14 +2334,13 @@ public:
             // if P > 0.
             mx::array h_prev = H0arr;
             if (t > 0) {
-                auto gates_prev = mx::reshape(
-                    mx::slice(Gates, mx::Shape{static_cast<SE>(t - 1), 0, 0},
-                              mx::Shape{static_cast<SE>(t), static_cast<SE>(B),
-                                        static_cast<SE>(fH)}),
-                    mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
-                auto o_prev = mx::slice(gates_prev,
-                    mx::Shape{0, static_cast<SE>(3 * H)},
-                    mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+                auto gates_prev =
+                    mx::reshape(mx::slice(Gates, mx::Shape{static_cast<SE>(t - 1), 0, 0},
+                                          mx::Shape{static_cast<SE>(t), static_cast<SE>(B),
+                                                    static_cast<SE>(fH)}),
+                                mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
+                auto o_prev = mx::slice(gates_prev, mx::Shape{0, static_cast<SE>(3 * H)},
+                                        mx::Shape{static_cast<SE>(B), static_cast<SE>(fH)});
                 auto h_raw_prev = mx::multiply(o_prev, mx::tanh(c_prev));
                 if (P > 0) {
                     auto Whr_T = mx::transpose(*Whr_arr, std::vector<int>{1, 0});  // (H, P)
@@ -2336,11 +2351,10 @@ public:
             }
 
             // Combine upstream dh_next with this step's slice of dY.
-            auto dy_t = mx::reshape(
-                mx::slice(dY, mx::Shape{static_cast<SE>(t), 0, 0},
-                          mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
-                                    static_cast<SE>(Hrec)}),
-                mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
+            auto dy_t = mx::reshape(mx::slice(dY, mx::Shape{static_cast<SE>(t), 0, 0},
+                                              mx::Shape{static_cast<SE>(t + 1), static_cast<SE>(B),
+                                                        static_cast<SE>(Hrec)}),
+                                    mx::Shape{static_cast<SE>(B), static_cast<SE>(Hrec)});
             auto dh_step = mx::add(dy_t, dh_next);
 
             mx::array dh_raw = dh_step;
@@ -2349,27 +2363,25 @@ public:
                 auto h_raw_t = mx::multiply(o_g, mx::tanh(c_t));
                 // dW_hr += dh_step.T @ h_raw_t   (P × H)
                 dWhr = mx::add(*dWhr,
-                               mx::matmul(mx::transpose(dh_step, std::vector<int>{1, 0}),
-                                          h_raw_t));
+                               mx::matmul(mx::transpose(dh_step, std::vector<int>{1, 0}), h_raw_t));
                 // dh_raw = dh_step @ W_hr  (B × H)
                 dh_raw = mx::matmul(dh_step, *Whr_arr);
             }
 
             // Gate gradients.
             auto tanh_c = mx::tanh(c_t);
-            auto dc_k = mx::add(
-                mx::multiply(mx::multiply(dh_raw, o_g),
-                             mx::subtract(one_f, mx::multiply(tanh_c, tanh_c))),
-                dc_next);
+            auto dc_k = mx::add(mx::multiply(mx::multiply(dh_raw, o_g),
+                                             mx::subtract(one_f, mx::multiply(tanh_c, tanh_c))),
+                                dc_next);
 
             auto d_o = mx::multiply(mx::multiply(dh_raw, tanh_c),
                                     mx::multiply(o_g, mx::subtract(one_f, o_g)));
             auto d_f = mx::multiply(mx::multiply(dc_k, c_prev),
                                     mx::multiply(f_g, mx::subtract(one_f, f_g)));
-            auto d_i = mx::multiply(mx::multiply(dc_k, g_g),
-                                    mx::multiply(i_g, mx::subtract(one_f, i_g)));
-            auto d_g = mx::multiply(mx::multiply(dc_k, i_g),
-                                    mx::subtract(one_f, mx::multiply(g_g, g_g)));
+            auto d_i =
+                mx::multiply(mx::multiply(dc_k, g_g), mx::multiply(i_g, mx::subtract(one_f, i_g)));
+            auto d_g =
+                mx::multiply(mx::multiply(dc_k, i_g), mx::subtract(one_f, mx::multiply(g_g, g_g)));
 
             auto d_gates = mx::concatenate(std::vector<mx::array>{d_i, d_f, d_g, d_o},
                                            /*axis=*/1);  // (B, 4H)
@@ -2381,8 +2393,8 @@ public:
             // dW_ih += d_gates.T @ X_t
             dWih = mx::add(dWih, mx::matmul(mx::transpose(d_gates, std::vector<int>{1, 0}), X_t));
             // dW_hh += d_gates.T @ h_prev
-            dWhh = mx::add(dWhh,
-                           mx::matmul(mx::transpose(d_gates, std::vector<int>{1, 0}), h_prev));
+            dWhh =
+                mx::add(dWhh, mx::matmul(mx::transpose(d_gates, std::vector<int>{1, 0}), h_prev));
             // bias grads accumulate elementwise from each step's d_gates column-sum.
             auto db_step = mx::sum(d_gates, /*axis=*/std::vector<int>{0});
             dBih = mx::add(dBih, db_step);
@@ -2411,14 +2423,14 @@ public:
 
     // embedding_bag: use MLX gather + reduce
     Storage embedding_bag_forward(const Storage& weight,
-                                   const Storage& indices,
-                                   const Storage& offsets,
-                                   const Shape& weight_shape,
-                                   const Shape& indices_shape,
-                                   int mode,
-                                   int padding_idx,
-                                   bool include_last_offset,
-                                   Dtype dt) override {
+                                  const Storage& indices,
+                                  const Storage& offsets,
+                                  const Shape& weight_shape,
+                                  const Shape& indices_shape,
+                                  int mode,
+                                  int padding_idx,
+                                  bool include_last_offset,
+                                  Dtype dt) override {
         const auto& gw = std::get<GpuStorage>(weight);
         const auto& gi = std::get<GpuStorage>(indices);
         const auto& go = std::get<GpuStorage>(offsets);
@@ -2454,25 +2466,25 @@ public:
         auto seg_bc = ::mlx::core::broadcast_to(seg_2d, {n_idx, D});
         std::vector<::mlx::core::array> scatter_idx = {seg_bc};
         auto out = (mode == 2)
-            ? ::mlx::core::scatter_max(base, scatter_idx, emb, std::vector<int>{0, 1})
-            : ::mlx::core::scatter_add(base, scatter_idx, emb, std::vector<int>{0, 1});
+                       ? ::mlx::core::scatter_max(base, scatter_idx, emb, std::vector<int>{0, 1})
+                       : ::mlx::core::scatter_add(base, scatter_idx, emb, std::vector<int>{0, 1});
         if (mode == 1) {  // mean: normalize by bag sizes
             auto bag_sizes = ::mlx::core::zeros({B}, ::mlx::core::float32);
-            auto ones_idx  = ::mlx::core::ones({n_idx}, ::mlx::core::float32);
-            auto seg_1d    = ::mlx::core::reshape(seg_ids, {n_idx});
+            auto ones_idx = ::mlx::core::ones({n_idx}, ::mlx::core::float32);
+            auto seg_1d = ::mlx::core::reshape(seg_ids, {n_idx});
             std::vector<::mlx::core::array> sz_idx = {seg_1d};
             bag_sizes = ::mlx::core::scatter_add(bag_sizes, sz_idx, ones_idx, std::vector<int>{0});
             auto bag_sizes_2d = ::mlx::core::reshape(bag_sizes, {B, 1});
             auto bag_sizes_bc = ::mlx::core::broadcast_to(bag_sizes_2d, {B, D});
-            out = ::mlx::core::divide(out, ::mlx::core::maximum(bag_sizes_bc,
-                ::mlx::core::full({B, D}, 1.0f, ::mlx::core::float32)));
+            out = ::mlx::core::divide(
+                out, ::mlx::core::maximum(bag_sizes_bc,
+                                          ::mlx::core::full({B, D}, 1.0f, ::mlx::core::float32)));
         }
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
     // ── astype ────────────────────────────────────────────────────────────────
-    Storage astype(const Storage& a, const Shape& shape,
-                   Dtype /*src_dt*/, Dtype dst_dt) override {
+    Storage astype(const Storage& a, const Shape& shape, Dtype /*src_dt*/, Dtype dst_dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto result = ::mlx::core::astype(*ga.arr, gpu::to_mlx_dtype(dst_dt));
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
@@ -2480,15 +2492,16 @@ public:
 
     // ── flip ──────────────────────────────────────────────────────────────────
     // MLX has no built-in flip; implement via take with reversed indices per dim.
-    Storage flip(const Storage& a, const Shape& shape,
-                 const std::vector<int>& dims, Dtype dt) override {
+    Storage
+    flip(const Storage& a, const Shape& shape, const std::vector<int>& dims, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto arr = ::mlx::core::contiguous(*ga.arr);
         for (int d : dims) {
             const int n = static_cast<int>(shape[d]);
             // Build reversed-index array [n-1, n-2, ..., 0].
             std::vector<int> idx_vec(n);
-            for (int i = 0; i < n; ++i) idx_vec[i] = n - 1 - i;
+            for (int i = 0; i < n; ++i)
+                idx_vec[i] = n - 1 - i;
             auto idx = ::mlx::core::array(idx_vec.data(), {n}, ::mlx::core::int32);
             arr = ::mlx::core::take(arr, idx, d);
         }
@@ -2496,31 +2509,36 @@ public:
     }
 
     // ── masked_select ─────────────────────────────────────────────────────────
-    Storage masked_select_count(const Storage& mask,
-                                const Shape& shape, Dtype dt) override {
+    Storage masked_select_count(const Storage& mask, const Shape& shape, Dtype dt) override {
         const auto& gm = std::get<GpuStorage>(mask);
-        auto cm = ::mlx::core::contiguous(*gm.arr); cm.eval();
+        auto cm = ::mlx::core::contiguous(*gm.arr);
+        cm.eval();
         auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
         std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
         CpuStorage m_cs{cpu_m, cm.nbytes(), dt};
-        return Dispatcher::for_device(Device::CPU).masked_select_count(
-            Storage{m_cs}, shape, dt);
+        return Dispatcher::for_device(Device::CPU).masked_select_count(Storage{m_cs}, shape, dt);
     }
-    Storage masked_select(const Storage& a, const Storage& mask,
-                           const Shape& a_shape, const Shape& mask_shape,
-                           std::int64_t n_true, Dtype dt) override {
+    Storage masked_select(const Storage& a,
+                          const Storage& mask,
+                          const Shape& a_shape,
+                          const Shape& mask_shape,
+                          std::int64_t n_true,
+                          Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gm = std::get<GpuStorage>(mask);
-        auto ca = ::mlx::core::contiguous(*ga.arr); ca.eval();
-        auto cm = ::mlx::core::contiguous(*gm.arr); cm.eval();
+        auto ca = ::mlx::core::contiguous(*ga.arr);
+        ca.eval();
+        auto cm = ::mlx::core::contiguous(*gm.arr);
+        cm.eval();
         auto cpu_a = allocate_aligned_bytes(ca.nbytes(), Device::CPU);
         auto cpu_m = allocate_aligned_bytes(cm.nbytes(), Device::CPU);
         std::memcpy(cpu_a.get(), ca.data<void>(), ca.nbytes());
         std::memcpy(cpu_m.get(), cm.data<void>(), cm.nbytes());
         CpuStorage a_cs{cpu_a, ca.nbytes(), dt};
         CpuStorage m_cs{cpu_m, cm.nbytes(), Dtype::Bool};
-        auto result = Dispatcher::for_device(Device::CPU).masked_select(
-            Storage{a_cs}, Storage{m_cs}, a_shape, mask_shape, n_true, dt);
+        auto result =
+            Dispatcher::for_device(Device::CPU)
+                .masked_select(Storage{a_cs}, Storage{m_cs}, a_shape, mask_shape, n_true, dt);
         const auto& res_cpu = std::get<CpuStorage>(result);
         Shape out_shape{n_true};
         return Storage{gpu::upload_cpu_to_gpu(res_cpu, out_shape)};
@@ -2528,32 +2546,33 @@ public:
 
     // ── ctc_loss ──────────────────────────────────────────────────────────────
     Storage ctc_loss_forward(const Storage& log_probs,
-                              const Storage& targets,
-                              const Storage& input_lengths,
-                              const Storage& target_lengths,
-                              const Shape& lp_shape,
-                              int blank,
-                              bool zero_infinity,
-                              Dtype dt) override {
+                             const Storage& targets,
+                             const Storage& input_lengths,
+                             const Storage& target_lengths,
+                             const Shape& lp_shape,
+                             int blank,
+                             bool zero_infinity,
+                             Dtype dt) override {
         // Download all tensors to CPU for the DP algorithm.
         auto dl = [](const Storage& s) -> CpuStorage {
             const auto& g = std::get<GpuStorage>(s);
-            auto c = ::mlx::core::contiguous(*g.arr); c.eval();
+            auto c = ::mlx::core::contiguous(*g.arr);
+            c.eval();
             auto p = allocate_aligned_bytes(c.nbytes(), Device::CPU);
             std::memcpy(p.get(), c.data<void>(), c.nbytes());
             return CpuStorage{p, c.nbytes(), Dtype::F32};  // dtype set by caller
         };
-        auto lp_cpu  = dl(log_probs);
+        auto lp_cpu = dl(log_probs);
         auto tgt_cpu = dl(targets);
-        auto il_cpu  = dl(input_lengths);
-        auto tl_cpu  = dl(target_lengths);
-        lp_cpu.dtype  = dt;
+        auto il_cpu = dl(input_lengths);
+        auto tl_cpu = dl(target_lengths);
+        lp_cpu.dtype = dt;
         tgt_cpu.dtype = Dtype::I32;
-        il_cpu.dtype  = Dtype::I32;
-        tl_cpu.dtype  = Dtype::I32;
-        auto result = Dispatcher::for_device(Device::CPU).ctc_loss_forward(
-            Storage{lp_cpu}, Storage{tgt_cpu}, Storage{il_cpu}, Storage{tl_cpu},
-            lp_shape, blank, zero_infinity, dt);
+        il_cpu.dtype = Dtype::I32;
+        tl_cpu.dtype = Dtype::I32;
+        auto result = Dispatcher::for_device(Device::CPU)
+                          .ctc_loss_forward(Storage{lp_cpu}, Storage{tgt_cpu}, Storage{il_cpu},
+                                            Storage{tl_cpu}, lp_shape, blank, zero_infinity, dt);
         const auto& res_cpu = std::get<CpuStorage>(result);
         const int N = static_cast<int>(lp_shape[1]);
         Shape out_shape{static_cast<std::int64_t>(N)};

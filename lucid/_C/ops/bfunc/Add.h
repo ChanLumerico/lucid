@@ -52,8 +52,9 @@ public:
 
     // Graph-mode gradient: da = grad_out, db = grad_out (identity; BinaryKernel
     // handles broadcast reduction back to input shapes).
-    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
-        const TensorImplPtr& grad_out, const TensorImplPtr& /*a*/, const TensorImplPtr& /*b*/) {
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& /*a*/,
+                                                              const TensorImplPtr& /*b*/) {
         return {grad_out, grad_out};
     }
 };

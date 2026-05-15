@@ -31,9 +31,8 @@ namespace {
 // Build the per-query count of "sorted entries on the truthy side of v" via
 // broadcasting + comparison + reduction.  The output has the same shape as
 // ``values`` with dtype I64.
-TensorImplPtr count_compare(const TensorImplPtr& sorted_1d,
-                             const TensorImplPtr& values,
-                             bool less_or_equal) {
+TensorImplPtr
+count_compare(const TensorImplPtr& sorted_1d, const TensorImplPtr& values, bool less_or_equal) {
     const auto& vs = values->shape();
     const std::int64_t n = sorted_1d->shape()[0];
 
@@ -53,8 +52,8 @@ TensorImplPtr count_compare(const TensorImplPtr& sorted_1d,
     full.push_back(n);
     auto sorted_full = broadcast_to_op(sorted_b, full);
     auto values_full = broadcast_to_op(values_b, full);
-    auto cmp = less_or_equal ? less_equal_op(sorted_full, values_full)
-                              : less_op(sorted_full, values_full);
+    auto cmp =
+        less_or_equal ? less_equal_op(sorted_full, values_full) : less_op(sorted_full, values_full);
 
     // Reduction kernel only supports float types — cast bool → F32 for the
     // count, then back to I64 to match the standard ``searchsorted`` dtype.
@@ -66,9 +65,8 @@ TensorImplPtr count_compare(const TensorImplPtr& sorted_1d,
 
 }  // namespace
 
-TensorImplPtr searchsorted_op(const TensorImplPtr& sorted_1d,
-                              const TensorImplPtr& values,
-                              bool right) {
+TensorImplPtr
+searchsorted_op(const TensorImplPtr& sorted_1d, const TensorImplPtr& values, bool right) {
     if (!sorted_1d || !values)
         ErrorBuilder("searchsorted").fail("null input");
     if (sorted_1d->shape().size() != 1)
@@ -79,9 +77,8 @@ TensorImplPtr searchsorted_op(const TensorImplPtr& sorted_1d,
     return count_compare(sorted_1d, values, /*less_or_equal=*/right);
 }
 
-TensorImplPtr bucketize_op(const TensorImplPtr& values,
-                           const TensorImplPtr& boundaries,
-                           bool right) {
+TensorImplPtr
+bucketize_op(const TensorImplPtr& values, const TensorImplPtr& boundaries, bool right) {
     return searchsorted_op(boundaries, values, right);
 }
 

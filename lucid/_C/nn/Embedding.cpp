@@ -165,12 +165,12 @@ LUCID_REGISTER_OP(RotaryPosEmbeddingBackward)
 // ── EmbeddingBag ─────────────────────────────────────────────────────────────
 
 TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
-                                const TensorImplPtr& indices,
-                                const TensorImplPtr& offsets,
-                                int mode,
-                                int padding_idx,
-                                bool include_last_offset) {
-    Validator::input(weight,  "embedding_bag.weight").non_null();
+                               const TensorImplPtr& indices,
+                               const TensorImplPtr& offsets,
+                               int mode,
+                               int padding_idx,
+                               bool include_last_offset) {
+    Validator::input(weight, "embedding_bag.weight").non_null();
     Validator::input(indices, "embedding_bag.indices").non_null();
     Validator::input(offsets, "embedding_bag.offsets").non_null();
 
@@ -180,13 +180,12 @@ TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
     OpScopeFull scope{"embedding_bag", weight->device(), weight->dtype(), out_shape};
 
     auto& be = backend::Dispatcher::for_device(weight->device());
-    Storage out = be.embedding_bag_forward(
-        weight->storage(), indices->storage(), offsets->storage(),
-        weight->shape(), indices->shape(),
-        mode, padding_idx, include_last_offset, weight->dtype());
+    Storage out = be.embedding_bag_forward(weight->storage(), indices->storage(),
+                                           offsets->storage(), weight->shape(), indices->shape(),
+                                           mode, padding_idx, include_last_offset, weight->dtype());
 
-    return std::make_shared<TensorImpl>(
-        std::move(out), out_shape, weight->dtype(), weight->device(), false);
+    return std::make_shared<TensorImpl>(std::move(out), out_shape, weight->dtype(),
+                                        weight->device(), false);
 }
 
 }  // namespace lucid

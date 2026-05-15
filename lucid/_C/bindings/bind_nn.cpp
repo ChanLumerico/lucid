@@ -71,9 +71,7 @@ namespace lucid::bindings {
 //
 // ``cout_axis`` is 0 for ``conv*`` (weight: (C_out, C_in/g, K...))
 // and 1 for ``conv_transpose*`` (weight: (C_in, C_out, K...)).
-static TensorImplPtr conv_bias_or_zero(const TensorImplPtr& W,
-                                       py::object bias_obj,
-                                       int cout_axis) {
+static TensorImplPtr conv_bias_or_zero(const TensorImplPtr& W, py::object bias_obj, int cout_axis) {
     if (!bias_obj.is_none()) {
         return bias_obj.cast<TensorImplPtr>();
     }
@@ -84,8 +82,8 @@ static TensorImplPtr conv_bias_or_zero(const TensorImplPtr& W,
     Shape s{cout};
     auto& be = backend::Dispatcher::for_device(W->device());
     Storage zero_s = be.zeros(s, W->dtype());
-    return std::make_shared<TensorImpl>(std::move(zero_s), std::move(s),
-                                        W->dtype(), W->device(), false);
+    return std::make_shared<TensorImpl>(std::move(zero_s), std::move(s), W->dtype(), W->device(),
+                                        false);
 }
 
 // Registers all nn ops on the sub-module `m` (engine.nn).
@@ -181,35 +179,35 @@ void register_nn(py::module_& m) {
         [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int dl, int groups) {
             return conv1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0), sl, pl, dl, groups);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1,
-        py::arg("pad_l") = 0, py::arg("dilation_l") = 1, py::arg("groups") = 1,
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1, py::arg("pad_l") = 0,
+        py::arg("dilation_l") = 1, py::arg("groups") = 1,
         "1D convolution. x:(B,C_in,L), W:(C_out,C_in/G,KL), b:(C_out,) or None. "
         "Backward returns (dx, dW, db).");
 
     m.def(
         "conv2d",
-        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw,
-           int dh, int dw, int groups) {
-            return conv2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0),
-                             sh, sw, ph, pw, dh, dw, groups);
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw, int dh,
+           int dw, int groups) {
+            return conv2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0), sh, sw, ph, pw, dh, dw,
+                             groups);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1,
-        py::arg("stride_w") = 1, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
-        py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1, py::arg("stride_w") = 1,
+        py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("dilation_h") = 1,
+        py::arg("dilation_w") = 1, py::arg("groups") = 1,
         "2D convolution. x:(B,C_in,H,W), W:(C_out,C_in/G,KH,KW), b:(C_out,) or None. "
         "Backward returns (dx, dW, db).");
 
     m.def(
         "conv3d",
-        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw,
-           int pd, int ph, int pw, int dd, int dh, int dw, int groups) {
-            return conv3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0),
-                             sd, sh, sw, pd, ph, pw, dd, dh, dw, groups);
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw, int pd, int ph,
+           int pw, int dd, int dh, int dw, int groups) {
+            return conv3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/0), sd, sh, sw, pd, ph, pw,
+                             dd, dh, dw, groups);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1,
-        py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_d") = 0,
-        py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("dilation_d") = 1,
-        py::arg("dilation_h") = 1, py::arg("dilation_w") = 1, py::arg("groups") = 1,
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1, py::arg("stride_h") = 1,
+        py::arg("stride_w") = 1, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
+        py::arg("dilation_d") = 1, py::arg("dilation_h") = 1, py::arg("dilation_w") = 1,
+        py::arg("groups") = 1,
         "3D convolution. x:(B,C_in,D,H,W), W:(C_out,C_in/G,KD,KH,KW), b:(C_out,) or None. "
         "Backward returns (dx, dW, db).");
 
@@ -224,35 +222,34 @@ void register_nn(py::module_& m) {
     m.def(
         "conv_transpose1d",
         [](TensorImplPtr x, TensorImplPtr W, py::object b, int sl, int pl, int opadl) {
-            return conv_transpose1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
-                                       sl, pl, opadl);
+            return conv_transpose1d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sl, pl,
+                                       opadl);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"),
-        py::arg("stride_l") = 1, py::arg("pad_l") = 0, py::arg("opad_l") = 0,
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_l") = 1, py::arg("pad_l") = 0,
+        py::arg("opad_l") = 0,
         "1D transposed convolution. x:(B,C_in,L), W:(C_in,C_out,KL), b:(C_out,) or None.");
     m.def(
         "conv_transpose2d",
         [](TensorImplPtr x, TensorImplPtr W, py::object b, int sh, int sw, int ph, int pw,
            int opadh, int opadw) {
-            return conv_transpose2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
-                                       sh, sw, ph, pw, opadh, opadw);
+            return conv_transpose2d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sh, sw, ph,
+                                       pw, opadh, opadw);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"),
-        py::arg("stride_h") = 1, py::arg("stride_w") = 1, py::arg("pad_h") = 0,
-        py::arg("pad_w") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_h") = 1, py::arg("stride_w") = 1,
+        py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
         "2D transposed convolution. x:(B,C_in,H,W), W:(C_in,C_out,KH,KW), b:(C_out,) or None.");
     m.def(
         "conv_transpose3d",
-        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw,
-           int pd, int ph, int pw, int opadd, int opadh, int opadw) {
-            return conv_transpose3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1),
-                                       sd, sh, sw, pd, ph, pw, opadd, opadh, opadw);
+        [](TensorImplPtr x, TensorImplPtr W, py::object b, int sd, int sh, int sw, int pd, int ph,
+           int pw, int opadd, int opadh, int opadw) {
+            return conv_transpose3d_op(x, W, conv_bias_or_zero(W, b, /*cout_axis=*/1), sd, sh, sw,
+                                       pd, ph, pw, opadd, opadh, opadw);
         },
-        py::arg("x"), py::arg("W"), py::arg("b"),
-        py::arg("stride_d") = 1, py::arg("stride_h") = 1, py::arg("stride_w") = 1,
-        py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0, py::arg("opad_d") = 0,
-        py::arg("opad_h") = 0, py::arg("opad_w") = 0,
-        "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW), b:(C_out,) or None.");
+        py::arg("x"), py::arg("W"), py::arg("b"), py::arg("stride_d") = 1, py::arg("stride_h") = 1,
+        py::arg("stride_w") = 1, py::arg("pad_d") = 0, py::arg("pad_h") = 0, py::arg("pad_w") = 0,
+        py::arg("opad_d") = 0, py::arg("opad_h") = 0, py::arg("opad_w") = 0,
+        "3D transposed convolution. x:(B,C_in,D,H,W), W:(C_in,C_out,KD,KH,KW), b:(C_out,) or "
+        "None.");
 
     // Adaptive pooling: output size is specified directly; the kernel and
     // stride are computed internally assuming uniform spatial partitioning.
@@ -428,8 +425,7 @@ void register_nn(py::module_& m) {
             return fold_op(x, output_size, kernel_size, stride, padding, dilation);
         },
         py::arg("x"), py::arg("output_size"), py::arg("kernel_size"),
-        py::arg("stride") = std::vector<int>{1, 1},
-        py::arg("padding") = std::vector<int>{0, 0},
+        py::arg("stride") = std::vector<int>{1, 1}, py::arg("padding") = std::vector<int>{0, 0},
         py::arg("dilation") = std::vector<int>{1, 1},
         "col2im: inverse of unfold. (N, C*kH*kW, L) → (N, C, outH, outW).\n"
         "CPU: scatter-add loop.  GPU: native MLX scatter_add_axis with "
@@ -440,25 +436,25 @@ void register_nn(py::module_& m) {
     m.def(
         "ctc_loss",
         [](const TensorImplPtr& log_probs, const TensorImplPtr& targets,
-           const TensorImplPtr& input_lengths, const TensorImplPtr& target_lengths,
-           int blank, bool zero_infinity) {
-            return ctc_loss_op(log_probs, targets, input_lengths, target_lengths,
-                               blank, zero_infinity);
+           const TensorImplPtr& input_lengths, const TensorImplPtr& target_lengths, int blank,
+           bool zero_infinity) {
+            return ctc_loss_op(log_probs, targets, input_lengths, target_lengths, blank,
+                               zero_infinity);
         },
-        py::arg("log_probs"), py::arg("targets"),
-        py::arg("input_lengths"), py::arg("target_lengths"),
-        py::arg("blank") = 0, py::arg("zero_infinity") = false,
+        py::arg("log_probs"), py::arg("targets"), py::arg("input_lengths"),
+        py::arg("target_lengths"), py::arg("blank") = 0, py::arg("zero_infinity") = false,
         "CTC loss. log_probs:(T,N,C), targets:(N*S,) int32, lengths:(N,) int32.\n"
         "Returns per-sample losses (N,). CPU: forward DP in log-domain. GPU: CPU fallback.");
 
     m.def(
         "embedding_bag",
-        [](const TensorImplPtr& weight, const TensorImplPtr& indices,
-           const TensorImplPtr& offsets, int mode, int padding_idx, bool include_last_offset) {
-            return embedding_bag_op(weight, indices, offsets, mode, padding_idx, include_last_offset);
+        [](const TensorImplPtr& weight, const TensorImplPtr& indices, const TensorImplPtr& offsets,
+           int mode, int padding_idx, bool include_last_offset) {
+            return embedding_bag_op(weight, indices, offsets, mode, padding_idx,
+                                    include_last_offset);
         },
-        py::arg("weight"), py::arg("indices"), py::arg("offsets"),
-        py::arg("mode") = 0, py::arg("padding_idx") = -1, py::arg("include_last_offset") = false,
+        py::arg("weight"), py::arg("indices"), py::arg("offsets"), py::arg("mode") = 0,
+        py::arg("padding_idx") = -1, py::arg("include_last_offset") = false,
         "Pooled embedding lookup with offset-delimited bags.\n"
         "mode: 0=sum, 1=mean, 2=max.\n"
         "CPU: gather+reduce loop.  GPU: MLX gather+scatter_add/scatter_max.");

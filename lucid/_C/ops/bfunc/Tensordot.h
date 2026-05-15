@@ -25,4 +25,4 @@ LUCID_API TensorImplPtr tensordot_op(const TensorImplPtr& a,
                                      std::vector<int> axes_a,
                                      std::vector<int> axes_b);
 
-}
+}  // namespace lucid

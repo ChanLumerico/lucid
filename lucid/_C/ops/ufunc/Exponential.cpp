@@ -29,8 +29,9 @@ Storage ExpBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, saved_output_, n, dtype_, device_);
 }
 
-TensorImplPtr ExpBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+TensorImplPtr ExpBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr&,
+                                             const TensorImplPtr& out) {
     // dx = out * g  (out = exp(x) was saved as the forward output)
     return mul_op(g, out);
 }
@@ -49,8 +50,9 @@ Storage LogBackward::grad_formula(const Storage& g) {
     return divide_storages(g, saved_inputs_[0], n, dtype_, device_);
 }
 
-TensorImplPtr LogBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+TensorImplPtr LogBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
     return div_op(g, x);
 }
 
@@ -91,8 +93,9 @@ Storage SqrtBackward::grad_formula(const Storage& g) {
     return divide_storages(half_g, saved_output_, n, dtype_, device_);
 }
 
-TensorImplPtr SqrtBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+TensorImplPtr SqrtBackward::grad_formula_impl(const TensorImplPtr& g,
+                                              const TensorImplPtr&,
+                                              const TensorImplPtr& out) {
     // dx = g / (2*y) where y = sqrt(x) is the saved output
     return div_op(g, add_op(out, out));
 }
@@ -143,8 +146,9 @@ Storage ErfBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, coeff, n, dtype_, device_);
 }
 
-TensorImplPtr ErfBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+TensorImplPtr ErfBackward::grad_formula_impl(const TensorImplPtr& g,
+                                             const TensorImplPtr& x,
+                                             const TensorImplPtr&) {
     // dx = (2/sqrt(pi)) * exp(-x^2) * g
     auto neg_x2 = neg_op(mul_op(x, x));
     auto ex2 = exp_op(neg_x2);
@@ -176,11 +180,12 @@ Storage ErfinvBackward::grad_formula(const Storage& g) {
     return multiply_storages(g, coeff, n, dtype_, device_);
 }
 
-TensorImplPtr ErfinvBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out) {
+TensorImplPtr ErfinvBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                const TensorImplPtr&,
+                                                const TensorImplPtr& out) {
     // dx = sqrt(pi)/2 * exp(out^2) * g
     auto out2 = mul_op(out, out);
-    auto ey2  = exp_op(out2);
+    auto ey2 = exp_op(out2);
     auto coeff = mul_op(full_like_op(ey2, kSqrtPiOver2), ey2);
     return mul_op(g, coeff);
 }

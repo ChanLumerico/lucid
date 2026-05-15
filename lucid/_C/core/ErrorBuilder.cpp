@@ -18,7 +18,7 @@ namespace {
 // Thread-local call stack of operation names.
 thread_local std::vector<std::string> tl_stack_;
 
-}
+}  // namespace
 
 void ErrorContext::push(std::string op_name) {
     tl_stack_.emplace_back(std::move(op_name));

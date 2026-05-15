@@ -106,8 +106,8 @@ TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
 // that broadcasting (sum_g expanded back to input shape) is handled correctly.
 std::vector<Storage> LogSoftmaxBackward::apply(Storage grad_out) {
     const Shape& shape = input_shapes_[0];
-    return {backend::Dispatcher::for_device(device_)
-                .log_softmax_backward(saved_output_, grad_out, shape, axis_, dtype_)};
+    return {backend::Dispatcher::for_device(device_).log_softmax_backward(saved_output_, grad_out,
+                                                                          shape, axis_, dtype_)};
 }
 
 TensorImplPtr log_softmax_op(const TensorImplPtr& a, int axis) {

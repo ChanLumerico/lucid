@@ -36,8 +36,10 @@ TensorImplPtr movedim_op(const TensorImplPtr& a,
     std::vector<int> dst;
     src.reserve(source.size());
     dst.reserve(destination.size());
-    for (int s : source) src.push_back(wrap(s));
-    for (int d : destination) dst.push_back(wrap(d));
+    for (int s : source)
+        src.push_back(wrap(s));
+    for (int d : destination)
+        dst.push_back(wrap(d));
 
     // Reject duplicates — they would make the permutation ill-defined.
     std::vector<int> sorted_src = src;
@@ -52,10 +54,12 @@ TensorImplPtr movedim_op(const TensorImplPtr& a,
     // Axes not mentioned in ``source`` keep their relative order; they fill
     // the destination slots not claimed by ``dst``.
     std::vector<bool> moved(static_cast<std::size_t>(ndim), false);
-    for (int s : src) moved[static_cast<std::size_t>(s)] = true;
+    for (int s : src)
+        moved[static_cast<std::size_t>(s)] = true;
     std::vector<int> rest;
     for (int i = 0; i < ndim; ++i)
-        if (!moved[static_cast<std::size_t>(i)]) rest.push_back(i);
+        if (!moved[static_cast<std::size_t>(i)])
+            rest.push_back(i);
 
     std::vector<int> perm(static_cast<std::size_t>(ndim), -1);
     for (std::size_t i = 0; i < src.size(); ++i)
@@ -77,15 +81,19 @@ TensorImplPtr unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes) 
         ErrorBuilder("unflatten").index_error("dim out of range");
 
     std::int64_t product = 1;
-    for (auto s : sizes) product *= s;
+    for (auto s : sizes)
+        product *= s;
     if (product != a->shape()[static_cast<std::size_t>(d)])
         ErrorBuilder("unflatten").fail("sizes do not multiply to dim length");
 
     Shape new_shape;
     new_shape.reserve(static_cast<std::size_t>(ndim) - 1 + sizes.size());
-    for (int i = 0; i < d; ++i) new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
-    for (auto s : sizes) new_shape.push_back(s);
-    for (int i = d + 1; i < ndim; ++i) new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
+    for (int i = 0; i < d; ++i)
+        new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
+    for (auto s : sizes)
+        new_shape.push_back(s);
+    for (int i = d + 1; i < ndim; ++i)
+        new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
     return reshape_op(a, new_shape);
 }
 

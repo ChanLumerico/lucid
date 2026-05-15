@@ -42,8 +42,9 @@ public:
 
     // Graph-mode: da = grad_out * b, db = grad_out * a.
     // BinaryKernel passes broadcast-expanded a and b so shapes already match.
-    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
-        const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b);
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
 };
 
 // Public entry point: compute a * b with full broadcasting and autograd support.

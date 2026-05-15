@@ -32,10 +32,10 @@ template <int N>
 class LUCID_API BatchNormNdBackward : public FuncOp<BatchNormNdBackward<N>, 3> {
 public:
     static const OpSchema schema_v1;
-    Storage saved_mean_;           // Per-channel mean, shape (C,).
-    Storage saved_rstd_;           // Per-channel reciprocal std, shape (C,).
-    int B_ = 0, C_ = 0;           // Batch and channel counts.
-    int S_[N > 0 ? N : 1];        // Spatial sizes (guard against N==0).
+    Storage saved_mean_;    // Per-channel mean, shape (C,).
+    Storage saved_rstd_;    // Per-channel reciprocal std, shape (C,).
+    int B_ = 0, C_ = 0;     // Batch and channel counts.
+    int S_[N > 0 ? N : 1];  // Spatial sizes (guard against N==0).
 
     // Run the training-mode forward pass.
     // x     – input of shape (B, C, S0, ..., S_{N-1}).

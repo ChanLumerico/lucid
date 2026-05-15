@@ -197,10 +197,10 @@ LUCID_API TensorImplPtr huber_loss_op(const TensorImplPtr& input,
 // input_lengths / target_lengths: (N,) int32.
 // Returns per-sample losses (N,) — apply reduction in Python.
 LUCID_API TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs,
-                                     const TensorImplPtr& targets,
-                                     const TensorImplPtr& input_lengths,
-                                     const TensorImplPtr& target_lengths,
-                                     int blank,
-                                     bool zero_infinity);
+                                    const TensorImplPtr& targets,
+                                    const TensorImplPtr& input_lengths,
+                                    const TensorImplPtr& target_lengths,
+                                    int blank,
+                                    bool zero_infinity);
 
 }  // namespace lucid

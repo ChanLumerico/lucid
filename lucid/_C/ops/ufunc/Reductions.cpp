@@ -13,11 +13,6 @@
 
 #include "Reductions.h"
 
-#include "Exponential.h"
-#include "Var.h"
-#include "../bfunc/Div.h"
-#include "../gfunc/Gfunc.h"
-
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -30,6 +25,10 @@
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpRegistry.h"
+#include "../bfunc/Div.h"
+#include "../gfunc/Gfunc.h"
+#include "Exponential.h"
+#include "Var.h"
 
 namespace lucid {
 
@@ -310,9 +309,7 @@ GpuStorage ProdBackward::gpu_kernel(
 // handles the gradient automatically via the chain rule:
 //   std = sqrt(var(x, axes, keepdims))
 // No new backward node is required; SqrtBackward and VarBackward cover it.
-TensorImplPtr std_op(const TensorImplPtr& a,
-                     const std::vector<int>& axes,
-                     bool keepdims) {
+TensorImplPtr std_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
     return sqrt_op(var_op(a, axes, keepdims));
 }
 

@@ -49,24 +49,24 @@ inline const ::mlx::core::Device kMlxFftStream{::mlx::core::Device::cpu};
 inline Dtype dtype_for_complex_fft(Dtype in) {
     if (in == Dtype::C64 || in == Dtype::F32 || in == Dtype::F16)
         return Dtype::C64;
-    ErrorBuilder("fft").not_implemented(
-        "fftn/ifftn requires F16/F32/C64 input, got " + std::string(dtype_name(in)));
+    ErrorBuilder("fft").not_implemented("fftn/ifftn requires F16/F32/C64 input, got " +
+                                        std::string(dtype_name(in)));
     return Dtype::C64;
 }
 
 inline Dtype dtype_for_rfft(Dtype in) {
     if (in == Dtype::F32 || in == Dtype::F16)
         return Dtype::C64;
-    ErrorBuilder("rfftn").not_implemented(
-        "rfftn requires F16/F32 input, got " + std::string(dtype_name(in)));
+    ErrorBuilder("rfftn").not_implemented("rfftn requires F16/F32 input, got " +
+                                          std::string(dtype_name(in)));
     return Dtype::C64;
 }
 
 inline Dtype dtype_for_irfft(Dtype in) {
     if (in == Dtype::C64)
         return Dtype::F32;
-    ErrorBuilder("irfftn").not_implemented(
-        "irfftn requires C64 input, got " + std::string(dtype_name(in)));
+    ErrorBuilder("irfftn").not_implemented("irfftn requires C64 input, got " +
+                                           std::string(dtype_name(in)));
     return Dtype::F32;
 }
 
@@ -179,10 +179,8 @@ inline ::mlx::core::Shape mlx_n_from_lucid(const std::vector<std::int64_t>& n) {
 // Convert an MLX array result into a Lucid Storage on the requested device.
 //   GPU device: wrap the MLX array directly (no copy).
 //   CPU device: download to a CpuStorage (one device-to-host copy).
-inline Storage finalise_result(::mlx::core::array&& out,
-                               Dtype out_dtype,
-                               const Shape& out_shape,
-                               Device dev) {
+inline Storage
+finalise_result(::mlx::core::array&& out, Dtype out_dtype, const Shape& out_shape, Device dev) {
     if (dev == Device::GPU)
         return Storage{::lucid::gpu::wrap_mlx_array(::mlx::core::contiguous(out), out_dtype)};
     auto wrapped = ::lucid::gpu::wrap_mlx_array(::mlx::core::contiguous(out), out_dtype);

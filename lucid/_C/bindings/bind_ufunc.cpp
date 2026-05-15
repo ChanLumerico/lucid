@@ -23,6 +23,7 @@
 #include "../core/TensorImpl.h"
 #include "../ops/ufunc/Activation.h"
 #include "../ops/ufunc/Arith.h"
+#include "../ops/ufunc/Astype.h"
 #include "../ops/ufunc/CubeRoot.h"
 #include "../ops/ufunc/Discrete.h"
 #include "../ops/ufunc/Exponential.h"
@@ -30,14 +31,12 @@
 #include "../ops/ufunc/Inplace.h"
 #include "../ops/ufunc/Predicate.h"
 #include "../ops/ufunc/Reductions.h"
-#include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/ScalarParam.h"
 #include "../ops/ufunc/Scan.h"
 #include "../ops/ufunc/Softmax.h"
 #include "../ops/ufunc/Trace.h"
 #include "../ops/ufunc/Transpose.h"
 #include "../ops/ufunc/Trig.h"
-#include "../ops/ufunc/Astype.h"
 #include "../ops/ufunc/Var.h"
 #include "BindingGen.h"
 
@@ -93,7 +92,7 @@ void register_ufunc(py::module_& m) {
 
     // softmax is registered manually because its extra `dim` argument is
     // not captured by the plain bind_unary<> signature.
-    m.def("softmax",     &softmax_op,     py::arg("a"), py::arg("dim") = -1);
+    m.def("softmax", &softmax_op, py::arg("a"), py::arg("dim") = -1);
     m.def("log_softmax", &log_softmax_op, py::arg("a"), py::arg("dim") = -1);
 
     // Scalar-parameter ops: base ** exp, base ** a, and clamp.
@@ -166,16 +165,13 @@ void register_ufunc(py::module_& m) {
     m.def("clip_", &clip_inplace_op, py::arg("a"), py::arg("min"), py::arg("max"));
 
     // Floating-point predicate ops (output is always bool).
-    m.def("any",     &any_op,     py::arg("a"));
-    m.def("all",     &all_op,     py::arg("a"));
-    m.def("isinf",   &isinf_op,   py::arg("a"));
-    m.def("isnan",   &isnan_op,   py::arg("a"));
-    m.def("isfinite",&isfinite_op,py::arg("a"));
-    m.def("nan_to_num", &nan_to_num_op,
-          py::arg("a"),
-          py::arg("nan")    = 0.0,
-          py::arg("posinf") = 3.4028234663852886e+38,
-          py::arg("neginf") = -3.4028234663852886e+38);
+    m.def("any", &any_op, py::arg("a"));
+    m.def("all", &all_op, py::arg("a"));
+    m.def("isinf", &isinf_op, py::arg("a"));
+    m.def("isnan", &isnan_op, py::arg("a"));
+    m.def("isfinite", &isfinite_op, py::arg("a"));
+    m.def("nan_to_num", &nan_to_num_op, py::arg("a"), py::arg("nan") = 0.0,
+          py::arg("posinf") = 3.4028234663852886e+38, py::arg("neginf") = -3.4028234663852886e+38);
 
     // Dtype cast: element-wise conversion to a different dtype.
     // CPU: static_cast loop.  GPU: mlx::core::astype.

@@ -10,13 +10,13 @@
 #include <cstring>
 #include <variant>
 
+#include <mlx/array.h>
+#include <mlx/ops.h>
+
 #include "../core/Allocator.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
-
-#include <mlx/array.h>
-#include <mlx/ops.h>
 
 namespace lucid {
 

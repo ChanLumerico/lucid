@@ -35,7 +35,7 @@ class LUCID_API ScaledDotProductAttentionBackward
     : public FuncOp<ScaledDotProductAttentionBackward, 3> {
 public:
     static const OpSchema schema_v1;
-    double scale_ = 1.0;     // Dot-product scale factor (usually 1/sqrt(d_k)).
+    double scale_ = 1.0;  // Dot-product scale factor (usually 1/sqrt(d_k)).
     Shape orig_q_shape_;
     Shape orig_k_shape_;
     Shape orig_v_shape_;

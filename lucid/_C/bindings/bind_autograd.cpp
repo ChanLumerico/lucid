@@ -81,8 +81,7 @@ void register_autograd(py::module_& m) {
     // activations when this is enabled.
     m.def("is_mutation_on_saved_allowed", &lucid::is_mutation_on_saved_allowed,
           "Return whether the version-mismatch check is currently disabled.");
-    m.def("set_mutation_on_saved_allowed", &lucid::set_mutation_on_saved_allowed,
-          py::arg("allow"),
+    m.def("set_mutation_on_saved_allowed", &lucid::set_mutation_on_saved_allowed, py::arg("allow"),
           "Enable or disable the autograd version-mismatch check.  When "
           "True, in-place mutations of saved tensors no longer raise "
           "VersionMismatch — gradients become the user's responsibility.");

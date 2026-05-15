@@ -43,12 +43,12 @@
 
 // Deletes the copy constructor and copy-assignment operator for Type.
 // Use in the public section of non-copyable classes.
-#define LUCID_NOCOPY(Type)                                                                        \
-    Type(const Type&) = delete;                                                                   \
+#define LUCID_NOCOPY(Type)                                                                         \
+    Type(const Type&) = delete;                                                                    \
     Type& operator=(const Type&) = delete
 
 // Deletes the move constructor and move-assignment operator for Type.
 // Use alongside LUCID_NOCOPY for fully immovable types (e.g., mutex holders).
-#define LUCID_NOMOVE(Type)                                                                        \
-    Type(Type&&) = delete;                                                                        \
+#define LUCID_NOMOVE(Type)                                                                         \
+    Type(Type&&) = delete;                                                                         \
     Type& operator=(Type&&) = delete

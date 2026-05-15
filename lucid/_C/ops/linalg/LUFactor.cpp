@@ -27,8 +27,7 @@ std::vector<TensorImplPtr> lu_factor_op(const TensorImplPtr& a) {
     pivot_shape.push_back(n);
 
     auto [lu_storage, ipiv_storage] =
-        backend::Dispatcher::for_device(a->device()).linalg_lu_factor(
-            a->storage(), sh, a->dtype());
+        backend::Dispatcher::for_device(a->device()).linalg_lu_factor(a->storage(), sh, a->dtype());
 
     auto lu = fresh(std::move(lu_storage), sh, a->dtype(), a->device());
     auto pivots = fresh(std::move(ipiv_storage), pivot_shape, Dtype::I32, a->device());

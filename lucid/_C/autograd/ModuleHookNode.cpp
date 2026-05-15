@@ -58,7 +58,8 @@ py::tuple make_input_tuple(const std::shared_ptr<ModuleBackwardHookState>& state
     }
     for (std::size_t edge_idx = 0; edge_idx < state->input_arg_indices.size(); ++edge_idx) {
         const auto arg_idx = state->input_arg_indices[edge_idx];
-        tup[arg_idx] = storage_to_python(state->grad_inputs[edge_idx], state->input_metas[edge_idx]);
+        tup[arg_idx] =
+            storage_to_python(state->grad_inputs[edge_idx], state->input_metas[edge_idx]);
     }
     return tup;
 }
@@ -161,7 +162,8 @@ std::vector<Storage> ModuleOutputHookNode::apply_barrier() {
         apply_tuple_result_to_outputs(result, state_);
         state_->pre_hooks_ran = true;
     }
-    if (state_->input_arg_indices.empty() && !state_->full_hooks_ran && !state_->full_runner.is_none()) {
+    if (state_->input_arg_indices.empty() && !state_->full_hooks_ran &&
+        !state_->full_runner.is_none()) {
         auto result = state_->full_runner(py::tuple(0), make_output_tuple(state_));
         (void)result;
         state_->full_hooks_ran = true;
@@ -215,8 +217,8 @@ void register_module_hook_nodes(py::module_& m) {
     m.def(
         "_create_module_backward_hook_state",
         [](std::size_t n_inputs, py::object pre_runner, py::object full_runner) {
-            return std::make_shared<ModuleBackwardHookState>(
-                n_inputs, std::move(pre_runner), std::move(full_runner));
+            return std::make_shared<ModuleBackwardHookState>(n_inputs, std::move(pre_runner),
+                                                             std::move(full_runner));
         },
         py::arg("n_inputs"), py::arg("pre_runner"), py::arg("full_runner"));
 

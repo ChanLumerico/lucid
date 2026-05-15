@@ -17,8 +17,7 @@
 
 namespace lucid {
 
-LUCID_API TensorImplPtr
-histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi);
+LUCID_API TensorImplPtr histc_op(const TensorImplPtr& a, std::int64_t bins, double lo, double hi);
 
 LUCID_API TensorImplPtr cartesian_prod_op(const std::vector<TensorImplPtr>& tensors);
 

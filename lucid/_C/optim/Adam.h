@@ -74,8 +74,8 @@ private:
     // Global step counter; bias correction factors are functions of this.
     std::int64_t step_count_;
 
-    std::vector<Storage> m_; // Per-parameter first-moment estimates.
-    std::vector<Storage> v_; // Per-parameter second-moment estimates.
+    std::vector<Storage> m_;  // Per-parameter first-moment estimates.
+    std::vector<Storage> v_;  // Per-parameter second-moment estimates.
 };
 
 // AdamW optimizer (Loshchilov & Hutter, 2017).

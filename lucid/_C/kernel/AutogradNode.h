@@ -21,5 +21,5 @@ namespace kernel {
 template <class Derived, std::size_t N_IN>
 using AutogradNode = ::lucid::AutogradNode<Derived, N_IN>;
 
-}
+}  // namespace kernel
 }  // namespace lucid

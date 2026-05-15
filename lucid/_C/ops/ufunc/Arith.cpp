@@ -22,8 +22,8 @@ Storage NegBackward::grad_formula(const Storage& g) {
     return negate_storage(g, shape_numel(out_shape_), dtype_, device_);
 }
 
-TensorImplPtr NegBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&) {
+TensorImplPtr
+NegBackward::grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&) {
     return neg_op(g);
 }
 
@@ -76,8 +76,9 @@ Storage ReciprocalBackward::grad_formula(const Storage& g) {
     return negate_storage(g_div, n, dtype_, device_);
 }
 
-TensorImplPtr ReciprocalBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+TensorImplPtr ReciprocalBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                    const TensorImplPtr& x,
+                                                    const TensorImplPtr&) {
     // dx = -g / x^2
     auto x_sq = mul_op(x, x);
     return neg_op(div_op(g, x_sq));
@@ -99,8 +100,9 @@ Storage SquareBackward::grad_formula(const Storage& g) {
     return multiply_storages(two_x, g, n, dtype_, device_);
 }
 
-TensorImplPtr SquareBackward::grad_formula_impl(
-    const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&) {
+TensorImplPtr SquareBackward::grad_formula_impl(const TensorImplPtr& g,
+                                                const TensorImplPtr& x,
+                                                const TensorImplPtr&) {
     // dx = 2*x * g = (x+x) * g
     return mul_op(add_op(x, x), g);
 }

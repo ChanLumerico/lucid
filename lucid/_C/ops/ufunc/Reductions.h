@@ -160,8 +160,6 @@ LUCID_API TensorImplPtr min_op(const TensorImplPtr& a, const std::vector<int>& a
 
 // Standard deviation: std(x) = sqrt(var(x, axes, keepdims)).
 // Gradient flows through the sqrt and var backward nodes automatically.
-LUCID_API TensorImplPtr std_op(const TensorImplPtr& a,
-                               const std::vector<int>& axes,
-                               bool keepdims);
+LUCID_API TensorImplPtr std_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims);
 
 }  // namespace lucid

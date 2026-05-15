@@ -9,9 +9,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../core/Dtype.h"
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
-#include "../core/Dtype.h"
 #include "../ops/gfunc/Gfunc.h"
 
 namespace py = pybind11;
@@ -81,23 +81,21 @@ void register_gfunc(py::module_& m) {
 
     m.def("diag", &diag_op, py::arg("v"), py::arg("k") = 0);
 
-    m.def("logspace", &logspace_op,
-          py::arg("start"), py::arg("stop"), py::arg("num") = 50,
-          py::arg("base") = 10.0,
-          py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
+    m.def("logspace", &logspace_op, py::arg("start"), py::arg("stop"), py::arg("num") = 50,
+          py::arg("base") = 10.0, py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
           py::arg("requires_grad") = false);
 
-    m.def("scatter_add", &scatter_add_op,
-          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
-    m.def("scatter_amax", &scatter_amax_op,
-          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
-    m.def("scatter_amin", &scatter_amin_op,
-          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
-    m.def("scatter_prod", &scatter_prod_op,
-          py::arg("base"), py::arg("indices"), py::arg("src"), py::arg("dim"));
+    m.def("scatter_add", &scatter_add_op, py::arg("base"), py::arg("indices"), py::arg("src"),
+          py::arg("dim"));
+    m.def("scatter_amax", &scatter_amax_op, py::arg("base"), py::arg("indices"), py::arg("src"),
+          py::arg("dim"));
+    m.def("scatter_amin", &scatter_amin_op, py::arg("base"), py::arg("indices"), py::arg("src"),
+          py::arg("dim"));
+    m.def("scatter_prod", &scatter_prod_op, py::arg("base"), py::arg("indices"), py::arg("src"),
+          py::arg("dim"));
 
-    m.def("unfold_dim", &unfold_dim_op,
-          py::arg("a"), py::arg("dim"), py::arg("size"), py::arg("step"));
+    m.def("unfold_dim", &unfold_dim_op, py::arg("a"), py::arg("dim"), py::arg("size"),
+          py::arg("step"));
 
     // _like ops infer shape and device from an existing tensor; only the
     // requires_grad flag may be overridden.

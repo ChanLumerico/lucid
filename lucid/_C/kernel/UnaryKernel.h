@@ -86,12 +86,13 @@ public:
 
     // Default graph-mode gradient formula: throws NotImplementedError.
     // Override in concrete Derived classes to support create_graph=True.
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& /*g*/, const TensorImplPtr& /*a*/,
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& /*g*/,
+                                    const TensorImplPtr& /*a*/,
                                     const TensorImplPtr& /*out*/) {
-        throw std::runtime_error(
-            "create_graph=True is not supported for op '" +
-            std::string(Derived::schema_v1.name) + "'. "
-            "Implement grad_formula_impl() to add support.");
+        throw std::runtime_error("create_graph=True is not supported for op '" +
+                                 std::string(Derived::schema_v1.name) +
+                                 "'. "
+                                 "Implement grad_formula_impl() to add support.");
     }
 
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
@@ -208,27 +209,29 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
 
     auto& a = this->saved_impl_inputs_[0];
     if (!a) {
-        throw std::runtime_error(
-            "apply_for_graph: saved_impl_inputs_[0] not set for op '" +
-            std::string(Derived::schema_v1.name) + "'.");
+        throw std::runtime_error("apply_for_graph: saved_impl_inputs_[0] not set for op '" +
+                                 std::string(Derived::schema_v1.name) + "'.");
     }
 
-    auto dx = static_cast<Derived*>(this)->grad_formula_impl(
-        grad_out, a, this->saved_impl_output_);
+    auto dx = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a, this->saved_impl_output_);
 
     // Reduce back to input shape if needed (same as apply()).
-    if (dx->shape() == this->input_shapes_[0]) return {dx};
+    if (dx->shape() == this->input_shapes_[0])
+        return {dx};
     std::vector<int> axes;
     const int ng = static_cast<int>(dx->shape().size());
     const int nt = static_cast<int>(this->input_shapes_[0].size());
-    for (int i = 0; i < ng - nt; ++i) axes.push_back(i);
+    for (int i = 0; i < ng - nt; ++i)
+        axes.push_back(i);
     for (int i = 0; i < nt; ++i) {
         if (this->input_shapes_[0][static_cast<std::size_t>(i)] == 1 &&
             dx->shape()[static_cast<std::size_t>(i + ng - nt)] != 1)
             axes.push_back(i + ng - nt);
     }
-    if (!axes.empty()) dx = sum_op(dx, axes, false);
-    if (dx->shape() != this->input_shapes_[0]) dx = reshape_op(dx, this->input_shapes_[0]);
+    if (!axes.empty())
+        dx = sum_op(dx, axes, false);
+    if (dx->shape() != this->input_shapes_[0])
+        dx = reshape_op(dx, this->input_shapes_[0]);
     return {dx};
 }
 

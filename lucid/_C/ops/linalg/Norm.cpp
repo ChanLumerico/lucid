@@ -125,7 +125,7 @@ Shape reduced_shape(const Shape& sh, const std::vector<int>& axes, bool keepdims
     if (axes.empty()) {
         if (keepdims)
             return Shape(sh.size(), 1);  // keep all dims as size-1
-        return Shape{};                   // global reduction to scalar
+        return Shape{};                  // global reduction to scalar
     }
     // Mark which dimensions are reduced.
     std::vector<bool> mask(sh.size(), false);

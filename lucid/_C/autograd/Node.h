@@ -87,7 +87,8 @@ public:
     // lacks graph support rather than producing a silent wrong result.
     virtual std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) {
         throw std::runtime_error(
-            "create_graph=True is not yet supported for op '" + std::string(node_name()) + "'. "
+            "create_graph=True is not yet supported for op '" + std::string(node_name()) +
+            "'. "
             "Open an issue or use retain_graph=True with multiple backward calls instead.");
     }
 
@@ -98,9 +99,7 @@ public:
     // Return weak_ptrs to each input TensorImpl so Engine can accumulate
     // gradients into non-leaf tensors that have retain_grad=true.
     // Default: empty (AccumulateGrad has no inputs to retain).
-    virtual std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const {
-        return {};
-    }
+    virtual std::vector<std::weak_ptr<TensorImpl>> retainable_inputs() const { return {}; }
 
     // Assert that no saved input tensor has been modified in-place since the
     // forward pass.  The default is a no-op; AutogradNode overrides this to

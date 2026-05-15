@@ -80,8 +80,7 @@ TensorImplPtr index_select_op(const TensorImplPtr& a, int dim, const TensorImplP
     return gather_op(a, idx_full, d);
 }
 
-TensorImplPtr
-narrow_op(const TensorImplPtr& a, int dim, std::int64_t start, std::int64_t length) {
+TensorImplPtr narrow_op(const TensorImplPtr& a, int dim, std::int64_t start, std::int64_t length) {
     if (!a)
         ErrorBuilder("narrow").fail("null input");
     const int d = wrap_dim(a, dim, "narrow");
@@ -123,8 +122,7 @@ TensorImplPtr scatter_op(const TensorImplPtr& base,
     return scatter_add_op(base, indices, delta, d);
 }
 
-TensorImplPtr
-kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim) {
+TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim) {
     if (!a)
         ErrorBuilder("kthvalue").fail("null input");
     const int d = wrap_dim(a, dim, "kthvalue");
@@ -143,7 +141,8 @@ kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim) {
     Storage idx_storage = backend::Dispatcher::for_device(a->device()).zeros(idx_shape, Dtype::I64);
 
     std::size_t numel = 1;
-    for (auto s : idx_shape) numel *= static_cast<std::size_t>(s);
+    for (auto s : idx_shape)
+        numel *= static_cast<std::size_t>(s);
     std::vector<std::int64_t> host(numel, k - 1);
     if (a->device() == Device::CPU) {
         auto& cs = std::get<CpuStorage>(idx_storage);
@@ -158,8 +157,8 @@ kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim) {
         idx_storage =
             backend::Dispatcher::for_device(Device::GPU).from_cpu(std::move(stage), idx_shape);
     }
-    auto idx_tensor = std::make_shared<TensorImpl>(
-        std::move(idx_storage), idx_shape, Dtype::I64, a->device(), false);
+    auto idx_tensor = std::make_shared<TensorImpl>(std::move(idx_storage), idx_shape, Dtype::I64,
+                                                   a->device(), false);
 
     auto val = gather_op(sorted, idx_tensor, d);
     if (keepdim)

@@ -185,8 +185,7 @@ TensorImplPtr cumprod_op(const TensorImplPtr& a, int axis) {
 namespace {
 
 // Dispatch cummax or cummin forward via the backend.
-TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis,
-                                bool is_max, const char* name) {
+TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis, bool is_max, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
     const Dtype dt = a->dtype();
     const Device device = a->device();
@@ -209,8 +208,7 @@ TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis,
 // Generic segmented right-to-left accumulation.
 // Template parameter IsMax selects the is_new_extreme condition.
 template <bool IsMax, typename T>
-void scan_ext_backward_loop(const T* dy, const T* y,
-                            T* dx, const Shape& shape, int axis) {
+void scan_ext_backward_loop(const T* dy, const T* y, T* dx, const Shape& shape, int axis) {
     const int ndim = static_cast<int>(shape.size());
     std::size_t outer = 1, inner = 1;
     for (int d = 0; d < axis; ++d)
@@ -246,46 +244,42 @@ void scan_ext_backward_loop(const T* dy, const T* y,
     }
 }
 
-Storage cummax_backward_cpu(const Storage& grad, const Storage& out,
-                             const Shape& shape, int axis, Dtype dt) {
+Storage cummax_backward_cpu(
+    const Storage& grad, const Storage& out, const Shape& shape, int axis, Dtype dt) {
     const auto& g_cs = std::get<CpuStorage>(grad);
     const auto& o_cs = std::get<CpuStorage>(out);
     std::size_t nb = g_cs.nbytes;
     auto ptr = allocate_aligned_bytes(nb, Device::CPU);
 
     if (dt == Dtype::F32)
-        scan_ext_backward_loop<true>(
-            reinterpret_cast<const float*>(g_cs.ptr.get()),
-            reinterpret_cast<const float*>(o_cs.ptr.get()),
-            reinterpret_cast<float*>(ptr.get()), shape, axis);
+        scan_ext_backward_loop<true>(reinterpret_cast<const float*>(g_cs.ptr.get()),
+                                     reinterpret_cast<const float*>(o_cs.ptr.get()),
+                                     reinterpret_cast<float*>(ptr.get()), shape, axis);
     else if (dt == Dtype::F64)
-        scan_ext_backward_loop<true>(
-            reinterpret_cast<const double*>(g_cs.ptr.get()),
-            reinterpret_cast<const double*>(o_cs.ptr.get()),
-            reinterpret_cast<double*>(ptr.get()), shape, axis);
+        scan_ext_backward_loop<true>(reinterpret_cast<const double*>(g_cs.ptr.get()),
+                                     reinterpret_cast<const double*>(o_cs.ptr.get()),
+                                     reinterpret_cast<double*>(ptr.get()), shape, axis);
     else
         ErrorBuilder("cummax_backward").not_implemented("dtype not supported");
 
     return Storage{CpuStorage{ptr, nb, dt}};
 }
 
-Storage cummin_backward_cpu(const Storage& grad, const Storage& out,
-                             const Shape& shape, int axis, Dtype dt) {
+Storage cummin_backward_cpu(
+    const Storage& grad, const Storage& out, const Shape& shape, int axis, Dtype dt) {
     const auto& g_cs = std::get<CpuStorage>(grad);
     const auto& o_cs = std::get<CpuStorage>(out);
     std::size_t nb = g_cs.nbytes;
     auto ptr = allocate_aligned_bytes(nb, Device::CPU);
 
     if (dt == Dtype::F32)
-        scan_ext_backward_loop<false>(
-            reinterpret_cast<const float*>(g_cs.ptr.get()),
-            reinterpret_cast<const float*>(o_cs.ptr.get()),
-            reinterpret_cast<float*>(ptr.get()), shape, axis);
+        scan_ext_backward_loop<false>(reinterpret_cast<const float*>(g_cs.ptr.get()),
+                                      reinterpret_cast<const float*>(o_cs.ptr.get()),
+                                      reinterpret_cast<float*>(ptr.get()), shape, axis);
     else if (dt == Dtype::F64)
-        scan_ext_backward_loop<false>(
-            reinterpret_cast<const double*>(g_cs.ptr.get()),
-            reinterpret_cast<const double*>(o_cs.ptr.get()),
-            reinterpret_cast<double*>(ptr.get()), shape, axis);
+        scan_ext_backward_loop<false>(reinterpret_cast<const double*>(g_cs.ptr.get()),
+                                      reinterpret_cast<const double*>(o_cs.ptr.get()),
+                                      reinterpret_cast<double*>(ptr.get()), shape, axis);
     else
         ErrorBuilder("cummin_backward").not_implemented("dtype not supported");
 
@@ -319,16 +313,14 @@ public:
 
             if (dtype_ == Dtype::F32) {
                 std::vector<float> dx(n, 0.0f);
-                scan_ext_backward_loop<true>(
-                    g_cont.data<float>(), y_cont.data<float>(),
-                    dx.data(), input_shape_, axis_);
+                scan_ext_backward_loop<true>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
+                                             input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
-                scan_ext_backward_loop<true>(
-                    g_cont.data<double>(), y_cont.data<double>(),
-                    dx.data(), input_shape_, axis_);
+                scan_ext_backward_loop<true>(g_cont.data<double>(), y_cont.data<double>(),
+                                             dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
             } else {
@@ -367,16 +359,14 @@ public:
 
             if (dtype_ == Dtype::F32) {
                 std::vector<float> dx(n, 0.0f);
-                scan_ext_backward_loop<false>(
-                    g_cont.data<float>(), y_cont.data<float>(),
-                    dx.data(), input_shape_, axis_);
+                scan_ext_backward_loop<false>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
+                                              input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
-                scan_ext_backward_loop<false>(
-                    g_cont.data<double>(), y_cont.data<double>(),
-                    dx.data(), input_shape_, axis_);
+                scan_ext_backward_loop<false>(g_cont.data<double>(), y_cont.data<double>(),
+                                              dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
                 return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
             } else {

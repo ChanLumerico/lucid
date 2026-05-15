@@ -16,9 +16,9 @@
 namespace lucid {
 
 TensorImplPtr solve_triangular_op(const TensorImplPtr& a,
-                                   const TensorImplPtr& b,
-                                   bool upper,
-                                   bool unitriangular) {
+                                  const TensorImplPtr& b,
+                                  bool upper,
+                                  bool unitriangular) {
     using namespace linalg_detail;
     Validator::input(a, "solve_triangular.a").float_only().square_2d();
     Validator::input(b, "solve_triangular.b").float_only();
@@ -27,9 +27,9 @@ TensorImplPtr solve_triangular_op(const TensorImplPtr& a,
     if (a->device() != b->device())
         ErrorBuilder("solve_triangular").fail("A and b must be on the same device");
 
-    auto out_storage = backend::Dispatcher::for_device(a->device()).linalg_solve_triangular(
-        a->storage(), b->storage(), a->shape(), b->shape(),
-        upper, unitriangular, a->dtype());
+    auto out_storage = backend::Dispatcher::for_device(a->device())
+                           .linalg_solve_triangular(a->storage(), b->storage(), a->shape(),
+                                                    b->shape(), upper, unitriangular, a->dtype());
 
     return fresh(std::move(out_storage), b->shape(), b->dtype(), b->device());
 }

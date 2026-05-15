@@ -23,16 +23,15 @@ using ::lucid::helpers::fresh;
 // complex input (``real``, ``imag``).
 inline void require_complex(Dtype dt, const char* op) {
     if (dt != Dtype::C64)
-        ErrorBuilder(op).not_implemented(
-            "expected C64 input, got " + std::string(dtype_name(dt)));
+        ErrorBuilder(op).not_implemented("expected C64 input, got " + std::string(dtype_name(dt)));
 }
 
 // Reject any dtype that isn't real (F32 / F16 / F64) — used by
 // ``complex_combine`` which builds C64 from two real tensors.
 inline void require_real_float(Dtype dt, const char* op) {
     if (dt != Dtype::F32 && dt != Dtype::F16 && dt != Dtype::F64)
-        ErrorBuilder(op).not_implemented(
-            "expected real floating dtype, got " + std::string(dtype_name(dt)));
+        ErrorBuilder(op).not_implemented("expected real floating dtype, got " +
+                                         std::string(dtype_name(dt)));
 }
 
 }  // namespace lucid::complex_detail

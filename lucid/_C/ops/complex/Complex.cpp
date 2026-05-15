@@ -21,13 +21,11 @@ TensorImplPtr complex_op(const TensorImplPtr& re, const TensorImplPtr& im) {
     complex_detail::require_real_float(re->dtype(), "complex.re");
     complex_detail::require_real_float(im->dtype(), "complex.im");
     if (re->shape() != im->shape())
-        ErrorBuilder("complex").shape_mismatch(
-            re->shape(), im->shape(),
-            "real and imag must have the same shape");
+        ErrorBuilder("complex").shape_mismatch(re->shape(), im->shape(),
+                                               "real and imag must have the same shape");
     if (re->device() != im->device())
-        ErrorBuilder("complex").device_mismatch(
-            re->device(), im->device(),
-            "real and imag must live on the same device");
+        ErrorBuilder("complex").device_mismatch(re->device(), im->device(),
+                                                "real and imag must live on the same device");
 
     OpScopeFull scope{"complex", re->device(), re->dtype(), re->shape()};
 

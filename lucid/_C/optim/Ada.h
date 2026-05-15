@@ -52,8 +52,8 @@ protected:
 
 private:
     double lr_, beta1_, beta2_, eps_, weight_decay_;
-    std::vector<Storage> m_; // Per-parameter first-moment estimates.
-    std::vector<Storage> u_; // Per-parameter infinity-norm estimates.
+    std::vector<Storage> m_;  // Per-parameter first-moment estimates.
+    std::vector<Storage> u_;  // Per-parameter infinity-norm estimates.
     std::int64_t step_count_;
 };
 

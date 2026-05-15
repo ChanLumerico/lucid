@@ -16,4 +16,4 @@ namespace lucid {
 // yielding a [M×N] matrix.  Autograd is supported via OuterBackward.
 LUCID_API TensorImplPtr outer_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
-}
+}  // namespace lucid

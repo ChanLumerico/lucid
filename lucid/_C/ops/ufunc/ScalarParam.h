@@ -38,7 +38,8 @@ public:
     Storage grad_formula(const Storage& g);
 
     // Graph-mode gradient: d/dx(x^e) = e * x^(e-1) * g
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& a,
+    TensorImplPtr grad_formula_impl(const TensorImplPtr& g,
+                                    const TensorImplPtr& a,
                                     const TensorImplPtr& /*out*/) {
         extern TensorImplPtr pow_scalar_op(const TensorImplPtr&, double);
         extern TensorImplPtr mul_op(const TensorImplPtr&, const TensorImplPtr&);
@@ -46,10 +47,10 @@ public:
         auto a_pow_em1 = pow_scalar_op(a, exp_ - 1.0);
         // e * x^(e-1) via mul_scalar_storage
         const std::size_t n = static_cast<std::size_t>(a_pow_em1->numel());
-        Storage scaled = mul_scalar_storage(a_pow_em1->storage(), exp_, n,
-                                            a_pow_em1->dtype(), a_pow_em1->device());
-        auto scaled_impl = std::make_shared<TensorImpl>(
-            std::move(scaled), a->shape(), a->dtype(), a->device(), false);
+        Storage scaled = mul_scalar_storage(a_pow_em1->storage(), exp_, n, a_pow_em1->dtype(),
+                                            a_pow_em1->device());
+        auto scaled_impl = std::make_shared<TensorImpl>(std::move(scaled), a->shape(), a->dtype(),
+                                                        a->device(), false);
         return mul_op(scaled_impl, g);
     }
 };

@@ -31,7 +31,7 @@ public:
     static const OpSchema schema_v1;
     Storage saved_mean_;             // Per-(batch, group) mean, shape (B*G,).
     Storage saved_rstd_;             // Per-(batch, group) reciprocal std.
-    int B_ = 0, C_ = 0, G_ = 0;     // Batch, channel, and group counts.
+    int B_ = 0, C_ = 0, G_ = 0;      // Batch, channel, and group counts.
     std::vector<int> spatial_dims_;  // Per-axis spatial sizes.
 
     // Run the forward pass.

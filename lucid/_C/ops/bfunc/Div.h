@@ -40,8 +40,9 @@ public:
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 
     // Graph-mode: da = grad_out / b,  db = -grad_out * a / b².
-    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
-        const TensorImplPtr& grad_out, const TensorImplPtr& a, const TensorImplPtr& b);
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
+                                                              const TensorImplPtr& a,
+                                                              const TensorImplPtr& b);
 };
 
 // Public entry point: compute a / b with full broadcasting and autograd support.

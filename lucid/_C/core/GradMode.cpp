@@ -12,7 +12,7 @@ namespace {
 // One bool per thread.  No synchronisation needed because reads and writes
 // only ever occur on the owning thread.
 thread_local bool g_grad_enabled = true;
-}
+}  // namespace
 
 bool GradMode::is_enabled() {
     return g_grad_enabled;

@@ -96,8 +96,8 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root)
 // autograd graph.  Gradient accumulation at shared nodes is done via add_op
 // (which creates a new backward node) rather than raw storage +=.
 static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
-                                TensorImplPtr grad_seed,
-                                bool retain_graph) {
+                               TensorImplPtr grad_seed,
+                               bool retain_graph) {
     if (!root->grad_fn()) {
         // Leaf shortcut: store the seed directly as grad_impl.
         if (root->requires_grad()) {
@@ -114,7 +114,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
 
     for (const auto& node : order) {
         auto it = pending.find(node.get());
-        if (it == pending.end()) continue;
+        if (it == pending.end())
+            continue;
         TensorImplPtr grad_in = std::move(it->second);
         pending.erase(it);
 
@@ -124,12 +125,14 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         // graph mode — gives the user a clear, actionable message.
         const auto input_grads = node->apply_for_graph(grad_in);
 
-        if (!retain_graph) node->release_saved();
+        if (!retain_graph)
+            node->release_saved();
 
         const auto& edges = node->next_edges();
         for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
             auto next = edges[i].node;
-            if (!next || !input_grads[i]) continue;
+            if (!next || !input_grads[i])
+                continue;
             auto pit = pending.find(next.get());
             if (pit == pending.end()) {
                 pending.emplace(next.get(), input_grads[i]);
@@ -141,7 +144,8 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         }
     }
 
-    if (!retain_graph) root->clear_grad_fn();
+    if (!retain_graph)
+        root->clear_grad_fn();
 }
 
 void Engine::backward(const std::shared_ptr<TensorImpl>& root,
@@ -162,8 +166,8 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         if (storage_is_empty(seed)) {
             seed = make_ones_storage(root->shape(), root->dtype(), root->device());
         }
-        auto seed_impl = std::make_shared<TensorImpl>(
-            std::move(seed), root->shape(), root->dtype(), root->device(), false);
+        auto seed_impl = std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
+                                                      root->device(), false);
         backward_for_graph(root, std::move(seed_impl), /*retain_graph=*/true);
         return;
     }
@@ -257,8 +261,10 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
                 if (auto t = retain_ins[i].lock()) {
                     if (t->retains_grad() && !t->is_leaf()) {
                         auto& g = t->mutable_grad_storage();
-                        if (!g.has_value()) g = input_grads[i];
-                        else accumulate_into(*g, input_grads[i]);
+                        if (!g.has_value())
+                            g = input_grads[i];
+                        else
+                            accumulate_into(*g, input_grads[i]);
                     }
                 }
             }

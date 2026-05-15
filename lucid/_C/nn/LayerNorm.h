@@ -29,8 +29,8 @@ namespace lucid {
 class LUCID_API LayerNormBackward : public FuncOp<LayerNormBackward, 3> {
 public:
     static const OpSchema schema_v1;
-    Storage saved_mean_;   // Shape (outer,), one mean per normalized slice.
-    Storage saved_rstd_;   // Shape (outer,), reciprocal std per slice.
+    Storage saved_mean_;     // Shape (outer,), one mean per normalized slice.
+    Storage saved_rstd_;     // Shape (outer,), reciprocal std per slice.
     std::size_t outer_ = 0;  // Product of all leading (non-normalized) dims.
     std::size_t N_ = 0;      // Product of all normalized (trailing) dims.
 

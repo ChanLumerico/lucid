@@ -81,21 +81,19 @@ lapack_eig_f64(const double* A, int n, double* wr, double* wi, double* VR, int* 
 // LU_out receives the packed LU matrix (n×n, row-major); ipiv_out receives
 // the 1-based pivot indices (n int32_t values).
 // Uses sgetrf_ / dgetrf_.
-LUCID_INTERNAL void lapack_lu_factor_f32(const float* A, int n, float* LU_out,
-                                         int* ipiv_out, int* info);
-LUCID_INTERNAL void lapack_lu_factor_f64(const double* A, int n, double* LU_out,
-                                         int* ipiv_out, int* info);
+LUCID_INTERNAL void
+lapack_lu_factor_f32(const float* A, int n, float* LU_out, int* ipiv_out, int* info);
+LUCID_INTERNAL void
+lapack_lu_factor_f64(const double* A, int n, double* LU_out, int* ipiv_out, int* info);
 
 // Triangular solve: solve A X = B where A is triangular; B is overwritten
 // with X.  upper selects upper (true) or lower (false) triangular; unit
 // indicates a unit-diagonal (implicit 1 on diagonal).
 // Uses strtrs_ / dtrtrs_.
-LUCID_INTERNAL void lapack_solve_triangular_f32(const float* A, float* B, int n,
-                                                int nrhs, bool upper, bool unit,
-                                                int* info);
-LUCID_INTERNAL void lapack_solve_triangular_f64(const double* A, double* B, int n,
-                                                int nrhs, bool upper, bool unit,
-                                                int* info);
+LUCID_INTERNAL void lapack_solve_triangular_f32(
+    const float* A, float* B, int n, int nrhs, bool upper, bool unit, int* info);
+LUCID_INTERNAL void lapack_solve_triangular_f64(
+    const double* A, double* B, int n, int nrhs, bool upper, bool unit, int* info);
 
 // Least-squares: min ||AX - B||_2 using sgels_/dgels_.
 // A is m×n (col-major on input, overwritten); B is m×nrhs, overwritten with X.
@@ -104,23 +102,23 @@ LUCID_INTERNAL void lapack_lstsq_f64(const double* A, double* B, int m, int n, i
 
 // LU-based solve: AX=B given packed LU+ipiv from lu_factor. Uses sgetrs_/dgetrs_.
 // B is overwritten with X.
-LUCID_INTERNAL void lapack_lu_solve_f32(const float* LU, const int* ipiv,
-                                        float* B, int n, int nrhs, int* info);
-LUCID_INTERNAL void lapack_lu_solve_f64(const double* LU, const int* ipiv,
-                                        double* B, int n, int nrhs, int* info);
+LUCID_INTERNAL void
+lapack_lu_solve_f32(const float* LU, const int* ipiv, float* B, int n, int nrhs, int* info);
+LUCID_INTERNAL void
+lapack_lu_solve_f64(const double* LU, const int* ipiv, double* B, int n, int nrhs, int* info);
 
 // Householder product: reconstruct Q from H (geqrf output) + tau. Uses sorgqr_/dorgqr_.
 // Writes Q (m×k) into Q_out.
-LUCID_INTERNAL void lapack_householder_product_f32(const float* H, const float* tau,
-                                                   float* Q_out, int m, int n, int k, int* info);
-LUCID_INTERNAL void lapack_householder_product_f64(const double* H, const double* tau,
-                                                   double* Q_out, int m, int n, int k, int* info);
+LUCID_INTERNAL void lapack_householder_product_f32(
+    const float* H, const float* tau, float* Q_out, int m, int n, int k, int* info);
+LUCID_INTERNAL void lapack_householder_product_f64(
+    const double* H, const double* tau, double* Q_out, int m, int n, int k, int* info);
 
 // LDL^T factorization. Uses ssytrf_/dsytrf_. A_out receives packed LD; ipiv receives pivots.
-LUCID_INTERNAL void lapack_ldl_factor_f32(const float* A, float* A_out,
-                                          int* ipiv, int n, int* info);
-LUCID_INTERNAL void lapack_ldl_factor_f64(const double* A, double* A_out,
-                                          int* ipiv, int n, int* info);
+LUCID_INTERNAL void
+lapack_ldl_factor_f32(const float* A, float* A_out, int* ipiv, int n, int* info);
+LUCID_INTERNAL void
+lapack_ldl_factor_f64(const double* A, double* A_out, int* ipiv, int n, int* info);
 
 // Low-level helpers: convert a row-major matrix to column-major (for LAPACK
 // input) and back (for LAPACK output) using vDSP_mtrans.

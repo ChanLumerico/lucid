@@ -33,7 +33,8 @@ static TensorImplPtr conj_complex(const TensorImplPtr& a) {
     OpScopeFull scope{"fft._conj_complex", a->device(), a->dtype(), a->shape()};
     auto in_arr = fft_detail::as_mlx_input(a);
     auto out = ::mlx::core::conjugate(in_arr, fft_detail::kMlxFftStream);
-    Storage out_st = fft_detail::finalise_result(std::move(out), a->dtype(), a->shape(), a->device());
+    Storage out_st =
+        fft_detail::finalise_result(std::move(out), a->dtype(), a->shape(), a->device());
     return fft_detail::fresh(std::move(out_st), a->shape(), a->dtype(), a->device());
 }
 
@@ -55,8 +56,7 @@ void register_fft(py::module_& m) {
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
             return fftn_op(a, std::move(n), std::move(dim));
         },
-        py::arg("a"),
-        py::arg("s") = std::vector<std::int64_t>{},
+        py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},
         "N-dimensional discrete Fourier transform (complex output).");
 
@@ -65,18 +65,15 @@ void register_fft(py::module_& m) {
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
             return ifftn_op(a, std::move(n), std::move(dim));
         },
-        py::arg("a"),
-        py::arg("s") = std::vector<std::int64_t>{},
-        py::arg("dim") = std::vector<int>{},
-        "N-dimensional inverse discrete Fourier transform.");
+        py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
+        py::arg("dim") = std::vector<int>{}, "N-dimensional inverse discrete Fourier transform.");
 
     m.def(
         "rfftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
             return rfftn_op(a, std::move(n), std::move(dim));
         },
-        py::arg("a"),
-        py::arg("s") = std::vector<std::int64_t>{},
+        py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},
         "N-dimensional real-input DFT.  Output dtype is C64; last axis size is n//2+1.");
 
@@ -85,8 +82,7 @@ void register_fft(py::module_& m) {
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
             return irfftn_op(a, std::move(n), std::move(dim));
         },
-        py::arg("a"),
-        py::arg("s") = std::vector<std::int64_t>{},
+        py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},
         "N-dimensional inverse real DFT.  Output dtype is F32.");
 }

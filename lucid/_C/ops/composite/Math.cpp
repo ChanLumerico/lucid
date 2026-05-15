@@ -137,8 +137,7 @@ TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr& b) {
 // Tolerance check via the standard formula.  We materialise the ``rtol``
 // scalar as a same-shape constant tensor so the multiply doesn't depend on
 // any scalar-broadcast support in the binary ops.
-TensorImplPtr
-isclose_op(const TensorImplPtr& a, const TensorImplPtr& b, double rtol, double atol) {
+TensorImplPtr isclose_op(const TensorImplPtr& a, const TensorImplPtr& b, double rtol, double atol) {
     auto diff = abs_op(sub_op(a, b));
     auto abs_b = abs_op(b);
     auto rtol_t = full_like_op(abs_b, rtol);

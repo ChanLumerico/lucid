@@ -35,8 +35,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = out * g  (saved output is exp(x))
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
-                                    const TensorImplPtr& out);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 // Backward node for element-wise natural logarithm: y = ln(x).
@@ -51,8 +51,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = g / x
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
-                                    const TensorImplPtr&);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Backward node for element-wise base-2 logarithm: y = log2(x).
@@ -83,8 +83,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = g / (2*y)  where y = sqrt(x) is the saved output
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
-                                    const TensorImplPtr& out);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 // Backward node for reciprocal square root: y = 1 / sqrt(x).
@@ -114,8 +114,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = (2/sqrt(pi)) * exp(-x^2) * g
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
-                                    const TensorImplPtr&);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 LUCID_API TensorImplPtr exp_op(const TensorImplPtr& a);
@@ -136,7 +136,7 @@ LUCID_API TensorImplPtr erf_op(const TensorImplPtr& a);
 // where y = erfinv(x) is the saved output.
 class LUCID_API ErfinvBackward : public UnaryOp<ErfinvBackward> {
 public:
-    static constexpr bool kSavesInput  = false;
+    static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
@@ -144,8 +144,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = sqrt(pi)/2 * exp(out^2) * g
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
-                                    const TensorImplPtr& out);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 LUCID_API TensorImplPtr erfinv_op(const TensorImplPtr& a);

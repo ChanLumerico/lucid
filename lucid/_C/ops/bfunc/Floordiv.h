@@ -19,4 +19,4 @@ namespace lucid {
 // I64 regardless of the input dtype.
 LUCID_API TensorImplPtr floordiv_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
-}
+}  // namespace lucid

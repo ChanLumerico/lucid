@@ -232,7 +232,7 @@ void Rprop::update_one(std::size_t i, std::shared_ptr<TensorImpl>& p, const Stor
         const T smin = static_cast<T>(step_min_);
         const T smax = static_cast<T>(step_max_);
         for (std::size_t k = 0; k < n; ++k) {
-            const T sc = G[k] * PV[k]; // Positive: same sign; negative: reversed.
+            const T sc = G[k] * PV[k];  // Positive: same sign; negative: reversed.
             T s = SS[k];
             if (sc > T{0})
                 s *= epT;

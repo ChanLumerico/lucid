@@ -32,8 +32,8 @@ public:
         return be.neg(a, s, dt);
     }
     Storage grad_formula(const Storage& g);
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
-                                    const TensorImplPtr&);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
 // Backward node for element-wise absolute value: y = |x|.
@@ -78,8 +78,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = -g / x^2
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
-                                    const TensorImplPtr&);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Backward node for element-wise square: y = x^2.
@@ -94,8 +94,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = 2*x * g
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x,
-                                    const TensorImplPtr&);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
 // Backward node for element-wise cube: y = x^3.

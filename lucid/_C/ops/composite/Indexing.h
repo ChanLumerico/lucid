@@ -20,17 +20,19 @@
 namespace lucid {
 
 LUCID_API TensorImplPtr take_op(const TensorImplPtr& a, const TensorImplPtr& indices);
-LUCID_API TensorImplPtr
-index_select_op(const TensorImplPtr& a, int dim, const TensorImplPtr& indices);
+LUCID_API TensorImplPtr index_select_op(const TensorImplPtr& a,
+                                        int dim,
+                                        const TensorImplPtr& indices);
 
-LUCID_API TensorImplPtr
-narrow_op(const TensorImplPtr& a, int dim, std::int64_t start, std::int64_t length);
+LUCID_API TensorImplPtr narrow_op(const TensorImplPtr& a,
+                                  int dim,
+                                  std::int64_t start,
+                                  std::int64_t length);
 
 LUCID_API TensorImplPtr scatter_op(const TensorImplPtr& base,
                                    int dim,
                                    const TensorImplPtr& indices,
                                    const TensorImplPtr& src);
-LUCID_API TensorImplPtr
-kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim);
+LUCID_API TensorImplPtr kthvalue_op(const TensorImplPtr& a, std::int64_t k, int dim, bool keepdim);
 
 }  // namespace lucid

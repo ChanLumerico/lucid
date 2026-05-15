@@ -58,8 +58,8 @@ public:
     }
     Storage grad_formula(const Storage& g);
     // dx = (1 - out^2) * g  where out = tanh(x)
-    TensorImplPtr grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&,
-                                    const TensorImplPtr& out);
+    TensorImplPtr
+    grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
 LUCID_API TensorImplPtr sinh_op(const TensorImplPtr& a);

@@ -35,70 +35,62 @@ void register_composite(py::module_& m) {
     // ── elementwise math compositions ───────────────────────────────────────
     m.def("log10", &log10_op, py::arg("a"));
     m.def("log1p", &log1p_op, py::arg("a"));
-    m.def("exp2",  &exp2_op,  py::arg("a"));
+    m.def("exp2", &exp2_op, py::arg("a"));
     m.def("trunc", &trunc_op, py::arg("a"));
-    m.def("frac",  &frac_op,  py::arg("a"));
+    m.def("frac", &frac_op, py::arg("a"));
 
-    m.def("atan2",     &atan2_op,     py::arg("y"), py::arg("x"));
-    m.def("fmod",      &fmod_op,      py::arg("a"), py::arg("b"));
+    m.def("atan2", &atan2_op, py::arg("y"), py::arg("x"));
+    m.def("fmod", &fmod_op, py::arg("a"), py::arg("b"));
     m.def("remainder", &remainder_op, py::arg("a"), py::arg("b"));
-    m.def("hypot",     &hypot_op,     py::arg("a"), py::arg("b"));
+    m.def("hypot", &hypot_op, py::arg("a"), py::arg("b"));
     m.def("logaddexp", &logaddexp_op, py::arg("a"), py::arg("b"));
-    m.def("isclose",   &isclose_op,
-          py::arg("a"), py::arg("b"),
-          py::arg("rtol") = 1e-5, py::arg("atol") = 1e-8);
+    m.def("isclose", &isclose_op, py::arg("a"), py::arg("b"), py::arg("rtol") = 1e-5,
+          py::arg("atol") = 1e-8);
 
     // ── reductions ──────────────────────────────────────────────────────────
-    m.def("logsumexp", &logsumexp_op,
-          py::arg("a"), py::arg("dim"), py::arg("keepdims"));
+    m.def("logsumexp", &logsumexp_op, py::arg("a"), py::arg("dim"), py::arg("keepdims"));
 
     // ── linear algebra ──────────────────────────────────────────────────────
-    m.def("mm",   &mm_op,   py::arg("a"), py::arg("b"));
-    m.def("bmm",  &bmm_op,  py::arg("a"), py::arg("b"));
+    m.def("mm", &mm_op, py::arg("a"), py::arg("b"));
+    m.def("bmm", &bmm_op, py::arg("a"), py::arg("b"));
     m.def("kron", &kron_op, py::arg("a"), py::arg("b"));
 
     // ── logical ─────────────────────────────────────────────────────────────
     m.def("logical_and", &logical_and_op, py::arg("a"), py::arg("b"));
-    m.def("logical_or",  &logical_or_op,  py::arg("a"), py::arg("b"));
+    m.def("logical_or", &logical_or_op, py::arg("a"), py::arg("b"));
     m.def("logical_xor", &logical_xor_op, py::arg("a"), py::arg("b"));
     m.def("logical_not", &logical_not_op, py::arg("a"));
 
     // ── indexing ────────────────────────────────────────────────────────────
-    m.def("take",         &take_op,         py::arg("a"), py::arg("indices"));
-    m.def("index_select", &index_select_op,
-          py::arg("a"), py::arg("dim"), py::arg("indices"));
-    m.def("narrow", &narrow_op,
-          py::arg("a"), py::arg("dim"), py::arg("start"), py::arg("length"));
-    m.def("scatter", &scatter_op,
-          py::arg("base"), py::arg("dim"), py::arg("indices"), py::arg("src"));
-    m.def("kthvalue", &kthvalue_op,
-          py::arg("a"), py::arg("k"), py::arg("dim"), py::arg("keepdim"));
+    m.def("take", &take_op, py::arg("a"), py::arg("indices"));
+    m.def("index_select", &index_select_op, py::arg("a"), py::arg("dim"), py::arg("indices"));
+    m.def("narrow", &narrow_op, py::arg("a"), py::arg("dim"), py::arg("start"), py::arg("length"));
+    m.def("scatter", &scatter_op, py::arg("base"), py::arg("dim"), py::arg("indices"),
+          py::arg("src"));
+    m.def("kthvalue", &kthvalue_op, py::arg("a"), py::arg("k"), py::arg("dim"), py::arg("keepdim"));
 
     // ── layout ──────────────────────────────────────────────────────────────
-    m.def("movedim", &movedim_op,
-          py::arg("a"), py::arg("source"), py::arg("destination"));
-    m.def("unflatten", &unflatten_op,
-          py::arg("a"), py::arg("dim"), py::arg("sizes"));
+    m.def("movedim", &movedim_op, py::arg("a"), py::arg("source"), py::arg("destination"));
+    m.def("unflatten", &unflatten_op, py::arg("a"), py::arg("dim"), py::arg("sizes"));
 
     // ── stats / combinatorial ───────────────────────────────────────────────
-    m.def("histc", &histc_op,
-          py::arg("a"), py::arg("bins"), py::arg("lo"), py::arg("hi"));
+    m.def("histc", &histc_op, py::arg("a"), py::arg("bins"), py::arg("lo"), py::arg("hi"));
     m.def("cartesian_prod", &cartesian_prod_op, py::arg("tensors"));
 
     // ── sorted-array search ─────────────────────────────────────────────────
-    m.def("searchsorted", &searchsorted_op,
-          py::arg("sorted_1d"), py::arg("values"), py::arg("right") = false);
-    m.def("bucketize", &bucketize_op,
-          py::arg("values"), py::arg("boundaries"), py::arg("right") = false);
+    m.def("searchsorted", &searchsorted_op, py::arg("sorted_1d"), py::arg("values"),
+          py::arg("right") = false);
+    m.def("bucketize", &bucketize_op, py::arg("values"), py::arg("boundaries"),
+          py::arg("right") = false);
 
     // ── pure aliases of existing primitives ─────────────────────────────────
     // Comparison: short reference-framework-style names alongside the long
     // forms already bound by ``register_bfunc``.
-    m.def("eq", &equal_op,         py::arg("a"), py::arg("b"));
-    m.def("ne", &not_equal_op,     py::arg("a"), py::arg("b"));
-    m.def("lt", &less_op,          py::arg("a"), py::arg("b"));
-    m.def("le", &less_equal_op,    py::arg("a"), py::arg("b"));
-    m.def("gt", &greater_op,       py::arg("a"), py::arg("b"));
+    m.def("eq", &equal_op, py::arg("a"), py::arg("b"));
+    m.def("ne", &not_equal_op, py::arg("a"), py::arg("b"));
+    m.def("lt", &less_op, py::arg("a"), py::arg("b"));
+    m.def("le", &less_equal_op, py::arg("a"), py::arg("b"));
+    m.def("gt", &greater_op, py::arg("a"), py::arg("b"));
     m.def("ge", &greater_equal_op, py::arg("a"), py::arg("b"));
 
     // Trigonometric short names — share kernels with arcsin/arccos/arctan.
@@ -110,12 +102,13 @@ void register_composite(py::module_& m) {
     m.def("bitwise_not", &invert_op, py::arg("a"));
 
     // Shape aliases.
-    m.def("view", [](const TensorImplPtr& a, const Shape& shape) {
-        return reshape_op(a, shape);
-    }, py::arg("a"), py::arg("shape"));
-    m.def("concat", [](const std::vector<TensorImplPtr>& xs, int dim) {
-        return concatenate_op(xs, dim);
-    }, py::arg("tensors"), py::arg("dim"));
+    m.def(
+        "view", [](const TensorImplPtr& a, const Shape& shape) { return reshape_op(a, shape); },
+        py::arg("a"), py::arg("shape"));
+    m.def(
+        "concat",
+        [](const std::vector<TensorImplPtr>& xs, int dim) { return concatenate_op(xs, dim); },
+        py::arg("tensors"), py::arg("dim"));
 
     // Top-level ``cross`` and ``norm`` are aliases for the linalg sub-module
     // entries.  They live in Python (lucid.linalg.{cross, norm}); the Python

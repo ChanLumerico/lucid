@@ -45,10 +45,9 @@ public:
 
     // Graph-mode gradient for create_graph=True.
     // dA = b * a^(b-1) * g;   dB = log(a) * a^b * g
-    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
-        const TensorImplPtr& g,
-        const TensorImplPtr& a_ptr,
-        const TensorImplPtr& b_ptr) {
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& g,
+                                                              const TensorImplPtr& a_ptr,
+                                                              const TensorImplPtr& b_ptr) {
         extern TensorImplPtr pow_op(const TensorImplPtr&, const TensorImplPtr&);
         extern TensorImplPtr mul_op(const TensorImplPtr&, const TensorImplPtr&);
         extern TensorImplPtr log_op(const TensorImplPtr&);
@@ -56,8 +55,8 @@ public:
 
         // Scalar 1 tensor
         auto ones = std::make_shared<TensorImpl>(
-            make_ones_storage(a_ptr->shape(), a_ptr->dtype(), a_ptr->device()),
-            a_ptr->shape(), a_ptr->dtype(), a_ptr->device(), false);
+            make_ones_storage(a_ptr->shape(), a_ptr->dtype(), a_ptr->device()), a_ptr->shape(),
+            a_ptr->dtype(), a_ptr->device(), false);
 
         // dA = b * a^(b-1) * g
         TensorImplPtr bm1 = sub_op(b_ptr, ones);

@@ -300,8 +300,8 @@ void walk_strided_to_contig(const std::byte* src,
     }
     for (std::int64_t i = 0; i < shape[depth]; ++i) {
         walk_strided_to_contig(src, dst, shape, stride, depth + 1,
-                               src_off + static_cast<std::size_t>(i * stride[depth]),
-                               dst_off, elem_size);
+                               src_off + static_cast<std::size_t>(i * stride[depth]), dst_off,
+                               elem_size);
     }
 }
 
@@ -315,7 +315,8 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
     const std::size_t elem = dtype_size(s.dtype);
     const std::size_t total = shape_numel(shape) * elem;
     std::vector<std::byte> out(total);
-    if (total == 0) return out;
+    if (total == 0)
+        return out;
 
     Stride contig = contiguous_stride(shape, elem);
     if (contig == stride && storage_offset == 0) {
@@ -323,8 +324,8 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
         return out;
     }
     std::size_t dst_off = 0;
-    walk_strided_to_contig(s.ptr.get() + storage_offset, out.data(),
-                           shape, stride, 0, 0, dst_off, elem);
+    walk_strided_to_contig(s.ptr.get() + storage_offset, out.data(), shape, stride, 0, 0, dst_off,
+                           elem);
     return out;
 }
 
@@ -334,11 +335,16 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
 //   * bools render as True / False
 //   * complex64 renders as "(re+imj)" with Python-side conventions
 //   * integers render with %lld / %ld via std::to_string
-void format_element(const std::byte* ptr, Dtype dt, int precision,
-                    std::ostringstream& os) {
+void format_element(const std::byte* ptr, Dtype dt, int precision, std::ostringstream& os) {
     auto fmt_float = [&](double v) {
-        if (std::isnan(v)) { os << "nan"; return; }
-        if (std::isinf(v)) { os << (v < 0 ? "-inf" : "inf"); return; }
+        if (std::isnan(v)) {
+            os << "nan";
+            return;
+        }
+        if (std::isinf(v)) {
+            os << (v < 0 ? "-inf" : "inf");
+            return;
+        }
         char buf[64];
         std::snprintf(buf, sizeof(buf), "%.*g", precision, v);
         std::string s(buf);
@@ -383,7 +389,10 @@ void format_element(const std::byte* ptr, Dtype dt, int precision,
             } else {
                 std::uint32_t e = 1;
                 std::uint32_t m = mant;
-                while ((m & 0x400) == 0) { m <<= 1; --e; }
+                while ((m & 0x400) == 0) {
+                    m <<= 1;
+                    --e;
+                }
                 m &= 0x3ff;
                 f = (sign << 31) | ((e + 112) << 23) | (m << 13);
             }
@@ -409,7 +418,8 @@ void format_element(const std::byte* ptr, Dtype dt, int precision,
         const float im = *reinterpret_cast<const float*>(ptr + 4);
         os << "(";
         fmt_float(static_cast<double>(re));
-        if (im >= 0 || std::isnan(im)) os << "+";
+        if (im >= 0 || std::isnan(im))
+            os << "+";
         fmt_float(static_cast<double>(im));
         os << "j)";
         break;
@@ -421,11 +431,15 @@ void format_element(const std::byte* ptr, Dtype dt, int precision,
 // NumPy-flavoured nested-bracket string.  ``threshold`` applies to total
 // element count; ``edgeitems`` clips long axes once that ceiling is
 // exceeded.
-void render_nested(const std::byte* base, const Shape& shape,
-                   std::size_t depth, std::size_t off,
+void render_nested(const std::byte* base,
+                   const Shape& shape,
+                   std::size_t depth,
+                   std::size_t off,
                    const std::vector<std::int64_t>& contig_stride_bytes,
-                   Dtype dt, int precision,
-                   bool truncate, std::size_t edgeitems,
+                   Dtype dt,
+                   int precision,
+                   bool truncate,
+                   std::size_t edgeitems,
                    std::ostringstream& os) {
     if (depth == shape.size()) {
         format_element(base + off, dt, precision, os);
@@ -442,17 +456,20 @@ void render_nested(const std::byte* base, const Shape& shape,
 
     if (truncate && n > static_cast<std::int64_t>(edgeitems) * 2) {
         for (std::int64_t i = 0; i < static_cast<std::int64_t>(edgeitems); ++i) {
-            if (i > 0) os << ", ";
+            if (i > 0)
+                os << ", ";
             render_one(i);
         }
         os << ", ..., ";
         for (std::int64_t i = n - static_cast<std::int64_t>(edgeitems); i < n; ++i) {
             render_one(i);
-            if (i + 1 < n) os << ", ";
+            if (i + 1 < n)
+                os << ", ";
         }
     } else {
         for (std::int64_t i = 0; i < n; ++i) {
-            if (i > 0) os << ", ";
+            if (i > 0)
+                os << ", ";
             render_one(i);
         }
     }
@@ -463,30 +480,30 @@ void render_nested(const std::byte* base, const Shape& shape,
 
 py::bytes TensorImpl::to_bytes() const {
     const std::size_t total = nbytes();
-    if (total == 0) return py::bytes();
+    if (total == 0)
+        return py::bytes();
 
-    return std::visit(overloaded{
-        [&](const CpuStorage& s) -> py::bytes {
-            auto buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
-            return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
+    return std::visit(
+        overloaded{
+            [&](const CpuStorage& s) -> py::bytes {
+                auto buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
+                return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
+            },
+            [&](const GpuStorage& g) -> py::bytes {
+                CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                return py::bytes(reinterpret_cast<const char*>(cpu.ptr.get()), total);
+            },
+            [&](const SharedStorage& sh) -> py::bytes {
+                CpuStorage v = sh.cpu_view();
+                auto buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
+                return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
+            },
         },
-        [&](const GpuStorage& g) -> py::bytes {
-            CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-            return py::bytes(reinterpret_cast<const char*>(cpu.ptr.get()), total);
-        },
-        [&](const SharedStorage& sh) -> py::bytes {
-            CpuStorage v = sh.cpu_view();
-            auto buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
-            return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
-        },
-    }, storage_);
+        storage_);
 }
 
-std::shared_ptr<TensorImpl> TensorImpl::from_bytes(py::bytes data,
-                                                   Shape shape,
-                                                   Dtype dtype,
-                                                   Device device,
-                                                   bool requires_grad) {
+std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
+    py::bytes data, Shape shape, Dtype dtype, Device device, bool requires_grad) {
     const std::size_t elem = dtype_size(dtype);
     const std::size_t expected = shape_numel(shape) * elem;
 
@@ -497,8 +514,8 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(py::bytes data,
     }
     if (static_cast<std::size_t>(raw_len) != expected) {
         ErrorBuilder("from_bytes")
-            .fail("byte length mismatch (got " + std::to_string(raw_len)
-                  + ", expected " + std::to_string(expected) + ")");
+            .fail("byte length mismatch (got " + std::to_string(raw_len) + ", expected " +
+                  std::to_string(expected) + ")");
     }
 
     CpuStorage cpu;
@@ -513,14 +530,13 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(py::bytes data,
         return std::make_shared<TensorImpl>(Storage{gpu::upload_cpu_to_gpu(cpu, shape)},
                                             std::move(shape), dtype, device, requires_grad);
     }
-    return std::make_shared<TensorImpl>(Storage{std::move(cpu)},
-                                        std::move(shape), dtype, device, requires_grad);
+    return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, std::move(shape), dtype, device,
+                                        requires_grad);
 }
 
 py::object TensorImpl::item() const {
     if (numel() != 1) {
-        ErrorBuilder("item")
-            .fail("item() can only be called on a tensor with one element");
+        ErrorBuilder("item").fail("item() can only be called on a tensor with one element");
     }
 
     // Snapshot the single element to a contiguous CPU byte buffer.  This
@@ -604,8 +620,7 @@ py::object TensorImpl::item() const {
         float re, im;
         std::memcpy(&re, raw, sizeof(re));
         std::memcpy(&im, raw + sizeof(re), sizeof(im));
-        return py::cast(std::complex<double>(static_cast<double>(re),
-                                             static_cast<double>(im)));
+        return py::cast(std::complex<double>(static_cast<double>(re), static_cast<double>(im)));
     }
     }
     ErrorBuilder("item").fail("unsupported dtype");
@@ -613,39 +628,41 @@ py::object TensorImpl::item() const {
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
-    if (!autograd_) return nullptr;
+    if (!autograd_)
+        return nullptr;
     // Prefer the graph-mode gradient (set when backward(create_graph=True)).
-    if (autograd_->grad_impl) return autograd_->grad_impl;
-    if (!autograd_->grad.has_value()) return nullptr;
+    if (autograd_->grad_impl)
+        return autograd_->grad_impl;
+    if (!autograd_->grad.has_value())
+        return nullptr;
     // Wrap the accumulated grad Storage as a fresh leaf TensorImpl with the
     // same shape/dtype/device as ``this``.  No data copy — the new impl
     // shares the underlying Storage variant.
-    return std::make_shared<TensorImpl>(*autograd_->grad, meta_.shape,
-                                        meta_.dtype, meta_.device, false);
+    return std::make_shared<TensorImpl>(*autograd_->grad, meta_.shape, meta_.dtype, meta_.device,
+                                        false);
 }
 
-std::string TensorImpl::to_string(int precision,
-                                  std::size_t threshold,
-                                  std::size_t edgeitems) const {
+std::string
+TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitems) const {
     // Snapshot data on CPU regardless of device.  All formatting then
     // reads through a packed contiguous buffer with canonical stride.
     std::vector<std::byte> buf;
     std::visit(overloaded{
-        [&](const CpuStorage& s) {
-            buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
-        },
-        [&](const GpuStorage& g) {
-            CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-            buf = contig_snapshot_cpu(cpu, meta_.shape,
-                                      contiguous_stride(meta_.shape,
-                                                        dtype_size(meta_.dtype)),
-                                      0);
-        },
-        [&](const SharedStorage& sh) {
-            CpuStorage v = sh.cpu_view();
-            buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
-        },
-    }, storage_);
+                   [&](const CpuStorage& s) {
+                       buf = contig_snapshot_cpu(s, meta_.shape, meta_.stride, offset_);
+                   },
+                   [&](const GpuStorage& g) {
+                       CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                       buf = contig_snapshot_cpu(
+                           cpu, meta_.shape,
+                           contiguous_stride(meta_.shape, dtype_size(meta_.dtype)), 0);
+                   },
+                   [&](const SharedStorage& sh) {
+                       CpuStorage v = sh.cpu_view();
+                       buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
+                   },
+               },
+               storage_);
 
     if (meta_.shape.empty()) {
         // 0-d scalar — render the single element with no brackets.
@@ -660,17 +677,15 @@ std::string TensorImpl::to_string(int precision,
     std::vector<std::int64_t> contig_stride_bytes(meta_.shape.size(), 0);
     if (!meta_.shape.empty()) {
         contig_stride_bytes.back() = static_cast<std::int64_t>(elem);
-        for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(meta_.shape.size()) - 2;
-             i >= 0; --i) {
-            contig_stride_bytes[i] =
-                contig_stride_bytes[i + 1] * meta_.shape[i + 1];
+        for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(meta_.shape.size()) - 2; i >= 0; --i) {
+            contig_stride_bytes[i] = contig_stride_bytes[i + 1] * meta_.shape[i + 1];
         }
     }
 
     const bool truncate = numel() > threshold;
     std::ostringstream os;
-    render_nested(buf.data(), meta_.shape, 0, 0, contig_stride_bytes,
-                  meta_.dtype, precision, truncate, edgeitems, os);
+    render_nested(buf.data(), meta_.shape, 0, 0, contig_stride_bytes, meta_.dtype, precision,
+                  truncate, edgeitems, os);
     return os.str();
 }
 
@@ -755,10 +770,10 @@ void TensorImpl::zero_grad() {
 
 void TensorImpl::eval() const {
     if (meta_.device != Device::GPU)
-        return;                                         // CPU: no-op
+        return;  // CPU: no-op
     const auto& gpu_st = std::get<GpuStorage>(storage_);
     if (gpu_st.arr)
-        gpu_st.arr->eval();                            // mlx::core::array::eval()
+        gpu_st.arr->eval();  // mlx::core::array::eval()
 }
 
 bool TensorImpl::storage_is_shared() const noexcept {
@@ -807,8 +822,8 @@ void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
         // Lazy-include to avoid a circular dependency at the header level.
         // add_op is defined in ops/bfunc/Add.h which is not included here;
         // declare it as an extern to keep TensorImpl.cpp independent of the ops layer.
-        extern std::shared_ptr<TensorImpl> add_op(
-            const std::shared_ptr<TensorImpl>&, const std::shared_ptr<TensorImpl>&);
+        extern std::shared_ptr<TensorImpl> add_op(const std::shared_ptr<TensorImpl>&,
+                                                  const std::shared_ptr<TensorImpl>&);
         autograd_->grad_impl = add_op(autograd_->grad_impl, g);
     }
 }

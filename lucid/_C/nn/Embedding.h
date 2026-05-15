@@ -35,9 +35,9 @@ namespace lucid {
 class LUCID_API EmbeddingBackward : public FuncOp<EmbeddingBackward, 1> {
 public:
     static const OpSchema schema_v1;
-    int padding_idx_ = -1;         // Rows at this index are zeroed and skipped.
-    Shape weight_shape_;           // (num_embeddings, embed_dim).
-    Storage saved_indices_;        // Integer index tensor from forward.
+    int padding_idx_ = -1;   // Rows at this index are zeroed and skipped.
+    Shape weight_shape_;     // (num_embeddings, embed_dim).
+    Storage saved_indices_;  // Integer index tensor from forward.
     Shape saved_indices_shape_;
     Dtype saved_indices_dtype_ = Dtype::I64;
 
@@ -92,10 +92,10 @@ LUCID_API TensorImplPtr rotary_pos_embedding_op(const TensorImplPtr& input,
 // max (mode=2).  offsets marks the start of each bag in the flat indices
 // tensor.  padding_idx < 0 means no padding.
 LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,
-                                          const TensorImplPtr& indices,
-                                          const TensorImplPtr& offsets,
-                                          int mode,
-                                          int padding_idx,
-                                          bool include_last_offset);
+                                         const TensorImplPtr& indices,
+                                         const TensorImplPtr& offsets,
+                                         int mode,
+                                         int padding_idx,
+                                         bool include_last_offset);
 
 }  // namespace lucid

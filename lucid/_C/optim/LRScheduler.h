@@ -51,7 +51,7 @@ protected:
     virtual double compute_lr_at(std::int64_t epoch) const = 0;
 
     Optimizer& opt_;
-    double base_lr_;    // lr captured from the optimizer at construction.
+    double base_lr_;  // lr captured from the optimizer at construction.
     std::int64_t epoch_;
 };
 
@@ -93,7 +93,7 @@ protected:
     double compute_lr_at(std::int64_t epoch) const override;
 
 private:
-    std::vector<std::int64_t> milestones_; // Sorted ascending at construction.
+    std::vector<std::int64_t> milestones_;  // Sorted ascending at construction.
     double gamma_;
 };
 

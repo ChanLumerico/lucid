@@ -17,18 +17,19 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <mlx/ops.h>
+#include <mlx/transforms.h>  // mlx::core::eval(std::vector<array>)
+
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../backend/gpu/MetalAllocator.h"
+#include "../backend/gpu/MlxBridge.h"
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/GradMode.h"
 #include "../core/MemoryStats.h"
-#include "../core/TensorImpl.h"
 #include "../core/Storage.h"
-#include "../backend/gpu/MetalAllocator.h"
-#include "../backend/gpu/MlxBridge.h"
-#include <mlx/ops.h>
-#include <mlx/transforms.h>   // mlx::core::eval(std::vector<array>)
+#include "../core/TensorImpl.h"
 
 namespace py = pybind11;
 
@@ -112,27 +113,22 @@ void register_tensor_impl(py::module_& m) {
         .def_property_readonly("device", [](const TensorImpl& t) { return t.device(); })
         .def_property_readonly("requires_grad",
                                [](const TensorImpl& t) { return t.requires_grad(); })
-        .def_property_readonly("grad_fn",
-                               [](const TensorImpl& t) -> std::shared_ptr<Node> {
-                                   return t.grad_fn();
-                               },
-                               "The backward function that produced this tensor, or None "
-                               "for leaf tensors.")
-        .def_property_readonly("retains_grad",
-                               [](const TensorImpl& t) { return t.retains_grad(); })
-        .def("retain_grad_",
-             [](TensorImpl& t) { t.set_retain_grad(true); },
-             "Mark this tensor to retain its gradient during backward, even if "
-             "it is not a leaf tensor.")
+        .def_property_readonly(
+            "grad_fn", [](const TensorImpl& t) -> std::shared_ptr<Node> { return t.grad_fn(); },
+            "The backward function that produced this tensor, or None "
+            "for leaf tensors.")
+        .def_property_readonly("retains_grad", [](const TensorImpl& t) { return t.retains_grad(); })
+        .def(
+            "retain_grad_", [](TensorImpl& t) { t.set_retain_grad(true); },
+            "Mark this tensor to retain its gradient during backward, even if "
+            "it is not a leaf tensor.")
         .def_property_readonly("is_leaf", [](const TensorImpl& t) { return t.is_leaf(); })
         // version is a mutation counter; the autograd engine reads it to
         // detect in-place modifications to saved tensors.
         .def_property_readonly("version", [](const TensorImpl& t) { return t.version(); })
         .def_property_readonly(
             "is_metal_shared",
-            [](const TensorImpl& t) -> bool {
-                return storage_is_metal_shared(t.storage());
-            },
+            [](const TensorImpl& t) -> bool { return storage_is_metal_shared(t.storage()); },
             "True when the tensor's storage is a MTLResourceStorageModeShared "
             "allocation — simultaneously accessible from CPU and GPU without a "
             "memcpy.  Created by make_shared_tensor() or to_shared_storage().")
@@ -150,65 +146,63 @@ void register_tensor_impl(py::module_& m) {
         .def("to_bytes", &TensorImpl::to_bytes,
              "Return the tensor data as a contiguous bytes blob "
              "(row-major).  GPU tensors are downloaded to CPU first.")
-        .def_static("from_bytes", &TensorImpl::from_bytes,
-                    py::arg("data"), py::arg("shape"), py::arg("dtype"),
-                    py::arg("device") = Device::CPU,
+        .def_static("from_bytes", &TensorImpl::from_bytes, py::arg("data"), py::arg("shape"),
+                    py::arg("dtype"), py::arg("device") = Device::CPU,
                     py::arg("requires_grad") = false,
                     "Reconstruct a TensorImpl from a raw bytes blob + "
                     "metadata.  ``len(data)`` must equal "
                     "``prod(shape) * dtype_size(dtype)``.")
-        .def("to_string", &TensorImpl::to_string,
-             py::arg("precision") = 4, py::arg("threshold") = 1000,
-             py::arg("edgeitems") = 3,
+        .def("to_string", &TensorImpl::to_string, py::arg("precision") = 4,
+             py::arg("threshold") = 1000, py::arg("edgeitems") = 3,
              "Render the tensor's data as a human-readable string.  "
              "Used by ``__repr__`` to avoid going through numpy.")
-        .def("grad_to_tensor",
-             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
-                 return t.grad_to_tensor();
-             },
-             "Wrap the accumulated gradient as a fresh TensorImpl sharing "
-             "the same Storage.  Returns None when no gradient has been "
-             "accumulated.  Replaces the prior numpy round-trip in "
-             "``Tensor.grad``.")
+        .def(
+            "grad_to_tensor",
+            [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> { return t.grad_to_tensor(); },
+            "Wrap the accumulated gradient as a fresh TensorImpl sharing "
+            "the same Storage.  Returns None when no gradient has been "
+            "accumulated.  Replaces the prior numpy round-trip in "
+            "``Tensor.grad``.")
         .def("item", &TensorImpl::item,
              "Extract a single-element tensor's value as a Python scalar "
              "(int / float / bool / complex).  Throws when numel() != 1.")
-        .def("grad_as_impl",
-             [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> {
-                 return t.grad_as_impl();
-             },
-             "Return the gradient as a TensorImpl (set when backward was called with "
-             "create_graph=True). Returns None if no graph-mode gradient is available.")
+        .def(
+            "grad_as_impl",
+            [](const TensorImpl& t) -> std::shared_ptr<TensorImpl> { return t.grad_as_impl(); },
+            "Return the gradient as a TensorImpl (set when backward was called with "
+            "create_graph=True). Returns None if no graph-mode gradient is available.")
         .def("copy_from", &TensorImpl::copy_from)
         .def("zero_grad", &TensorImpl::zero_grad)
         .def("eval", &TensorImpl::eval,
              "Force evaluation of this tensor's lazy MLX graph.\n"
              "GPU tensors: calls mlx::core::eval() on the underlying array.\n"
              "CPU tensors: no-op.")
-        .def("clone_with_grad",
-             [](const TensorImpl& self, bool requires_grad) -> std::shared_ptr<TensorImpl> {
-                 // Creates a new TensorImpl that SHARES the same Storage with a
-                 // different requires_grad flag.  No data copy is made — only the
-                 // autograd metadata differs.  This is the canonical way to flip
-                 // requires_grad without going through a numpy round-trip.
-                 return std::make_shared<TensorImpl>(
-                     self.storage(), self.shape(), self.dtype(), self.device(), requires_grad);
-             },
-             py::arg("requires_grad"),
-             "Return a new TensorImpl sharing the same storage but with a different "
-             "requires_grad flag.  No data is copied.")
-        .def("set_grad",
-             [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
-                 // Copies g's Storage into self's gradient slot, replacing any
-                 // existing gradient.  Used by clip_grad and grad_scaler to write
-                 // back scaled gradients without going through numpy.
-                 Storage s = g->storage();          // copy the Storage variant
-                 self.set_grad_storage(std::move(s));
-             },
-             py::arg("grad"),
-             "Replace this tensor's gradient storage with a copy of grad's storage.\n"
-             "Used internally by clip_grad and GradScaler; prefer .grad = tensor for "
-             "normal use.");
+        .def(
+            "clone_with_grad",
+            [](const TensorImpl& self, bool requires_grad) -> std::shared_ptr<TensorImpl> {
+                // Creates a new TensorImpl that SHARES the same Storage with a
+                // different requires_grad flag.  No data copy is made — only the
+                // autograd metadata differs.  This is the canonical way to flip
+                // requires_grad without going through a numpy round-trip.
+                return std::make_shared<TensorImpl>(self.storage(), self.shape(), self.dtype(),
+                                                    self.device(), requires_grad);
+            },
+            py::arg("requires_grad"),
+            "Return a new TensorImpl sharing the same storage but with a different "
+            "requires_grad flag.  No data is copied.")
+        .def(
+            "set_grad",
+            [](TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
+                // Copies g's Storage into self's gradient slot, replacing any
+                // existing gradient.  Used by clip_grad and grad_scaler to write
+                // back scaled gradients without going through numpy.
+                Storage s = g->storage();  // copy the Storage variant
+                self.set_grad_storage(std::move(s));
+            },
+            py::arg("grad"),
+            "Replace this tensor's gradient storage with a copy of grad's storage.\n"
+            "Used internally by clip_grad and GradScaler; prefer .grad = tensor for "
+            "normal use.");
 
     // to_shared_storage re-wraps the tensor's backing buffer as a Metal
     // MTLResourceStorageModeShared allocation.  The resulting tensor occupies
@@ -262,9 +256,8 @@ void register_tensor_impl(py::module_& m) {
                 // shared_ptr is captured in the CpuStorage custom deleter.
                 new_storage = Storage{sh.cpu_view()};
             }
-            return std::make_shared<TensorImpl>(
-                std::move(new_storage), t->shape(), t->dtype(),
-                target_device, t->requires_grad());
+            return std::make_shared<TensorImpl>(std::move(new_storage), t->shape(), t->dtype(),
+                                                target_device, t->requires_grad());
         },
         py::arg("tensor"), py::arg("device"),
         "Zero-copy device relabeling for SharedStorage tensors.\n\n"
@@ -278,8 +271,7 @@ void register_tensor_impl(py::module_& m) {
     // call transfer_storage(t, Device::GPU) for a zero-copy GPU view.
     m.def(
         "make_shared_tensor",
-        [](const std::vector<std::int64_t>& shape,
-           Dtype dtype,
+        [](const std::vector<std::int64_t>& shape, Dtype dtype,
            bool requires_grad) -> std::shared_ptr<TensorImpl> {
             std::size_t n = 1;
             for (auto d : shape)
@@ -289,29 +281,25 @@ void register_tensor_impl(py::module_& m) {
                 // Empty tensor: fall back to ordinary CPU zeros.
                 auto& be = backend::Dispatcher::for_device(Device::CPU);
                 Storage s = be.zeros(Shape(shape), dtype);
-                return std::make_shared<TensorImpl>(
-                    std::move(s), Shape(shape), dtype, Device::CPU, requires_grad);
+                return std::make_shared<TensorImpl>(std::move(s), Shape(shape), dtype, Device::CPU,
+                                                    requires_grad);
             }
             auto owned = gpu::make_metal_shared(nbytes);
             if (!owned.buf.cpu_ptr)
-                throw std::runtime_error(
-                    "make_shared_tensor: MTLBuffer allocation failed — "
-                    "Metal may not be available on this device");
+                throw std::runtime_error("make_shared_tensor: MTLBuffer allocation failed — "
+                                         "Metal may not be available on this device");
             // macOS guarantees MTLResourceStorageModeShared buffers are
             // zero-initialized; no explicit memset needed.
             SharedStorage ss;
-            ss.cpu_ptr    = owned.buf.cpu_ptr;
+            ss.cpu_ptr = owned.buf.cpu_ptr;
             ss.mtl_handle = owned.buf.mtl_handle;
-            ss.nbytes     = nbytes;
-            ss.dtype      = dtype;
-            ss.owner      = std::move(owned.owner);
-            return std::make_shared<TensorImpl>(
-                Storage{std::move(ss)}, Shape(shape), dtype,
-                Device::CPU, requires_grad);
+            ss.nbytes = nbytes;
+            ss.dtype = dtype;
+            ss.owner = std::move(owned.owner);
+            return std::make_shared<TensorImpl>(Storage{std::move(ss)}, Shape(shape), dtype,
+                                                Device::CPU, requires_grad);
         },
-        py::arg("shape"),
-        py::arg("dtype")         = Dtype::F32,
-        py::arg("requires_grad") = false,
+        py::arg("shape"), py::arg("dtype") = Dtype::F32, py::arg("requires_grad") = false,
         "Allocate a zero-filled tensor in MTLResourceStorageModeShared memory.\n\n"
         "The tensor is immediately readable on CPU (device=CPU) and can be\n"
         "transferred to GPU via transfer_storage() with no memcpy.\n"

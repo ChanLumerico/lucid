@@ -24,11 +24,10 @@ LUCID_API TensorImplPtr isfinite_op(const TensorImplPtr& a);
 // nan_val    : replacement for NaN     (default 0.0)
 // posinf_val : replacement for +Inf    (default max finite value)
 // neginf_val : replacement for -Inf    (default min finite value)
-LUCID_API TensorImplPtr nan_to_num_op(
-    const TensorImplPtr& a,
-    double nan_val    = 0.0,
-    double posinf_val = 3.4028234663852886e+38,
-    double neginf_val = -3.4028234663852886e+38);
+LUCID_API TensorImplPtr nan_to_num_op(const TensorImplPtr& a,
+                                      double nan_val = 0.0,
+                                      double posinf_val = 3.4028234663852886e+38,
+                                      double neginf_val = -3.4028234663852886e+38);
 
 // Full-tensor boolean reductions.  Output is a scalar Bool tensor.
 // No gradient is attached.

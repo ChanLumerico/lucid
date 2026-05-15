@@ -20,8 +20,8 @@ TensorImplPtr real_op(const TensorImplPtr& a) {
     complex_detail::require_complex(a->dtype(), "real");
     OpScopeFull scope{"real", a->device(), a->dtype(), a->shape()};
 
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .complex_real(a->storage(), a->shape());
+    Storage out =
+        backend::Dispatcher::for_device(a->device()).complex_real(a->storage(), a->shape());
     return complex_detail::fresh(std::move(out), a->shape(), Dtype::F32, a->device());
 }
 

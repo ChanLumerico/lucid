@@ -19,8 +19,8 @@ TensorImplPtr imag_op(const TensorImplPtr& a) {
     complex_detail::require_complex(a->dtype(), "imag");
     OpScopeFull scope{"imag", a->device(), a->dtype(), a->shape()};
 
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .complex_imag(a->storage(), a->shape());
+    Storage out =
+        backend::Dispatcher::for_device(a->device()).complex_imag(a->storage(), a->shape());
     return complex_detail::fresh(std::move(out), a->shape(), Dtype::F32, a->device());
 }
 

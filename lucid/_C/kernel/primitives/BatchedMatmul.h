@@ -33,11 +33,11 @@ namespace primitives {
 // a_bcast_shape and b_bcast_shape hold the shapes to broadcast each
 // operand to before the GEMM loop.
 struct NdMatmulInfo {
-    Shape out_shape;       // Shape of the output tensor.
-    Shape a_bcast_shape;   // Shape of operand a after batch broadcast.
-    Shape b_bcast_shape;   // Shape of operand b after batch broadcast.
-    int M = 0, K = 0, N = 0; // Inner matrix dimensions.
-    std::size_t batch = 1;   // Product of all broadcast batch dimensions.
+    Shape out_shape;          // Shape of the output tensor.
+    Shape a_bcast_shape;      // Shape of operand a after batch broadcast.
+    Shape b_bcast_shape;      // Shape of operand b after batch broadcast.
+    int M = 0, K = 0, N = 0;  // Inner matrix dimensions.
+    std::size_t batch = 1;    // Product of all broadcast batch dimensions.
 };
 
 // Compute NdMatmulInfo from operand shapes a and b. Raises ShapeMismatch

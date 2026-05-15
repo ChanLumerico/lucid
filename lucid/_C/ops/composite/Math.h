@@ -48,7 +48,9 @@ LUCID_API TensorImplPtr logaddexp_op(const TensorImplPtr& a, const TensorImplPtr
 // Elementwise tolerance check: ``|a − b| ≤ atol + rtol·|b|``.  Returns a
 // bool tensor.  Composes ``sub``, ``abs``, scalar ``mul``, ``add``, and
 // ``less_equal`` so no dedicated kernel is required.
-LUCID_API TensorImplPtr
-isclose_op(const TensorImplPtr& a, const TensorImplPtr& b, double rtol, double atol);
+LUCID_API TensorImplPtr isclose_op(const TensorImplPtr& a,
+                                   const TensorImplPtr& b,
+                                   double rtol,
+                                   double atol);
 
 }  // namespace lucid

@@ -146,9 +146,7 @@ public:
     void set_grad_fn(std::shared_ptr<Node> fn) noexcept {
         ensure_autograd()->grad_fn = std::move(fn);
     }
-    void set_grad_output_nr(std::uint32_t nr) noexcept {
-        ensure_autograd()->grad_output_nr = nr;
-    }
+    void set_grad_output_nr(std::uint32_t nr) noexcept { ensure_autograd()->grad_output_nr = nr; }
     void clear_grad_fn() noexcept {
         if (autograd_)
             autograd_->grad_fn.reset();
@@ -168,9 +166,7 @@ public:
 
     // retain_grad: if true, Engine accumulates gradients into this tensor's grad
     // storage even when it is not a leaf, matching reference tensor.retain_grad().
-    bool retains_grad() const noexcept {
-        return autograd_ ? autograd_->retain_grad : false;
-    }
+    bool retains_grad() const noexcept { return autograd_ ? autograd_->retain_grad : false; }
     void set_retain_grad(bool v) noexcept { ensure_autograd()->retain_grad = v; }
 
     // Increments the autograd version counter; called by every in-place op.
@@ -221,11 +217,8 @@ public:
     // Reconstructs a TensorImpl from a raw bytes blob + metadata.  The blob
     // must be ``shape_numel(shape) * dtype_size(dtype)`` bytes long.  When
     // ``device == GPU`` the buffer is uploaded to MLX before returning.
-    static std::shared_ptr<TensorImpl> from_bytes(py::bytes data,
-                                                  Shape shape,
-                                                  Dtype dtype,
-                                                  Device device,
-                                                  bool requires_grad);
+    static std::shared_ptr<TensorImpl>
+    from_bytes(py::bytes data, Shape shape, Dtype dtype, Device device, bool requires_grad);
 
     // Extracts a single-element tensor's value as a Python scalar object
     // (int / float / bool / complex).  Throws when ``numel() != 1``.  GPU
@@ -240,9 +233,8 @@ public:
     //   precision   — significant digits for floating point
     //   threshold   — if numel > threshold, an edge-summary is rendered
     //   edgeitems   — how many items to keep at each edge of a truncated axis
-    std::string to_string(int precision = 4,
-                          std::size_t threshold = 1000,
-                          std::size_t edgeitems = 3) const;
+    std::string
+    to_string(int precision = 4, std::size_t threshold = 1000, std::size_t edgeitems = 3) const;
 
     // Wraps the tensor's accumulated gradient as a fresh TensorImpl that
     // shares the underlying Storage.  Returns nullptr when no gradient has

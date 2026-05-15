@@ -18,4 +18,4 @@ namespace lucid {
 // einsum_op so that autograd is inherited from the einsum backward pass.
 LUCID_API TensorImplPtr inner_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
-}
+}  // namespace lucid

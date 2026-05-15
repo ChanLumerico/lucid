@@ -16,8 +16,9 @@
 
 #include "Vforce.h"
 
-#include <Accelerate/Accelerate.h>
 #include <cmath>
+
+#include <Accelerate/Accelerate.h>
 
 namespace lucid::backend::cpu {
 

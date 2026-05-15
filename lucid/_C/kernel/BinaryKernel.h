@@ -233,12 +233,13 @@ public:
 
     // Default graph-mode gradient formula: throws NotImplementedError.
     // Override in concrete Derived classes to support create_graph=True.
-    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(
-        const TensorImplPtr& /*grad_out*/, const TensorImplPtr& /*a*/, const TensorImplPtr& /*b*/) {
-        throw std::runtime_error(
-            "create_graph=True is not supported for op '" +
-            std::string(Derived::schema_v1.name) + "'. "
-            "Implement grad_formula_impl() to add support.");
+    std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& /*grad_out*/,
+                                                              const TensorImplPtr& /*a*/,
+                                                              const TensorImplPtr& /*b*/) {
+        throw std::runtime_error("create_graph=True is not supported for op '" +
+                                 std::string(Derived::schema_v1.name) +
+                                 "'. "
+                                 "Implement grad_formula_impl() to add support.");
     }
 
 protected:
@@ -435,9 +436,10 @@ std::vector<Storage> BinaryKernel<Derived>::apply(Storage grad_out) {
 // Mirrors reduce_grad_to_shape but operates on TensorImplPtr via sum_op.
 template <class Derived>
 TensorImplPtr BinaryKernel<Derived>::reduce_impl_to_shape(const TensorImplPtr& grad,
-                                                           const Shape& grad_shape,
-                                                           const Shape& target_shape) {
-    if (grad_shape == target_shape) return grad;
+                                                          const Shape& grad_shape,
+                                                          const Shape& target_shape) {
+    if (grad_shape == target_shape)
+        return grad;
 
     // Forward declaration — defined in ops/ufunc/Reductions.cpp.
     extern TensorImplPtr sum_op(const TensorImplPtr&, const std::vector<int>&, bool);
@@ -449,14 +451,16 @@ TensorImplPtr BinaryKernel<Derived>::reduce_impl_to_shape(const TensorImplPtr& g
     const int ndim_g = static_cast<int>(grad_shape.size());
     const int ndim_t = static_cast<int>(target_shape.size());
     const int leading = ndim_g - ndim_t;
-    for (int i = 0; i < leading; ++i) axes.push_back(i);
+    for (int i = 0; i < leading; ++i)
+        axes.push_back(i);
     for (int i = 0; i < ndim_t; ++i) {
         if (target_shape[static_cast<std::size_t>(i)] == 1 &&
             grad_shape[static_cast<std::size_t>(i + leading)] != 1)
             axes.push_back(i + leading);
     }
 
-    if (axes.empty()) return grad;
+    if (axes.empty())
+        return grad;
 
     auto reduced = sum_op(grad, axes, /*keepdims=*/false);
 
@@ -482,7 +486,8 @@ std::vector<TensorImplPtr> BinaryKernel<Derived>::apply_for_graph(const TensorIm
     if (!a || !b) {
         throw std::runtime_error(
             "apply_for_graph called but saved_impl_inputs_ were not set for op '" +
-            std::string(Derived::schema_v1.name) + "'. "
+            std::string(Derived::schema_v1.name) +
+            "'. "
             "Ensure create_graph=True was set before the forward pass.");
     }
 

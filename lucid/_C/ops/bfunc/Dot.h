@@ -19,4 +19,4 @@ namespace lucid {
 // matrices, with autograd support for both cases.
 LUCID_API TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
-}
+}  // namespace lucid

@@ -201,9 +201,7 @@ public:
 
     // Build a C64 array from two F32 arrays of the same shape; the result
     // satisfies ``complex_real(out) == re`` and ``complex_imag(out) == im``.
-    virtual Storage complex_combine(const Storage& re,
-                                    const Storage& im,
-                                    const Shape& shape) = 0;
+    virtual Storage complex_combine(const Storage& re, const Storage& im, const Shape& shape) = 0;
 
     // Element-wise complex conjugate.  No-op for real dtypes (returned
     // unchanged); negates the imaginary part for C64.
@@ -256,9 +254,12 @@ public:
     virtual Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // Replace NaN/Inf values with finite substitutes.  Output dtype matches input.
-    virtual Storage nan_to_num(
-        const Storage& a, const Shape& shape, Dtype dt,
-        double nan_val, double posinf_val, double neginf_val) = 0;
+    virtual Storage nan_to_num(const Storage& a,
+                               const Shape& shape,
+                               Dtype dt,
+                               double nan_val,
+                               double posinf_val,
+                               double neginf_val) = 0;
 
     // Axis reductions.  opts.axes specifies which dimensions to collapse; the
     // output shape follows keepdims semantics.  variance() uses the biased
@@ -450,25 +451,33 @@ public:
     // Scatter-reduce variants: base is pre-initialised with the appropriate
     // neutral element (−∞ for amax, +∞ for amin, 1 for prod) when include_self
     // is false; the callers set this up before dispatching.
-    virtual Storage scatter_amax(const Storage& base, const Storage& indices,
-                                 const Storage& src, const Shape& base_shape,
-                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
-    virtual Storage scatter_amin(const Storage& base, const Storage& indices,
-                                 const Storage& src, const Shape& base_shape,
-                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
-    virtual Storage scatter_prod(const Storage& base, const Storage& indices,
-                                 const Storage& src, const Shape& base_shape,
-                                 const Shape& idx_shape, int dim, Dtype dt) = 0;
+    virtual Storage scatter_amax(const Storage& base,
+                                 const Storage& indices,
+                                 const Storage& src,
+                                 const Shape& base_shape,
+                                 const Shape& idx_shape,
+                                 int dim,
+                                 Dtype dt) = 0;
+    virtual Storage scatter_amin(const Storage& base,
+                                 const Storage& indices,
+                                 const Storage& src,
+                                 const Shape& base_shape,
+                                 const Shape& idx_shape,
+                                 int dim,
+                                 Dtype dt) = 0;
+    virtual Storage scatter_prod(const Storage& base,
+                                 const Storage& indices,
+                                 const Storage& src,
+                                 const Shape& base_shape,
+                                 const Shape& idx_shape,
+                                 int dim,
+                                 Dtype dt) = 0;
 
     // Sliding-window view along a single dimension.
     // Returns shape (*base.shape[:dim], L, *base.shape[dim+1:], size)
     // where L = (dim_size - size) / step + 1.
-    virtual Storage unfold_dim(const Storage& a,
-                               const Shape& in_shape,
-                               int dim,
-                               int size,
-                               int step,
-                               Dtype dt) = 0;
+    virtual Storage
+    unfold_dim(const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) = 0;
 
     // General batched matrix multiplication.  Shapes and transpose flags are
     // encoded in opts; the implementation must handle both 2-D and batched cases.
@@ -661,41 +670,39 @@ public:
     // LU factorisation (packed format).  Returns {LU, pivots} where LU is
     // the packed n×n matrix (LAPACK dgetrf_ format) and pivots is an n-element
     // I32 tensor of 1-based pivot indices.
-    virtual StoragePair linalg_lu_factor(const Storage& a,
-                                         const Shape& shape,
-                                         Dtype dt) = 0;
+    virtual StoragePair linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // Triangular solve: solve A X = B where A is triangular.
     // upper=true → upper triangular; unit=true → unit diagonal.
     virtual Storage linalg_solve_triangular(const Storage& a,
-                                             const Storage& b,
-                                             const Shape& a_shape,
-                                             const Shape& b_shape,
-                                             bool upper,
-                                             bool unitriangular,
-                                             Dtype dt) = 0;
+                                            const Storage& b,
+                                            const Shape& a_shape,
+                                            const Shape& b_shape,
+                                            bool upper,
+                                            bool unitriangular,
+                                            Dtype dt) = 0;
 
     // Least-squares: solve min||AX-B||_2. Returns [solution, residuals, rank, svd].
     // a_shape=(m,n), b_shape=(m,nrhs). Solution shape=(n,nrhs).
     virtual std::vector<Storage> linalg_lstsq(const Storage& a,
-                                               const Storage& b,
-                                               const Shape& a_shape,
-                                               const Shape& b_shape,
-                                               Dtype dt) = 0;
+                                              const Storage& b,
+                                              const Shape& a_shape,
+                                              const Shape& b_shape,
+                                              Dtype dt) = 0;
 
     // Solve AX=B given LU+pivots from linalg_lu_factor. Returns X (same shape as B).
     virtual Storage linalg_lu_solve(const Storage& LU,
-                                     const Storage& pivots,
-                                     const Storage& b,
-                                     const Shape& lu_shape,
-                                     const Shape& b_shape,
-                                     Dtype dt) = 0;
+                                    const Storage& pivots,
+                                    const Storage& b,
+                                    const Shape& lu_shape,
+                                    const Shape& b_shape,
+                                    Dtype dt) = 0;
 
     // Reconstruct Q (m×k) from Householder reflectors H (m×n) and tau (k,).
     virtual Storage linalg_householder_product(const Storage& H,
-                                                const Storage& tau,
-                                                const Shape& h_shape,
-                                                Dtype dt) = 0;
+                                               const Storage& tau,
+                                               const Shape& h_shape,
+                                               Dtype dt) = 0;
 
     // LDL^T factorization of symmetric matrix. Returns {LD_packed, pivots_i32}.
     virtual StoragePair linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) = 0;
@@ -915,8 +922,8 @@ public:
     // Compact parameter bag for N-D standard convolution (N in {1,2,3}).
     // Arrays are indexed 0..N-1; unused trailing entries are ignored.
     struct ConvNdOpts {
-        int N;          // number of spatial dimensions
-        int groups;     // channel grouping factor for grouped convolution
+        int N;       // number of spatial dimensions
+        int groups;  // channel grouping factor for grouped convolution
         int stride[3];
         int pad[3];
         int dilation[3];
@@ -1008,37 +1015,39 @@ public:
     // Fold (col2im): inverse of unfold/im2col. Accumulates (N, C*kH*kW, L)
     // patches back into (N, C, outH, outW) using scatter-add.
     virtual Storage nn_fold(const Storage& x,
-                             const Shape& x_shape,
-                             const Shape& out_shape,
-                             const std::vector<int>& kernel_size,
-                             const std::vector<int>& stride,
-                             const std::vector<int>& padding,
-                             const std::vector<int>& dilation,
-                             Dtype dt) = 0;
+                            const Shape& x_shape,
+                            const Shape& out_shape,
+                            const std::vector<int>& kernel_size,
+                            const std::vector<int>& stride,
+                            const std::vector<int>& padding,
+                            const std::vector<int>& dilation,
+                            Dtype dt) = 0;
 
     // EmbeddingBag: gather rows from weight at indices, then reduce per bag.
     // mode: 0=sum, 1=mean, 2=max. For 1-D indices, offsets marks bag starts.
     virtual Storage embedding_bag_forward(const Storage& weight,
-                                           const Storage& indices,
-                                           const Storage& offsets,
-                                           const Shape& weight_shape,
-                                           const Shape& indices_shape,
-                                           int mode,
-                                           int padding_idx,
-                                           bool include_last_offset,
-                                           Dtype dt) = 0;
+                                          const Storage& indices,
+                                          const Storage& offsets,
+                                          const Shape& weight_shape,
+                                          const Shape& indices_shape,
+                                          int mode,
+                                          int padding_idx,
+                                          bool include_last_offset,
+                                          Dtype dt) = 0;
 
     // Flip (reverse) along the given axes.
-    virtual Storage flip(const Storage& a, const Shape& shape,
-                         const std::vector<int>& dims, Dtype dt) = 0;
+    virtual Storage
+    flip(const Storage& a, const Shape& shape, const std::vector<int>& dims, Dtype dt) = 0;
 
     // Masked select: extract elements where bool mask == true.
     // Returns a flat 1-D Storage of `n_true` elements.
-    virtual Storage masked_select_count(const Storage& mask,
-                                        const Shape& shape, Dtype dt) = 0;
-    virtual Storage masked_select(const Storage& a, const Storage& mask,
-                                   const Shape& a_shape, const Shape& mask_shape,
-                                   std::int64_t n_true, Dtype dt) = 0;
+    virtual Storage masked_select_count(const Storage& mask, const Shape& shape, Dtype dt) = 0;
+    virtual Storage masked_select(const Storage& a,
+                                  const Storage& mask,
+                                  const Shape& a_shape,
+                                  const Shape& mask_shape,
+                                  std::int64_t n_true,
+                                  Dtype dt) = 0;
 
     // CTC (Connectionist Temporal Classification) loss.
     // log_probs: (T, N, C) log-probabilities; targets: (N, S) or flat (sum_S,)
@@ -1439,8 +1448,7 @@ public:
 
     // Cast elements to a different dtype; shape is unchanged.
     // CPU: element-wise static_cast loop.  GPU: mlx::core::astype.
-    virtual Storage astype(const Storage& a, const Shape& shape,
-                            Dtype src_dt, Dtype dst_dt) = 0;
+    virtual Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) = 0;
 
     // Moves `src` to MTLResourceStorageModeShared memory so that both CPU and
     // GPU can access it without a copy.  Default is a no-op; GpuBackend overrides.
@@ -1462,10 +1470,10 @@ public:
         int num_layers = 1;
         int seq_len = 1;
         int batch_size = 1;
-        bool batch_first = false;    // if true, input is (batch, seq, input_size)
+        bool batch_first = false;  // if true, input is (batch, seq, input_size)
         bool bidirectional = false;
         bool has_bias = true;
-        int proj_size = 0;           // 0 ⇒ standard LSTM; >0 ⇒ projected LSTM
+        int proj_size = 0;  // 0 ⇒ standard LSTM; >0 ⇒ projected LSTM
     };
 
     // LSTM inference forward.  Returns [output, hn, cn].
