@@ -135,21 +135,29 @@ jobs:
       - name: Strip host MLX (catch RPATH absolute-path regressions)
         # The 3.0.0 release shipped a wheel with an absolute LC_RPATH
         # baked at build time — the runner-side smoke passed only because
-        # the same path was coincidentally reachable. Stripping host MLX
-        # before smoke forces the wheel to resolve libmlx purely via its
-        # own @loader_path RPATH inside the smoke venv. Any future
-        # regression to an absolute path fails this step closed.
+        # libmlx.dylib coincidentally lived at the baked path on the
+        # runner. The clean-machine simulation is: remove the .dylib
+        # from every site-packages root, then run smoke. The wheel must
+        # resolve libmlx purely via its own @loader_path RPATH inside
+        # the temp venv.
         run: |
           python -m pip uninstall -y mlx mlx-metal || true
-          # Use actual import (not find_spec) — find_spec returns a
-          # non-None namespace-package shell when an empty `mlx/` dir
-          # lingers on sys.path even though the package is gone.
+          # dyld follows dylib files, not Python module imports.
+          # Scan for libmlx.dylib presence directly — namespace-package
+          # shells without code still import OK, so import-based checks
+          # produce false negatives.
           python -c "
-          try:
-              import mlx
-              raise SystemExit(f'mlx still importable: {mlx.__file__}')
-          except ImportError:
-              print('host MLX successfully stripped')
+          import site, pathlib
+          roots = list(site.getsitepackages()) + [site.getusersitepackages()]
+          roots.append('/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages')
+          dylibs = []
+          for r in roots:
+              p = pathlib.Path(r)
+              if p.exists():
+                  dylibs.extend(str(x) for x in p.rglob('libmlx.dylib'))
+          if dylibs:
+              raise SystemExit(f'libmlx.dylib still on host:\n  ' + '\n  '.join(dylibs))
+          print('libmlx.dylib stripped from all host site-packages')
           "
 
       - name: Verify wheel installs + imports (truly clean env)

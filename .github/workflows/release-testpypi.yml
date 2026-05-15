@@ -61,23 +61,29 @@ jobs:
       - name: Strip host MLX (catch RPATH absolute-path regressions)
         # The 3.0.0 wheel baked the runner's Python framework MLX path as
         # an absolute LC_RPATH — the bundled smoke happened to pass because
-        # the same path was reachable on the runner. To make the smoke a
-        # truthful clean-machine simulation, uninstall mlx from the runner's
-        # Python first. After this step, the wheel must resolve libmlx via
-        # its own @loader_path RPATH pointing into the smoke venv only.
+        # the same path was reachable on the runner. After this step, the
+        # wheel must resolve libmlx via its own @loader_path RPATH pointing
+        # into the smoke venv only.
         run: |
           python -m pip uninstall -y mlx mlx-metal || true
-          # Verify mlx genuinely can't be imported. find_spec() alone is
-          # too strict — after uninstall, an empty `mlx/` namespace-package
-          # shell can linger on sys.path (from a sibling editable install
-          # or partial uninstall) and find_spec returns a non-None spec
-          # with origin=None. Real import is the source of truth.
+          # dyld follows dylib files, not Python module imports. The right
+          # question isn't "can I import mlx?" (namespace-package shells
+          # still import even with no real code), it's "does libmlx.dylib
+          # exist anywhere dyld might reach via RPATH?". Scan every
+          # site-packages root plus the framework path that 3.0.0 baked.
           python -c "
-          try:
-              import mlx
-              raise SystemExit(f'mlx still importable: {mlx.__file__}')
-          except ImportError:
-              print('host MLX successfully stripped')
+          import site, pathlib
+          roots = list(site.getsitepackages()) + [site.getusersitepackages()]
+          # Framework path is where the 3.0.0 absolute RPATH pointed.
+          roots.append('/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages')
+          dylibs = []
+          for r in roots:
+              p = pathlib.Path(r)
+              if p.exists():
+                  dylibs.extend(str(x) for x in p.rglob('libmlx.dylib'))
+          if dylibs:
+              raise SystemExit(f'libmlx.dylib still on host:\n  ' + '\n  '.join(dylibs))
+          print('libmlx.dylib stripped from all host site-packages')
           "
 
       - name: Verify wheel installs + imports (truly clean env)
