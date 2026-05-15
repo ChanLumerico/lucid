@@ -14,12 +14,18 @@ echo "==> Release build"
 "$PYTHON_BIN" -m pip install -e . --no-build-isolation
 
 # ── 2. Python fast tier (unit + numerical + stubs, no reference framework) ─
-echo "==> Python fast tier (unit / numerical / stubs)"
+# Run models zoo and the rest as separate processes so the ~80 model
+# fixtures don't accumulate live tensors in a single 14 GB GitHub runner.
+echo "==> Python fast tier (non-models)"
 "$PYTHON_BIN" -m pytest lucid/test/ \
     --ignore=lucid/test/parity \
     --ignore=lucid/test/integration \
     --ignore=lucid/test/perf \
+    --ignore=lucid/test/unit/models \
     -x -q
+
+echo "==> Python fast tier (models zoo)"
+"$PYTHON_BIN" -m pytest lucid/test/unit/models/ -x -q
 
 # ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
 echo "==> Parity tier (vs reference framework)"

@@ -89,6 +89,8 @@ jobs:
           python -m pip install --no-build-isolation -e ".[test]"
 
       - name: Run coverage
+        # Split into two coverage processes (non-models then models) and
+        # combine, so the ~80 model fixtures don't OOM the 14 GB runner.
         run: |
           python -m pip install coverage
           mkdir -p build/coverage
@@ -96,7 +98,13 @@ jobs:
               --ignore=lucid/test/parity \
               --ignore=lucid/test/integration \
               --ignore=lucid/test/perf \
+              --ignore=lucid/test/unit/models \
               -q
+          mv .coverage .coverage.non_models
+          python -m coverage run --source=lucid -m pytest \
+              lucid/test/unit/models/ -q
+          mv .coverage .coverage.models
+          python -m coverage combine .coverage.non_models .coverage.models
           python -m coverage xml -o build/coverage/coverage.xml
           python -m coverage report
 
