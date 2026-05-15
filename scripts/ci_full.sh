@@ -78,6 +78,9 @@ echo "==> Kernel template coverage"
 echo "==> Storage API compliance"
 "$PYTHON_BIN" tools/check_storage_api.py
 
+echo "==> H4 numpy guard (sanctioned bridge files only)"
+"$PYTHON_BIN" tools/check_numpy_h4.py
+
 # ── 8. Build tools ────────────────────────────────────────────────────────────
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh

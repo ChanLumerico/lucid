@@ -1601,10 +1601,6 @@ class Tensor:
         * 1-d tensor → a flat ``list``.
         * N-d tensor → a nested ``list`` of depth ``N``.
 
-        The conversion routes through :meth:`numpy` and then calls
-        ``ndarray.tolist()``, so the element types follow NumPy's
-        Python-type promotion (e.g. ``float32`` → Python ``float``).
-
         Returns
         -------
         list or int or float or bool
@@ -1620,13 +1616,68 @@ class Tensor:
 
         Notes
         -----
-        Routes through the NumPy bridge (rule **H4**) and forces a
-        device-to-host synchronisation for Metal tensors. The nested-list
-        depth equals the tensor rank :math:`d`; the total number of
-        leaves equals :math:`\prod_i s_i`. Autograd information is
-        dropped — the returned Python objects are pure value copies.
+        Numpy-free for every standard dtype (F16 / F32 / F64 / I8 / I16 /
+        I32 / I64 / Bool).  Reads ``to_bytes()`` and feeds the raw buffer
+        to ``struct.unpack`` with the matching format code, then nests
+        the flat list according to ``self.shape``.
+
+        BF16 and complex64 fall back to the legacy ``self.numpy().tolist()``
+        path because ``struct`` has no native code for either dtype.
+
+        Forces a device-to-host synchronisation for Metal tensors via the
+        underlying ``to_bytes()``.  Autograd information is dropped — the
+        returned Python objects are pure value copies.
         """
-        return self.numpy().tolist()
+        import struct  # stdlib — kept inside method so the module-level
+                       # imports stay numpy-free even on this code path.
+
+        impl = self._impl
+        dtype = impl.dtype
+        # Map engine dtype → struct format-code.  See ``_tensor_to_list`` in
+        # ``lucid.nn.utils.rnn`` for the same map (integer dtypes only there).
+        fmt_map = {
+            _C_engine.Dtype.F16: "e",
+            _C_engine.Dtype.F32: "f",
+            _C_engine.Dtype.F64: "d",
+            _C_engine.Dtype.I8: "b",
+            _C_engine.Dtype.I16: "h",
+            _C_engine.Dtype.I32: "i",
+            _C_engine.Dtype.I64: "q",
+            _C_engine.Dtype.Bool: "?",
+        }
+        fmt = fmt_map.get(dtype)
+        if fmt is None:
+            # BF16 / C64 — fall back to numpy.  Both are explicit advanced
+            # dtypes where the user already opted into the numpy bridge by
+            # choosing them.  Lazy-imports numpy with the standard H4
+            # ImportError when missing.
+            return self.numpy().tolist()  # type: ignore[no-any-return]
+
+        n = impl.numel()
+        raw = impl.to_bytes()
+        flat: list[object] = list(struct.unpack(f"={n}{fmt}", raw)) if n else []
+
+        shape = tuple(self.shape)
+        if not shape:
+            # 0-d tensor → bare Python scalar.
+            return flat[0] if flat else None  # type: ignore[return-value]
+
+        if len(shape) == 1:
+            return flat
+
+        # Nest the flat buffer according to row-major shape.  Walk the
+        # trailing dims down to a 1-D row, then group rows into the
+        # higher-dim list.
+        def _nest(buf: list[object], dims: tuple[int, ...]) -> list[object]:
+            if len(dims) == 1:
+                return buf
+            stride = 1
+            for d in dims[1:]:
+                stride *= d
+            return [_nest(buf[i * stride:(i + 1) * stride], dims[1:])
+                    for i in range(dims[0])]
+
+        return _nest(flat, shape)
 
     def contiguous(self) -> Self:
         r"""Return a tensor whose data is stored in contiguous C-order memory.

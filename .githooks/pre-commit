@@ -1,20 +1,48 @@
 #!/usr/bin/env bash
-# .githooks/pre-commit — update Lines of Code badge in README.md
+# .githooks/pre-commit — Lucid pre-commit gate.
 #
-# Runs `cloc lucid/` before every commit, extracts the total code line count,
-# and rewrites the static shield badge in README.md.  The updated README is
-# re-staged so the badge is always in sync with the committed source.
+# Two checks, both blocking (the second is hard-fail):
 #
-# Requires: cloc (brew install cloc)
-# Skip:     LUCID_SKIP_LOC_BADGE=1 git commit ...
+#   1. H4 numpy guard.  ``tools/check_numpy_h4.py`` walks lucid/ and
+#      flags any ``import numpy`` outside the six sanctioned bridge
+#      files (CLAUDE.md §6.1 H4).  The 3.0.1 → 3.0.2 hotfix sequence
+#      surfaced four unsanctioned leaks that had crept in silently;
+#      this guard makes the same regression visible at commit time
+#      rather than after a release ships.
+#
+#   2. LOC badge refresh.  Runs ``cloc lucid/`` and rewrites the
+#      shield badge in README.md so it always matches the committed
+#      source.  Re-stages README.md.  Soft-fails (warning only) when
+#      cloc isn't installed.
+#
+# Skip individual checks:
+#     LUCID_SKIP_H4_GUARD=1     skip the H4 scan
+#     LUCID_SKIP_LOC_BADGE=1    skip the LOC badge refresh
 
 set -uo pipefail
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# ── 1. H4 numpy guard ───────────────────────────────────────────────────────
+# Hard-fail.  Run before LOC refresh so a violation aborts the commit
+# without leaving a half-applied badge stage.
+if [[ "${LUCID_SKIP_H4_GUARD:-0}" != "1" ]]; then
+    if ! python3 "${REPO_ROOT}/tools/check_numpy_h4.py" --quiet; then
+        echo "" >&2
+        # Re-run non-quiet to show the violations for the developer.
+        python3 "${REPO_ROOT}/tools/check_numpy_h4.py" >&2 || true
+        echo "" >&2
+        echo "  ❌  Pre-commit blocked.  Fix H4 violation above and re-stage." >&2
+        echo "      Override (discouraged):  LUCID_SKIP_H4_GUARD=1 git commit ..." >&2
+        exit 1
+    fi
+fi
+
+# ── 2. LOC badge refresh ────────────────────────────────────────────────────
 if [[ "${LUCID_SKIP_LOC_BADGE:-0}" == "1" ]]; then
     exit 0
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
 README="${REPO_ROOT}/README.md"
 
 if ! command -v cloc &>/dev/null; then
