@@ -1,12 +1,14 @@
 name: Lucid C++ Engine CI
 
 on:
+  # PR gate: every push to a branch with an open PR runs the full matrix.
   pull_request:
-  # Only run `push` on the trunk — feature branches with open PRs are
-  # already covered by the `pull_request` event, so listing them here
-  # would double-trigger every push.
+  # Post-merge: only explicit release tags retrigger the gate. Routine
+  # `git push origin main` does not — main is assumed already green from
+  # the PR check, and tagged releases are the meaningful republish point
+  # (matches `release-testpypi.yml`).
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
   schedule:
     - cron: "17 9 * * *"
