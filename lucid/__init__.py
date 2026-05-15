@@ -194,6 +194,10 @@ __all__ = [
     # ── serialization ─────────────────────────────────────────────────────
     "save", "load", "save_sharded", "load_sharded",
     "save_safetensors", "load_safetensors",
+    # ── ops reachable via lazy __getattr__ but previously missing from
+    # __all__ / dir() (IDE autocomplete + ``from lucid import *``) ────────
+    "abs", "all", "any", "complex", "cummax", "cummin", "diagonal",
+    "erf", "erfinv", "max", "min", "pow", "ravel", "round", "sum",
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
     "utils", "amp", "profiler", "einops",

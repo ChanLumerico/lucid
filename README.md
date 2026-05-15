@@ -19,7 +19,7 @@
 
 Version 3.0 is a complete rewrite. The Python-layer minimalism of earlier releases is preserved at the API surface, but underneath sits a fully engineered C++ engine with a typed exception hierarchy, a memory pool, determinism and thread-safety contracts, op fusion, and a direct Metal shader escape hatch. The result is a framework that is simultaneously a clean learning resource and a platform capable of running real training workloads on Apple Silicon hardware.
 
-[📑 Documentation](https://chanlumerico.github.io/lucid/build/html/index.html) | [🤗 Hugging Face](https://huggingface.co/ChanLumerico/lucid) | [📋 Changelog](CHANGELOG.md)
+[📑 Documentation](https://chanlumerico.github.io/lucid/) | [🤗 Hugging Face](https://huggingface.co/ChanLumerico/lucid) | [📋 Changelog](CHANGELOG.md)
 
 ---
 
@@ -142,8 +142,8 @@ The C++ engine is compiled automatically via `scikit-build-core` + CMake + Ninja
 
 ```bash
 pip install lucid-dl[numpy]   # numpy bridge (tensor(), .numpy(), from_numpy())
-pip install lucid-dl[test]    # pytest + pytest-benchmark + numpy
-pip install lucid-dl[docs]    # Sphinx documentation stack
+pip install lucid-dl[test]    # pytest + pytest-benchmark + numpy + safetensors
+pip install lucid-dl[dev]     # ruff + mypy + numpy (contributor tooling)
 ```
 
 The reference framework for parity tests is **not** declared as a dependency — install it separately if you need `pytest -m parity`.

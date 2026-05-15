@@ -1,3 +1,7 @@
 include .extensions/cpp_extensions.json
-recursive-include lucid/_backend/_C *.hpp *.h *.pyi
+include README.md LICENSE CHANGELOG.md
+
+# C++ engine sources need to be in the sdist so source installs can build.
+recursive-include lucid/_C *.h *.hpp *.cpp *.mm *.metal CMakeLists.txt
+recursive-include lucid/_C/cmake *
 recursive-include lucid *.json *.pyi

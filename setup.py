@@ -18,10 +18,6 @@ except ImportError as e:
     ) from e
 
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
-
-
 def _enforce_apple_silicon_only() -> None:
     system = platform.system()
     machine = platform.machine()
@@ -135,39 +131,11 @@ _enforce_apple_silicon_only()
 _raw_version = "{{VERSION_PLACEHOLDER}}"
 PACKAGE_VERSION = "0.0.0" if _raw_version.startswith("{{") else _raw_version
 
+# All distribution metadata (name, version, deps, classifiers, packages,
+# extras_require) lives in pyproject.toml — this file is the *build*
+# entrypoint only (CMake-driven C++ extension + Apple-Silicon guard).
 setuptools.setup(
-    name="lucid-dl",
     version=PACKAGE_VERSION,
-    license="MIT",
-    author="ChanLumerico",
-    author_email="greensox284@gmail.com",
-    description="Lumerico's Comprehensive Interface for Deep Learning",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/ChanLumerico/lucid",
-    packages=setuptools.find_namespace_packages(include=["lucid*"]),
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: 3.13",
-        "Programming Language :: Python :: 3.14",
-        "Operating System :: MacOS :: MacOS X",
-    ],
-    python_requires=">=3.11",
-    install_requires=[
-        "numpy",
-        "pandas",
-        "openml",
-        "mlx; platform_system == 'Darwin' and platform_machine == 'arm64'",
-    ],
-    extras_require={
-        "test": [
-            "pytest>=7.0",
-            "einops>=0.8",
-            "tqdm",
-        ],
-    },
     package_data={
         "lucid.weights": ["registry.json", "__init__.pyi"],
         "lucid.models": ["registry.json"],

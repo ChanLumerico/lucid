@@ -12,11 +12,27 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "lucid"
+name = "lucid-dl"
 version = "3.0.0"
 description = "Apple Silicon ML framework"
 readme = "README.md"
+license = "MIT"
+authors = [{ name = "ChanLumerico", email = "greensox284@gmail.com" }]
 requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: MacOS :: MacOS X",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/ChanLumerico/lucid"
+Documentation = "https://chanlumerico.github.io/lucid/"
+Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ChanLumerico/lucid/issues"
 # Lucid is self-contained: ``import lucid`` and the full forward + backward +
 # optimizer + save/load lifecycle work without numpy installed.  NumPy is
 # only needed at the explicit user-facing bridge surface (``tensor(np_arr)``,
