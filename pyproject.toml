@@ -5,9 +5,13 @@ requires = [
     "pybind11>=2.10",
     "cmake>=3.24",
     "ninja>=1.11",
-    # setup.py imports mlx at build time to detect Metal sources, so it
-    # must be available in the isolated build environment.
-    "mlx>=0.18; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # setup.py imports mlx at build time to detect Metal sources, and
+    # lucid/_C/ops/fft/*.cpp uses the pre-0.21 `fftn(array, vector<int>
+    # axes, StreamOrDevice)` overload. MLX 0.21+ replaced it with
+    # `fftn(array, Shape, vector<int>, FFTNorm, StreamOrDevice)` so we
+    # pin to the last compatible release line. TODO: port FFT ops to
+    # the new API in a follow-up PR.
+    "mlx>=0.18,<0.21; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 build-backend = "setuptools.build_meta"
 
