@@ -2,11 +2,20 @@ name: Lucid C++ Engine CI
 
 on:
   pull_request:
+  # Only run `push` on the trunk — feature branches with open PRs are
+  # already covered by the `pull_request` event, so listing them here
+  # would double-trigger every push.
   push:
-    branches: [main, lucid-3.0]
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "17 9 * * *"
+
+# Cancel any in-flight run on the same ref when a new push lands, so
+# rapid successive pushes don't pile up 7–9 min jobs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   phase-gate:
