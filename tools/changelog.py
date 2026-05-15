@@ -179,18 +179,42 @@ def _add_bullet(category: str, message: str, dry_run: bool = False) -> None:
     cat_header = f"### {cat_label}"
     bullet = f"- {message.strip()}\n"
 
-    # Strip the placeholder if present (and any leading/trailing blank lines
-    # that surrounded it).
-    placeholder = "- _Pending the next release._"
-    if placeholder in body:
-        # Remove the entire "### Added\n\n- _Pending..._\n" block if that's all
-        # there is under it; otherwise just drop the placeholder line.
-        lines2 = body.splitlines(keepends=True)
-        kept = []
-        for line in lines2:
-            if line.strip() == placeholder:
+    # Strip any "[Unreleased] is empty" placeholder line and the surrounding
+    # blank lines that frame it.  Historically we've used two phrasings:
+    #
+    #     - _Pending the next release._    (old bullet form)
+    #     _No changes yet._                (current italics-only form)
+    #
+    # Both are recognised here; new code paths in this script standardise on
+    # the second form (no leading dash) so the placeholder isn't valid
+    # markdown for a category bullet — it can't accidentally be mistaken
+    # for a real entry.
+    placeholder_patterns = (
+        "- _Pending the next release._",
+        "_No changes yet._",
+    )
+
+    def _is_placeholder(stripped: str) -> bool:
+        return stripped in placeholder_patterns
+
+    if any(_is_placeholder(line.strip()) for line in body.splitlines()):
+        # Drop the placeholder line.  Collapse the runs of blank lines that
+        # surrounded it so we don't leave a double-blank where the entry will
+        # land.
+        kept: list[str] = []
+        prev_blank = False
+        for line in body.splitlines(keepends=True):
+            if _is_placeholder(line.strip()):
                 continue
+            is_blank = (line.strip() == "")
+            if is_blank and prev_blank:
+                continue  # collapse consecutive blanks
             kept.append(line)
+            prev_blank = is_blank
+        # Strip a leading blank so the body starts cleanly under the
+        # ## [Unreleased] header.
+        while kept and kept[0].strip() == "":
+            kept.pop(0)
         body = "".join(kept)
 
     if cat_header in body:

@@ -232,6 +232,16 @@ public:
     std::shared_ptr<TensorImpl>
     transfer_to_device(Device target, bool requires_grad) const;
 
+    // Convert the tensor to a nested Python list (or a Python scalar for
+    // 0-d tensors) — numpy-free, mirroring ``item()``'s dtype dispatch but
+    // walking the full shape.  Handles every supported dtype including
+    // C64 (yields Python ``complex``), so callers don't need to fall back
+    // to the numpy bridge for any standard dtype.  GPU tensors are
+    // downloaded to a temporary CpuStorage first via the existing
+    // ``to_bytes()`` snapshot path; the heavy lifting then runs against a
+    // contiguous row-major byte buffer.
+    py::object tolist() const;
+
     // Extracts a single-element tensor's value as a Python scalar object
     // (int / float / bool / complex).  Throws when ``numel() != 1``.  GPU
     // tensors are downloaded to CPU; the F16 IEEE-754 binary16 → float

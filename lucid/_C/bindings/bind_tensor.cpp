@@ -159,6 +159,12 @@ void register_tensor_impl(py::module_& m) {
              "numpy-free for ``import lucid`` users who didn't install the "
              "``[numpy]`` extra.  SharedStorage tensors should use "
              "``transfer_storage`` instead — that path is zero-copy relabel.")
+        .def("tolist", &TensorImpl::tolist,
+             "Convert the tensor to a nested Python list (or scalar for 0-d), "
+             "covering every supported dtype including F16 and C64.  Mirrors "
+             "``item()``'s dtype dispatch but walks the full shape.  Used by "
+             "``Tensor.tolist()`` so the call stays numpy-free across all "
+             "current Lucid dtypes — no struct.unpack-based fallback.")
         .def("to_string", &TensorImpl::to_string, py::arg("precision") = 4,
              py::arg("threshold") = 1000, py::arg("edgeitems") = 3,
              "Render the tensor's data as a human-readable string.  "

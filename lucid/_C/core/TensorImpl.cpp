@@ -595,6 +595,161 @@ TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
         storage_);
 }
 
+namespace {
+
+// Decode a single IEEE-754 binary16 (half) bit pattern to a host float.
+// Mirrors the inline decoder in ``TensorImpl::item()`` and is kept in
+// this translation unit so the only divergence is the surrounding loop.
+inline float decode_f16(std::uint16_t bits) {
+    std::uint32_t sign = (bits >> 15) & 0x1u;
+    std::uint32_t exp = (bits >> 10) & 0x1fu;
+    std::uint32_t mant = bits & 0x3ffu;
+    std::uint32_t f;
+    if (exp == 0) {
+        if (mant == 0) {
+            f = sign << 31;
+        } else {
+            std::uint32_t e = 1;
+            std::uint32_t m = mant;
+            while ((m & 0x400u) == 0) {
+                m <<= 1;
+                --e;
+            }
+            m &= 0x3ffu;
+            f = (sign << 31) | ((e + 112) << 23) | (m << 13);
+        }
+    } else if (exp == 31) {
+        f = (sign << 31) | (0xffu << 23) | (mant << 13);
+    } else {
+        f = (sign << 31) | ((exp + 112) << 23) | (mant << 13);
+    }
+    float out;
+    std::memcpy(&out, &f, sizeof(out));
+    return out;
+}
+
+// Walk ``shape`` recursively over ``raw`` (a contiguous row-major byte
+// buffer for the active dtype) and emit a nested py::list whose leaves
+// are Python scalars produced by ``scalar``.  ``elem_size`` is the byte
+// stride of one element in ``raw``.
+template <typename ScalarFn>
+py::object emit_nested(
+    const char* raw,
+    const Shape& shape,
+    std::size_t depth,
+    std::size_t elem_size,
+    const ScalarFn& scalar) {
+    if (depth == shape.size()) {
+        return scalar(raw);
+    }
+    const std::int64_t dim = shape[depth];
+    // Stride in bytes for one step along this axis = product of trailing
+    // dims × elem_size.  Compute on the fly so we don't materialise a
+    // stride vector for the (typically tiny) recursion depth.
+    std::size_t stride = elem_size;
+    for (std::size_t i = depth + 1; i < shape.size(); ++i) {
+        stride *= static_cast<std::size_t>(shape[i]);
+    }
+    py::list out;
+    for (std::int64_t i = 0; i < dim; ++i) {
+        out.append(emit_nested(raw + static_cast<std::size_t>(i) * stride,
+                               shape, depth + 1, elem_size, scalar));
+    }
+    return out;
+}
+
+}  // namespace
+
+py::object TensorImpl::tolist() const {
+    // Reuse the existing ``to_bytes()`` snapshot — it already handles the
+    // CpuStorage / GpuStorage / SharedStorage variants + GPU download and
+    // collapses non-contiguous views into a fresh row-major buffer.  The
+    // returned ``py::bytes`` keeps the buffer alive for the duration of
+    // this call; we read through ``raw`` below without owning it.
+    py::bytes blob = to_bytes();
+    char* raw = nullptr;
+    py::ssize_t len = 0;
+    PyBytes_AsStringAndSize(blob.ptr(), &raw, &len);
+    (void)len;  // Trust shape × dtype_size; ``to_bytes`` already validated.
+
+    const std::size_t elem = dtype_size(meta_.dtype);
+
+    // Build a typed scalar emitter per dtype, then hand it to
+    // ``emit_nested`` which walks the shape generically.  Each emitter
+    // returns the appropriate Python type (``int`` / ``float`` / ``bool``
+    // / ``complex``) so the resulting list matches what ``Tensor.item()``
+    // would produce for a 0-d slice.
+    auto walk = [&](auto scalar) -> py::object {
+        if (meta_.shape.empty()) {
+            // 0-d tensor → bare Python scalar.
+            return scalar(raw);
+        }
+        return emit_nested(raw, meta_.shape, 0, elem, scalar);
+    };
+
+    switch (meta_.dtype) {
+    case Dtype::F32:
+        return walk([](const char* p) -> py::object {
+            float v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::float_(static_cast<double>(v));
+        });
+    case Dtype::F64:
+        return walk([](const char* p) -> py::object {
+            double v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::float_(v);
+        });
+    case Dtype::F16:
+        return walk([](const char* p) -> py::object {
+            std::uint16_t bits;
+            std::memcpy(&bits, p, sizeof(bits));
+            return py::float_(static_cast<double>(decode_f16(bits)));
+        });
+    case Dtype::I64:
+        return walk([](const char* p) -> py::object {
+            std::int64_t v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::int_(v);
+        });
+    case Dtype::I32:
+        return walk([](const char* p) -> py::object {
+            std::int32_t v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::int_(v);
+        });
+    case Dtype::I16:
+        return walk([](const char* p) -> py::object {
+            std::int16_t v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::int_(static_cast<int>(v));
+        });
+    case Dtype::I8:
+        return walk([](const char* p) -> py::object {
+            std::int8_t v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::int_(static_cast<int>(v));
+        });
+    case Dtype::Bool:
+        return walk([](const char* p) -> py::object {
+            std::uint8_t v;
+            std::memcpy(&v, p, sizeof(v));
+            return py::bool_(v != 0);
+        });
+    case Dtype::C64:
+        return walk([](const char* p) -> py::object {
+            // complex64 = 2 contiguous f32, real then imag.
+            float re, im;
+            std::memcpy(&re, p, sizeof(re));
+            std::memcpy(&im, p + sizeof(re), sizeof(im));
+            return py::cast(std::complex<double>(static_cast<double>(re),
+                                                 static_cast<double>(im)));
+        });
+    }
+    ErrorBuilder("tolist").fail("unsupported dtype");
+    return py::none();
+}
+
 py::object TensorImpl::item() const {
     if (numel() != 1) {
         ErrorBuilder("item").fail("item() can only be called on a tensor with one element");

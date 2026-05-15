@@ -15,11 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No changes yet._
-
 ### Fixed
 
 - numpy-free Tensor.tolist() + H4 enforcement + hook installer
+- close numpy-free gaps (C64 .tolist + .tensor) + doc/tooling cleanup
 
 ---
 

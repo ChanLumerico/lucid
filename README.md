@@ -11,7 +11,7 @@
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
-![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-113133-purple)
+![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-113250-purple)
 
 </div>
 
@@ -90,7 +90,7 @@ CPU↔GPU transfers for tensors above 64 KB avoid an intermediate copy using a s
 │    Tensor  —  storage, views, dtype, device         │
 │    Autograd  —  dynamic graph, backward engine      │
 │    Ops  —  260+ kernels across all op families      │
-│    CPU backend  —  Accelerate (BLAS/LAPACK/BNNS)    │
+│    CPU backend  —  Accelerate (BLAS/LAPACK/vDSP)    │
 │    GPU backend  —  MLX + Metal                      │
 └────────────────────────────────────────────────────┘
 ```
@@ -101,7 +101,7 @@ Lucid enforces a strict backend bifurcation:
 
 | Stream | Backend | Rationale |
 |--------|---------|-----------|
-| CPU | Apple Accelerate (vDSP / vForce / BLAS / LAPACK / BNNS) | Native arm64 SIMD; no framework overhead |
+| CPU | Apple Accelerate (vDSP / vForce / BLAS / LAPACK) | Native arm64 SIMD; no framework overhead |
 | GPU | MLX | Unified memory; lazy evaluation; Metal under the hood |
 | `lucid.linalg` on CPU | MLX (exception) | MLX is itself CPU-backed here; avoids duplicating LAPACK wrappers |
 | Data-dependent output shapes | CPU round-trip | Unavoidable when output size is unknown at graph-build time |
@@ -341,10 +341,6 @@ The dominant remaining overhead on GPU is the Python-to-C++ dispatch boundary an
 ### 🔄 Zero-copy transfers
 
 CPU↔GPU transfers above 64 KB avoid an intermediate copy. Below that threshold the fast private upload path is used instead. The threshold is configurable at build time.
-
-### 🧠 BNNS fast paths
-
-`Conv2d` with batch size 1 and `BatchNorm` dispatch to Apple's BNNS (Basic Neural Network Subroutines) for single-sample inference, delivering lower latency than the general BLAS path.
 
 ### ⚡ Op fusion
 

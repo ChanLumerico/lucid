@@ -35,7 +35,7 @@ C++ engine
   tensor/    TensorImpl, AutogradMeta, view semantics
   core/      Dtype, Shape, Device, Error, Allocator
   backend/
-    cpu/     Apple Accelerate (BLAS / LAPACK / vDSP / vForce / BNNS)
+    cpu/     Apple Accelerate (BLAS / LAPACK / vDSP / vForce)
     gpu/     MLX (mlx::core::*) + MetalAllocator
   kernel/    IKernel, UnaryKernel, BinaryKernel, primitives
   autograd/  Node, Engine, AutogradNode<Derived,N>
@@ -61,7 +61,7 @@ bindings → ops → kernel → autograd → backend → tensor → core
 
 | Stream | Backend | Notes |
 |--------|---------|-------|
-| CPU | Apple Accelerate only | vDSP / vForce / BLAS / LAPACK / BNNS |
+| CPU | Apple Accelerate only | vDSP / vForce / BLAS / LAPACK |
 | GPU | MLX only | mlx::core::* |
 | `lucid.linalg` on CPU | MLX (exception) | MLX itself is CPU-backed here; wrap result back as GPU |
 | Data-dependent output shapes | CPU round-trip | Unavoidable; document the reason in a comment |

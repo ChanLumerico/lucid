@@ -78,6 +78,9 @@ def _infer_engine_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
     """Default-dtype inference for Python scalars.
 
     Matches numpy's behaviour at the call site:
+      * any ``complex`` element → ``C64``  (numpy promotes to complex128
+        by default; lucid pins to complex64 because the engine only
+        carries C64 today)
       * any ``float`` element → ``F32`` (lucid's default float dtype)
       * all ``bool`` elements → ``Bool``
       * otherwise (ints) → ``I64``  (numpy uses platform int, but
@@ -86,6 +89,11 @@ def _infer_engine_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
     """
     if not flat:
         return _C_engine.Dtype.F32  # zero-length tensor — match numpy default
+    # complex must be checked first — Python's numeric hierarchy means
+    # `complex` is neither `float` nor `int`, but the dtype promotion
+    # rules say a single complex value upgrades everything else.
+    if any(isinstance(v, complex) for v in flat):
+        return _C_engine.Dtype.C64
     has_float = any(isinstance(v, float) and not isinstance(v, bool) for v in flat)
     if has_float:
         return _C_engine.Dtype.F32
@@ -110,6 +118,22 @@ def _coerce_for_struct(v: object, dtype: _C_engine.Dtype) -> object:
     return float(v)  # type: ignore[arg-type]
 
 
+def _pack_complex64(flat: Sequence[object]) -> bytes:
+    """Pack a flat sequence of complex/real scalars as little-endian
+    interleaved (real, imag) float32 pairs — the on-disk layout the
+    engine's C64 dtype expects (matches ``TensorImpl::tolist()``'s
+    decoder in TensorImpl.cpp).
+    """
+    if not flat:
+        return b""
+    floats: list[float] = []
+    for v in flat:
+        c = complex(v)  # type: ignore[arg-type]  # accepts int/float/complex
+        floats.append(c.real)
+        floats.append(c.imag)
+    return struct.pack(f"={len(floats)}f", *floats)
+
+
 def _try_numpy_free_to_impl(
     data: object,
     dtype_eng: _C_engine.Dtype | None,
@@ -118,19 +142,32 @@ def _try_numpy_free_to_impl(
 ) -> _C_engine.TensorImpl | None:
     """Build a TensorImpl from Python scalars/lists/tuples without numpy.
 
-    Returns ``None`` when the input or target dtype can't be handled by
-    ``struct.pack`` (e.g. BF16, complex64, ragged nesting); the caller
-    then falls through to the numpy bridge.
+    Returns ``None`` when the input can't be handled by ``struct.pack``
+    (e.g. ragged nesting, BF16 target dtype); the caller then falls
+    through to the numpy bridge.  All currently supported engine dtypes
+    have a numpy-free path here — including C64 (packed as interleaved
+    f32 pairs).
     """
-    if isinstance(data, (list, tuple)) or isinstance(data, (int, float, bool)):
+    if isinstance(data, (list, tuple)) or isinstance(data, (int, float, bool, complex)):
         unpacked = _flatten_with_shape(data)
         if unpacked is None:
             return None  # ragged → numpy
         shape, flat = unpacked
         target = dtype_eng if dtype_eng is not None else _infer_engine_dtype(flat)
+
+        # C64 isn't directly encodable as a single struct format code —
+        # it ships as two f32 values per element (real, imag).  Handle
+        # it explicitly so users can write ``lucid.tensor([1+2j, ...])``
+        # without dragging numpy in just for complex literal support.
+        if target == _C_engine.Dtype.C64:
+            packed = _pack_complex64(flat)
+            return _C_engine.TensorImpl.from_bytes(
+                packed, shape, target, device_eng, requires_grad
+            )
+
         fmt_entry = _DTYPE_STRUCT.get(target)
         if fmt_entry is None:
-            return None  # BF16 / C64 → numpy
+            return None  # BF16 (not yet in the enum) → numpy if it ever lands
         fmt, _ = fmt_entry
         n = len(flat)
         if n == 0:
