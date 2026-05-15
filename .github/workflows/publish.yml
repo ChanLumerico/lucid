@@ -141,11 +141,15 @@ jobs:
         # regression to an absolute path fails this step closed.
         run: |
           python -m pip uninstall -y mlx mlx-metal || true
+          # Use actual import (not find_spec) — find_spec returns a
+          # non-None namespace-package shell when an empty `mlx/` dir
+          # lingers on sys.path even though the package is gone.
           python -c "
-          import importlib.util
-          spec = importlib.util.find_spec('mlx')
-          assert spec is None, f'mlx still on host: {spec.origin}'
-          print('host MLX successfully stripped')
+          try:
+              import mlx
+              raise SystemExit(f'mlx still importable: {mlx.__file__}')
+          except ImportError:
+              print('host MLX successfully stripped')
           "
 
       - name: Verify wheel installs + imports (truly clean env)

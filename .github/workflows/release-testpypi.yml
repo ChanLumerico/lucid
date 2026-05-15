@@ -67,12 +67,17 @@ jobs:
         # its own @loader_path RPATH pointing into the smoke venv only.
         run: |
           python -m pip uninstall -y mlx mlx-metal || true
-          # Verify framework mlx really gone from the runner Python.
+          # Verify mlx genuinely can't be imported. find_spec() alone is
+          # too strict — after uninstall, an empty `mlx/` namespace-package
+          # shell can linger on sys.path (from a sibling editable install
+          # or partial uninstall) and find_spec returns a non-None spec
+          # with origin=None. Real import is the source of truth.
           python -c "
-          import importlib.util
-          spec = importlib.util.find_spec('mlx')
-          assert spec is None, f'mlx still on host: {spec.origin}'
-          print('host MLX successfully stripped')
+          try:
+              import mlx
+              raise SystemExit(f'mlx still importable: {mlx.__file__}')
+          except ImportError:
+              print('host MLX successfully stripped')
           "
 
       - name: Verify wheel installs + imports (truly clean env)
