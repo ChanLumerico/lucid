@@ -24,8 +24,14 @@ echo "==> Python fast tier (non-models)"
     --ignore=lucid/test/unit/models \
     -x -q
 
-echo "==> Python fast tier (models zoo)"
-"$PYTHON_BIN" -m pytest lucid/test/unit/models/ -x -q
+echo "==> Python fast tier (models zoo, one file per process)"
+# Each test_models_*.py constructs large model fixtures; running all 42
+# in one pytest session OOM-kills the runner. Iterate so each file gets
+# a fresh Python heap.
+for _t in lucid/test/unit/models/test_models_*.py; do
+    echo "  ▸ $_t"
+    "$PYTHON_BIN" -m pytest "$_t" -q || exit 1
+done
 
 # ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
 echo "==> Parity tier (vs reference framework)"
