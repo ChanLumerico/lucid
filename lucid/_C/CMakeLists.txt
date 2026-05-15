@@ -319,8 +319,29 @@ set_target_properties(
         OUTPUT_NAME "engine"
         SUFFIX "${LUCID_PYTHON_EXTENSION_SUFFIX}"
         LIBRARY_OUTPUT_DIRECTORY "${LUCID_EXTENSION_OUTPUT_DIR}"
+        # BUILD_RPATH = absolute path to the build-env's MLX install so
+        # `import lucid` works directly out of the build tree during
+        # `pip install -e .` (no install step copies the .so anywhere).
         BUILD_RPATH "${LUCID_MLX_LIBRARY_DIR}"
-        INSTALL_RPATH "${LUCID_MLX_LIBRARY_DIR}")
+        # INSTALL_RPATH = relative path baked into the *wheel* .so. The
+        # wheel layout is:
+        #     site-packages/lucid/_C/engine.cpython-*.so   ← @loader_path
+        #     site-packages/mlx/lib/libmlx.dylib
+        # so two `..` levels reach site-packages, then `mlx/lib/`.
+        # Using an absolute path here (the 3.0.0 bug) bakes the build
+        # machine's filesystem into the wheel — dyld then follows it
+        # blindly, ignoring the user's venv mlx, and resolves to
+        # whatever happens to be at that absolute path on the user's
+        # machine (often a different MLX version → ABI mismatch on
+        # import). `@loader_path` is .so-position-relative and works
+        # regardless of venv vs system Python install.
+        INSTALL_RPATH "@loader_path/../../mlx/lib"
+        # Use INSTALL_RPATH at link time too, so the wheel's .so never
+        # ships with the build-tree absolute path even transiently.
+        BUILD_WITH_INSTALL_RPATH ON
+        # Don't auto-add the linker's search path to RPATH — that path
+        # is build-env-specific and would re-introduce the same bug.
+        INSTALL_RPATH_USE_LINK_PATH OFF)
 
 # ── Optional C++ unit tests (Google Test) ────────────────────────────────────
 option(BUILD_TESTING "Build C++ unit tests using Google Test" OFF)

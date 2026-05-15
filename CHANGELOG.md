@@ -19,6 +19,40 @@ _No changes yet._
 
 ---
 
+## [3.0.1] — 2026-05-16
+
+Hotfix for a dylib RPATH bug in 3.0.0 that made the wheel unusable on
+fresh installs.
+
+### Fixed
+
+- **`engine.cpython-*-darwin.so` RPATH baking** — 3.0.0 baked the
+  build machine's absolute MLX library path
+  (`/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/mlx/lib`)
+  as the wheel's only `LC_RPATH` entry. At runtime `dyld` followed
+  that absolute path verbatim, ignoring the user's venv-installed MLX
+  in `site-packages/mlx/lib/`. On any machine whose framework Python
+  had a different MLX version (or no MLX at all), `import lucid`
+  failed with `Symbol not found: __ZN3mlx4core10as_strided...`.
+  Fixed by switching `lucid/_C/CMakeLists.txt` to
+  `INSTALL_RPATH "@loader_path/../../mlx/lib"` +
+  `BUILD_WITH_INSTALL_RPATH ON` +
+  `INSTALL_RPATH_USE_LINK_PATH OFF`, so the .so resolves libmlx
+  relative to its own location inside `site-packages/lucid/_C/`.
+  Works in venv and system Python equivalently.
+
+### Tooling
+
+- **`release-testpypi.yml` smoke hardening** — the editable install
+  in the build-deps step (`pip install -e ".[test]"`) was masking
+  RPATH regressions because it kept the build env's MLX 1:1 with the
+  baked path. Smoke now `pip uninstall -y mlx` after the wheel is
+  built, then re-installs MLX into a clean venv and imports — exactly
+  what a real user sees. Any future RPATH absolute-path leak fails
+  the workflow at this step.
+
+---
+
 ## [3.0.0] — 2026-05-16
 
 First production release. Lucid is now PyTorch-compatible across the public

@@ -132,7 +132,23 @@ jobs:
           python -m build --no-isolation
           ls -lh dist/
 
-      - name: Verify wheel installs + imports
+      - name: Strip host MLX (catch RPATH absolute-path regressions)
+        # The 3.0.0 release shipped a wheel with an absolute LC_RPATH
+        # baked at build time — the runner-side smoke passed only because
+        # the same path was coincidentally reachable. Stripping host MLX
+        # before smoke forces the wheel to resolve libmlx purely via its
+        # own @loader_path RPATH inside the smoke venv. Any future
+        # regression to an absolute path fails this step closed.
+        run: |
+          python -m pip uninstall -y mlx mlx-metal || true
+          python -c "
+          import importlib.util
+          spec = importlib.util.find_spec('mlx')
+          assert spec is None, f'mlx still on host: {spec.origin}'
+          print('host MLX successfully stripped')
+          "
+
+      - name: Verify wheel installs + imports (truly clean env)
         run: ./scripts/ci_publish.sh
 
       - uses: actions/upload-artifact@v4

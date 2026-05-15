@@ -46,17 +46,64 @@ jobs:
           python -m pip install setuptools wheel cmake ninja pybind11 mlx
           python -m pip install --no-build-isolation -e ".[test]"
 
-      - name: Build + verify wheel
-        # `scripts/ci_publish.sh` builds the wheel into `dist/` and verifies
-        # it installs + imports inside a clean venv. The env vars below
-        # force the wheel platform tag to `macosx_26_0_arm64` — without
-        # them python.org's universal2 Python interpreter would produce
-        # a `universal2` tag that lies about x86_64 compatibility.
+      - name: Build wheel only (no smoke yet)
         env:
           MACOSX_DEPLOYMENT_TARGET: "26.0"
           _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
           ARCHFLAGS: "-arch arm64"
-        run: ./scripts/ci_publish.sh
+        run: |
+          # Build the wheel — host env has mlx for linkage. Skip the
+          # bundled smoke (ci_publish.sh runs both), we run smoke
+          # separately below after stripping host mlx.
+          python -m pip wheel . -w dist/ --no-deps --no-build-isolation -q
+          ls -lh dist/
+
+      - name: Strip host MLX (catch RPATH absolute-path regressions)
+        # The 3.0.0 wheel baked the runner's Python framework MLX path as
+        # an absolute LC_RPATH — the bundled smoke happened to pass because
+        # the same path was reachable on the runner. To make the smoke a
+        # truthful clean-machine simulation, uninstall mlx from the runner's
+        # Python first. After this step, the wheel must resolve libmlx via
+        # its own @loader_path RPATH pointing into the smoke venv only.
+        run: |
+          python -m pip uninstall -y mlx mlx-metal || true
+          # Verify framework mlx really gone from the runner Python.
+          python -c "
+          import importlib.util
+          spec = importlib.util.find_spec('mlx')
+          assert spec is None, f'mlx still on host: {spec.origin}'
+          print('host MLX successfully stripped')
+          "
+
+      - name: Verify wheel installs + imports (truly clean env)
+        # Now ci_publish.sh creates a fresh venv, installs the wheel WITH
+        # deps (so mlx ends up in the venv only), and imports. If RPATH
+        # regresses to an absolute build-machine path, this step fails
+        # closed because no mlx exists at that path anymore.
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "26.0"
+          _PYTHON_HOST_PLATFORM: "macosx-26.0-arm64"
+          ARCHFLAGS: "-arch arm64"
+        run: |
+          # ci_publish.sh would re-build, but the wheel is already in dist/.
+          # Inline the venv + smoke part directly to skip the rebuild.
+          set -euo pipefail
+          WHEEL=$(ls dist/lucid*.whl | sort -V | tail -1)
+          echo "==> Smoke against $WHEEL"
+          TMP=$(mktemp -d)
+          python -m venv "$TMP/venv"
+          "$TMP/venv/bin/pip" install "$WHEEL" -q
+          ( cd "$TMP" && "$TMP/venv/bin/python" - <<'PY'
+          import lucid
+          from lucid._C import engine as E
+          t = E.randn([3, 4])
+          assert t.shape == [3, 4]
+          # exercise mlx::core::as_strided (the 3.0.0 ABI failure point)
+          x = lucid.arange(0, 24).reshape(2, 3, 4).permute(2, 0, 1)
+          assert x.shape == (4, 2, 3)
+          print(f"✅ wheel works against venv-only mlx: {lucid.__file__}")
+          PY
+          )
 
       - uses: actions/upload-artifact@v4
         with:

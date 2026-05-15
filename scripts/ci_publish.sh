@@ -23,13 +23,18 @@ if [ -z "$WHEEL" ]; then
 fi
 echo "    Built: $WHEEL"
 
-echo "==> Installing wheel into temp venv"
+echo "==> Installing wheel into temp venv (with deps — mlx must live in this venv)"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 "$PYTHON_BIN" -m venv "$TMPDIR/venv"
 source "$TMPDIR/venv/bin/activate"
 
-python -m pip install "$WHEEL" -q --no-deps 2>&1 | tail -3
+# Install WITH deps. The wheel's INSTALL_RPATH is `@loader_path/../../mlx/lib`,
+# which resolves relative to engine.so's location — i.e., this venv's
+# site-packages/mlx/lib/. If mlx is absent from this venv, dyld either fails
+# closed (correct behaviour) or worse, falls back to an outside libmlx
+# (RPATH regression). Either way, `--no-deps` masks the real failure mode.
+python -m pip install "$WHEEL" -q 2>&1 | tail -3
 
 echo "==> Smoke test"
 # CRITICAL: `cd` out of the project root before importing. The repo's
