@@ -4,36 +4,6 @@ from lucid.models._registry import register_model
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 from lucid.models.vision.maskformer._model import MaskFormerForSemanticSegmentation
 
-_CFG_R18 = MaskFormerConfig(
-    num_classes=150,
-    in_channels=3,
-    backbone_layers=(2, 2, 2, 2),  # ResNet-18
-    backbone_block="basic",
-    d_model=256,
-    n_head=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    dim_feedforward=2048,
-    dropout=0.1,
-    num_queries=100,
-    fpn_out_channels=256,
-)
-
-_CFG_R34 = MaskFormerConfig(
-    num_classes=150,
-    in_channels=3,
-    backbone_layers=(3, 4, 6, 3),  # ResNet-34
-    backbone_block="basic",
-    d_model=256,
-    n_head=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    dim_feedforward=2048,
-    dropout=0.1,
-    num_queries=100,
-    fpn_out_channels=256,
-)
-
 _CFG_R50 = MaskFormerConfig(
     num_classes=150,
     in_channels=3,
@@ -69,39 +39,6 @@ def _build(
     return MaskFormerForSemanticSegmentation(
         MaskFormerConfig(**{**cfg.__dict__, **kw}) if kw else cfg
     )
-
-
-@register_model(
-    task="semantic-segmentation",
-    family="maskformer",
-    model_type="maskformer",
-    model_class=MaskFormerForSemanticSegmentation,
-    default_config=_CFG_R18,
-)
-def maskformer_resnet18(
-    pretrained: bool = False,
-    **overrides: object,
-) -> MaskFormerForSemanticSegmentation:
-    """MaskFormer with ResNet-18 backbone (BasicBlock, expansion=1).
-
-    Lightweight variant for fast inference / low-memory training.
-    """
-    return _build(_CFG_R18, overrides)
-
-
-@register_model(
-    task="semantic-segmentation",
-    family="maskformer",
-    model_type="maskformer",
-    model_class=MaskFormerForSemanticSegmentation,
-    default_config=_CFG_R34,
-)
-def maskformer_resnet34(
-    pretrained: bool = False,
-    **overrides: object,
-) -> MaskFormerForSemanticSegmentation:
-    """MaskFormer with ResNet-34 backbone (BasicBlock, expansion=1)."""
-    return _build(_CFG_R34, overrides)
 
 
 @register_model(

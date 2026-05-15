@@ -31,7 +31,6 @@ timm key layout (pvt_v2_b1):
 
 from typing import ClassVar, cast
 
-import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor

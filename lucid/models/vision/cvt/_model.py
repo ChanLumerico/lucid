@@ -18,10 +18,8 @@ Architecture (CvT-13, image=224):
   Head   : LN → mean-pool → FC(384, num_classes)
 """
 
-import math
 from typing import ClassVar, cast
 
-import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
@@ -235,9 +233,10 @@ class _CvTStage(nn.Module):
         self.embed = _ConvEmbed(
             in_ch, dim, kernel=kernel, stride=embed_stride, padding=padding
         )
-        # In the paper, K/V use stride=2 in stages 2 and 3, stride=1 in stage 1
-        # We use stride=2 when spatial dims are large enough (embed_stride==4 → stage0)
-        stride_kv = 2 if embed_stride == 4 else 1
+        # Paper §3.2 / Table 1: K/V conv-projection uses stride=2 in *all*
+        # three stages (Q is always stride=1).  This is the key trick that
+        # makes CvT attention cheaper than ViT's O(N²).
+        stride_kv = 2
         self.blocks = nn.ModuleList(
             [
                 _CvTBlock(dim, num_heads, stride_kv, mlp_ratio, dropout)

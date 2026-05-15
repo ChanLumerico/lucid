@@ -883,3 +883,87 @@ class RoIHead(nn.Module):
         class_logits = cast(Tensor, self.cls_score(x))
         box_deltas = cast(Tensor, self.bbox_pred(x))
         return class_logits, box_deltas
+
+
+# ---------------------------------------------------------------------------
+# Bipartite assignment (Hungarian / Kuhn-Munkres)
+# ---------------------------------------------------------------------------
+
+
+def solve_assignment(
+    cost: list[list[float]],
+) -> tuple[list[int], list[int]]:
+    """Min-cost bipartite assignment for a rectangular ``(n_rows × n_cols)``
+    cost matrix with ``n_rows ≤ n_cols``.
+
+    Standard Jonker-Volgenant / Kuhn-Munkres algorithm — O(n_rows² · n_cols).
+    Verified against ``scipy.optimize.linear_sum_assignment`` (drop-in
+    replacement for the cases used by DETR / MaskFormer / Mask2Former).
+
+    Args:
+        cost: ``n_rows × n_cols`` matrix where ``cost[i][j]`` is the cost of
+            assigning row ``i`` to column ``j``.  Rows must not outnumber
+            columns; transpose the matrix outside this function if needed.
+
+    Returns:
+        ``(row_ind, col_ind)`` — both length ``n_rows``, with ``row_ind`` =
+        ``[0, 1, ..., n_rows - 1]`` and ``col_ind[i]`` the column matched to
+        row ``i``.  Total cost ``sum(cost[i][col_ind[i]])`` is minimal.
+
+    Notes:
+        Pure Python so it works inside autograd-free preprocessing on every
+        backend.  For very large matrices (~1000+) consider a vectorised
+        solver — none of Lucid's detection models hit that regime today.
+    """
+    nr = len(cost)
+    if nr == 0:
+        return [], []
+    nc = len(cost[0])
+    assert nr <= nc, "solve_assignment expects n_rows <= n_cols"
+
+    INF = float("inf")
+    u = [0.0] * (nr + 1)
+    v = [0.0] * (nc + 1)
+    # p[j] = row assigned to column j (1-indexed; 0 = free).
+    p = [0] * (nc + 1)
+    way = [0] * (nc + 1)
+
+    for i in range(1, nr + 1):
+        p[0] = i
+        j0 = 0
+        minv = [INF] * (nc + 1)
+        used = [False] * (nc + 1)
+        while True:
+            used[j0] = True
+            i0 = p[j0]
+            delta = INF
+            j1 = -1
+            for j in range(1, nc + 1):
+                if not used[j]:
+                    c = cost[i0 - 1][j - 1] - u[i0] - v[j]
+                    if c < minv[j]:
+                        minv[j] = c
+                        way[j] = j0
+                    if minv[j] < delta:
+                        delta = minv[j]
+                        j1 = j
+            for j in range(nc + 1):
+                if used[j]:
+                    u[p[j]] += delta
+                    v[j] -= delta
+                else:
+                    minv[j] -= delta
+            j0 = j1
+            if p[j0] == 0:
+                break
+        # Augment along the way back to column 0.
+        while j0:
+            j2 = way[j0]
+            p[j0] = p[j2]
+            j0 = j2
+
+    row_ind: list[int] = [0] * nr
+    for j in range(1, nc + 1):
+        if p[j] != 0:
+            row_ind[p[j] - 1] = j - 1
+    return list(range(nr)), row_ind

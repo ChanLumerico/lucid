@@ -11,8 +11,6 @@ from lucid.models.vision.lenet import (
     LeNetForImageClassification,
     lenet_5,
     lenet_5_cls,
-    lenet_5_relu,
-    lenet_5_relu_cls,
 )
 
 
@@ -61,9 +59,12 @@ class TestLeNetParamCounts(unittest.TestCase):
         self.assertEqual(lenet_5_cls().num_parameters(), 61_706)
 
     def test_relu_variant_same_param_count(self) -> None:
-        # Activation / pooling type doesn't change param count
-        self.assertEqual(lenet_5_relu().num_parameters(), 50_692)
-        self.assertEqual(lenet_5_relu_cls().num_parameters(), 61_706)
+        # Activation / pooling type doesn't change param count — built via
+        # config override on the canonical factory.
+        m = lenet_5(activation="relu", pooling="max")
+        m_cls = lenet_5_cls(activation="relu", pooling="max")
+        self.assertEqual(m.num_parameters(), 50_692)
+        self.assertEqual(m_cls.num_parameters(), 61_706)
 
     def test_rgb_input_params(self) -> None:
         # in_channels=3 → C1: 6*(3*25+1) = 6*76 = 456
@@ -97,7 +98,7 @@ class TestLeNetBackbone(unittest.TestCase):
         self.assertIsInstance(out, BaseModelOutput)
 
     def test_relu_backbone_forward(self) -> None:
-        m = lenet_5_relu()
+        m = lenet_5(activation="relu", pooling="max")
         m.eval()
         x = lucid.randn(1, 1, 32, 32)
         out = m.forward_features(x)
@@ -145,12 +146,12 @@ class TestLeNetRegistry(unittest.TestCase):
 
     def test_all_variants_registered(self) -> None:
         names = models.list_models()
-        for n in ["lenet_5", "lenet_5_relu", "lenet_5_cls", "lenet_5_relu_cls"]:
+        for n in ["lenet_5", "lenet_5_cls"]:
             self.assertIn(n, names)
 
     def test_family_filter(self) -> None:
         lenet_models = models.list_models(family="lenet")
-        self.assertEqual(len(lenet_models), 4)
+        self.assertEqual(len(lenet_models), 2)
 
     def test_create_model_backbone(self) -> None:
         m = models.create_model("lenet_5")
@@ -166,7 +167,7 @@ class TestLeNetRegistry(unittest.TestCase):
         self.assertEqual(cfg.activation, "tanh")
 
     def test_auto_model(self) -> None:
-        m = models.AutoModel.from_pretrained("lenet_5_relu")
+        m = models.AutoModel.from_pretrained("lenet_5")
         self.assertIsInstance(m, LeNet)
 
     def test_auto_model_for_classification(self) -> None:

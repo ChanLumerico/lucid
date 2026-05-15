@@ -42,7 +42,6 @@ Faithfulness notes
 * RoI head: proposal assigned positive if IoU ≥ 0.5 with any GT.
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -415,16 +414,12 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             # Vectorised reductions: device-side argmax/max, then a single bulk
             # materialisation each.  Replaces 2 × A × M ``.item()`` syncs with
             # ~ 2A + M syncs.
-            best_gt_t = lucid.argmax(iou_mat, dim=1)         # (A,) int — best GT per anchor
-            best_iou_t = iou_mat.max(dim=1)                  # (A,)
-            best_anc_t = lucid.argmax(iou_mat, dim=0)        # (M,) int — best anchor per GT
+            best_gt_t = lucid.argmax(iou_mat, dim=1)  # (A,) int — best GT per anchor
+            best_iou_t = iou_mat.max(dim=1)  # (A,)
+            best_anc_t = lucid.argmax(iou_mat, dim=0)  # (M,) int — best anchor per GT
 
-            best_iou_list: list[float] = [
-                float(best_iou_t[a].item()) for a in range(A)
-            ]
-            best_gt_list: list[int] = [
-                int(best_gt_t[a].item()) for a in range(A)
-            ]
+            best_iou_list: list[float] = [float(best_iou_t[a].item()) for a in range(A)]
+            best_gt_list: list[int] = [int(best_gt_t[a].item()) for a in range(A)]
             best_anchor_for_gt: list[int] = [
                 int(best_anc_t[m].item()) for m in range(M)
             ]
@@ -523,13 +518,9 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             labels_list: list[int] = []
             # Vectorised: argmax + max over GT axis.
             best_g_t = lucid.argmax(iou_mat, dim=1)  # (N_i,)
-            best_v_t = iou_mat.max(dim=1)            # (N_i,)
-            best_v_list: list[float] = [
-                float(best_v_t[n].item()) for n in range(N_i)
-            ]
-            best_gt: list[int] = [
-                int(best_g_t[n].item()) for n in range(N_i)
-            ]
+            best_v_t = iou_mat.max(dim=1)  # (N_i,)
+            best_v_list: list[float] = [float(best_v_t[n].item()) for n in range(N_i)]
+            best_gt: list[int] = [int(best_g_t[n].item()) for n in range(N_i)]
             for n in range(N_i):
                 best_v = best_v_list[n]
                 if best_v >= self._cfg.roi_fg_iou_thresh:
@@ -548,7 +539,8 @@ class FasterRCNNForObjectDetection(PretrainedModel):
 
             lbl_t = lucid.tensor(labels_list, device=dev)
             wt_t = lucid.tensor(
-                [1.0 if l > 0 else 0.0 for l in labels_list], device=dev,
+                [1.0 if l > 0 else 0.0 for l in labels_list],
+                device=dev,
             )
 
             all_cls.append(lbl_t)
@@ -651,6 +643,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             logits=all_logits,
             pred_boxes=pred_boxes,
             loss=loss,
+            proposals=tuple(proposals),
         )
 
     def _decode_boxes(
@@ -659,18 +652,27 @@ class FasterRCNNForObjectDetection(PretrainedModel):
         all_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
+        """Decode bbox deltas per class → ``(N_total, K, 4)``.
+
+        Per-class regression (paper §3.3): NMS for class ``c`` must use the
+        boxes decoded with class ``c``'s deltas, not a single canonical box.
+        """
         dev = all_deltas.device.type
+        K = self._cfg.num_classes
         if not any(int(p.shape[0]) > 0 for p in proposals):
-            return lucid.zeros((0, 4), device=dev)
+            return lucid.zeros((0, K, 4), device=dev)
         flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         N = int(all_deltas.shape[0])
         if N == 0:
-            return lucid.zeros((0, 4), device=dev)
-        K = self._cfg.num_classes
-        # Use class-0 (first fg) delta as canonical decode
-        top_deltas = all_deltas.reshape(N, K, 4)[:, 0, :]
-        boxes = decode_boxes(top_deltas, flat_props, self._cfg.bbox_reg_weights)
-        return clip_boxes_to_image(boxes, image_size)
+            return lucid.zeros((0, K, 4), device=dev)
+        deltas_3d = all_deltas.reshape(N, K, 4)
+        per_class: list[Tensor] = []
+        for c in range(K):
+            boxes_c = decode_boxes(
+                deltas_3d[:, c, :], flat_props, self._cfg.bbox_reg_weights
+            )
+            per_class.append(clip_boxes_to_image(boxes_c, image_size))
+        return lucid.stack(per_class, dim=1)
 
     # ------------------------------------------------------------------
     # Post-processing
@@ -679,12 +681,21 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     def postprocess(
         self,
         output: ObjectDetectionOutput,
-        proposals: list[Tensor],
+        proposals: list[Tensor] | None = None,
     ) -> list[dict[str, Tensor]]:
         """Per-class NMS on raw detector output.
 
-        Returns list of per-image result dicts with "boxes", "scores", "labels".
+        Reads per-image proposals from ``output.proposals`` (populated by
+        ``forward()``) when not given explicitly.  Returns list of per-image
+        result dicts with "boxes", "scores", "labels".
         """
+        if proposals is None:
+            if output.proposals is None:
+                raise ValueError(
+                    "postprocess() needs proposals — pass them explicitly or "
+                    "call forward() first so the output carries them."
+                )
+            proposals = list(output.proposals)
         logits = output.logits
         pred_boxes = output.pred_boxes
         results: list[dict[str, Tensor]] = []
@@ -704,6 +715,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
 
             for c in range(1, self._cfg.num_classes + 1):
                 sc_c_all = scores_i[:, c]
+                bx_class = bx_i[:, c - 1, :]  # (N_i, 4) per-class
                 mask: list[int] = [
                     i
                     for i in range(N_i)
@@ -713,7 +725,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                     continue
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = sc_c_all[mask_t]
-                bx_c = bx_i[mask_t]
+                bx_c = bx_class[mask_t]
                 keep = batched_nms(
                     bx_c,
                     sc_c,

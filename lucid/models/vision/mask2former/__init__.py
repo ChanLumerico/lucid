@@ -6,8 +6,6 @@ Paper: "Masked-attention Mask Transformer for Universal Image Segmentation"
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
 from lucid.models.vision.mask2former._model import Mask2FormerForSemanticSegmentation
 from lucid.models.vision.mask2former._pretrained import (
-    mask2former_resnet18,
-    mask2former_resnet34,
     mask2former_resnet50,
     mask2former_resnet101,
     mask2former_swin_tiny,
@@ -19,8 +17,6 @@ from lucid.models.vision.mask2former._pretrained import (
 __all__ = [
     "Mask2FormerConfig",
     "Mask2FormerForSemanticSegmentation",
-    "mask2former_resnet18",
-    "mask2former_resnet34",
     "mask2former_resnet50",
     "mask2former_resnet101",
     "mask2former_swin_tiny",

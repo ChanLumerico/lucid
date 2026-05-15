@@ -37,7 +37,6 @@ Losses
   Same Hungarian matching + BCE mask + CE class as MaskFormer.
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -46,7 +45,6 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
-from lucid.models._registry import register_model
 from lucid.models.vision.mask2former._config import Mask2FormerConfig
 
 # ---------------------------------------------------------------------------
@@ -242,6 +240,7 @@ class _SwinBackbone(nn.Module):
         h: Tensor = cast(Tensor, self.patch_embed(x))
         feats: list[Tensor] = []
         from lucid.models.vision.swin._model import _SwinStage
+
         for stage_mod in self.stages:
             # _SwinStage.forward applies blocks then (optionally) downsample.
             # We want the feature BEFORE downsample as the FPN tap for level i.
@@ -443,8 +442,9 @@ def _hungarian_match_masks(
             row.append(c_cls - iou)
         cost.append(row)
 
-    from lucid.models.vision.detr._model import _kuhn_munkres_rectangular
-    gt_idx, pred_idx = _kuhn_munkres_rectangular(cost)
+    from lucid.models._utils._detection import solve_assignment
+
+    gt_idx, pred_idx = solve_assignment(cost)
     return pred_idx, gt_idx
 
 
@@ -753,15 +753,20 @@ class Mask2FormerForSemanticSegmentation(PretrainedModel):
             cls_tgt: Tensor = lucid.tensor(cls_tgt_data)
             cls_losses.append(F.cross_entropy(cl_b, cls_tgt, reduction="mean"))
 
+            # Mask loss: BCE + Dice on matched pairs (Mask2Former §3.2 uses
+            # BCE + Dice with point-sampling — we apply over the full mask
+            # without point sampling for simplicity).
             if pred_idx:
                 for pi, gi in zip(pred_idx, gt_idx):
                     pred_m: Tensor = ml_b[pi]
                     gt_m: Tensor = gt_masks_small[gi]
-                    mask_losses.append(
-                        F.binary_cross_entropy_with_logits(
-                            pred_m.reshape(-1), gt_m.reshape(-1)
-                        )
-                    )
+                    pred_flat = pred_m.reshape(-1)
+                    gt_flat = gt_m.reshape(-1)
+                    bce = F.binary_cross_entropy_with_logits(pred_flat, gt_flat)
+                    pred_p = F.sigmoid(pred_flat)
+                    inter = (pred_p * gt_flat).sum()
+                    dice = 1.0 - 2.0 * inter / (pred_p.sum() + gt_flat.sum() + 1e-6)
+                    mask_losses.append(bce + dice)
 
         cls_loss: Tensor = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()

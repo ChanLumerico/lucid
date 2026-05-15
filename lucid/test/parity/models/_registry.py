@@ -154,7 +154,6 @@ class ParitySpec:
 SPECS: list[ParitySpec] = [
     # ── LeNet / AlexNet / ZFNet / GoogLeNet — no timm equivalent ────────────
     ParitySpec(M.lenet_5_cls, None, input_shape=(1, 1, 32, 32)),
-    ParitySpec(M.lenet_5_relu_cls, None, input_shape=(1, 1, 32, 32)),
     ParitySpec(M.alexnet_cls, None, tier="slow"),
     ParitySpec(M.zfnet_cls, None, tier="slow"),
     ParitySpec(M.googlenet_cls, None),

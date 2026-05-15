@@ -1,7 +1,7 @@
 """Unit tests for the custom Kuhn-Munkres / Hungarian algorithm used by
 DETR / MaskFormer / Mask2Former matchers.
 
-Validates ``_kuhn_munkres_rectangular`` against ``scipy.optimize.linear_sum_assignment``
+Validates ``solve_assignment`` against ``scipy.optimize.linear_sum_assignment``
 on a range of randomised rectangular cost matrices.  ``scipy`` is only used inside
 this test module — production code never imports it.
 """
@@ -13,7 +13,7 @@ import pytest
 
 # Skip the whole module if scipy isn't available (it's optional [test] extra)
 scipy_opt = pytest.importorskip("scipy.optimize")
-from lucid.models.vision.detr._model import _kuhn_munkres_rectangular
+from lucid.models._utils._detection import solve_assignment
 
 
 def _ref_assignment(cost: list[list[float]]) -> dict[int, int]:
@@ -23,7 +23,7 @@ def _ref_assignment(cost: list[list[float]]) -> dict[int, int]:
 
 
 def _our_assignment(cost: list[list[float]]) -> dict[int, int]:
-    rows, cols = _kuhn_munkres_rectangular(cost)
+    rows, cols = solve_assignment(cost)
     return dict(zip(rows, cols))
 
 
@@ -47,25 +47,27 @@ class TestHungarianCorrectness(unittest.TestCase):
     def test_rectangular_3x5(self) -> None:
         """3 rows × 5 cols — assign each row to a distinct col."""
         cost = [
-            [10.0,  1.0,  9.0, 8.0,  7.0],
-            [ 5.0,  6.0,  2.0, 8.0,  9.0],
-            [ 4.0,  5.0,  6.0, 7.0,  1.0],
+            [10.0, 1.0, 9.0, 8.0, 7.0],
+            [5.0, 6.0, 2.0, 8.0, 9.0],
+            [4.0, 5.0, 6.0, 7.0, 1.0],
         ]
         ours = _our_assignment(cost)
         ref = _ref_assignment(cost)
         self.assertAlmostEqual(
-            _total_cost(cost, ours), _total_cost(cost, ref), places=5,
+            _total_cost(cost, ours),
+            _total_cost(cost, ref),
+            places=5,
         )
 
     def test_obvious_match_5x3(self) -> None:
         """5 queries × 3 GTs — rows 0/1/2 should match cols 0/1/2 (diagonal cheap)."""
         # Note: API is (n_rows ≤ n_cols), so caller should construct cost as (M, N).
         cost = [
-            [ 0.0,  10.0,  10.0,  100.0,  100.0],
-            [10.0,   0.0,  10.0,  100.0,  100.0],
-            [10.0,  10.0,   0.0,  100.0,  100.0],
+            [0.0, 10.0, 10.0, 100.0, 100.0],
+            [10.0, 0.0, 10.0, 100.0, 100.0],
+            [10.0, 10.0, 0.0, 100.0, 100.0],
         ]
-        rows, cols = _kuhn_munkres_rectangular(cost)
+        rows, cols = solve_assignment(cost)
         self.assertEqual(rows, [0, 1, 2])
         self.assertEqual(cols, [0, 1, 2])
 
@@ -79,7 +81,9 @@ class TestHungarianCorrectness(unittest.TestCase):
         ours = _our_assignment(cost)
         ref = _ref_assignment(cost)
         self.assertAlmostEqual(
-            _total_cost(cost, ours), _total_cost(cost, ref), places=5,
+            _total_cost(cost, ours),
+            _total_cost(cost, ref),
+            places=5,
         )
 
     def test_random_rectangular(self) -> None:
@@ -88,16 +92,15 @@ class TestHungarianCorrectness(unittest.TestCase):
         for trial in range(100):
             M = rng.randint(1, 8)
             N = rng.randint(M, 12)
-            cost = [
-                [rng.uniform(-5.0, 5.0) for _ in range(N)]
-                for _ in range(M)
-            ]
+            cost = [[rng.uniform(-5.0, 5.0) for _ in range(N)] for _ in range(M)]
             ours = _our_assignment(cost)
             ref = _ref_assignment(cost)
             ours_cost = _total_cost(cost, ours)
             ref_cost = _total_cost(cost, ref)
             self.assertAlmostEqual(
-                ours_cost, ref_cost, places=4,
+                ours_cost,
+                ref_cost,
+                places=4,
                 msg=f"trial {trial} M={M} N={N}: ours={ours_cost} ref={ref_cost}",
             )
 
@@ -105,14 +108,13 @@ class TestHungarianCorrectness(unittest.TestCase):
         """DETR-scale random matrix: 5 GTs × 100 queries."""
         rng = random.Random(0)
         M, N = 5, 100
-        cost = [
-            [rng.uniform(-2.0, 2.0) for _ in range(N)]
-            for _ in range(M)
-        ]
+        cost = [[rng.uniform(-2.0, 2.0) for _ in range(N)] for _ in range(M)]
         ours = _our_assignment(cost)
         ref = _ref_assignment(cost)
         self.assertAlmostEqual(
-            _total_cost(cost, ours), _total_cost(cost, ref), places=4,
+            _total_cost(cost, ours),
+            _total_cost(cost, ref),
+            places=4,
         )
 
 

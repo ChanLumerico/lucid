@@ -100,6 +100,10 @@ class ObjectDetectionOutput(ModelOutput):
     pred_boxes: Tensor
     loss: Tensor | None = None
     hidden_states: tuple[Tensor, ...] | None = None
+    # Two-stage detectors (R-CNN / Fast R-CNN / Faster R-CNN) emit detections
+    # *per RoI*; ``proposals`` carries the per-image RoI list so downstream
+    # ``postprocess()`` can be called against the output alone.
+    proposals: tuple[Tensor, ...] | None = None
 
 
 @dataclass
@@ -145,3 +149,61 @@ class Seq2SeqLMOutput(ModelOutput):
     encoder_last_hidden_state: Tensor | None = None
     encoder_hidden_states: tuple[Tensor, ...] | None = None
     encoder_attentions: tuple[Tensor, ...] | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Generative-family outputs
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class DiffusionModelOutput(ModelOutput):
+    """Single-step output of a diffusion U-Net's forward pass.
+
+    Attributes:
+        sample: The network's prediction at the given timestep.  Whether
+            this is the noise ``ε``, the clean ``x_0``, or ``v`` depends on
+            :attr:`DiffusionModelConfig.prediction_type`.
+        loss:   Optional training loss (MSE against ground-truth noise for
+            ``epsilon`` parameterisation).
+    """
+
+    sample: Tensor
+    loss: Tensor | None = None
+
+
+@dataclass
+class VAEOutput(ModelOutput):
+    """End-to-end VAE forward output.
+
+    Attributes:
+        sample:     Reconstructed image ``\\hat{x}`` (B, C, H, W).
+        latent:     Sampled latent ``z = μ + σ·ε`` (B, latent_dim).
+        mu:         Encoder mean ``μ(x)``.
+        logvar:     Encoder log-variance ``log σ²(x)``.
+        loss:       Total ELBO loss (recon + β·KL) when supplied targets.
+        recon_loss: Reconstruction term alone.
+        kl_loss:    KL divergence term alone.
+    """
+
+    sample: Tensor
+    latent: Tensor
+    mu: Tensor
+    logvar: Tensor
+    loss: Tensor | None = None
+    recon_loss: Tensor | None = None
+    kl_loss: Tensor | None = None
+
+
+@dataclass
+class GenerationOutput(ModelOutput):
+    """Result of a generative model's sampling loop.
+
+    Attributes:
+        samples:       Final ``(n_samples, C, H, W)`` image batch.
+        intermediates: Optional list of intermediate latents — one per
+            inference step when callers request trajectory inspection.
+    """
+
+    samples: Tensor
+    intermediates: tuple[Tensor, ...] | None = None

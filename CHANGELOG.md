@@ -103,7 +103,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.models.vision.mask2former: Mask2Former (Cheng et al., CVPR 2022) — ResNet-18/34/50/101 or Swin-T/S/B/L backbone, multi-scale FPN pixel decoder, masked cross-attention with per-layer FPN level cycling (8 factories)
 
+- lucid.models.text — first NLP family wave (5 architectures, 39 registry entries): Transformer (Vaswani et al., NeurIPS 2017) base/large + seq2seq + cls + token-cls heads (7 factories); BERT (Devlin et al., NAACL 2019) tiny/mini/small/medium/base/large + MLM/SequenceCls/TokenCls/QA heads (13 factories); GPT (Radford et al., 2018) base + LM/Cls heads (4 factories); GPT-2 (Radford et al., 2019) small/medium/large/xlarge + LM/Cls heads (10 factories); RoFormer (Su et al., 2021) base + MLM/SequenceCls/TokenCls heads (5 factories). Shared `_utils._text` infra (causal masks, position ids, RoPE).
+
+- lucid.models.generative — first generative family wave (3 architectures, 16 registry entries): VAE (Kingma & Welling, 2013) vanilla + hierarchical Sønderby/Ladder VAE + image-gen heads (4 factories); DDPM (Ho et al., NeurIPS 2020) CIFAR-10 / LSUN-256 / ImageNet-64 backbones + image-gen heads (7 factories); NCSN (Song & Ermon, NeurIPS 2019 + NCSNv2) CIFAR-10 / CelebA-64 backbones + image-gen heads (5 factories). Shared `_utils._generative` infra (β / σ schedule helpers, scheduler base class, DDPMScheduler ancestral sampler, annealed Langevin dynamics).
+
+- AutoModelForCausalLM / AutoModelForMaskedLM / AutoModelForSeq2SeqLM / AutoModelForSequenceClassification / AutoModelForTokenClassification / AutoModelForQuestionAnswering / AutoModelForImageGeneration auto-classes for the seven new task tags.
+
+- DropPath helper (Huang et al., 2016 stochastic depth) added to `models._utils._classification`. Wired into ConvNeXt, Swin, EfficientFormer with linear schedule across the trunk per the original recipes.
+
 - ObjectDetectionOutput / InstanceSegmentationOutput / SemanticSegmentationOutput dataclasses in models._output
+
+- ObjectDetectionOutput.proposals: optional per-image RoI tuple emitted by R-CNN / Fast R-CNN / Faster R-CNN forward, so `postprocess(output)` works without re-running the RPN.
 
 - lucid.models._utils package: _common (make_divisible canonicalised across 7 model families), _classification (LayerScale), _detection (box ops, NMS, AnchorGenerator, roi_align/roi_pool, FPN, RPN, RoIHead shared modules)
 
@@ -158,6 +168,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MaxViT docstring: replaced "Standard PyTorch padding=1" with framework-neutral wording (H5).
 
 - move CHANGELOG auto-injection from prepare-commit-msg → post-commit
+
+- Paper-faithful audit pass on the model zoo (closes the remaining ⚠️ deviations flagged in the Wave-3 retrospective):
+  - **EfficientDet BiFPN** — removed `.item()` round-trip in fast-normalised weighted fusion (was forcing a per-step host sync).
+  - **CoAtNet `_rel_idx`** — registered as non-persistent buffer so `.to(device=...)` works.
+  - **EfficientNet stochastic depth** — was applied unconditionally; now respects `training` flag and per-block survival probability schedule (Tan & Le 2019 §3.3).
+  - **R-CNN family class-specific decode** — Fast / Faster R-CNN now decode bbox deltas with the predicted top-class deltas (paper §3.3) instead of class 0 / argmax-of-bg-included.
+  - **ResNeSt `is_first` flag** — first block of each stage receives the correct `is_first=True` to drop the redundant 1×1 down-projection.
+  - **MaskFormer / Mask2Former dice loss** — corrected denominator from `|p|·|g|` (cosine-style) to `|p|+|g|` per Milletari 2016.
+  - **YOLOv1 w/h decoding** — paper §2 / Eq.1 uses sigmoid-bounded direct prediction (`sigmoid(raw)·{W,H}`); was incorrectly using YOLOv2's `exp(raw)·{W,H}` anchor formulation. Loss term updated to MSE on `√w_norm, √h_norm`.
+  - **CvT `stride_kv`** — paper Table 1 specifies stride=2 for K/V conv-projection in *all* three stages; was only stage 0.
+  - **CrossViT classification head** — paper §3.3 averages two per-branch classifier logits; was concat → single FC.
+  - **MobileNetV2 `last_ch`** — `last_ch = make_divisible(1280·max(1, width_mult))` per paper §3.4 / torchvision; was hard-coded 1280 for all width multipliers.
+  - **DDPM `learn_sigma=True`** — now raises `NotImplementedError` (Improved-DDPM hybrid `L_simple + L_vlb` loss not yet implemented) instead of silently emitting an unusable variance head.
+  - **Inception v3 auxiliary classifier** — moved from after `inception_c1` (35×35) to after `inception_c3` (last 17×17 = Mixed_6e) per paper §6 / Fig.10.
+  - **SKNet `_SKAttentionGate`** — `AdaptiveAvgPool2d(1)` lifted into `__init__` (was instantiated each forward call).
+  - **EfficientFormer LayerScale + DropPath** — added per-residual-branch γ (init 1e-5) and linear stochastic-depth schedule per paper §4.1 (max-rate 0.0 / 0.1 / 0.2 for L1 / L3 / L7).
 
 ### Performance
 

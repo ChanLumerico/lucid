@@ -315,8 +315,13 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.stages = stages
         self.norm_s = norm_s
         self.norm_l = norm_l
-        # Fuse both CLS tokens → single classifier
-        self._build_classifier(config.small_dim + config.large_dim, config.num_classes)
+        # Paper §3.3: each branch has its *own* classifier; the final logits
+        # are the *average* of both heads (not concat → FC).  ``classifier``
+        # holds the small-branch head so :class:`ClassificationHeadMixin`'s
+        # ``reset_classifier`` still works; ``head_l`` is the large-branch
+        # head, kept in sync by our :meth:`reset_classifier` override below.
+        self._build_classifier(config.small_dim, config.num_classes)
+        self.head_l = nn.Linear(config.large_dim, config.num_classes)
 
     def forward(  # type: ignore[override]
         self,
@@ -335,12 +340,19 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
             x_s, x_l = result
         x_s = cast(Tensor, self.norm_s(x_s))
         x_l = cast(Tensor, self.norm_l(x_l))
-        # Concatenate CLS tokens from both branches
-        cls_cat = lucid.cat([x_s[:, 0], x_l[:, 0]], dim=1)  # (B, small_dim + large_dim)
-        logits = cast(Tensor, self.classifier(cls_cat))
+        # Paper §3.3: average the logits of two per-branch classifiers.
+        logits_s = cast(Tensor, self.classifier(x_s[:, 0]))
+        logits_l = cast(Tensor, self.head_l(x_l[:, 0]))
+        logits = (logits_s + logits_l) * 0.5
 
         loss: Tensor | None = None
         if labels is not None:
             loss = F.cross_entropy(logits, labels)
 
         return ImageClassificationOutput(logits=logits, loss=loss)
+
+    def reset_classifier(self, num_classes: int) -> None:
+        # Override to keep the large-branch head in sync with the small one.
+        super().reset_classifier(num_classes)
+        in_features = int(self.head_l.in_features)
+        self.head_l = nn.Linear(in_features, num_classes)

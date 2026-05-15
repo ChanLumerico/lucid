@@ -53,6 +53,9 @@ class _SelectiveKernelAttn(nn.Module):
         self.fc_select = nn.Conv2d(
             attn_channels, channels * num_paths, kernel_size=1, bias=False
         )
+        # Reused across calls — instantiating in forward() leaks modules and
+        # breaks ``.to(device)``/``state_dict`` round-trips.
+        self.gap = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, num_paths, C, H, W)
@@ -66,7 +69,7 @@ class _SelectiveKernelAttn(nn.Module):
             summed = summed + x[:, p, :, :, :]
 
         # Global average pool: mean over H and W
-        gap = cast(Tensor, nn.AdaptiveAvgPool2d(1)(summed))  # (B, C, 1, 1)
+        gap = cast(Tensor, self.gap(summed))  # (B, C, 1, 1)
 
         z = cast(Tensor, self.fc_reduce(gap))
         z = cast(Tensor, self.bn(z))

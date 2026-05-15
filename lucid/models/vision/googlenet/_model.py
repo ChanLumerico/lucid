@@ -30,7 +30,6 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
-from lucid.models._output import ImageClassificationOutput
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 
 # ---------------------------------------------------------------------------

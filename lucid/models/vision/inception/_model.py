@@ -10,7 +10,7 @@ Architecture overview (299×299 input):
     InceptionC × 4: factorized n×1 / 1×n blocks (n=7)
     InceptionD (Reduction-B): 3-branch, stride-2 reduction
     InceptionE × 2: expanded branch with 1×3 / 3×1 splits
-    Auxiliary classifier attaches after InceptionC[1]
+    Auxiliary classifier attaches after the last 17×17 stage (InceptionC[3] = Mixed_6e)
     Head: AdaptiveAvgPool(1×1) → Dropout(0.5) → FC(2048, num_classes)
 """
 
@@ -437,7 +437,8 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         self.drop = nn.Dropout(p=config.dropout)
         self._build_classifier(2048, config.num_classes)
 
-        # Auxiliary classifier (attaches after inception_c1)
+        # Auxiliary classifier — paper §6 / Fig.10 attaches after the last
+        # 17×17 stage (Mixed_6e = inception_c3), not after c1.
         if config.aux_logits:
             self.aux: nn.Module = _InceptionAux(768, config.num_classes)
         else:
@@ -459,13 +460,13 @@ class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin
         x = cast(Tensor, self.reduction_a(x))
         x = cast(Tensor, self.inception_c0(x))
         x = cast(Tensor, self.inception_c1(x))
+        x = cast(Tensor, self.inception_c2(x))
+        x = cast(Tensor, self.inception_c3(x))
 
         aux_out: Tensor | None = None
         if use_aux and isinstance(self.aux, _InceptionAux):
             aux_out = cast(Tensor, self.aux(x))
 
-        x = cast(Tensor, self.inception_c2(x))
-        x = cast(Tensor, self.inception_c3(x))
         x = cast(Tensor, self.reduction_b(x))
         x = cast(Tensor, self.inception_e0(x))
         x = cast(Tensor, self.inception_e1(x))

@@ -235,3 +235,48 @@ class AutoModelForCausalLM(_BaseAutoClass):
 
 class AutoModelForMaskedLM(_BaseAutoClass):
     _task: ClassVar[str] = "masked-lm"
+
+
+class AutoModelForSeq2SeqLM(_BaseAutoClass):
+    """Encoder-decoder seq2seq head — translation, summarisation.
+
+    Covers Vaswani Transformer today; T5 / BART / mBART are the natural
+    future consumers.
+    """
+
+    _task: ClassVar[str] = "seq2seq-lm"
+
+
+class AutoModelForSequenceClassification(_BaseAutoClass):
+    """Sentence-level classifier — GLUE / sentiment / NLI fine-tunes.
+
+    Resolves to ``{Family}ForSequenceClassification`` across BERT / GPT /
+    GPT-2 / RoFormer / Transformer.
+    """
+
+    _task: ClassVar[str] = "sequence-classification"
+
+
+class AutoModelForTokenClassification(_BaseAutoClass):
+    """Per-token classifier — NER, POS tagging.
+
+    Resolves to ``{Family}ForTokenClassification`` across BERT / RoFormer /
+    Transformer.
+    """
+
+    _task: ClassVar[str] = "token-classification"
+
+
+class AutoModelForQuestionAnswering(_BaseAutoClass):
+    """SQuAD-style span head — start / end logits over the sequence.
+
+    Resolves to ``{Family}ForQuestionAnswering`` across BERT / RoFormer.
+    """
+
+    _task: ClassVar[str] = "question-answering"
+
+
+class AutoModelForImageGeneration(_BaseAutoClass):
+    """Image-generation head — VAE / DDPM / NCSN and future flow models."""
+
+    _task: ClassVar[str] = "image-generation"

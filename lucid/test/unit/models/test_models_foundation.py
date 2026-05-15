@@ -401,3 +401,99 @@ class TestHub:
         wrong_sha = "0" * 64
         with pytest.raises(RuntimeError, match="SHA256 mismatch"):
             download(remote.as_uri(), wrong_sha, name="dummy_model")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AutoModel coverage — new task-level dispatchers (2026-05)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAutoModelTaskCoverage:
+    """Every Auto class must resolve at least one registered factory.
+
+    Catches the regression where a model factory is registered under a task
+    string for which no ``AutoModel`` subclass exists (silent dispatch hole).
+    """
+
+    def test_sequence_classification_dispatch(self) -> None:
+        from lucid.models import (
+            AutoModelForSequenceClassification,
+            BertForSequenceClassification,
+        )
+        from lucid.models._registry import _registry_lookup
+
+        entry = _registry_lookup(
+            "bert_base_cls", task=AutoModelForSequenceClassification._task
+        )
+        assert entry.model_class is BertForSequenceClassification
+
+    def test_token_classification_dispatch(self) -> None:
+        from lucid.models import (
+            AutoModelForTokenClassification,
+            BertForTokenClassification,
+        )
+        from lucid.models._registry import _registry_lookup
+
+        entry = _registry_lookup(
+            "bert_base_token_cls", task=AutoModelForTokenClassification._task
+        )
+        assert entry.model_class is BertForTokenClassification
+
+    def test_question_answering_dispatch(self) -> None:
+        from lucid.models import (
+            AutoModelForQuestionAnswering,
+            BertForQuestionAnswering,
+        )
+        from lucid.models._registry import _registry_lookup
+
+        entry = _registry_lookup(
+            "bert_base_qa", task=AutoModelForQuestionAnswering._task
+        )
+        assert entry.model_class is BertForQuestionAnswering
+
+    def test_seq2seq_lm_dispatch(self) -> None:
+        from lucid.models import (
+            AutoModelForSeq2SeqLM,
+            TransformerForSeq2SeqLM,
+        )
+        from lucid.models._registry import _registry_lookup
+
+        entry = _registry_lookup(
+            "transformer_base_seq2seq", task=AutoModelForSeq2SeqLM._task
+        )
+        assert entry.model_class is TransformerForSeq2SeqLM
+
+    def test_no_task_has_zero_models(self) -> None:
+        """Sanity: every Auto class's task tag has ≥1 registered factory."""
+        from lucid.models import (
+            AutoModel,
+            AutoModelForCausalLM,
+            AutoModelForImageClassification,
+            AutoModelForMaskedLM,
+            AutoModelForObjectDetection,
+            AutoModelForQuestionAnswering,
+            AutoModelForSemanticSegmentation,
+            AutoModelForSeq2SeqLM,
+            AutoModelForSequenceClassification,
+            AutoModelForTokenClassification,
+        )
+        from lucid.models._registry import list_models
+
+        autos = [
+            AutoModel,
+            AutoModelForImageClassification,
+            AutoModelForObjectDetection,
+            AutoModelForSemanticSegmentation,
+            AutoModelForCausalLM,
+            AutoModelForMaskedLM,
+            AutoModelForSeq2SeqLM,
+            AutoModelForSequenceClassification,
+            AutoModelForTokenClassification,
+            AutoModelForQuestionAnswering,
+        ]
+        for auto_cls in autos:
+            registered = list_models(task=auto_cls._task)
+            assert len(registered) > 0, (
+                f"{auto_cls.__name__} has task={auto_cls._task!r} but no models "
+                f"are registered under it — dispatch hole."
+            )

@@ -95,28 +95,6 @@ class TestUNet:
         assert diff < 1e-5
 
 
-class TestUNetSmall:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.unet import unet_small
-
-        m = _build(unet_small, device)
-        out = m(_img(device, ch=1))
-        assert isinstance(out, SemanticSegmentationOutput)
-        assert int(out.logits.shape[-2]) == _H
-        assert int(out.logits.shape[-1]) == _W
-
-
-class TestUNetBilinear:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.unet import unet_bilinear
-
-        m = _build(unet_bilinear, device)
-        out = m(_img(device, ch=1))
-        assert isinstance(out, SemanticSegmentationOutput)
-        assert int(out.logits.shape[-2]) == _H
-        assert int(out.logits.shape[-1]) == _W
-
-
 class TestResUNet2d:
     def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.unet import res_unet_2d
@@ -188,42 +166,6 @@ class TestAttentionUNet:
         diff = float(lucid.abs(out.logits - out2.logits).max().item())
         assert diff < 1e-5
 
-    def test_small_variant(self, device: str) -> None:
-        from lucid.models.vision.attention_unet import attention_unet_small
-
-        m = _build(attention_unet_small, device)
-        out = m(_img(device, ch=1))
-        assert isinstance(out, SemanticSegmentationOutput)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# MaskFormer R18/R34 (slim BasicBlock variants)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class TestMaskFormerResNet18:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.maskformer import maskformer_resnet18
-        m = _build(
-            lambda: maskformer_resnet18(num_queries=20, num_decoder_layers=2),
-            device,
-        )
-        out = m(_img(device))
-        assert isinstance(out, SemanticSegmentationOutput)
-        K = m.config.num_classes
-        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
-
-
-class TestMaskFormerResNet34:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.maskformer import maskformer_resnet34
-        m = _build(
-            lambda: maskformer_resnet34(num_queries=20, num_decoder_layers=2),
-            device,
-        )
-        out = m(_img(device))
-        assert isinstance(out, SemanticSegmentationOutput)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MaskFormer
@@ -292,38 +234,16 @@ class TestMask2Former:
         assert diff < 1e-5
 
 
-class TestMask2FormerResNet18:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.mask2former import mask2former_resnet18
-        m = _build(
-            lambda: mask2former_resnet18(num_queries=20, num_decoder_layers=2),
-            device,
-        )
-        out = m(_img(device))
-        assert isinstance(out, SemanticSegmentationOutput)
-        K = m.config.num_classes
-        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
-
-
-class TestMask2FormerResNet34:
-    def test_factory_and_forward(self, device: str) -> None:
-        from lucid.models.vision.mask2former import mask2former_resnet34
-        m = _build(
-            lambda: mask2former_resnet34(num_queries=20, num_decoder_layers=2),
-            device,
-        )
-        out = m(_img(device))
-        assert isinstance(out, SemanticSegmentationOutput)
-
-
 class TestMask2FormerSwinTiny:
     def test_factory_and_forward(self, device: str) -> None:
         # Override window_size to 4 so the Swin stages divide our 128px test
         # input cleanly (default ws=7 expects 224/112/56/28 inputs).
         from lucid.models.vision.mask2former import mask2former_swin_tiny
+
         m = _build(
             lambda: mask2former_swin_tiny(
-                num_queries=20, num_decoder_layers=2,
+                num_queries=20,
+                num_decoder_layers=2,
                 swin_window_size=4,
             ),
             device,
@@ -348,19 +268,12 @@ class TestSegmentationRegistry:
             "fcn_resnet50",
             "fcn_resnet101",
             "unet",
-            "unet_small",
-            "unet_bilinear",
             "res_unet_2d",
             "unet_3d",
             "res_unet_3d",
             "attention_unet",
-            "attention_unet_small",
-            "maskformer_resnet18",
-            "maskformer_resnet34",
             "maskformer_resnet50",
             "maskformer_resnet101",
-            "mask2former_resnet18",
-            "mask2former_resnet34",
             "mask2former_resnet50",
             "mask2former_resnet101",
             "mask2former_swin_tiny",

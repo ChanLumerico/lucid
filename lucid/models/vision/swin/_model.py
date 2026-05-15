@@ -23,7 +23,6 @@ Each SwinBlock:
   Alternating blocks use cyclic shift + mask to implement shifted windows.
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -33,6 +32,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._classification import DropPath
 from lucid.models.vision.swin._config import SwinConfig
 
 # ---------------------------------------------------------------------------
@@ -199,6 +199,7 @@ class _SwinBlock(nn.Module):
         mlp_ratio: float,
         dropout: float,
         attn_drop: float,
+        drop_path_rate: float = 0.0,
     ) -> None:
         super().__init__()
         self.ws = window_size
@@ -216,6 +217,7 @@ class _SwinBlock(nn.Module):
             nn.Linear(mlp_dim, dim),
             nn.Dropout(p=dropout),
         )
+        self.drop_path = DropPath(drop_path_rate)
 
     def _attn_mask(self, H: int, W: int, device: str = "cpu") -> Tensor | None:
         if self.shift_size == 0:
@@ -262,8 +264,10 @@ class _SwinBlock(nn.Module):
             ss = self.shift_size
             x = lucid.roll(x, [ss, ss], dims=[1, 2])  # type: ignore[list-item]
 
-        x = shortcut + x
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        x = shortcut + cast(Tensor, self.drop_path(x))
+        x = x + cast(
+            Tensor, self.drop_path(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x)))))
+        )
         return x
 
 
@@ -283,8 +287,15 @@ class _SwinStage(nn.Module):
         dropout: float,
         attn_drop: float,
         downsample: bool,
+        drop_path_rates: list[float] | None = None,
     ) -> None:
         super().__init__()
+        if drop_path_rates is None:
+            drop_path_rates = [0.0] * depth
+        if len(drop_path_rates) != depth:
+            raise ValueError(
+                f"drop_path_rates length must equal depth ({len(drop_path_rates)} vs {depth})"
+            )
         self.blocks = nn.ModuleList(
             [
                 _SwinBlock(
@@ -295,6 +306,7 @@ class _SwinStage(nn.Module):
                     mlp_ratio=mlp_ratio,
                     dropout=dropout,
                     attn_drop=attn_drop,
+                    drop_path_rate=drop_path_rates[i],
                 )
                 for i in range(depth)
             ]
@@ -324,8 +336,20 @@ def _build_swin(
     fi: list[FeatureInfo] = []
     reduction = cfg.patch_size
 
+    # Linear stochastic-depth schedule across the trunk (Liu 2021 §A).
+    total_blocks = sum(cfg.depths)
+    if total_blocks > 1 and cfg.drop_path_rate > 0.0:
+        dp_all = [
+            cfg.drop_path_rate * i / (total_blocks - 1) for i in range(total_blocks)
+        ]
+    else:
+        dp_all = [cfg.drop_path_rate] * total_blocks
+    block_cursor = 0
+
     for i, (depth, heads) in enumerate(zip(cfg.depths, cfg.num_heads)):
         downsample = i < len(cfg.depths) - 1
+        stage_dp = dp_all[block_cursor : block_cursor + depth]
+        block_cursor += depth
         stages.append(
             _SwinStage(
                 dim,
@@ -336,6 +360,7 @@ def _build_swin(
                 cfg.dropout,
                 cfg.attention_dropout,
                 downsample,
+                drop_path_rates=list(stage_dp),
             )
         )
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))

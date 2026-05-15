@@ -22,6 +22,9 @@ class SwinConfig(ModelConfig):
     ``mlp_ratio`` — MLP hidden expansion (4.0 in the paper).
     ``dropout`` — applied to MLP and attention.
     ``patch_size`` — initial patch merging (4×4 in the paper).
+    ``drop_path_rate`` — stochastic-depth max rate; linearly scheduled
+        across all blocks of the trunk (Liu et al., 2021 §A).  Paper uses
+        0.2 for Swin-T, 0.3 for Swin-S/B/L.
     """
 
     model_type: ClassVar[str] = "swin"
@@ -37,6 +40,7 @@ class SwinConfig(ModelConfig):
     mlp_ratio: float = 4.0
     dropout: float = 0.0
     attention_dropout: float = 0.0
+    drop_path_rate: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))

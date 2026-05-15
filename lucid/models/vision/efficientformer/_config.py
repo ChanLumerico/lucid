@@ -30,6 +30,13 @@ class EfficientFormerConfig(ModelConfig):
     depths: tuple[int, ...] = (3, 2, 6, 4)
     embed_dims: tuple[int, ...] = (48, 96, 224, 448)
     mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0)
+    # Regularization knobs (paper §4.1):
+    #   drop_path_rate    — max stochastic depth rate (linear schedule across trunk).
+    #                       Paper uses 0.0 for L1, 0.1 for L3, 0.2 for L7.
+    #   layer_scale_init  — γ initialization for LayerScale on every residual
+    #                       branch (paper appendix: 1e-5).
+    drop_path_rate: float = 0.0
+    layer_scale_init: float = 1e-5
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))

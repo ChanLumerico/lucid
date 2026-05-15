@@ -34,6 +34,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._classification import DropPath
 from lucid.models.vision.convnext._config import ConvNeXtConfig
 
 # ---------------------------------------------------------------------------
@@ -42,15 +43,18 @@ from lucid.models.vision.convnext._config import ConvNeXtConfig
 
 
 class _ConvNeXtBlock(nn.Module):
-    """Depthwise 7×7 + inverted-bottleneck MLP + layer scale."""
+    """Depthwise 7×7 + inverted-bottleneck MLP + layer scale + DropPath."""
 
-    def __init__(self, dim: int, layer_scale_init: float) -> None:
+    def __init__(
+        self, dim: int, layer_scale_init: float, drop_path_rate: float = 0.0
+    ) -> None:
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, 7, padding=3, groups=dim)
         self.norm = nn.LayerNorm(dim)
         self.fc1 = nn.Linear(dim, 4 * dim)
         self.fc2 = nn.Linear(4 * dim, dim)
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
+        self.drop_path = DropPath(drop_path_rate)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         shortcut = x
@@ -61,7 +65,7 @@ class _ConvNeXtBlock(nn.Module):
         x = cast(Tensor, self.fc2(x))
         x = x * self.gamma  # layer scale
         x = x.permute(0, 3, 1, 2)  # (B, C, H, W)
-        return shortcut + x
+        return shortcut + cast(Tensor, self.drop_path(x))
 
 
 # ---------------------------------------------------------------------------
@@ -108,10 +112,22 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
     fi: list[FeatureInfo] = []
     reduction = 4
 
+    # Linear stochastic-depth schedule across the entire trunk (Liu 2022 §3).
+    total_blocks = sum(cfg.depths)
+    if total_blocks > 1 and cfg.dropout > 0.0:
+        dp_rates = [cfg.dropout * i / (total_blocks - 1) for i in range(total_blocks)]
+    else:
+        dp_rates = [cfg.dropout] * total_blocks
+    block_cursor = 0
+
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
-        stage = nn.Sequential(
-            *[_ConvNeXtBlock(dim, cfg.layer_scale_init) for _ in range(depth)]
-        )
+        stage_blocks: list[nn.Module] = []
+        for _ in range(depth):
+            stage_blocks.append(
+                _ConvNeXtBlock(dim, cfg.layer_scale_init, dp_rates[block_cursor])
+            )
+            block_cursor += 1
+        stage = nn.Sequential(*stage_blocks)
         stages.append(stage)
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
 

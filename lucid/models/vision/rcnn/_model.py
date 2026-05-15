@@ -33,7 +33,6 @@ from lucid.models._base import PretrainedModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
     batched_nms,
-    box_cxcywh_to_xyxy,
     clip_boxes_to_image,
     decode_boxes,
 )
@@ -337,7 +336,11 @@ class RCNNForObjectDetection(PretrainedModel):
             final_logits = lucid.zeros((0, self._num_classes + 1), device=dev)
             final_boxes = lucid.zeros((0, 4), device=dev)
 
-        return ObjectDetectionOutput(logits=final_logits, pred_boxes=final_boxes)
+        return ObjectDetectionOutput(
+            logits=final_logits,
+            pred_boxes=final_boxes,
+            proposals=tuple(proposals),
+        )
 
     # ------------------------------------------------------------------
     # Post-processing helper (call separately after forward)
@@ -346,13 +349,14 @@ class RCNNForObjectDetection(PretrainedModel):
     def postprocess(
         self,
         output: ObjectDetectionOutput,
-        proposals: list[Tensor],
+        proposals: list[Tensor] | None = None,
     ) -> list[dict[str, Tensor]]:
         """Apply score threshold + per-class NMS to raw R-CNN output.
 
         Args:
             output:    ``ObjectDetectionOutput`` from ``forward()``.
-            proposals: Same proposal list passed to ``forward()``.
+            proposals: Same proposal list passed to ``forward()``.  When
+                       omitted, falls back to ``output.proposals``.
 
         Returns:
             List of per-image result dicts, each with:
@@ -360,6 +364,13 @@ class RCNNForObjectDetection(PretrainedModel):
               ``"scores"`` : (K,)   class confidence scores
               ``"labels"`` : (K,)   integer class indices (1-based, 0=bg)
         """
+        if proposals is None:
+            if output.proposals is None:
+                raise ValueError(
+                    "postprocess() needs proposals — pass them explicitly or "
+                    "use the output produced by a forward() call."
+                )
+            proposals = list(output.proposals)
         logits = output.logits  # (Σ N_i, num_classes + 1)
         pred_boxes = output.pred_boxes  # (Σ N_i, 4)
 
@@ -400,7 +411,9 @@ class RCNNForObjectDetection(PretrainedModel):
                 keep = batched_nms(
                     bx_c,
                     sc_c,
-                    lucid.zeros(int(sc_c.shape[0]), device=dev),  # single class → no offset
+                    lucid.zeros(
+                        int(sc_c.shape[0]), device=dev
+                    ),  # single class → no offset
                     self._nms_thresh,
                 )
                 keep = keep[: self._max_det]

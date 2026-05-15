@@ -60,7 +60,6 @@ from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import (
     batched_nms,
-    box_iou,
     clip_boxes_to_image,
 )
 
@@ -174,9 +173,7 @@ class _ConvBnMish(nn.Module):
         self.act = nn.Mish()
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(
-            Tensor, self.act(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
-        )
+        return cast(Tensor, self.act(cast(Tensor, self.bn(cast(Tensor, self.conv(x))))))
 
 
 # ---------------------------------------------------------------------------

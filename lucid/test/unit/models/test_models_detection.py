@@ -207,9 +207,12 @@ class TestDETR:
 class TestDETRResNet101:
     def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.detr import detr_resnet101
+
         m = _build(
             lambda: detr_resnet101(
-                num_encoder_layers=2, num_decoder_layers=2, num_queries=20,
+                num_encoder_layers=2,
+                num_decoder_layers=2,
+                num_queries=20,
             ),
             device,
         )
@@ -383,7 +386,8 @@ class TestDetectionRegistry:
             "fast_rcnn",
             "faster_rcnn",
             "mask_rcnn",
-            "detr_resnet50", "detr_resnet101",
+            "detr_resnet50",
+            "detr_resnet101",
             "efficientdet_d0",
             "efficientdet_d7",
             "yolo_v1",

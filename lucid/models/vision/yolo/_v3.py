@@ -56,7 +56,6 @@ from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import (
     batched_nms,
-    box_iou,
     clip_boxes_to_image,
 )
 

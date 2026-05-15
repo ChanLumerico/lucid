@@ -21,13 +21,13 @@ Architecture (EfficientFormer-L1, image=224):
 
 from typing import ClassVar, cast
 
-import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._classification import DropPath, LayerScale
 from lucid.models.vision.efficientformer._config import EfficientFormerConfig
 
 # ---------------------------------------------------------------------------
@@ -70,30 +70,40 @@ class _MLP(nn.Module):
 class _EfficientFormerPoolBlock(nn.Module):
     """Pooling MetaFormer block operating in (B, C, H, W) layout."""
 
-    def __init__(self, dim: int, mlp_ratio: float) -> None:
+    def __init__(
+        self,
+        dim: int,
+        mlp_ratio: float,
+        drop_path_rate: float,
+        layer_scale_init: float,
+    ) -> None:
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
         self.bn = nn.BatchNorm2d(dim)
         self.pool_mixer = _PoolingBlock()
         self.norm = nn.LayerNorm(dim)
         self.mlp = _MLP(dim, mlp_ratio)
+        self.ls1 = LayerScale(dim, layer_scale_init)
+        self.ls2 = LayerScale(dim, layer_scale_init)
+        self.drop_path = DropPath(drop_path_rate)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        # DWConv + BN (spatial)
+        # DWConv + BN (LePE-style local position encoding, no LayerScale).
         shortcut = x
         x = cast(Tensor, self.bn(cast(Tensor, self.dwconv(x))))
         x = shortcut + x
 
-        # Pooling mixer (spatial)
-        x = x + cast(Tensor, self.pool_mixer(x))
+        # Pooling mixer (spatial) with LayerScale + DropPath.
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls1(self.pool_mixer(x)))))
 
-        # MLP (channel-last)
+        # MLP (channel-last) with LayerScale + DropPath. LayerScale applied
+        # in (B, C, H, W) layout after permute-back.
         B, C, H, W = x.shape
-        x_cl = x.permute(0, 2, 3, 1)  # (B, H, W, C)
+        x_cl = x.permute(0, 2, 3, 1)
         x_cl = cast(Tensor, self.norm(x_cl))
         x_cl = cast(Tensor, self.mlp(x_cl))
-        x_cl = x_cl.permute(0, 3, 1, 2)  # (B, C, H, W)
-        x = x + x_cl
+        x_mlp = x_cl.permute(0, 3, 1, 2)
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls2(x_mlp))))
         return x
 
 
@@ -105,19 +115,30 @@ class _EfficientFormerPoolBlock(nn.Module):
 class _EfficientFormerAttnBlock(nn.Module):
     """Standard MHA transformer block for stage 4."""
 
-    def __init__(self, dim: int, num_heads: int, mlp_ratio: float) -> None:
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float,
+        drop_path_rate: float,
+        layer_scale_init: float,
+    ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = _MLP(dim, mlp_ratio)
+        self.ls1 = LayerScale(dim, layer_scale_init)
+        self.ls2 = LayerScale(dim, layer_scale_init)
+        self.drop_path = DropPath(drop_path_rate)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # x: (B, N, C)
         n = cast(Tensor, self.norm1(x))
         attn_out, _ = self.attn(n, n, n)
-        x = x + attn_out
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls1(attn_out))))
+        m = cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls2(m))))
         return x
 
 
@@ -167,23 +188,45 @@ def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
     fi: list[FeatureInfo] = []
     reduction = 4  # stem applies 4× downsampling
 
+    # Linear DropPath schedule across the whole trunk (paper §4.1).
+    total_blocks = sum(cfg.depths)
+    if total_blocks > 1 and cfg.drop_path_rate > 0.0:
+        dp_rates = [
+            cfg.drop_path_rate * i / (total_blocks - 1) for i in range(total_blocks)
+        ]
+    else:
+        dp_rates = [cfg.drop_path_rate] * total_blocks
+    cursor = 0
+
     for i, (depth, dim, mlp_ratio) in enumerate(
         zip(cfg.depths, cfg.embed_dims, cfg.mlp_ratios)
     ):
         if i < last_stage:
             # Pooling-based blocks (4D)
             stage = nn.Sequential(
-                *[_EfficientFormerPoolBlock(dim, mlp_ratio) for _ in range(depth)]
+                *[
+                    _EfficientFormerPoolBlock(
+                        dim, mlp_ratio, dp_rates[cursor + j], cfg.layer_scale_init
+                    )
+                    for j in range(depth)
+                ]
             )
         else:
             # Attention-based blocks (sequence) — num_heads auto
             num_heads = max(1, dim // 32)
             stage = nn.Sequential(
                 *[
-                    _EfficientFormerAttnBlock(dim, num_heads, mlp_ratio)
-                    for _ in range(depth)
+                    _EfficientFormerAttnBlock(
+                        dim,
+                        num_heads,
+                        mlp_ratio,
+                        dp_rates[cursor + j],
+                        cfg.layer_scale_init,
+                    )
+                    for j in range(depth)
                 ]
             )
+        cursor += depth
         stages.append(stage)
         fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
 

@@ -40,7 +40,6 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
-from lucid.models._registry import register_model
 from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 
 # ---------------------------------------------------------------------------

@@ -14,14 +14,6 @@ _CFG_BASE = AttentionUNetConfig(
     bilinear=False,
 )
 
-_CFG_SMALL = AttentionUNetConfig(
-    num_classes=2,
-    in_channels=1,
-    base_channels=32,
-    depth=3,
-    bilinear=True,
-)
-
 
 def _build(
     cfg: AttentionUNetConfig, kw: dict[str, object]
@@ -49,23 +41,3 @@ def attention_unet(
     Soft attention gates suppress irrelevant skip-connection features.
     """
     return _build(_CFG_BASE, overrides)
-
-
-@register_model(
-    task="semantic-segmentation",
-    family="attention_unet",
-    model_type="attention_unet",
-    model_class=AttentionUNetForSemanticSegmentation,
-    default_config=_CFG_SMALL,
-)
-def attention_unet_small(
-    pretrained: bool = False,
-    **overrides: object,
-) -> AttentionUNetForSemanticSegmentation:
-    """Attention U-Net — small variant.
-
-    Lightweight configuration: 3-level encoder/decoder, base_channels=32,
-    bilinear upsampling.  Suitable for rapid experimentation or
-    memory-constrained settings.
-    """
-    return _build(_CFG_SMALL, overrides)

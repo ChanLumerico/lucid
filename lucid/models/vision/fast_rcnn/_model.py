@@ -31,7 +31,6 @@ Faithfulness notes
 * Smooth-L1 loss with σ = 1 per §3 (matches paper eq. 3).
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -437,27 +436,31 @@ class FastRCNNForObjectDetection(PretrainedModel):
         all_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
-        """Decode top-scoring class bbox delta for every proposal."""
+        """Decode bbox deltas per class, returning ``(N_total, K, 4)``.
+
+        Paper §3.2 specifies class-specific bounding-box regression — at
+        inference, NMS for class ``c`` must use the boxes decoded with
+        class ``c``'s deltas, not a single canonical box across classes.
+        """
         K = self._num_classes
         N_total = int(all_deltas.shape[0])
         dev = all_deltas.device.type
 
-        # Flatten all proposals
         if any(int(p.shape[0]) > 0 for p in proposals):
             flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         else:
-            return lucid.zeros((0, 4), device=dev)
+            return lucid.zeros((0, K, 4), device=dev)
 
         # all_deltas: (N_total, K*4) → (N_total, K, 4)
         deltas_3d = all_deltas.reshape(N_total, K, 4)
 
-        # Pick delta for foreground class with highest raw delta norm
-        # (at inference, class selection happens in postprocess)
-        # Here we use class 0 (first foreground) as the canonical delta
-        top_deltas = deltas_3d[:, 0, :]  # (N_total, 4) — class-agnostic decode
-
-        boxes = decode_boxes(top_deltas, flat_props, self._bbox_weights)
-        return clip_boxes_to_image(boxes, image_size)
+        # Decode every class's delta independently against the same proposals,
+        # producing one (N_total, 4) box per class then stacking back.
+        per_class: list[Tensor] = []
+        for c in range(K):
+            boxes_c = decode_boxes(deltas_3d[:, c, :], flat_props, self._bbox_weights)
+            per_class.append(clip_boxes_to_image(boxes_c, image_size))
+        return lucid.stack(per_class, dim=1)  # (N_total, K, 4)
 
     # ------------------------------------------------------------------
     # Post-processing (score threshold + per-class NMS)
@@ -481,7 +484,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
               ``"labels"`` : (K_det,)    class indices (1-based)
         """
         logits = output.logits  # (Σ N_i, K+1)
-        pred_boxes = output.pred_boxes  # (Σ N_i, 4)  — top-class decoded boxes
+        pred_boxes = output.pred_boxes  # (Σ N_i, K, 4) — class-specific decoded
 
         results: list[dict[str, Tensor]] = []
         offset = 0
@@ -490,7 +493,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
         for props in proposals:
             N_i = int(props.shape[0])
             lg_i = logits[offset : offset + N_i]  # (N_i, K+1)
-            bx_i = pred_boxes[offset : offset + N_i]  # (N_i, 4)
+            bx_i = pred_boxes[offset : offset + N_i]  # (N_i, K, 4)
             offset += N_i
 
             scores_i = F.softmax(lg_i, dim=-1)
@@ -501,6 +504,9 @@ class FastRCNNForObjectDetection(PretrainedModel):
 
             for c in range(1, self._num_classes + 1):
                 cls_scores = scores_i[:, c]
+                # Class-specific decoded boxes for class c (1-based label →
+                # 0-based delta index).
+                bx_class = bx_i[:, c - 1, :]  # (N_i, 4)
 
                 mask: list[int] = [
                     i
@@ -512,7 +518,7 @@ class FastRCNNForObjectDetection(PretrainedModel):
 
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = cls_scores[mask_t]
-                bx_c = bx_i[mask_t]
+                bx_c = bx_class[mask_t]
 
                 keep = batched_nms(
                     bx_c,

@@ -7,22 +7,27 @@ from lucid.models.vision.efficientformer._model import (
     EfficientFormerForImageClassification,
 )
 
+# Paper §4.1 / appendix: linear stochastic-depth schedule with max rate
+# 0.0 (L1), 0.1 (L3), 0.2 (L7); LayerScale init 1e-5 across all variants.
 _CFG_L1 = EfficientFormerConfig(
     depths=(3, 2, 6, 4),
     embed_dims=(48, 96, 224, 448),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    drop_path_rate=0.0,
 )
 
 _CFG_L3 = EfficientFormerConfig(
     depths=(4, 4, 12, 6),
     embed_dims=(64, 128, 320, 512),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    drop_path_rate=0.1,
 )
 
 _CFG_L7 = EfficientFormerConfig(
     depths=(6, 6, 18, 8),
     embed_dims=(96, 192, 384, 768),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    drop_path_rate=0.2,
 )
 
 

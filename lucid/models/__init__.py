@@ -5,24 +5,109 @@
 from lucid.models._auto import (
     AutoConfig, AutoModel,
     AutoModelForCausalLM, AutoModelForImageClassification,
+    AutoModelForImageGeneration,
     AutoModelForMaskedLM, AutoModelForObjectDetection,
+    AutoModelForQuestionAnswering,
     AutoModelForSemanticSegmentation,
+    AutoModelForSeq2SeqLM,
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
 from lucid.models._hub    import PretrainedEntry, download, load_from_pretrained_entry
-from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
+from lucid.models._mixins import (
+    BackboneMixin, ClassificationHeadMixin, DiffusionMixin,
+    FeatureInfo, GenerationMixin, MaskedLMMixin,
+)
 from lucid.models._output import (
     ModelOutput, BaseModelOutput, BaseModelOutputWithPooling,
     ImageClassificationOutput, ObjectDetectionOutput, InstanceSegmentationOutput,
     SemanticSegmentationOutput, CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
+    DiffusionModelOutput, VAEOutput, GenerationOutput,
 )
 from lucid.models._registry import create_model, is_model, list_models, model_entrypoint, register_model
+
+# Text-domain infrastructure (Phase 4 base layer).
+# RoPE / sinusoidal PE live in lucid.nn — import from there directly.
+from lucid.models.text import LanguageModelConfig, TextActivation
+# Generative-domain infrastructure (Phase 5 base layer).
+from lucid.models.generative import (
+    BetaSchedule, DDPMScheduler,
+    DiffusionModelConfig, GenerativeActivation, GenerativeModelConfig,
+    Scheduler,
+)
+# 2013 — VAE (Kingma & Welling)
+from lucid.models.generative.vae import (
+    VAEConfig, VAEModel, VAEForImageGeneration,
+    vae, hvae, vae_gen, hvae_gen,
+)
+# 2020 — DDPM (Ho et al.)
+from lucid.models.generative.ddpm import (
+    DDPMConfig, DDPMModel, DDPMForImageGeneration, DDPMUNet,
+    ddpm_cifar, ddpm_lsun, ddpm_imagenet64,
+    ddpm_cifar_gen, ddpm_lsun_gen, ddpm_imagenet64_gen,
+)
+# 2019 — NCSN (Song & Ermon)
+from lucid.models.generative.ncsn import (
+    NCSNConfig, NCSNModel, NCSNForImageGeneration,
+    ncsn_cifar, ncsn_celeba,
+    ncsn_cifar_gen, ncsn_celeba_gen,
+)
+# 2017 — Transformer (Vaswani et al.)
+from lucid.models.text.transformer import (
+    TransformerConfig, TransformerModel,
+    TransformerForSeq2SeqLM,
+    TransformerForSequenceClassification, TransformerForTokenClassification,
+    transformer_base, transformer_large,
+    transformer_base_seq2seq, transformer_large_seq2seq,
+    transformer_base_cls, transformer_base_token_cls,
+)
+# 2018 — BERT (Devlin et al.)
+from lucid.models.text.bert import (
+    BertConfig, BertModel,
+    BertForCausalLM,
+    BertForMaskedLM,
+    BertForNextSentencePrediction,
+    BertForPreTraining, BertForPreTrainingOutput,
+    BertForQuestionAnswering,
+    BertForSequenceClassification, BertForTokenClassification,
+    bert_tiny, bert_mini, bert_small, bert_medium, bert_base, bert_large,
+    bert_base_mlm, bert_large_mlm,
+    bert_base_cls, bert_large_cls,
+    bert_base_token_cls, bert_base_qa,
+)
+# 2018 — GPT-1 (Radford et al.)
+from lucid.models.text.gpt import (
+    GPTConfig, GPTModel, GPTLMHeadModel,
+    GPTDoubleHeadsModel, GPTDoubleHeadsOutput,
+    GPTForSequenceClassification,
+    gpt, gpt_lm, gpt_cls,
+)
+# 2019 — GPT-2 (Radford et al.)
+from lucid.models.text.gpt2 import (
+    GPT2Config, GPT2Model, GPT2LMHeadModel,
+    GPT2DoubleHeadsModel, GPT2DoubleHeadsOutput,
+    GPT2ForSequenceClassification,
+    gpt2_small, gpt2_medium, gpt2_large, gpt2_xlarge,
+    gpt2_small_lm, gpt2_medium_lm, gpt2_large_lm, gpt2_xlarge_lm,
+    gpt2_small_cls,
+)
+# 2021 — RoFormer (Su et al.)
+from lucid.models.text.roformer import (
+    RoFormerConfig, RoFormerModel,
+    RoFormerForMaskedLM,
+    RoFormerForMultipleChoice,
+    RoFormerForQuestionAnswering,
+    RoFormerForSequenceClassification, RoFormerForTokenClassification,
+    roformer,
+    roformer_mlm, roformer_cls, roformer_token_cls,
+)
 
 # Vision families — chronological order of publication
 # 1998 — LeNet-5 (LeCun et al.)
 from lucid.models.vision.lenet import (
     LeNetConfig, LeNet, LeNetForImageClassification,
-    lenet_5, lenet_5_cls, lenet_5_relu, lenet_5_relu_cls,
+    lenet_5, lenet_5_cls,
 )
 # 2012 — AlexNet (Krizhevsky, Sutskever & Hinton)
 from lucid.models.vision.alexnet import (
@@ -260,13 +345,13 @@ from lucid.models.vision.fcn import (
 # 2015 — U-Net (Ronneberger et al.)
 from lucid.models.vision.unet import (
     UNetConfig, UNetForSemanticSegmentation,
-    unet, unet_small, unet_bilinear,
+    unet,
     res_unet_2d, unet_3d, res_unet_3d,
 )
 # 2018 — Attention U-Net (Oktay et al.)
 from lucid.models.vision.attention_unet import (
     AttentionUNetConfig, AttentionUNetForSemanticSegmentation,
-    attention_unet, attention_unet_small,
+    attention_unet,
 )
 # 2020 — DETR (Carion et al.)
 from lucid.models.vision.detr import (
@@ -282,13 +367,11 @@ from lucid.models.vision.efficientdet import (
 # 2021 — MaskFormer (Cheng et al.)
 from lucid.models.vision.maskformer import (
     MaskFormerConfig, MaskFormerForSemanticSegmentation,
-    maskformer_resnet18, maskformer_resnet34,
     maskformer_resnet50, maskformer_resnet101,
 )
 # 2022 — Mask2Former (Cheng et al.)
 from lucid.models.vision.mask2former import (
     Mask2FormerConfig, Mask2FormerForSemanticSegmentation,
-    mask2former_resnet18, mask2former_resnet34,
     mask2former_resnet50, mask2former_resnet101,
     mask2former_swin_tiny, mask2former_swin_small,
     mask2former_swin_base, mask2former_swin_large,
@@ -309,17 +392,27 @@ __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
     "ModelConfig", "PretrainedModel",
     "PretrainedEntry", "download", "load_from_pretrained_entry",
-    "BackboneMixin", "ClassificationHeadMixin", "FeatureInfo",
+    "BackboneMixin", "ClassificationHeadMixin", "DiffusionMixin",
+    "FeatureInfo", "GenerationMixin", "MaskedLMMixin",
+    "LanguageModelConfig", "TextActivation",
+    "GenerativeModelConfig", "DiffusionModelConfig",
+    "GenerativeActivation", "BetaSchedule",
+    "Scheduler", "DDPMScheduler",
     "ModelOutput", "BaseModelOutput", "BaseModelOutputWithPooling",
     "ImageClassificationOutput", "ObjectDetectionOutput", "InstanceSegmentationOutput",
     "SemanticSegmentationOutput", "CausalLMOutput", "MaskedLMOutput", "Seq2SeqLMOutput",
+    "DiffusionModelOutput", "VAEOutput", "GenerationOutput",
     "AutoConfig", "AutoModel",
     "AutoModelForCausalLM", "AutoModelForImageClassification",
     "AutoModelForMaskedLM", "AutoModelForObjectDetection", "AutoModelForSemanticSegmentation",
+    "AutoModelForSeq2SeqLM",
+    "AutoModelForSequenceClassification", "AutoModelForTokenClassification",
+    "AutoModelForQuestionAnswering",
+    "AutoModelForImageGeneration",
     "create_model", "is_model", "list_models", "model_entrypoint", "register_model",
     # ── Vision (1998) LeNet ───────────────────────────────────────────────────
     "LeNetConfig", "LeNet", "LeNetForImageClassification",
-    "lenet_5", "lenet_5_cls", "lenet_5_relu", "lenet_5_relu_cls",
+    "lenet_5", "lenet_5_cls",
     # ── Vision (2012) AlexNet ─────────────────────────────────────────────────
     "AlexNetConfig", "AlexNet", "AlexNetForImageClassification",
     "alexnet", "alexnet_cls",
@@ -447,11 +540,11 @@ __all__ = [
     "fcn_resnet50", "fcn_resnet101",
     # ── Vision (2015) U-Net ──────────────────────────────────────────────────
     "UNetConfig", "UNetForSemanticSegmentation",
-    "unet", "unet_small", "unet_bilinear",
+    "unet",
     "res_unet_2d", "unet_3d", "res_unet_3d",
     # ── Vision (2018) Attention U-Net ────────────────────────────────────────
     "AttentionUNetConfig", "AttentionUNetForSemanticSegmentation",
-    "attention_unet", "attention_unet_small",
+    "attention_unet",
     # ── Vision (2014) R-CNN ───────────────────────────────────────────────────
     "RCNNConfig", "RCNNForObjectDetection",
     "rcnn",
@@ -473,14 +566,51 @@ __all__ = [
     "efficientdet_d4", "efficientdet_d5", "efficientdet_d6", "efficientdet_d7",
     # ── Vision (2021) MaskFormer ──────────────────────────────────────────────
     "MaskFormerConfig", "MaskFormerForSemanticSegmentation",
-    "maskformer_resnet18", "maskformer_resnet34",
     "maskformer_resnet50", "maskformer_resnet101",
     # ── Vision (2022) Mask2Former ─────────────────────────────────────────────
     "Mask2FormerConfig", "Mask2FormerForSemanticSegmentation",
-    "mask2former_resnet18", "mask2former_resnet34",
     "mask2former_resnet50", "mask2former_resnet101",
     "mask2former_swin_tiny", "mask2former_swin_small",
     "mask2former_swin_base", "mask2former_swin_large",
+    # ── Text (2017) Transformer (Vaswani et al.) ──────────────────────────────
+    "TransformerConfig", "TransformerModel",
+    "TransformerForSeq2SeqLM",
+    "TransformerForSequenceClassification", "TransformerForTokenClassification",
+    "transformer_base", "transformer_large",
+    "transformer_base_seq2seq", "transformer_large_seq2seq",
+    "transformer_base_cls", "transformer_base_token_cls",
+    # ── Text (2018) BERT ──────────────────────────────────────────────────────
+    "BertConfig", "BertModel",
+    "BertForCausalLM",
+    "BertForMaskedLM",
+    "BertForNextSentencePrediction",
+    "BertForPreTraining", "BertForPreTrainingOutput",
+    "BertForQuestionAnswering",
+    "BertForSequenceClassification", "BertForTokenClassification",
+    "bert_tiny", "bert_mini", "bert_small", "bert_medium", "bert_base", "bert_large",
+    "bert_base_mlm", "bert_large_mlm",
+    "bert_base_cls", "bert_large_cls",
+    "bert_base_token_cls", "bert_base_qa",
+    # ── Text (2018) GPT-1 ─────────────────────────────────────────────────────
+    "GPTConfig", "GPTModel", "GPTLMHeadModel",
+    "GPTDoubleHeadsModel", "GPTDoubleHeadsOutput",
+    "GPTForSequenceClassification",
+    "gpt", "gpt_lm", "gpt_cls",
+    # ── Text (2019) GPT-2 ─────────────────────────────────────────────────────
+    "GPT2Config", "GPT2Model", "GPT2LMHeadModel",
+    "GPT2DoubleHeadsModel", "GPT2DoubleHeadsOutput",
+    "GPT2ForSequenceClassification",
+    "gpt2_small", "gpt2_medium", "gpt2_large", "gpt2_xlarge",
+    "gpt2_small_lm", "gpt2_medium_lm", "gpt2_large_lm", "gpt2_xlarge_lm",
+    "gpt2_small_cls",
+    # ── Text (2021) RoFormer ──────────────────────────────────────────────────
+    "RoFormerConfig", "RoFormerModel",
+    "RoFormerForMaskedLM",
+    "RoFormerForMultipleChoice",
+    "RoFormerForQuestionAnswering",
+    "RoFormerForSequenceClassification", "RoFormerForTokenClassification",
+    "roformer",
+    "roformer_mlm", "roformer_cls", "roformer_token_cls",
     # ── Vision (2016) YOLOv1 ──────────────────────────────────────────────────
     "YOLOV1Config", "YOLOV1ForObjectDetection",
     "yolo_v1", "yolo_v1_tiny",
@@ -493,4 +623,15 @@ __all__ = [
     # ── Vision (2020) YOLOv4 ──────────────────────────────────────────────────
     "YOLOV4Config", "YOLOV4ForObjectDetection",
     "yolo_v4",
+    # ── Generative (2013) VAE ─────────────────────────────────────────────────
+    "VAEConfig", "VAEModel", "VAEForImageGeneration",
+    "vae", "hvae", "vae_gen", "hvae_gen",
+    # ── Generative (2020) DDPM ────────────────────────────────────────────────
+    "DDPMConfig", "DDPMModel", "DDPMForImageGeneration", "DDPMUNet",
+    "ddpm_cifar", "ddpm_lsun", "ddpm_imagenet64",
+    "ddpm_cifar_gen", "ddpm_lsun_gen", "ddpm_imagenet64_gen",
+    # ── Generative (2019) NCSN ────────────────────────────────────────────────
+    "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
+    "ncsn_cifar", "ncsn_celeba",
+    "ncsn_cifar_gen", "ncsn_celeba_gen",
 ]

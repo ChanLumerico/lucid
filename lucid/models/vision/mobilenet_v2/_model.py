@@ -108,9 +108,10 @@ def _build_features(cfg: MobileNetV2Config) -> tuple[nn.Sequential, int]:
             )
             in_ch = out_ch
 
-    # Head conv — 1280 is NOT scaled by width_mult (paper §3.4 and timm both
-    # keep the head channel count at 1280 regardless of width multiplier)
-    last_ch = 1280
+    # Head conv — paper §3.4 / torchvision reference: scale 1280 by
+    # ``max(1.0, width_mult)`` so wider models still get a wider head, but
+    # narrow variants don't shrink the head below 1280.
+    last_ch = _make_divisible(1280 * max(1.0, cfg.width_mult))
     layers += [
         nn.Conv2d(in_ch, last_ch, 1, bias=False),
         nn.BatchNorm2d(last_ch),

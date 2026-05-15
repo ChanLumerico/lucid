@@ -282,9 +282,11 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                     # cx/cy: sigmoid + cell offset → pixel x_center
                     x_pixel = (F.sigmoid(raw_cx) + float(c)) * cell_w
                     y_pixel = (F.sigmoid(raw_cy) + float(r)) * cell_h
-                    # w/h: exp → pixel dimensions (clamp to prevent overflow)
-                    w_pixel = lucid.exp(raw_w.clamp(min=-10.0, max=10.0)) * float(W)
-                    h_pixel = lucid.exp(raw_h.clamp(min=-10.0, max=10.0)) * float(H)
+                    # Paper §2 / Eq.1: w, h are network outputs ∈ [0, 1]
+                    # directly (normalized by image dims) — sigmoid, not exp.
+                    # exp() is YOLOv2's anchor-based parametrization.
+                    w_pixel = F.sigmoid(raw_w) * float(W)
+                    h_pixel = F.sigmoid(raw_h) * float(H)
 
                     # Convert cxcywh → xyxy
                     x1 = x_pixel - w_pixel / 2.0
@@ -394,8 +396,8 @@ class YOLOV1ForObjectDetection(PretrainedModel):
 
                     px = (1.0 / (1.0 + math.exp(-raw_cx_b)) + col) * cell_w_px
                     py = (1.0 / (1.0 + math.exp(-raw_cy_b)) + row) * cell_h_px
-                    pw = math.exp(max(-10.0, min(10.0, raw_w_b))) * W
-                    ph = math.exp(max(-10.0, min(10.0, raw_h_b))) * H
+                    pw = (1.0 / (1.0 + math.exp(-raw_w_b))) * W
+                    ph = (1.0 / (1.0 + math.exp(-raw_h_b))) * H
 
                     px1 = px - pw / 2.0
                     py1 = py - ph / 2.0
@@ -461,29 +463,22 @@ class YOLOV1ForObjectDetection(PretrainedModel):
                             xy_terms.append((sig_cx - tgt_cx_t[0]) ** 2)
                             xy_terms.append((sig_cy - tgt_cy_t[0]) ** 2)
 
-                            # wh loss: MSE on sqrt of (exp(pred) * img_dim)
-                            pred_w_px = lucid.exp(
-                                pred_w.clamp(min=-10.0, max=10.0)
-                            ) * float(W)
-                            pred_h_px = lucid.exp(
-                                pred_h.clamp(min=-10.0, max=10.0)
-                            ) * float(H)
-                            tgt_sqrt_w = float(math.sqrt(max(w_m, 0.0)))
-                            tgt_sqrt_h = float(math.sqrt(max(h_m, 0.0)))
-                            sqrt_pw = lucid.log(pred_w_px.clamp(1e-6, 1e9)) * 0.5
-                            sqrt_ph = lucid.log(pred_h_px.clamp(1e-6, 1e9)) * 0.5
-                            # Approximate sqrt MSE as (sqrt(pw) - sqrt(tw))²
-                            # but we can also do it directly:
+                            # Paper Eq.3: MSE on sqrt(w_norm), sqrt(h_norm).
+                            # w_norm = sigmoid(raw_w) ∈ [0,1], not exp(raw_w).
+                            pred_w_norm = F.sigmoid(pred_w)
+                            pred_h_norm = F.sigmoid(pred_h)
+                            tgt_w_norm = max(0.0, min(1.0, w_m / float(W)))
+                            tgt_h_norm = max(0.0, min(1.0, h_m / float(H)))
+                            tgt_sqrt_w_t = lucid.tensor([math.sqrt(tgt_w_norm)])
+                            tgt_sqrt_h_t = lucid.tensor([math.sqrt(tgt_h_norm)])
                             wh_terms.append(
-                                (pred_w_px**0.5 - lucid.tensor([tgt_sqrt_w**2]) ** 0.5)
+                                (pred_w_norm.clamp(min=1e-12) ** 0.5 - tgt_sqrt_w_t[0])
                                 ** 2
                             )
                             wh_terms.append(
-                                (pred_h_px**0.5 - lucid.tensor([tgt_sqrt_h**2]) ** 0.5)
+                                (pred_h_norm.clamp(min=1e-12) ** 0.5 - tgt_sqrt_h_t[0])
                                 ** 2
                             )
-                            _ = sqrt_pw  # suppress unused
-                            _ = sqrt_ph
 
                             # Confidence loss (obj): MSE vs iou_val
                             sig_conf = F.sigmoid(pred_conf)

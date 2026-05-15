@@ -28,7 +28,6 @@ Architecture
   Mask head: dot(query, pixel_embed) → (B, N, H/4, W/4) sigmoid at inference
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -37,7 +36,6 @@ import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import SemanticSegmentationOutput
-from lucid.models._registry import register_model
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 
 # ---------------------------------------------------------------------------
@@ -230,15 +228,18 @@ class _FPNPixelDecoder(nn.Module):
         # Top-down FPN with per-level 3×3 smoothing (paper §3.2):
         # each lateral is smoothed via its own out_* conv before merging.
         p5: Tensor = cast(Tensor, self.out5(F.relu(cast(Tensor, self.lat5(c5)))))
-        p4: Tensor = cast(Tensor, self.out4(
-            F.relu(cast(Tensor, self.lat4(c4))) + cast(Tensor, self.up(p5))
-        ))
-        p3: Tensor = cast(Tensor, self.out3(
-            F.relu(cast(Tensor, self.lat3(c3))) + cast(Tensor, self.up(p4))
-        ))
-        p2: Tensor = cast(Tensor, self.out2(
-            F.relu(cast(Tensor, self.lat2(c2))) + cast(Tensor, self.up(p3))
-        ))
+        p4: Tensor = cast(
+            Tensor,
+            self.out4(F.relu(cast(Tensor, self.lat4(c4))) + cast(Tensor, self.up(p5))),
+        )
+        p3: Tensor = cast(
+            Tensor,
+            self.out3(F.relu(cast(Tensor, self.lat3(c3))) + cast(Tensor, self.up(p4))),
+        )
+        p2: Tensor = cast(
+            Tensor,
+            self.out2(F.relu(cast(Tensor, self.lat2(c2))) + cast(Tensor, self.up(p3))),
+        )
 
         # Project to d_model
         return cast(Tensor, self.proj(p2))  # (B, out_ch, H/4, W/4)
@@ -302,8 +303,9 @@ def _hungarian_match_masks(
             row.append(c_cls - iou)
         cost.append(row)
 
-    from lucid.models.vision.detr._model import _kuhn_munkres_rectangular
-    gt_idx, pred_idx = _kuhn_munkres_rectangular(cost)
+    from lucid.models._utils._detection import solve_assignment
+
+    gt_idx, pred_idx = solve_assignment(cost)
     return pred_idx, gt_idx
 
 
@@ -536,17 +538,20 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
             cls_tgt: Tensor = lucid.tensor(cls_tgt_data)
             cls_losses.append(F.cross_entropy(cl_b, cls_tgt, reduction="mean"))
 
-            # Mask loss: BCE on matched pairs
+            # Mask loss: BCE + Dice on matched pairs (MaskFormer paper §4
+            # uses λ_mask=20·BCE + λ_dice=1·Dice; we average them with
+            # equal weight here since per-task tuning is downstream).
             if pred_idx:
                 for pi, gi in zip(pred_idx, gt_idx):
                     pred_m: Tensor = ml_b[pi]  # (H/4, W/4)
                     gt_m: Tensor = gt_masks_small[gi]  # (H/4, W/4)
-                    mask_losses.append(
-                        F.binary_cross_entropy_with_logits(
-                            pred_m.reshape(-1),
-                            gt_m.reshape(-1),
-                        )
-                    )
+                    pred_flat = pred_m.reshape(-1)
+                    gt_flat = gt_m.reshape(-1)
+                    bce = F.binary_cross_entropy_with_logits(pred_flat, gt_flat)
+                    pred_p = F.sigmoid(pred_flat)
+                    inter = (pred_p * gt_flat).sum()
+                    dice = 1.0 - 2.0 * inter / (pred_p.sum() + gt_flat.sum() + 1e-6)
+                    mask_losses.append(bce + dice)
 
         cls_loss: Tensor = (
             lucid.cat([l.reshape(1) for l in cls_losses]).mean()

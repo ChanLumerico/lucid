@@ -29,6 +29,7 @@ Each MBConv block:
 import math
 from typing import ClassVar, cast
 
+import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
@@ -131,6 +132,18 @@ class _MBConvBlock(nn.Module):
         out = cast(Tensor, self.se(out))
         out = cast(Tensor, self.project_bn(cast(Tensor, self.project_conv(out))))
         if self._has_residual:
+            # Stochastic depth (Tan & Le 2019 §3.3) — applied only when the
+            # block has a real residual (in_ch == out_ch and stride == 1) and
+            # only at training time.
+            if self.training and self._drop_connect_rate > 0.0:
+                keep_prob = 1.0 - self._drop_connect_rate
+                # Per-sample binary mask: shape (B, 1, 1, 1) so it broadcasts.
+                B = int(out.shape[0])
+                mask_shape = (B,) + (1,) * (out.ndim - 1)
+                random_tensor = lucid.rand(mask_shape, device=out.device.type)
+                binary_mask = (random_tensor < keep_prob).float()
+                # Inverted scaling so expectation matches at inference time.
+                out = out * binary_mask / keep_prob
             out = out + x
         return out
 

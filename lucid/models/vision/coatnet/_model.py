@@ -124,6 +124,8 @@ class _RelAttnBlock(nn.Module):
     map is averaged-pooled to this size if it does not (graceful degradation).
     """
 
+    _rel_idx: Tensor
+
     def __init__(
         self,
         dim: int,
@@ -172,13 +174,14 @@ class _RelAttnBlock(nn.Module):
         rel_w = rel_w + (W - 1)
         # Combine into flat index: row * (2W-1) + col
         rel_idx = rel_h * (2 * W - 1) + rel_w  # (N, N)
-        # Register as non-parameter buffer
-        object.__setattr__(self, "_rel_idx", rel_idx)
+        # Register as a proper non-persistent buffer so ``.to(device=...)``
+        # moves it alongside parameters and Metal forward stays on-device.
+        self.register_buffer("_rel_idx", rel_idx, persistent=False)
 
     def _rel_pos_bias(self) -> Tensor:
         # rel_idx: (N, N), rel_bias: (num_heads, (2H-1)*(2W-1))
         # Returns (num_heads, N, N)
-        idx: Tensor = self._rel_idx  # type: ignore[assignment]
+        idx: Tensor = self._rel_idx
         idx_flat = idx.reshape(-1)  # (N*N,)
         # Gather from bias table
         bias = self.rel_bias[:, idx_flat]  # (num_heads, N*N)

@@ -483,9 +483,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             best_iou_list: list[float] = [
                 float(best_iou_t[a].item()) for a in range(A_total)
             ]
-            best_gt_list: list[int] = [
-                int(best_gt_t[a].item()) for a in range(A_total)
-            ]
+            best_gt_list: list[int] = [int(best_gt_t[a].item()) for a in range(A_total)]
             best_anchor_for_gt: list[int] = [
                 int(best_anc_t[m].item()) for m in range(M)
             ]
@@ -580,12 +578,8 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
             best_g_t = lucid.argmax(iou_mat, dim=1)
             best_v_t = iou_mat.max(dim=1)
-            best_v_list: list[float] = [
-                float(best_v_t[n].item()) for n in range(N_i)
-            ]
-            best_gt: list[int] = [
-                int(best_g_t[n].item()) for n in range(N_i)
-            ]
+            best_v_list: list[float] = [float(best_v_t[n].item()) for n in range(N_i)]
+            best_gt: list[int] = [int(best_g_t[n].item()) for n in range(N_i)]
             for n in range(N_i):
                 best_v = best_v_list[n]
                 if best_v >= self._cfg.roi_fg_iou_thresh:
@@ -603,7 +597,8 @@ class MaskRCNNForObjectDetection(PretrainedModel):
             reg_tgt = encode_boxes(matched_boxes, props, self._cfg.bbox_reg_weights)
             lbl_t = lucid.tensor(labels_list, device=dev)
             wt_t = lucid.tensor(
-                [1.0 if l > 0 else 0.0 for l in labels_list], device=dev,
+                [1.0 if l > 0 else 0.0 for l in labels_list],
+                device=dev,
             )
 
             all_cls.append(lbl_t)
@@ -856,17 +851,27 @@ class MaskRCNNForObjectDetection(PretrainedModel):
         all_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
+        """Decode bbox deltas per class → ``(N_total, K, 4)``.
+
+        Class-specific regression at inference (paper §4.1) — NMS for each
+        class consumes its own decoded boxes.
+        """
         dev = all_deltas.device.type
+        K = self._cfg.num_classes
         if not any(int(p.shape[0]) > 0 for p in proposals):
-            return lucid.zeros((0, 4), device=dev)
+            return lucid.zeros((0, K, 4), device=dev)
         flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
         N = int(all_deltas.shape[0])
         if N == 0:
-            return lucid.zeros((0, 4), device=dev)
-        K = self._cfg.num_classes
-        top_deltas = all_deltas.reshape(N, K, 4)[:, 0, :]
-        boxes = decode_boxes(top_deltas, flat_props, self._cfg.bbox_reg_weights)
-        return clip_boxes_to_image(boxes, image_size)
+            return lucid.zeros((0, K, 4), device=dev)
+        deltas_3d = all_deltas.reshape(N, K, 4)
+        per_class: list[Tensor] = []
+        for c in range(K):
+            boxes_c = decode_boxes(
+                deltas_3d[:, c, :], flat_props, self._cfg.bbox_reg_weights
+            )
+            per_class.append(clip_boxes_to_image(boxes_c, image_size))
+        return lucid.stack(per_class, dim=1)
 
     # ------------------------------------------------------------------
     # Post-processing
@@ -905,6 +910,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
 
             for c in range(1, K + 1):
                 sc_c_all = scores_i[:, c]
+                bx_class = bx_i[:, c - 1, :]  # (N_i, 4) per-class
                 mask: list[int] = [
                     i
                     for i in range(N_i)
@@ -914,7 +920,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
                     continue
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = sc_c_all[mask_t]
-                bx_c = bx_i[mask_t]
+                bx_c = bx_class[mask_t]
                 mk_c = F.sigmoid(mk_i[mask_t, c - 1])  # (k, 28, 28)
 
                 keep = batched_nms(

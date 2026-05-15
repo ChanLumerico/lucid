@@ -46,7 +46,6 @@ Faithfulness notes
 * Loss: focal loss for classification + smooth-L1 for regression (paper §4.2).
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -136,50 +135,35 @@ class _BiFPNLayer(nn.Module):
         assert len(features) == L
 
         # --- Top-down intermediate ---
+        # Tensor-level arithmetic only — gradients must flow back to
+        # ``self.td_weights`` / ``self.out_weights`` (paper's key contribution).
         td: list[Tensor] = [features[-1]]  # coarsest passes through
         for i in range(L - 2, -1, -1):  # from coarsest-1 down to finest
-            w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i]))
-            w0 = float(w[0].item()) + _EPS
-            w1 = float(w[1].item()) + _EPS
-            wsum = w0 + w1
+            w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i])) + _EPS
+            wsum = w.sum()
             up = F.interpolate(td[0], scale_factor=2.0, mode="nearest")
-            node: Tensor = cast(
-                Tensor,
-                self.td_convs[L - 2 - i]((w0 / wsum) * features[i] + (w1 / wsum) * up),
-            )
+            fused: Tensor = (w[0] / wsum) * features[i] + (w[1] / wsum) * up
+            node = cast(Tensor, self.td_convs[L - 2 - i](fused))
             td.insert(0, node)  # prepend so td[0] = finest
 
         # --- Bottom-up output ---
         out: list[Tensor] = []
-        # Finest level (only 2 inputs)
-        wf: Tensor = F.relu(cast(Tensor, self.out_weights[0]))
-        wf0 = float(wf[0].item()) + _EPS
-        wf1 = float(wf[1].item()) + _EPS
-        wfsum = wf0 + wf1
-        out.append(
-            cast(
-                Tensor,
-                self.out_convs[0]((wf0 / wfsum) * features[0] + (wf1 / wfsum) * td[0]),
-            )
-        )
+        # Finest level (only 2 inputs).
+        wf: Tensor = F.relu(cast(Tensor, self.out_weights[0])) + _EPS
+        wfsum = wf.sum()
+        fused_f: Tensor = (wf[0] / wfsum) * features[0] + (wf[1] / wfsum) * td[0]
+        out.append(cast(Tensor, self.out_convs[0](fused_f)))
 
         for i in range(1, L):
-            wl: Tensor = F.relu(cast(Tensor, self.out_weights[i]))
-            wl0 = float(wl[0].item()) + _EPS
-            wl1 = float(wl[1].item()) + _EPS
-            wl2 = float(wl[2].item()) + _EPS
-            wlsum = wl0 + wl1 + wl2
+            wl: Tensor = F.relu(cast(Tensor, self.out_weights[i])) + _EPS
+            wlsum = wl.sum()
             down = cast(Tensor, self.down(out[-1]))
-            out.append(
-                cast(
-                    Tensor,
-                    self.out_convs[i](
-                        (wl0 / wlsum) * features[i]
-                        + (wl1 / wlsum) * td[i]
-                        + (wl2 / wlsum) * down
-                    ),
-                )
+            fused_l: Tensor = (
+                (wl[0] / wlsum) * features[i]
+                + (wl[1] / wlsum) * td[i]
+                + (wl[2] / wlsum) * down
             )
+            out.append(cast(Tensor, self.out_convs[i](fused_l)))
 
         return out
 
@@ -631,12 +615,8 @@ class EfficientDetForObjectDetection(PretrainedModel):
             # Vectorised per-anchor reductions.
             best_m_t = lucid.argmax(iou_mat, dim=1)
             best_v_t = iou_mat.max(dim=1)
-            best_v_list: list[float] = [
-                float(best_v_t[a].item()) for a in range(A)
-            ]
-            best_m_list: list[int] = [
-                int(best_m_t[a].item()) for a in range(A)
-            ]
+            best_v_list: list[float] = [float(best_v_t[a].item()) for a in range(A)]
+            best_m_list: list[int] = [int(best_m_t[a].item()) for a in range(A)]
 
             for a in range(A):
                 best_v = best_v_list[a]

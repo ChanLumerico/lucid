@@ -68,7 +68,6 @@ differ slightly from the canonical training schedule but the
 trained model is functionally equivalent.
 """
 
-import math
 from typing import ClassVar, cast
 
 import lucid
@@ -81,6 +80,7 @@ from lucid.models._utils._detection import (
     box_cxcywh_to_xyxy,
     box_xyxy_to_cxcywh,
     generalized_box_iou,
+    solve_assignment,
 )
 from lucid.models.vision.detr._config import DETRConfig
 
@@ -159,69 +159,6 @@ class _ResNet50C5(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# 2-D sinusoidal positional encoding
-# ---------------------------------------------------------------------------
-
-
-def _build_2d_sin_pos_enc(
-    h: int,
-    w: int,
-    d_model: int,
-    temperature: float = 10000.0,
-    device: str = "cpu",
-) -> Tensor:
-    """Build 2-D sine / cosine positional encoding of shape (h*w, d_model).
-
-    Each spatial position (row r, col c) gets a d_model-dim embedding:
-      dim 0 … d//2-1  : function of column c
-      dim d//2 … d-1  : function of row r
-    matching the implementation in §A.4 of the DETR paper.
-    """
-    assert d_model % 2 == 0, "d_model must be even for 2-D positional encoding"
-    half = d_model // 2
-    quarter = half // 2
-
-    # column encoding (x-axis)
-    col_data: list[list[float]] = []
-    for c in range(w):
-        row: list[float] = []
-        for i in range(quarter):
-            omega = math.pow(temperature, -2.0 * i / half)
-            row.append(math.sin(c * omega))
-            row.append(math.cos(c * omega))
-        col_data.append(row)
-    col_enc = lucid.tensor(col_data, device=device)  # (w, half)
-
-    # row encoding (y-axis)
-    row_data: list[list[float]] = []
-    for r in range(h):
-        row2: list[float] = []
-        for i in range(quarter):
-            omega = math.pow(temperature, -2.0 * i / half)
-            row2.append(math.sin(r * omega))
-            row2.append(math.cos(r * omega))
-        row_data.append(row2)
-    row_enc = lucid.tensor(row_data, device=device)  # (h, half)
-
-    # Tile: (h, w, d_model)
-    # For each (r,c): first half = col_enc[c], second half = row_enc[r]
-    pos_enc_data: list[list[list[float]]] = []
-    for r in range(h):
-        row_slice: list[list[float]] = []
-        for c in range(w):
-            vec: list[float] = []
-            for d in range(half):
-                vec.append(float(col_enc[c, d].item()))
-            for d in range(half):
-                vec.append(float(row_enc[r, d].item()))
-            row_slice.append(vec)
-        pos_enc_data.append(row_slice)
-
-    pos_2d = lucid.tensor(pos_enc_data, device=device)  # (h, w, d_model)
-    return pos_2d.reshape(h * w, d_model)  # (h*w, d_model)
-
-
-# ---------------------------------------------------------------------------
 # MLP head (for bounding-box prediction)
 # ---------------------------------------------------------------------------
 
@@ -296,74 +233,8 @@ def _hungarian_match(
             row.append(cost_cls * c_cls + cost_l1 * c_l1 + cost_giou * c_giou)
         cost.append(row)
 
-    gt_idx, pred_idx = _kuhn_munkres_rectangular(cost)
+    gt_idx, pred_idx = solve_assignment(cost)
     return pred_idx, gt_idx
-
-
-def _kuhn_munkres_rectangular(
-    cost: list[list[float]],
-) -> tuple[list[int], list[int]]:
-    """Min-cost bipartite assignment for a rectangular (n_rows × n_cols) matrix
-    with n_rows ≤ n_cols.  Each row is assigned to a distinct column so total
-    cost is minimised.  Standard Jonker-Volgenant / Kuhn-Munkres algorithm —
-    O(n_rows² · n_cols) and verified against ``scipy.optimize.linear_sum_assignment``.
-
-    Returns ``(row_ind, col_ind)`` — equal length lists, ``row_ind`` strictly
-    ascending, giving the matched column for each row.
-    """
-    nr = len(cost)
-    if nr == 0:
-        return [], []
-    nc = len(cost[0])
-    assert nr <= nc, "Hungarian helper expects n_rows <= n_cols"
-
-    INF = float("inf")
-    u = [0.0] * (nr + 1)
-    v = [0.0] * (nc + 1)
-    # p[j] = row assigned to column j (1-indexed; 0 = free).
-    p = [0] * (nc + 1)
-    way = [0] * (nc + 1)
-
-    for i in range(1, nr + 1):
-        p[0] = i
-        j0 = 0
-        minv = [INF] * (nc + 1)
-        used = [False] * (nc + 1)
-        while True:
-            used[j0] = True
-            i0 = p[j0]
-            delta = INF
-            j1 = -1
-            for j in range(1, nc + 1):
-                if not used[j]:
-                    c = cost[i0 - 1][j - 1] - u[i0] - v[j]
-                    if c < minv[j]:
-                        minv[j] = c
-                        way[j] = j0
-                    if minv[j] < delta:
-                        delta = minv[j]
-                        j1 = j
-            for j in range(nc + 1):
-                if used[j]:
-                    u[p[j]] += delta
-                    v[j] -= delta
-                else:
-                    minv[j] -= delta
-            j0 = j1
-            if p[j0] == 0:
-                break
-        # Augment along the way back to column 0.
-        while j0:
-            j2 = way[j0]
-            p[j0] = p[j2]
-            j0 = j2
-
-    # Extract assignment: each row 1..nr is matched to exactly one column.
-    row_ind: list[int] = [0] * nr
-    for j in range(1, nc + 1):
-        if p[j] != 0:
-            row_ind[p[j] - 1] = j - 1
-    return list(range(nr)), row_ind
 
 
 # ---------------------------------------------------------------------------
@@ -456,7 +327,7 @@ class DETRForObjectDetection(PretrainedModel):
         device = feat.device.type
 
         # 2. 2-D positional encoding → add to feature map
-        pos_enc = _build_2d_sin_pos_enc(fH, fW, d, device=device)  # (H'W', d)
+        pos_enc = F.sinusoidal_embedding_2d(fH, fW, d, device=device)  # (H'W', d)
         # Expand to (S, B, d) by repeating across batch
         pos_t = pos_enc.unsqueeze(1).expand(-1, B, -1)  # (S, B, d)
 

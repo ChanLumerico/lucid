@@ -7,14 +7,10 @@ from lucid.models.vision.attention_unet._config import AttentionUNetConfig
 from lucid.models.vision.attention_unet._model import (
     AttentionUNetForSemanticSegmentation,
 )
-from lucid.models.vision.attention_unet._pretrained import (
-    attention_unet,
-    attention_unet_small,
-)
+from lucid.models.vision.attention_unet._pretrained import attention_unet
 
 __all__ = [
     "AttentionUNetConfig",
     "AttentionUNetForSemanticSegmentation",
     "attention_unet",
-    "attention_unet_small",
 ]

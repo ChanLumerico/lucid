@@ -57,8 +57,9 @@ from lucid.models.vision.unet._config import UNetConfig
 # ---------------------------------------------------------------------------
 
 
-def _conv(dim: int, in_ch: int, out_ch: int, k: int = 3, padding: int = 1,
-          bias: bool = False) -> nn.Module:
+def _conv(
+    dim: int, in_ch: int, out_ch: int, k: int = 3, padding: int = 1, bias: bool = False
+) -> nn.Module:
     if dim == 3:
         return nn.Conv3d(in_ch, out_ch, k, padding=padding, bias=bias)
     return nn.Conv2d(in_ch, out_ch, k, padding=padding, bias=bias)
@@ -133,7 +134,9 @@ class _DoubleConv(nn.Module):
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         out: Tensor = cast(Tensor, self.body(x))
         if self._residual:
-            identity: Tensor = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+            identity: Tensor = (
+                x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+            )
             out = out + identity
         out = F.relu(out)
         if self.dropout is not None:
@@ -184,22 +187,30 @@ class _DecoderBlock(nn.Module):
             self.conv = _DoubleConv(in_ch + skip_ch, out_ch, dim, dropout, residual)
         else:
             self.up = _deconv(dim, in_ch, in_ch // 2)
-            self.conv = _DoubleConv(in_ch // 2 + skip_ch, out_ch, dim, dropout, residual)
+            self.conv = _DoubleConv(
+                in_ch // 2 + skip_ch, out_ch, dim, dropout, residual
+            )
 
     def forward(self, x: Tensor, skip: Tensor) -> Tensor:  # type: ignore[override]
         x_up: Tensor = cast(Tensor, self.up(x))
 
         # Pad x_up to match skip spatial dims (handles non-power-of-2 inputs).
         if self._dim == 3:
-            sD = int(skip.shape[2]); sH = int(skip.shape[3]); sW = int(skip.shape[4])
-            uD = int(x_up.shape[2]); uH = int(x_up.shape[3]); uW = int(x_up.shape[4])
+            sD = int(skip.shape[2])
+            sH = int(skip.shape[3])
+            sW = int(skip.shape[4])
+            uD = int(x_up.shape[2])
+            uH = int(x_up.shape[3])
+            uW = int(x_up.shape[4])
             dD, dH, dW = sD - uD, sH - uH, sW - uW
             if dD or dH or dW:
                 # F.pad order: (W_l, W_r, H_t, H_b, D_f, D_b)
                 x_up = F.pad(x_up, (0, dW, 0, dH, 0, dD))
         else:
-            sH = int(skip.shape[2]); sW = int(skip.shape[3])
-            uH = int(x_up.shape[2]); uW = int(x_up.shape[3])
+            sH = int(skip.shape[2])
+            sW = int(skip.shape[3])
+            uH = int(x_up.shape[2])
+            uW = int(x_up.shape[3])
             dH, dW = sH - uH, sW - uW
             if dH or dW:
                 x_up = F.pad(x_up, (0, dW, 0, dH))
@@ -268,17 +279,22 @@ class UNetForSemanticSegmentation(PretrainedModel):
             skip_ch = enc_channels[i]
             dec_out = enc_channels[i]
             dec_block = _DecoderBlock(
-                dec_in, skip_ch, dec_out,
-                dim=dim, bilinear=config.bilinear,
-                dropout=dropout, residual=residual,
+                dec_in,
+                skip_ch,
+                dec_out,
+                dim=dim,
+                bilinear=config.bilinear,
+                dropout=dropout,
+                residual=residual,
             )
             self.add_module(f"decoder_{i}", dec_block)
             self.decoders.append(dec_block)
             dec_in = dec_out
 
         # Segmentation head
-        self.head = _conv(dim, enc_channels[0], config.num_classes, k=1, padding=0,
-                          bias=True)
+        self.head = _conv(
+            dim, enc_channels[0], config.num_classes, k=1, padding=0, bias=True
+        )
 
     def forward(  # type: ignore[override]
         self,
@@ -307,7 +323,10 @@ class UNetForSemanticSegmentation(PretrainedModel):
         out_spatial = tuple(int(s) for s in logits.shape[2:])
         if out_spatial != in_spatial:
             logits = F.interpolate(
-                logits, size=in_spatial, mode=_interp_mode(dim), align_corners=False,
+                logits,
+                size=in_spatial,
+                mode=_interp_mode(dim),
+                align_corners=False,
             )
 
         loss: Tensor | None = None
