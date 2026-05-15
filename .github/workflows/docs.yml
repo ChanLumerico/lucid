@@ -32,8 +32,13 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install Lucid + Griffe
-        run: pip install griffe && pip install -e "." --no-deps
+      # Griffe parses Python source statically — we don't need to install
+      # Lucid (and can't, since setup.py enforces Apple Silicon). PYTHONPATH
+      # in the next step exposes the source tree to Griffe.
+      - name: Install Griffe
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install griffe
 
       - name: Generate API data (Griffe → JSON)
         run: python web/scripts/build-api-data.py

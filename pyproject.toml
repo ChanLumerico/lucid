@@ -12,6 +12,7 @@ build-backend = "setuptools.build_meta"
 name = "lucid"
 version = "3.0.0"
 description = "Apple Silicon ML framework"
+readme = "README.md"
 requires-python = ">=3.12"
 # Lucid is self-contained: ``import lucid`` and the full forward + backward +
 # optimizer + save/load lifecycle work without numpy installed.  NumPy is
