@@ -32,12 +32,21 @@ source "$TMPDIR/venv/bin/activate"
 python -m pip install "$WHEEL" -q --no-deps 2>&1 | tail -3
 
 echo "==> Smoke test"
-python - <<'EOF'
+# CRITICAL: `cd` out of the project root before importing. The repo's
+# `lucid/` source directory shadows the installed wheel in `sys.path`
+# (cwd is `sys.path[0]` for `python - <<EOF`). The source tree never
+# contains the compiled `engine.cpython-*-darwin.so` — only the wheel
+# does — so an in-tree import surfaces a misleading circular-import
+# error from `lucid/_C/__init__.py`. Running from `$TMPDIR` (which has
+# no `lucid/`) lets Python resolve through the venv's site-packages.
+( cd "$TMPDIR" && python - <<'EOF'
+import lucid
 from lucid._C import engine as E
 t = E.randn([3, 4])
 assert t.shape == [3, 4], f"shape mismatch: {t.shape}"
 assert str(t.dtype) in ("Dtype.F32", "F32")
-print("    engine import OK, tensor creation OK")
+print(f"    engine import OK ({lucid.__file__}), tensor creation OK")
 EOF
+)
 
 echo "==> ci_publish: green"
