@@ -25,7 +25,7 @@ cd "$(dirname "$0")/.."
 
 MODE="${1:-ubsan}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-PYTEST_TARGET="${PYTEST_TARGET:-tests/parity/}"
+PYTEST_TARGET="${PYTEST_TARGET:-lucid/test/parity/}"
 
 case "$MODE" in
     ubsan)

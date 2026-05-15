@@ -46,12 +46,8 @@ jobs:
       - name: Run full local gate
         run: ./scripts/ci_full.sh
 
-      - name: Build wheel artifact
-        run: ./tools/build_wheel.sh
-
-      - name: Verify wheel in fresh venv
-        run: ./tools/verify_wheel.sh
-
+      # `ci_full.sh` step 9 (`scripts/ci_publish.sh`) already builds + verifies
+      # the wheel into `dist/`, so we just upload the artifact here.
       - uses: actions/upload-artifact@v4
         with:
           name: lucid-wheel-py${{ matrix.python-version }}
@@ -86,12 +82,21 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Run coverage
-        run: ./tools/coverage.sh
+        run: |
+          python -m pip install coverage
+          mkdir -p build/coverage
+          python -m coverage run --source=lucid -m pytest lucid/test/ \
+              --ignore=lucid/test/parity \
+              --ignore=lucid/test/integration \
+              --ignore=lucid/test/perf \
+              -q
+          python -m coverage xml -o build/coverage/coverage.xml
+          python -m coverage report
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lucid-coverage-lcov
-          path: build/coverage/lucid.lcov
+          name: lucid-coverage-xml
+          path: build/coverage/coverage.xml
 
   nightly-perf:
     name: Nightly perf placeholder
@@ -112,7 +117,7 @@ jobs:
           python -m pip install -e ".[test]"
 
       - name: Run perf placeholder
-        run: python -m pytest tests/perf/ -q
+        run: python -m pytest lucid/test/perf/ -q
 
       - uses: actions/upload-artifact@v4
         with:
