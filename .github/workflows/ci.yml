@@ -40,7 +40,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11
+          python -m pip install cmake ninja pybind11 mlx
           python -m pip install -e ".[test]"
 
       - name: Run full local gate
@@ -78,7 +78,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11
+          python -m pip install cmake ninja pybind11 mlx
           python -m pip install -e ".[test]"
 
       - name: Run coverage
@@ -113,7 +113,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install cmake ninja pybind11
+          python -m pip install cmake ninja pybind11 mlx
           python -m pip install -e ".[test]"
 
       - name: Run perf placeholder
