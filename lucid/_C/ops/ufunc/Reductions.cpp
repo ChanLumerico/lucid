@@ -27,6 +27,7 @@
 #include "../../core/OpRegistry.h"
 #include "../bfunc/Div.h"
 #include "../gfunc/Gfunc.h"
+#include "Astype.h"
 #include "Exponential.h"
 #include "Var.h"
 
@@ -146,8 +147,33 @@ Storage SumBackward::grad_formula(const Storage& grad_out) {
                                      this->device_);
 }
 
+namespace {
+
+// PyTorch-compatible promotion for integer/bool reductions.  ``bool / int8 /
+// int16 / int32`` all promote to ``int64`` before reducing — preserves
+// overflow headroom for sum/prod and matches the reference framework's
+// observable behaviour.  Floats / complex pass through unchanged.
+//
+// Without this, ``bool.sum()`` raised NotImplementedError on CPU and
+// silently returned a 0-d bool (acting like ``any()``) on GPU — found
+// during the M4 Max parity smoke when training accuracy reported 1.56%
+// (= 1/batch) instead of the real count.
+TensorImplPtr promote_int_for_reduce(const TensorImplPtr& a) {
+    switch (a->dtype()) {
+    case Dtype::Bool:
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+        return astype_op(a, Dtype::I64);
+    default:
+        return a;
+    }
+}
+
+}  // namespace
+
 TensorImplPtr sum_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
-    return SumBackward::forward(a, axes, keepdims);
+    return SumBackward::forward(promote_int_for_reduce(a), axes, keepdims);
 }
 LUCID_REGISTER_OP(SumBackward)
 
@@ -219,7 +245,7 @@ Storage ProdBackward::grad_formula(const Storage& grad_out) {
 }
 
 TensorImplPtr prod_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
-    return ProdBackward::forward(a, axes, keepdims);
+    return ProdBackward::forward(promote_int_for_reduce(a), axes, keepdims);
 }
 LUCID_REGISTER_OP(ProdBackward)
 

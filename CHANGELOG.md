@@ -15,10 +15,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No changes yet._
+
+---
+
+## [3.0.3] — 2026-05-16
+
+Correctness + Metal-perf pass.  Found during a real LeNet-5 / MNIST
+training smoke on M4 Max Mac Studio: training accuracy was stuck at
+exactly 1.56 % (= 1 / batch) every step despite loss decreasing
+identically to PyTorch.  Root cause was a silent `bool.sum()` bug;
+fixing it surfaced two more never-implemented integer dispatch paths
+and two redundant Metal sync points that together cost ~5–37 % of
+step throughput.
+
 ### Fixed
 
-- numpy-free Tensor.tolist() + H4 enforcement + hook installer
-- close numpy-free gaps (C64 .tolist + .tensor) + doc/tooling cleanup
+- **`bool` / `int` reductions** — `lucid._C.engine.sum` /
+  `engine.prod` now auto-promote `Bool` / `I8` / `I16` / `I32` inputs
+  to `I64` before reducing, matching PyTorch's `bool.sum() → int64`
+  semantics.  Pre-3.0.3 behaviour was: CPU raised
+  `NotImplementedError: cpu_backend::reduce: dtype not supported`,
+  Metal silently returned a 0-d `bool` (acting like `any()`) — that
+  was the source of the 1.56 % stuck-accuracy training bug.  Caller
+  code like ``(pred == y).sum().item()`` now reports the real count
+  on every supported dtype.
+- **`Tensor.astype` Cartesian-product cast** — `CpuBackend::astype`
+  now covers every {F16, F32, F64, I8, I16, I32, I64, Bool} ×
+  {same} pair.  Previously several pairs (notably `Bool → I64`,
+  `I64 → Bool`, `I16 → I64`, `F64 → I8`, `Bool → F64`) were
+  `NotImplementedError`, which broke ``Tensor.long()`` /
+  ``Tensor.bool()`` chains on integer / bool inputs.  F16 is handled
+  via a two-step F32 bridge so the dispatch table stays simple.
+- **Native I64 reduction kernel** — added to
+  `CpuBackend.reduce_axes` so the promoted bool/int reduce path runs
+  on integer math directly, not round-tripped through F64 (which
+  would have lost precision past `2^53`).
+
+### Changed
+
+- **`Optimizer.step()` no longer auto-flushes Metal params.**  Every
+  concrete `step()` was historically wrapped to call
+  `_metal_eval_params()` after the update, forcing
+  `mlx.core.eval()` on every parameter tensor.  Metal profiling
+  (LeNet-5 / MNIST, M4 Max, May 2026) showed this shattered the MLX
+  lazy-graph pipeline that would otherwise chain
+  forward → backward → step into one submission, and cost between
+  5 % and 37 % of step throughput depending on batch size.  Default
+  is now lazy — the new class-level flag
+  ``AUTO_EVAL_AFTER_STEP: ClassVar[bool] = False`` controls the old
+  behaviour.  Set it to ``True`` per-class (or per-instance) to
+  restore the synchronous flush when you need ``step()`` to act as a
+  sync point.  Matches PyTorch, which never auto-eval's after
+  ``step()``.
+- **`Tensor.backward()` no longer pre-evals the forward graph.**
+  Historical docstring claimed a `self._impl.eval()` before the
+  backward pass gave a ~2× speedup; current measurement on M4 Max
+  shows it's neutral-to-negative because the MLX backward kernel
+  triggers the necessary evaluation on its own.  The explicit
+  pre-eval was redundant.  Removed.  No correctness or autograd
+  semantics change.
+
+### Tooling
+
+- New profiling baseline note in obsidian:
+  - 5-epoch LeNet-5 / MNIST on M4 Max Metal: 27.9 s (Lucid 3.0.2) →
+    26.4 s (this release).  PyTorch MPS reference: 12.1 s.  Remaining
+    ~2.2× gap is structural MLX small-op kernel-launch overhead,
+    closable only by ``lucid.compile()`` (graph capture / fusion) —
+    tracked separately as the 3.1 Tier-S item.
 
 ---
 

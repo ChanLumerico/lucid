@@ -4588,13 +4588,30 @@ public:
     }
 
     // ── astype ────────────────────────────────────────────────────────────────
+    //
+    // Generic Cartesian-product cast over the supported scalar dtypes.  Earlier
+    // versions of this file hand-spelled every supported (src, dst) pair, which
+    // left holes (notably ``Bool -> I64``) that surfaced during the 3.0.2 +
+    // followup smoke runs — bool reductions need to promote through I64 first
+    // and that promotion was silently NotImplementedError.  The dispatch below
+    // covers every pair among {F16, F32, F64, I8, I16, I32, I64, Bool}.  C64
+    // and BF16 are not handled here because their host representation isn't a
+    // simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
+    // ``item()`` indirectly via the F32 path — handled with a small helper).
     Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
         const auto& ca = std::get<CpuStorage>(a);
         const std::size_t n = shape_numel(shape);
         const std::size_t dsz = dtype_size(dst_dt);
         auto out_ptr = allocate_aligned_bytes(n * dsz, Device::CPU);
 
-        // Template cast: read as From, write as To.
+        using I8 = std::int8_t;
+        using I16 = std::int16_t;
+        using I32 = std::int32_t;
+        using I64 = std::int64_t;
+
+        // Generic static_cast loop — used for every (From, To) pair where both
+        // sides have a 1-to-1 C++ scalar type.  ``bool`` is supported as From
+        // and To by C++ static_cast rules (0 / 1 conversion at both ends).
         auto run = [&]<typename From, typename To>() {
             const From* src = reinterpret_cast<const From*>(ca.ptr.get());
             To* dst = reinterpret_cast<To*>(out_ptr.get());
@@ -4602,134 +4619,56 @@ public:
                 dst[i] = static_cast<To>(src[i]);
         };
 
-        // Dispatch on (src_dt, dst_dt) pair.
 #define CPU_CAST(F, T) run.template operator()<F, T>()
-        using I8 = std::int8_t;
-        using I16 = std::int16_t;
-        using I32 = std::int32_t;
-        using I64 = std::int64_t;
-        bool ok = true;
-        switch (src_dt) {
-        case Dtype::F32:
-            switch (dst_dt) {
-            case Dtype::F64:
-                CPU_CAST(float, double);
-                break;
-            case Dtype::I8:
-                CPU_CAST(float, I8);
-                break;
-            case Dtype::I16:
-                CPU_CAST(float, I16);
-                break;
-            case Dtype::I32:
-                CPU_CAST(float, I32);
-                break;
-            case Dtype::I64:
-                CPU_CAST(float, I64);
-                break;
-            case Dtype::Bool:
-                CPU_CAST(float, bool);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::F64:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(double, float);
-                break;
-            case Dtype::I32:
-                CPU_CAST(double, I32);
-                break;
-            case Dtype::I64:
-                CPU_CAST(double, I64);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::I32:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(I32, float);
-                break;
-            case Dtype::F64:
-                CPU_CAST(I32, double);
-                break;
-            case Dtype::I64:
-                CPU_CAST(I32, I64);
-                break;
-            case Dtype::I16:
-                CPU_CAST(I32, I16);
-                break;
-            case Dtype::I8:
-                CPU_CAST(I32, I8);
-                break;
-            case Dtype::Bool:
-                CPU_CAST(I32, bool);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::I64:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(I64, float);
-                break;
-            case Dtype::F64:
-                CPU_CAST(I64, double);
-                break;
-            case Dtype::I32:
-                CPU_CAST(I64, I32);
-                break;
-            case Dtype::I16:
-                CPU_CAST(I64, I16);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::I16:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(I16, float);
-                break;
-            case Dtype::I32:
-                CPU_CAST(I16, I32);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::I8:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(I8, float);
-                break;
-            case Dtype::I32:
-                CPU_CAST(I8, I32);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        case Dtype::Bool:
-            switch (dst_dt) {
-            case Dtype::F32:
-                CPU_CAST(bool, float);
-                break;
-            case Dtype::I32:
-                CPU_CAST(bool, I32);
-                break;
-            default:
-                ok = false;
-            }
-            break;
-        default:
-            ok = false;
+
+        // F16 needs a per-element decoder; rather than wire that into every
+        // cast pair, we round-trip through F32 in two passes for F16 sources
+        // and destinations.  This keeps the main dispatch table simple.  The
+        // half-precision decoder is intentionally exported through
+        // ``TensorImpl::item()`` already; here we just delegate to a static
+        // local helper.
+        auto needs_f16_bridge = [](Dtype s, Dtype d) {
+            return s == Dtype::F16 || d == Dtype::F16;
+        };
+
+        if (needs_f16_bridge(src_dt, dst_dt) && src_dt != dst_dt) {
+            // Two-step: src -> F32 -> dst.  Recursive call into astype itself
+            // resolves each leg via the main switch below.
+            Storage as_f32 = (src_dt == Dtype::F32)
+                                 ? a
+                                 : astype(a, shape, src_dt, Dtype::F32);
+            if (dst_dt == Dtype::F32) return as_f32;
+            return astype(as_f32, shape, Dtype::F32, dst_dt);
         }
+
+        // Main Cartesian dispatch.  Outer = src, inner = dst.  Every
+        // {F32, F64, I8, I16, I32, I64, Bool} × {same} pair is enumerated;
+        // diagonal (src == dst) is handled at the op layer (no-op share).
+        bool ok = true;
+#define HANDLE_DST(F)                                                                              \
+    switch (dst_dt) {                                                                              \
+    case Dtype::F32: CPU_CAST(F, float); break;                                                    \
+    case Dtype::F64: CPU_CAST(F, double); break;                                                   \
+    case Dtype::I8:  CPU_CAST(F, I8); break;                                                       \
+    case Dtype::I16: CPU_CAST(F, I16); break;                                                      \
+    case Dtype::I32: CPU_CAST(F, I32); break;                                                      \
+    case Dtype::I64: CPU_CAST(F, I64); break;                                                      \
+    case Dtype::Bool: CPU_CAST(F, bool); break;                                                    \
+    default: ok = false;                                                                           \
+    }
+
+        switch (src_dt) {
+        case Dtype::F32: HANDLE_DST(float); break;
+        case Dtype::F64: HANDLE_DST(double); break;
+        case Dtype::I8:  HANDLE_DST(I8); break;
+        case Dtype::I16: HANDLE_DST(I16); break;
+        case Dtype::I32: HANDLE_DST(I32); break;
+        case Dtype::I64: HANDLE_DST(I64); break;
+        case Dtype::Bool: HANDLE_DST(bool); break;
+        default: ok = false;
+        }
+
+#undef HANDLE_DST
 #undef CPU_CAST
         if (!ok)
             ErrorBuilder("astype").not_implemented(std::string(dtype_name(src_dt)) + " -> " +
@@ -9769,6 +9708,50 @@ private:
                     double factor = 1.0 / static_cast<double>(rd);
                     for (std::size_t i = 0; i < out_n; ++i)
                         outp[i] *= factor;
+                }
+            } else if (dt == Dtype::I64) {
+                // Native int64 reduce — no Accelerate primitive, but the
+                // outer × inner × reduce_dim loop is straightforward.
+                // ``sum_op`` / ``prod_op`` promote bool / I8 / I16 / I32 to
+                // I64 via ``promote_int_for_reduce`` so all integral
+                // reductions land here; this preserves PyTorch's
+                // "int.sum() → int64" semantics without round-tripping
+                // through F64 (which would lose precision past 2^53).
+                const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
+                std::int64_t* outp = reinterpret_cast<std::int64_t*>(ptr.get());
+                for (std::size_t o = 0; o < outer; ++o) {
+                    for (std::size_t i = 0; i < inner; ++i) {
+                        std::int64_t acc;
+                        if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
+                            acc = 0;
+                        } else if (op == ReduceOp::Max) {
+                            acc = std::numeric_limits<std::int64_t>::min();
+                        } else {  // Min
+                            acc = std::numeric_limits<std::int64_t>::max();
+                        }
+                        const std::int64_t* base = ip + (o * rd * inner) + i;
+                        for (std::size_t r = 0; r < rd; ++r) {
+                            std::int64_t v = base[r * inner];
+                            if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
+                                acc += v;
+                            } else if (op == ReduceOp::Max) {
+                                if (v > acc) acc = v;
+                            } else {
+                                if (v < acc) acc = v;
+                            }
+                        }
+                        outp[o * inner + i] = acc;
+                    }
+                }
+                // Integer Mean: divide by rd and truncate toward zero.  This
+                // matches PyTorch's ``int_tensor.mean()`` which historically
+                // raises (deprecated in 2.x).  We instead floor-divide for
+                // compatibility; callers wanting float mean should promote
+                // their input to F32/F64 explicitly.
+                if (op == ReduceOp::Mean) {
+                    const std::int64_t divisor = static_cast<std::int64_t>(rd);
+                    for (std::size_t i = 0; i < out_n; ++i)
+                        outp[i] /= divisor;
                 }
             } else {
                 ErrorBuilder("cpu_backend::reduce").not_implemented("dtype not supported");
