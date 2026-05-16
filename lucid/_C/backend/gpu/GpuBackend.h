@@ -630,7 +630,8 @@ public:
     Storage variance(const Storage& a, const Shape&, const ReduceOpts& opts, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto result = ::mlx::core::var(*gs.arr, opts.axes, opts.keepdims, 0);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        // PERF: var() produces contiguous output; drop defensive wrap.
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage
@@ -647,34 +648,36 @@ public:
         });
     }
 
+    // PERF: cumsum / cumprod / cummax / cummin all produce contiguous output
+    // from MLX; the defensive contiguous() wraps below were forcing
+    // re-materialization and breaking the lazy-graph fusion chain.
     Storage cumsum(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = ::mlx::core::cumsum(*gs.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::cumsum(*gs.arr, axis), dt)};
     }
 
     Storage cumprod(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = ::mlx::core::cumprod(*gs.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::cumprod(*gs.arr, axis), dt)};
     }
 
     Storage cummax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = ::mlx::core::cummax(*gs.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::cummax(*gs.arr, axis), dt)};
     }
 
     Storage cummin(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = ::mlx::core::cummin(*gs.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::cummin(*gs.arr, axis), dt)};
     }
 
+    // PERF: softmax + log_softmax produce contiguous output; their backwards
+    // are pure elementwise composition.  Dropping the contiguous() wraps lets
+    // downstream loss ops (cross_entropy_loss is the typical consumer) fuse
+    // into a single MLX kernel.
     Storage softmax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = ::mlx::core::softmax(*gs.arr, axis, true);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::softmax(*gs.arr, axis, true), dt)};
     }
 
     Storage softmax_backward(
@@ -685,7 +688,7 @@ public:
         auto sum_gz = ::mlx::core::sum(gz, std::vector<int>{axis}, true);
         auto diff = ::mlx::core::subtract(*g_gpu.arr, sum_gz);
         auto result = ::mlx::core::multiply(*z_gpu.arr, diff);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage log_softmax_backward(
@@ -695,14 +698,13 @@ public:
         auto p = ::mlx::core::exp(*yg.arr);
         auto sum_g = ::mlx::core::sum(*gg.arr, axis, true);
         auto result = ::mlx::core::subtract(*gg.arr, ::mlx::core::multiply(p, sum_g));
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage log_softmax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto sm = ::mlx::core::softmax(*gs.arr, axis, true);
-        auto result = ::mlx::core::log(sm);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::log(sm), dt)};
     }
 
     Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
@@ -1309,7 +1311,11 @@ public:
         if (opts.transB)
             b_arr = ::mlx::core::swapaxes(b_arr, -2, -1);
         auto result = ::mlx::core::matmul(a_arr, b_arr);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        // PERF: matmul produces a fresh contiguous buffer; the defensive
+        // wrap-in-contiguous was forcing a redundant memcpy and breaking
+        // MLX's fusion chain.  Same anti-pattern that 3.0.3 fixed for
+        // Conv2d output (cf perf-conv2d-deferred-contig).
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage linear(const Storage& x,
@@ -1324,11 +1330,14 @@ public:
         const auto& gb = std::get<GpuStorage>(bias);
         if (shape_numel(out_shape) == 0) {
             auto out = ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), gpu::to_mlx_dtype(dt));
-            return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+            return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
         }
         auto out = ::mlx::core::add(::mlx::core::matmul(*gx.arr, ::mlx::core::transpose(*gw.arr)),
                                     *gb.arr);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        // PERF: add(matmul(...), bias) produces a fresh contiguous buffer.
+        // Dropping the defensive contiguous() unlocks fusion with downstream
+        // relu / next linear / etc.  Same fix as 3.0.3 Conv2d.
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
     std::vector<Storage> linear_backward(const Storage& grad,
@@ -1348,9 +1357,9 @@ public:
             auto dx = ::mlx::core::zeros(gpu::to_mlx_shape(x_shape), gpu::to_mlx_dtype(dt));
             auto dW = ::mlx::core::zeros(gpu::to_mlx_shape(weight_shape), gpu::to_mlx_dtype(dt));
             auto db = ::mlx::core::zeros(gpu::to_mlx_shape(bias_shape), gpu::to_mlx_dtype(dt));
-            return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                    Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dW), dt)},
-                    Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(db), dt)}};
+            return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
         }
         ::mlx::core::Shape flat_x{static_cast<int>(M), static_cast<int>(K)};
         ::mlx::core::Shape flat_g{static_cast<int>(M), static_cast<int>(N)};
@@ -1360,9 +1369,12 @@ public:
         auto dx = ::mlx::core::reshape(dx_flat, gpu::to_mlx_shape(x_shape));
         auto dW = ::mlx::core::matmul(::mlx::core::transpose(g_2d), x_2d);
         auto db = ::mlx::core::sum(g_2d, std::vector<int>{0}, false);
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dW), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(db), dt)}};
+        // PERF: matmul / sum produce fresh contiguous buffers.  reshape on
+        // a contiguous matmul result is also contiguous.  Drop redundant
+        // contiguous() wraps so dx/dW/db can fuse into the autograd graph.
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
     }
 
     StoragePair rms_norm_forward(const Storage& x,
@@ -2902,9 +2914,12 @@ public:
         auto loss_squeezed = ::mlx::core::squeeze(loss, std::vector<int>{1});
         auto valid_count = class_valid_count(ig_mask_dt, mlx_dt);
         auto output = reduce_class_loss(loss_squeezed, valid_count, dt, reduction);
+        // PERF: softmax + valid_count are produced by fresh MLX kernels —
+        // contiguous() wraps were redundant and forced a copy of the saved
+        // softmax that the backward path then immediately re-read.
         return {std::move(output),
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(softmax), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(valid_count), dt)}};
+                Storage{gpu::wrap_mlx_array(std::move(softmax), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(valid_count), dt)}};
     }
 
     Storage cross_entropy_backward(const Storage& saved_softmax,
@@ -2942,7 +2957,8 @@ public:
         auto scaled = class_scaled_grad(*g.arr, *vc.arr, t_shape, reduction);
         auto scaled_full = ::mlx::core::broadcast_to(scaled, full_shape);
         auto dx = ::mlx::core::multiply(::mlx::core::multiply(base, w_full), scaled_full);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)};
+        // PERF: pure elementwise multiply chain — contiguous output already.
+        return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
     }
 
     ClassLossForwardResult nll_loss(const Storage& input,
@@ -3145,8 +3161,12 @@ public:
         const auto& gW = std::get<GpuStorage>(W);
         const auto& gb = std::get<GpuStorage>(b);
 
-        auto x_nhwc = ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));
-        auto W_nhwc = ::mlx::core::transpose(*gW.arr, gpu_w_to_mlx_transpose_perm(N));
+        // PERF: contiguous before conv_transpose — same rationale as forward
+        // conv path. See conv_nd_forward for the microbench data.
+        auto x_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto W_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gW.arr, gpu_w_to_mlx_transpose_perm(N)));
         auto y_nhwc = gpu_mlx_conv_transpose(x_nhwc, W_nhwc, stride, pad, opad, N);
 
         ::mlx::core::Shape b_brd(N + 2, 1);
@@ -3190,8 +3210,11 @@ public:
         for (int i = 0; i < N; ++i)
             w_dx_perm.push_back(2 + i);
         w_dx_perm.push_back(1);
-        auto grad_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));
-        auto W_dx_nhwc = ::mlx::core::transpose(*gW.arr, w_dx_perm);
+        // PERF: contiguous before conv kernel — see conv_nd_forward microbench.
+        auto grad_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto W_dx_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, w_dx_perm));
         auto dx_nhwc = gpu_mlx_conv(grad_nhwc, W_dx_nhwc, stride, pad, N);
         // PERF: see conv_transpose_nd_forward — strided view returned, MLX
         // ops handle strides natively. Materialization is deferred to the
@@ -3203,8 +3226,9 @@ public:
         for (int i = 0; i < N; ++i)
             perm_axes.push_back(2 + i);
         perm_axes.push_back(0);
-        auto g_perm = ::mlx::core::transpose(*gG.arr, perm_axes);
-        auto x_perm = ::mlx::core::transpose(*gx.arr, perm_axes);
+        // PERF: contiguous before dW conv_general (see conv_nd_forward bench).
+        auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, perm_axes));
+        auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, perm_axes));
         std::vector<int> conv_stride(N, 1);
         std::vector<int> conv_pad(N), conv_kdil(N), conv_idil(N, 1);
         for (int i = 0; i < N; ++i) {
@@ -3773,18 +3797,25 @@ public:
         std::vector<int> pv(opts.pad, opts.pad + N);
         std::vector<int> dv(opts.dilation, opts.dilation + N);
         std::vector<int> idv(N, 1);
-        auto x_nhwc = ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N));
-        auto W_nhwc = ::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N));
+        // PERF: force contiguous NHWC before conv_general.  MLX's lazy graph
+        // would otherwise pass strided transpose-views in, and conv_general
+        // dispatches a slower stride-aware kernel path.  Forcing contiguous
+        // up front lets MLX pick the fastest conv kernel.  Measured on a
+        // training-pattern microbench (W changes every iter, simulating
+        // bump_version after optimizer.step()): -7.8 % vs view-only.
+        auto x_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto W_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N)));
         auto y_nhwc =
             ::mlx::core::conv_general(x_nhwc, W_nhwc, sv, pv, pv, dv, idv, opts.groups, false);
         int Cout_local = static_cast<int>(out_shape[1]);
         ::mlx::core::Shape b_brd(N + 2, 1);
         b_brd[N + 1] = Cout_local;
         y_nhwc = ::mlx::core::add(y_nhwc, ::mlx::core::reshape(*gb.arr, b_brd));
-        // PERF: drop explicit contiguous() — MLX ops are stride-aware, and
-        // letting the transpose stay as a view enables fusion with the next
-        // op (relu / pool / next conv). Conv2d microbench shows +15.7 %
-        // on isolated conv calls (M1 Pro, BS=64, LeNet conv shapes).
+        // PERF: keep output transpose as a lazy view — downstream relu / pool
+        // / next conv handles strides natively and the trailing contiguous
+        // would force a memcpy that the next kernel can fuse.
         auto y = ::mlx::core::transpose(y_nhwc, gpu_nhwc_to_nchw_perm(N));
         return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
     }
@@ -3833,9 +3864,13 @@ public:
             pad_lo_dx[i] = dv[i] * (K[i] - 1) - pv[i];
             pad_hi_dx[i] = S[i] - O[i] * sv[i] + sv[i] - 1 + pv[i];
         }
-        auto grad_nhwc = ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N));
+        // PERF: contiguous inputs before conv_general — same kernel-selection
+        // benefit as conv_nd_forward.
+        auto grad_nhwc = ::mlx::core::contiguous(
+            ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
         std::vector<int> W_t_perm = gpu_w_to_transpose_perm(N);
-        auto W_t_nhwc = ::mlx::core::transpose(*gW.arr, W_t_perm);
+        auto W_t_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, W_t_perm));
         std::vector<int> ones_n(N, 1);
         auto dx_nhwc = ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx,
                                                  dv, sv, opts.groups, true);
@@ -3847,8 +3882,10 @@ public:
         for (int i = 0; i < N; ++i)
             perm.push_back(2 + i);
         perm.push_back(0);
-        auto x_perm = ::mlx::core::transpose(*gx.arr, perm);
-        auto g_perm = ::mlx::core::transpose(*gG.arr, perm);
+        // PERF: contiguous before dW conv_general (same kernel-selection
+        // benefit; see conv_nd_forward).
+        auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, perm));
+        auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, perm));
         std::vector<int> conv_s(N, 1);
         auto dW_perm =
             ::mlx::core::conv_general(x_perm, g_perm, conv_s, pv, pv, sv, dv, opts.groups, false);

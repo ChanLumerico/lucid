@@ -19,6 +19,117 @@ _No changes yet._
 
 ---
 
+## [3.1.0] — 2026-05-16
+
+Metal performance pass — focus on lazy-graph fusion.  Earned by a
+deep per-layer profile of LeNet-5 that revealed Lucid's GPU forward
+was **+57.9 % slower** than the raw MLX equivalent (M1 Pro, BS=64,
+fp32, fwd-only, model output).  Root cause: a defensive
+`mlx::core::contiguous(...)` wrap on the return path of many GPU
+backend ops, applied as a habit when the operation was already
+guaranteed to produce contiguous output.  Each redundant
+`contiguous()` materialises the lazy graph at that point, breaking
+MLX's ability to fuse adjacent kernels and forcing a memcpy that
+the next op would otherwise have folded into its own kernel
+launch.
+
+After the sweep, M1 Pro LeNet-5 forward is **+3.9 % vs raw MLX**
+(essentially parity — was +57.9 %).
+
+### Performance
+
+- **Conv2d / ConvTranspose2d input contiguous-before-conv_general.**
+  Symmetric counterpart to 3.0.3's *output* contig removal — force a
+  contiguous NHWC buffer for x and W before invoking
+  `mlx::core::conv_general()`.  When the kernel receives a strided
+  transpose-view, MLX dispatches a slower stride-aware path; with a
+  contiguous input it picks the fastest contiguous-NHWC kernel.
+  Microbench (W mutates every iter, simulating training pattern):
+  484 µs → 446 µs per call (**−7.8 %**).  Applied to all 5 conv-kernel
+  call sites (forward + backward dx + backward dW + conv_transpose
+  forward + conv_transpose backward).
+- **`matmul` — drop trailing `contiguous(out)`.**  The MLX matmul
+  kernel always produces a fresh contiguous buffer; the defensive
+  wrap was forcing a redundant memcpy and breaking fusion with
+  downstream activation / bias-add.
+- **`linear` forward + backward — drop trailing `contiguous()` on
+  all four outputs** (forward out, backward dx, dW, db).  The single
+  biggest find of the 3.1 sweep — Lucid's Linear was **+12 to +25 %
+  slower** than raw MLX Linear (fc1/fc2/fc3 in the LeNet-5 profile)
+  for this exact reason.  After fix:
+    * Lucid fc1 solo: 383 µs → **232 µs** (**−39 %**; now **−2.7 %
+      vs raw MLX**)
+    * Lucid fc2 solo: 364 µs → 234 µs (**−36 %**)
+    * Lucid fc3 solo: 307 µs → 242 µs (**−21 %**)
+  The fix also lets the surrounding chain fuse better — Conv2d solo
+  costs dropped from 466 µs → 336 µs (conv1) and 596 µs → 385 µs
+  (conv2) on the same M1 Pro measurement, even though Conv2d itself
+  wasn't touched in this change — the lazy graph extends past the
+  matmul/linear boundary now.
+- **`softmax` / `log_softmax` (forward + backward) — drop redundant
+  `contiguous()` wrap.**  Both are computed-fresh ops; the wrap was
+  forcing materialisation right where loss kernels want to fuse the
+  result.
+- **`cross_entropy_loss` forward + backward — drop redundant
+  `contiguous()` on saved softmax / valid_count / dx.**  Saved
+  tensors used in autograd were being re-materialised at save time
+  then re-read in the backward; both round-trips removed.
+- **`variance`, `cumsum`, `cumprod`, `cummax`, `cummin` — drop
+  redundant `contiguous()` wrap.**  All MLX-native reductions /
+  scans that produce contiguous output naturally.
+
+### Measurement summary (M1 Pro, BS=64, fp32)
+
+LeNet-5 model forward (model output only, no loss):
+
+| Build | Lucid fwd µs | MLX fwd µs | Δ vs MLX |
+|---|---|---|---|
+| 3.0.3 (pre-sweep) | 1537 | 973 | +57.9 % |
+| 3.1.0 (this) | 770 | 741 | **+3.9 %** |
+
+Per-layer fusion benefit (sum of solo-eval / chain-eval):
+- 3.0.3: 60 % (3805 µs solo sum → 1537 µs chained)
+- 3.1.0: 72 % (3456 µs solo sum → **1169** µs chained)
+
+### Tests
+
+All conv unit + parity tests pass (37 conv tests).  73 nn parity,
+118 ops / optim / autograd parity, 19 vision-model parity (LeNet /
+AlexNet / ConvNeXt / EfficientNet / DenseNet / GoogLeNet /
+InceptionV3) — no numerical regression.
+
+### Backward compatibility
+
+No API changes.  Internal-only optimisation — every public op
+signature, every Tensor method, every Module shape contract is
+unchanged.  Drop-in replacement for 3.0.3.
+
+### What got skipped (was on the 3.1 wish list, deferred to 3.2+)
+
+- **W-NHWC sidecar cache** at the `nn.Conv2d` module level — the
+  user's original 3.1 request.  Investigation revealed that the
+  cache *can't* help training workloads (every `optimizer.step()`
+  bumps the parameter version, invalidating any cache; cache miss
+  rate = 100 % in training) and the kernel-selection benefit it
+  would have provided is already captured by the
+  contiguous-before-conv_general change above.  The Python-module-
+  level cache would still benefit inference loops (W reused across
+  many forwards without mutation) — kept on the 3.2 backlog for the
+  inference-perf milestone.
+- **Fused CrossEntropy** — the engine's `cross_entropy_loss` is
+  already a single MLX expression chain (softmax →
+  take_along_axis → log → negate → multiply → reduce); not two
+  separate log_softmax + nll passes.  The 3.1 contiguous removal
+  on the loss path is the actually-useful optimisation.
+- **Fused Adam** — the C++ Adam step is already expressed as one
+  MLX expression chain per parameter (~14 lazy ops fused into one
+  or two kernel launches per param at eval time).  The 730 µs / 10
+  params = 73 µs / param measured cost is at the Metal kernel-
+  launch floor; cross-parameter fusion isn't possible since each
+  param has a different shape.
+
+---
+
 ## [3.0.3] — 2026-05-16
 
 Correctness + Metal-perf pass.  Found during a real LeNet-5 / MNIST
