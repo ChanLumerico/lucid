@@ -76,6 +76,27 @@ step throughput.
   pre-eval was redundant.  Removed.  No correctness or autograd
   semantics change.
 
+### Performance
+
+- **Conv2d / ConvTranspose2d / conv backward — drop redundant
+  `mlx::core::contiguous()` after the final NHWC→NCHW transpose.**
+  Lucid's GPU conv path is `transpose(x, NCHW→NHWC) → transpose(W,
+  NCHW→NHWC) → conv_general → add(bias) → transpose(NHWC→NCHW)` —
+  the trailing `contiguous()` was a defensive copy under the
+  assumption that downstream ops needed a row-major buffer.  MLX
+  ops are stride-aware, so the call was forcing a memory copy that
+  the next op (relu / pool / batchnorm / next conv) would normally
+  fuse with its own kernel.  Removing it lets the transpose stay as
+  a lazy view all the way down to the final `mx.eval()`.  Touches
+  4 sites: `conv_nd_forward`, `conv_nd_backward (dx)`,
+  `conv_transpose_nd_forward`, `conv_transpose_nd_backward (dx)`.
+  Measured impact (M1 Pro, BS=64, fp32):
+    * Conv2d microbench (single conv layer, LeNet shape):
+      `transpose+conv+transpose+contig` 740 µs → `transpose+conv+transpose` 624 µs (**−15.7 %**).
+    * LeNet-5 full forward: 2680 µs → 2219 µs (**−17.2 %**).
+    * LeNet-5 full step (fwd + bwd + opt): 6947 µs → 6610 µs (5-run median, **−4.8 %**).
+  All 20 conv unit + parity tests still pass.
+
 ### Tooling
 
 - New profiling baseline note in obsidian:
