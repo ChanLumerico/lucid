@@ -19,6 +19,84 @@ _No changes yet._
 
 ---
 
+## [3.2.1] — 2026-05-20
+
+BatchNorm running-stats lazy-graph leak hotfix.  Found during a
+CIFAR-10 / ResNet-18 measurement on Mac Studio: training consistently
+OOM'd at ~batch 400 (bs=32) regardless of memory pressure or cache
+clearing.  Bisected to:
+
+  * Simple Linear-only training: no leak ✓
+  * Conv2d-only training: no leak ✓
+  * BatchNorm2d-only training: no leak ✓
+  * Conv2d + BatchNorm2d (CBR pattern): **+4 MB/iter** leak 🔥
+  * Residual block (2× CBR + skip): **+8 MB/iter** leak 🔥
+  * Full ResNet-18: **+37 MB/iter** leak → OOM after few hundred batches
+
+### Root cause
+
+`nn.BatchNorm{1,2,3}d._update_running_stats` constructs the new
+``running_mean`` / ``running_var`` as a *lazy MLX expression*:
+
+```python
+new_rm = (1 - eff) * running_mean + eff * batch_mean
+self._buffers["running_mean"] = new_rm.detach()
+```
+
+`.detach()` clears the autograd graph but **leaves the MLX lazy
+expression intact**.  The new buffer holds the old running_mean,
+batch_mean, and indirectly the entire forward graph that produced the
+batch's input (conv weights + activations) as graph parents.
+
+The training loop's only force-evaluation point is ``loss.item()``,
+which materialises the path connected to the loss.  BN running stats
+are **not** connected to the loss (they're statistics, not gradients
+flow targets), so the running-stats lazy chain accumulates one full
+forward graph per training step and is never collected.
+
+Pure-MLX experiments verified that MLX *does* release parents after
+``mx.eval()`` — so the fix is just to eval the running stats
+explicitly after the update.
+
+### Fix
+
+`nn.BatchNorm{1,2,3}d._update_running_stats` now calls
+`_eval_running_stats_metal(self._buffers)` after assigning the new
+running_mean / running_var.  That helper dispatches a single
+`engine.eval_tensors([running_mean, running_var, num_batches_tracked])`
+which forces materialisation and detaches the lazy expression's
+parents.
+
+### Measurement (M4 Max Mac Studio, ResNet-18 / bs=16)
+
+| Pattern | Active memory growth | 30-iter total |
+|---|---|---|
+| Before fix | +8 MB/iter (residual block) | 228 MB after 20 iter |
+| **After fix** | **stable** | **64 MB across all iters** |
+
+For full ResNet-18 the growth was +37 MB/iter → 5-epoch projection 286 GB (impossible).  After fix: stable across full training.
+
+### Performance
+
+No measurable throughput regression — the eval call adds a sync
+barrier for ~tens of small tensors per BN layer, which is the same
+work MLX would have done anyway when the running stats are finally
+read.  CPU-only path is unaffected (the helper skips when buffers are
+on CPU).
+
+### Tests
+
+44 BN + norm parity tests pass on local M1 Pro.  Mac Studio full
+ResNet-18 / CIFAR-10 5-epoch training now completes (was OOM on 3.2.0
+and earlier).
+
+### Migration
+
+No user code change needed — fix is transparent.  Existing models
+using `nn.BatchNorm{1,2,3}d` benefit immediately on `pip install --upgrade`.
+
+---
+
 ## [3.2.0] — 2026-05-17
 
 Training-pipeline overhead pass.  After 3.1.0's GPU-kernel fusion sweep

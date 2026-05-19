@@ -23,9 +23,9 @@ _builtin_bool = bool  # save before any local shadowing
 # costs ~2.5 µs.  The dict miss path (unknown string) falls back to
 # ``_parse_device`` which still raises a proper TypeError for garbage input.
 _STR_TO_DEVICE_ENUM: dict[str, _C_engine.Device] = {
-    "cpu":   _C_engine.Device.CPU,
+    "cpu": _C_engine.Device.CPU,
     "metal": _C_engine.Device.GPU,
-    "gpu":   _C_engine.Device.GPU,
+    "gpu": _C_engine.Device.GPU,
 }
 
 
