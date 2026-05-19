@@ -41,6 +41,55 @@ _CFG_269 = ResNetConfig(block_type="bottleneck", layers=(3, 30, 48, 8))
     default_config=_CFG_18,
 )
 def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-18 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the paper-cited ResNet-18 topology:
+    :class:`_BasicBlock` blocks stacked ``[2, 2, 2, 2]`` over four
+    stages, yielding approximately 11.7M parameters.  The original
+    paper (He et al., 2015) reports a 69.76% ImageNet-1k top-1
+    validation accuracy with this configuration (Table 4).  Used as a
+    lightweight backbone where parameter / FLOP budget is tight.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored — the returned model is randomly initialised.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig` to
+        customise individual fields (e.g. ``in_channels=1`` for
+        grayscale input, ``zero_init_residual=True`` for large-batch
+        training).
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-18 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  The key insight is the
+    identity shortcut
+
+    .. math::
+
+        y_{l+1} = \sigma\!\left(F(y_l, W_l) + y_l\right),
+
+    which lets gradients propagate through a clean identity branch
+    even in very deep networks.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_18
+    >>> model = resnet_18()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
+    (1, 512, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_18.__dict__, **overrides}) if overrides else _CFG_18
     return ResNet(cfg)
 
@@ -53,6 +102,47 @@ def resnet_18(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_34,
 )
 def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-34 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the paper-cited ResNet-34 topology:
+    :class:`_BasicBlock` blocks stacked ``[3, 4, 6, 3]`` over four
+    stages, yielding approximately 21.8M parameters.  Reaches 73.31%
+    ImageNet-1k top-1 in He et al., 2015 (Table 4).  A good middle
+    ground when ResNet-18 is too small but ResNet-50's bottleneck
+    overhead is unwanted.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig` to
+        customise individual fields without writing a config by hand.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-34 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Like ResNet-18 this
+    variant uses two-layer residual blocks, so the final-stage output
+    is 512 channels (not 2048 as in the bottleneck variants).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_34
+    >>> model = resnet_34()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 512, H/32, W/32)
+    (1, 512, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_34.__dict__, **overrides}) if overrides else _CFG_34
     return ResNet(cfg)
 
@@ -65,6 +155,56 @@ def resnet_34(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_50,
 )
 def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-50 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the paper-cited ResNet-50 topology:
+    :class:`_Bottleneck` blocks stacked ``[3, 4, 6, 3]`` over four
+    stages, yielding approximately 25.6M parameters.  Reaches 76.13%
+    ImageNet-1k top-1 in He et al., 2015 (Table 4).  By far the most
+    common ResNet variant in production — used as the default backbone
+    for Faster R-CNN, Mask R-CNN, DeepLab, and many other downstream
+    tasks.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored — the returned model is randomly initialised.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig` to
+        customise individual fields (``in_channels``, ``num_classes``,
+        ``zero_init_residual``, …) without writing a config by hand.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-50 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  The bottleneck block
+
+    .. math::
+
+        F(x) = W_3 \,\sigma\!\left(W_2 \,\sigma(W_1 x)\right)
+
+    compresses the channel count via the leading 1×1 convolution and
+    re-expands it via the trailing 1×1, reducing FLOPs at depth.  The
+    final-stage output is 2048 channels (``hidden_sizes[3] *
+    expansion``).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_50
+    >>> model = resnet_50()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (2, 2048, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
     return ResNet(cfg)
 
@@ -77,6 +217,47 @@ def resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_101,
 )
 def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-101 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the paper-cited ResNet-101 topology:
+    :class:`_Bottleneck` blocks stacked ``[3, 4, 23, 3]`` over four
+    stages, yielding approximately 44.5M parameters.  Reaches 77.37%
+    ImageNet-1k top-1 in He et al., 2015 (Table 4).  Higher-capacity
+    drop-in replacement for ResNet-50 when accuracy matters more than
+    inference latency.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig` to
+        customise individual fields without writing a config by hand.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-101 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  The bulk of the depth lives
+    in stage-3 (23 bottleneck blocks); stages 1, 2, and 4 are identical
+    to ResNet-50.  Final-stage output is 2048 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_101
+    >>> model = resnet_101()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
     return ResNet(cfg)
 
@@ -89,6 +270,47 @@ def resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_152,
 )
 def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-152 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the paper-cited ResNet-152 topology:
+    :class:`_Bottleneck` blocks stacked ``[3, 8, 36, 3]`` over four
+    stages, yielding approximately 60.2M parameters.  Reaches 78.31%
+    ImageNet-1k top-1 in He et al., 2015 (Table 4) — the highest of
+    the canonical ResNet variants from the original paper.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig` to
+        customise individual fields without writing a config by hand.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-152 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  The 36-block stage-3 is
+    the defining feature; stages 1 and 4 are unchanged from
+    ResNet-50/101, and stage-2 widens from 4 to 8 blocks.  Final-stage
+    output is 2048 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_152
+    >>> model = resnet_152()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_152.__dict__, **overrides}) if overrides else _CFG_152
     return ResNet(cfg)
 
@@ -108,6 +330,46 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
 def resnet_18_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-18 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the paper-cited
+    ResNet-18 topology: :class:`_BasicBlock` blocks stacked
+    ``[2, 2, 2, 2]`` over four stages, followed by global average
+    pooling and a linear projection to ``config.num_classes``
+    (default 1000 for ImageNet-1k).  Approximately 11.7M parameters
+    and 69.76% ImageNet-1k top-1 in He et al., 2015 (Table 4).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`
+        (typically ``num_classes`` to retarget the classifier or
+        ``dropout`` to inject regularisation before the linear head).
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-18 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_18_cls
+    >>> model = resnet_18_cls(num_classes=10)
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 10)
+    """
     cfg = ResNetConfig(**{**_CFG_18.__dict__, **overrides}) if overrides else _CFG_18
     return ResNetForImageClassification(cfg)
 
@@ -122,6 +384,44 @@ def resnet_18_cls(
 def resnet_34_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-34 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the paper-cited
+    ResNet-34 topology: :class:`_BasicBlock` blocks stacked
+    ``[3, 4, 6, 3]`` over four stages, followed by global average
+    pooling and a linear projection to ``config.num_classes``.
+    Approximately 21.8M parameters and 73.31% ImageNet-1k top-1 in
+    He et al., 2015 (Table 4).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-34 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_34_cls
+    >>> model = resnet_34_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = ResNetConfig(**{**_CFG_34.__dict__, **overrides}) if overrides else _CFG_34
     return ResNetForImageClassification(cfg)
 
@@ -136,6 +436,57 @@ def resnet_34_cls(
 def resnet_50_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-50 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the paper-cited
+    ResNet-50 topology: :class:`_Bottleneck` blocks stacked
+    ``[3, 4, 6, 3]`` over four stages, followed by global average
+    pooling and a linear projection to ``config.num_classes``.
+    Approximately 25.6M parameters and 76.13% ImageNet-1k top-1 in
+    He et al., 2015 (Table 4) — the canonical default for ImageNet
+    classification benchmarks.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.  Use
+        ``num_classes=N`` to retarget the head (e.g. ``num_classes=10``
+        for CIFAR-10 fine-tuning) and ``dropout=p`` to inject
+        regularisation before the final linear layer.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-50 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Final pre-classifier
+    feature has 2048 channels (``hidden_sizes[3] * expansion``).
+
+    Examples
+    --------
+    Run a forward pass without labels:
+
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_50_cls
+    >>> model = resnet_50_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+
+    Retarget to CIFAR-10 and add dropout:
+
+    >>> model = resnet_50_cls(num_classes=10, dropout=0.1)
+    >>> model.config.num_classes
+    10
+    """
     cfg = ResNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
     return ResNetForImageClassification(cfg)
 
@@ -150,6 +501,44 @@ def resnet_50_cls(
 def resnet_101_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-101 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the paper-cited
+    ResNet-101 topology: :class:`_Bottleneck` blocks stacked
+    ``[3, 4, 23, 3]`` over four stages, followed by global average
+    pooling and a linear projection to ``config.num_classes``.
+    Approximately 44.5M parameters and 77.37% ImageNet-1k top-1 in
+    He et al., 2015 (Table 4).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-101 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_101_cls
+    >>> model = resnet_101_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = ResNetConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
     return ResNetForImageClassification(cfg)
 
@@ -164,6 +553,45 @@ def resnet_101_cls(
 def resnet_152_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-152 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the paper-cited
+    ResNet-152 topology: :class:`_Bottleneck` blocks stacked
+    ``[3, 8, 36, 3]`` over four stages, followed by global average
+    pooling and a linear projection to ``config.num_classes``.
+    Approximately 60.2M parameters and 78.31% ImageNet-1k top-1 in
+    He et al., 2015 (Table 4) — the deepest and most accurate of the
+    original ResNet variants.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-152 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See He et al., "Deep Residual Learning for Image Recognition",
+    CVPR 2016 (arXiv:1512.03385), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_152_cls
+    >>> model = resnet_152_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = ResNetConfig(**{**_CFG_152.__dict__, **overrides}) if overrides else _CFG_152
     return ResNetForImageClassification(cfg)
 
@@ -181,6 +609,47 @@ def resnet_152_cls(
     default_config=_CFG_WIDE50,
 )
 def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""Wide ResNet-50-2 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with ResNet-50's ``[3, 4, 6, 3]``
+    :class:`_Bottleneck` layout but with a ``bottleneck_width_mult=2``
+    multiplier on the inner 3×3 convolutions.  The per-stage output
+    channel count is unchanged from ResNet-50 (256 / 512 / 1024 /
+    2048), but the inner bottleneck width doubles — yielding roughly
+    68.9M parameters.  Defined in Zagoruyko & Komodakis, "Wide
+    Residual Networks", BMVC 2016 (arXiv:1605.07146).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the Wide ResNet-50-2 configuration applied (or
+        with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    Widening the inner channels lets shallower networks recover (and
+    surpass) the accuracy of much deeper canonical ResNets while being
+    easier to parallelise on modern accelerators because the FLOPs
+    are concentrated in a smaller number of wider layers.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import wide_resnet_50
+    >>> model = wide_resnet_50()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = (
         ResNetConfig(**{**_CFG_WIDE50.__dict__, **overrides})
         if overrides
@@ -199,6 +668,38 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
 def wide_resnet_50_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""Wide ResNet-50-2 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the Wide
+    ResNet-50-2 configuration: ResNet-50's ``[3, 4, 6, 3]`` bottleneck
+    layout with a 2x inner-channel multiplier.  Approximately 68.9M
+    parameters; from Zagoruyko & Komodakis, "Wide Residual Networks",
+    BMVC 2016 (arXiv:1605.07146).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the Wide ResNet-50-2 configuration applied (or
+        with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import wide_resnet_50_cls
+    >>> model = wide_resnet_50_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = (
         ResNetConfig(**{**_CFG_WIDE50.__dict__, **overrides})
         if overrides
@@ -220,6 +721,39 @@ def wide_resnet_50_cls(
     default_config=_CFG_WIDE101,
 )
 def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""Wide ResNet-101-2 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with ResNet-101's ``[3, 4, 23, 3]``
+    :class:`_Bottleneck` layout and a ``bottleneck_width_mult=2``
+    multiplier on the inner 3×3 convolutions.  Output channel counts
+    match standard ResNet-101 (256 / 512 / 1024 / 2048); approximately
+    126.9M parameters.  From Zagoruyko & Komodakis, "Wide Residual
+    Networks", BMVC 2016 (arXiv:1605.07146).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the Wide ResNet-101-2 configuration applied (or
+        with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import wide_resnet_101
+    >>> model = wide_resnet_101()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = (
         ResNetConfig(**{**_CFG_WIDE101.__dict__, **overrides})
         if overrides
@@ -238,6 +772,38 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
 def wide_resnet_101_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""Wide ResNet-101-2 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the Wide
+    ResNet-101-2 configuration: ResNet-101's ``[3, 4, 23, 3]``
+    bottleneck layout with a 2x inner-channel multiplier.
+    Approximately 126.9M parameters; from Zagoruyko & Komodakis,
+    "Wide Residual Networks", BMVC 2016 (arXiv:1605.07146).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the Wide ResNet-101-2 configuration applied
+        (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import wide_resnet_101_cls
+    >>> model = wide_resnet_101_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = (
         ResNetConfig(**{**_CFG_WIDE101.__dict__, **overrides})
         if overrides
@@ -259,6 +825,45 @@ def wide_resnet_101_cls(
     default_config=_CFG_200,
 )
 def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-200 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the deep bottleneck topology
+    introduced in He et al., "Identity Mappings in Deep Residual
+    Networks", ECCV 2016 (arXiv:1603.05027): :class:`_Bottleneck`
+    blocks stacked ``[3, 24, 36, 3]`` over four stages — approximately
+    64.7M parameters.  Used as a high-capacity backbone for ImageNet
+    pre-training in large-scale vision pipelines.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-200 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    Final-stage output is 2048 channels.  Memory cost scales with the
+    24-block stage-2 — keep ``zero_init_residual=True`` for stable
+    convergence at large batch sizes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_200
+    >>> model = resnet_200()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_200.__dict__, **overrides}) if overrides else _CFG_200
     return ResNet(cfg)
 
@@ -273,6 +878,37 @@ def resnet_200(pretrained: bool = False, **overrides: object) -> ResNet:
 def resnet_200_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-200 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the deep
+    bottleneck topology ``[3, 24, 36, 3]`` from He et al., "Identity
+    Mappings in Deep Residual Networks", ECCV 2016 (arXiv:1603.05027).
+    Approximately 64.7M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-200 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_200_cls
+    >>> model = resnet_200_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = ResNetConfig(**{**_CFG_200.__dict__, **overrides}) if overrides else _CFG_200
     return ResNetForImageClassification(cfg)
 
@@ -290,6 +926,44 @@ def resnet_200_cls(
     default_config=_CFG_269,
 )
 def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
+    r"""ResNet-269 feature-extracting backbone (no classification head).
+
+    Builds a :class:`ResNet` with the very deep bottleneck topology
+    ``[3, 30, 48, 8]``, an extension of the canonical ResNet design
+    studied in subsequent deep-residual literature (notably as the
+    teacher network in MXNet-style training pipelines and as an
+    inception-resnet baseline).  Approximately 102.1M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNet
+        Backbone with the ResNet-269 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    Final-stage output is 2048 channels.  Training such a deep network
+    benefits significantly from ``zero_init_residual=True`` and a long
+    warm-up schedule.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_269
+    >>> model = resnet_269()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, H/32, W/32)
+    (1, 2048, 7, 7)
+    """
     cfg = ResNetConfig(**{**_CFG_269.__dict__, **overrides}) if overrides else _CFG_269
     return ResNet(cfg)
 
@@ -304,5 +978,36 @@ def resnet_269(pretrained: bool = False, **overrides: object) -> ResNet:
 def resnet_269_cls(
     pretrained: bool = False, **overrides: object
 ) -> ResNetForImageClassification:
+    r"""ResNet-269 image classifier (backbone + GAP + linear head).
+
+    Builds a :class:`ResNetForImageClassification` with the very deep
+    bottleneck topology ``[3, 30, 48, 8]``.  Approximately 102.1M
+    parameters — primarily useful as a high-capacity teacher in
+    knowledge distillation pipelines.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`ResNetConfig`.
+
+    Returns
+    -------
+    ResNetForImageClassification
+        Classifier with the ResNet-269 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnet import resnet_269_cls
+    >>> model = resnet_269_cls()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     cfg = ResNetConfig(**{**_CFG_269.__dict__, **overrides}) if overrides else _CFG_269
     return ResNetForImageClassification(cfg)

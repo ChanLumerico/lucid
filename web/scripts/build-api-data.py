@@ -20,12 +20,20 @@ from __future__ import annotations  # allowed in build scripts (not lucid/ sourc
 
 import argparse
 import json
+import logging
 import re
 import subprocess
 import sys
 import textwrap
+import threading
+import time
 from pathlib import Path
 from typing import Any
+
+try:
+    from tqdm import tqdm
+except ImportError:                                          # graceful fallback
+    tqdm = None                                              # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -58,7 +66,6 @@ _EXCLUDED_SUBTREE: set[str] = {
     "lucid.metal",       # GPU backend internals
     "lucid.backends",    # CPU/GPU dispatch internals
     "lucid.test",        # test infrastructure (parity fixtures, etc.)
-    "lucid.models",      # zoo — not yet docs-ready
     "lucid.benchmarks",  # internal perf scripts
 }
 
@@ -66,9 +73,31 @@ _EXCLUDED_SUBTREE: set[str] = {
 # Used for umbrella packages whose ``__init__.py`` has no user-facing content
 # of its own but whose children DO get documented separately.
 _EXCLUDED_SELF: set[str] = {
-    "lucid.nn.modules",  # umbrella; content re-exposed via lucid.nn path-grouping
-    "lucid.utils",       # umbrella; only lucid.utils.data has docs content
+    "lucid.nn.modules",         # umbrella; content re-exposed via lucid.nn path-grouping
+    "lucid.utils",              # umbrella; only lucid.utils.data has docs content
+    "lucid.models._utils",      # internal helper subpackage of lucid.models
 }
+
+# Family-root slugs: their ``__init__.py`` is intentionally minimal but each
+# is given its own browsable index page populated with cards for every
+# direct sub-family.  The build script post-processes these JSONs to
+# inject ``family_groups`` (one entry per child package).
+_FAMILY_ROOTS: set[str] = {
+    "lucid.models.vision",
+    "lucid.models.text",
+    "lucid.models.generative",
+}
+
+
+def _is_family_leaf(slug: str) -> bool:
+    """A slug like ``lucid.models.vision.resnet`` — depth-4 under a
+    family root.  These are the actual model-family pages (resnet, vit,
+    bert, …) that own ``ModelConfig._canonical_name`` and the 4-slot
+    sidebar structure."""
+    parts = slug.split(".")
+    if len(parts) != 4:
+        return False
+    return ".".join(parts[:3]) in _FAMILY_ROOTS
 
 # Special-case slug→griffe-path mappings (layered ON TOP of auto-discovery).
 _MANIFEST_OVERRIDES: dict[str, str] = {
@@ -132,6 +161,18 @@ def _discover_manifest() -> dict[str, str]:
             if sub_slug in _EXCLUDED_SUBTREE or sub_slug in _EXCLUDED_SELF:
                 continue
             manifest[sub_slug] = sub_slug
+            # Family-root walk: lucid.models has a 4-level structure
+            # (lucid/models/{vision,text,generative}/{family}/) — every
+            # leaf family directory becomes its own page so the family
+            # cards on the family-root index are clickable.
+            if sub_slug in _FAMILY_ROOTS:
+                for third in sorted(second.iterdir()):
+                    if not _is_public_pkg(third):
+                        continue
+                    leaf_slug = f"{sub_slug}.{third.name}"
+                    if leaf_slug in _EXCLUDED_SUBTREE or leaf_slug in _EXCLUDED_SELF:
+                        continue
+                    manifest[leaf_slug] = leaf_slug
 
     manifest.update(_MANIFEST_OVERRIDES)
     return manifest
@@ -892,6 +933,84 @@ def _parse_dunder_all(mod: Any) -> set[str] | None:
     return None
 
 
+def _slug_to_config_path(slug: str) -> Path:
+    """Map a family-leaf slug to its ``_config.py`` source file.
+
+    e.g. ``lucid.models.vision.resnet`` → ``<repo>/lucid/models/vision/resnet/_config.py``
+    """
+    parts = slug.split(".")
+    return REPO_ROOT.joinpath(*parts) / "_config.py"
+
+
+def _extract_family_meta(slug: str) -> dict[str, str]:
+    """Parse a family-leaf's ``_config.py`` to extract ``@model_family_meta``
+    decorator arguments.
+
+    Convention (see ``arch-models-canonical-name``): each family's Config
+    dataclass is wrapped with ``@model_family_meta(canonical_name=...,
+    citation=..., theory=...)`` whose keyword arguments are all string
+    literals (or implicit concatenations of literals).  We use Python's
+    built-in ``ast`` module rather than Griffe so the literal evaluation
+    is straightforward.
+
+    Returns a dict with any of the keys ``canonical_name`` / ``citation``
+    / ``theory`` that were found and successfully decoded.  Empty dict
+    when the decorator is absent or its args aren't pure literals.
+    """
+    import ast as _ast
+    import textwrap
+
+    src_file = _slug_to_config_path(slug)
+    try:
+        tree = _ast.parse(src_file.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return {}
+
+    wanted = {"canonical_name", "citation", "theory"}
+    out: dict[str, str] = {}
+
+    for node in _ast.walk(tree):
+        if not isinstance(node, _ast.ClassDef):
+            continue
+        for dec in node.decorator_list:
+            # Only ``Call`` decorators (``@model_family_meta(...)``); ignore
+            # bare decorators like ``@dataclass``.
+            if not isinstance(dec, _ast.Call):
+                continue
+            func = dec.func
+            # Accept both ``model_family_meta`` (after ``from ... import``)
+            # and ``module.model_family_meta`` (qualified) forms.
+            if isinstance(func, _ast.Name):
+                name = func.id
+            elif isinstance(func, _ast.Attribute):
+                name = func.attr
+            else:
+                continue
+            if name != "model_family_meta":
+                continue
+            for kw in dec.keywords:
+                if kw.arg not in wanted:
+                    continue
+                try:
+                    val = _ast.literal_eval(kw.value)
+                except (ValueError, SyntaxError):
+                    continue
+                if not isinstance(val, str):
+                    continue
+                # ``theory`` is typically a raw-triple-quoted block with
+                # leading indentation; dedent so the rST renderer sees
+                # clean column-0 directives.
+                if kw.arg == "theory":
+                    val = textwrap.dedent(val).strip("\n")
+                else:
+                    val = val.strip()
+                if val:
+                    out[kw.arg] = val
+            if out:
+                return out
+    return out
+
+
 def _serialise_module(mod: Any, parser: Any, sha: str, *, slug: str) -> dict[str, Any]:
     """Top-level serialiser for a module."""
     from griffe import Function as GriffeFunction, Class as GriffeClass, Module as GriffeModule
@@ -1034,11 +1153,53 @@ def _build_tensor_data(loader: Any, parser: Any, sha: str) -> dict[str, Any]:
 VERBOSE = False
 
 
+def _emit(msg: str) -> None:
+    """Print a status line without breaking an active tqdm bar."""
+    if tqdm is not None:
+        tqdm.write(msg)
+    else:
+        print(msg)
+
+
+_LUCID_MODELS_TIER1_SUBS = {"auto", "base", "hub", "mixins", "output", "registry"}
+"""Subcategories kept on the ``lucid.models`` landing page.  Everything
+with a slash (e.g. ``vision/resnet/pretrained``) is a family member and
+belongs on its own family page — keeping them here would make the index
+page ~500 members long and obscure the user-facing dispatch surface."""
+
+_LUCID_MODELS_FAMILY_GROUPS = [
+    {"slug": "lucid.models.vision",     "label": "Vision",     "icon": "image"},
+    {"slug": "lucid.models.text",       "label": "Text",       "icon": "text"},
+    {"slug": "lucid.models.generative", "label": "Generative", "icon": "sparkles"},
+]
+
+
+def _build_family_groups(family_root_slug: str) -> list[dict[str, Any]]:
+    """Walk the filesystem under a family-root and emit one entry per
+    direct sub-package (model family).  Each entry is a card on the
+    family-root's index page linking to that family's detail page."""
+    parts = family_root_slug.split(".")  # e.g. ["lucid", "models", "vision"]
+    family_dir = LUCID_SRC / Path(*parts)
+    if not family_dir.is_dir():
+        return []
+
+    groups: list[dict[str, Any]] = []
+    for sub in sorted(family_dir.iterdir()):
+        if not sub.is_dir() or sub.name.startswith("_"):
+            continue
+        if not (sub / "__init__.py").exists():
+            continue
+        groups.append({
+            "slug": f"{family_root_slug}.{sub.name}",
+            "label": sub.name,
+        })
+    return groups
+
+
 def build_one(slug: str, griffe_path: str, loader: Any, parser: Any, sha: str) -> None:
     from griffe import Module as GriffeModule, Class as GriffeClass
 
     out_file = OUT_DIR / f"{slug}.json"
-    print(f"  {slug} → {out_file.name}", end="", flush=True)
 
     try:
         if slug == "lucid.tensor":
@@ -1047,21 +1208,45 @@ def build_one(slug: str, griffe_path: str, loader: Any, parser: Any, sha: str) -
             obj = loader.load(griffe_path)
             if isinstance(obj, GriffeModule):
                 data = _serialise_module(obj, parser, sha, slug=slug)
+                # Family-leaf metadata: each ``lucid.models.<domain>.<family>``
+                # Config class is wrapped with ``@model_family_meta(...)``
+                # carrying three docs-facing fields (``canonical_name`` /
+                # ``citation`` / ``theory``).  Parsed directly from the
+                # source file via ``ast`` — does not depend on Griffe.
+                # See ``arch-models-canonical-name``.
+                if _is_family_leaf(slug):
+                    meta = _extract_family_meta(slug)
+                    for key in ("canonical_name", "citation", "theory"):
+                        if meta.get(key):
+                            data[key] = meta[key]
             elif isinstance(obj, GriffeClass):
                 serialised = _serialise_class(obj, parser, sha)
                 data = {"slug": slug, **serialised}
             else:
                 data = {"slug": slug, "kind": "unknown", "name": griffe_path}
 
+        if slug == "lucid.models":
+            members = data.get("members", []) or []
+            filtered = [
+                m for m in members
+                if (m.get("subcategory") or "") in _LUCID_MODELS_TIER1_SUBS
+            ]
+            data["members"] = filtered
+            data["family_groups"] = _LUCID_MODELS_FAMILY_GROUPS
+
+        if slug in _FAMILY_ROOTS:
+            data["members"] = []  # __init__.py is intentionally empty
+            data["family_groups"] = _build_family_groups(slug)
+
         out_file.write_text(
             json.dumps(data, indent=2, ensure_ascii=False, default=str),
             encoding="utf-8",
         )
         member_count = len(data.get("members", data.get("methods", [])))
-        print(f"  ✓  ({member_count} members)")
+        _emit(f"  ✓ {slug:32}  ({member_count} members)")
 
     except Exception as exc:
-        print(f"  ✗  {exc}")
+        _emit(f"  ✗ {slug:32}  {exc}")
         if VERBOSE:
             import traceback
             traceback.print_exc()
@@ -1075,7 +1260,6 @@ def build_synth(slug: str, filter_subcat: str, lucid_data: dict[str, Any]) -> No
     slugs drop subcategory entirely so their members render flat.
     """
     out_file = OUT_DIR / f"{slug}.json"
-    print(f"  {slug} → {out_file.name}", end="", flush=True)
 
     filtered = [
         m for m in lucid_data.get("members", [])
@@ -1125,7 +1309,40 @@ def build_synth(slug: str, filter_subcat: str, lucid_data: dict[str, Any]) -> No
         json.dumps(data, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
-    print(f"  ✓  ({len(filtered)} members)")
+    _emit(f"  ✓ {slug:32}  ({len(filtered)} members)")
+
+
+class _ElapsedSpinner:
+    """Print '[mm:ss] msg' on a timer until ``stop()``.  Used during the
+    upfront ``loader.load('lucid')`` walk which has no granular progress."""
+
+    def __init__(self, msg: str, interval: float = 2.0) -> None:
+        self._msg = msg
+        self._interval = interval
+        self._t0 = time.monotonic()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _fmt(self) -> str:
+        dt = int(time.monotonic() - self._t0)
+        return f"\r[{dt//60:02d}:{dt%60:02d}] {self._msg}"
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            sys.stdout.write(self._fmt())
+            sys.stdout.flush()
+
+    def __enter__(self) -> "_ElapsedSpinner":
+        sys.stdout.write(self._fmt()); sys.stdout.flush()
+        self._thread.start()
+        return self
+
+    def __exit__(self, *a: Any) -> None:
+        self._stop.set()
+        self._thread.join(timeout=0.1)
+        dt = int(time.monotonic() - self._t0)
+        sys.stdout.write(f"\r[{dt//60:02d}:{dt%60:02d}] {self._msg} ✓\n")
+        sys.stdout.flush()
 
 
 def main() -> None:
@@ -1136,6 +1353,13 @@ def main() -> None:
     parser_args.add_argument("--verbose", action="store_true")
     args = parser_args.parse_args()
     VERBOSE = args.verbose
+
+    # Griffe's docstring parser emits a warning per signature/docstring mismatch.
+    # In verbose mode keep them visible; otherwise silence so the progress bar
+    # isn't drowned out.
+    if not VERBOSE:
+        logging.getLogger("griffe").setLevel(logging.ERROR)
+        logging.getLogger("mkdocstrings").setLevel(logging.ERROR)
 
     # Verify griffe is available
     try:
@@ -1172,9 +1396,10 @@ def main() -> None:
     lucid_data: dict[str, Any] | None = None
     if synth_slugs:
         try:
-            lucid_mod = loader.load("lucid")
-            if isinstance(lucid_mod, GriffeModule):
-                lucid_data = _serialise_module(lucid_mod, Parser.numpy, sha, slug="lucid")
+            with _ElapsedSpinner("loading lucid/ tree (Griffe AST walk)..."):
+                lucid_mod = loader.load("lucid")
+                if isinstance(lucid_mod, GriffeModule):
+                    lucid_data = _serialise_module(lucid_mod, Parser.numpy, sha, slug="lucid")
         except Exception as exc:
             print(f"  [warn] failed to load lucid for synthesis: {exc}")
 
@@ -1184,12 +1409,29 @@ def main() -> None:
     elif args.module and args.module in _SYNTH_SLUGS:
         manifest = {}
 
-    print(f"Building {len(manifest) + len(synth_slugs)} module(s)  [commit: {sha}]")
+    total = len(manifest) + len(synth_slugs)
+    print(f"Building {total} module(s)  [commit: {sha}]")
+
+    items: list[tuple[str, str, str]] = []
     for slug, griffe_path in manifest.items():
-        build_one(slug, griffe_path, loader, Parser.numpy, sha)
+        items.append(("manifest", slug, griffe_path))
     if lucid_data:
         for slug, filter_subcat in synth_slugs.items():
-            build_synth(slug, filter_subcat, lucid_data)
+            items.append(("synth", slug, filter_subcat))
+
+    iterator: Any = items
+    if tqdm is not None:
+        iterator = tqdm(items, total=total, desc="modules", unit="mod",
+                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+
+    for kind, slug, payload in iterator:
+        if tqdm is not None:
+            iterator.set_postfix_str(slug, refresh=False)
+        if kind == "manifest":
+            build_one(slug, payload, loader, Parser.numpy, sha)
+        else:
+            assert lucid_data is not None
+            build_synth(slug, payload, lucid_data)
 
     print(f"\nDone. Files in {OUT_DIR}")
 

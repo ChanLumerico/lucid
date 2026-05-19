@@ -13,21 +13,81 @@ import lucid.nn as nn
 
 
 class ModelConfig(ABC):
-    """Base class for model configuration dataclasses.
+    r"""Base class for every model's configuration dataclass.
+
+    A ``ModelConfig`` subclass holds the hyper-parameters that fully
+    determine a model's architecture (depths, widths, vocab sizes,
+    activation choices, …).  Configs are immutable, JSON-serialisable,
+    and the single argument every concrete :class:`PretrainedModel`
+    constructor accepts.
 
     Subclasses must:
 
-    - Use ``@dataclass(frozen=True)`` (immutability + ``fields()`` introspection)
-    - Set the ``model_type`` ``ClassVar[str]`` to a unique family identifier
-    - Optionally implement ``__post_init__`` for cross-field validation
+    - Use ``@dataclass(frozen=True)`` (immutability + ``fields()``
+      introspection).
+    - Set the ``model_type`` ``ClassVar[str]`` to a unique family
+      identifier (e.g. ``"resnet"``, ``"bert"``).
+    - Optionally implement ``__post_init__`` for cross-field validation.
 
-    The base provides JSON round-trip (``to_dict`` / ``from_dict`` /
-    ``save`` / ``load``) so all configs share one persistence format.
+    Attributes
+    ----------
+    model_type : ClassVar[str]
+        Persistent family identifier.  Embedded in ``config.json`` on
+        disk and used by directory-based loading to find the correct
+        registry entry.
+
+    See Also
+    --------
+    lucid.models._meta.model_family_meta
+        Class decorator that attaches paper / theory / display metadata
+        (``canonical_name`` / ``citation`` / ``theory``) to a Config
+        subclass.  Concrete families wrap their Config with this so the
+        docs site can render family-root index pages.
+
+    Notes
+    -----
+    The base class provides a JSON round-trip via :meth:`to_dict` /
+    :meth:`from_dict` / :meth:`save` / :meth:`load`.  Unknown fields are
+    tolerated on load with a :class:`UserWarning` — this lets newer
+    checkpoints (which may have added fields) load into older code
+    without crashing.
+
+    Examples
+    --------
+    >>> from dataclasses import dataclass
+    >>> @dataclass(frozen=True)
+    ... class MyConfig(ModelConfig):
+    ...     model_type: ClassVar[str] = "myfamily"
+    ...     hidden_size: int = 768
+    ...     num_layers: int = 12
+    >>> cfg = MyConfig(hidden_size=1024)
+    >>> cfg.to_dict()["model_type"]
+    'myfamily'
     """
 
     model_type: ClassVar[str] = "base"
 
     def to_dict(self) -> dict[str, object]:
+        r"""Serialise the config (including ``model_type``) to a plain dict.
+
+        Returns
+        -------
+        dict[str, object]
+            JSON-friendly mapping of every dataclass field plus the
+            ``model_type`` ClassVar.
+
+        Raises
+        ------
+        TypeError
+            If ``self`` is not a ``@dataclass``.
+
+        Examples
+        --------
+        >>> cfg = MyConfig(hidden_size=1024)
+        >>> d = cfg.to_dict()
+        >>> d["hidden_size"], d["model_type"]
+        (1024, 'myfamily')
+        """
         if not is_dataclass(self):
             raise TypeError(f"{type(self).__name__} must be decorated with @dataclass")
         d: dict[str, object] = asdict(self)
@@ -36,6 +96,37 @@ class ModelConfig(ABC):
 
     @classmethod
     def from_dict(cls, d: dict[str, object]) -> Self:
+        r"""Reconstruct a config from a plain dict (inverse of :meth:`to_dict`).
+
+        Parameters
+        ----------
+        d : dict[str, object]
+            Field-name → value mapping; ``model_type`` is silently
+            stripped (it's a ClassVar, not a constructor arg).
+
+        Returns
+        -------
+        Self
+            New instance of ``cls`` populated from ``d``.
+
+        Raises
+        ------
+        TypeError
+            If ``cls`` is not a ``@dataclass``.
+
+        Warns
+        -----
+        UserWarning
+            When ``d`` contains keys not declared on ``cls`` — those keys
+            are dropped before invoking the constructor so older code can
+            load newer checkpoints with added fields.
+
+        Examples
+        --------
+        >>> cfg = MyConfig.from_dict({"hidden_size": 512, "model_type": "myfamily"})
+        >>> cfg.hidden_size
+        512
+        """
         copy: dict[str, object] = dict(d)
         # ``model_type`` is a ClassVar — never a constructor arg.
         copy.pop("model_type", None)
@@ -59,13 +150,44 @@ class ModelConfig(ABC):
         return cls(**copy)
 
     def save(self, path: str) -> None:
-        """Write a JSON config file to ``path``."""
+        r"""Write the config as pretty-printed JSON to ``path``.
+
+        Parameters
+        ----------
+        path : str
+            File path to write.  Existing files are overwritten.
+
+        Examples
+        --------
+        >>> cfg = MyConfig(hidden_size=1024)
+        >>> cfg.save("/tmp/myconfig.json")
+        """
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, sort_keys=True)
 
     @classmethod
     def load(cls, path: str) -> Self:
-        """Read a JSON config file from ``path``."""
+        r"""Load a config from a JSON file (inverse of :meth:`save`).
+
+        Parameters
+        ----------
+        path : str
+            Path to a JSON file produced by :meth:`save`.
+
+        Returns
+        -------
+        Self
+            Reconstructed config instance.
+
+        Raises
+        ------
+        ValueError
+            If ``path`` does not contain a JSON object.
+
+        Examples
+        --------
+        >>> cfg = MyConfig.load("/tmp/myconfig.json")
+        """
         with open(path, "r", encoding="utf-8") as f:
             d = json.load(f)
         if not isinstance(d, dict):
@@ -74,14 +196,52 @@ class ModelConfig(ABC):
 
 
 class PretrainedModel(nn.Module):
-    """Base for all models that support ``from_pretrained`` / ``save_pretrained``.
+    r"""Base for every Lucid model that supports the pretrained-checkpoint flow.
 
-    Contract for concrete subclasses:
+    Subclasses inherit :meth:`from_pretrained` / :meth:`save_pretrained`
+    plus parameter-counting and embedding-access helpers.  The contract:
 
-    - Set ``config_class = MyConfig`` (ClassVar) — required, enforced at init.
-    - Define ``__init__(self, config: MyConfig) -> None`` with a single arg.
-      All variant differences (depth, width, …) belong inside the config.
-    - Implement ``forward(...) -> ModelOutput``.
+    - Set ``config_class = MyConfig`` as a ``ClassVar`` — required;
+      enforced at ``__init__`` time.
+    - Define ``__init__(self, config: MyConfig) -> None`` taking a single
+      config argument.  All architectural variation (depth, width,
+      activation choices, …) belongs inside the config — no extra
+      constructor parameters.
+    - Implement ``forward(...) -> ModelOutput`` returning one of the
+      dataclasses in :mod:`lucid.models._output`.
+
+    Attributes
+    ----------
+    config_class : ClassVar[type[ModelConfig] or None]
+        Subclasses MUST override.  ``None`` signals "not set" — the base
+        ``__init__`` raises in that case.
+    base_model_prefix : ClassVar[str]
+        Optional name of the backbone attribute (e.g. ``"bert"`` on
+        ``BertForMaskedLM``).  Used by future state-dict remapping logic
+        when loading head-less checkpoints into head-bearing models.
+    config : ModelConfig
+        Instance attribute populated by ``__init__``.
+
+    Notes
+    -----
+    The class is a thin lift on :class:`lucid.nn.Module` — all parameter
+    management still flows through the standard ``Module`` machinery.
+    Two persistence formats are supported when saving / loading: the
+    pickle-based ``weights.lucid`` (default) and the cross-framework
+    ``model.safetensors``.
+
+    Examples
+    --------
+    >>> class MyModel(PretrainedModel):
+    ...     config_class: ClassVar[type[MyConfig]] = MyConfig
+    ...     def __init__(self, config):
+    ...         super().__init__(config)
+    ...         self.linear = nn.Linear(config.hidden_size, config.num_classes)
+    ...     def forward(self, x):
+    ...         return self.linear(x)
+    >>> model = MyModel(MyConfig(hidden_size=128, num_classes=10))
+    >>> model.num_parameters()
+    1290
     """
 
     # None signals "not set"; __init__ will raise if a concrete subclass forgets.
@@ -91,6 +251,20 @@ class PretrainedModel(nn.Module):
     config: ModelConfig
 
     def __init__(self, config: ModelConfig) -> None:
+        r"""Initialise the module and validate the supplied config.
+
+        Parameters
+        ----------
+        config : ModelConfig
+            Must be an instance of the subclass's declared
+            :attr:`config_class`.
+
+        Raises
+        ------
+        TypeError
+            If ``config_class`` has not been set on the concrete subclass,
+            or if ``config`` is not an instance of ``config_class``.
+        """
         super().__init__()
         cls = type(self)
         if cls.config_class is None:
@@ -108,15 +282,57 @@ class PretrainedModel(nn.Module):
 
     @classmethod
     def from_pretrained(cls, name_or_path: str, *, strict: bool = True) -> Self:
-        """Load a model.
+        r"""Load a model from a registered name or a local directory.
 
-        Two modes:
+        Two modes are supported:
 
-        1. Registered name (``"resnet_50"`` / ``"resnet-50"``) — looked up in
-           the global registry; the factory is called with ``pretrained=True``.
-        2. Local directory containing ``config.json`` + ``weights.lucid`` —
-           config is restored via ``cls.config_class.load``; weights via
-           :func:`lucid.load`.
+        1. **Registered name** (``"resnet_50"`` / ``"resnet-50"``) —
+           looked up in the global registry; the factory is invoked with
+           ``pretrained=True``.  The factory result is validated to be an
+           instance of ``cls`` (so subclass calls like
+           ``ResNet.from_pretrained("vit_base_16")`` raise rather than
+           silently returning the wrong family).
+        2. **Local directory** containing ``config.json`` plus either
+           ``model.safetensors`` (preferred) or ``weights.lucid``.  The
+           config is restored via ``cls.config_class.load`` and the
+           weights are loaded with :func:`lucid.load`.
+
+        Parameters
+        ----------
+        name_or_path : str
+            Registered model name or filesystem directory path.
+        strict : bool, optional, keyword-only, default=True
+            Forwarded to :meth:`load_state_dict`.
+
+        Returns
+        -------
+        Self
+            A fully constructed model instance.
+
+        Raises
+        ------
+        ValueError
+            If the name is unrecognised and is not a valid directory.
+        FileNotFoundError
+            If a directory was supplied but required files are absent.
+        TypeError
+            If the registered factory yields a non-subclass of ``cls``,
+            or ``config_class`` is unset, or the weights file lacks a
+            state-dict.
+
+        Notes
+        -----
+        For task-aware dispatch that resolves to a different concrete
+        subclass per task, use the ``AutoModelFor*`` family instead.
+
+        Examples
+        --------
+        >>> # Registered name
+        >>> model = ResNetForImageClassification.from_pretrained("resnet_50")
+        >>>
+        >>> # Local directory
+        >>> model.save_pretrained("/tmp/my_resnet50")
+        >>> reloaded = ResNetForImageClassification.from_pretrained("/tmp/my_resnet50")
         """
         from lucid.models._registry import is_model, model_entrypoint
 
@@ -173,17 +389,34 @@ class PretrainedModel(nn.Module):
         *,
         safe_serialization: bool = False,
     ) -> None:
-        """Write ``config.json`` and weights to *path*.
+        r"""Write ``config.json`` and weights to ``path``.
 
         Parameters
         ----------
-        path:
+        path : str
             Destination directory.  Created if it does not exist.
-        safe_serialization:
-            If ``True``, save weights as ``model.safetensors`` using the
-            SafeTensors format (requires ``pip install safetensors``).
-            If ``False`` (default), save as ``weights.lucid`` using Lucid's
-            native pickle-based format.
+        safe_serialization : bool, optional, keyword-only, default=False
+            If ``True``, save weights as ``model.safetensors`` (requires
+            ``pip install safetensors``).  If ``False``, save as
+            ``weights.lucid`` using the native pickle-based format.
+
+        Notes
+        -----
+        Output layout::
+
+            path/
+              config.json
+              model.safetensors   # when safe_serialization=True
+              weights.lucid       # when safe_serialization=False
+
+        The companion :meth:`from_pretrained` (or any ``AutoModelFor*``
+        class) reads this directory layout and prefers SafeTensors when
+        both files are present.
+
+        Examples
+        --------
+        >>> model = create_model("resnet_50")
+        >>> model.save_pretrained("/tmp/my_resnet50", safe_serialization=True)
         """
         os.makedirs(path, exist_ok=True)
         self.config.save(os.path.join(path, "config.json"))
@@ -197,7 +430,30 @@ class PretrainedModel(nn.Module):
             _lucid.save(self.state_dict(), os.path.join(path, "weights.lucid"))
 
     def num_parameters(self, *, only_trainable: bool = False) -> int:
-        """Total parameter count (sum of all element counts)."""
+        r"""Return the total number of elements across all parameters.
+
+        Parameters
+        ----------
+        only_trainable : bool, optional, keyword-only, default=False
+            When ``True``, parameters with ``requires_grad=False`` are
+            excluded (useful for reporting trainable model size after
+            freezing the backbone).
+
+        Returns
+        -------
+        int
+            Sum of ``prod(p.shape)`` over the selected parameters.
+
+        Examples
+        --------
+        >>> model = create_model("resnet_50")
+        >>> model.num_parameters()
+        25557032
+        >>> for p in model.backbone.parameters():
+        ...     p.requires_grad = False
+        >>> model.num_parameters(only_trainable=True) < 25557032
+        True
+        """
         total: int = 0
         for p in self.parameters():
             if only_trainable and not p.requires_grad:
@@ -209,10 +465,40 @@ class PretrainedModel(nn.Module):
         return total
 
     def get_input_embeddings(self) -> nn.Module | None:
-        """Return the input-embedding submodule, or None if not applicable."""
+        r"""Return the input-embedding submodule, or ``None`` if not applicable.
+
+        Returns
+        -------
+        nn.Module or None
+            The embedding layer for text / token-id models (BERT, GPT,
+            …); ``None`` for vision and other non-embedding models.
+
+        Notes
+        -----
+        Override in subclasses that have an embedding table.  Used by
+        tools that need to resize / share / introspect token embeddings
+        without coupling to family-specific attribute names.
+        """
         return None
 
     def set_input_embeddings(self, value: nn.Module) -> None:
+        r"""Replace the input-embedding submodule.
+
+        Parameters
+        ----------
+        value : nn.Module
+            New embedding module.
+
+        Raises
+        ------
+        NotImplementedError
+            On the base class — subclasses with embeddings must override.
+
+        Notes
+        -----
+        Companion to :meth:`get_input_embeddings`.  Subclasses that
+        override one should override the other.
+        """
         raise NotImplementedError(
             f"{type(self).__name__} does not support set_input_embeddings"
         )

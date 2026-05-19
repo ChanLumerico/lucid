@@ -91,6 +91,12 @@ export type ApiMember = ApiFunction | ApiClass;
 // Module / top-level data files
 // ---------------------------------------------------------------------------
 
+export interface FamilyGroup {
+  slug: string;
+  label: string;
+  icon?: string;
+}
+
 export interface ApiModule extends DocstringParsed {
   slug: string;
   name: string;
@@ -98,6 +104,19 @@ export interface ApiModule extends DocstringParsed {
   kind: "module";
   source: string | null;
   members: ApiMember[];
+  family_groups?: FamilyGroup[];
+  /** Paper-style family display name (``"ResNet"``, ``"ConvNeXt"``,
+   *  ``"BERT"``), extracted from the Config class's ``@model_family_meta``
+   *  decorator.  Absent → docs renderer falls back to capitalised dirname. */
+  canonical_name?: string;
+  /** MLA-formatted citation of the family's defining paper, extracted
+   *  from ``@model_family_meta(citation=...)``. */
+  citation?: string;
+  /** rST-formatted theoretical description (multi-paragraph, math OK),
+   *  extracted from ``@model_family_meta(theory=...)``.  Rendered through
+   *  the same MathText pipeline as docstring extended-description
+   *  sections on family-root index pages. */
+  theory?: string;
 }
 
 /** Special kind for lucid.tensor — a single class exposed as a module */

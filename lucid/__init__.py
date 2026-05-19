@@ -19,7 +19,7 @@ try:
             f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
             f"got {_abi}. Rebuild the engine."
         )
-except (TypeError, ValueError):
+except TypeError, ValueError:
     pass  # Mocked during docs build — skip ABI check
 
 # fmt: off
@@ -67,7 +67,7 @@ from lucid._threads import (
 # The engine already exposes ``set_deterministic`` / ``is_deterministic``;
 # wrap them under the standard ``use_deterministic_algorithms`` /
 # ``are_deterministic_algorithms_enabled`` names without an alias hop.
-def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # noqa: F821
+def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # type: ignore # noqa: F821
     """Globally toggle deterministic kernel selection.
 
     Lucid does not ship a separate ``warn_only`` mode — callers either get
@@ -79,7 +79,7 @@ def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None
     _C_engine.set_deterministic(_py_bool(mode))
 
 
-def are_deterministic_algorithms_enabled() -> bool:  # noqa: F821
+def are_deterministic_algorithms_enabled() -> bool:  # type: ignore # noqa: F821
     """Return whether deterministic kernel selection is currently active."""
     return _py_bool(_C_engine.is_deterministic())
 

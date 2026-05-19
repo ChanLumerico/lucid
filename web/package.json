@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "python3 scripts/build-api-data.py",
+    "predev": "python3 scripts/build-api-data-cached.py",
     "dev": "next dev",
-    "prebuild": "[ \"$SKIP_API_BUILD\" = \"1\" ] || python3 scripts/build-api-data.py",
+    "dev:fast": "SKIP_API_BUILD=1 next dev",
+    "prebuild": "python3 scripts/build-api-data-cached.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

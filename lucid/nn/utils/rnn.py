@@ -12,7 +12,6 @@ from lucid._tensor.tensor import Tensor  # public alias for NamedTuple field ann
 from lucid._C import engine as _C_engine
 from lucid._ops import cat  # type: ignore[attr-defined]  # cat is in _ops.__init__ but not re-exported with __all__
 
-
 # Integer-dtype → struct format-code map, used by _int_tensor_to_list to
 # unpack a 1-D int tensor's raw bytes into a Python list without going
 # through numpy.  Apple Silicon is little-endian; ``=`` uses native byte

@@ -9,11 +9,44 @@ if TYPE_CHECKING:
 
 
 class ModelFactory(Protocol):
-    """Protocol satisfied by every factory function passed to @register_model.
+    r"""Protocol implemented by every factory function registered with
+    :func:`register_model`.
 
-    The ``pretrained`` flag controls whether to download and load weights.
-    ``**overrides`` allows callers to override config fields at creation time
-    (e.g. ``create_model("resnet_50", num_classes=10)``).
+    A factory takes a single positional flag and an open-ended set of
+    keyword overrides, and returns a fully constructed
+    :class:`PretrainedModel`.  The ``pretrained`` flag controls whether
+    the factory should download and load a checkpoint (``True``) or just
+    allocate randomly initialised weights (``False``).
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Whether to download / load registered checkpoint weights into the
+        model before returning it.
+    **overrides : object
+        Optional config-field overrides.  Forwarded to the underlying
+        :class:`ModelConfig` constructor — e.g.
+        ``create_model("resnet_50", num_classes=10)``.
+
+    Returns
+    -------
+    PretrainedModel
+        Concrete model instance ready for ``.forward(...)``.
+
+    Notes
+    -----
+    The ``__name__`` attribute is part of the protocol because
+    :func:`register_model` uses it as the registry key when no explicit
+    name is supplied (which is the common case — the decorator captures
+    the function's defined name).
+
+    Examples
+    --------
+    >>> from lucid.models import register_model, create_model
+    >>> @register_model(task="image-classification", family="myfamily")
+    ... def my_model(pretrained: bool = False, **overrides: object):
+    ...     return MyModel(MyConfig(**overrides))
+    >>> model = create_model("my_model", num_classes=10)
     """
 
     __name__: str  # every Python function has __name__; Protocol must declare it
@@ -27,6 +60,31 @@ class ModelFactory(Protocol):
 
 @dataclass(frozen=True)
 class _RegistryEntry:
+    r"""Internal record stored under each registered name.
+
+    Attributes
+    ----------
+    factory : ModelFactory
+        The decorated function that builds the model.
+    task : str
+        Task tag (``"base"``, ``"image-classification"``, ``"causal-lm"``,
+        …) used by Auto classes for typed dispatch.
+    family : str
+        Architecture family identifier (e.g. ``"resnet"``, ``"bert"``).
+        Inferred from the factory module path when not supplied.
+    model_type : str
+        Persistent ``ModelConfig.model_type`` value this factory produces.
+        Used by directory-based loading to match ``config.json`` against
+        registered factories.
+    model_class : type[PretrainedModel] or None, default=None
+        Optional fast-path pointer to the concrete model class — skips a
+        factory call during ``from_pretrained`` from a directory.
+    default_config : ModelConfig or None, default=None
+        Optional fast-path default config — lets
+        :meth:`AutoConfig.from_pretrained` return without invoking the
+        factory.
+    """
+
     factory: ModelFactory
     task: str
     family: str
@@ -41,7 +99,25 @@ _REGISTRY: dict[str, _RegistryEntry] = {}
 
 
 def _normalize(name: str) -> str:
-    """Hyphens are equivalent to underscores; case-insensitive lookup."""
+    r"""Canonicalise a model name for case- and separator-insensitive lookup.
+
+    Parameters
+    ----------
+    name : str
+        User-supplied name (e.g. ``"ResNet-50"``).
+
+    Returns
+    -------
+    str
+        Lowercase form with hyphens replaced by underscores
+        (``"resnet_50"``).
+
+    Notes
+    -----
+    All registry keys are stored normalised; every lookup runs through
+    this function so ``"resnet_50"``, ``"resnet-50"``, and ``"ResNet-50"``
+    all reach the same entry.
+    """
     return name.replace("-", "_").lower()
 
 
@@ -53,29 +129,70 @@ def register_model(
     model_class: type[PretrainedModel] | None = None,
     default_config: ModelConfig | None = None,
 ) -> Callable[[ModelFactory], ModelFactory]:
-    """Decorator that registers a factory function under its ``__name__``.
+    r"""Decorator that registers a factory function under its ``__name__``.
+
+    The global registry is the single source of truth for which models
+    Lucid exposes.  Every public factory in ``lucid/models/**/_pretrained.py``
+    is decorated with ``@register_model`` so it becomes discoverable via
+    :func:`create_model`, :func:`list_models`, and the ``AutoModelFor*``
+    family.
 
     Parameters
     ----------
-    task:
-        Task tag used by Auto classes for typed dispatch
-        (``"base"``, ``"image-classification"``, ``"causal-lm"``, …).
-    family:
-        Architecture family (e.g. ``"resnet"``); inferred from the
-        factory's parent module name when omitted.
-    model_type:
-        ``ModelConfig.model_type`` this factory produces; defaults to
-        *family*.
-    model_class:
-        The concrete :class:`PretrainedModel` subclass this factory
-        returns.  When supplied, :class:`AutoModel` directory-loading
-        avoids a redundant factory call — recommended for all Phase 1+
-        registrations.
-    default_config:
-        The default :class:`ModelConfig` for this variant (i.e., the
-        config the factory uses when ``pretrained=False``).  When
-        supplied, :class:`AutoConfig` returns it instantly without
+    task : str, default="base"
+        Task tag used by Auto classes for typed dispatch.  Common values:
+        ``"base"``, ``"image-classification"``, ``"object-detection"``,
+        ``"semantic-segmentation"``, ``"causal-lm"``, ``"masked-lm"``,
+        ``"seq2seq-lm"``, ``"sequence-classification"``,
+        ``"token-classification"``, ``"question-answering"``,
+        ``"image-generation"``.
+    family : str or None, optional
+        Architecture family identifier (e.g. ``"resnet"``).  When ``None``,
+        inferred from the factory's parent module name (the
+        second-to-last component of ``fn.__module__``).
+    model_type : str or None, optional
+        Persistent ``ModelConfig.model_type`` value this factory produces.
+        Defaults to ``family``.  Used by directory-based loading to match
+        on-disk ``config.json`` files against registered factories.
+    model_class : type[PretrainedModel] or None, optional
+        The concrete :class:`PretrainedModel` subclass returned by this
+        factory.  When supplied, directory-based loading
+        (:meth:`AutoModel.from_pretrained` against a path) avoids a
+        redundant factory call — strongly recommended.
+    default_config : ModelConfig or None, optional
+        The default config produced when ``pretrained=False``.  When
+        supplied, :meth:`AutoConfig.from_pretrained` returns it without
         instantiating the model.
+
+    Returns
+    -------
+    Callable[[ModelFactory], ModelFactory]
+        Decorator that returns the original factory unmodified (only the
+        registry side-effect occurs).
+
+    Raises
+    ------
+    ValueError
+        If a model is already registered under the same normalised name.
+
+    Notes
+    -----
+    The decorator uses the factory's ``__name__`` (normalised through
+    :func:`_normalize`) as the registry key.  Same name twice raises —
+    this catches accidental shadowing across families.
+
+    Examples
+    --------
+    >>> from lucid.models import register_model, PretrainedModel
+    >>> # Inside lucid/models/vision/myfamily/_pretrained.py:
+    >>> @register_model(
+    ...     task="image-classification",
+    ...     family="myfamily",
+    ...     model_type="myfamily",
+    ... )
+    ... def myfamily_small(pretrained: bool = False, **overrides):
+    ...     cfg = MyFamilyConfig(depth=12, **overrides)
+    ...     return MyFamilyForImageClassification(cfg)
     """
 
     def decorator(fn: ModelFactory) -> ModelFactory:
@@ -107,7 +224,37 @@ def register_model(
 
 
 def list_models(*, task: str | None = None, family: str | None = None) -> list[str]:
-    """All registered model names, optionally filtered. Sorted alphabetically."""
+    r"""List all registered model names, optionally filtered by task / family.
+
+    Parameters
+    ----------
+    task : str or None, optional, keyword-only
+        Restrict to entries with this task tag (e.g.
+        ``"image-classification"``).  ``None`` returns all tasks.
+    family : str or None, optional, keyword-only
+        Restrict to entries from this architecture family (e.g.
+        ``"resnet"``).  ``None`` returns all families.
+
+    Returns
+    -------
+    list[str]
+        Sorted list of normalised model names matching the filters.
+
+    Notes
+    -----
+    Use this for discovery — pair with :func:`create_model` to build any
+    listed name.  The returned strings are the canonical (normalised)
+    forms; either ``"resnet_50"`` or ``"ResNet-50"`` is accepted as input
+    elsewhere, but the listing always returns the canonical spelling.
+
+    Examples
+    --------
+    >>> from lucid.models import list_models
+    >>> list_models(family="resnet")[:3]
+    ['resnet_101', 'resnet_152', 'resnet_18']
+    >>> "vit_base_16" in list_models(task="image-classification")
+    True
+    """
     out: list[str] = []
     for name, entry in _REGISTRY.items():
         if task is not None and entry.task != task:
@@ -119,11 +266,63 @@ def list_models(*, task: str | None = None, family: str | None = None) -> list[s
 
 
 def is_model(name: str) -> bool:
+    r"""Return whether ``name`` is registered (case / separator insensitive).
+
+    Parameters
+    ----------
+    name : str
+        Candidate model name.
+
+    Returns
+    -------
+    bool
+        ``True`` if a registry entry exists under the normalised name.
+
+    Examples
+    --------
+    >>> from lucid.models import is_model
+    >>> is_model("resnet_50")
+    True
+    >>> is_model("ResNet-50")
+    True
+    >>> is_model("not_a_real_model")
+    False
+    """
     return _normalize(name) in _REGISTRY
 
 
 def model_entrypoint(name: str) -> ModelFactory:
-    """Return the registered factory for *name* (any task)."""
+    r"""Return the registered factory callable for ``name``.
+
+    Parameters
+    ----------
+    name : str
+        Registered model name (any case, hyphens or underscores).
+
+    Returns
+    -------
+    ModelFactory
+        The factory function decorated with :func:`register_model`.
+
+    Raises
+    ------
+    ValueError
+        If no entry is registered under the normalised name; the error
+        message includes up to three Levenshtein-near suggestions.
+
+    Notes
+    -----
+    Task is **not** filtered here — :func:`model_entrypoint` returns the
+    factory regardless of which Auto class it belongs to.  Use
+    :func:`_registry_lookup` internally when you need task-filtered
+    dispatch.
+
+    Examples
+    --------
+    >>> from lucid.models import model_entrypoint
+    >>> factory = model_entrypoint("resnet_50")
+    >>> model = factory(pretrained=False)
+    """
     norm = _normalize(name)
     entry = _REGISTRY.get(norm)
     if entry is None:
@@ -134,13 +333,76 @@ def model_entrypoint(name: str) -> ModelFactory:
 def create_model(
     name: str, *, pretrained: bool = False, **overrides: object
 ) -> PretrainedModel:
-    """timm-style entry point: look up name and call its factory."""
+    r"""Look up ``name`` and call its factory — the timm-style entry point.
+
+    Parameters
+    ----------
+    name : str
+        Registered model name (case-insensitive, ``-`` / ``_``
+        interchangeable).
+    pretrained : bool, optional, keyword-only, default=False
+        Whether to download and load registered checkpoint weights.
+    **overrides : object
+        Forwarded as keyword arguments to the underlying factory.  Most
+        factories pipe these into the ``ModelConfig`` constructor so
+        callers can adjust hyper-parameters at creation time without
+        defining a custom config (e.g. ``num_classes=10`` for transfer
+        learning).
+
+    Returns
+    -------
+    PretrainedModel
+        A fully constructed concrete model.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not registered.
+
+    Notes
+    -----
+    Equivalent to ``model_entrypoint(name)(pretrained=pretrained,
+    **overrides)``.  For task-aware dispatch with the Auto* shells, see
+    :class:`AutoModel` and the ``AutoModelFor*`` family.
+
+    Examples
+    --------
+    >>> from lucid.models import create_model
+    >>> # CIFAR-10 transfer head — random init, 10 classes
+    >>> model = create_model("resnet_50", num_classes=10)
+    >>> model.config.num_classes
+    10
+    """
     factory = model_entrypoint(name)
     return factory(pretrained=pretrained, **overrides)
 
 
 def _registry_lookup(name: str, *, task: str) -> _RegistryEntry:
-    """Lookup with task filter — used by Auto classes for typed dispatch."""
+    r"""Resolve ``name`` and require the entry's task to equal ``task``.
+
+    Parameters
+    ----------
+    name : str
+        Registered model name.
+    task : str, keyword-only
+        Required task tag.
+
+    Returns
+    -------
+    _RegistryEntry
+        The matching registry entry.
+
+    Raises
+    ------
+    ValueError
+        If the name is unknown, or if the entry's task does not match.
+
+    Notes
+    -----
+    Used internally by :class:`_BaseAutoClass.from_pretrained` so that
+    ``AutoModelForImageClassification.from_pretrained("gpt")`` raises a
+    clean error rather than returning an inappropriate model.
+    """
     norm = _normalize(name)
     entry = _REGISTRY.get(norm)
     if entry is None:
@@ -154,7 +416,28 @@ def _registry_lookup(name: str, *, task: str) -> _RegistryEntry:
 
 
 def _unknown_model_message(name: str, candidates: list[str]) -> str:
-    """Build an error message with up to 3 typo suggestions."""
+    r"""Build a "did you mean" error message for an unknown model name.
+
+    Parameters
+    ----------
+    name : str
+        The (unrecognised) name the caller supplied.
+    candidates : list[str]
+        All registered names; the function scores each by Levenshtein
+        distance to ``_normalize(name)``.
+
+    Returns
+    -------
+    str
+        Error message with up to three suggestions whose edit distance
+        is at most 3, sorted by closeness.
+
+    Notes
+    -----
+    The threshold is conservative so that, say, ``"resnet50"`` suggests
+    ``"resnet_50"`` (distance 1) but unrelated names don't pollute the
+    output.
+    """
     norm = _normalize(name)
     nearby = sorted(
         ((_edit_distance(c, norm), c) for c in candidates),
@@ -166,7 +449,25 @@ def _unknown_model_message(name: str, candidates: list[str]) -> str:
 
 
 def _edit_distance(a: str, b: str) -> int:
-    """Levenshtein distance — small dependency-free implementation."""
+    r"""Compute the Levenshtein edit distance between two strings.
+
+    Parameters
+    ----------
+    a, b : str
+        Input strings.
+
+    Returns
+    -------
+    int
+        Minimum number of single-character insertions, deletions, or
+        substitutions required to transform ``a`` into ``b``.
+
+    Notes
+    -----
+    Standard two-row dynamic programming implementation — O(len(a) *
+    len(b)) time, O(min(len(a), len(b))) memory.  Used by
+    :func:`_unknown_model_message` to suggest near-misses.
+    """
     if len(a) < len(b):
         a, b = b, a
     if not b:

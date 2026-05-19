@@ -3,7 +3,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Sidebar, type SidebarItem } from "@/components/layout/Sidebar";
 import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule, isApiClass } from "@/lib/types";
-import type { ApiMember } from "@/lib/types";
+import type { ApiMember, ApiModule } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Subcategory display: per-module ordering + friendly labels.
@@ -155,6 +155,10 @@ const PACKAGE_LABELS: Record<string, string> = {
   "lucid.serialization":  "Serialization",
   "lucid.utils":          "Utils",         // synthetic parent
   "lucid.utils.data":     "Data",
+  "lucid.models":         "Model Zoo",
+  "lucid.models.vision":  "Vision Models",
+  "lucid.models.text":    "Text Models",
+  "lucid.models.generative": "Generative Models",
 };
 
 function packageLabel(slug: string): string {
@@ -180,6 +184,11 @@ const PACKAGE_TAG_OVERRIDES: Record<string, string | null> = {
   "lucid.creation":      null,
   "lucid.ops":           null,
   "lucid.ops.composite": null,
+  // Model Zoo family roots — the label ("Vision Models" etc.) already says
+  // everything; the real path tag is redundant noise in the sidebar.
+  "lucid.models.vision":     null,
+  "lucid.models.text":       null,
+  "lucid.models.generative": null,
 };
 
 function packageTag(slug: string, isSynthetic: boolean): string | undefined {
@@ -332,6 +341,111 @@ function groupMembers(
   return result;
 }
 
+// True for slugs of the form ``lucid.models.{vision|text|generative}.<family>`` —
+// the leaf level under Model Zoo where each model family lives.  Used to swap
+// the default subcategory-bucketed sidebar tree for the strict 4-slot layout
+// (Config / Direct Model / Task Wrappers / Pretrained).
+function isFamilyLeaf(slug: string): boolean {
+  const parts = slug.split(".");
+  if (parts.length !== 4) return false;
+  if (parts[0] !== "lucid" || parts[1] !== "models") return false;
+  return parts[2] === "vision" || parts[2] === "text" || parts[2] === "generative";
+}
+
+// Pretty-print a family directory name when ``_canonical_name`` is absent.
+// ``mobilenet_v4`` → ``Mobilenet V4``.  Crude but never wrong (unlike the
+// algorithmic ``.title()`` for paper-cased names like ConvNeXt / ResNeXt).
+function familyDirToLabel(dirName: string): string {
+  return dirName
+    .split("_")
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+/** Build the 4-slot family-leaf sidebar item:
+ *
+ *   <CanonicalName>
+ *   ├── <FamilyConfig>           (slot 1, direct leaf)
+ *   ├── <DirectModelClass>       (slot 2, direct leaf)
+ *   ├── Task Wrappers ──┐        (slot 3, sub-group: every *For* class)
+ *   │   └── ...
+ *   └── Pretrained ─────┘        (slot 4, sub-group: every factory function)
+ *       └── ...
+ *
+ *  ``*Output`` dataclasses are hidden — they're forward-return types, not
+ *  user-facing entry points.
+ */
+function buildFamilyLeafItem(slug: string, data: ApiModule): SidebarItem {
+  const dirName = slug.split(".").pop() ?? slug;
+  const title = data.canonical_name && data.canonical_name.length > 0
+    ? data.canonical_name
+    : familyDirToLabel(dirName);
+
+  const allMembers = data.members.filter(
+    (m) => isApiClass(m) || m.kind === "function",
+  );
+
+  // Partition into the 4 strict slots.
+  const configClass = allMembers.find(
+    (m) => isApiClass(m) && m.name.endsWith("Config"),
+  );
+  const taskWrappers = allMembers.filter(
+    (m) =>
+      isApiClass(m) &&
+      m.name.includes("For") &&
+      !m.name.endsWith("Output") &&
+      !m.name.endsWith("Config"),
+  );
+  // *Output classes are dataclasses for forward return types — not entry
+  // points; suppress from the sidebar to keep the family tree clean.
+  const outputClasses = allMembers.filter(
+    (m) => isApiClass(m) && m.name.endsWith("Output"),
+  );
+  const directModel = allMembers.find(
+    (m) =>
+      isApiClass(m) &&
+      m !== configClass &&
+      !taskWrappers.includes(m) &&
+      !outputClasses.includes(m),
+  );
+  const pretrained = allMembers.filter((m) => m.kind === "function");
+
+  const items: SidebarItem[] = [];
+  if (configClass) items.push(memberLeaf(slug, configClass));
+  if (directModel) items.push(memberLeaf(slug, directModel));
+  if (taskWrappers.length > 0) {
+    items.push({
+      title: "Task Wrappers",
+      badge: `${taskWrappers.length}`,
+      items: taskWrappers.map((m) => memberLeaf(slug, m)),
+    });
+  }
+  if (pretrained.length > 0) {
+    items.push({
+      title: "Pretrained",
+      badge: `${pretrained.length}`,
+      items: pretrained.map((m) => memberLeaf(slug, m)),
+    });
+  }
+
+  const badgeCount =
+    (configClass ? 1 : 0) +
+    (directModel ? 1 : 0) +
+    taskWrappers.length +
+    pretrained.length;
+
+  return {
+    title,
+    // No tag on family-leaf entries — the canonical name (ResNet, BERT, …)
+    // is the user-facing identifier; the raw ``lucid.models.vision.resnet``
+    // path is just noise here.  Same rationale as the family-root tag
+    // suppression in PACKAGE_TAG_OVERRIDES.
+    href: `/api/${slug}`,
+    badge: `${badgeCount}`,
+    items,
+  };
+}
+
 function buildModuleItem(slug: string): SidebarItem {
   let memberItems: SidebarItem[] | undefined;
   let badge: string | undefined;
@@ -339,12 +453,25 @@ function buildModuleItem(slug: string): SidebarItem {
   try {
     const data = loadApiData(slug);
 
+    // Family-leaf pages get the strict 4-slot tree (Config / Direct /
+    // Task Wrappers / Pretrained).  Bypass the default subcategory
+    // bucketing entirely.
+    if (isApiModule(data) && isFamilyLeaf(slug)) {
+      return buildFamilyLeafItem(slug, data);
+    }
+
     if (isApiModule(data)) {
       const members = data.members.filter(
         (m) => isApiClass(m) || m.kind === "function",
       );
 
-      if (members.length > 0) {
+      // Family-root pages (lucid.models.vision/text/generative) — and the
+      // top-level lucid.models — carry a ``family_groups`` array instead of
+      // a flat member list.  Show that count for the badge so users see
+      // "Vision (45)" not "Vision (0)".
+      if (data.family_groups && data.family_groups.length > 0 && members.length === 0) {
+        badge = `${data.family_groups.length}`;
+      } else if (members.length > 0) {
         // For the `lucid` top-level, skip the Tensor class itself — it has
         // its own dedicated entry at `lucid.tensor` where all 260 methods
         // are surfaced.  Listing it twice in the sidebar would just create
@@ -446,9 +573,14 @@ function buildApiSidebar(): SidebarItem[] {
     }
   }
 
+  // Slugs whose sub-packages are the *primary* content rather than
+  // auxiliary — render them FIRST in the items list so the family-root
+  // entries (e.g. Vision / Text / Generative under Model Zoo) sit above
+  // the slug's own bucketed members instead of being buried at the bottom.
+  const SUBPKGS_FIRST = new Set<string>(["lucid.models"]);
+
   /** Build a SidebarItem for a slug, recursively attaching any documented
-   *  sub-packages as nested children (placed AT THE END of the item's
-   *  existing children, after the slug's own member subcategories). */
+   *  sub-packages as nested children. */
   function buildItem(slug: string, parent: string | null): SidebarItem {
     const isSynthetic = synthetic.has(slug);
     const base: SidebarItem = isSynthetic
@@ -459,12 +591,13 @@ function buildApiSidebar(): SidebarItem[] {
     // ``lucid.nn.functional``).  No further prefix-stripping needed.
     const subPkgs = childrenOf.get(slug) ?? [];
     if (subPkgs.length === 0) return base;
+    const subPkgItems = subPkgs.map((s) => buildItem(s, slug));
+    const ownItems = base.items ?? [];
     return {
       ...base,
-      items: [
-        ...(base.items ?? []),
-        ...subPkgs.map((s) => buildItem(s, slug)),
-      ],
+      items: SUBPKGS_FIRST.has(slug)
+        ? [...subPkgItems, ...ownItems]
+        : [...ownItems, ...subPkgItems],
     };
   }
 

@@ -256,7 +256,77 @@ class _BertPooler(nn.Module):
 
 
 class BertModel(PretrainedModel):
-    """Bare BERT encoder returning hidden states + pooled CLS embedding."""
+    r"""Bare BERT encoder returning hidden states and pooled CLS embedding.
+
+    Implements the bidirectional transformer encoder of Devlin et al., 2018.
+    Token, position, and segment embeddings are summed, LayerNormed, and
+    dropout-regularised, then passed through :math:`L` transformer blocks of
+    multi-head self-attention plus position-wise feed-forward.  A single
+    tanh-activated linear ("pooler") on the first ``[CLS]`` token produces a
+    sentence-level embedding used by classification heads.
+
+    Use this class as the trunk when you want raw hidden states; the
+    task-specific subclasses (``BertFor*``) wrap it with appropriate heads.
+
+    Parameters
+    ----------
+    config : BertConfig
+        Hyperparameters controlling vocabulary, depth, width, head count, and
+        regularisation.  See :class:`BertConfig` for the full field list.
+
+    Attributes
+    ----------
+    embeddings : nn.Module
+        Token + position + token-type embedding block followed by LayerNorm
+        and dropout.
+    encoder : nn.Module
+        Stack of ``config.num_hidden_layers`` transformer encoder layers.
+    pooler : nn.Module
+        Dense + tanh projection of the ``[CLS]`` hidden state.
+    config_class : type[BertConfig]
+        Class-level pointer used by the registry to instantiate a matching
+        config from disk.
+    base_model_prefix : str
+        Prefix (``"bert"``) under which sub-module checkpoints are nested in
+        task-head variants — used during weight loading.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805).
+
+    Self-attention follows the scaled dot-product form
+
+    .. math::
+
+        \mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(
+            \frac{Q K^{\top}}{\sqrt{d_k}}
+        \right) V
+
+    with :math:`d_k = H / A`.  Each layer applies multi-head attention,
+    followed by a feed-forward block
+
+    .. math::
+
+        \mathrm{FFN}(x) = \mathrm{GELU}(x W_1 + b_1) W_2 + b_2,
+
+    each wrapped by a residual connection and post-LayerNorm.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertModel
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128, num_attention_heads=2,
+    ...                  intermediate_size=512)
+    >>> model = BertModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (B=1, T=4, H=128)
+    (1, 4, 128)
+    >>> out.pooler_output.shape       # (B=1, H=128)
+    (1, 128)
+    """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
     base_model_prefix: ClassVar[str] = "bert"
@@ -352,7 +422,59 @@ class _BertOnlyMLMHead(nn.Module):
 
 
 class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
-    """BERT + tied MLM head (the pre-training objective)."""
+    r"""BERT with a tied masked-language-modeling head.
+
+    Implements the masked-LM half of the Devlin et al. (2018) pre-training
+    objective.  A two-layer projection (dense + GELU + LayerNorm) maps each
+    hidden state to vocabulary logits via a decoder whose weight matrix is
+    tied to the input ``word_embeddings`` table when
+    ``config.tie_word_embeddings`` is True.  Use for pre-training from
+    scratch, continued pre-training on domain corpora, or fill-in-the-blank
+    inference.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        controls whether the decoder weight is bound to the input embedding
+        matrix to halve the parameter count.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    cls : nn.Module
+        Masked-LM prediction head with its own dense + LayerNorm transform
+        and an output decoder of shape ``(hidden_size, vocab_size)``.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805), section 3.1 Task #1.
+
+    When ``labels`` is supplied the head computes
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{MLM}} = -\frac{1}{|M|}
+            \sum_{i \in M} \log p_{\theta}(x_i \mid x_{\setminus M})
+
+    over the set :math:`M` of masked positions, with positions where the
+    label equals ``-100`` excluded from the sum.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForMaskedLM
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForMaskedLM(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, V=30522)
+    (1, 4, 30522)
+    """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
     base_model_prefix: ClassVar[str] = "bert"
@@ -396,7 +518,53 @@ class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
 
 
 class BertForSequenceClassification(PretrainedModel):
-    """BERT + pooled-CLS linear classifier (GLUE-style fine-tunes)."""
+    r"""BERT with a pooled-CLS linear classifier for sequence-level tasks.
+
+    Wraps the bidirectional encoder with a dropout-regularised linear head
+    operating on the ``[CLS]`` pooled embedding.  This is the standard
+    fine-tuning recipe for GLUE-style sentence/sentence-pair tasks (SST-2,
+    MNLI, QQP, RTE, ...) introduced in Devlin et al., 2018 §4.1.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  ``config.num_labels`` sets the output
+        dimension; ``config.classifier_dropout`` (falling back to
+        ``hidden_dropout``) sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    dropout : nn.Dropout
+        Dropout layer applied to the pooled ``[CLS]`` embedding.
+    classifier : nn.Linear
+        Final linear of shape ``(hidden_size, num_labels)`` producing logits.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805).
+
+    The pooled representation is
+    :math:`p = \tanh(W_{\mathrm{pool}}\, h_{[\mathrm{CLS}]} + b_{\mathrm{pool}})`,
+    and the final logits are :math:`z = W_{\mathrm{cls}}\,\mathrm{Dropout}(p) + b_{\mathrm{cls}}`.
+    When ``labels`` is provided, cross-entropy over ``num_labels`` classes is
+    computed and exposed as ``output.loss``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForSequenceClassification
+    >>> cfg = BertConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForSequenceClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, num_labels=3)
+    (1, 3)
+    """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
     base_model_prefix: ClassVar[str] = "bert"
@@ -441,7 +609,58 @@ class BertForSequenceClassification(PretrainedModel):
 
 
 class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
-    """BERT + per-token linear classifier (NER, POS tagging)."""
+    r"""BERT with a per-token linear classifier for tagging tasks.
+
+    Wraps the bidirectional encoder with a dropout-regularised linear head
+    applied independently at every sequence position.  Used for token-level
+    fine-tunes such as named-entity recognition (CoNLL-2003), part-of-speech
+    tagging, and chunking — see Devlin et al., 2018 §4.3.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  ``config.num_labels`` sets the per-position
+        output dimension; ``config.classifier_dropout`` (falling back to
+        ``hidden_dropout``) sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    dropout : nn.Dropout
+        Dropout applied to the full sequence hidden states.
+    classifier : nn.Linear
+        Final linear of shape ``(hidden_size, num_labels)`` mapping each
+        token's hidden state to per-class logits.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805).
+
+    The loss (when ``labels`` is provided) is the masked cross-entropy
+    inherited from :class:`MaskedLMMixin`:
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{|V|}
+            \sum_{(b, t) \in V} \log p_{\theta}\!\left(y_{b,t} \mid x_b\right),
+
+    where :math:`V` is the set of positions with ``label != -100``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForTokenClassification
+    >>> cfg = BertConfig(num_labels=9, num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForTokenClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, num_labels=9)
+    (1, 4, 9)
+    """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
     base_model_prefix: ClassVar[str] = "bert"
@@ -483,7 +702,59 @@ class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
 
 
 class BertForQuestionAnswering(PretrainedModel):
-    """BERT + 2-way linear (start / end span logits) — SQuAD-style fine-tunes."""
+    r"""BERT with a 2-way span head for extractive question answering.
+
+    Wraps the bidirectional encoder with a single linear of output width 2,
+    producing start- and end-position logits over each token in the input.
+    This is the SQuAD v1.1 / v2.0 fine-tuning recipe of Devlin et al., 2018
+    §4.2 — given a ``(question, context)`` pair concatenated with ``[SEP]``,
+    the model predicts the answer span inside the context.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  The QA head is always 2-way; ``num_labels``
+        is ignored here.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    qa_outputs : nn.Linear
+        Final linear of shape ``(hidden_size, 2)`` mapping each token's
+        hidden state to ``(start_logit, end_logit)``.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805).
+
+    When both ``start_positions`` and ``end_positions`` are provided, the
+    loss is the symmetric average of two cross-entropies:
+
+    .. math::
+
+        \mathcal{L} = \tfrac{1}{2}\!\left(
+            \mathrm{CE}(z^{\mathrm{start}}, y^{\mathrm{start}})
+          + \mathrm{CE}(z^{\mathrm{end}},   y^{\mathrm{end}})
+        \right).
+
+    The returned ``logits`` tensor has shape ``(B, T, 2)``; index ``[..., 0]``
+    for start scores and ``[..., 1]`` for end scores.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForQuestionAnswering
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForQuestionAnswering(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=7, 2)
+    (1, 7, 2)
+    """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
     base_model_prefix: ClassVar[str] = "bert"
@@ -534,7 +805,48 @@ class BertForQuestionAnswering(PretrainedModel):
 
 @dataclass
 class BertForPreTrainingOutput(ModelOutput):
-    """Joint MLM + NSP output for :class:`BertForPreTraining`."""
+    r"""Combined output for :class:`BertForPreTraining`.
+
+    Aggregates the masked-LM logits, next-sentence-prediction logits, and
+    optional per-objective and combined losses produced by the full BERT
+    pre-training pipeline of Devlin et al., 2018.
+
+    Parameters
+    ----------
+    prediction_logits : Tensor
+        MLM head logits of shape ``(B, T, vocab_size)`` — one distribution
+        over the WordPiece vocabulary per input position.
+    seq_relationship_logits : Tensor
+        NSP head logits of shape ``(B, 2)`` — binary IsNext / NotNext scores
+        derived from the pooled ``[CLS]`` embedding.
+    loss : Tensor or None, default=None
+        Sum of ``mlm_loss`` and ``nsp_loss`` when both are available;
+        otherwise the single available loss, or ``None`` if neither label
+        set was supplied.
+    mlm_loss : Tensor or None, default=None
+        Cross-entropy on masked positions when ``labels`` was supplied.
+    nsp_loss : Tensor or None, default=None
+        Binary cross-entropy on the NSP head when ``next_sentence_label``
+        was supplied.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §3.1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForPreTraining
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForPreTraining(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.prediction_logits.shape, out.seq_relationship_logits.shape
+    ((1, 5, 30522), (1, 2))
+    """
 
     prediction_logits: Tensor
     seq_relationship_logits: Tensor
@@ -569,13 +881,62 @@ class _BertPreTrainingHeads(nn.Module):
 
 
 class BertForPreTraining(PretrainedModel, MaskedLMMixin):
-    """BERT + the original Devlin et al. pre-training objective.
+    r"""BERT with the original joint MLM + NSP pre-training objective.
 
-    Combines the masked-LM head (tied to input embeddings when
-    ``config.tie_word_embeddings`` is True) with the next-sentence-prediction
-    head.  Supply ``labels`` (MLM targets) and / or ``next_sentence_label``
-    (binary NSP target) to compute the corresponding losses; their sum is
-    exposed as ``output.loss``.
+    Combines the masked-language-modeling head (decoder weight tied to input
+    embeddings when ``config.tie_word_embeddings`` is True) with the
+    next-sentence-prediction head on top of the pooled ``[CLS]`` embedding.
+    This is the exact head configuration used in Devlin et al., 2018 to
+    train BERT-Base and BERT-Large from scratch.
+
+    Supply ``labels`` (MLM targets) and/or ``next_sentence_label`` (binary
+    NSP target) to compute the corresponding losses; their sum is exposed as
+    ``output.loss``.  Use this class only when reproducing the original
+    pre-training recipe — newer encoder-only LMs typically drop NSP and use
+    :class:`BertForMaskedLM` directly.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        controls whether the MLM decoder weight is tied to the input
+        embedding matrix.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    cls : nn.Module
+        Combined head holding both the MLM prediction projection
+        (``cls.predictions``) and the NSP binary linear
+        (``cls.seq_relationship``).
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §3.1.
+
+    The combined loss when both objectives are supplied is
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{pretrain}}
+            = \mathcal{L}_{\mathrm{MLM}} + \mathcal{L}_{\mathrm{NSP}}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForPreTraining
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForPreTraining(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 103, 102, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.prediction_logits.shape    # MLM logits  (B=1, T=6, V=30522)
+    (1, 6, 30522)
+    >>> out.seq_relationship_logits.shape   # NSP logits  (B=1, 2)
+    (1, 2)
     """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
@@ -636,11 +997,58 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
 
 
 class BertForNextSentencePrediction(PretrainedModel):
-    """BERT + standalone NSP head (Devlin et al. §3.1 pretraining task 2).
+    r"""BERT with the standalone next-sentence-prediction head.
 
-    Note: NSP was abandoned by RoBERTa / ALBERT / DeBERTa as adding no
-    downstream value, so this class is kept mostly for parity with the
-    original BERT release and historical experiments.
+    Wraps the bidirectional encoder with a single binary linear classifier
+    operating on the pooled ``[CLS]`` embedding.  This is pre-training task 2
+    of Devlin et al., 2018 §3.1 in isolation — useful for reproducing
+    historical experiments or as a sanity check for sentence-pair coherence.
+
+    NSP was abandoned by RoBERTa, ALBERT, and DeBERTa as offering no
+    downstream value, so prefer :class:`BertForMaskedLM` (MLM-only) or
+    :class:`BertForSequenceClassification` for new work.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying bidirectional encoder trunk.
+    cls : nn.Module
+        NSP head — a single ``Linear(hidden_size, 2)`` over the pooled
+        embedding.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §3.1 (task #2).
+
+    When ``labels`` is provided, the loss is the binary cross-entropy
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{NSP}}
+            = -\frac{1}{B}\sum_{b=1}^{B}
+              \log p_{\theta}(y_b \mid x_b^{(A)}, x_b^{(B)}),
+
+    where :math:`y_b \in \{0, 1\}` denotes IsNext vs. NotNext.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForNextSentencePrediction
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForNextSentencePrediction(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])
+    >>> token_type_ids = lucid.tensor([[0, 0, 0, 1, 1]])
+    >>> out = model(input_ids, token_type_ids=token_type_ids)
+    >>> out.logits.shape   # (B=1, 2)
+    (1, 2)
     """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig
@@ -676,12 +1084,69 @@ class BertForNextSentencePrediction(PretrainedModel):
 
 
 class BertForCausalLM(PretrainedModel):
-    """BERT trunk used as a left-to-right LM.
+    r"""BERT trunk repurposed as a left-to-right (causal) language model.
 
-    Standard BERT attends bidirectionally; this wrapper injects a causal mask
-    on top of the existing additive attention mask so the encoder behaves as
-    a decoder.  The LM head is the same tied projection used by
-    :class:`BertForMaskedLM`.
+    Standard BERT attends bidirectionally; this wrapper injects a
+    lower-triangular causal mask on top of the existing additive
+    attention/padding mask so the same encoder weights behave as a decoder.
+    The LM head is the same tied projection used by
+    :class:`BertForMaskedLM`.  Use this class when you want to apply
+    pre-trained BERT weights to a generative or sequence-continuation task.
+
+    Parameters
+    ----------
+    config : BertConfig
+        BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        ties the LM decoder weight to the input embedding matrix.
+
+    Attributes
+    ----------
+    bert : BertModel
+        Underlying transformer trunk; only ``embeddings`` and ``encoder`` are
+        invoked in ``forward`` (the pooler is bypassed).
+    cls : nn.Module
+        Tied LM prediction head — same architecture as
+        :class:`BertForMaskedLM`.
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805); causal adaptation follows the standard left-to-right
+    LM masking scheme.
+
+    The additive causal mask :math:`M \in \mathbb{R}^{T \times T}` satisfies
+
+    .. math::
+
+        M_{ij} =
+        \begin{cases}
+            0, & j \le i \\
+            -10^{4}, & j > i
+        \end{cases}
+
+    and is broadcast against a padding mask when present.  Loss (when
+    ``labels`` is supplied) uses the standard next-token shift:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{CLM}}
+            = -\frac{1}{B(T-1)} \sum_{b,t}
+              \log p_{\theta}(y_{b, t+1} \mid x_{b,\le t}),
+
+    with positions labelled ``-100`` excluded.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import BertConfig, BertForCausalLM
+    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    ...                  num_attention_heads=2, intermediate_size=512)
+    >>> model = BertForCausalLM(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, V=30522)
+    (1, 4, 30522)
     """
 
     config_class: ClassVar[type[BertConfig]] = BertConfig

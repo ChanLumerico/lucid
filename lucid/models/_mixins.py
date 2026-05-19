@@ -23,7 +23,35 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class FeatureInfo:
-    """Output spec for one stage of a backbone (timm-compatible)."""
+    r"""Specification of one stage emitted by a feature-extracting backbone.
+
+    Used by detection / segmentation heads that consume a *feature
+    pyramid*: each entry describes the channel count and spatial
+    down-sampling factor of one backbone stage relative to the input.
+
+    Attributes
+    ----------
+    stage : int
+        Zero-based stage index, in the order the backbone emits features
+        (typically deepening from stage 0 toward higher receptive field).
+    num_channels : int
+        Channel count of the feature map at this stage.
+    reduction : int
+        Spatial down-sampling factor vs the network input — e.g. ``4``,
+        ``8``, ``16``, ``32`` for the canonical CNN stage taps.
+
+    Notes
+    -----
+    The layout is timm-compatible: detection heads that consume timm
+    backbones drop in unchanged.  See :class:`BackboneMixin` for the
+    protocol that produces a ``list[FeatureInfo]``.
+
+    Examples
+    --------
+    >>> info = FeatureInfo(stage=3, num_channels=512, reduction=32)
+    >>> info.reduction
+    32
+    """
 
     stage: int
     num_channels: int
@@ -31,27 +59,89 @@ class FeatureInfo:
 
 
 class BackboneMixin(ABC):
-    """Marker mixin: a model that can serve as a feature extractor.
+    r"""Marker mixin for models usable as feature extractors.
 
-    Subclasses must implement :meth:`forward_features` returning the
-    deepest stage's feature map and :attr:`feature_info` enumerating
-    every emitted stage's channel / stride spec.
+    Detection and segmentation heads consume backbones through this small
+    protocol: a ``forward_features(x)`` that emits the deepest stage's
+    feature map, and a ``feature_info`` property enumerating every
+    emitted stage's spec.  Implementing classes get a uniform interface
+    that head builders (FPN, BiFPN, …) can target.
+
+    Notes
+    -----
+    The mixin carries no state — it only declares two abstract slots.
+    Subclasses MUST override:
+
+    * :meth:`forward_features` — returns the final stage's feature map
+      (and may stash intermediate stages on ``self`` for downstream
+      use).
+    * :attr:`feature_info` — returns a ``list[FeatureInfo]`` with one
+      entry per stage the backbone exposes.
+
+    Examples
+    --------
+    >>> class MyBackbone(PretrainedModel, BackboneMixin):
+    ...     def forward_features(self, x):
+    ...         return self.stages(x)
+    ...     @property
+    ...     def feature_info(self):
+    ...         return [FeatureInfo(0, 64, 4), FeatureInfo(1, 128, 8)]
     """
 
     @abstractmethod
-    def forward_features(self, x: Tensor) -> Tensor: ...
+    def forward_features(self, x: Tensor) -> Tensor:
+        r"""Run the backbone's feature-extraction pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input image batch, shape ``(B, C, H, W)``.
+
+        Returns
+        -------
+        Tensor
+            Feature map at the deepest stage.  Concrete subclasses may
+            additionally stash earlier stages on the instance so
+            multi-stage consumers can fetch them.
+        """
+        ...
 
     @property
     @abstractmethod
-    def feature_info(self) -> list[FeatureInfo]: ...
+    def feature_info(self) -> list[FeatureInfo]:
+        r"""Return the per-stage feature pyramid specification."""
+        ...
 
 
 class ClassificationHeadMixin:
-    """Standard ``classifier`` Linear head + transfer-learning hook.
+    r"""Standard Linear classification head + transfer-learning helper.
 
-    Subclasses must call :meth:`_build_classifier` in their ``__init__``
-    *after* ``super().__init__(config)`` to install the head.  Use
-    :meth:`reset_classifier` to swap ``num_classes`` post hoc.
+    Adds two methods to any classifier subclass: :meth:`_build_classifier`
+    constructs a ``Linear`` (optionally wrapped in a ``Dropout``)
+    according to the config, and :meth:`reset_classifier` swaps in a
+    freshly-initialised Linear with a new ``num_classes`` for transfer
+    learning.
+
+    Notes
+    -----
+    The contract: subclasses must call ``self._build_classifier(...)``
+    inside their ``__init__`` *after* ``super().__init__(config)`` so the
+    backbone is in place before the head is attached.
+
+    The host class exposes ``self.classifier`` as either a plain
+    ``nn.Linear`` (no dropout configured) or an ``nn.Sequential`` of
+    ``[Dropout, Linear]``; :meth:`reset_classifier` handles both shapes.
+
+    Examples
+    --------
+    >>> class MyClassifier(PretrainedModel, ClassificationHeadMixin):
+    ...     def __init__(self, config):
+    ...         super().__init__(config)
+    ...         self.backbone = MyBackbone(config)
+    ...         self._build_classifier(config.hidden_size, config.num_classes,
+    ...                                dropout=config.dropout)
+    >>> model = MyClassifier(cfg)
+    >>> model.reset_classifier(num_classes=10)
     """
 
     classifier: nn.Module
@@ -63,6 +153,26 @@ class ClassificationHeadMixin:
         *,
         dropout: float = 0.0,
     ) -> None:
+        r"""Install the classification head on ``self.classifier``.
+
+        Parameters
+        ----------
+        in_features : int
+            Channel count entering the head (backbone pooled-feature
+            dimension).
+        num_classes : int
+            Output class count.
+        dropout : float, optional, keyword-only, default=0.0
+            Drop probability.  When positive, the head becomes
+            ``Sequential(Dropout(p), Linear(in, out))``; when zero, just a
+            bare ``Linear``.
+
+        Notes
+        -----
+        Called from the subclass ``__init__`` after the backbone is
+        constructed.  Idempotent: calling twice replaces the previous
+        head.
+        """
         if dropout > 0.0:
             self.classifier = nn.Sequential(
                 nn.Dropout(dropout),
@@ -72,7 +182,34 @@ class ClassificationHeadMixin:
             self.classifier = nn.Linear(in_features, num_classes)
 
     def reset_classifier(self, num_classes: int) -> None:
-        """Replace the final Linear with a freshly initialised one."""
+        r"""Replace the final ``Linear`` with a freshly initialised one.
+
+        Parameters
+        ----------
+        num_classes : int
+            New output dimensionality.  ``in_features`` is preserved from
+            the current head.
+
+        Raises
+        ------
+        RuntimeError
+            If the head is a ``Sequential`` containing no ``Linear``.
+        NotImplementedError
+            If the head is some other custom module type.
+
+        Notes
+        -----
+        Used during transfer learning — typically called immediately
+        after :meth:`from_pretrained` to adapt a 1000-class ImageNet head
+        to a downstream task with a different label set.
+
+        Examples
+        --------
+        >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+        >>> model.reset_classifier(num_classes=10)
+        >>> model(lucid.randn(1, 3, 224, 224)).logits.shape
+        (1, 10)
+        """
         if isinstance(self.classifier, nn.Linear):
             in_features = int(self.classifier.in_features)
             self.classifier = nn.Linear(in_features, num_classes)
@@ -98,15 +235,29 @@ class ClassificationHeadMixin:
 
 
 class MaskedLMMixin:
-    """Per-token cross-entropy loss helper for masked-LM / token-classification
-    heads.
+    r"""Per-token cross-entropy loss helper for masked-LM / token-class heads.
 
-    Encoder text families (BERT, RoFormer, …) all reduce a ``(B, T, V)`` logit
-    tensor against ``(B, T)`` labels with the same recipe: flatten the
-    sequence axis into the batch axis, then run
+    Encoder text families (BERT, RoFormer, …) all reduce a ``(B, T, V)``
+    logit tensor against ``(B, T)`` labels with the same recipe: flatten
+    the sequence axis into the batch axis, then run
     :func:`lucid.nn.functional.cross_entropy` with ``ignore_index=-100``.
-    Centralising the call here removes a 3-line stanza repeated across every
-    ``ForMaskedLM`` / ``ForTokenClassification`` class.
+    Centralising the call here removes a 3-line stanza repeated across
+    every ``ForMaskedLM`` / ``ForTokenClassification`` class.
+
+    Notes
+    -----
+    The mixin is stateless and exposes a single ``@staticmethod`` —
+    inheriting from it is purely a documentation / discoverability
+    convenience; the same effect is obtained by calling
+    ``MaskedLMMixin.compute_lm_loss(...)`` directly.
+
+    Examples
+    --------
+    >>> class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
+    ...     def forward(self, input_ids, labels=None):
+    ...         logits = self.head(self.bert(input_ids))
+    ...         loss = self.compute_lm_loss(logits, labels) if labels else None
+    ...         return MaskedLMOutput(logits=logits, loss=loss)
     """
 
     @staticmethod
@@ -116,17 +267,39 @@ class MaskedLMMixin:
         *,
         ignore_index: int = -100,
     ) -> Tensor:
-        """Flatten ``(B, T, V)`` logits against ``(B, T)`` labels and reduce
-        with cross-entropy.
+        r"""Compute per-token cross-entropy loss for an LM head.
 
-        Args:
-            logits:       ``(B, T, V)`` per-token logits.
-            labels:       ``(B, T)`` int target ids.  Entries equal to
-                          ``ignore_index`` contribute zero loss / gradient.
-            ignore_index: Token id to skip (HuggingFace convention: ``-100``).
+        Parameters
+        ----------
+        logits : Tensor
+            ``(B, T, V)`` per-token logits.
+        labels : Tensor
+            ``(B, T)`` int target token ids.  Entries equal to
+            ``ignore_index`` contribute zero loss and zero gradient.
+        ignore_index : int, optional, keyword-only, default=-100
+            Token id to skip during reduction.  Convention from the wider
+            ML ecosystem: ``-100`` marks non-masked positions in MLM and
+            padding tokens in token classification.
 
-        Returns:
-            Scalar loss tensor.
+        Returns
+        -------
+        Tensor
+            Scalar loss tensor (mean over the contributing positions).
+
+        Notes
+        -----
+        Implementation: flatten ``logits`` to ``(B*T, V)`` and ``labels``
+        to ``(B*T,)``, cast labels to ``long``, then call
+        :func:`lucid.nn.functional.cross_entropy`.  No probabilistic
+        reweighting; the loss is a plain mean over non-ignored positions.
+
+        Examples
+        --------
+        >>> logits = lucid.randn(2, 10, 32000)
+        >>> labels = lucid.randint(0, 32000, (2, 10))
+        >>> loss = MaskedLMMixin.compute_lm_loss(logits, labels)
+        >>> loss.shape
+        ()
         """
         B, T, V = logits.shape
         return F.cross_entropy(
@@ -142,29 +315,36 @@ class MaskedLMMixin:
 
 
 class GenerationMixin:
-    """Decoder-only autoregressive sampling for causal LM heads.
+    r"""Decoder-only autoregressive sampling for causal LM heads.
+
+    Provides :meth:`generate` — greedy or stochastic next-token sampling
+    with temperature, top-k, top-p (nucleus), and repetition-penalty
+    knobs.  Per-sequence stopping at ``eos_token_id`` is honoured.
 
     Concrete subclasses must:
 
     * Inherit from :class:`lucid.models.PretrainedModel`.
-    * Have a ``forward(input_ids, ...)`` that returns a
-      :class:`lucid.models.CausalLMOutput` with ``logits`` shaped
+    * Define ``forward(input_ids, ...)`` returning a
+      :class:`lucid.models.CausalLMOutput` with ``logits`` of shape
       ``(B, T, vocab_size)``.
     * Expose a ``config`` attribute carrying ``vocab_size`` /
-      ``pad_token_id`` / ``bos_token_id`` / ``eos_token_id`` (the fields
+      ``pad_token_id`` / ``bos_token_id`` / ``eos_token_id`` (fields
       :class:`lucid.models.text.LanguageModelConfig` defines).
 
-    The mixin then provides :meth:`generate` — greedy or stochastic
-    sampling with ``temperature``, ``top_k``, ``top_p``, and
-    ``repetition_penalty`` knobs.  Sampling stops per-sequence when
-    ``eos_token_id`` is produced (or unconditionally at ``max_length``).
-
-    Notes on cache
-    --------------
+    Notes
+    -----
     The first implementation does **not** use the model's KV cache —
     every step re-runs the full prefix.  This is correct but O(T²) in
-    the prefix length.  Plan to add cache support when GPT-2 lands and
-    we have a concrete ``past_key_values`` shape to plumb through.
+    the prefix length.  Cache support is planned once GPT-2 lands and a
+    concrete ``past_key_values`` shape is available to plumb through.
+
+    Examples
+    --------
+    >>> model = AutoModelForCausalLM.from_pretrained("gpt2_small")
+    >>> prompt = lucid.tensor([[1, 2, 3]]).long()
+    >>> out = model.generate(prompt, max_new_tokens=10, do_sample=True, top_p=0.9)
+    >>> out.shape
+    (1, 13)
     """
 
     @lucid.no_grad()
@@ -182,35 +362,76 @@ class GenerationMixin:
         pad_token_id: int | None = None,
         eos_token_id: int | None = None,
     ) -> Tensor:
-        """Autoregressively extend ``input_ids`` until a stop condition.
+        r"""Autoregressively extend ``input_ids`` until a stop condition.
 
-        Args:
-            input_ids: ``(B, T_prompt)`` int prompt tokens.
-            max_length: Total sequence length cap (prompt + generated).
-                Ignored when ``max_new_tokens`` is supplied.
-            max_new_tokens: Cap on tokens to generate, additive over the
-                prompt length.  Takes precedence over ``max_length``.
-            do_sample: ``False`` → greedy argmax; ``True`` → temperature
-                / top-k / top-p sampling.
-            temperature: Logit divisor before softmax.  ``< 1`` sharpens,
-                ``> 1`` flattens.  Ignored under greedy decoding.
-            top_k: Keep only the K highest-probability tokens before
-                sampling.  ``None`` disables.
-            top_p: Nucleus sampling — keep the smallest token set whose
-                cumulative probability ≥ ``top_p``.  ``None`` disables.
-            repetition_penalty: Multiply the logit of every previously
-                generated token by ``1 / penalty`` (HuggingFace
-                convention).  ``1.0`` → no effect.
-            pad_token_id: Token id used to pad finished sequences after
-                they emit ``eos_token_id``.  Defaults to
-                ``config.pad_token_id`` then 0.
-            eos_token_id: Stop generating per-sequence once this id is
-                emitted.  Defaults to ``config.eos_token_id``.
+        Parameters
+        ----------
+        input_ids : Tensor
+            ``(B, T_prompt)`` int prompt tokens.
+        max_length : int, optional, keyword-only, default=20
+            Total sequence length cap (prompt + generated).  Ignored when
+            ``max_new_tokens`` is supplied.
+        max_new_tokens : int or None, optional, keyword-only
+            Cap on the number of *new* tokens to generate, additive over
+            the prompt length.  Takes precedence over ``max_length``.
+        do_sample : bool, optional, keyword-only, default=False
+            ``False`` → greedy argmax decoding; ``True`` → stochastic
+            sampling honouring ``temperature`` / ``top_k`` / ``top_p``.
+        temperature : float, optional, keyword-only, default=1.0
+            Logit divisor before softmax.  ``< 1`` sharpens, ``> 1``
+            flattens.  Ignored under greedy decoding.
+        top_k : int or None, optional, keyword-only
+            Keep only the K highest-probability tokens before sampling.
+            ``None`` disables.
+        top_p : float or None, optional, keyword-only
+            Nucleus sampling — keep the smallest token set whose
+            cumulative probability ≥ ``top_p``.  ``None`` disables.
+        repetition_penalty : float, optional, keyword-only, default=1.0
+            Multiply the logit of every previously generated token by
+            ``1 / penalty`` (and by ``penalty`` if the logit is
+            negative).  ``1.0`` → no effect; ``> 1`` discourages
+            repetition.
+        pad_token_id : int or None, optional, keyword-only
+            Token id used to pad finished sequences after they emit
+            ``eos_token_id``.  Defaults to ``config.pad_token_id``, then
+            ``0`` if unset.
+        eos_token_id : int or None, optional, keyword-only
+            Stop generating per-sequence once this id is emitted.
+            Defaults to ``config.eos_token_id``.
 
-        Returns:
-            ``(B, T_final)`` int Tensor where ``T_final`` ≤ ``max_length``
+        Returns
+        -------
+        Tensor
+            ``(B, T_final)`` int tensor where ``T_final`` ≤ ``max_length``
             (or ``T_prompt + max_new_tokens``).  Sequences that hit
             ``eos_token_id`` early are right-padded with ``pad_token_id``.
+
+        Raises
+        ------
+        ValueError
+            If ``input_ids`` is not 2-D.
+
+        Notes
+        -----
+        Decorated with :func:`lucid.no_grad` — generation never builds an
+        autograd graph.  Each step:
+
+        1. Materialise the current prefix as ``(B, T_cur)``.
+        2. Run a forward pass; take logits at the last position.
+        3. Apply repetition penalty.
+        4. Greedy argmax, or apply temperature / top-k / top-p and
+           inverse-CDF sample one token per row.
+        5. Replace finished rows' tokens with ``pad_token_id``.
+
+        Loop breaks early when every row has emitted EOS.
+
+        Examples
+        --------
+        >>> model = AutoModelForCausalLM.from_pretrained("gpt")
+        >>> tokens = lucid.tensor([[1, 2, 3]]).long()
+        >>> out = model.generate(tokens, max_new_tokens=5)
+        >>> out.shape
+        (1, 8)
         """
         # ── Resolve token id defaults from the host model's config ────────
         cfg = getattr(self, "config", None)
@@ -292,13 +513,28 @@ class GenerationMixin:
 
 
 def _apply_repetition_penalty(logits: Tensor, prefix: Tensor, penalty: float) -> Tensor:
-    """Multiply logits of tokens already in ``prefix`` by ``1 / penalty``
-    (or ``penalty`` if the logit is negative — HuggingFace convention).
+    r"""Multiply logits of tokens already in ``prefix`` by ``1 / penalty``
+    (or ``penalty`` if the logit is negative).
 
-    Args:
-        logits: ``(B, vocab)`` next-token logits.
-        prefix: ``(B, T)`` int tokens generated so far.
-        penalty: Strictly positive float; ``> 1`` discourages repetition.
+    Parameters
+    ----------
+    logits : Tensor
+        ``(B, vocab)`` next-token logits.
+    prefix : Tensor
+        ``(B, T)`` int tokens generated so far.
+    penalty : float
+        Strictly positive float; ``> 1`` discourages repetition.
+
+    Returns
+    -------
+    Tensor
+        Adjusted ``(B, vocab)`` logits.
+
+    Notes
+    -----
+    Convention popularised by the wider ML ecosystem: positive logits
+    shrink toward 0, negative logits grow more negative — both directions
+    push the affected token's probability down.
     """
     B = int(logits.shape[0])
     vocab = int(logits.shape[1])
@@ -318,7 +554,22 @@ def _apply_repetition_penalty(logits: Tensor, prefix: Tensor, penalty: float) ->
 
 
 def _top_k_filter(logits: Tensor, k: int) -> Tensor:
-    """Set every logit outside the top-K to ``-inf`` per row."""
+    r"""Set every logit outside the per-row top-K to ``-inf``.
+
+    Parameters
+    ----------
+    logits : Tensor
+        ``(B, vocab)`` logits.
+    k : int
+        Number of tokens to retain per row.  If ``k >= vocab``, ``logits``
+        is returned unchanged.
+
+    Returns
+    -------
+    Tensor
+        Masked logits where non-top-K entries are replaced with a very
+        large negative number (``-1e9``).
+    """
     B = int(logits.shape[0])
     vocab = int(logits.shape[1])
     if k >= vocab:
@@ -335,7 +586,22 @@ def _top_k_filter(logits: Tensor, k: int) -> Tensor:
 
 
 def _top_p_filter(logits: Tensor, p: float) -> Tensor:
-    """Nucleus filtering: keep smallest set whose cumulative softmax ≥ p."""
+    r"""Nucleus (top-p) filtering — keep the smallest token set with
+    cumulative softmax probability ≥ ``p``.
+
+    Parameters
+    ----------
+    logits : Tensor
+        ``(B, vocab)`` logits.
+    p : float
+        Cumulative probability threshold in ``(0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        Masked logits where tokens outside the nucleus are set to
+        ``-1e9``.
+    """
     B = int(logits.shape[0])
     vocab = int(logits.shape[1])
     NEG_INF = -1e9
@@ -361,11 +627,26 @@ def _top_p_filter(logits: Tensor, p: float) -> Tensor:
 
 
 def _multinomial_one(probs: Tensor, *, device: str) -> Tensor:
-    """Sample one token per row from ``(B, vocab)`` probability tensor.
+    r"""Draw exactly one token per row from a categorical distribution.
 
-    Lucid does not (yet) ship ``lucid.multinomial``, so we materialise the
-    row, run the standard inverse-CDF sampling in Python on a single
-    ``lucid.rand`` draw per row, and return ``(B,)`` int tokens.
+    Parameters
+    ----------
+    probs : Tensor
+        ``(B, vocab)`` non-negative probability tensor — rows should sum
+        to 1.
+    device : str, keyword-only
+        Device string to allocate the random draws on.
+
+    Returns
+    -------
+    Tensor
+        ``(B,)`` long tensor of sampled token ids.
+
+    Notes
+    -----
+    Lucid does not (yet) ship ``lucid.multinomial`` so this routine uses
+    a Python inverse-CDF loop on a single uniform draw per row.
+    Acceptable because it only runs once per generation step.
     """
     B = int(probs.shape[0])
     vocab = int(probs.shape[1])
@@ -390,20 +671,36 @@ def _multinomial_one(probs: Tensor, *, device: str) -> Tensor:
 
 
 class DiffusionMixin:
-    """Standard sampling loop for diffusion-family generative models.
+    r"""Reverse-process sampling loop for diffusion-family generative models.
 
     Concrete subclasses must:
 
-      * Inherit from :class:`lucid.models.PretrainedModel`.
-      * Have a ``forward(sample, timestep, ...) -> DiffusionModelOutput`` that
-        returns the network's prediction at the supplied timestep.
-      * Expose a ``config`` attribute carrying ``sample_size`` / ``in_channels``
-        (the fields :class:`DiffusionModelConfig` defines).
+    * Inherit from :class:`lucid.models.PretrainedModel`.
+    * Define ``forward(sample, timestep, ...) -> DiffusionModelOutput``
+      that returns the network's prediction at the supplied timestep.
+    * Expose a ``config`` attribute carrying ``sample_size`` /
+      ``in_channels`` (fields :class:`DiffusionModelConfig` defines) — or
+      explicitly pass ``generator_shape`` to :meth:`generate`.
 
-    The mixin then provides :meth:`generate` — a vanilla reverse-process loop
-    parametrised by an externally-supplied :class:`Scheduler`.  Sampler
-    choice (DDPM, DDIM, …) is therefore a runtime knob, not baked into the
-    model class.
+    The mixin then provides :meth:`generate` — a vanilla reverse-process
+    loop parametrised by an externally-supplied
+    :class:`DiffusionScheduler`.  Sampler choice (DDPM, DDIM, …) is thus
+    a runtime knob rather than baked into the model class.
+
+    Notes
+    -----
+    The mixin is stateless.  All hyper-parameters (number of inference
+    steps, image shape, batch size) flow through :meth:`generate`'s
+    keyword arguments; the model class itself stays sampler-agnostic.
+
+    Examples
+    --------
+    >>> from lucid.models import DDPMScheduler, AutoModelForImageGeneration
+    >>> model = AutoModelForImageGeneration.from_pretrained("ddpm_cifar_gen")
+    >>> scheduler = DDPMScheduler(num_train_timesteps=1000)
+    >>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50)
+    >>> out.samples.shape
+    (4, 3, 32, 32)
     """
 
     @lucid.no_grad()
@@ -417,22 +714,60 @@ class DiffusionMixin:
         return_intermediates: bool = False,
         device: str = "cpu",
     ) -> GenerationOutput:
-        """Sample ``n_samples`` images via the reverse diffusion process.
+        r"""Sample ``n_samples`` images via the reverse diffusion process.
 
-        Args:
-            scheduler:           Already-constructed :class:`Scheduler`.
-            n_samples:           Batch size of the output.
-            num_inference_steps: If ``None``, uses ``scheduler.timesteps`` as
-                                 already set; otherwise calls
-                                 ``scheduler.set_timesteps`` first.
-            generator_shape:     Override the per-sample tensor shape (defaults
-                                 to ``(in_channels, H, W)`` from ``self.config``).
-            return_intermediates: If True, also returns the per-step samples.
-            device:              Where to allocate the noise tensor.
+        Parameters
+        ----------
+        scheduler : DiffusionScheduler
+            Already-constructed scheduler (DDPM, DDIM, etc.).  Encapsulates
+            the noise schedule and the per-step update rule.
+        n_samples : int, optional, keyword-only, default=1
+            Batch size of the generated output.
+        num_inference_steps : int or None, optional, keyword-only
+            If ``None``, the scheduler's ``timesteps`` are used as-is;
+            otherwise ``scheduler.set_timesteps(num_inference_steps, ...)``
+            is called first to (re)build the timestep schedule.
+        generator_shape : tuple[int, ...] or None, optional, keyword-only
+            Per-sample tensor shape, ``(C, H, W)``.  When omitted,
+            defaults to ``(in_channels, H, W)`` derived from
+            ``self.config``.
+        return_intermediates : bool, optional, keyword-only, default=False
+            If ``True``, every per-step sample is recorded and returned
+            in :attr:`GenerationOutput.intermediates`.
+        device : str, optional, keyword-only, default="cpu"
+            Device to allocate the initial Gaussian noise tensor on.
 
-        Returns:
-            :class:`GenerationOutput` with the final ``(n_samples, C, H, W)``
-            samples (and optional list of intermediates).
+        Returns
+        -------
+        GenerationOutput
+            ``.samples`` is the final ``(n_samples, C, H, W)`` batch;
+            ``.intermediates`` is populated when ``return_intermediates``
+            is ``True``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``generator_shape`` is ``None`` and the model lacks a
+            ``config`` with ``sample_size`` / ``in_channels`` fields.
+
+        Notes
+        -----
+        Decorated with :func:`lucid.no_grad` — sampling never builds an
+        autograd graph.  Standard reverse-process loop:
+
+        1. Draw :math:`x_T \sim \mathcal{N}(0, I)`.
+        2. For each ``t`` in ``scheduler.timesteps`` (descending):
+           run the model forward, then apply
+           ``scheduler.step(model_pred, t, x_t)`` to obtain :math:`x_{t-1}`.
+
+        Examples
+        --------
+        >>> model = AutoModelForImageGeneration.from_pretrained("ddpm_cifar_gen")
+        >>> scheduler = DDPMScheduler(num_train_timesteps=1000)
+        >>> out = model.generate(scheduler, n_samples=4, num_inference_steps=50,
+        ...                      device="cpu")
+        >>> out.samples.shape
+        (4, 3, 32, 32)
         """
         from lucid.models._output import GenerationOutput
 

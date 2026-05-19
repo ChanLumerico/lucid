@@ -1,4 +1,21 @@
-"""ResNet family — backbone + image classification."""
+"""ResNet model family — feature-extracting backbones and image classifiers.
+
+Implements the residual-learning architecture from He et al., "Deep Residual
+Learning for Image Recognition", CVPR 2016 (arXiv:1512.03385), plus a few
+widely-cited follow-up variants:
+
+- **Canonical ResNets** — :func:`resnet_18`, :func:`resnet_34`,
+  :func:`resnet_50`, :func:`resnet_101`, :func:`resnet_152` and their
+  ``*_cls`` classification counterparts.
+- **Wide ResNets** (Zagoruyko & Komodakis, BMVC 2016) —
+  :func:`wide_resnet_50`, :func:`wide_resnet_101`.
+- **Deep bottleneck variants** — :func:`resnet_200`, :func:`resnet_269`.
+
+Every variant shares the same architecture-specifying dataclass
+:class:`ResNetConfig`.  Use the factory functions for paper-cited
+configurations; pass ``**overrides`` to tweak individual fields without
+writing a config by hand.
+"""
 
 from lucid.models.vision.resnet._config import ResNetConfig
 from lucid.models.vision.resnet._model import ResNet, ResNetForImageClassification

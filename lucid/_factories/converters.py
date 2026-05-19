@@ -267,8 +267,9 @@ def _to_impl(
     # ``lucid.tensor([1, 2, 3])`` pattern doesn't transitively import
     # numpy.  Returns None for inputs the fast path can't handle (ragged
     # lists, BF16 / C64 dtype targets, ndarray) — caller falls through.
-    fast = _try_numpy_free_to_impl(data, _dtype_eng if dtype is not None else None,
-                                   _device_eng, _rg)
+    fast = _try_numpy_free_to_impl(
+        data, _dtype_eng if dtype is not None else None, _device_eng, _rg
+    )
     if fast is not None:
         return fast
 

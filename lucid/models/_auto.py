@@ -15,7 +15,28 @@ if TYPE_CHECKING:
 
 
 class _BaseAutoClass:
-    """Common implementation shared by all Auto* classes."""
+    r"""Internal mixin shared by every public ``AutoModelFor*`` shell.
+
+    Concrete subclasses set a single class variable, ``_task``, naming the
+    task tag (``"image-classification"``, ``"causal-lm"``, …).  The shared
+    :meth:`from_pretrained` implementation then resolves a registered model
+    name (or a local directory) through the registry and verifies that the
+    registry entry's declared task matches ``_task``.
+
+    Attributes
+    ----------
+    _task : ClassVar[str]
+        Task tag every subclass must override.  Used to gate registry
+        lookups so that, for example, ``AutoModelForCausalLM`` refuses to
+        return an image-classification head.
+
+    Notes
+    -----
+    This class is **not** part of the public API — instantiating it raises
+    ``EnvironmentError`` and even subclasses are not meant to be
+    constructed.  Use the documented ``AutoModelFor*.from_pretrained(...)``
+    class method instead.
+    """
 
     _task: ClassVar[str]
 
@@ -29,10 +50,59 @@ class _BaseAutoClass:
     def from_pretrained(
         cls, name_or_path: str, *, strict: bool = True
     ) -> PretrainedModel:
-        """Resolve *name_or_path* and return a fully constructed model.
+        r"""Resolve a name or local checkpoint directory and return a model.
 
-        Accepts either a registered model name (``"resnet_50"``) or a local
-        directory that contains ``config.json`` + ``weights.lucid``.
+        Two input modes are supported:
+
+        1. **Registered model name** (e.g. ``"resnet_50"``) — looked up in
+           the global registry.  The registry entry's ``_task`` must equal
+           ``cls._task``; otherwise a :class:`ValueError` is raised.  The
+           factory is then invoked with ``pretrained=True``.
+        2. **Local directory** containing ``config.json`` and either
+           ``model.safetensors`` or ``weights.lucid``.  The directory is
+           dispatched to :func:`_load_from_directory`, which parses
+           ``model_type`` from the config and finds the matching registry
+           entry under the requested task.
+
+        Parameters
+        ----------
+        name_or_path : str
+            Either a registered model name (case-insensitive, ``-`` and
+            ``_`` interchangeable) or a path to a directory written by
+            :meth:`PretrainedModel.save_pretrained`.
+        strict : bool, optional, keyword-only, default=True
+            Forwarded to :meth:`PretrainedModel.load_state_dict`.  When
+            ``False``, mismatched / missing keys are tolerated — useful
+            when fine-tuning a backbone whose head shape differs from the
+            checkpoint.
+
+        Returns
+        -------
+        PretrainedModel
+            A fully constructed concrete subclass with weights loaded.
+
+        Raises
+        ------
+        ValueError
+            If the name is unknown, or the registered task does not match
+            ``cls._task``.
+        FileNotFoundError
+            If a local directory is supplied but ``config.json`` /
+            ``weights`` files are absent.
+
+        Notes
+        -----
+        The lookup is performed by :func:`_registry_lookup` and uses
+        ``_normalize`` so case and hyphen / underscore differences are
+        ignored.  When a near-match is found, the error message includes
+        up to three Levenshtein-near suggestions.
+
+        Examples
+        --------
+        >>> from lucid.models import AutoModelForImageClassification
+        >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+        >>> type(model).__name__
+        'ResNetForImageClassification'
         """
         from lucid.models._registry import _registry_lookup, is_model
 
@@ -52,16 +122,52 @@ class _BaseAutoClass:
 
 
 def _load_from_directory(task: str, path: Path, *, strict: bool) -> PretrainedModel:
-    """Load a model from a ``config.json`` + ``weights.lucid`` directory.
+    r"""Reconstruct a model from a ``config.json`` + weights directory.
 
-    Strategy:
-    1. Parse ``model_type`` from ``config.json``.
-    2. Find the matching registry entry (task + model_type).
-    3. **Fast path** (model_class provided): instantiate the class directly with
-       the saved config — zero redundant parameter allocation.
-    4. **Fallback** (no model_class): call factory(pretrained=False) once to
-       discover the class, then instantiate with the saved config.  Still only
-       one factory call, not two.
+    Two-step strategy:
+
+    1. Parse ``model_type`` from ``config.json`` to identify the family.
+    2. Find a registry entry whose ``(task, model_type)`` match.
+
+    The registry entry may carry an optional ``model_class`` shortcut so
+    the model can be instantiated directly with the saved config; when
+    absent, the factory is called once with ``pretrained=False`` only to
+    discover the concrete class, after which the saved config is used to
+    re-instantiate it (this guarantees parameter shapes match the
+    checkpoint exactly).
+
+    Parameters
+    ----------
+    task : str
+        Task tag the caller's Auto class requires (e.g.
+        ``"image-classification"``).
+    path : pathlib.Path
+        Directory containing ``config.json`` and a weights file.
+    strict : bool, keyword-only
+        Forwarded to :meth:`PretrainedModel.load_state_dict`.
+
+    Returns
+    -------
+    PretrainedModel
+        A fresh model populated with the on-disk state dict.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``config.json`` or neither weights file (``model.safetensors``
+        or ``weights.lucid``) exist under ``path``.
+    ValueError
+        If ``config.json`` is malformed, ``model_type`` is missing, or no
+        registered entry matches the ``(task, model_type)`` pair.
+    TypeError
+        If the matching model class fails to declare ``config_class`` or
+        the weights file does not contain a state-dict.
+
+    Notes
+    -----
+    SafeTensors are preferred when present (``model.safetensors``); the
+    pickle-based ``weights.lucid`` is the fallback.  Both are loaded via
+    :func:`lucid.load` with ``weights_only=True``.
     """
     import json
 
@@ -135,7 +241,38 @@ def _load_from_directory(task: str, path: Path, *, strict: bool) -> PretrainedMo
 
 
 class AutoConfig:
-    """Generic config loader — returns the :class:`ModelConfig` for any name."""
+    r"""Generic config loader — return the :class:`ModelConfig` for any name.
+
+    Use this when you only need the hyper-parameter dataclass for a
+    registered model, without paying the cost of allocating its weights.
+    Typical applications: introspecting layer widths, building parity
+    tests, or feeding the config into a custom training loop.
+
+    Notes
+    -----
+    :class:`AutoConfig` is not instantiable — call
+    :meth:`AutoConfig.from_pretrained` directly.  Resolution has two
+    fast paths:
+
+    1. If the registry entry carries a ``default_config`` (recommended
+       for all Phase 1+ registrations), that config object is returned
+       immediately — zero model construction.
+    2. Otherwise, the factory is invoked with ``pretrained=False`` and the
+       returned model's ``.config`` is read; no checkpoint is downloaded.
+
+    Local directories are also accepted: ``config.json`` is parsed and a
+    matching ``ModelConfig`` subclass is reconstructed via
+    :meth:`ModelConfig.from_dict`.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoConfig
+    >>> cfg = AutoConfig.from_pretrained("resnet_50")
+    >>> cfg.model_type
+    'resnet'
+    >>> cfg.num_classes
+    1000
+    """
 
     def __init__(self) -> None:
         raise EnvironmentError(
@@ -144,12 +281,43 @@ class AutoConfig:
 
     @classmethod
     def from_pretrained(cls, name_or_path: str) -> ModelConfig:
-        """Return the config for *name_or_path* without allocating model weights.
+        r"""Return the :class:`ModelConfig` for ``name_or_path``.
 
-        Fast path: if the registry entry carries a ``default_config``, it is
-        returned directly (O(1), no factory call).  Otherwise the factory is
-        called with ``pretrained=False`` and its ``.config`` attribute is
-        returned — still no weight download.
+        Parameters
+        ----------
+        name_or_path : str
+            Registered model name (e.g. ``"vit_base_16"``) or a directory
+            saved by :meth:`PretrainedModel.save_pretrained`.
+
+        Returns
+        -------
+        ModelConfig
+            The default configuration dataclass for that family (no
+            weights are downloaded or instantiated).
+
+        Raises
+        ------
+        ValueError
+            If the name is unknown to the registry.
+        FileNotFoundError
+            If a directory path is supplied but ``config.json`` is absent.
+
+        Notes
+        -----
+        Resolution order:
+
+        1. ``default_config`` fast path — O(1) when the registry entry
+           pre-declared one at ``@register_model`` time.
+        2. Factory fallback — invokes the factory with ``pretrained=False``
+           and reads ``.config`` off the resulting model.  Still allocates
+           parameters, but no checkpoint download.
+
+        Examples
+        --------
+        >>> from lucid.models import AutoConfig
+        >>> cfg = AutoConfig.from_pretrained("bert_base")
+        >>> cfg.hidden_size
+        768
         """
         from lucid.models._registry import _REGISTRY, _normalize, is_model
 
@@ -177,6 +345,36 @@ class AutoConfig:
 
 
 def _load_config_from_directory(path: Path) -> ModelConfig:
+    r"""Reconstruct a :class:`ModelConfig` from a ``config.json`` directory.
+
+    Parameters
+    ----------
+    path : pathlib.Path
+        Directory containing a ``config.json`` produced by
+        :meth:`ModelConfig.save`.
+
+    Returns
+    -------
+    ModelConfig
+        Concrete config subclass matching the on-disk ``model_type``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``config.json`` is absent.
+    ValueError
+        If the JSON is malformed, ``model_type`` is missing, or no
+        registered entry matches the declared ``model_type``.
+    TypeError
+        If the matching model class has no ``config_class`` attribute.
+
+    Notes
+    -----
+    Fast path uses ``default_config`` from the registry entry to discover
+    the config class without instantiating the model.  Fallback calls the
+    factory with ``pretrained=False`` once just to identify the config
+    class, then re-parses the saved JSON through ``from_dict``.
+    """
     import json
 
     from lucid.models._registry import _REGISTRY
@@ -212,71 +410,292 @@ def _load_config_from_directory(path: Path) -> ModelConfig:
 
 
 class AutoModel(_BaseAutoClass):
-    """Backbone — returns the family base class (no task head)."""
+    r"""Auto-dispatching wrapper that loads the *backbone* of any family.
+
+    "Backbone" means the family base class with no task head attached
+    (e.g. ``ResNet``, not ``ResNetForImageClassification``).  Use this
+    when you want raw feature outputs or intend to attach a custom head
+    on top.
+
+    Notes
+    -----
+    Each registered model carries a ``_task`` tag; this class filters on
+    ``_task == "base"``.  A given name can resolve to different classes
+    under different ``AutoModelFor*`` shells — for example,
+    ``AutoModel.from_pretrained("resnet_50")`` returns ``ResNet`` whereas
+    ``AutoModelForImageClassification.from_pretrained("resnet_50")``
+    returns ``ResNetForImageClassification``.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModel
+    >>> backbone = AutoModel.from_pretrained("resnet_50")
+    >>> type(backbone).__name__
+    'ResNet'
+    >>> import lucid
+    >>> features = backbone.forward_features(lucid.randn(1, 3, 224, 224))
+    >>> features.shape
+    (1, 2048, 7, 7)
+    """
 
     _task: ClassVar[str] = "base"
 
 
 class AutoModelForImageClassification(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a registered image classifier.
+
+    The Auto* family lets you write framework-agnostic code that picks
+    the right model at runtime — given a model name string, Lucid looks
+    up the registry, verifies the model's declared task matches, and
+    returns the concrete subclass with weights loaded.
+
+    Notes
+    -----
+    Each registered model declares a class-level
+    ``_task: ClassVar[str]``.  This Auto class restricts lookups to
+    entries tagged ``"image-classification"`` and raises
+    :class:`ValueError` on mismatch — preventing accidental loads of a
+    detection backbone or a language model as a classifier.
+
+    The returned object is a concrete subclass such as
+    ``ResNetForImageClassification`` or ``ViTForImageClassification``;
+    its ``forward(images)`` returns an :class:`ImageClassificationOutput`
+    with ``logits`` of shape ``(B, num_classes)``.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForImageClassification
+    >>> model = AutoModelForImageClassification.from_pretrained("resnet_50")
+    >>> type(model).__name__
+    'ResNetForImageClassification'
+    >>> import lucid
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.logits.shape
+    (1, 1000)
+    """
+
     _task: ClassVar[str] = "image-classification"
 
 
 class AutoModelForObjectDetection(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a registered object detector.
+
+    Resolves names like ``"faster_rcnn"`` / ``"detr_resnet50"`` /
+    ``"yolo_v3"`` to their concrete ``{Family}ForObjectDetection``
+    subclass.
+
+    Notes
+    -----
+    The detector forward returns an :class:`ObjectDetectionOutput` with
+    ``logits`` (class scores per proposal / query) and ``pred_boxes``
+    (predicted box coordinates).  Two-stage detectors additionally
+    populate ``proposals`` so postprocessing can be reconstructed from
+    the output alone.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForObjectDetection
+    >>> model = AutoModelForObjectDetection.from_pretrained("detr_resnet50")
+    >>> type(model).__name__
+    'DETRForObjectDetection'
+    """
+
     _task: ClassVar[str] = "object-detection"
 
 
 class AutoModelForSemanticSegmentation(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a semantic-segmentation model.
+
+    Resolves names like ``"fcn_resnet50"`` / ``"unet"`` /
+    ``"maskformer_resnet50"`` to their concrete
+    ``{Family}ForSemanticSegmentation`` subclass.
+
+    Notes
+    -----
+    The forward returns a :class:`SemanticSegmentationOutput` whose
+    ``logits`` carry per-pixel class scores of shape
+    ``(B, num_classes, H, W)``.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForSemanticSegmentation
+    >>> model = AutoModelForSemanticSegmentation.from_pretrained("fcn_resnet50")
+    >>> type(model).__name__
+    'FCNForSemanticSegmentation'
+    """
+
     _task: ClassVar[str] = "semantic-segmentation"
 
 
 class AutoModelForCausalLM(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a causal (left-to-right) LM.
+
+    Resolves names like ``"gpt"`` / ``"gpt2_small"`` to their concrete
+    ``{Family}LMHeadModel`` subclass.  The model is suitable for
+    next-token prediction and autoregressive generation via
+    :meth:`GenerationMixin.generate`.
+
+    Notes
+    -----
+    The forward returns a :class:`CausalLMOutput` with ``logits`` shaped
+    ``(B, T, vocab_size)`` and optionally a ``past_key_values`` tuple for
+    cache-friendly decoding.  Models tagged ``"causal-lm"`` typically
+    expose ``config.vocab_size`` / ``pad_token_id`` / ``bos_token_id`` /
+    ``eos_token_id``.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForCausalLM
+    >>> model = AutoModelForCausalLM.from_pretrained("gpt")
+    >>> type(model).__name__
+    'GPTLMHeadModel'
+    """
+
     _task: ClassVar[str] = "causal-lm"
 
 
 class AutoModelForMaskedLM(_BaseAutoClass):
+    r"""Auto-dispatching wrapper that loads a masked-LM model.
+
+    Resolves names like ``"bert_base_mlm"`` / ``"roformer_mlm"`` to their
+    concrete ``{Family}ForMaskedLM`` subclass — bidirectional models
+    trained with the masked-token reconstruction objective.
+
+    Notes
+    -----
+    The forward returns a :class:`MaskedLMOutput` with ``logits`` of shape
+    ``(B, T, vocab_size)``.  Subclasses use
+    :meth:`MaskedLMMixin.compute_lm_loss` to reduce against ``(B, T)``
+    label tensors with ``ignore_index=-100`` for non-masked positions.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForMaskedLM
+    >>> model = AutoModelForMaskedLM.from_pretrained("bert_base_mlm")
+    >>> type(model).__name__
+    'BertForMaskedLM'
+    """
+
     _task: ClassVar[str] = "masked-lm"
 
 
 class AutoModelForSeq2SeqLM(_BaseAutoClass):
-    """Encoder-decoder seq2seq head — translation, summarisation.
+    r"""Auto-dispatching wrapper that loads a seq2seq (encoder-decoder) model.
 
-    Covers Vaswani Transformer today; T5 / BART / mBART are the natural
-    future consumers.
+    Covers translation / summarisation heads — currently the Vaswani
+    Transformer family (``transformer_base_seq2seq`` /
+    ``transformer_large_seq2seq``).  T5, BART, and mBART are the natural
+    future consumers of this Auto class.
+
+    Notes
+    -----
+    The forward returns a :class:`Seq2SeqLMOutput` carrying decoder
+    ``logits``, optional decoder hidden states / attentions, and the
+    encoder's outputs so callers can cache them across multiple decoder
+    passes.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForSeq2SeqLM
+    >>> model = AutoModelForSeq2SeqLM.from_pretrained("transformer_base_seq2seq")
+    >>> type(model).__name__
+    'TransformerForSeq2SeqLM'
     """
 
     _task: ClassVar[str] = "seq2seq-lm"
 
 
 class AutoModelForSequenceClassification(_BaseAutoClass):
-    """Sentence-level classifier — GLUE / sentiment / NLI fine-tunes.
+    r"""Auto-dispatching wrapper that loads a sentence-level classifier.
 
-    Resolves to ``{Family}ForSequenceClassification`` across BERT / GPT /
-    GPT-2 / RoFormer / Transformer.
+    Resolves to ``{Family}ForSequenceClassification`` for GLUE / sentiment
+    / NLI fine-tunes across BERT / GPT / GPT-2 / RoFormer / Transformer.
+
+    Notes
+    -----
+    The forward returns an output whose ``logits`` are shaped
+    ``(B, num_labels)``.  Each backbone wraps a pooled representation
+    (CLS for BERT-style, last non-pad token for GPT-style) through a
+    Linear classifier head.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForSequenceClassification
+    >>> model = AutoModelForSequenceClassification.from_pretrained("bert_base_cls")
+    >>> type(model).__name__
+    'BertForSequenceClassification'
     """
 
     _task: ClassVar[str] = "sequence-classification"
 
 
 class AutoModelForTokenClassification(_BaseAutoClass):
-    """Per-token classifier — NER, POS tagging.
+    r"""Auto-dispatching wrapper that loads a per-token classifier.
 
-    Resolves to ``{Family}ForTokenClassification`` across BERT / RoFormer /
-    Transformer.
+    Resolves to ``{Family}ForTokenClassification`` for NER / POS-tagging
+    fine-tunes across BERT / RoFormer / Transformer.
+
+    Notes
+    -----
+    The forward returns ``logits`` of shape ``(B, T, num_labels)`` and is
+    typically trained against ``(B, T)`` label tensors via
+    :meth:`MaskedLMMixin.compute_lm_loss`, which folds the sequence axis
+    into the batch axis for cross-entropy.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForTokenClassification
+    >>> model = AutoModelForTokenClassification.from_pretrained("bert_base_token_cls")
+    >>> type(model).__name__
+    'BertForTokenClassification'
     """
 
     _task: ClassVar[str] = "token-classification"
 
 
 class AutoModelForQuestionAnswering(_BaseAutoClass):
-    """SQuAD-style span head — start / end logits over the sequence.
+    r"""Auto-dispatching wrapper that loads a SQuAD-style QA head.
 
-    Resolves to ``{Family}ForQuestionAnswering`` across BERT / RoFormer.
+    Resolves to ``{Family}ForQuestionAnswering`` across BERT / RoFormer —
+    models that emit per-token start / end logits over the input sequence.
+
+    Notes
+    -----
+    The forward returns an output with ``start_logits`` and ``end_logits``
+    of shape ``(B, T)`` each.  Inference picks the (start, end) span that
+    maximises ``start_logits[s] + end_logits[e]`` subject to ``s <= e``.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForQuestionAnswering
+    >>> model = AutoModelForQuestionAnswering.from_pretrained("bert_base_qa")
+    >>> type(model).__name__
+    'BertForQuestionAnswering'
     """
 
     _task: ClassVar[str] = "question-answering"
 
 
 class AutoModelForImageGeneration(_BaseAutoClass):
-    """Image-generation head — VAE / DDPM / NCSN and future flow models."""
+    r"""Auto-dispatching wrapper that loads an image-generation model.
+
+    Resolves names like ``"vae_gen"`` / ``"ddpm_cifar_gen"`` /
+    ``"ncsn_cifar_gen"`` to their concrete ``{Family}ForImageGeneration``
+    subclass — VAE / DDPM / NCSN today, future flow models tomorrow.
+
+    Notes
+    -----
+    All ``ForImageGeneration`` subclasses expose a ``generate(...)``
+    method (via :class:`DiffusionMixin` for diffusion models, or a
+    family-specific method for VAEs).  See
+    :class:`GenerationOutput` for the structure of the returned samples.
+
+    Examples
+    --------
+    >>> from lucid.models import AutoModelForImageGeneration
+    >>> model = AutoModelForImageGeneration.from_pretrained("ddpm_cifar_gen")
+    >>> type(model).__name__
+    'DDPMForImageGeneration'
+    """
 
     _task: ClassVar[str] = "image-generation"
