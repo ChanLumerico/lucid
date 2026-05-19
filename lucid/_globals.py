@@ -24,6 +24,11 @@ def set_default_device(d: _dev | str) -> None:
     global _default_device_str
     with _lock:
         _default_device_str = d if isinstance(d, str) else d.type
+    # Invalidate the converters' ndarray-fast-path device cache.
+    # Imported lazily to avoid a circular dependency at module load time.
+    from lucid._factories.converters import _invalidate_default_device_cache
+
+    _invalidate_default_device_cache()
 
 
 def get_default_device() -> str:

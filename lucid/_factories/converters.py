@@ -41,6 +41,36 @@ _DTYPE_STRUCT: dict[_C_engine.Dtype, tuple[str, int]] = {
 }
 
 
+# Cached default-device engine enum for the ndarray fast path.
+# Default device is stable per process (set once by user or defaults to CPU);
+# resolving it on every ``lucid.tensor(np_array)`` call cost ~50 ns × 120 k
+# calls = 6 ms / epoch — small but eliminable.
+_CACHED_DEFAULT_DEVICE_ENUM: _C_engine.Device | None = None
+
+
+def _default_device_enum_cached() -> _C_engine.Device:
+    """Return the resolved default-device engine enum from a per-process cache.
+
+    Invalidation: cleared by :func:`lucid._globals.set_default_device` —
+    user explicitly switching the global default is rare.  Code that
+    passes an explicit ``device=`` kwarg bypasses this helper and goes
+    through ``_parse_device`` as before.
+    """
+    global _CACHED_DEFAULT_DEVICE_ENUM
+    if _CACHED_DEFAULT_DEVICE_ENUM is None:
+        from lucid._dispatch import _parse_device
+        from lucid._globals import get_default_device
+
+        _CACHED_DEFAULT_DEVICE_ENUM = _parse_device(get_default_device())
+    return _CACHED_DEFAULT_DEVICE_ENUM
+
+
+def _invalidate_default_device_cache() -> None:
+    """Called by ``lucid._globals.set_default_device`` after a change."""
+    global _CACHED_DEFAULT_DEVICE_ENUM
+    _CACHED_DEFAULT_DEVICE_ENUM = None
+
+
 def _flatten_with_shape(data: object) -> tuple[list[int], list[object]] | None:
     """Walk a (possibly nested) list/tuple, returning ``(shape, flat)``.
 
@@ -242,6 +272,31 @@ def _to_impl(
 ) -> _C_engine.TensorImpl:
     """Convert list/scalar/ndarray/Tensor -> TensorImpl."""
     from lucid._tensor.tensor import Tensor as _Tensor
+
+    # 3.1.1: hottest path — bare ``lucid.tensor(np_array)`` with no dtype
+    # override, default device, no grad.  Skips ``normalize_factory_kwargs``,
+    # ``_try_numpy_free_to_impl``'s isinstance gauntlet, the dead-code
+    # ``_np_dtype_to_engine`` lookup, and ``np.ascontiguousarray`` (gated
+    # on the C_CONTIGUOUS flag).  Profile of LeNet-5/MNIST training showed
+    # ``lucid.tensor`` called 120k times per epoch via the DataLoader
+    # per-sample tensorisation pattern — this fast path turns a ~9 µs
+    # per-call hot loop into ~1 µs.
+    if (
+        dtype is None
+        and device is None
+        and not requires_grad
+        and type(data).__module__ == "numpy"
+        and type(data).__name__ == "ndarray"
+    ):
+        if data.flags["C_CONTIGUOUS"]:  # type: ignore[attr-defined]
+            return _C_engine.TensorImpl(data, _default_device_enum_cached(), False)
+        # Non-contiguous → still hot, just one more numpy call.
+        np = _require_numpy("lucid.tensor() ndarray fast path")
+        return _C_engine.TensorImpl(
+            np.ascontiguousarray(data),  # type: ignore[attr-defined]
+            _default_device_enum_cached(),
+            False,
+        )
 
     _dtype_eng, _device_eng, _rg = normalize_factory_kwargs(
         dtype, device, requires_grad

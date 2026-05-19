@@ -19,6 +19,202 @@ _No changes yet._
 
 ---
 
+## [3.2.0] — 2026-05-17
+
+Training-pipeline overhead pass.  After 3.1.0's GPU-kernel fusion sweep
+brought Lucid's forward to within +3.9 % of raw MLX, the next layer of
+the LeNet-5 / MNIST profile pointed at Python-side hot loops: 48 % of
+per-epoch time in `engine.item()`, 30 % in `Dataset.__getitem__` →
+`lucid.tensor(np_array)`, and small per-call overhead in `.to(device)`
+/ `.long()`.  3.2.0 collapses each of those.
+
+A new isolated raw-MLX vs PyTorch-MPS measurement (Mac Studio M4 Max,
+LeNet-5, varying batch sizes) also corrected the framing of the gap:
+**MLX matches or beats PyTorch MPS at the GPU-kernel level** for
+forward+backward on training-scale workloads (0.52× at BS=16, 0.60× at
+BS=64).  The ~2.2× wall-clock gap on the full training script is
+non-GPU pipeline overhead; 3.2.0 targets it directly.
+
+### New (small) public API
+
+- **`lucid.nn.functional.accuracy(logits, target, *, dim=-1)`** — fused
+  `(argmax == target).float().mean()`, returns a 0-d Tensor in
+  `[0, 1]`.
+- **`lucid.nn.functional.correct_count(logits, target, *, dim=-1)`** —
+  fused `(argmax == target).long().sum()`, returns a 0-d int64 Tensor.
+  Pairs naturally with the `running_correct += ... .item()` training
+  pattern: one Python wrap instead of four.
+- **`Dataset.__getitems__(indices) -> already-batched`** — optional
+  protocol method.  When present on a dataset, `DataLoader` skips the
+  per-sample `__getitem__` loop + `collate_fn` and passes the result
+  through directly.  Backward-compatible: datasets without
+  `__getitems__` keep working unchanged.
+- **`TensorDataset.__getitems__`** — vectorised override using fancy
+  indexing.  When the wrapped tensors live on Metal, the resulting
+  batch tensors stay on Metal — no per-batch `.to(device)` round-trip
+  in the training loop.
+
+### Performance
+
+- **`TensorImpl::item()` direct memory read.**  Old path:
+  `to_bytes()` → `download_gpu_to_cpu()` → fresh `CpuStorage` +
+  `py::bytes` allocation + extract + decode.  New path: pointer-offset
+  into the storage buffer (CPU) or `mx::array::data<T>()` after `eval()`
+  (GPU), then decode the single scalar.  cProfile of LeNet-5/MNIST
+  training counted `engine.item()` as 1.63 s of 3.34 s per epoch (48 %).
+  Measured on M4 Max:
+    * CPU 0-d item: ~5 µs → **0.25 µs** (20× faster)
+    * Metal item (already-evaluated): ~870 µs → **0.29 µs** (3000× faster — old path's bytes-roundtrip was the dominant cost)
+    * Metal item-after-compute: **221 µs**, which is now the genuine
+      `mx::array::eval()` sync cost; PyTorch MPS's `.item()` is in the
+      same ballpark.  Lucid overhead is effectively zero on this path.
+- **`Tensor.to(device=...)` no-op fast path.**  When the kwarg is the
+  only argument and the tensor is already on the requested device, the
+  whole arg-parse + dtype/device normalisation walk is bypassed via a
+  string→engine.Device lookup table.  3 µs/call → 1.12 µs/call (M4 Max).
+- **dtype shortcut methods no-op fast paths** (`.long() .float()
+  .double() .half() .int() .bool() .cpu() .metal()`).  All eight now
+  short-circuit to `return self` when the source already matches the
+  target dtype/device — the docstrings already documented this as
+  no-op semantics, but the implementation went through `to(...)` 's
+  full machinery (~2.5 µs).  Now ~0.96 µs.
+- **`lucid.tensor(np.ndarray)` fast path.**  For the hot
+  `lucid.tensor(np_array)` case with no dtype/device override, skip
+  `normalize_factory_kwargs`, the `_try_numpy_free_to_impl` isinstance
+  gauntlet, `_np_dtype_to_engine`'s `np.dtype.name` lookup, and
+  `np.ascontiguousarray` (gated on the array's `C_CONTIGUOUS` flag).
+  Microbench: 9.0 µs/call → 2.17 µs/call (4.1× faster).
+- **`TensorDataset` + vectorised batch fetch.**  With pre-tensorised
+  data, the DataLoader path goes from 60 k `__getitem__` calls +
+  64-element stack per batch to one fancy index per wrapped tensor.
+  Measured per-batch cost on (60 000, 1, 28, 28) MNIST-shape:
+    * old `NumpyMNIST` per-sample pattern: **793 µs/batch**
+    * `TensorDataset` (CPU): 722 µs/batch (−9 %)
+    * **`TensorDataset` (Metal, dataset already on GPU): 246 µs/batch
+      (−69 %, 3.2× faster)**
+  The Metal-resident variant also makes the per-batch `.to(device=)` in
+  user code a no-op (already on Metal) — both effects compose.
+
+### Notes on what *didn't* help (investigated, then deferred)
+
+A pipeline-overhead profile evaluated four hypothetical wins.  Two of
+them lost; only one of the wins generalises cleanly to all users.
+
+| Mode | 1-epoch wall | vs baseline | Verdict |
+|---|---|---|---|
+| BASELINE (per-sample tensor + 2 `.item()` / batch) | 2.50 s | — | reference |
+| Lazy GPU metric accumulation (no per-batch `.item()`) | 2.68 s | +7.1 % | **regression** — lazy graph bloats |
+| Batched-collate (`__getitem__` returns numpy slice) | 1.89 s | −24.5 % | win, ships as the `TensorDataset` pattern above |
+| Multi-worker DataLoader (nw=2) | 2.52 s | +0.8 % | neutral on MNIST-sized data |
+| Multi-worker DataLoader (nw=4) | 2.66 s | +6.4 % | regression on small data |
+
+Net: per-batch `.item()` sync is *not* a bottleneck once the dataset
+path is fast — it actually acts as natural backpressure that keeps the
+MLX lazy graph manageable.  Multi-worker DataLoader stays on the
+roadmap for ImageNet-scale workloads but adds no value here.
+
+### Tests
+
+361 tests pass: 142 nn unit + 73 nn parity + 118 ops/optim/autograd
+parity + 11 data utils parity + integration data-pipeline + factory /
+device / metal regression.  No public-API regression.  All 3.1.0
+behaviour preserved.
+
+### Migration note
+
+No code change required to benefit from the `.item()` / `.to()` /
+`lucid.tensor(np_array)` fast paths — they're internal.
+
+For the `TensorDataset` win, the recommended pattern is:
+
+```python
+# 3.2.0+ recommended pattern for in-memory datasets
+import lucid
+from lucid.utils.data import TensorDataset, DataLoader
+
+# Pre-load entire dataset to GPU once
+X = lucid.tensor(train_x_np).to("metal")
+y = lucid.tensor(train_y_np).to("metal")
+loader = DataLoader(TensorDataset(X, y), batch_size=64, shuffle=True)
+
+# Training loop — batches are already on Metal
+for x, y in loader:
+    logits = model(x)
+    loss = loss_fn(logits, y)
+    loss.backward()
+    opt.step()
+```
+
+The per-sample `__getitem__ → lucid.tensor(np_array)` pattern continues
+to work for streaming or larger-than-memory datasets.
+
+---
+
+## [3.1.1] — 2026-05-17
+
+DataLoader-side Python overhead pass.  Deep cProfile of LeNet-5/MNIST
+training revealed that `lucid.tensor(np_array)` is the single hottest
+Python call in a real training loop (≈ 120 k calls / epoch via
+per-sample tensorisation inside `Dataset.__getitem__`), accounting for
+**~33 % of per-epoch CPU time** at BS=64.  The non-GPU side of Lucid's
+PyTorch gap — not GPU kernel speed — is what 3.1.1 targets.
+
+### Performance
+
+- **`lucid.tensor(np_array)` fast path.**  For the hot case
+  `lucid.tensor(np_array)` with no dtype / device / requires_grad
+  override, skip:
+    * `normalize_factory_kwargs` (dtype + device parsing — ~150 ns/call)
+    * `_try_numpy_free_to_impl` isinstance gauntlet (ndarray bails out)
+    * `_np_dtype_to_engine` (`.name` lookup → string formatting — measured
+      at ~120 ns/call on M1 Pro just for ``np.dtype.name``)
+    * `np.ascontiguousarray` (gated on the array's `C_CONTIGUOUS` flag —
+      a no-op when the array is already contiguous, but the call itself
+      cost ~1 µs)
+  When the array is already C-contiguous, the path collapses to a
+  single `_C_engine.TensorImpl(arr, default_device, False)` constructor
+  call.  Microbench on M1 Pro:
+    * Before: 9.0 µs / call (60 k iter median, fp32 (1, 28, 28) array)
+    * After: **2.17 µs / call (−76 %, 4.1× faster)**
+- **Cached default-device enum.**  Resolving the default device through
+  `get_default_device() → _parse_device` cost ~50 ns × 120 k = ~6 ms /
+  epoch.  Cached now in `_CACHED_DEFAULT_DEVICE_ENUM`; invalidated by
+  `lucid.set_default_device` (rare in practice — set once per process).
+
+### Notes on what *didn't* help
+
+A deep training-pipeline profile evaluated four hypothetical wins:
+
+| Mode | Wall-clock (1 epoch) | vs baseline | Verdict |
+|---|---|---|---|
+| BASELINE (per-sample `lucid.tensor` + 2 `.item()` / batch) | 2.50 s | — | reference |
+| Lazy GPU metric accumulation (no per-batch `.item()`) | 2.68 s | **+7.1 %** | **regression** — lazy graph bloats |
+| Batched-collate (`__getitem__` returns numpy slice) | 1.89 s | −24.5 % | win |
+| Batched-collate + lazy metric (combined) | 1.65 s | −34.1 % | best |
+| Multi-worker DataLoader (nw=2) | 2.52 s | +0.8 % | neutral |
+| Multi-worker DataLoader (nw=4) | 2.66 s | +6.4 % | regression on small data |
+
+Key takeaways folded into the 3.1.1 release:
+
+- `.item()` per-batch sync is **not** the bottleneck — removing it
+  causes lazy-graph bloat that costs more than the saved sync time.
+  Per-batch sync acts as natural backpressure.
+- Multi-worker DataLoader **does not help** for cheap-to-load datasets
+  (MNIST-size).  Subprocess spawn + IPC overhead exceeds the loading
+  cost.  Reserve `num_workers > 0` for ImageNet-scale data.
+- The biggest realisable win — batched `__getitem__` returning numpy
+  slices instead of pre-tensorised samples — is a *user-side* pattern,
+  not a Lucid internal change.  The 3.1.1 fast path makes even the
+  legacy pre-tensorised pattern 4× faster, so existing code benefits
+  without modification.
+
+### Tests
+
+171 factory + ops parity tests pass (same coverage as 3.1.0).
+No public API surface change; drop-in replacement for 3.1.0.
+
+---
+
 ## [3.1.0] — 2026-05-16
 
 Metal performance pass — focus on lazy-graph fusion.  Earned by a

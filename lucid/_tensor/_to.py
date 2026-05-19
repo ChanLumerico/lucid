@@ -16,6 +16,18 @@ if TYPE_CHECKING:
 
 _builtin_bool = bool  # save before any local shadowing
 
+# 3.2.0 fast paths: string→engine.Device lookup table, so the hot training
+# loop ``x.to(device="metal")`` never allocates a Python ``device(...)``
+# instance just to extract ``._engine``.  cProfile measured ~65 k .to()
+# calls / epoch in LeNet-5/MNIST; each parsing pass through ``_parse_device``
+# costs ~2.5 µs.  The dict miss path (unknown string) falls back to
+# ``_parse_device`` which still raises a proper TypeError for garbage input.
+_STR_TO_DEVICE_ENUM: dict[str, _C_engine.Device] = {
+    "cpu":   _C_engine.Device.CPU,
+    "metal": _C_engine.Device.GPU,
+    "gpu":   _C_engine.Device.GPU,
+}
+
 
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
@@ -52,6 +64,31 @@ def _inject_to(cls: type) -> None:
         device transfers between CPU and Metal copy the dispatch label but
         share physical DRAM when the underlying buffer is a SharedStorage.
         """
+        # 3.2.0 ultra-fast path for the dominant training-loop pattern
+        # ``x.to(device="metal")`` (or ``"cpu"``) where the tensor is already
+        # on that device.  cProfile measured ~65 k .to() calls / epoch on
+        # LeNet-5/MNIST; each call paid ~3 µs walking the full arg-parsing
+        # + dtype/device normalisation path.  This branch short-circuits
+        # the no-op case to a dict lookup + identity-equality compare.
+        if (
+            not args
+            and not kwargs.get("copy", False)
+            and "dtype" not in kwargs
+            and len(kwargs) == 1
+            and "device" in kwargs
+        ):
+            dev_in = kwargs["device"]
+            cur = self._impl.device
+            target_enum: _C_engine.Device | None = None
+            if isinstance(dev_in, str):
+                target_enum = _STR_TO_DEVICE_ENUM.get(dev_in)
+            elif isinstance(dev_in, _C_engine.Device):
+                target_enum = dev_in
+            elif isinstance(dev_in, _device_cls):
+                target_enum = dev_in._engine
+            if target_enum is not None and target_enum == cur:
+                return self
+
         target_device = self._impl.device
         target_dtype = self._impl.dtype
         copy = _builtin_bool(kwargs.get("copy", False))
@@ -153,6 +190,12 @@ def _inject_to(cls: type) -> None:
         CPU; this call only updates the dispatch target so subsequent ops
         run through the MLX/Metal backend.
         """
+        # 3.2.0 no-op fast path — skip the to() machinery entirely when
+        # the tensor is already on the target device.  ~3 µs saved per
+        # call; multiplied by training-loop call frequency it's
+        # meaningful even though each individual call looks trivial.
+        if self._impl.device == _C_engine.Device.GPU:
+            return self
         return to(self, _C_engine.Device.GPU)
 
     def cpu(self: Tensor) -> Tensor:
@@ -172,6 +215,8 @@ def _inject_to(cls: type) -> None:
         call relabels the dispatch target so subsequent ops route through
         Apple Accelerate (vDSP / vForce / BLAS / LAPACK).
         """
+        if self._impl.device == _C_engine.Device.CPU:
+            return self
         return to(self, _C_engine.Device.CPU)
 
     def float(self: Tensor) -> Tensor:
@@ -189,6 +234,8 @@ def _inject_to(cls: type) -> None:
         ``float32``.  Otherwise performs a copy-cast via the engine's
         ``astype`` op; the device is preserved.
         """
+        if self._impl.dtype == _C_engine.Dtype.F32:
+            return self
         return to(self, float32)
 
     def double(self: Tensor) -> Tensor:
@@ -206,6 +253,8 @@ def _inject_to(cls: type) -> None:
         ``float64``.  Otherwise allocates a new tensor with widened
         precision; device is preserved.
         """
+        if self._impl.dtype == _C_engine.Dtype.F64:
+            return self
         return to(self, float64)
 
     def half(self: Tensor) -> Tensor:
@@ -224,6 +273,8 @@ def _inject_to(cls: type) -> None:
         ``inf`` for magnitudes above ~65504 and underflow to 0 for
         magnitudes below ~6e-5.
         """
+        if self._impl.dtype == _C_engine.Dtype.F16:
+            return self
         return to(self, float16)
 
     def int(self: Tensor) -> Tensor:
@@ -241,6 +292,8 @@ def _inject_to(cls: type) -> None:
         ``int32``.  Casts from floating point truncate toward zero;
         values outside ``[-2**31, 2**31 - 1]`` produce undefined results.
         """
+        if self._impl.dtype == _C_engine.Dtype.I32:
+            return self
         return to(self, int32)
 
     def long(self: Tensor) -> Tensor:
@@ -258,6 +311,12 @@ def _inject_to(cls: type) -> None:
         ``int64``.  Casts from floating point truncate toward zero.
         Typically used for index tensors (e.g. ``gather`` / ``scatter``).
         """
+        # 3.2.0 no-op fast path — the dominant case in training is
+        # ``lucid.tensor(int(label)).long()``, where the input is already
+        # I64 (Python ints default to I64).  Skip the to() machinery.
+        # cProfile measured ~60 k .long() calls / epoch = ~0.15 s.
+        if self._impl.dtype == _C_engine.Dtype.I64:
+            return self
         return to(self, int64)
 
     def bool(self: Tensor) -> Tensor:
@@ -275,6 +334,8 @@ def _inject_to(cls: type) -> None:
         ``bool``.  Otherwise each element is reduced to ``True`` if
         nonzero and ``False`` if zero.
         """
+        if self._impl.dtype == _C_engine.Dtype.Bool:
+            return self
         return to(self, bool_)
 
     for _name, _fn in [

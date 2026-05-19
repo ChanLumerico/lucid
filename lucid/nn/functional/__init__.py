@@ -134,6 +134,7 @@ from lucid.nn.functional.sampling import (
     channel_shuffle,
     pdist,
 )
+from lucid.nn.functional.metrics import accuracy, correct_count
 
 __all__ = [
     # activations
@@ -259,4 +260,7 @@ __all__ = [
     "multi_head_attention_forward",
     "channel_shuffle",
     "pdist",
+    # metrics
+    "accuracy",
+    "correct_count",
 ]
