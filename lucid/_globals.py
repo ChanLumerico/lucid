@@ -12,6 +12,13 @@ def set_default_dtype(d: dtype) -> None:
     global _default_dtype
     with _lock:
         _default_dtype = d
+    # 3.2.2: invalidate the dispatch-side default-dtype cache so that
+    # subsequent ``normalize_factory_kwargs`` calls re-resolve the
+    # engine enum.  Imported lazily to avoid circular dependency at
+    # module load time.
+    from lucid._dispatch import _invalidate_default_dtype_cache
+
+    _invalidate_default_dtype_cache()
 
 
 def get_default_dtype() -> dtype:
@@ -24,11 +31,15 @@ def set_default_device(d: _dev | str) -> None:
     global _default_device_str
     with _lock:
         _default_device_str = d if isinstance(d, str) else d.type
-    # Invalidate the converters' ndarray-fast-path device cache.
-    # Imported lazily to avoid a circular dependency at module load time.
-    from lucid._factories.converters import _invalidate_default_device_cache
+    # Invalidate BOTH device caches:
+    #   - ``lucid._factories.converters`` for the ndarray-fast-path
+    #   - ``lucid._dispatch`` for ``normalize_factory_kwargs``
+    # Imported lazily to avoid circular dependency at module load time.
+    from lucid._factories.converters import _invalidate_default_device_cache as _c_inv
+    from lucid._dispatch import _invalidate_default_device_cache as _d_inv
 
-    _invalidate_default_device_cache()
+    _c_inv()
+    _d_inv()
 
 
 def get_default_device() -> str:

@@ -316,13 +316,13 @@ public:
                 scan_ext_backward_loop<true>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
                                              input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
-                return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
+                return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
                 scan_ext_backward_loop<true>(g_cont.data<double>(), y_cont.data<double>(),
                                              dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
-                return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
+                return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else {
                 ErrorBuilder("cummax_backward").not_implemented("dtype");
                 return {};
@@ -362,13 +362,13 @@ public:
                 scan_ext_backward_loop<false>(g_cont.data<float>(), y_cont.data<float>(), dx.data(),
                                               input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
-                return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
+                return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else if (dtype_ == Dtype::F64) {
                 std::vector<double> dx(n, 0.0);
                 scan_ext_backward_loop<false>(g_cont.data<double>(), y_cont.data<double>(),
                                               dx.data(), input_shape_, axis_);
                 ::mlx::core::array dx_arr(dx.data(), shape_mlx, mlx_dt);
-                return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx_arr), dtype_)}};
+                return {Storage{gpu::wrap_mlx_array(std::move(dx_arr), dtype_)}};
             } else {
                 ErrorBuilder("cummin_backward").not_implemented("dtype");
                 return {};

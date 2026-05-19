@@ -1150,6 +1150,17 @@ class _InstanceNormBase(Module):
             self._buffers["running_mean"] = new_rm.detach()
             self._buffers["running_var"] = new_rv.detach()
 
+            # 3.2.2: same leak fix as 3.2.1's BatchNorm — InstanceNorm's
+            # running-stats update is a lazy MLX expression whose parents
+            # chain back through the input activation graph.  Since
+            # running stats are not part of the loss compute path,
+            # ``loss.item()`` never evaluates them and the chain grows
+            # one full forward graph per training step.  Force-eval here
+            # breaks the chain.  Triggered by ``track_running_stats=True``
+            # on Metal (default is False; this fixes the opt-in path).
+            if x._impl.device.name == "GPU":
+                _eval_running_stats_metal(self._buffers)
+
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
         return (

@@ -105,7 +105,7 @@ GpuStorage nextafter_gpu_f32(const GpuStorage& a, const GpuStorage& b) {
     step = mx::where(any_nan, nan_bits, step);
 
     auto out = mx::view(step, mx::float32);
-    return gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::F32);
+    return gpu::wrap_mlx_array(std::move(out), Dtype::F32);
 }
 
 }  // namespace

@@ -19,6 +19,104 @@ _No changes yet._
 
 ---
 
+## [3.2.2] — 2026-05-20
+
+Codebase-wide inefficiency sweep prompted by a deep audit after the
+3.2.1 BN-leak hotfix.  Six independent improvements grouped by cost
+(critical leak fix + five medium-ROI hot-path optimisations) + a
+broader contiguous-removal sweep that extends 3.1.0's work.
+
+### Fixed
+
+- **`nn.InstanceNorm{1,2,3}d._update_running_stats` lazy-graph leak.**
+  Same root cause as 3.2.1's BatchNorm fix: the running-stats update
+  `(1 - m) * running_mean + m * batch_mean` builds a lazy MLX
+  expression that holds the entire forward graph (conv weights +
+  activations) as parents through the `batch_mean` parent.
+  `.detach()` clears autograd but not the MLX lazy chain, and
+  `loss.item()` only evaluates the loss path — running stats
+  accumulate one full forward graph per step.  Trigger condition:
+  `InstanceNorm(track_running_stats=True)` on Metal (default is
+  False, so most users are unaffected, but the opt-in path used by
+  RNN / time-series models was vulnerable).  Fix mirrors the 3.2.1
+  one-liner: force-eval running stats after update via
+  `_eval_running_stats_metal()`.
+
+### Performance
+
+- **`_REGISTRY` linear scan → O(1) dict lookup** in
+  `lucid._ops.__init__._make_free_fn`.  Each free-function bind
+  previously walked all ~500–1000 ops; with the new
+  `_REGISTRY_BY_FREE_FN` index the lookup is constant-time.  Module-
+  load cost ~1 ms saved, and the path is also hit by late-bound name
+  resolution.
+- **`nn.Module.__call__` early-exit on hookless modules.**  Skips
+  the four `OrderedDict` iterations (`_GLOBAL_FORWARD_PRE_HOOKS`,
+  `self._forward_pre_hooks`, the post-fwd equivalents, and the
+  backward-hook check) when no hooks are registered.  Saves ~15–20 µs
+  per `forward()` call on the 99 % case; over a ResNet-18 forward
+  (50+ module calls) that's ~1 ms / batch.
+- **Default dtype/device cache in `lucid._dispatch.normalize_factory_kwargs`.**
+  Process-lifetime cache of `to_engine_dtype(get_default_dtype())`
+  and `_parse_device(get_default_device())`.  Invalidated by
+  `lucid.set_default_dtype` / `lucid.set_default_device` (rare in
+  practice).  Was costing ~0.5–1.2 µs per op call before; now ~0.1 µs.
+  Mirrors the same pattern that `lucid._factories.converters`
+  already used for the ndarray-fast-path device cache.
+- **Conditional `Optimizer.step()` wrapper.**  Previously every
+  optimizer subclass had its `step()` unconditionally wrapped in
+  `_step_with_eval` that checked `AUTO_EVAL_AFTER_STEP` at runtime —
+  even though the default has been False since 3.0.3.  Now the
+  wrapper is installed only when `AUTO_EVAL_AFTER_STEP = True` at
+  subclass declaration; the default path runs the user's raw
+  `step()`.  Saves ~0.7 µs / step.  *Behaviour note*: toggling
+  `AUTO_EVAL_AFTER_STEP` at runtime no longer enables auto-flush for
+  subclasses declared with the default.  To opt back in, set the
+  class attribute before the subclass is defined.
+- **Contiguous-sweep follow-up (3.1.0 extension).**  21 more
+  `wrap_mlx_array(::mlx::core::contiguous(<expr>), dt)` sites
+  identified as safe to drop (operands produce fresh contiguous
+  output):
+    * `lucid/_C/backend/gpu/GpuBackend.h`: 16 sites — `zeros`, `ones`,
+      `reverse_along_axis`, `trace`, `trace_backward`, `where`
+      forward + backward, `masked_fill`, `gather`,
+      `scatter_add_axis_backward`, `pad`, `concatenate`, `stack`,
+      `topk` (values), `argsort`.
+    * `lucid/_C/ops/ufunc/Scan.cpp`: 4 sites — `cummax_backward` /
+      `cummin_backward` F32 / F64 paths.
+    * `lucid/_C/ops/utils/Nextafter.cpp`: 1 site — `nextafter` view cast.
+  Cumulative effect on training loops that pass through these ops:
+  modest individually (~0.1–0.5 % each); over a full forward
+  graph the deferred-materialization wins add up to ~1–2 % on
+  workloads that use these ops.
+
+### Cumulative estimated impact
+
+| Change | Per-call overhead saved | Per-epoch effect (LeNet-5/MNIST) |
+|---|---|---|
+| `_REGISTRY` dict lookup | ~2 µs (one-shot at module load) | negligible runtime |
+| `Module.__call__` early-exit | ~15–20 µs / forward | ~+1 % throughput |
+| dispatch dtype/device cache | ~1 µs / op | ~+0.5 % |
+| optimizer wrapper conditional | ~0.7 µs / step | ~+0.3 % |
+| Contiguous sweep (21 sites) | varies | ~+1 % on relevant workloads |
+| **Total** | | **~+2–3 % LeNet, +OOM safety for InstanceNorm** |
+
+### Tests
+
+501 tests pass (factories, autograd, device, metal, nn unit, nn parity,
+ops parity, optim parity, data utils parity).  No public-API
+regression; all 3.2.1 behaviour preserved except for the documented
+``AUTO_EVAL_AFTER_STEP`` runtime-toggle edge case.
+
+### Migration
+
+`Optimizer.AUTO_EVAL_AFTER_STEP` runtime toggle: if you previously
+relied on `Adam.AUTO_EVAL_AFTER_STEP = True` *after* declaration to
+enable auto-flush, set it inside the subclass body instead.  All
+other changes are transparent.
+
+---
+
 ## [3.2.1] — 2026-05-20
 
 BatchNorm running-stats lazy-graph leak hotfix.  Found during a

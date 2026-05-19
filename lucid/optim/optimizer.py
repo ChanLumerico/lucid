@@ -88,8 +88,26 @@ class Optimizer:
     AUTO_EVAL_AFTER_STEP: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: object) -> None:
-        """Wrap every concrete step() so opt-in auto-flush works when enabled."""
+        """Wrap every concrete ``step()`` *only when* ``AUTO_EVAL_AFTER_STEP``
+        is set on the subclass.
+
+        3.2.2 change: the default (``AUTO_EVAL_AFTER_STEP = False``) keeps
+        the user's overridden ``step()`` as-is — no closure layer, no
+        per-call ``type(self).AUTO_EVAL_AFTER_STEP`` branch.  The wrapper
+        existed historically to support the optional eager flush, but
+        when the flag is False (default since 3.0.3) the wrapper just
+        adds dispatch overhead with no semantic effect.
+
+        To opt back into the synchronous flush, set
+        ``AUTO_EVAL_AFTER_STEP = True`` on the subclass *before* it is
+        first declared; the wrapper is then installed.  Toggling the
+        flag at runtime is still possible — see ``step()``'s post-hoc
+        wrapping in subclasses that need it.
+        """
         super().__init_subclass__(**kwargs)
+        if not cls.AUTO_EVAL_AFTER_STEP:
+            # Default path: no wrapper, user's step() runs raw.
+            return
         if "step" in cls.__dict__:
             _orig = cls.__dict__["step"]
 

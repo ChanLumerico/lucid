@@ -80,12 +80,12 @@ public:
 
     Storage zeros(const Shape& shape, Dtype dt) override {
         auto arr = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(arr), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
     Storage ones(const Shape& shape, Dtype dt) override {
         auto arr = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(arr), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
     Storage clone(const Storage& src, const Shape&, Dtype dt) override {
@@ -718,13 +718,13 @@ public:
         ::mlx::core::array idx_arr(idx.data(), idx_shape, ::mlx::core::int32);
         idx_arr = ::mlx::core::broadcast_to(idx_arr, gpu::to_mlx_shape(shape));
         auto result = ::mlx::core::take_along_axis(*gs.arr, idx_arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage trace(const Storage& a, const Shape&, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         auto result = ::mlx::core::trace(*gs.arr, 0, 0, 1);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) override {
@@ -734,7 +734,7 @@ public:
         auto eye =
             ::mlx::core::eye(static_cast<int>(M), static_cast<int>(N), 0, gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::multiply(eye, *gg.arr);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     std::vector<Storage>
@@ -763,7 +763,7 @@ public:
         auto zero = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         auto result = true_branch ? ::mlx::core::where(*gc.arr, *gg.arr, zero)
                                   : ::mlx::core::where(*gc.arr, zero, *gg.arr);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage masked_fill(
@@ -772,7 +772,7 @@ public:
         const auto& gm = std::get<GpuStorage>(mask);
         ::mlx::core::array v(static_cast<float>(value), gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::where(*gm.arr, v, *ga.arr);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage gather(const Storage& a,
@@ -785,7 +785,7 @@ public:
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gi = std::get<GpuStorage>(indices);
         auto result = ::mlx::core::take_along_axis(*ga.arr, *gi.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage gather_backward(const Storage& grad,
@@ -805,7 +805,7 @@ public:
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(input_shape), gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::scatter_add_axis(base, fixed, *gg.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage
@@ -928,7 +928,7 @@ public:
         }
         ::mlx::core::array zero(static_cast<float>(0.0), gpu::to_mlx_dtype(dt));
         auto result = ::mlx::core::pad(*ga.arr, pad, zero);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage concatenate(const std::vector<Storage>& xs,
@@ -940,7 +940,7 @@ public:
         for (const auto& x : xs)
             arrays.push_back(*std::get<GpuStorage>(x).arr);
         auto result = ::mlx::core::concatenate(std::move(arrays), axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     Storage stack(const std::vector<Storage>& xs, const Shape&, int axis, Dtype dt) override {
@@ -949,7 +949,7 @@ public:
         for (const auto& x : xs)
             arrays.push_back(*std::get<GpuStorage>(x).arr);
         auto result = ::mlx::core::stack(arrays, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
     std::vector<Storage> split_equal(
@@ -1039,7 +1039,7 @@ public:
             idx = take_descending_top_indices(idx, axis, output_shape);
         auto values = ::mlx::core::take_along_axis(*ga.arr, idx, axis);
         return {
-            Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(values), dt)},
+            Storage{gpu::wrap_mlx_array(std::move(values), dt)},
             Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(idx), Dtype::I32)},
         };
     }
@@ -1047,7 +1047,7 @@ public:
     Storage argsort(const Storage& a, const Shape&, int axis, Dtype) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = ::mlx::core::argsort(*ga.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::I32)};
+        return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::I32)};
     }
 
     Storage arg_reduce_index(
@@ -1069,7 +1069,7 @@ public:
         const auto& idx = std::get<GpuStorage>(indices);
         auto base = ::mlx::core::zeros(gpu::to_mlx_shape(output_shape), gpu::to_mlx_dtype(dt));
         auto out = ::mlx::core::scatter_add_axis(base, *idx.arr, *g.arr, axis);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
     Storage scatter_add(const Storage& base,
@@ -1104,7 +1104,7 @@ public:
         auto fixed =
             ::mlx::core::where(::mlx::core::less(idx, zero), ::mlx::core::add(idx, axis_len), idx);
         auto out = ::mlx::core::scatter_add_axis(*gb.arr, fixed, *gs.arr, d);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
 private:

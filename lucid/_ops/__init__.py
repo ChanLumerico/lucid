@@ -29,6 +29,20 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import OpEntry, _REGISTRY
 
+
+# 3.2.2: index ``_REGISTRY`` by ``free_fn_name`` so ``_make_free_fn`` and
+# ``_populate_free_fns`` skip the O(N) linear scan over ~500–1000 entries.
+# Built once at module load, before ``_populate_free_fns`` runs.  Entries
+# without a ``free_fn_name`` are excluded; collisions are resolved by
+# first-wins (matching the previous ``set``-based dedup in
+# ``_populate_free_fns``).
+_REGISTRY_BY_FREE_FN: dict[str, OpEntry] = {}
+for _e in _REGISTRY:
+    _fn = _e.free_fn_name or _e.name
+    if _fn and _fn not in _REGISTRY_BY_FREE_FN:
+        _REGISTRY_BY_FREE_FN[_fn] = _e
+del _e, _fn
+
 # PEP 749 / Python 3.14: ``Format.FORWARDREF`` keeps unresolved names as
 # ``ForwardRef`` objects instead of raising ``NameError``.  Used when
 # introspecting adapter signatures whose annotations reference symbols
@@ -242,50 +256,53 @@ def _make_free_fn(name: str) -> object:
     """Build a free function that unwraps Tensors → TensorImpls, calls the
     engine op, and rewraps the result.  The returned wrapper carries an
     explicit ``__signature__`` derived from the registry entry."""
-    for entry in _REGISTRY:
-        fn_name = entry.free_fn_name or entry.name
-        if fn_name == name:
-            e = entry
+    # 3.2.2: dict-indexed lookup replaces the O(N) ``for entry in _REGISTRY``
+    # scan that paid ~2–3 µs per ``_make_free_fn`` call.  The cumulative
+    # cost during module load is ~1 ms, but the same path is also hit by
+    # late-bound name resolution (rare, but real) — keep the lookup O(1).
+    e = _REGISTRY_BY_FREE_FN.get(name)
+    if e is None:
+        raise AttributeError(f"No op found for free function: {name}")
+    fn_name = e.free_fn_name or e.name
 
-            if e.n_tensor_args == -1:
+    if e.n_tensor_args == -1:
 
-                def _fn_list(
-                    tensors: list[Tensor], *args: object, **kwargs: object
-                ) -> object:
-                    impls = [_unwrap(t) for t in tensors]
-                    result = e.engine_fn(impls, *args, **kwargs)
-                    if e.returns_tensor:
-                        if isinstance(result, (list, tuple)):
-                            return type(result)(_wrap(r) for r in result)
-                        return _wrap(result)
-                    return result
+        def _fn_list(
+            tensors: list[Tensor], *args: object, **kwargs: object
+        ) -> object:
+            impls = [_unwrap(t) for t in tensors]
+            result = e.engine_fn(impls, *args, **kwargs)
+            if e.returns_tensor:
+                if isinstance(result, (list, tuple)):
+                    return type(result)(_wrap(r) for r in result)
+                return _wrap(result)
+            return result
 
-                _fn_list.__name__ = fn_name
-                _fn_list.__qualname__ = fn_name
-                _fn_list.__signature__ = _signature_for_entry(e)  # type: ignore[attr-defined]
-                return _fn_list
+        _fn_list.__name__ = fn_name
+        _fn_list.__qualname__ = fn_name
+        _fn_list.__signature__ = _signature_for_entry(e)  # type: ignore[attr-defined]
+        return _fn_list
 
-            def _fn(*args: object, **kwargs: object) -> object:
-                from lucid._C import engine as _C_engine  # noqa: PLC0415
+    def _fn(*args: object, **kwargs: object) -> object:
+        from lucid._C import engine as _C_engine  # noqa: PLC0415
 
-                proc: list[object] = []
-                for i, a in enumerate(args):
-                    if i < e.n_tensor_args and hasattr(a, "_impl"):
-                        proc.append(_unwrap(a))  # type: ignore[arg-type]
-                    else:
-                        proc.append(a)
-                result = e.engine_fn(*proc, **kwargs)
-                if e.returns_tensor:
-                    if isinstance(result, (list, tuple)):
-                        return type(result)(_wrap(r) for r in result)
-                    return _wrap(result)
-                return result
+        proc: list[object] = []
+        for i, a in enumerate(args):
+            if i < e.n_tensor_args and hasattr(a, "_impl"):
+                proc.append(_unwrap(a))  # type: ignore[arg-type]
+            else:
+                proc.append(a)
+        result = e.engine_fn(*proc, **kwargs)
+        if e.returns_tensor:
+            if isinstance(result, (list, tuple)):
+                return type(result)(_wrap(r) for r in result)
+            return _wrap(result)
+        return result
 
-            _fn.__name__ = fn_name
-            _fn.__qualname__ = fn_name
-            _fn.__signature__ = _signature_for_entry(e)  # type: ignore[attr-defined]
-            return _fn
-    raise AttributeError(f"No op found for free function: {name}")
+    _fn.__name__ = fn_name
+    _fn.__qualname__ = fn_name
+    _fn.__signature__ = _signature_for_entry(e)  # type: ignore[attr-defined]
+    return _fn
 
 
 # ── Module population ────────────────────────────────────────────────────────

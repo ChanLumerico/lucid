@@ -8,6 +8,46 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
+# 3.2.2: cache the resolved default-dtype/device engine enums so that
+# ``normalize_factory_kwargs`` — called once per op invocation (~200–300
+# ops per ResNet-18 forward, ~65 k calls per LeNet-5/MNIST epoch) —
+# doesn't re-do the lookup + dtype/device parsing on every call.
+# Invalidated by ``lucid._globals.set_default_dtype/device``.
+_CACHED_DEFAULT_DTYPE_ENUM: _C_engine.Dtype | None = None
+_CACHED_DEFAULT_DEVICE_ENUM: _C_engine.Device | None = None
+
+
+def _default_dtype_enum_cached() -> _C_engine.Dtype:
+    global _CACHED_DEFAULT_DTYPE_ENUM
+    if _CACHED_DEFAULT_DTYPE_ENUM is None:
+        _CACHED_DEFAULT_DTYPE_ENUM = to_engine_dtype(get_default_dtype())
+    return _CACHED_DEFAULT_DTYPE_ENUM
+
+
+def _default_device_enum_cached() -> _C_engine.Device:
+    global _CACHED_DEFAULT_DEVICE_ENUM
+    if _CACHED_DEFAULT_DEVICE_ENUM is None:
+        _CACHED_DEFAULT_DEVICE_ENUM = _parse_device(get_default_device())
+    return _CACHED_DEFAULT_DEVICE_ENUM
+
+
+def _invalidate_default_dtype_cache() -> None:
+    """Called by ``lucid._globals.set_default_dtype`` after a change."""
+    global _CACHED_DEFAULT_DTYPE_ENUM
+    _CACHED_DEFAULT_DTYPE_ENUM = None
+
+
+def _invalidate_default_device_cache() -> None:
+    """Called by ``lucid._globals.set_default_device`` after a change.
+
+    Note: ``lucid._factories.converters`` keeps a *separate* device cache
+    for the ndarray-fast-path hot loop; ``set_default_device`` invalidates
+    both via the hook installed in ``lucid._globals``.
+    """
+    global _CACHED_DEFAULT_DEVICE_ENUM
+    _CACHED_DEFAULT_DEVICE_ENUM = None
+
+
 def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     """Return the underlying TensorImpl from a Tensor or TensorImpl."""
     if isinstance(t, _C_engine.TensorImpl):
@@ -38,12 +78,14 @@ def normalize_factory_kwargs(
     requires_grad: bool = False,
 ) -> tuple[_C_engine.Dtype, _C_engine.Device, bool]:
     """Resolve dtype/device to engine enums, applying defaults."""
-    _dtype = (
-        to_engine_dtype(dt) if dt is not None else to_engine_dtype(get_default_dtype())
-    )
+    if dt is None:
+        _dtype = _default_dtype_enum_cached()
+    else:
+        _dtype = to_engine_dtype(dt)
     if dev is None:
-        dev = get_default_device()
-    _device = _parse_device(dev)
+        _device = _default_device_enum_cached()
+    else:
+        _device = _parse_device(dev)
     return _dtype, _device, requires_grad
 
 
