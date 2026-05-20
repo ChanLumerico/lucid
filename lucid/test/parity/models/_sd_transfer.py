@@ -201,6 +201,7 @@ def transfer(
         coverage or accept partial alignment.
     """
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     # Build numpy views of both state dicts
@@ -259,6 +260,7 @@ def transfer_positional(lucid_model: Any, timm_model: Any) -> None:
     Raises ``AssertionError`` on count or shape mismatch.
     """
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     lparams = list(lucid_model.parameters())
@@ -320,6 +322,7 @@ def diagnose_forward(
     """
     import lucid
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     transfer(lucid_model, timm_model, remap, key_transform)

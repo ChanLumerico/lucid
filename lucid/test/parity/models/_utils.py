@@ -89,6 +89,7 @@ def _run_parity(spec: ParitySpec) -> None:
     """
     import timm
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     from lucid.test.parity.models._sd_transfer import (
@@ -191,6 +192,7 @@ def _run_self_consistency(spec: ParitySpec) -> None:
 def _copy_lucid_to_ref(lucid_model: nn.Module, ref_model: Any) -> None:
     """Copy parameters from Lucid model → reference model positionally."""
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     lucid_params = list(lucid_model.parameters())
@@ -224,6 +226,7 @@ def run_parity(
     """Run one full-model parity check against a timm reference (legacy API)."""
     import timm
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     timm_model = timm.create_model(
@@ -289,6 +292,7 @@ def run_block_parity(
 ) -> None:
     """Compare a single sub-module against its reference counterpart (legacy API)."""
     from lucid.test._fixtures.ref_framework import require_ref
+
     _ref = require_ref()
 
     lucid_block.eval()
