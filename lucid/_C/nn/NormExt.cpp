@@ -28,11 +28,13 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -61,25 +63,44 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     for (std::size_t i = 2; i < x->shape().size(); ++i)
         spatial *= static_cast<int>(x->shape()[i]);
 
-    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
+    // 3.3 AMP plumbing: schema_v1.amp_policy == ForceFP32.  Under
+    // ``AutocastGuard(F16)`` SchemaGuard returns ``Dtype::F32`` regardless of
+    // input dtype — the eval-mode normalisation is numerically sensitive in
+    // exactly the same way the training-mode reduction is, and the running
+    // ``mean`` / ``var`` buffers live on the ``nn.BatchNorm`` Parameter slots
+    // at F32 anyway.  Without this plumbing ``model.eval()`` under
+    // ``with amp.autocast(F16):`` would feed F16 activations into F32 running
+    // stats — the backend doesn't validate dtype mismatch and silently
+    // produces NaN outputs (Mac Studio ResNet-18 / CIFAR-10 train loop
+    // converged on train but reported ``test_loss=nan, test_acc=10.00 %``).
+    SchemaGuard sg{schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr mean_eff = astype_op(mean, eff_dt);
+    const TensorImplPtr var_eff = astype_op(var, eff_dt);
+    const TensorImplPtr gamma_eff = astype_op(gamma, eff_dt);
+    const TensorImplPtr beta_eff = astype_op(beta, eff_dt);
 
-    auto& be = backend::Dispatcher::for_device(x->device());
+    OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
+
+    auto& be = backend::Dispatcher::for_device(x_eff->device());
     // batch_norm_eval_forward returns [y, rstd].
-    auto fwd =
-        be.batch_norm_eval_forward(x->storage(), mean->storage(), var->storage(), gamma->storage(),
-                                   beta->storage(), x->shape(), C, spatial, eps, x->dtype());
+    auto fwd = be.batch_norm_eval_forward(x_eff->storage(), mean_eff->storage(),
+                                          var_eff->storage(), gamma_eff->storage(),
+                                          beta_eff->storage(), x_eff->shape(), C, spatial, eps,
+                                          eff_dt);
     Storage out_storage = std::move(fwd[0]);
     Storage rstd_storage = std::move(fwd[1]);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
-                                            x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), x_eff->shape(), eff_dt,
+                                            x_eff->device(), false);
 
     auto bwd = std::make_shared<BatchNormEvalBackward>();
     bwd->eps_ = eps;
     bwd->rstd_ = std::move(rstd_storage);
-    // saved_inputs_[0..4] will hold {x, mean, var, gamma, beta}.
-    kernel::NaryKernel<BatchNormEvalBackward, 5>::wire_autograd(std::move(bwd),
-                                                                {x, mean, var, gamma, beta}, out);
+    // saved_inputs_[0..4] will hold {x, mean, var, gamma, beta} at eff_dt.
+    kernel::NaryKernel<BatchNormEvalBackward, 5>::wire_autograd(
+        std::move(bwd), {x_eff, mean_eff, var_eff, gamma_eff, beta_eff}, out);
     return out;
 }
 

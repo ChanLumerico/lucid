@@ -26,11 +26,14 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -62,9 +65,6 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
                                          int groups) {
     if (!x || !W || !b)
         ErrorBuilder("conv").fail("null input");
-    if (x->dtype() != W->dtype() || x->dtype() != b->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(W->dtype())), "conv");
     if (x->device() != W->device() || x->device() != b->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(W->device())), "conv");
@@ -78,33 +78,66 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     if (groups < 1)
         ErrorBuilder("conv").fail("groups must be >= 1");
 
-    const int B = static_cast<int>(x->shape()[0]);
-    const int Cin = static_cast<int>(x->shape()[1]);
-    const int Cout = static_cast<int>(W->shape()[0]);
-    const int Cw = static_cast<int>(W->shape()[1]);
+    // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under an
+    // ``AutocastGuard(F16)`` scope, SchemaGuard resolves ``eff_dt`` to
+    // the autocast target (F32 on CPU per the Accelerate-no-F16 carve-out,
+    // F16 on GPU where ``mlx::core::conv_general`` accepts native F16
+    // and Apple Silicon GPUs run the conv at half throughput → speedup).
+    // Without this plumbing, ``with amp.autocast(F16):`` had no effect on
+    // Conv2d — F32 was used regardless.  Must run before the
+    // dtype-match check: under autocast, the surrounding Conv has cast
+    // x to F16 while W / b on the Parameter slots are still F32 — the
+    // pre-AMP strict equality check fired before SchemaGuard could
+    // unify them.
+    //
+    // Use ``astype_op`` (not ``maybe_cast_for_kernel``) so the cast
+    // tensors carry an ``AstypeBackward`` grad_fn pointing back to the
+    // original Parameter / activation.  Without this the cast tensors
+    // would have requires_grad=false → ``NaryKernel::wire_autograd`` would
+    // short-circuit with any_grad=false → the entire conv backward chain
+    // would be dropped under AMP.  ``astype_op`` returns the input
+    // unchanged when dtypes already match, so the F32 baseline incurs
+    // zero overhead.
+    SchemaGuard sg{ConvNdBackward<N>::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr W_eff = astype_op(W, eff_dt);
+    const TensorImplPtr b_eff = astype_op(b, eff_dt);
+    if (x_eff->dtype() != W_eff->dtype() || x_eff->dtype() != b_eff->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
+                            std::string(dtype_name(W_eff->dtype())), "conv");
+
+    const int B = static_cast<int>(x_eff->shape()[0]);
+    const int Cin = static_cast<int>(x_eff->shape()[1]);
+    const int Cout = static_cast<int>(W_eff->shape()[0]);
+    const int Cw = static_cast<int>(W_eff->shape()[1]);
 
     if (Cin % groups != 0)
-        throw ShapeMismatch(x->shape(), W->shape(), "conv: C_in must be divisible by groups");
+        throw ShapeMismatch(x_eff->shape(), W_eff->shape(),
+                            "conv: C_in must be divisible by groups");
     if (Cout % groups != 0)
-        throw ShapeMismatch(W->shape(), x->shape(), "conv: C_out must be divisible by groups");
+        throw ShapeMismatch(W_eff->shape(), x_eff->shape(),
+                            "conv: C_out must be divisible by groups");
     const int Cin_g = Cin / groups;
     const int Cout_g = Cout / groups;
     if (Cw != Cin_g)
-        throw ShapeMismatch(W->shape(), x->shape(), "conv: W.shape[1] must equal C_in / groups");
-    if (b->shape()[0] != Cout)
-        throw ShapeMismatch(b->shape(), W->shape(), "conv: bias C_out mismatch");
+        throw ShapeMismatch(W_eff->shape(), x_eff->shape(),
+                            "conv: W.shape[1] must equal C_in / groups");
+    if (b_eff->shape()[0] != Cout)
+        throw ShapeMismatch(b_eff->shape(), W_eff->shape(), "conv: bias C_out mismatch");
 
     int S[N];
     int K[N];
     int O[N];
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape()[2 + i]);
-        K[i] = static_cast<int>(W->shape()[2 + i]);
+        S[i] = static_cast<int>(x_eff->shape()[2 + i]);
+        K[i] = static_cast<int>(W_eff->shape()[2 + i]);
         if (dilation[i] < 1)
             ErrorBuilder("conv").fail("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape(), W->shape(), "conv: output shape non-positive");
+            throw ShapeMismatch(x_eff->shape(), W_eff->shape(),
+                                "conv: output shape non-positive");
     }
 
     Shape out_shape;
@@ -121,7 +154,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         K_total *= K[i];
 
-    OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt, out_shape};
     // 2 ops (mul+add) per element of the output per input-channel-kernel position.
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin_g * K_total);
 
@@ -133,12 +166,13 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         opts.pad[i] = pad[i];
         opts.dilation[i] = dilation[i];
     }
-    auto& be = backend::Dispatcher::for_device(x->device());
-    Storage out_storage = be.conv_nd_forward(x->storage(), W->storage(), b->storage(), B, Cin, Cout,
-                                             Cin_g, Cout_g, S, K, O, opts, out_shape, x->dtype());
+    auto& be = backend::Dispatcher::for_device(x_eff->device());
+    Storage out_storage =
+        be.conv_nd_forward(x_eff->storage(), W_eff->storage(), b_eff->storage(), B, Cin, Cout,
+                           Cin_g, Cout_g, S, K, O, opts, out_shape, eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            x->dtype(), x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
+                                            x_eff->device(), false);
 
     auto bwd = std::make_shared<ConvNdBackward<N>>();
     for (int i = 0; i < N; ++i) {
@@ -147,8 +181,10 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->dilation_[i] = dilation[i];
     }
     bwd->groups_ = groups;
-    // saved_inputs_[0..2] will hold {x, W, b}.
-    kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b}, out);
+    // saved_inputs_[0..2] hold the *cast* (effective-dtype) {x, W, b} so
+    // the backward conv_general dispatches at eff_dt to match the forward.
+    kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd),
+                                                            {x_eff, W_eff, b_eff}, out);
     return out;
 }
 

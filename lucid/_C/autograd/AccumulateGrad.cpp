@@ -7,6 +7,8 @@
 
 #include <utility>
 
+#include "../backend/Dispatcher.h"
+#include "../core/Storage.h"
 #include "Helpers.h"
 
 namespace lucid {
@@ -33,6 +35,21 @@ std::vector<Storage> AccumulateGrad::apply(Storage grad_out) {
     }
     if (!t->requires_grad()) {
         return {};
+    }
+
+    // 3.3 AMP fix: under autocast, the same leaf parameter can be reached
+    // via two different effective dtypes — e.g. a Conv with eff_dt=F16
+    // emits an F16 grad while a sibling path that ran ForceFP32 emits an
+    // F32 grad.  ``accumulate_into`` asserts identical dtype on GPU and
+    // would throw DtypeMismatch in that case.  Always cast incoming grads
+    // to the leaf parameter's own dtype before storing/accumulating —
+    // this matches the reference framework's policy of keeping the
+    // gradient slot at the parameter's dtype.
+    const Dtype target_dt = t->dtype();
+    const Dtype src_dt = storage_dtype(grad_out);
+    if (src_dt != target_dt) {
+        auto& be = backend::Dispatcher::for_device(t->device());
+        grad_out = be.astype(grad_out, t->shape(), src_dt, target_dt);
     }
 
     auto& grad = t->mutable_grad_storage();

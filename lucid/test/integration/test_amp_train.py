@@ -33,7 +33,14 @@ class TestAMPTraining:
         for _ in range(50):
             opt.zero_grad()
             with amp.autocast(device_type=device):
-                loss = F.mse_loss(model(x), y)
+                out = model(x)
+                # 3.3 AMP fix: under autocast on metal the model output is
+                # F16 (Promote policy on Linear took effect — before the fix
+                # autocast was silently a no-op).  Loss functions are
+                # numerically sensitive and run in F32 by convention; cast
+                # the output explicitly so the F32 target dtype matches.
+                out_f32 = out.float() if out.dtype != lucid.float32 else out
+                loss = F.mse_loss(out_f32, y)
             loss.backward()
             opt.step()
         last = float(loss.item())

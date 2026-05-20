@@ -344,6 +344,38 @@ void register_tensor_impl(py::module_& m) {
         "Batch-evaluate GPU tensors in one mlx::core::eval() call.\n"
         "CPU tensors are silently ignored.  No-op when all tensors are on CPU.");
 
+    // eval_tensors_async(list[TensorImpl]) — schedule batched evaluation on
+    // the GPU stream **without blocking** the CPU thread.  The lazy MLX
+    // expression graph is still finalised (so the parent activation chain is
+    // released and memory can be reclaimed), but the CPU does not wait for
+    // the kernel to complete.  Used by the BN / InstanceNorm running-stats
+    // update — 3.2.1 introduced ``eval_tensors`` there to break the lazy
+    // chain that prevented `loss.item()` from triggering eval (since running
+    // stats are not on the loss path), which caused a per-iter memory leak;
+    // but with 16 BN modules in ResNet-18, the per-BN sync cost ~6 ms /
+    // forward.  ``async_eval`` keeps the leak fix while dropping the sync,
+    // because the parent reference release happens at *schedule* time, not
+    // at *completion* time.
+    m.def(
+        "eval_tensors_async",
+        [](const std::vector<std::shared_ptr<TensorImpl>>& tensors) {
+            std::vector<mlx::core::array> arrays;
+            arrays.reserve(tensors.size());
+            for (const auto& t : tensors) {
+                if (!t || t->device() != Device::GPU)
+                    continue;
+                const auto& gpu_st = std::get<GpuStorage>(t->storage());
+                if (gpu_st.arr)
+                    arrays.push_back(*gpu_st.arr);
+            }
+            if (!arrays.empty())
+                mlx::core::async_eval(arrays);
+        },
+        py::arg("tensors"),
+        "Batch-schedule GPU evaluation without blocking the CPU thread.\n"
+        "CPU tensors are silently ignored.  Finalises the MLX lazy graph\n"
+        "(releases parent activation references) but returns immediately.");
+
     // eval_gpu(impl) — evaluate a single GPU TensorImpl in-place.
     // Faster than eval_tensors([impl]) for the single-tensor case because it
     // avoids Python list creation and the pybind11 vector conversion overhead

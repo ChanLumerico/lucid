@@ -8,15 +8,53 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "../api.h"
+#include "../core/Dtype.h"
 #include "../core/Storage.h"
 #include "Optimizer.h"
+
+namespace mlx::core {
+class array;
+}  // namespace mlx::core
 
 namespace lucid {
 
 class TensorImpl;
+
+// Per-step scalar cache for Adam-family GPU updates.  All 8 broadcast
+// scalars (beta1, 1-beta1, beta2, 1-beta2, eps, lr, 1/bc1, 1/bc2) plus
+// the optional weight-decay scalar are rebuilt **once per step** at the
+// first parameter and reused across the remaining ~64 parameters of a
+// typical ResNet-18 / transformer step.  Without this, ``adam_step_gpu``
+// built ``params.size() * 8`` MLX arrays per call (520 for ResNet-18) —
+// each MLX array construction has constant overhead, and the bias
+// correction factors don't even depend on which parameter is updated.
+//
+// The cache invalidates when ``step_count_`` advances or the param
+// dtype changes (mixed-precision case).
+struct AdamScalarCache {
+    bool valid = false;
+    Dtype dt = Dtype::F32;
+    std::int64_t for_step = 0;
+    std::unique_ptr<mlx::core::array> b1;
+    std::unique_ptr<mlx::core::array> omb1;
+    std::unique_ptr<mlx::core::array> b2;
+    std::unique_ptr<mlx::core::array> omb2;
+    std::unique_ptr<mlx::core::array> eps_a;
+    std::unique_ptr<mlx::core::array> lr_a;
+    std::unique_ptr<mlx::core::array> wd_a;       // present iff weight_decay != 0
+    std::unique_ptr<mlx::core::array> inv_bc1;
+    std::unique_ptr<mlx::core::array> inv_bc2;
+    std::unique_ptr<mlx::core::array> wd_factor;  // (1 - lr*wd) for AdamW
+
+    AdamScalarCache();
+    ~AdamScalarCache();
+    AdamScalarCache(const AdamScalarCache&) = delete;
+    AdamScalarCache& operator=(const AdamScalarCache&) = delete;
+};
 
 // Adam optimizer (Kingma & Ba, 2014).
 //
@@ -43,7 +81,12 @@ public:
          double weight_decay = 0.0,
          bool amsgrad = false);
 
-    void set_lr(double lr) override { lr_ = lr; }
+    // 3.4 perf: invalidate the scalar cache on lr change so the
+    // ``lr_a`` / ``wd_factor`` arrays are rebuilt next step.
+    void set_lr(double lr) override {
+        lr_ = lr;
+        scalar_cache_.valid = false;
+    }
     double lr() const override { return lr_; }
     double beta1() const { return beta1_; }
     double beta2() const { return beta2_; }
@@ -76,6 +119,9 @@ private:
 
     std::vector<Storage> m_;  // Per-parameter first-moment estimates.
     std::vector<Storage> v_;  // Per-parameter second-moment estimates.
+
+    // 3.4 perf: see AdamScalarCache documentation above.
+    AdamScalarCache scalar_cache_;
 };
 
 // AdamW optimizer (Loshchilov & Hutter, 2017).
@@ -97,7 +143,12 @@ public:
           double eps = 1e-8,
           double weight_decay = 1e-2);
 
-    void set_lr(double lr) override { lr_ = lr; }
+    // 3.4 perf: invalidate the scalar cache on lr change (same rationale
+    // as in ``Adam::set_lr``).
+    void set_lr(double lr) override {
+        lr_ = lr;
+        scalar_cache_.valid = false;
+    }
     double lr() const override { return lr_; }
 
     std::string state_dict_id() const override { return "adamw_v1"; }
@@ -124,6 +175,9 @@ private:
 
     std::vector<Storage> m_;
     std::vector<Storage> v_;
+
+    // 3.4 perf: see AdamScalarCache documentation above.
+    AdamScalarCache scalar_cache_;
 };
 
 // NAdam optimizer (Dozat, 2016) — Adam with Nesterov momentum.

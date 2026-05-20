@@ -170,7 +170,15 @@ def _inject_to(cls: type) -> None:
             if impl.requires_grad != rg:
                 impl = impl.clone_with_grad(rg)
         else:
-            impl = impl.clone_with_grad(self._impl.requires_grad)
+            # 3.3 AMP fix: only clone_with_grad when the requires_grad flag
+            # actually disagrees.  The astype path above wires AstypeBackward
+            # (and propagates requires_grad) when grad mode is on, so an
+            # unconditional clone here would strip the freshly-installed
+            # grad_fn and break the backward chain — exactly the failure
+            # that left ``logits.float()`` mid-graph dropping gradients
+            # under AMP.
+            if impl.requires_grad != self._impl.requires_grad:
+                impl = impl.clone_with_grad(self._impl.requires_grad)
         return _wrap(impl)
 
     def metal(self: Tensor) -> Tensor:

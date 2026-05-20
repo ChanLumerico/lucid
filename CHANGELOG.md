@@ -19,6 +19,299 @@ _No changes yet._
 
 ---
 
+## [3.3.0] — 2026-05-20
+
+AMP / mixed-precision activation **end-to-end**, with five engine-level
+fixes that turn the surface plumbing into a feature users can actually
+train with.  The autocast infrastructure (`AutocastGuard`,
+`SchemaGuard`, `AmpPolicy`) has been wired into the codebase since the
+3.0 series, but the **four hot ops that would benefit most —
+`LinearBackward`, `ConvNdBackward<N>`, `MatmulBackward`,
+`BatchNormNdBackward<N>`** — never called `SchemaGuard` to honor the
+autocast scope.  Result: `with lucid.amp.autocast(F16):` had **no
+effect** on the entire backbone of every CNN / MLP / transformer —
+F32 was used regardless.  This release plumbs SchemaGuard into all
+four; on top of that, five subtle gradient-flow bugs that would have
+caused the plumbed AMP path to silently produce **random-accuracy
+gradients** (10 % top-1 on ResNet-18 / CIFAR-10 — the model can't
+learn even though wall-clock looks 2.5× faster) are fixed below.
+
+### Fixed
+
+- **AMP autocast scope now actually changes dtype** for `Conv1d` /
+  `Conv2d` / `Conv3d` (`AmpPolicy::Promote`), `nn.Linear`
+  (`AmpPolicy::Promote`), `lucid.matmul` (`AmpPolicy::Promote`), and
+  `nn.BatchNorm{1,2,3}d` (`AmpPolicy::ForceFP32`).  Each forward
+  invokes `SchemaGuard{schema_v1, x->dtype(), x->device()}` to
+  resolve `effective_dtype()`, then casts its operands to that
+  dtype.  Outside an autocast scope this is a no-op; inside
+  `with amp.autocast(F16):` Conv / Linear / Matmul dispatch native
+  F16 to MLX (Apple GPU runs F16 conv/matmul at roughly 1.4–1.8×
+  FP32 throughput).
+- **AMP cast now preserves the autograd chain (`AstypeBackward`).**
+  The first attempt at the four ops above routed the cast through
+  `detail::maybe_cast_for_kernel`, which produced a TensorImpl with
+  `requires_grad=false`.  Downstream, `NaryKernel::wire_autograd`
+  saw `any_grad=false` on the cast inputs and silently skipped the
+  whole backward wiring — every parameter inside an autocast scope
+  had `p.grad is None` after `loss.backward()`, the optimizer step
+  ran on zero updates, and the model trained at random accuracy
+  even with `GradScaler` enabled.  Replaced with the autograd-aware
+  `astype_op`, which now wires a new `AstypeBackward` node when the
+  input has `requires_grad`; the backward casts the incoming
+  gradient back to the source dtype, keeping the chain intact and
+  ensuring F32 parameter slots accumulate F32 gradients.  Same-dtype
+  `astype_op(t, t->dtype())` is a no-op fast path that returns the
+  input verbatim — the F32 baseline pays zero overhead.
+- **`Tensor.to(dtype=...)` no longer strips the autograd grad_fn.**
+  The same-device branch in `_to.py` called `clone_with_grad`
+  unconditionally, which creates a fresh leaf `TensorImpl` and drops
+  the `grad_fn` that `astype_op` had just wired.  Now the call is
+  guarded behind `impl.requires_grad != self._impl.requires_grad` —
+  the cast's freshly-installed backward node survives, so
+  `logits.float()` mid-graph (the canonical AMP wrap-up that brings
+  loss inputs back to F32) propagates gradients correctly.
+- **`GradScaler.unscale_` no longer flushes F16 gradients to zero.**
+  At the default `init_scale=2**16`, the unscale coefficient
+  `1/65536 ≈ 1.526e-5` is **subnormal** in F16 (min-normal is
+  `6.1e-5`); Apple Silicon's Metal backend flushes subnormals to
+  zero, so a naive `full(shape, inv_scale, g.dtype=F16, ...)` coef
+  becomes the zero tensor and every unscaled gradient collapses to
+  0.  Additionally, mixed-dtype multiply (F16 grad × F32 coef) is
+  rejected by `BinaryKernel`'s same-dtype validator (would
+  segfault).  Now `unscale_` casts the gradient to F32 first, then
+  multiplies by an F32 coef — matching the reference framework's
+  AMP path.  The optimizer receives clean F32 gradients to update
+  the F32 parameter slots with.
+- **`AccumulateGrad` and `accumulate_into` now coerce mixed-dtype
+  gradients.**  In ResNet-style residual blocks two paths can
+  converge on the same parameter at different effective dtypes —
+  e.g. the `c1` Conv emits F16 grad while a sibling BN
+  (`ForceFP32`) emits F32.  The leaf accumulator now casts incoming
+  grads to the parameter's own dtype before storing; the
+  intermediate-node accumulator (`accumulate_into` in
+  `autograd/Helpers.cpp`) casts the source to the destination's
+  dtype before adding.  Without this, GPU `mlx::core::add` and CPU
+  `cpu_add_inplace` would throw `DtypeMismatch` and the backward
+  pass would fail to even complete on every multi-path AMP model.
+- **`gpu_backend::full(dtype=F16)`** was `NotImplementedError`.
+  Triggered by Python scalar promotions touching a cast F16 tensor
+  inside autocast (e.g. BatchNorm's running-stats update builds an
+  F16 scalar tensor).  Now creates an F32 scalar then `astype` to
+  F16 — same path the rest of the F16 dispatch uses.  Also wired
+  I8 / I16 cases that had been left as `NotImplementedError`.
+- **`BatchNormEvalBackward` (the `model.eval()` BN path) now honors
+  AMP.**  The eval-mode op declared `AmpPolicy::ForceFP32` in its
+  schema but `forward()` never called `SchemaGuard` — under
+  `model.eval()` + `with amp.autocast(F16):` the F16 activations
+  were passed straight into the F32 running-mean / running-var
+  buffers.  The backend's `batch_norm_eval_forward` doesn't validate
+  dtype consistency and silently produced NaN outputs, so on
+  Mac Studio ResNet-18 / CIFAR-10 the **training loop converged
+  normally (80 % train acc) but `evaluate()` reported
+  `test_loss=nan, test_acc=10 %`**.  Now `forward()` resolves
+  `eff_dt = F32` via SchemaGuard and `astype_op`-casts all five
+  inputs (x / mean / var / γ / β) up to F32 before the kernel call,
+  matching the training-mode path.
+- **`BatchNorm` / `InstanceNorm` running stats no longer drift to
+  F16 under autocast.**  ``_update_running_stats`` mixes the F32
+  buffer with the batch reduction in a sequence of ``mul`` / ``add``
+  ops; ``mul`` is registered ``AmpPolicy::Promote`` and ``var`` is
+  ``AmpPolicy::KeepInput``, so inside ``with amp.autocast(F16):``
+  every iteration silently demoted the running buffers from F32 to
+  F16.  After thousands of training steps the F16 precision loss
+  poisoned the stats and ``model.eval()`` produced 10–18 % test
+  accuracy on CIFAR-10 even though training itself converged.
+  Wrapped the update in ``AutocastGuard(F32)`` (RAII via CPython
+  refcount drop on exit) and ``.to(buffer_dtype)``-cast ``x`` *before*
+  computing batch_mean / batch_var so the F32 buffers stay F32 and
+  the variance is computed at full precision.  Mac Studio
+  ResNet-18 / CIFAR-10 after the fix: ``test_acc=77.75 %`` vs F32
+  baseline ``79.95 %`` — the residual 2.2 pp gap is the standard
+  F16-precision tax, not a correctness bug.
+- **Strict dtype-match checks** in Conv / Linear / Matmul / BN
+  fired before `SchemaGuard` could unify dtypes under autocast
+  (upstream Conv had cast x to F16 while `gamma` / `beta` were
+  still F32 on the Parameter slots).  Moved each check to *after*
+  the AMP cast, where all operands share the policy-resolved
+  dtype.
+
+### Optimised
+
+- **`eval_tensors_async` — new C++ binding around
+  `mlx::core::async_eval`.**  Schedules batched GPU evaluation
+  *without* blocking the CPU thread, but still finalises the MLX
+  lazy expression graph at schedule time so parent activation
+  references are released and downstream allocators can reclaim
+  memory.  Exported as `lucid._C.engine.eval_tensors_async(list)`.
+  Drop-in replacement for `eval_tensors` whenever the caller only
+  needs the lazy-chain break, not the GPU completion barrier.
+- **`_eval_running_stats_metal` switched to `eval_tensors_async`.**
+  BatchNorm / InstanceNorm running-stats update no longer issues a
+  GPU sync per layer.  3.2.1 had introduced the sync as a memory
+  leak fix (running stats live outside the loss graph, so they were
+  never evaluated and accumulated one full forward graph per step);
+  switching to `async_eval` keeps that fix while dropping the
+  per-BN barrier.  **Single biggest win in this release** — see the
+  Performance section.
+- **`Adam` / `AdamW` per-step scalar cache (`AdamScalarCache`).**
+  The 8 broadcast scalars (`β1`, `1-β1`, `β2`, `1-β2`, `eps`, `lr`,
+  `1/bc1`, `1/bc2`) are now built **once per step** at the first
+  parameter and reused across the remaining ~64 parameters of a
+  typical ResNet-18 step — instead of constructing
+  `params.size() * 8` MLX scalar arrays per call (520 for
+  ResNet-18).  Cache invalidates when `step_count_` advances or the
+  param dtype changes (mixed-precision case) or `set_lr` is called.
+  Effect on the timing-loop is currently in the measurement-noise
+  band (~0.2 ms / step on M4 Max), but the infrastructure is sound
+  and pays off more once the MLX schedule gets cheaper or the
+  pattern is reused by other optimizers.
+- **Backward-path `contiguous(...)` sweep — extension of 3.1.0's
+  forward sweep.**  Removed redundant `wrap_mlx_array(contiguous(...))`
+  on the return path of `batch_norm_backward`, `layer_norm_backward`,
+  `rms_norm_backward`, and `group_norm_backward` — MLX `multiply` /
+  `sum` produce contiguous tensors and `reshape` preserves
+  contiguity, so the trailing materialisation was breaking lazy
+  fusion at the autograd boundary.  Forward kernels of these ops
+  were already cleaned in 3.1.0; the 3.4-perf-sweep applies the
+  same treatment to their backward halves.  Per-call savings are
+  small (~0.1 ms) but consistent with the 3.1.0 sweep philosophy.
+- **`_update_running_stats` micro-clean.**  Dropped the redundant
+  `.detach()` calls on `batch_mean` / `batch_var` / `new_rm` /
+  `new_rv` inside the `with no_grad():` context — every tensor
+  computed there already has `requires_grad=False`, so detach was a
+  Python+pybind round-trip with no observable effect.  Same change
+  applied to InstanceNorm's equivalent path.
+
+### Performance
+
+- **M1 Pro TinyResNet train step** (BS=32, 4 residual blocks):
+  - F32 baseline:    median 93.3 ms
+  - AMP F16:         median 86.5 ms (**−7 %**)
+- **Mac Studio M4 Max ResNet-18 / CIFAR-10** (BS=32, 1 epoch,
+  measured *after* the 3.4 perf sweep above):
+
+  | Mode             | 3.3.0 baseline | **3.3.0 final** | Δ            |
+  |------------------|----------------|-----------------|--------------|
+  | F32 (1 epoch)    | 68.23 s        | **58.62 s**     | **−14.1 %**  |
+  | F32 (step median)| 43.24 ms       | **36.27 ms**    | **−16.1 %**  |
+  | F32 forward      | 16.69 ms       | **9.91 ms**     | **−40.6 %**  |
+  | AMP F16 (1 epoch)| 88.86 s        | **77.58 s**     | **−12.7 %**  |
+  | AMP F16 (step)   | 56.66 ms       | **49.27 ms**    | **−13.0 %**  |
+
+  vs **PyTorch MPS 2.9.1** on the same workload (`torch_resnet_cifar`
+  with `torch.from_numpy` pre-tensorised data, identical optimizer /
+  hyperparams):
+
+  | Mode    | PyTorch | Lucid 3.3.0 baseline | **Lucid 3.3.0 final** |
+  |---------|---------|----------------------|------------------------|
+  | F32     | 32.46 s | 68.23 s (2.10×)      | **58.62 s (1.80×)**    |
+  | AMP F16 | 68.58 s | 88.86 s (1.30×)      | **77.58 s (1.13×)**    |
+
+  Memory remains better than the reference framework — peak GPU
+  398 MiB (F32) / 444 MiB (AMP) vs reference 430 / 510 MiB
+  respectively.  Numerical parity preserved (Lucid F32 test acc
+  55.10 % vs reference 55.41 % on 1-epoch CIFAR-10, within noise).
+  AMP correctness verified end-to-end at 5 epochs: 77.75 % vs F32
+  79.95 %, the standard F16-precision tax.
+
+  The single biggest contributor is the `async_eval` switch — it
+  removes 16 GPU sync barriers per forward (one per BatchNorm
+  layer in ResNet-18), saving ~5.9 ms / forward and ~9.2 s / epoch.
+
+  The residual 1.80× gap on F32 is *not* Python-overhead bound:
+  step time scales **linearly with batch size** (BS=32 → 36 ms,
+  BS=128 → 143 ms; ratio 3.93×) — Python dispatch overhead is
+  fixed-cost so the time would grow *sub-linearly* if Python were
+  the bottleneck.  The gap is dominated by **MLX op-level lazy
+  graph vs MPSGraph fused-kernel** scheduling:  Apple's
+  MPSGraph fuses `conv + bias + activation + BN` into a single
+  kernel launch, while MLX schedules each op as a separate node.
+  ResNet-18 backward (where the gap is largest, ~6.4 ms vs
+  PyTorch 11.55 ms — yes, Lucid backward kernels are actually
+  *faster* in isolation, but full-step is slower because Adam
+  and forward Python overhead are larger).  Closing this requires
+  either `lucid.compile()` (graph capture + MLX `compile`) or
+  upstream MLX adopting MPSGraph kernels — both out of scope here.
+
+### Investigated, no action
+
+- **Adam foreach-fusion** — projected 8–15 % speedup based on the
+  per-param Python-dispatch model.  Actual measurement: Adam.step()
+  lazy-build cost is **0.48 ms (0.5 %)** of training step on M1 Pro.
+  The 27 ms figure that motivated the projection was eval-time GPU
+  compute (deferred to next `loss.item()`), not Python dispatch.
+  Lucid's C++ `Optimizer::step()` already loops in a single pybind
+  dispatch and MLX's lazy graph already batches the per-param
+  updates.  No real opportunity; the projection assumed PyTorch's
+  per-param Python-dispatch model.
+- **Other optimizers (SGD / RMSProp / NAdam / RAdam / Adamax /
+  Adagrad / Adadelta) per-step scalar cache.**  Same pattern as
+  `AdamScalarCache` would mechanically apply, but the Adam version
+  produced noise-level savings on M4 Max (~0.2 ms / step) and the
+  other optimizers have *fewer* per-step scalars to hoist.  Skipped
+  in this release; the infrastructure landed in `Adam.h` /
+  `Adam.cpp` so a follow-up can roll it out symmetrically when the
+  underlying MLX dispatch cost rises (or when a benchmark surfaces
+  a real win).
+- **`conv_nd_backward` redundant-`contiguous(...)` removal.**  Each
+  of the trailing `contiguous` wraps there carries an explicit
+  "PERF" comment justifying its presence (MLX `conv_general`
+  kernel selection requires contiguous inputs and the
+  transpose-then-contig sequence is wired into the
+  forward-symmetric pattern).  Touching them would be a
+  correctness risk for marginal gain.
+- **`DataLoader` per-step overhead** — measured at ~1.55 ms / step
+  on the current workload, which translates to ~2.4 s / epoch for
+  1562 iterations.  Decomposition: 0.34 ms for the
+  `next(iter)` + `.to('metal')` + sync of one batch, the rest is
+  Python-side loop bookkeeping (collate, list construction).  The
+  inherent batch-slicing + collate API cost cannot be made smaller
+  without breaking the `__getitem__`-per-sample contract that
+  user-defined `Dataset` subclasses depend on; switching to
+  `TensorDataset` (vectorised `__getitems__` fast path that landed
+  in 3.2.0) did not change the median step time on this workload
+  because the timing was already dominated by the GPU step, not
+  the data prep.
+
+### API
+
+- **`lucid.amp.autocast(dtype=lucid.float16)`** is functional
+  end-to-end for the four ops above.  Usage matches the reference
+  framework's `cuda.amp.autocast`:
+  ```python
+  import lucid.amp as amp
+  scaler = amp.GradScaler()
+  for x, y in loader:
+      opt.zero_grad()
+      with amp.autocast(dtype=lucid.float16):
+          out = model(x)              # Conv / Linear / Matmul → F16
+          out_f32 = out.float()       # cast back for loss
+          loss = loss_fn(out_f32, y)  # F32 loss (BN forces F32 inside)
+      scaler.scale(loss).backward()    # grads land at parameter dtype
+      scaler.step(opt)                 # unscale in F32
+      scaler.update()
+  ```
+  On CPU the F16 path is silently demoted to F32 (Accelerate has no
+  F16 arithmetic).  No public Python API surface change — the
+  autocast context and `GradScaler` already existed.  New C++
+  export: `lucid::AstypeBackward` (autograd node for `astype_op`,
+  exposed only through the existing `astype_op` free function).
+
+### Tests
+
+All 50 AMP / autograd / integration tests pass; 596 nn + ops unit
+tests pass; existing F32 training paths are byte-identical to 3.2.2
+(SchemaGuard fast-path returns input dtype when no autocast active).
+`test_amp_train.py` updated to cast the model output back to F32
+before computing the loss — the canonical AMP pattern that the
+plumbing now actually exercises.  Pre-existing 5 `flatten` failures
+in `test_parity_func.py::TestJVPParity` / `TestJacFwdParity` /
+`TestVmapJacfwdParity` predate this release (verified on 3.2.2
+baseline) and are unrelated; see func module backlog.
+
+---
+
 ## [3.2.2] — 2026-05-20
 
 Codebase-wide inefficiency sweep prompted by a deep audit after the

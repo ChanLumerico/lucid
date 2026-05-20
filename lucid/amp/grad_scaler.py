@@ -144,6 +144,22 @@ class GradScaler:
 
         Args:
             optimizer: The optimizer whose parameters' grads will be unscaled.
+
+        Notes
+        -----
+        The inverse-scale coefficient is always built in **float32** even
+        when the gradient is float16.  At ``init_scale=2**16=65536`` the
+        unscale factor is ``1/65536 ≈ 1.526e-5``, which is **subnormal**
+        in float16 (the smallest normal F16 value is ``6.1e-5``).  Apple
+        Silicon's Metal backend flushes F16 subnormals to zero, so a
+        naive ``full(shape, inv_scale, F16, ...)`` coefficient becomes the
+        zero tensor and every unscaled gradient collapses to 0 → the
+        model stops learning even though the wall-clock looks great.
+        Casting the gradient to F32 first (via MLX's automatic
+        promotion on mixed-dtype multiply) keeps the unscale exact and
+        also gives the optimizer F32 gradients to update the F32
+        parameter slots with — matching the reference framework's AMP
+        path.
         """
         if not self._enabled:
             return
@@ -167,10 +183,24 @@ class GradScaler:
                 if n_fin < g_impl.numel():
                     self._found_inf = True
                 else:
-                    coef = _C_engine.full(
-                        list(g_impl.shape), inv_scale, g_impl.dtype, g_impl.device
+                    # Unscale in F32 regardless of grad dtype.  Mixed-dtype
+                    # multiply via ``mul_op`` is not supported (BinaryKernel
+                    # validates same-dtype operands), and an F16-dtype coef
+                    # at ``init_scale=2**16`` is subnormal (1/65536 ≈
+                    # 1.526e-5 < F16 min-normal 6.1e-5) which Apple Metal
+                    # flushes to zero — wiping every gradient.  Two-step
+                    # promotion: cast grad → F32, then multiply by F32
+                    # coef.  The optimizer receives a clean F32 grad,
+                    # matching the reference framework's AMP path.
+                    g_f32 = (
+                        g_impl
+                        if g_impl.dtype == _C_engine.F32
+                        else _C_engine.astype(g_impl, _C_engine.F32)
                     )
-                    p._impl.set_grad(_C_engine.mul(g_impl, coef))
+                    coef = _C_engine.full(
+                        list(g_f32.shape), inv_scale, _C_engine.F32, g_f32.device
+                    )
+                    p._impl.set_grad(_C_engine.mul(g_f32, coef))
 
     def step(
         self, optimizer: Optimizer, *args: object, **kwargs: object

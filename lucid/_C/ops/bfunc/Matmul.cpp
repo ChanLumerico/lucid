@@ -17,11 +17,14 @@
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/SchemaGuard.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
+#include "../../kernel/BinaryKernel.h"
 #include "../../kernel/NaryKernel.h"
 #include "../../kernel/primitives/BatchedMatmul.h"
 #include "../bfunc/_BinaryOp.h"
+#include "../ufunc/Astype.h"
 
 using lucid::kernel::primitives::NdMatmulInfo;
 using lucid::kernel::primitives::plan_nd_matmul;
@@ -120,9 +123,6 @@ std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
 TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPtr& b) {
     if (!a || !b)
         ErrorBuilder("matmul").fail("null input");
-    if (a->dtype() != b->dtype())
-        throw DtypeMismatch(std::string(dtype_name(a->dtype())),
-                            std::string(dtype_name(b->dtype())), "matmul");
     if (a->device() != b->device())
         throw DeviceMismatch(std::string(device_name(a->device())),
                              std::string(device_name(b->device())), "matmul");
@@ -130,24 +130,45 @@ TensorImplPtr MatmulBackward::forward(const TensorImplPtr& a, const TensorImplPt
         throw ShapeMismatch(a->shape(), b->shape(), "matmul: both operands must be ≥2-D");
     }
 
-    const auto info = plan_nd_matmul(a->shape(), b->shape());
+    // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under
+    // ``AutocastGuard(F16)`` SchemaGuard resolves ``eff_dt`` to the
+    // autocast target (F32 on CPU per Accelerate-no-F16 carve-out;
+    // F16 on GPU where ``mlx::core::matmul`` runs natively at half
+    // throughput).  Cast precedes the dtype-match check so a/b can
+    // arrive at differing dtypes under autocast (e.g. a from an upstream
+    // Conv cast to F16, b a Parameter still F32).
+    //
+    // ``astype_op`` is autograd-aware (wires ``AstypeBackward`` when the
+    // input has requires_grad), which keeps the backward chain intact
+    // through the AMP cast.  ``maybe_cast_for_kernel`` would produce a
+    // requires_grad=false cast tensor → wire_autograd would short-circuit
+    // → backward would drop every gradient.  No-op fast path on F32.
+    SchemaGuard sg{MatmulBackward::schema_v1, a->dtype(), a->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr a_eff = astype_op(a, eff_dt);
+    const TensorImplPtr b_eff = astype_op(b, eff_dt);
+    if (a_eff->dtype() != b_eff->dtype())
+        throw DtypeMismatch(std::string(dtype_name(a_eff->dtype())),
+                            std::string(dtype_name(b_eff->dtype())), "matmul");
+
+    const auto info = plan_nd_matmul(a_eff->shape(), b_eff->shape());
     const int M = info.M, N = info.N, K = info.K;
 
-    OpScopeFull scope{MatmulBackward::schema_v1.name, a->device(), a->dtype(), info.out_shape};
+    OpScopeFull scope{MatmulBackward::schema_v1.name, a_eff->device(), eff_dt, info.out_shape};
     // Each output element requires K multiplications and K-1 additions ≈ 2*K MACs.
     scope.set_flops(static_cast<std::int64_t>(2) * info.batch * M * N * K);
 
-    Storage a_use =
-        broadcast_for_matmul(a->storage(), a->shape(), info.a_bcast_shape, a->dtype(), a->device());
-    Storage b_use =
-        broadcast_for_matmul(b->storage(), b->shape(), info.b_bcast_shape, a->dtype(), a->device());
-    Storage out_storage = backend::Dispatcher::for_device(a->device())
-                              .matmul(a_use, b_use, matmul_opts(info, false, false), a->dtype());
+    Storage a_use = broadcast_for_matmul(a_eff->storage(), a_eff->shape(), info.a_bcast_shape,
+                                         eff_dt, a_eff->device());
+    Storage b_use = broadcast_for_matmul(b_eff->storage(), b_eff->shape(), info.b_bcast_shape,
+                                         eff_dt, a_eff->device());
+    Storage out_storage = backend::Dispatcher::for_device(a_eff->device())
+                              .matmul(a_use, b_use, matmul_opts(info, false, false), eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), info.out_shape, a->dtype(),
-                                            a->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), info.out_shape, eff_dt,
+                                            a_eff->device(), false);
 
-    kernel::NaryKernel<MatmulBackward, 2>::wire_autograd({a, b}, out);
+    kernel::NaryKernel<MatmulBackward, 2>::wire_autograd({a_eff, b_eff}, out);
     return out;
 }
 

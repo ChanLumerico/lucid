@@ -23,10 +23,13 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -44,9 +47,6 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                                               double eps) {
     if (!x || !gamma || !beta)
         ErrorBuilder("batch_norm").fail("null input");
-    if (x->dtype() != gamma->dtype() || x->dtype() != beta->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(gamma->dtype())), "batch_norm");
     if (x->device() != gamma->device() || x->device() != beta->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "batch_norm");
@@ -58,26 +58,58 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     if (gamma->shape().size() != 1 || beta->shape().size() != 1)
         throw ShapeMismatch(gamma->shape(), beta->shape(), "batch_norm: γ, β must be 1-D");
 
-    const int B = static_cast<int>(x->shape()[0]);
-    const int C = static_cast<int>(x->shape()[1]);
+    // 3.3 AMP plumbing: schema_v1.amp_policy == ForceFP32.  Under
+    // ``AutocastGuard(F16)`` SchemaGuard returns ``Dtype::F32`` regardless
+    // of input dtype — BN's batch statistics are numerically sensitive
+    // and running them in F16 risks catastrophic cancellation of the
+    // mean/variance reductions.  The cast MUST happen before the strict
+    // ``x->dtype() != gamma->dtype()`` check below: under autocast, the
+    // surrounding Conv has cast x to F16 while gamma / beta on the
+    // ``nn.BatchNorm`` Parameter slots are still F32.  After the cast
+    // all three operands share ``eff_dt`` and the dtype-match invariant
+    // holds.  Outside an autocast scope this is a no-op (``astype_op``
+    // returns the input unchanged when dtypes already match).
+    //
+    // ``astype_op`` (not ``maybe_cast_for_kernel``) is used so the cast
+    // tensors carry an ``AstypeBackward`` grad_fn.  Without this the
+    // F32-cast x_eff has requires_grad=false and ``wire_autograd`` would
+    // drop the entire BN backward chain under AMP.
+    SchemaGuard sg{BatchNormNdBackward<N>::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr gamma_eff = astype_op(gamma, eff_dt);
+    const TensorImplPtr beta_eff = astype_op(beta, eff_dt);
+
+    // Trivially true after the AMP cast above — kept as a defensive
+    // assertion in case ``astype_op`` ever returns an input whose dtype
+    // doesn't match eff_dt (would indicate a backend bug).
+    if (x_eff->dtype() != gamma_eff->dtype() || x_eff->dtype() != beta_eff->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
+                            std::string(dtype_name(gamma_eff->dtype())), "batch_norm");
+
+    const int B = static_cast<int>(x_eff->shape()[0]);
+    const int C = static_cast<int>(x_eff->shape()[1]);
     int S[N > 0 ? N : 1];
     int spatial_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape()[2 + i]);
+        S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         spatial_total *= S[i];
     }
-    if (gamma->shape()[0] != C || beta->shape()[0] != C)
-        throw ShapeMismatch(gamma->shape(), x->shape(), "batch_norm: γ/β must have length C");
+    if (gamma_eff->shape()[0] != C || beta_eff->shape()[0] != C)
+        throw ShapeMismatch(gamma_eff->shape(), x_eff->shape(),
+                            "batch_norm: γ/β must have length C");
 
-    OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x->device(), x->dtype(), x->shape()};
+    OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt,
+                      x_eff->shape()};
 
     // batch_norm_forward returns [y, mean, rstd].
-    auto forward = backend::Dispatcher::for_device(x->device())
-                       .batch_norm_forward(x->storage(), gamma->storage(), beta->storage(), B, C,
-                                           spatial_total, N, eps, x->shape(), x->dtype());
+    auto forward = backend::Dispatcher::for_device(x_eff->device())
+                       .batch_norm_forward(x_eff->storage(), gamma_eff->storage(),
+                                           beta_eff->storage(), B, C, spatial_total, N, eps,
+                                           x_eff->shape(), eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x->shape(), x->dtype(),
-                                            x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x_eff->shape(), eff_dt,
+                                            x_eff->device(), false);
     auto bwd = std::make_shared<BatchNormNdBackward<N>>();
     bwd->saved_mean_ = std::move(forward[1]);
     bwd->saved_rstd_ = std::move(forward[2]);
@@ -85,9 +117,9 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     bwd->C_ = C;
     for (int i = 0; i < N; ++i)
         bwd->S_[i] = S[i];
-    // saved_inputs_[0..2] will hold {x, gamma, beta}.
-    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, gamma, beta},
-                                                                 out);
+    // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
+    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(
+        std::move(bwd), {x_eff, gamma_eff, beta_eff}, out);
     return out;
 }
 

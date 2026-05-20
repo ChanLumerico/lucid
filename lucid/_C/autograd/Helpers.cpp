@@ -104,6 +104,28 @@ Storage reduce_grad_to_shape(const Storage& grad,
 //   CpuStorage+SharedStorage   — view the shared source as CPU, then add.
 // Any other combination (CPU+GPU, GPU+CPU, etc.) throws DeviceMismatch.
 void accumulate_into(Storage& dst, const Storage& src) {
+    // 3.3 AMP fix: when a non-leaf intermediate gradient is accumulated from
+    // two paths whose effective dtypes differ (e.g. Promote + ForceFP32
+    // siblings under autocast(F16)), coerce src to dst's dtype before
+    // adding.  Without this, ``mlx::core::add`` would throw DtypeMismatch
+    // and ``cpu_add_inplace`` would assert.  Casting src (rather than
+    // promoting dst) keeps the destination dtype stable across additions
+    // — once the first grad lands the slot's dtype is fixed, and all
+    // subsequent grads conform.  Element-wise add is shape-agnostic so a
+    // 1-D ``{numel}`` shape passed to ``be.astype`` is sufficient.
+    const Dtype dst_dt = storage_dtype(dst);
+    const Dtype src_dt = storage_dtype(src);
+    Storage src_owned;
+    const Storage* src_ptr = &src;
+    if (src_dt != dst_dt) {
+        const Device dev = storage_is_cpu(src) ? Device::CPU
+                           : storage_is_gpu(src) ? Device::GPU
+                                                 : Device::CPU;  // SharedStorage is CPU-viewable
+        const std::size_t n = storage_nbytes(src) / dtype_size(src_dt);
+        Shape one_d_shape = {static_cast<std::int64_t>(n)};
+        src_owned = backend::Dispatcher::for_device(dev).astype(src, one_d_shape, src_dt, dst_dt);
+        src_ptr = &src_owned;
+    }
     std::visit(overloaded{
                    [&](CpuStorage& d, const CpuStorage& s) { cpu_add_inplace(d, s); },
                    [&](GpuStorage& d, const GpuStorage& s) {
@@ -138,7 +160,7 @@ void accumulate_into(Storage& dst, const Storage& src) {
                        throw DeviceMismatch("matching device", "mixed CPU/GPU", "accumulate_into");
                    },
                },
-               dst, src);
+               dst, *src_ptr);
 }
 
 // -------------------------------------------------------------------------

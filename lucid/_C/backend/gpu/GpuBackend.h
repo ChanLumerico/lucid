@@ -1427,8 +1427,12 @@ public:
             *gr.arr, ::mlx::core::subtract(gx_scaled, ::mlx::core::multiply(xnorm, m)));
         auto dx = ::mlx::core::reshape(dx_2d, gpu::to_mlx_shape(x_shape));
         auto dgamma = ::mlx::core::reshape(dgamma_2d, gpu::to_mlx_shape(gamma_shape));
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)}};
+        // 3.4 backward sweep: ``multiply`` / ``sum`` produce contiguous
+        // tensors and ``reshape`` preserves contiguity, so the trailing
+        // ``contiguous(...)`` wrap is a redundant materialisation that
+        // breaks lazy fusion at the autograd boundary.
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)}};
     }
 
     std::vector<Storage> layer_norm_forward(const Storage& x,
@@ -1496,9 +1500,11 @@ public:
         auto dx = ::mlx::core::reshape(dx_2d, gpu::to_mlx_shape(x_shape));
         auto dgamma = ::mlx::core::reshape(dgamma_2d, gpu::to_mlx_shape(gamma_shape));
         auto dbeta = ::mlx::core::reshape(dbeta_2d, gpu::to_mlx_shape(beta_shape));
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
+        // 3.4 backward sweep: reduction outputs are contiguous and
+        // ``reshape`` preserves contiguity.  See BatchNorm backward.
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
     }
 
     std::vector<Storage> batch_norm_forward(const Storage& x,
@@ -1569,9 +1575,15 @@ public:
         auto inner = ::mlx::core::subtract(::mlx::core::subtract(*ggrad.arr, mean_g),
                                            ::mlx::core::multiply(xnorm, mean_g_xn));
         auto dx = ::mlx::core::multiply(::mlx::core::multiply(gamma_view, *gr.arr), inner);
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
+        // 3.4 perf: backward sweep — drop the trailing ``contiguous(...)``
+        // wraps that mirror the 3.1.0 forward-side sweep.  ``multiply`` and
+        // ``sum`` already return contiguous tensors from MLX, so the wrap
+        // is a redundant materialisation that breaks lazy fusion through
+        // the accumulate_into / next-edge boundary.  ResNet-18 / CIFAR-10
+        // hits this path 16 × per backward (one per BatchNorm2d).
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
     }
 
     std::vector<Storage> group_norm_forward(const Storage& x,
@@ -1690,9 +1702,10 @@ public:
                                            ::mlx::core::multiply(xnorm_g, mean2));
         auto dx_g = ::mlx::core::multiply(rstd_g, inner);
         auto dx = ::mlx::core::reshape(dx_g, gpu::to_mlx_shape(x_shape));
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dx), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dgamma), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(dbeta), dt)}};
+        // 3.4 backward sweep: same as BatchNorm / LayerNorm.
+        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
     }
 
     Storage linalg_norm(const Storage& a,
@@ -5955,6 +5968,17 @@ private:
         auto ones_arr = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         ::mlx::core::array scalar = [&]() -> ::mlx::core::array {
             switch (dt) {
+            case Dtype::F16:
+                // 3.3 AMP support: F16 fill values arise in Conv/Linear/Matmul
+                // autocast scopes when Python scalar promotions touch a cast
+                // tensor (e.g. BatchNorm's ``(1-eff) * running_mean`` builds an
+                // F16 scalar tensor under autocast(F16)).  Build via an
+                // F32 array then cast — ``mlx::core::array`` ctor doesn't
+                // accept a float16 scalar directly, but ``astype`` from F32
+                // is fast and matches the dtype of ``ones_arr``.
+                return ::mlx::core::astype(
+                    ::mlx::core::array(static_cast<float>(fill_value)),
+                    ::mlx::core::float16);
             case Dtype::F32:
                 return ::mlx::core::array(static_cast<float>(fill_value));
             case Dtype::F64:
@@ -5963,6 +5987,10 @@ private:
                 return ::mlx::core::array(static_cast<int32_t>(fill_value));
             case Dtype::I64:
                 return ::mlx::core::array(static_cast<int64_t>(fill_value));
+            case Dtype::I8:
+                return ::mlx::core::array(static_cast<int8_t>(fill_value));
+            case Dtype::I16:
+                return ::mlx::core::array(static_cast<int16_t>(fill_value));
             case Dtype::Bool:
                 return ::mlx::core::array(fill_value != 0.0);
             case Dtype::C64:

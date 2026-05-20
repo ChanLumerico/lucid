@@ -19,11 +19,14 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
+#include "../kernel/BinaryKernel.h"
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/_BinaryOp.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -58,36 +61,69 @@ LinearBackward::forward(const TensorImplPtr& x, const TensorImplPtr& W, const Te
     Validator::input(x, "linear.x").non_null();
     Validator::input(W, "linear.W").non_null().ndim(2);
     Validator::input(b, "linear.b").non_null().ndim(1);
-    Validator::pair(x, W, "linear").same_dtype().same_device();
-    Validator::pair(x, b, "linear").same_dtype().same_device();
+    // Device check first — AMP cast doesn't change device.  Dtype check
+    // is deferred until after the AMP cast (operands match by
+    // construction at eff_dt).
+    Validator::pair(x, W, "linear").same_device();
+    Validator::pair(x, b, "linear").same_device();
 
-    const auto fx = flatten_x(x->shape());
+    // 3.3 AMP plumbing: schema_v1.amp_policy == Promote.  Under an
+    // ``AutocastGuard(F16)`` scope, SchemaGuard resolves ``eff_dt`` to the
+    // autocast target (F32 on CPU per Accelerate-no-F16 carve-out, F16 on
+    // GPU).  All three operands are cast to ``eff_dt`` before the matmul
+    // so MLX's conv/matmul kernels can take their native F16 fast path —
+    // previously the autocast scope was completely ignored by Linear, so
+    // F32 was used even inside ``with amp.autocast(F16):``.  The cast
+    // must precede the dtype-match validator: under autocast, the
+    // surrounding op has cast x to F16 while W / b on the Parameter
+    // slots are still F32.  After the cast all three share ``eff_dt``.
+    //
+    // ``astype_op`` (not ``maybe_cast_for_kernel``) is used because it
+    // wires an ``AstypeBackward`` node when the input has requires_grad.
+    // Without this the cast tensors carry requires_grad=false → the
+    // downstream ``NaryKernel::wire_autograd`` any_grad check fires
+    // false → the entire backward chain breaks at every AMP cast
+    // boundary.  ``astype_op`` is a same-dtype no-op (returns input as
+    // ``shared_ptr``), so the F32 baseline pays no cost.
+    SchemaGuard sg{schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr W_eff = astype_op(W, eff_dt);
+    const TensorImplPtr b_eff = astype_op(b, eff_dt);
+    Validator::pair(x_eff, W_eff, "linear").same_dtype();
+    Validator::pair(x_eff, b_eff, "linear").same_dtype();
+
+    const auto fx = flatten_x(x_eff->shape());
     const std::size_t M = fx.M;
     const std::size_t K = fx.K;
-    const std::size_t N = static_cast<std::size_t>(W->shape()[0]);
+    const std::size_t N = static_cast<std::size_t>(W_eff->shape()[0]);
 
-    if (W->shape()[1] != static_cast<std::int64_t>(K))
-        throw ShapeMismatch(W->shape(), x->shape(), "linear: W.shape[1] != x.last_dim");
-    if (b->shape()[0] != static_cast<std::int64_t>(N))
-        throw ShapeMismatch(b->shape(), W->shape(), "linear: b.shape[0] != W.shape[0]");
+    if (W_eff->shape()[1] != static_cast<std::int64_t>(K))
+        throw ShapeMismatch(W_eff->shape(), x_eff->shape(),
+                            "linear: W.shape[1] != x.last_dim");
+    if (b_eff->shape()[0] != static_cast<std::int64_t>(N))
+        throw ShapeMismatch(b_eff->shape(), W_eff->shape(),
+                            "linear: b.shape[0] != W.shape[0]");
 
     // Output shape mirrors x but with the last dim replaced by N (out features).
-    Shape out_shape = x->shape();
+    Shape out_shape = x_eff->shape();
     out_shape.back() = static_cast<std::int64_t>(N);
 
-    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), out_shape};
+    OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, out_shape};
     // Each output element requires 2*K FLOPs (multiply-add pairs).
     scope.set_flops(static_cast<std::int64_t>(2 * M * N * K));
 
-    Storage out_storage = backend::Dispatcher::for_device(x->device())
-                              .linear(x->storage(), W->storage(), b->storage(), x->shape(),
-                                      W->shape(), out_shape, x->dtype());
+    Storage out_storage = backend::Dispatcher::for_device(x_eff->device())
+                              .linear(x_eff->storage(), W_eff->storage(), b_eff->storage(),
+                                      x_eff->shape(), W_eff->shape(), out_shape, eff_dt);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            x->dtype(), x->device(), false);
+                                            eff_dt, x_eff->device(), false);
 
-    // Wire the backward node; saved_inputs_ will hold {x, W, b}.
-    kernel::NaryKernel<LinearBackward, 3>::wire_autograd({x, W, b}, out);
+    // Wire the backward node; saved_inputs_ holds {x, W, b} at the
+    // effective (cast) dtype so apply() can do the matmul transposes
+    // and reduce(db) entirely at F16 — matching the forward path.
+    kernel::NaryKernel<LinearBackward, 3>::wire_autograd({x_eff, W_eff, b_eff}, out);
     return out;
 }
 
