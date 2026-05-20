@@ -1,7 +1,7 @@
 """Parity tests for lucid.func against the reference framework's func module.
 
 Each test verifies that lucid.func transforms produce numerically identical
-results to the reference framework's equivalent transform (torch.func).
+results to the reference framework's equivalent transform.
 
 Coverage:
   vmap       — batch vectorisation: elementwise, matmul, in_dims, composition

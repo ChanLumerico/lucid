@@ -1,8 +1,8 @@
 """Positional encoding primitives — Lucid-specific extensions to ``nn.functional``.
 
-PyTorch's ``nn.functional`` doesn't ship positional-encoding helpers (every
-model file rebuilds them locally).  Lucid centralises the common patterns so
-families consume a single canonical implementation:
+The reference framework's ``nn.functional`` doesn't ship positional-encoding
+helpers (every model file rebuilds them locally).  Lucid centralises the
+common patterns so families consume a single canonical implementation:
 
     * Sinusoidal positional encoding (1D)  — Vaswani et al., 2017
     * Sinusoidal positional encoding (2D)  — DETR §A.4 (Carion et al., 2020)

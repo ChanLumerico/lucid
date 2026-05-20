@@ -190,7 +190,7 @@ def transfer(
     lucid_model:
         Lucid model (``lucid.nn.Module`` subclass).
     timm_model:
-        timm / PyTorch model.
+        timm / reference-framework model.
     remap:
         Optional explicit overrides ``{lucid_key: timm_key}``.
 
@@ -200,7 +200,8 @@ def transfer(
         Alignment statistics.  Caller decides whether to assert full
         coverage or accept partial alignment.
     """
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     # Build numpy views of both state dicts
     lucid_sd_np: dict[str, np.ndarray] = {
@@ -233,7 +234,7 @@ def transfer(
                 result.unmatched_lucid.append(lk)
                 result.unmatched_timm.append(tk)
                 continue
-        timm_sd[tk].copy_(torch.from_numpy(arr))
+        timm_sd[tk].copy_(_ref.from_numpy(arr))
 
     if true_mismatches:
         import warnings
@@ -257,7 +258,8 @@ def transfer_positional(lucid_model: Any, timm_model: Any) -> None:
     attribute names differ from timm's but shapes / order match).
     Raises ``AssertionError`` on count or shape mismatch.
     """
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     lparams = list(lucid_model.parameters())
     tparams = list(timm_model.parameters())
@@ -274,7 +276,7 @@ def transfer_positional(lucid_model: Any, timm_model: Any) -> None:
         if arr.shape != tuple(tp.shape):
             mismatches.append(f"  [{i}] lucid={arr.shape} vs timm={tuple(tp.shape)}")
         else:
-            tp.data.copy_(torch.from_numpy(arr))
+            tp.data.copy_(_ref.from_numpy(arr))
 
     if mismatches:
         raise AssertionError(
@@ -317,7 +319,8 @@ def diagnose_forward(
     Useful for diagnosing *where* divergence starts in a failing test.
     """
     import lucid
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     transfer(lucid_model, timm_model, remap, key_transform)
 
@@ -343,7 +346,7 @@ def diagnose_forward(
             continue
 
         def _hook_timm(m: Any, inp: Any, out: Any, _n: str = name) -> None:
-            if isinstance(out, torch.Tensor):
+            if isinstance(out, _ref.Tensor):
                 timm_acts[_n] = out.detach().cpu().numpy()
 
         timm_handles.append(mod.register_forward_hook(_hook_timm))
@@ -353,8 +356,8 @@ def diagnose_forward(
         timm_model.eval()
 
         lucid_model(lucid.from_numpy(x_np.copy()))
-        with torch.no_grad():
-            timm_model(torch.from_numpy(x_np.copy()))
+        with _ref.no_grad():
+            timm_model(_ref.from_numpy(x_np.copy()))
     finally:
         for h in lucid_handles + timm_handles:
             h.remove()

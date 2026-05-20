@@ -11,9 +11,10 @@ Three variants are shipped:
     * :class:`SinusoidalEmbedding2D` — DETR §A.4
     * :class:`RotaryEmbedding`                 — Su et al., 2021
 
-PyTorch has none of these in ``torch.nn``; every model file reimplements
-them.  Lucid centralises them so families share a single canonical
-implementation (and weight checkpoints don't drift between siblings).
+The reference framework has none of these in its ``nn`` namespace; every
+model file reimplements them.  Lucid centralises them so families share
+a single canonical implementation (and weight checkpoints don't drift
+between siblings).
 """
 
 from typing import cast

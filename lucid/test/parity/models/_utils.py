@@ -54,7 +54,7 @@ heavy = pytest.mark.heavy
 # ── Tier-aware parametrize helper ─────────────────────────────────────────────
 
 
-def _spec_param(spec: "ParitySpec") -> pytest.param:
+def _spec_param(spec: ParitySpec) -> pytest.param:
     """Wrap a ParitySpec with the appropriate pytest tier mark.
 
     Use inside ``@pytest.mark.parametrize`` so each variant automatically
@@ -74,7 +74,7 @@ def _spec_param(spec: "ParitySpec") -> pytest.param:
 # ── Registry-driven runners ───────────────────────────────────────────────────
 
 
-def _run_parity(spec: "ParitySpec") -> None:
+def _run_parity(spec: ParitySpec) -> None:
     """Execute one full parity check from a ParitySpec.
 
     Steps
@@ -88,7 +88,8 @@ def _run_parity(spec: "ParitySpec") -> None:
     6. On failure, run ``diagnose_forward`` and print the top diverging layers.
     """
     import timm
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     from lucid.test.parity.models._sd_transfer import (
         diagnose_forward,
@@ -128,8 +129,8 @@ def _run_parity(spec: "ParitySpec") -> None:
     rng = np.random.default_rng(0)
     x_np = rng.standard_normal(spec.input_shape).astype(np.float32)
 
-    with torch.no_grad():
-        y_ref = timm_model(torch.from_numpy(x_np.copy())).numpy()
+    with _ref.no_grad():
+        y_ref = timm_model(_ref.from_numpy(x_np.copy())).numpy()
 
     lucid_out = lucid_model(lucid.from_numpy(x_np.copy()))
     y_lucid = (
@@ -156,7 +157,7 @@ def _run_parity(spec: "ParitySpec") -> None:
         raise exc
 
 
-def _run_self_consistency(spec: "ParitySpec") -> None:
+def _run_self_consistency(spec: ParitySpec) -> None:
     """Run a determinism check for a ParitySpec.
 
     Runs the Lucid model twice on the same fixed input and asserts
@@ -189,7 +190,8 @@ def _run_self_consistency(spec: "ParitySpec") -> None:
 
 def _copy_lucid_to_ref(lucid_model: nn.Module, ref_model: Any) -> None:
     """Copy parameters from Lucid model → reference model positionally."""
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     lucid_params = list(lucid_model.parameters())
     ref_params = list(ref_model.parameters())
@@ -205,7 +207,7 @@ def _copy_lucid_to_ref(lucid_model: nn.Module, ref_model: Any) -> None:
             raise AssertionError(
                 f"shape mismatch: lucid={arr.shape} ref={tuple(rp.shape)}"
             )
-        rp.data.copy_(torch.from_numpy(arr))
+        rp.data.copy_(_ref.from_numpy(arr))
 
 
 def run_parity(
@@ -221,7 +223,8 @@ def run_parity(
 ) -> None:
     """Run one full-model parity check against a timm reference (legacy API)."""
     import timm
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     timm_model = timm.create_model(
         timm_name,
@@ -240,8 +243,8 @@ def run_parity(
     rng = np.random.default_rng(seed)
     x_np = rng.standard_normal(input_shape).astype(np.float32)
 
-    with torch.no_grad():
-        y_ref = timm_model(torch.from_numpy(x_np)).numpy()
+    with _ref.no_grad():
+        y_ref = timm_model(_ref.from_numpy(x_np)).numpy()
 
     lucid_out = lucid_model(lucid.from_numpy(x_np))
     y_lucid = (
@@ -285,7 +288,8 @@ def run_block_parity(
     rtol: float = 1e-4,
 ) -> None:
     """Compare a single sub-module against its reference counterpart (legacy API)."""
-    import torch
+    from lucid.test._fixtures.ref_framework import require_ref
+    _ref = require_ref()
 
     lucid_block.eval()
     ref_block.eval()
@@ -298,8 +302,8 @@ def run_block_parity(
     rng = np.random.default_rng(seed)
     x_np = rng.standard_normal(input_shape).astype(np.float32)
 
-    with torch.no_grad():
-        y_ref = ref_block(torch.from_numpy(x_np)).numpy()
+    with _ref.no_grad():
+        y_ref = ref_block(_ref.from_numpy(x_np)).numpy()
 
     y_lucid_out = lucid_block(lucid.from_numpy(x_np))
     y_lucid = (

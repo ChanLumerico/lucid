@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def accuracy(logits: "Tensor", target: "Tensor", *, dim: int = -1) -> "Tensor":
+def accuracy(logits: Tensor, target: Tensor, *, dim: int = -1) -> Tensor:
     r"""Compute the mean classification accuracy in ``[0, 1]``.
 
     Equivalent to ``(logits.argmax(dim=dim) == target).float().mean()`` —
@@ -65,7 +65,7 @@ def accuracy(logits: "Tensor", target: "Tensor", *, dim: int = -1) -> "Tensor":
     return (logits.argmax(dim=dim) == target).float().mean()
 
 
-def correct_count(logits: "Tensor", target: "Tensor", *, dim: int = -1) -> "Tensor":
+def correct_count(logits: Tensor, target: Tensor, *, dim: int = -1) -> Tensor:
     r"""Count of correct top-1 predictions as an ``int64`` 0-d Tensor.
 
     Equivalent to ``(logits.argmax(dim=dim) == target).long().sum()`` —

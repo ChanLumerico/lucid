@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 _NEG_INF: float = float("-inf")
 
 
-def _to_additive_mask(mask: "Tensor", float_dtype: object) -> "Tensor":
+def _to_additive_mask(mask: Tensor, float_dtype: object) -> Tensor:
     """Convert a bool/byte mask (True = mask out) to an additive float mask
     (-inf where True, 0 where False).  Already-float masks pass through."""
     if mask.dtype == _lucid.bool_:
@@ -411,7 +411,7 @@ class MultiheadAttention(Module):
         )
 
     def _project_qkv(
-        self, query: "Tensor", key: "Tensor", value: "Tensor"
+        self, query: Tensor, key: Tensor, value: Tensor
     ) -> tuple["Tensor", "Tensor", "Tensor"]:
         """Apply the input projections, returning ``(q, k, v)`` each shaped
         ``(B, T*, embed_dim)``."""
@@ -441,13 +441,13 @@ class MultiheadAttention(Module):
         v: Tensor = linear(value, v_w, v_b)
         return q, k, v
 
-    def _split_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
+    def _split_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Reshape ``(B, T, embed_dim)`` → ``(B, num_heads, T, head_dim)``."""
         return x.reshape(batch_size, seq_len, self.num_heads, self.head_dim).permute(
             [0, 2, 1, 3]
         )
 
-    def _merge_heads(self, x: "Tensor", batch_size: int, seq_len: int) -> "Tensor":
+    def _merge_heads(self, x: Tensor, batch_size: int, seq_len: int) -> Tensor:
         """Inverse of :meth:`_split_heads`."""
         return x.permute([0, 2, 1, 3]).reshape(batch_size, seq_len, self.embed_dim)
 
@@ -487,9 +487,9 @@ class MultiheadAttention(Module):
 
     def forward(  # type: ignore[override]  # narrower signature than Function/Module base by design
         self,
-        query: "Tensor",
-        key: "Tensor",
-        value: "Tensor",
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
         key_padding_mask: "Tensor | None" = None,
         need_weights: bool = True,
         attn_mask: "Tensor | None" = None,
@@ -601,9 +601,9 @@ class MultiheadAttention(Module):
 
     def _attn_with_weights(
         self,
-        q: "Tensor",
-        k: "Tensor",
-        v: "Tensor",
+        q: Tensor,
+        k: Tensor,
+        v: Tensor,
         attn_mask: "Tensor | None",
         is_causal: bool,
     ) -> tuple["Tensor", "Tensor"]:

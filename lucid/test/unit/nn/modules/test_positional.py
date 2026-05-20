@@ -1,6 +1,6 @@
 """Unit tests for ``lucid.nn`` positional-encoding modules + functional pair.
 
-Covers the three Lucid-specific extensions to PyTorch's nn surface:
+Covers the three Lucid-specific extensions to the reference framework's nn surface:
 
     * :class:`lucid.nn.SinusoidalEmbedding`
     * :class:`lucid.nn.SinusoidalEmbedding2D`

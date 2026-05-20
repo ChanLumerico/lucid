@@ -80,8 +80,9 @@ class Optimizer:
     # sizes because it shatters the MLX lazy-graph pipeline that would
     # otherwise chain forward → backward → step into one submission.
     #
-    # PyTorch's optimizers do NOT force-eval after step(); they rely on the
-    # next ``.item()`` / ``.cpu()`` / numpy bridge call to materialise.
+    # The reference framework's optimizers do NOT force-eval after step();
+    # they rely on the next ``.item()`` / ``.cpu()`` / numpy bridge call
+    # to materialise.
     # We mirror that default — set this class attribute to True (per-instance
     # via ``optimizer.AUTO_EVAL_AFTER_STEP = True`` or globally on a
     # subclass) only when you need step() to act as a synchronisation point.

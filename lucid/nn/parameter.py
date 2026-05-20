@@ -89,9 +89,21 @@ class Parameter(Tensor):
         Parameter
             Fresh instance ready to be bound as a Module attribute.
         """
+        # ``shadow_alloc`` mode short-circuit: when the underlying impl
+        # is a PhantomImpl, ``clone_with_grad`` already returns a phantom
+        # so the normal path Just Works.  The only branch that *must*
+        # be specialised is ``data=None`` — the engine's ``zeros`` is
+        # patched in shadow mode but the manual ``[0]`` shape would
+        # still allocate before the patch ran.  Importing locally to
+        # avoid a circular import.
+        from lucid.nn._shadow import is_active as _shadow_active, PhantomImpl
+
         if data is None:
-            impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
-            impl = impl.clone_with_grad(requires_grad)
+            if _shadow_active():
+                impl = PhantomImpl((0,), None, None, requires_grad)
+            else:
+                impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
+                impl = impl.clone_with_grad(requires_grad)
         elif isinstance(data, Tensor):
             impl = data._impl.clone_with_grad(requires_grad)
         else:
