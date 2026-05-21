@@ -2010,13 +2010,50 @@ public:
         axes.push_back(0);
         for (int i = 0; i < ndim; ++i)
             axes.push_back(2 + i);
-        auto dgamma = ::mlx::core::sum(::mlx::core::multiply(*ggrad.arr, xnorm), axes, false);
-        auto dbeta = ::mlx::core::sum(*ggrad.arr, axes, false);
-        auto mean_g = ::mlx::core::mean(*ggrad.arr, axes, true);
-        auto mean_g_xn = ::mlx::core::mean(::mlx::core::multiply(*ggrad.arr, xnorm), axes, true);
+
+        // 3.4+ Phase A.2: BN backward algorithmic restructure.
+        //
+        //   (a) CSE ``multiply(grad, xnorm)`` — the prior code emitted this
+        //       op twice (once inside the dgamma sum, once inside the
+        //       mean_g_xn mean).  MLX's lazy graph may CSE this, but
+        //       hoisting it makes the dedup explicit and saves the second
+        //       multiply when MLX doesn't.
+        //   (b) ``mean = sum / N`` — emit two sums with keepdims=true and
+        //       derive both ``mean_g`` (for dx) and ``dbeta`` (for output)
+        //       from the same ``sum_grad_kept``; same for ``mean_g_xn`` and
+        //       ``dgamma``.  Net: 2 reduction kernels instead of 4
+        //       (dbeta sum + dgamma sum + mean_g + mean_g_xn).
+        //
+        // Result: ~3 fewer MLX ops per BN backward call.  On ResNet-18
+        // with 20 BatchNorm2d layers and channels-first shapes ≤ 2M numel
+        // (below the MPSGraph dispatch threshold), this is the only
+        // backend path that runs — so the savings compound.  Targets the
+        // +1.31 ms BN bwd microbench gap vs the reference framework.
+        auto grad_xnorm = ::mlx::core::multiply(*ggrad.arr, xnorm);
+        auto sum_grad_kept = ::mlx::core::sum(*ggrad.arr, axes, true);
+        auto sum_grad_xn_kept = ::mlx::core::sum(grad_xnorm, axes, true);
+
+        // N = product of the reduced dims (batch + spatial).  Used as a
+        // scalar broadcast divisor to convert sum → mean for the dx
+        // formula.  Built from x's shape so it picks up the live extent.
+        std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
+        for (int i = 0; i < ndim; ++i)
+            N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
+        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
+                                 gpu::to_mlx_dtype(dt));
+        auto mean_g = ::mlx::core::multiply(sum_grad_kept, inv_N);
+        auto mean_g_xn = ::mlx::core::multiply(sum_grad_xn_kept, inv_N);
+
         auto inner = ::mlx::core::subtract(::mlx::core::subtract(*ggrad.arr, mean_g),
                                            ::mlx::core::multiply(xnorm, mean_g_xn));
         auto dx = ::mlx::core::multiply(::mlx::core::multiply(gamma_view, *gr.arr), inner);
+
+        // ``sum_*_kept`` has shape (1, C, 1, ..., 1); reshape to (C,) for
+        // the non-keepdims output expected by autograd.  Metadata-only on
+        // MLX, no kernel.
+        ::mlx::core::Shape c_only{static_cast<::mlx::core::ShapeElem>(channels)};
+        auto dgamma = ::mlx::core::reshape(sum_grad_xn_kept, c_only);
+        auto dbeta = ::mlx::core::reshape(sum_grad_kept, c_only);
         // 3.4 perf: backward sweep — drop the trailing ``contiguous(...)``
         // wraps that mirror the 3.1.0 forward-side sweep.  ``multiply`` and
         // ``sum`` already return contiguous tensors from MLX, so the wrap

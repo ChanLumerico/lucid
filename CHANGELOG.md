@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - BN running-stats fusion + conv backward contig sweep
 - fused ReLU backward (single MLX where() kernel)
+- BN backward algorithmic restructure (CSE + mean=sum/N)
 
 ---
 
