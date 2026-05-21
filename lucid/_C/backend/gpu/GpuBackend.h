@@ -6545,6 +6545,26 @@ private:
         });
     }
 
+    // 3.4+ Phase A.1: fused ReLU backward.  Single MLX expression replacing
+    // the prior 3-op composition (greater + astype + multiply) which MLX did
+    // not fuse — the cast from Bool to F32 between greater and multiply broke
+    // the kernel-fusion chain.  ``where(greater(x, 0), g, 0)`` is a single
+    // conditional-select kernel that handles the typecast implicitly.  ResNet-
+    // 18 ReLU bwd per-op (microbench, M4 Max): the +0.79 ms gap vs the
+    // reference framework should close.
+    Storage relu_backward(const Storage& g,
+                          const Storage& x,
+                          const Shape&,
+                          Dtype dt) override {
+        const auto& gg = std::get<GpuStorage>(g);
+        const auto& gx = std::get<GpuStorage>(x);
+        if (!gg.arr || !gx.arr)
+            ErrorBuilder("gpu_backend::relu_backward").fail("null GPU array");
+        ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
+        auto out = ::mlx::core::where(::mlx::core::greater(*gx.arr, zero), *gg.arr, zero);
+        return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
+    }
+
     Storage reduce_grad_to_shape(const Storage& grad,
                                  const Shape& grad_shape,
                                  const Shape& target_shape,

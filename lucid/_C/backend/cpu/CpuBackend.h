@@ -10192,6 +10192,36 @@ private:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    // 3.4+ Phase A.1: fused ReLU backward.  Single-pass loop replacing
+    // positive_mask + multiply, eliminating one intermediate buffer.  See
+    // GpuBackend::relu_backward for the GPU rationale.
+    Storage relu_backward(const Storage& g,
+                          const Storage& x,
+                          const Shape& shape,
+                          Dtype dt) override {
+        const auto& cg = std::get<CpuStorage>(g);
+        const auto& cx = std::get<CpuStorage>(x);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const auto* gp = reinterpret_cast<const float*>(cg.ptr.get());
+            const auto* xp = reinterpret_cast<const float*>(cx.ptr.get());
+            auto* op = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = (xp[i] > 0.f) ? gp[i] : 0.f;
+        } else if (dt == Dtype::F64) {
+            const auto* gp = reinterpret_cast<const double*>(cg.ptr.get());
+            const auto* xp = reinterpret_cast<const double*>(cx.ptr.get());
+            auto* op = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i)
+                op[i] = (xp[i] > 0.0) ? gp[i] : 0.0;
+        } else {
+            ErrorBuilder("cpu_backend::relu_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage reduce_grad_to_shape(const Storage& grad,
                                  const Shape& grad_shape,
                                  const Shape& target_shape,

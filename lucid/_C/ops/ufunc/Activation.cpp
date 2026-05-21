@@ -34,10 +34,19 @@ namespace lucid {
 const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 
 // dL/dx = (x > 0) * dL/dy: zero out gradient where x was non-positive.
+//
+// 3.4+ Phase A.1: dispatch to a single fused backend kernel rather than
+// composing positive_mask + multiply at the Storage layer.  The prior path
+// emitted three MLX ops (greater + astype + multiply) split across two
+// Storage boundaries, which MLX did not fuse into a single kernel — leaving
+// ~0.79 ms / step of overhead on ResNet-18 vs the reference framework.  The
+// backend now exposes :func:`IBackend::relu_backward` which on GPU lowers
+// to one ``where(greater(x, 0), g, 0)`` call and on CPU to one tight loop.
 Storage ReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
-    Storage mask = positive_mask_storage(saved_inputs_[0], n, dtype_, device_);
-    return multiply_storages(g, mask, n, dtype_, device_);
+    Shape flat{static_cast<std::int64_t>(n)};
+    return backend::Dispatcher::for_device(device_).relu_backward(g, saved_inputs_[0],
+                                                                  flat, dtype_);
 }
 
 TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
