@@ -1950,16 +1950,40 @@ public:
         // 32×64×112×112) 3.74 ms vs 4.56 ms when using the more "obviously
         // efficient" ``mlx::core::var(x, axes)`` (which can't share its
         // internal centered with the outer expression).
-        auto mean = ::mlx::core::mean(*gx.arr, axes, true);
+        //
+        // 3.4+ Phase A.3: replace mean(...) with sum(..., keepdims) × 1/N
+        // (mirror of the BN backward sum/mean restructure).  Same number
+        // of full-tensor reductions but each call site swaps a (potentially
+        // separately-dispatched) mean kernel for a sum + cheap scalar
+        // broadcast multiply, which MLX is more likely to fuse with the
+        // surrounding subtract / square chain.
+        std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
+        for (int i = 0; i < ndim; ++i)
+            N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
+        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
+                                 gpu::to_mlx_dtype(dt));
+
+        auto sum_x_kept = ::mlx::core::sum(*gx.arr, axes, true);
+        auto mean = ::mlx::core::multiply(sum_x_kept, inv_N);
         auto centered = ::mlx::core::subtract(*gx.arr, mean);
-        auto var = ::mlx::core::mean(::mlx::core::square(centered), axes, true);
+        auto sum_sq_kept =
+            ::mlx::core::sum(::mlx::core::square(centered), axes, true);
+        auto var = ::mlx::core::multiply(sum_sq_kept, inv_N);
         auto rstd =
             ::mlx::core::rsqrt(::mlx::core::add(var, gpu::mlx_scalar(eps, gpu::to_mlx_dtype(dt))));
         auto xnorm = ::mlx::core::multiply(centered, rstd);
         auto y = ::mlx::core::add(::mlx::core::multiply(xnorm, g_view), b_view);
-        return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(mean), dt)},
-                Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
+        // 3.4+ Phase A.3: drop trailing contiguous(...) on y / mean / rstd.
+        // Mirrors the 3.1.0 forward + 3.4.0 norm-backward + Step 3.2 conv
+        // backward sweeps — MLX add / multiply / mean / rsqrt already
+        // produce contiguous tensors and downstream ops (ReLU forward,
+        // BN backward's reshape of saved_mean / saved_rstd, the Step 1
+        // fused EMA update) handle strided lazy views natively.  Forcing
+        // contiguous() here broke the lazy chain that ReLU / next BN
+        // would otherwise fuse with.
+        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(mean), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)}};
     }
 
     // BatchNorm backward (training mode).
