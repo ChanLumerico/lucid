@@ -123,6 +123,15 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     auto bwd = std::make_shared<BatchNormNdBackward<N>>();
     bwd->saved_mean_ = std::move(forward[1]);
     bwd->saved_rstd_ = std::move(forward[2]);
+    // 3.4+ Phase A.4: forward slot 3 holds xnorm = (x - mean) * rstd (MLX
+    // path only — MPSGraph dispatch + CPU return an empty Storage here and
+    // the backend backward then recomputes inline).  Saving the lazy MLX
+    // intermediate is zero forward cost — it's already in the graph for
+    // ``y = xnorm * γ + β`` — and lets backward skip the 2 element-wise
+    // ops (subtract + multiply) that recompute it.
+    if (forward.size() >= 4) {
+        bwd->saved_xnorm_ = std::move(forward[3]);
+    }
     bwd->B_ = B;
     bwd->C_ = C;
     for (int i = 0; i < N; ++i)
@@ -205,8 +214,8 @@ std::vector<Storage> BatchNormNdBackward<N>::apply(Storage grad_out) {
     // Returns [dx, d_gamma, d_beta].
     return backend::Dispatcher::for_device(this->device_)
         .batch_norm_backward(this->saved_inputs_[0], this->saved_inputs_[1], this->saved_mean_,
-                             this->saved_rstd_, grad_out, this->B_, this->C_, spatial_total, N,
-                             this->input_shapes_[0], this->dtype_, this->eps_);
+                             this->saved_rstd_, this->saved_xnorm_, grad_out, this->B_, this->C_,
+                             spatial_total, N, this->input_shapes_[0], this->dtype_, this->eps_);
 }
 
 template class BatchNormNdBackward<1>;

@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fused ReLU backward (single MLX where() kernel)
 - BN backward algorithmic restructure (CSE + mean=sum/N)
 - BN forward polish (mean→sum/N + drop trailing contiguous)
+- BN saved-xnorm — backward skips centered+xnorm recomputation
 
 ---
 

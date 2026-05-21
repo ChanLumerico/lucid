@@ -1929,7 +1929,10 @@ public:
             if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
                 auto out = gpu::mps::batch_norm_train_forward(
                     x, gamma, beta, channels, ndim, eps, x_shape, dt);
-                return {std::move(out.y), std::move(out.mean), std::move(out.rstd)};
+                // 4th slot empty Storage — MPSGraph backward computes
+                // xnorm internally, no need to expose it (Phase A.4).
+                return {std::move(out.y), std::move(out.mean), std::move(out.rstd),
+                        Storage{GpuStorage{}}};
             }
         }
         (void)x_shape_param;
@@ -1981,9 +1984,16 @@ public:
         // fused EMA update) handle strided lazy views natively.  Forcing
         // contiguous() here broke the lazy chain that ReLU / next BN
         // would otherwise fuse with.
+        //
+        // 3.4+ Phase A.4: also expose xnorm as the 4th return so backward
+        // can skip recomputing centered + xnorm.  xnorm is already in the
+        // lazy chain (consumed by the y = xnorm * γ + β line above) so
+        // returning it here is zero extra forward compute — the autograd
+        // node just retains an extra reference to the existing intermediate.
         return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(mean), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)}};
+                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)},
+                Storage{gpu::wrap_mlx_array(std::move(xnorm), dt)}};
     }
 
     // BatchNorm backward (training mode).
@@ -1998,6 +2008,7 @@ public:
                                              const Storage& gamma,
                                              const Storage& saved_mean,
                                              const Storage& saved_rstd,
+                                             const Storage& saved_xnorm,
                                              const Storage& grad,
                                              int,
                                              int channels,
@@ -2027,8 +2038,18 @@ public:
         ::mlx::core::Shape br_c(static_cast<std::size_t>(ndim) + 2, 1);
         br_c[1] = static_cast<::mlx::core::ShapeElem>(channels);
         auto gamma_view = ::mlx::core::reshape(*gg.arr, br_c);
-        auto centered = ::mlx::core::subtract(*gx.arr, *gm.arr);
-        auto xnorm = ::mlx::core::multiply(centered, *gr.arr);
+
+        // 3.4+ Phase A.4: prefer the forward-saved xnorm to skip the
+        // ``centered = x - mean`` + ``xnorm = centered * rstd`` recomputation.
+        // Falls back to the recompute path when saved_xnorm is an empty
+        // Storage (e.g. MPSGraph dispatch which doesn't expose xnorm).
+        ::mlx::core::array xnorm = [&]() -> ::mlx::core::array {
+            if (const auto* xn = std::get_if<GpuStorage>(&saved_xnorm)) {
+                if (xn->arr) return *xn->arr;
+            }
+            auto centered = ::mlx::core::subtract(*gx.arr, *gm.arr);
+            return ::mlx::core::multiply(centered, *gr.arr);
+        }();
         std::vector<int> axes;
         axes.reserve(static_cast<std::size_t>(ndim) + 1);
         axes.push_back(0);

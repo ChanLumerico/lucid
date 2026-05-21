@@ -3734,15 +3734,20 @@ public:
             }
         }
         const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
+        // 3.4+ Phase A.4: 4th slot is empty — CPU backward recomputes
+        // xnorm inline (per-element loop cost is negligible).  Only the
+        // MLX-path GPU backend benefits from saving the full xnorm.
         return {Storage{CpuStorage{y_ptr, total * dtype_size(dt), dt}},
                 Storage{CpuStorage{mean_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{rstd_ptr, param_nbytes, dt}}};
+                Storage{CpuStorage{rstd_ptr, param_nbytes, dt}},
+                Storage{CpuStorage{}}};
     }
 
     std::vector<Storage> batch_norm_backward(const Storage& x,
                                              const Storage& gamma,
                                              const Storage& saved_mean,
                                              const Storage& saved_rstd,
+                                             const Storage& saved_xnorm,
                                              const Storage& grad,
                                              int batch,
                                              int channels,
@@ -3754,7 +3759,10 @@ public:
         // CPU backward uses saved_rstd directly via the chain-rule formula;
         // no need for eps reconstruction.  The signature carries eps for
         // GPU backend symmetry.
+        // 3.4+ Phase A.4: CPU path ignores saved_xnorm — the typed C kernel
+        // recomputes inline since the inner loop's per-element xnorm is free.
         (void)eps_unused;
+        (void)saved_xnorm;
         const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
         const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
         auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);

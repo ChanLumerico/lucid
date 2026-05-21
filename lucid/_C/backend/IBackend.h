@@ -1006,7 +1006,13 @@ public:
                                                      const Shape& beta_shape,
                                                      Dtype dt) = 0;
     // BatchNorm training forward.  ndim distinguishes 1-D, 2-D, and 3-D spatial
-    // tensors.  Returns [output, saved_mean, saved_rstd].
+    // tensors.  Returns [output, saved_mean, saved_rstd, saved_xnorm].  The
+    // 4th element (xnorm = (x - mean) * rstd) is the normalised input that
+    // backward needs; the MLX forward path already materialises it as a lazy
+    // intermediate, so exposing it costs nothing at forward time and saves
+    // a recomputation at backward time.  Backends without a meaningful
+    // xnorm intermediate (e.g. the MPSGraph dispatch) may return an empty
+    // Storage for slot 3 — the backward will then fall back to recomputing.
     virtual std::vector<Storage> batch_norm_forward(const Storage& x,
                                                     const Storage& gamma,
                                                     const Storage& beta,
@@ -1022,10 +1028,19 @@ public:
     // `eps` matches the forward's epsilon — GPU backend needs it to
     // reconstruct variance from saved_rstd (var = 1/rstd^2 - eps) for
     // the MPSGraph normalizationGradient* path.  CPU backend may ignore.
+    //
+    // 3.4+ Phase A.4: ``saved_xnorm`` optionally carries the forward's
+    // normalised input ``(x - mean) * rstd`` as a full-size tensor (same
+    // shape as ``x``).  When present (i.e. non-empty Storage) the MLX-path
+    // backward consumes it directly and skips two element-wise ops per
+    // BN backward (centered = x - mean; xnorm = centered * rstd).  Passing
+    // an empty Storage triggers the prior recomputation path — required
+    // for the MPSGraph dispatch, which has its own xnorm management.
     virtual std::vector<Storage> batch_norm_backward(const Storage& x,
                                                      const Storage& gamma,
                                                      const Storage& saved_mean,
                                                      const Storage& saved_rstd,
+                                                     const Storage& saved_xnorm,
                                                      const Storage& grad,
                                                      int batch,
                                                      int channels,

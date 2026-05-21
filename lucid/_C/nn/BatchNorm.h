@@ -127,6 +127,16 @@ public:
     Storage saved_mean_;
     // Per-channel reciprocal std $1 / \sqrt{\sigma_c^2 + \epsilon}$, shape ``(C,)``.
     Storage saved_rstd_;
+    // 3.4+ Phase A.4 — normalised input $\hat{x} = (x - \mu) / \sqrt{\sigma^2 + \varepsilon}$,
+    // shape ``(B, C, S_0, ..., S_{N-1})``.  Saving xnorm at forward time lets
+    // backward skip the recomputation of ``centered = x - mean`` and
+    // ``xnorm = centered * rstd`` — two element-wise ops on a full-size
+    // tensor.  Forward already computes xnorm internally as an intermediate
+    // (the MLX path materialises it before applying gamma + beta) so saving
+    // it has no additional forward compute cost; the lazy chain just retains
+    // a reference to the existing intermediate.  Holds memory across the
+    // backward call, ~16 MB / BN layer on a 32×64×32×32 F32 ResNet-18 shape.
+    Storage saved_xnorm_;
     // Batch ($B$) and channel ($C$) counts.
     int B_ = 0, C_ = 0;
     // Spatial sizes ``S_0, ..., S_{N-1}`` (guard array length 1 when ``N==0``).
