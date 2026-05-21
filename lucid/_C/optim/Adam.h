@@ -75,6 +75,16 @@ struct AdamScalarCache {
     std::unique_ptr<mlx::core::array> inv_bc1;
     std::unique_ptr<mlx::core::array> inv_bc2;
     std::unique_ptr<mlx::core::array> wd_factor;  // (1 - lr*wd) for AdamW
+    // 3.4+ Phase A.5: bias-correction-folded scalars for the simplified
+    // Adam update.  Algebra: step = (lr/bc1) * sqrt(bc2) * m / (sqrt(v) +
+    // eps * sqrt(bc2)).  Folding bias corrections into lr and eps drops
+    // 2 broadcast multiplies per parameter (m_hat, v_hat are no longer
+    // materialised).
+    //
+    //   lr_eff  = lr * sqrt(bc2) / bc1
+    //   eps_eff = eps * sqrt(bc2)
+    std::unique_ptr<mlx::core::array> lr_eff_a;
+    std::unique_ptr<mlx::core::array> eps_eff_a;
 
     // Default-construct an empty (invalid) cache.
     AdamScalarCache();

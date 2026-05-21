@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BN backward algorithmic restructure (CSE + mean=sum/N)
 - BN forward polish (mean→sum/N + drop trailing contiguous)
 - BN saved-xnorm — backward skips centered+xnorm recomputation
+- Adam — fold bias correction into pre-computed scalars
 
 ---
 

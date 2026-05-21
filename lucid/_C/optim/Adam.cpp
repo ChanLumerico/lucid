@@ -109,6 +109,12 @@ void refresh_adam_scalar_cache(AdamScalarCache& cache,
     cache.lr_a = std::make_unique<::mlx::core::array>(lr, mdt);
     cache.inv_bc1 = std::make_unique<::mlx::core::array>(1.0 / bc1, mdt);
     cache.inv_bc2 = std::make_unique<::mlx::core::array>(1.0 / bc2, mdt);
+    // 3.4+ Phase A.5: pre-folded bias-correction scalars for the
+    // simplified update (see header).  lr_eff folds in sqrt(bc2)/bc1,
+    // eps_eff folds in sqrt(bc2).
+    const double sqrt_bc2 = std::sqrt(bc2);
+    cache.lr_eff_a = std::make_unique<::mlx::core::array>(lr * sqrt_bc2 / bc1, mdt);
+    cache.eps_eff_a = std::make_unique<::mlx::core::array>(eps * sqrt_bc2, mdt);
     if (decoupled_wd) {
         cache.wd_factor = std::make_unique<::mlx::core::array>(1.0 - lr * weight_decay, mdt);
         cache.wd_a.reset();
@@ -157,10 +163,18 @@ void adam_step_gpu_cached(GpuStorage& param_g,
     m_g.arr = gpu::wrap_mlx_array(::mlx::core::array(m_new), dt).arr;
     v_g.arr = gpu::wrap_mlx_array(::mlx::core::array(v_new), dt).arr;
 
-    auto m_hat = ::mlx::core::multiply(m_new, *cache.inv_bc1);
-    auto v_hat = ::mlx::core::multiply(v_new, *cache.inv_bc2);
-    auto denom = ::mlx::core::add(::mlx::core::sqrt(v_hat), *cache.eps_a);
-    auto step_arr = ::mlx::core::multiply(*cache.lr_a, ::mlx::core::divide(m_hat, denom));
+    // 3.4+ Phase A.5: simplified update folding bias corrections into
+    // pre-computed scalars (lr_eff_a, eps_eff_a).  Equivalent to the prior
+    //   m_hat = m_new / bc1
+    //   v_hat = v_new / bc2
+    //   step  = lr * m_hat / (sqrt(v_hat) + eps)
+    // by the algebra
+    //   step = (lr * sqrt(bc2) / bc1) * m_new / (sqrt(v_new) + eps * sqrt(bc2))
+    // and saves the two ``m_hat`` / ``v_hat`` materialisations (2 full-
+    // tensor multiplies) per parameter.
+    auto denom = ::mlx::core::add(::mlx::core::sqrt(v_new), *cache.eps_eff_a);
+    auto step_arr =
+        ::mlx::core::multiply(*cache.lr_eff_a, ::mlx::core::divide(m_new, denom));
     auto new_param = ::mlx::core::subtract(*param_g.arr, step_arr);
     param_g.arr = gpu::wrap_mlx_array(std::move(new_param), dt).arr;
 }
