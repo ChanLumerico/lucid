@@ -11,10 +11,17 @@
 //   memory that is safe to use from Metal compute kernels.
 //
 // download_gpu_to_cpu design:
-//   Calls arr->eval() to force lazy graph execution and materialise the array,
-//   then accesses data<uint8_t>() for a memcpy to a fresh aligned CPU buffer.
-//   After eval() the data pointer is guaranteed CPU-accessible on Apple Silicon
-//   unified-memory hardware only when the array is not on a pure GPU stream.
+//   Wraps the array in mlx::core::contiguous() before eval() so the underlying
+//   buffer's byte order matches the logical shape — lazy transposes (e.g. the
+//   NHWC↔NCHW perm at the conv bridge) leave stride metadata pointing at a
+//   permuted view while the raw buffer is still in the source layout, and
+//   array::data<T>() returns those raw bytes ignoring strides.  contiguous()
+//   is the standard MLX layout-fixup primitive and is a cheap pass-through
+//   when the input is already row-contiguous.  After eval() on the
+//   materialised array, data<uint8_t>() yields shape-major bytes safe to
+//   memcpy into a fresh aligned CPU buffer.  After eval() the data pointer
+//   is guaranteed CPU-accessible on Apple Silicon unified-memory hardware
+//   only when the array is not on a pure GPU stream.
 //
 // make_tracked:
 //   Wraps a raw mlx::core::array* in a shared_ptr with a custom deleter that
@@ -147,7 +154,15 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
         ErrorBuilder("download_gpu_to_cpu").fail("null GPU array");
     }
 
-    gpu.arr->eval();
+    // Force shape-major byte layout before reading.  array::data<T>() returns
+    // bytes in the buffer's underlying layout and ignores stride metadata, so
+    // a lazily-transposed array (e.g. the deferred NHWC→NCHW perm in
+    // conv_nd_forward) would otherwise memcpy NHWC bytes out of a tensor
+    // whose Lucid metadata advertises NCHW.  contiguous() is a no-op pass-
+    // through on already row-contiguous inputs (cheap on the common path) and
+    // materialises a properly-laid-out copy for strided views.
+    ::mlx::core::array materialised = ::mlx::core::contiguous(*gpu.arr);
+    materialised.eval();
 
     const std::size_t total = shape_numel(shape) * dtype_size(gpu.dtype);
     CpuStorage out;
@@ -158,7 +173,7 @@ CpuStorage download_gpu_to_cpu(const GpuStorage& gpu, const Shape& shape) {
     }
     out.ptr = allocate_aligned_bytes(total, Device::CPU);
 
-    const auto* src = gpu.arr->data<std::uint8_t>();
+    const auto* src = materialised.data<std::uint8_t>();
     std::memcpy(out.ptr.get(), src, total);
     return out;
 }

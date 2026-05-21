@@ -976,6 +976,105 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
+    Storage silu_backward(
+        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        if (dt == Dtype::F32) {
+            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const float xi = x[i];
+                const float sx = 1.f / (1.f + std::exp(-xi));
+                const float dx = sx * (1.f + xi * (1.f - sx));
+                q[i] = dx * g[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double xi = x[i];
+                const double sx = 1.0 / (1.0 + std::exp(-xi));
+                const double dx = sx * (1.0 + xi * (1.0 - sx));
+                q[i] = dx * g[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::silu_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
+        // 0.5 * x * (1 + erf(x / sqrt(2))) — exact Gaussian-CDF GELU.
+        const auto& cs = std::get<CpuStorage>(a);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        constexpr double kInvSqrt2 = 0.7071067811865476;
+        if (dt == Dtype::F32) {
+            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float k = static_cast<float>(kInvSqrt2);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float x = p[i];
+                q[i] = 0.5f * x * (1.f + std::erf(x * k));
+            }
+        } else if (dt == Dtype::F64) {
+            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double x = p[i];
+                q[i] = 0.5 * x * (1.0 + std::erf(x * kInvSqrt2));
+            }
+        } else {
+            ErrorBuilder("cpu_backend::gelu_exact").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
+    Storage gelu_exact_backward(
+        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+        // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
+        const auto& cs = std::get<CpuStorage>(a);
+        const auto& gs = std::get<CpuStorage>(grad);
+        std::size_t n = shape_numel(shape);
+        std::size_t nb = n * dtype_size(dt);
+        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+        constexpr double kInvSqrt2 = 0.7071067811865476;
+        constexpr double kInvSqrt2Pi = 0.3989422804014327;  // 1 / sqrt(2π)
+        if (dt == Dtype::F32) {
+            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
+            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
+            float* q = reinterpret_cast<float*>(ptr.get());
+            const float k1 = static_cast<float>(kInvSqrt2);
+            const float k2 = static_cast<float>(kInvSqrt2Pi);
+            for (std::size_t i = 0; i < n; ++i) {
+                const float xi = x[i];
+                const float cdf = 0.5f * (1.f + std::erf(xi * k1));
+                const float pdf = k2 * std::exp(-0.5f * xi * xi);
+                q[i] = (cdf + xi * pdf) * g[i];
+            }
+        } else if (dt == Dtype::F64) {
+            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
+            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
+            double* q = reinterpret_cast<double*>(ptr.get());
+            for (std::size_t i = 0; i < n; ++i) {
+                const double xi = x[i];
+                const double cdf = 0.5 * (1.0 + std::erf(xi * kInvSqrt2));
+                const double pdf = kInvSqrt2Pi * std::exp(-0.5 * xi * xi);
+                q[i] = (cdf + xi * pdf) * g[i];
+            }
+        } else {
+            ErrorBuilder("cpu_backend::gelu_exact_backward").not_implemented("dtype not supported");
+        }
+        return Storage{CpuStorage{ptr, nb, dt}};
+    }
+
     Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
         const auto& cs = std::get<CpuStorage>(a);
         std::size_t n = shape_numel(shape);
@@ -3597,7 +3696,12 @@ public:
                                              int spatial,
                                              int,
                                              const Shape&,
-                                             Dtype dt) override {
+                                             Dtype dt,
+                                             double eps_unused) override {
+        // CPU backward uses saved_rstd directly via the chain-rule formula;
+        // no need for eps reconstruction.  The signature carries eps for
+        // GPU backend symmetry.
+        (void)eps_unused;
         const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
         const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
         auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);

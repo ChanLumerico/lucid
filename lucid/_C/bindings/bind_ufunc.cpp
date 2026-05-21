@@ -81,6 +81,7 @@ void register_ufunc(py::module_& m) {
     bind_unary<SigmoidBackward>(m, &sigmoid_op);
     bind_unary<SiluBackward>(m, &silu_op);
     bind_unary<GeluBackward>(m, &gelu_op);
+    bind_unary<GeluExactBackward>(m, &gelu_exact_op);
     bind_unary_extra<LeakyReluBackward>(m, &leaky_relu_op, py::arg("slope") = 0.01);
     bind_unary<SoftplusBackward>(m, &softplus_op);
     bind_unary_extra<EluBackward>(m, &elu_op, py::arg("alpha") = 1.0);

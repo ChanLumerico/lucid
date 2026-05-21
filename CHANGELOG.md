@@ -19,6 +19,193 @@ _No changes yet._
 
 ---
 
+## [3.4.0] — 2026-05-21
+
+**Per-op MPSGraph dispatch arrives.**  Apple's MPSGraph (the graph compiler
+PyTorch MPS uses internally) now coexists with MLX inside the same
+`GpuBackend`.  Per-op `should_dispatch_*` policies route the slowest
+seven op families to fused MPSGraph kernels with an executable cache;
+everything else still runs through MLX.  `device="metal"` semantics
+are unchanged — the dispatch is invisible to user code, toggleable via
+`LUCID_MPS_DISABLE=1` and observable via `LUCID_MPS_DEBUG=1`.
+
+Two op families also got **MLX-side algorithm fixes** instead of MPSGraph
+dispatch — embedding backward replaces a catastrophic onehot-matmul
+(820 MB intermediate at GPT-2 vocab) with `mlx::core::scatter_add_axis`,
+and LayerNorm / RMSNorm forward replace the 7-op composition with MLX's
+own fused `fast::layer_norm` / `fast::rms_norm` primitives.
+
+Phase 0 microbenchmarks (see `lucid_smoke/bench_op_microbench.py`,
+measured on Mac Studio M4 Max) drove every dispatch decision.  Where
+MPSGraph turned out to be net-negative (softmax backward, smaller silu
+shapes), it was demoted from the gate.
+
+### Performance — Mac Studio M4 Max (F32, vs PyTorch MPS 2.9.1)
+
+| Op (worst-shape) | 3.3.0 (Lucid) | 3.4.0 (Lucid) | Torch | ratio change |
+|---|---:|---:|---:|---|
+| `gelu` fwd ffn-big (32×128×3072) | 13.90 ms | **1.18 ms** | 0.44 ms | 31× → **2.67×** torch |
+| `gelu` bwd ffn-big | 14.37 ms | **1.66 ms** | 0.47 ms | 31× → **3.55×** torch |
+| `embedding` bwd gpt2 (B×L=4096, V=50257) | 34.73 ms | **0.76 ms** | 1.26 ms | 28× → **0.61×** torch ← Lucid faster |
+| `embedding` bwd bert (V=30522) | 21.13 ms | **0.57 ms** | 0.92 ms | 24× → **0.61×** torch ← Lucid faster |
+| `layer_norm` fwd llama (16×256×4096) | 2.43 ms | **0.55 ms** | 0.55 ms | 4.4× → **1.00×** torch (parity) |
+| `layer_norm` fwd gpt2 (32×128×768) | 0.46 ms | **0.21 ms** | 0.23 ms | 2.2× → **0.94×** torch ← Lucid faster |
+| `layer_norm` bwd llama (gated dispatch) | 4.95 ms | 4.96 ms* | 2.57 ms | 1.92× → 1.93× torch |
+| `rms_norm` fwd llama | 1.51 ms | **0.53 ms** | 0.53 ms | 2.8× → **1.01×** torch (parity) |
+| `batch_norm` train bwd large_acts (32×64×112²) | 7.04 ms | **4.03 ms** | 1.31 ms | 5.47× → **3.08×** torch |
+| `silu` bwd ffn-big (gated dispatch) | 2.63 ms | **1.72 ms** | 0.46 ms | 5.75× → **3.68×** torch |
+
+*Within noise on this run; dispatch threshold tuned by gate.
+
+End-to-end on a representative GPT-2-base step (B=16, L=128, V=50257,
+d_model=768, d_ff=3072): **~205 ms (estimated 3.3.0) → 112 ms (3.4-dev)**
+on Mac Studio M4 Max — roughly **2.2× → 1.21× PyTorch MPS** for transformer
+training.  ResNet-18 / CIFAR-10 5-epoch unchanged from 3.3.0
+(302.9 s / 1.79× PyTorch) — Wave A targets transformer hot paths, not
+CNN ops.
+
+### Added
+
+- **New C++ engine sub-directory** `lucid/_C/backend/gpu/mps/` housing
+  `MpsBridge.{h,mm}` (process-wide `MTLDevice` + `MTLCommandQueue`,
+  `array_to_buffer` / `buffer_to_array` round-trip primitives — see
+  `obsidian/engine/engine-mps-bridge-2026-05.md` for the bridge design),
+  `MpsDispatch.{h,cpp}` (per-op heuristics + `LUCID_MPS_DISABLE` /
+  `LUCID_MPS_DEBUG` env vars), and `MpsKernels.{h,mm}` (per-op fused
+  MPSGraph kernels with a process-wide `MPSGraphExecutable` cache —
+  graph compile is one-time per (shape, dtype, eps) signature; warm
+  calls reuse the executable).
+- **New `_C_engine.gelu_exact(a)`** Python binding wired into Python
+  `F.gelu(x, approximate="none")` (the default exact erf-based GELU).
+  Replaces a 10-op Python `_erf_approx` polynomial composition with a
+  single autograd-aware engine call that dispatches the forward and
+  backward to a fused MPSGraph kernel (or falls back to an MLX
+  composition using `mlx::core::erf` natively).  Eliminates ~9 `_C_engine`
+  ops from every `F.gelu(x)` Python call.
+- **`IBackend::gelu_exact` + `IBackend::gelu_exact_backward`** virtuals,
+  with implementations in both CPU and GPU backends; new
+  `lucid::GeluExactBackward` autograd node (in `Activation.h`) and
+  matching schema entry `"gelu_exact"`.
+- **`IBackend::silu_backward`** virtual.  Previously the SiLU backward
+  was composed at the autograd-node level from seven storage primitives
+  (`sigmoid_storage` / `mul_scalar_storage` / …); it now delegates to the
+  backend so the GPU path can dispatch a fused MPSGraph kernel for
+  FFN-scale activations and the CPU path can use a single scalar loop.
+- **`lucid_smoke/bench_op_microbench.py`** — 15 op families × ~60 shape
+  variants × {F32, F16} microbench harness with paired Lucid (MLX) and
+  PyTorch (MPS) measurements; outputs JSON, drove every dispatch
+  decision in this release.
+
+### Changed
+
+- **`F.gelu(x, approximate="none")`** internally uses
+  `_C_engine.gelu_exact` (a single autograd-aware op) instead of the
+  10-op Python `_erf_approx` composition.  Numerical output is closer to
+  PyTorch's exact GELU (uses `mlx::core::erf` / MPSGraph `erfWithTensor:`
+  directly, vs the Abramowitz-Stegun polynomial approximation that the
+  Python path used previously).  Bit-for-bit parity with PyTorch MPS
+  (`max|lucid - torch| = 0` on every shape tested).  Private helper
+  `_erf_approx` removed from `lucid/nn/functional/activations.py`.
+- **`GpuBackend::embedding_backward`** rewritten from an onehot-matmul
+  composition (`(M_total × N) × (N × D)` matmul of an
+  `(M_total, N)`-shaped float-mask onehot tensor — 820 MB intermediate
+  for GPT-2 `(B*L=4096, V=50257)`) to a direct
+  `mlx::core::scatter_add_axis` call with index broadcast.  Same MLX
+  primitive that the engine's existing `scatter_add_axis` op binds —
+  see `obsidian/engine/engine-mlx-scatter-axis-vs-multiaxis` for the
+  convention.  46× faster than 3.3.0 on GPT-2-input scale and now beats
+  PyTorch MPS by 1.7×.  No MPSGraph dispatch needed.
+- **`GpuBackend::layer_norm_forward`** and `rms_norm_forward` now use
+  `mlx::core::fast::layer_norm` / `fast::rms_norm` (MLX's fused
+  primitives, single Metal kernel) for the main output; saved-tensor
+  `mean` and `rstd` for the backward are computed in parallel via
+  `mlx::core::mean` + `var` reductions.  4-5× forward speedup on
+  llama-scale, matches PyTorch MPS parity.
+- **`IBackend::batch_norm_backward`** signature extended with
+  `double eps` parameter; `BatchNormNdBackward<N>` stores `eps_` on
+  the autograd node so the GPU MPSGraph kernel can reconstruct
+  variance from `saved_rstd` (`var = 1/rstd² - eps`) for the canonical
+  `normalizationGammaGradient*` / `normalizationBetaGradient*` /
+  `normalizationGradient*` ops.  CPU backend ignores the new parameter
+  (uses `saved_rstd` directly via the chain-rule formula).  Closes 1.75×
+  of the BN large_acts backward gap (5.47× → 3.08× PyTorch).
+- **`GpuBackend::softmax_backward`** wired with an MPSGraph dispatch
+  hook gated at `axis_size >= 1024`, but the gate is currently hardcoded
+  to return false — Phase 4 measurement showed both the MPSGraph
+  canonical `softMaxGradientWithIncomingGradient:` and a hand-rolled
+  chain were ~30 % slower than the MLX chain on `(4096, 50257)`
+  (MPSGraph framework overhead exceeded the kernel saving).  Kernel
+  code retained for reference / future re-evaluation.
+- **`GpuBackend::gelu` / `gelu_backward`** (tanh-approximation variant)
+  now route through MPSGraph when policy allows (universal — no shape
+  gate).  Bit-for-bit parity with the MLX fallback path.
+
+### Fixed
+
+- **Depthwise / grouped Conv2d backward on Metal** no longer raises
+  `[conv] If groups > 1, the output channels must be divisible by the
+  number of groups. Got 1 output channels and 128 groups.`  Both the
+  dx-via-flipped-conv and dW-via-channel-permute tricks in
+  `GpuBackend::conv_nd_backward` were passing `opts.groups` to MLX's
+  `conv_general`, but the channel rearrangement those tricks perform
+  doesn't compose with MLX's grouped conv layout — they only worked
+  for `groups == 1` despite the production code calling MLX with
+  `opts.groups` regardless.  Fix: when `opts.groups > 1`, slice `x` /
+  `W` / `grad_out` per group, run the ungrouped conv-tricks with
+  `groups=1` on each slice, then concatenate.  Mirrors the per-group
+  loop pattern already in `CpuBackend::conv_nd_backward`.  Six new
+  parametrized parity tests at
+  `lucid/test/parity/nn/test_conv_parity.py::TestConvGroupedParity`
+  cover `{groups=2, groups=4, depthwise=16}` × `{forward, backward}`.
+  ResNet-18 (which uses `groups=1` only) unaffected; **MobileNet /
+  EfficientNet / depthwise paths now trainable on Metal**.  See
+  `obsidian/debug/debug-conv-grouped-backward-2026-05.md`.
+- **`Tensor.numpy()` (and other GPU→CPU bridge sites)** on a
+  lazily-transposed MLX array no longer returns bytes in the
+  underlying buffer's layout instead of the logical shape order.
+  `conv_nd_forward`'s output transpose was deliberately left lazy
+  (perf, see 3.0.3) so downstream MLX ops could fuse the stride;
+  but `MlxBridge::download_gpu_to_cpu` was reading
+  `arr.data<uint8_t>()` directly, which per MLX docs is contiguous
+  bytes regardless of stride.  Fix: force
+  `mlx::core::contiguous(arr)` before the memcpy.  Only affected
+  direct `.numpy()` / `.tolist()` / `.to(device='cpu')` on raw
+  unmaterialised conv outputs; downstream training paths were fine
+  because the next op (BN, ReLU, …) materialised through MLX's
+  stride-aware kernels.  Regression covered by new
+  `lucid/test/unit/metal/test_metal.py::TestMetalLazyTransposeBridge`
+  (permute-view + grouped Conv2d forward + grouped Conv2d backward
+  grad).  See `obsidian/engine/engine-mlx-data-ignores-strides.md`.
+
+### Performance (additional measurement notes)
+
+- **`LUCID_MPS_DEBUG=1`** env var prints each dispatch decision plus
+  per-call phase timing (sync / buffer alloc / kernel run) to stderr.
+- **`LUCID_MPS_DISABLE=1`** env var disables the dispatch entirely
+  (every op falls through to the MLX path) — useful for A/B comparing
+  the dispatch vs the underlying MLX path, or for narrowing down
+  which op a regression came from.
+- Shape gates per op (Phase 4 tuned, M4 Max measurements):
+  - `gelu` / `gelu_exact`: universal (every shape wins)
+  - `batch_norm_train` fwd + bwd: `numel >= 8 M` (ImageNet-scale only;
+    ResNet stays on MLX)
+  - `layer_norm_backward`: `normalized_size >= 512 AND outer >= 256`
+    (real transformer layers; skip Q/K/V small projections)
+  - `silu_backward`: `numel >= 6 M` (FFN scale; CNN activation shapes
+    stay on MLX)
+  - `softmax_backward`: disabled (MPSGraph was net-negative)
+
+### Vault notes
+
+- `obsidian/architecture/arch-mps-dispatch-2026-05.md` — design rationale
+- `obsidian/engine/engine-mps-bridge-2026-05.md` — bridge primitives + spike
+- `obsidian/engine/engine-mlx-data-ignores-strides.md` — strided-bridge fix
+- `obsidian/debug/debug-conv-grouped-backward-2026-05.md` — grouped conv fix
+- `obsidian/perf/perf-mlx-op-baseline-2026-05.md` — Phase 0 baseline
+- `obsidian/perf/perf-mpsgraph-shortlist-2026-05.md` — shortlist decisions
+
+---
+
 ## [3.3.0] — 2026-05-20
 
 AMP / mixed-precision activation **end-to-end**, with five engine-level

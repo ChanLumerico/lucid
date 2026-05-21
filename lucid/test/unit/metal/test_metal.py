@@ -48,3 +48,29 @@ class TestMetalArith:
         a = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], device="metal")
         b = lucid.tensor([[5.0, 6.0], [7.0, 8.0]], device="metal")
         np.testing.assert_array_equal((a @ b).numpy(), [[19.0, 22.0], [43.0, 50.0]])
+
+
+class TestMetalLazyTransposeBridge:
+    # Regression: the GPU bridge used to memcpy the underlying buffer with
+    # array.data<T>(), which ignores stride metadata.  Lazy transposes (e.g.
+    # the deferred NHWC→NCHW perm in conv_nd_forward) left the data buffer
+    # in the source layout and .numpy() returned bytes in the wrong order.
+    # download_gpu_to_cpu now wraps in mlx::core::contiguous() before eval.
+    def test_permute_view_matches_contiguous(self) -> None:
+        t = lucid.randn(2, 3, 4, 5, device="metal")
+        view = t.permute((0, 2, 3, 1))
+        np.testing.assert_allclose(view.numpy(), view.contiguous().numpy())
+
+    def test_grouped_conv2d_output_bytes(self) -> None:
+        import lucid.nn.functional as F
+        x = lucid.randn(1, 2, 2, 2, device="metal")
+        w = lucid.randn(2, 1, 1, 1, device="metal")
+        y = F.conv2d(x, w, groups=2)
+        np.testing.assert_allclose(y.numpy(), y.contiguous().numpy())
+
+    def test_grad_bytes_through_grouped_backward(self) -> None:
+        import lucid.nn.functional as F
+        x = lucid.randn(2, 4, 4, 4, device="metal", requires_grad=True)
+        w = lucid.randn(4, 1, 3, 3, device="metal", requires_grad=True)
+        F.conv2d(x, w, groups=4).sum().backward()
+        np.testing.assert_allclose(x.grad.numpy(), x.grad.contiguous().numpy())

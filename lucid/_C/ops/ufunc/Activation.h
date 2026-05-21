@@ -89,6 +89,21 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
+// Backward node for exact (Gaussian-CDF) GeLU: y = 0.5 * x * (1 + erf(x/√2)).
+// Routed to by Python F.gelu(x, approximate="none"); replaces the prior
+// 10-op Python `_erf_approx` composition with a single dispatched op so that
+// (a) the GPU backend can dispatch to MPSGraph, and (b) the autograd graph
+// has a single node instead of ten.
+class LUCID_API GeluExactBackward : public UnaryOp<GeluExactBackward> {
+public:
+    static constexpr bool kSavesInput = true;
+    static const OpSchema schema_v1;
+    static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
+        return be.gelu_exact(a, s, dt);
+    }
+    Storage grad_formula(const Storage& g);
+};
+
 // Backward node for Leaky ReLU: y = x if x > 0, else slope * x.
 //
 // Gradient rule: dL/dx = (x > 0 ? 1 : slope) * dL/dy  (a leaky mask).
@@ -215,6 +230,7 @@ LUCID_API TensorImplPtr sigmoid_op(const TensorImplPtr& a);
 LUCID_API TensorImplPtr silu_op(const TensorImplPtr& a);
 
 LUCID_API TensorImplPtr gelu_op(const TensorImplPtr& a);
+LUCID_API TensorImplPtr gelu_exact_op(const TensorImplPtr& a);
 
 LUCID_API TensorImplPtr leaky_relu_op(const TensorImplPtr& a, double slope);
 

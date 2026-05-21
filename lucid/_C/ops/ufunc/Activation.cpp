@@ -84,23 +84,12 @@ LUCID_REGISTER_OP(SigmoidBackward)
 // silu — AmpPolicy::Promote; gradient derived analytically from y = x*σ(x).
 const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true};
 
-// dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.
-// Step-by-step using storage primitives:
-//   sx       = sigmoid(x)
-//   (1-sx)   = -sx + 1
-//   x*(1-sx) = x * (1-sx)
-//   (1+…)    = x*(1-sx) + 1
-//   dx       = sx * (1 + x*(1-sx))
+// dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Delegates to the backend so
+// GPU can dispatch to a single fused kernel (MLX expression or MPSGraph)
+// rather than the prior 7-op storage-primitive composition.
 Storage SiluBackward::grad_formula(const Storage& g) {
-    const std::size_t n = shape_numel(out_shape_);
-
-    Storage sx = sigmoid_storage(saved_inputs_[0], n, dtype_, device_);
-    Storage neg_sx = mul_scalar_storage(sx, -1.0, n, dtype_, device_);
-    Storage one_m_sx = add_scalar_storage(neg_sx, 1.0, n, dtype_, device_);
-    Storage x_omsx = multiply_storages(saved_inputs_[0], one_m_sx, n, dtype_, device_);
-    Storage one_p = add_scalar_storage(x_omsx, 1.0, n, dtype_, device_);
-    Storage dx = multiply_storages(sx, one_p, n, dtype_, device_);
-    return multiply_storages(dx, g, n, dtype_, device_);
+    return backend::Dispatcher::for_device(device_).silu_backward(
+        saved_inputs_[0], g, out_shape_, dtype_);
 }
 
 TensorImplPtr silu_op(const TensorImplPtr& a) {
@@ -123,6 +112,20 @@ TensorImplPtr gelu_op(const TensorImplPtr& a) {
     return GeluBackward::forward(a);
 }
 LUCID_REGISTER_OP(GeluBackward)
+
+// gelu_exact — Gaussian-CDF formulation (exact erf-based).  ForceFP32
+// matches the tanh-approx variant for consistent AMP behaviour.
+const OpSchema GeluExactBackward::schema_v1{"gelu_exact", 1, AmpPolicy::ForceFP32, true};
+
+Storage GeluExactBackward::grad_formula(const Storage& g) {
+    return backend::Dispatcher::for_device(device_).gelu_exact_backward(
+        saved_inputs_[0], g, out_shape_, dtype_);
+}
+
+TensorImplPtr gelu_exact_op(const TensorImplPtr& a) {
+    return GeluExactBackward::forward(a);
+}
+LUCID_REGISTER_OP(GeluExactBackward)
 
 // leaky_relu — KeepInput (valid for integer slopes).
 const OpSchema LeakyReluBackward::schema_v1{"leaky_relu", 1, AmpPolicy::KeepInput, true};

@@ -127,14 +127,20 @@ lucid_object_library(
     backend/cpu/Vforce.cpp)
 
 # Phase 9.1 + 18: Objective-C++ files require ARC and the Metal framework.
+# 3.4 Phase 1: gpu/mps/ subdirectory adds MPSGraph dispatch sources.
 lucid_object_library(
     lucid_backend_gpu
     backend/gpu/MlxBridge.cpp
     backend/gpu/MetalAllocator.mm
-    backend/gpu/MetalKernelRunner.mm)
+    backend/gpu/MetalKernelRunner.mm
+    backend/gpu/mps/MpsBridge.mm
+    backend/gpu/mps/MpsDispatch.cpp
+    backend/gpu/mps/MpsKernels.mm)
 set_source_files_properties(
     backend/gpu/MetalAllocator.mm
     backend/gpu/MetalKernelRunner.mm
+    backend/gpu/mps/MpsBridge.mm
+    backend/gpu/mps/MpsKernels.mm
     PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 
 lucid_object_library(lucid_backend_init backend/BackendInit.cpp)
@@ -305,8 +311,10 @@ target_link_libraries(
         lucid_compile_options
         "${LUCID_MLX_LIBRARY}"
         "-framework Accelerate"
-        "-framework Metal"       # Phase 9.1: MetalAllocator
-        "-framework Foundation") # required by Metal on macOS
+        "-framework Metal"                          # Phase 9.1: MetalAllocator
+        "-framework Foundation"                     # required by Metal on macOS
+        "-framework MetalPerformanceShaders"        # 3.4 Phase 1: MPSGraph deps
+        "-framework MetalPerformanceShadersGraph") # 3.4 Phase 1: graph kernels
 if(APPLE)
     target_link_options(lucid_engine PRIVATE -undefined dynamic_lookup)
 endif()

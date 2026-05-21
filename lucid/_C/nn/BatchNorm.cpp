@@ -117,6 +117,7 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     bwd->C_ = C;
     for (int i = 0; i < N; ++i)
         bwd->S_[i] = S[i];
+    bwd->eps_ = eps;
     // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
     kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(
         std::move(bwd), {x_eff, gamma_eff, beta_eff}, out);
@@ -133,7 +134,7 @@ std::vector<Storage> BatchNormNdBackward<N>::apply(Storage grad_out) {
     return backend::Dispatcher::for_device(this->device_)
         .batch_norm_backward(this->saved_inputs_[0], this->saved_inputs_[1], this->saved_mean_,
                              this->saved_rstd_, grad_out, this->B_, this->C_, spatial_total, N,
-                             this->input_shapes_[0], this->dtype_);
+                             this->input_shapes_[0], this->dtype_, this->eps_);
 }
 
 template class BatchNormNdBackward<1>;

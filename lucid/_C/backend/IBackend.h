@@ -211,9 +211,21 @@ public:
     // The *_backward variants receive the pre-activation input `a` and the
     // upstream gradient `grad`, and return the input gradient.
     virtual Storage silu(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    // silu_backward — dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Lucid's
+    // autograd node previously composed this from storage primitives; the
+    // single-op delegate lets the GPU backend dispatch to MPSGraph and
+    // CPU to a hand-rolled scalar loop.
+    virtual Storage
+    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) = 0;
     virtual Storage gelu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage
     gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) = 0;
+    // gelu_exact — Gaussian-CDF formulation: 0.5*x*(1 + erf(x/sqrt(2))).
+    // Distinct from `gelu` (tanh approximation) so callers can pick either
+    // numerical recipe; Python F.gelu(approximate="none") routes here.
+    virtual Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) = 0;
+    virtual Storage
+    gelu_exact_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) = 0;
     virtual Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) = 0;
     virtual Storage softplus(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) = 0;
@@ -560,6 +572,9 @@ public:
                                                     Dtype dt) = 0;
 
     // BatchNorm backward; returns [grad_x, grad_gamma, grad_beta].
+    // `eps` matches the forward's epsilon — GPU backend needs it to
+    // reconstruct variance from saved_rstd (var = 1/rstd^2 - eps) for
+    // the MPSGraph normalizationGradient* path.  CPU backend may ignore.
     virtual std::vector<Storage> batch_norm_backward(const Storage& x,
                                                      const Storage& gamma,
                                                      const Storage& saved_mean,
@@ -570,7 +585,8 @@ public:
                                                      int spatial,
                                                      int ndim,
                                                      const Shape& x_shape,
-                                                     Dtype dt) = 0;
+                                                     Dtype dt,
+                                                     double eps) = 0;
 
     // GroupNorm forward; groups partitions channels into equal groups before
     // normalizing each group independently.  Returns [output, saved_mean, saved_rstd].

@@ -36,6 +36,9 @@ public:
     Storage saved_rstd_;    // Per-channel reciprocal std, shape (C,).
     int B_ = 0, C_ = 0;     // Batch and channel counts.
     int S_[N > 0 ? N : 1];  // Spatial sizes (guard against N==0).
+    double eps_ = 1e-5;     // Forward's numerical-stability eps; required by the
+                            // GPU backend's MPSGraph backward to derive variance
+                            // from saved_rstd (var = 1/rstd^2 - eps).
 
     // Run the training-mode forward pass.
     // x     – input of shape (B, C, S0, ..., S_{N-1}).
