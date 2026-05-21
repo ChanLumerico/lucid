@@ -199,19 +199,68 @@ class _FCNHead(nn.Sequential):
 
 
 class FCNForSemanticSegmentation(PretrainedModel):
-    """FCN semantic segmentation model (Long et al., CVPR 2015).
+    r"""Fully Convolutional Network for semantic segmentation (Long et al., CVPR 2015).
 
-    Input contract
-    --------------
-    ``x``       : (B, in_channels, H, W) image batch.
-    ``targets`` : optional (B, H, W) integer segmentation masks for training.
+    The original deep-learning semantic segmentation architecture: a
+    classification backbone is repurposed as a *fully convolutional*
+    network by replacing fully-connected layers with 1x1 convolutions
+    and adding a final upsampling stage to recover input resolution.
+    In Lucid's implementation the backbone is a dilated ResNet
+    (``layer3`` dilation = 2, ``layer4`` dilation = 4) so the deepest
+    feature map stays at stride 8 instead of stride 32, giving denser
+    spatial sampling without sacrificing the receptive field.
 
-    Output contract
-    ---------------
-    ``SemanticSegmentationOutput``:
-      ``logits`` : (B, num_classes, H, W) — same spatial resolution as input.
-      ``loss``   : primary cross-entropy + 0.4 × auxiliary cross-entropy
-                   when targets are provided.
+    A primary FCN head produces ``num_classes`` logits from the C5
+    feature, and an auxiliary head on C4 stabilises optimisation
+    (used at training time only).  Bilinear interpolation lifts both
+    heads to the input resolution.
+
+    Parameters
+    ----------
+    config : FCNConfig
+        Frozen architecture spec.  Use :func:`fcn_resnet50` /
+        :func:`fcn_resnet101` for the standard variants.
+
+    Attributes
+    ----------
+    config : FCNConfig
+        Stored copy of the config that built this model.
+    backbone : _DilatedResNet
+        Dilated ResNet trunk producing C4 (stride 8, used by aux head)
+        and C5 (stride 8, used by main head) — both at the same
+        resolution thanks to atrous convolution in layer4.
+    classifier : _FCNHead
+        3x3 conv -> BatchNorm -> ReLU -> Dropout -> 1x1 conv producing
+        ``num_classes`` channels from the C5 feature.
+    aux_classifier : _FCNHead
+        Auxiliary head with the same structure applied to C4; its loss
+        is weighted by 0.4 and added to the main loss only during
+        training.
+
+    Notes
+    -----
+    See Long et al., "Fully Convolutional Networks for Semantic
+    Segmentation", CVPR 2015 (arXiv:1411.4038).  The bilinear
+    upsampling at the end is equivalent to a learnable transpose
+    convolution initialised to bilinear weights — but kept fixed in
+    this modernised dilated-ResNet variant.  Training loss is
+
+    .. math::
+
+        \mathcal{L} = \mathcal{L}_\mathrm{CE}(\mathrm{main}, y)
+                    + 0.4\, \mathcal{L}_\mathrm{CE}(\mathrm{aux}, y),
+
+    with categorical cross-entropy summed over all pixels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.fcn import fcn_resnet50
+    >>> model = fcn_resnet50()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape    # (B, num_classes, H, W)
+    (1, 21, 512, 512)
     """
 
     config_class: ClassVar[type[FCNConfig]] = FCNConfig

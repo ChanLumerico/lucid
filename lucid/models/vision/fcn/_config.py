@@ -4,8 +4,58 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="FCN",
+    citation=(
+        'Long, Jonathan, et al. "Fully Convolutional Networks for '
+        'Semantic Segmentation." Proceedings of the IEEE Conference on '
+        "Computer Vision and Pattern Recognition, 2015, pp. 3431–3440."
+    ),
+    theory=r"""
+    The Fully Convolutional Network is the first deep model trained
+    end-to-end, pixels-to-pixels, for **semantic segmentation**.  Its
+    core idea is to **convert a classification CNN into a dense
+    predictor** by reinterpreting its fully-connected layers as
+    :math:`1 \times 1` convolutions and learning to up-sample the
+    coarse spatial output back to input resolution.
+
+    A classifier such as VGG-16 ends with FC layers that collapse the
+    feature map to a single :math:`1 \times 1 \times K` vector.  By
+    rewriting each FC as a convolution with kernel equal to the input
+    feature size, the network becomes input-agnostic and produces a
+    *heatmap* :math:`\mathbb{R}^{K \times H/s \times W/s}` at the
+    backbone's coarse stride :math:`s` (32 for VGG-16, 32 for most
+    ResNets).
+
+    To recover full resolution the paper introduces **skip
+    architectures** — FCN-32s / FCN-16s / FCN-8s — that combine the
+    coarse final layer prediction with the higher-resolution
+    intermediate pool-4 and pool-3 predictions through learned
+    deconvolutions:
+
+    .. math::
+
+        \hat{y} = \mathrm{upsample}_{2}\!\bigl(
+            \mathrm{upsample}_{2}(p_5) + p_4
+        \bigr) + p_3, \quad
+        \text{(FCN-8s sketch)},
+
+    where :math:`p_\ell` is the per-class score map from level
+    :math:`\ell`.  This multi-resolution fusion gives the model
+    *coarse* semantic information and *fine* spatial detail without
+    needing extra encoder–decoder parameters.
+
+    Training uses a per-pixel softmax cross-entropy loss summed over
+    all output positions; the entire model is jointly fine-tuned
+    from ImageNet-pretrained classification weights.  FCN
+    demonstrated for the first time that segmentation could be a
+    "natural" output mode of a CNN, paving the way for U-Net,
+    DeepLab, and every subsequent dense-prediction architecture.
+    """,
+)
 @dataclass(frozen=True)
 class FCNConfig(ModelConfig):
     """Configuration for Fully Convolutional Network (FCN).

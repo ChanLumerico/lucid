@@ -289,10 +289,64 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
 
 
 class CvT(PretrainedModel, BackboneMixin):
-    """CvT feature extractor — returns mean-pooled token embedding.
+    r"""CvT backbone (Wu et al., 2021).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` shaped ``(B, 1, dim)``
-    (unsqueezed mean over tokens so the output is spatially consistent).
+    The Convolutional vision Transformer (CvT) reinjects the locality
+    inductive bias of CNNs into ViT through two changes: (i) every
+    stage starts with an *overlapping convolutional token embedding*
+    (kernel > stride) that produces a new lower-resolution token grid,
+    and (ii) the Q / K / V projections inside every self-attention are
+    *depthwise-separable convolutions* rather than linear maps:
+
+    .. math::
+
+        Q = \mathrm{Flatten}(\mathrm{DWConv}_q(x_{2D})),\quad
+        K = \mathrm{Flatten}(\mathrm{DWConv}_k(x_{2D})),\quad
+        V = \mathrm{Flatten}(\mathrm{DWConv}_v(x_{2D})),
+
+    where :math:`x_{2D}` is the spatially reshaped token map.  When the
+    K / V depthwise conv uses stride 2 the attention becomes *strided*,
+    reducing :math:`N` by 4x inside attention without losing the
+    full-resolution output for the next block.  CvT drops positional
+    embeddings entirely — locality is supplied implicitly by the
+    convolutional projections.
+
+    :meth:`forward_features` returns the mean-pooled token feature
+    :math:`(B, \texttt{dims[-1]})` over the final stage's tokens.
+
+    Parameters
+    ----------
+    config : CvTConfig
+        Frozen dataclass specifying ``dims``, ``depths``, ``num_heads``,
+        ``embed_strides``, ``mlp_ratio``, ``dropout``, and
+        ``in_channels``.  See :class:`CvTConfig`.
+
+    Attributes
+    ----------
+    stages : nn.ModuleList
+        Three :class:`_CvTStage` modules, each composed of a
+        convolutional token embedding plus a stack of CvT blocks.
+    feature_info : list[FeatureInfo]
+        Three-stage feature description with cumulative reductions
+        given by the cumulative product of ``config.embed_strides``.
+
+    Notes
+    -----
+    Reference: Haiping Wu *et al.*, *"CvT: Introducing Convolutions to
+    Vision Transformers"*, ICCV 2021,
+    `arXiv:2103.15808 <https://arxiv.org/abs/2103.15808>`_.
+
+    Examples
+    --------
+    Build a CvT-13 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.cvt import CvT, CvTConfig
+    >>> model = CvT(CvTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, dims[-1])
+    (1, 384)
     """
 
     config_class: ClassVar[type[CvTConfig]] = CvTConfig
@@ -325,7 +379,56 @@ class CvT(PretrainedModel, BackboneMixin):
 
 
 class CvTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """CvT with LayerNorm → mean pool → linear classification head."""
+    r"""CvT with a linear classification head (Wu et al., 2021).
+
+    Wraps the same three-stage trunk as :class:`CvT` and adds a global
+    mean pool over tokens, a final LayerNorm, and a single
+    :class:`nn.Linear` classification head:
+
+    .. math::
+
+        \text{logits} = W_{\text{head}}\,
+            \mathrm{LN}\!\bigl(\mathrm{Mean}(z^{L})\bigr)
+            + b_{\text{head}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : CvTConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See :class:`CvTConfig`.
+
+    Attributes
+    ----------
+    stages : nn.ModuleList
+        Three CvT stages.
+    head_norm : nn.LayerNorm
+        Final LayerNorm applied to the mean-pooled feature.
+    classifier : nn.Linear
+        Final linear projection of width ``(num_classes, dims[-1])``.
+
+    Notes
+    -----
+    Reference: Wu *et al.*, *"CvT: Introducing Convolutions to Vision
+    Transformers"*, ICCV 2021.  CvT-13 / CvT-21 reach **81.6% / 82.5%
+    top-1 on ImageNet-1k** at 224x224 (Table 1 of the paper).
+
+    Examples
+    --------
+    End-to-end inference with the default CvT-13 classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.cvt import (
+    ...     CvTConfig, CvTForImageClassification,
+    ... )
+    >>> model = CvTForImageClassification(CvTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[CvTConfig]] = CvTConfig
     base_model_prefix: ClassVar[str] = "cvt"

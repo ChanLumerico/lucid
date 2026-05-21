@@ -17,22 +17,53 @@
 
 namespace lucid {
 
-// Autograd node for the contiguous op.
+// Autograd node for materialising a C-contiguous copy of a tensor.
 //
-// Forward:  calls Dispatcher::contiguous, which copies non-contiguous data
-//           into a freshly allocated, densely-laid-out buffer.  If the input
-//           is already contiguous the backend may return the same storage
-//           without performing a copy.  The decision is based on the
-//           is_contiguous flag together with stride and offset metadata.
-// Backward: the gradient arrives at the output shape and must propagate back
-//           to the input, which could have had a non-standard layout.
-//           Because the gradient itself is always dense, the backward simply
-//           clones the gradient storage (preserving shape and dtype) so the
-//           upstream node receives a concrete, owning buffer.
+// Forward calls ``Dispatcher::contiguous``, which copies non-contiguous data
+// into a freshly allocated, densely laid-out buffer.  If the input is already
+// contiguous the backend may return the same storage without performing a
+// copy; the decision uses ``is_contiguous`` together with stride and offset
+// metadata.  Backward is essentially pass-through: because gradients are
+// always dense, ``apply`` simply clones the gradient storage so upstream
+// nodes receive a concrete, owning buffer with the input shape and dtype.
 //
-// Invariants:
-//   out_shape_       — the shape of the contiguous output (== input shape).
-//   input_shapes_[0] — the shape of the original (possibly non-contiguous) input.
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor with arbitrary strides, offset, and layout.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output sharing the input's shape and dtype, with canonical row-major
+//     strides and storage offset zero.
+//
+// Shape
+// -----
+// ``out.shape == in.shape`` exactly; only the stride and offset metadata
+// (and the underlying physical buffer) may change.
+//
+// Math
+// ----
+// $$ y_{[i_0, \ldots, i_{n-1}]} = x_{[i_0, \ldots, i_{n-1}]} $$
+// (identity on elements; the operation differs only in physical layout).
+//
+// Notes
+// -----
+// Required as a fast-path normalisation before any op that assumes
+// row-major storage (notably :func:`reshape_op` and most MLX kernels).
+// The backward pass clones the dense gradient because the original input
+// could have had any layout — cloning guarantees the upstream gradient is
+// a concrete buffer regardless of the forward path taken.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     ``"contiguous"``, ``AmpPolicy::KeepInput``, requires_grad=true.
+//
+// See Also
+// --------
+// :func:`reshape_op` — typically immediately follows ``contiguous_op``.
 class LUCID_API ContiguousBackward : public FuncOp<ContiguousBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -44,9 +75,32 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// Return a contiguous copy of `a`, or `a` itself if it is already contiguous.
-// Delegates to ContiguousBackward::forward, which handles both the copy and
-// the autograd node attachment.
+// Materialise a C-contiguous copy of a tensor.
+//
+// Delegates to :func:`ContiguousBackward::forward`, which handles both the
+// copy and the autograd node attachment.  If ``a`` is already contiguous
+// the backend may return ``a`` itself (no copy); otherwise a fresh buffer
+// is allocated.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor (any layout).
+//
+// Returns
+// -------
+// TensorImplPtr
+//     A tensor with the same values, shape, and dtype as ``a`` but with
+//     canonical row-major strides and ``storage_offset == 0``.
+//
+// Notes
+// -----
+// Idempotent: ``contiguous_op(contiguous_op(a))`` is equivalent to
+// ``contiguous_op(a)`` and avoids a second copy whenever possible.
+//
+// See Also
+// --------
+// :func:`reshape_op`, :func:`broadcast_to_op`.
 LUCID_API TensorImplPtr contiguous_op(const TensorImplPtr& a);
 
 }  // namespace lucid

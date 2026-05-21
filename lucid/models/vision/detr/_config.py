@@ -4,8 +4,60 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="DETR",
+    citation=(
+        'Carion, Nicolas, et al. "End-to-End Object Detection with '
+        'Transformers." Proceedings of the European Conference on '
+        "Computer Vision, 2020, pp. 213–229."
+    ),
+    theory=r"""
+    DETR (DEtection TRansformer) reframes object detection as a
+    **direct set prediction** problem.  A CNN backbone produces a
+    feature map :math:`f \in \mathbb{R}^{C \times H \times W}`, which
+    is flattened, projected to :math:`d_{\mathrm{model}}`, augmented
+    with 2-D sinusoidal positional encodings, and fed into a standard
+    Transformer encoder–decoder.  The decoder additionally takes
+    :math:`N` learnable **object queries**; each query produces one
+    detection through FFN heads (class logits + normalised box
+    :math:`(c_x, c_y, w, h)` with a sigmoid output).
+
+    Training enforces a one-to-one assignment between predictions
+    and ground-truth objects via the **Hungarian algorithm**.  The
+    optimal permutation :math:`\hat{\sigma}` over :math:`N` slots
+    minimises
+
+    .. math::
+
+        \hat{\sigma} = \arg\min_{\sigma \in S_N}
+            \sum_{i=1}^{N} \mathcal{L}_{\mathrm{match}}\!
+                \bigl(y_i, \hat{y}_{\sigma(i)}\bigr),
+
+    where the per-pair cost combines class probability and a
+    box-similarity term (an :math:`\ell_1` distance plus generalised
+    IoU).  Given the matched assignment, the final training loss is
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{Hung}}(y, \hat{y}) =
+            \sum_{i=1}^{N} \bigl[
+                -\log \hat{p}_{\hat{\sigma}(i)}(c_i)
+                + \mathbb{1}_{\{c_i \neq \varnothing\}}
+                  \mathcal{L}_{\mathrm{box}}(b_i, \hat{b}_{\hat{\sigma}(i)})
+            \bigr].
+
+    Because each query is matched to **at most one** ground-truth
+    object, DETR needs neither anchor priors, nor a separate proposal
+    stage, nor non-maximum suppression at inference — duplicates are
+    suppressed by the bipartite matching during training.  The result
+    is the first fully end-to-end detector with a Transformer trunk;
+    later variants (Deformable DETR, DAB-DETR, DINO, …) build on this
+    set-prediction framing while accelerating convergence.
+    """,
+)
 @dataclass(frozen=True)
 class DETRConfig(ModelConfig):
     """Configuration for DETR (DEtection TRansformer).

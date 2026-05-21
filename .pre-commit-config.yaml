@@ -50,3 +50,15 @@ repos:
             lucid/_tensor/_to\.py |
             lucid/__init__\.py
           )$
+
+      # Model-zoo family-contract validator.  Runs on every commit that
+      # touches `lucid/models/<domain>/<family>/`-tier files — catches
+      # missing @model_family_meta, malformed task-wrapper names, broken
+      # directory layout, etc. before the change leaves the dev box.
+      # Spec: obsidian/architecture/arch-models-family-contract.md
+      - id: lucid-validate-model-zoo
+        name: lucid model-zoo family contract
+        entry: python -m tools.validate_model_zoo --runtime
+        language: system
+        pass_filenames: false
+        files: ^lucid/models/(vision|text|generative)/[^/]+/.*\.py$

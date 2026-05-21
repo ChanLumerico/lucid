@@ -13,21 +13,54 @@
 
 namespace lucid {
 
-// Produce N output grids from N 1-D input tensors, where the i-th output
-// broadcasts the i-th input across all dimensions except its "carry" axis.
+// Build N broadcast coordinate grids from N 1-D input tensors.
 //
-// `indexing_xy` controls the axis assignment for the first two tensors:
-//   false ("ij" indexing): output[i] varies along axis i.
-//   true  ("xy" indexing): output[0] varies along axis 1 (x), and
-//                          output[1] varies along axis 0 (y); all others
-//                          follow the ij convention.
+// Given inputs $x_0, x_1, \ldots, x_{N-1}$ with lengths
+// $L_0, L_1, \ldots, L_{N-1}$, produces N output tensors all of the same
+// rank-N shape; the $i$-th output broadcasts $x_i$ across every axis
+// except its "carry" axis, where it varies.  This is the
+// multi-dimensional analogue of NumPy's ``np.meshgrid``.
 //
-// All inputs must be 1-D and share the same dtype and device.  The output
-// shape is determined by the sizes of all inputs (possibly swapped for the
-// first two when indexing_xy is true).
+// Parameters
+// ----------
+// xs : vector<TensorImplPtr>
+//     One or more 1-D input tensors.  All must share the same dtype and
+//     device.
+// indexing_xy : bool
+//     Axis convention for the first two inputs:
 //
-// Backward: for each output gradient, sum over all axes except the carry
-// axis to recover the gradient w.r.t. the corresponding 1-D input.
+//     * ``false`` — ``"ij"`` (matrix) indexing.  Output ``i`` varies along
+//       axis ``i``; output shape is ``(L_0, L_1, ..., L_{N-1})``.
+//     * ``true`` — ``"xy"`` (Cartesian) indexing.  Output 0 varies along
+//       axis 1 (x) and output 1 varies along axis 0 (y); outputs
+//       ``i >= 2`` follow the ``ij`` convention.  Output shape is
+//       ``(L_1, L_0, L_2, ..., L_{N-1})``.
+//
+// Returns
+// -------
+// vector<TensorImplPtr>
+//     N coordinate grids, one per input, each of rank N.
+//
+// Math
+// ----
+// For ``ij`` indexing:
+// $$\mathrm{out}_i[k_0, k_1, \ldots, k_{N-1}] = x_i[k_i]$$
+//
+// Notes
+// -----
+// Backward sums each output gradient over every axis except the carry
+// axis to recover the gradient w.r.t. the corresponding 1-D input.  All
+// inputs must be 1-D; mismatched ranks raise.
+//
+// Examples
+// --------
+// >>> X, Y = meshgrid([x, y], indexing_xy=true)  // 'xy' convention
+// >>> X.shape == (len(y), len(x))
+// True
+//
+// See Also
+// --------
+// Concat : Stack the resulting grids along a new leading axis.
 LUCID_API std::vector<TensorImplPtr> meshgrid_op(const std::vector<TensorImplPtr>& xs,
                                                  bool indexing_xy);
 

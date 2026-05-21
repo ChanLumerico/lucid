@@ -43,15 +43,51 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
   const classes   = data.members.filter(isApiClass);
   const functions = data.members.filter(isApiFunction);
 
+  // Family-leaf pages (e.g. lucid.models.vision.resnet) carry the full
+  // ``citation`` + ``theory`` extracted from ``@model_family_meta``.
+  // Render that above the member sections so the leaf page reads like
+  // a paper-style brief with the implementation listing underneath.
+  const hasFamilyMeta = Boolean(data.citation || data.theory);
+  const displayName = data.canonical_name && data.canonical_name.length > 0
+    ? data.canonical_name
+    : data.name;
+
   return (
     <div>
       <ModuleHeader
-        name={data.name}
+        name={displayName}
         path={data.path}
         summary={data.summary}
         kind="module"
         count={data.members.length}
       />
+      {hasFamilyMeta && (
+        <section className="mb-10 space-y-5">
+          {data.tasks && data.tasks.length > 0 && (
+            <TaskTagRow tasks={data.tasks} />
+          )}
+          {data.citation && (
+            <div>
+              <div className="text-[10px] font-semibold tracking-widest uppercase text-lucid-text-disabled mb-1.5">
+                Paper
+              </div>
+              <p className="text-sm text-lucid-text-mid leading-relaxed italic border-l-2 border-lucid-border pl-3">
+                {data.citation}
+              </p>
+            </div>
+          )}
+          {data.theory && (
+            <div>
+              <div className="text-[10px] font-semibold tracking-widest uppercase text-lucid-text-disabled mb-1.5">
+                Overview
+              </div>
+              <div className="text-sm text-lucid-text-mid">
+                <MathText text={data.theory} block />
+              </div>
+            </div>
+          )}
+        </section>
+      )}
       {data.family_groups && data.family_groups.length > 0 && (
         <FamilyGroups groups={data.family_groups} />
       )}
@@ -86,6 +122,7 @@ interface FamilyCardData extends FamilyGroup {
   citation: string | null;
   theory: string | null;
   fallbackSummary: string | null;
+  tasks: string[];
   count: number;
   unit: "members" | "families";
 }
@@ -96,6 +133,7 @@ function FamilyGroups({ groups }: FamilyGroupsProps) {
     let citation: string | null = null;
     let theory: string | null = null;
     let fallbackSummary: string | null = null;
+    let tasks: string[] = [];
     let count = 0;
     let unit: "members" | "families" = "members";
     try {
@@ -111,6 +149,9 @@ function FamilyGroups({ groups }: FamilyGroupsProps) {
         if (data.theory && data.theory.length > 0) {
           theory = data.theory;
         }
+        if (data.tasks && data.tasks.length > 0) {
+          tasks = data.tasks;
+        }
         if (data.family_groups && data.family_groups.length > 0) {
           count = data.family_groups.length;
           unit = "families";
@@ -121,7 +162,7 @@ function FamilyGroups({ groups }: FamilyGroupsProps) {
     } catch {
       // family JSON missing — render with placeholders
     }
-    return { ...g, canonicalName, citation, theory, fallbackSummary, count, unit };
+    return { ...g, canonicalName, citation, theory, fallbackSummary, tasks, count, unit };
   });
 
   return (
@@ -138,12 +179,122 @@ function FamilyGroups({ groups }: FamilyGroupsProps) {
   );
 }
 
+/** Extract the first paragraph of a (markdown-converted) theory body.
+ *  Stops at the first blank line so block-math fenced by ``$$ ... $$``
+ *  on its own paragraph never gets sliced mid-formula. */
+function firstParagraph(text: string): string {
+  const stripped = text.trim();
+  const idx = stripped.search(/\n\s*\n/);
+  return idx === -1 ? stripped : stripped.slice(0, idx);
+}
+
+// Pretty-print a task identifier: ``image-classification`` →
+// ``Image Classification``.  Specific multi-word acronyms get manual
+// overrides so casing matches paper convention.
+const TASK_LABEL_OVERRIDES: Record<string, string> = {
+  "fill-mask":                  "Fill-Mask",
+  "text2text-generation":       "Text-to-Text Generation",
+  "image-to-image":             "Image-to-Image",
+  "next-sentence-prediction":   "Next Sentence Prediction",
+  "masked-image-modeling":      "Masked Image Modeling",
+  "image-classification":       "Image Classification",
+  "object-detection":           "Object Detection",
+  "instance-segmentation":      "Instance Segmentation",
+  "semantic-segmentation":      "Semantic Segmentation",
+  "panoptic-segmentation":      "Panoptic Segmentation",
+  "image-generation":           "Image Generation",
+  "text-generation":            "Text Generation",
+  "text-classification":        "Text Classification",
+  "token-classification":       "Token Classification",
+  "question-answering":         "Question Answering",
+  "multiple-choice":            "Multiple Choice",
+  "pretraining":                "Pre-training",
+};
+
+// Task → swatch slug.  The swatch values themselves live in globals.css
+// as ``--color-task-<slug>`` — see the "Task-tag palette" block there.
+// To re-theme a category, edit the CSS swatches.  To add a new task, add
+// one row here pointing at an existing swatch (or define a new swatch in
+// CSS first).  Adjacent swatches are intentionally separated within each
+// category so neighbouring task tags on the same card never look alike.
+const TASK_SWATCH: Record<string, string> = {
+  // ── Vision (cool spectrum) ────────────────────────────────────────────────
+  "image-classification":     "vision-1",
+  "object-detection":         "vision-2",
+  "instance-segmentation":    "vision-3",
+  "semantic-segmentation":    "vision-4",
+  "panoptic-segmentation":    "vision-5",
+  "image-to-image":           "vision-7",
+  "masked-image-modeling":    "vision-6",
+  // ── Text (warm spectrum) ──────────────────────────────────────────────────
+  "fill-mask":                "text-1",
+  "text-generation":          "text-2",
+  "text2text-generation":     "text-3",
+  "text-classification":      "text-4",
+  "token-classification":     "text-5",
+  "question-answering":       "text-6",
+  "next-sentence-prediction": "text-7",
+  "multiple-choice":          "text-8",
+  // ── Generative ────────────────────────────────────────────────────────────
+  "image-generation":         "generative-1",
+  // ── Multi / meta ──────────────────────────────────────────────────────────
+  "pretraining":              "meta-1",
+};
+
+const TASK_SWATCH_DEFAULT = "meta-1";
+
+/** Build inline style for a task pill from its CSS swatch.
+ *  Single rendering template — opacities composed via ``color-mix`` so
+ *  the bg / text / border share one source of truth (the swatch). */
+function taskTagStyle(task: string): React.CSSProperties {
+  const swatch = TASK_SWATCH[task] ?? TASK_SWATCH_DEFAULT;
+  const color = `var(--color-task-${swatch})`;
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color} 35%, transparent)`,
+  };
+}
+
+function taskLabel(task: string): string {
+  if (task in TASK_LABEL_OVERRIDES) return TASK_LABEL_OVERRIDES[task];
+  return task
+    .split("-")
+    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+function TaskTag({ task }: { task: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md border px-2 py-0.5",
+        "text-[11px] font-medium font-mono leading-snug",
+      )}
+      style={taskTagStyle(task)}
+    >
+      {taskLabel(task)}
+    </span>
+  );
+}
+
+function TaskTagRow({ tasks }: { tasks: string[] }) {
+  if (!tasks || tasks.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {tasks.map((t) => (
+        <TaskTag key={t} task={t} />
+      ))}
+    </div>
+  );
+}
+
 function FamilyCard({ card }: { card: FamilyCardData }) {
-  // Body text priority: ``theory`` (rST+math) > module summary > nothing.
-  // ``theory`` renders through MathText; the summary fallback stays a
-  // plain paragraph because it's never rST-formatted.
-  const hasTheory = card.theory !== null;
-  const hasFallback = !hasTheory && card.fallbackSummary !== null;
+  // Compact overview: only the first paragraph of theory on the card —
+  // the full body is rendered on the family-leaf page itself.  Citation
+  // first, intro second.  Card itself stays clickable.
+  const theoryIntro = card.theory ? firstParagraph(card.theory) : null;
+  const hasFallback = !theoryIntro && card.fallbackSummary;
   return (
     <a
       href={`/api/${card.slug}`}
@@ -163,27 +314,16 @@ function FamilyCard({ card }: { card: FamilyCardData }) {
           {card.slug}
         </code>
       </header>
-      <div className="px-5 py-4 space-y-5">
-        {/* Citation FIRST. */}
+      <div className="px-5 py-4 space-y-4">
+        {card.tasks.length > 0 && <TaskTagRow tasks={card.tasks} />}
         {card.citation && (
-          <div>
-            <div className="text-[10px] font-semibold tracking-widest uppercase text-lucid-text-disabled mb-1.5">
-              Paper
-            </div>
-            <p className="text-xs text-lucid-text-mid leading-relaxed italic border-l-2 border-lucid-border pl-3">
-              {card.citation}
-            </p>
-          </div>
+          <p className="text-xs text-lucid-text-mid leading-relaxed italic border-l-2 border-lucid-border pl-3">
+            {card.citation}
+          </p>
         )}
-        {/* Theory SECOND — rST + math via MathText. */}
-        {hasTheory && (
-          <div>
-            <div className="text-[10px] font-semibold tracking-widest uppercase text-lucid-text-disabled mb-1.5">
-              Overview
-            </div>
-            <div className="text-sm text-lucid-text-mid leading-relaxed prose-family">
-              <MathText text={card.theory!} />
-            </div>
+        {theoryIntro && (
+          <div className="text-sm text-lucid-text-mid">
+            <MathText text={theoryIntro} block />
           </div>
         )}
         {hasFallback && (

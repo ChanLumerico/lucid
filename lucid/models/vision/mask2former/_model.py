@@ -454,19 +454,84 @@ def _hungarian_match_masks(
 
 
 class Mask2FormerForSemanticSegmentation(PretrainedModel):
-    """Mask2Former semantic segmentation model (Cheng et al., CVPR 2022).
+    r"""Mask2Former universal segmentation model (Cheng et al., CVPR 2022).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional dict with ``"masks"`` (B, H, W) integer masks.
+    A unified architecture that achieves state-of-the-art results across
+    semantic, instance, and panoptic segmentation with the same code path —
+    only the post-processing and dataset target format differ.  The
+    architectural breakthrough over MaskFormer is **masked attention**:
+    each transformer decoder layer restricts cross-attention to the
+    foreground region of the *previous* layer's predicted mask, which
+    sharply accelerates convergence (the paper reports 6x fewer training
+    iterations) and improves segmentation of small objects.
 
-    Output contract
-    ---------------
-    ``SemanticSegmentationOutput``:
-      ``logits`` : (B, num_classes+1, H, W) — per-pixel class logits.
-      ``loss``   : Hungarian-matched BCE mask + CE class loss when targets
-                   provided.
+    The pipeline is: backbone (ResNet or Swin) -> multi-scale FPN-style
+    pixel decoder producing high-resolution pixel embeddings plus a
+    P3 / P4 / P5 set of memory features -> :math:`L` masked-attention
+    decoder layers cycling through the three memory levels with query
+    embeddings -> sibling class and mask-embedding heads.
+
+    Parameters
+    ----------
+    config : Mask2FormerConfig
+        Frozen architecture spec.  Use the family of factories
+        (:func:`mask2former_resnet50`, :func:`mask2former_resnet101`,
+        :func:`mask2former_swin_tiny` / ``small`` / ``base`` / ``large``)
+        to obtain paper-cited variants.
+
+    Attributes
+    ----------
+    config : Mask2FormerConfig
+        Stored copy of the config that built this model.
+    backbone : _ResNetBackbone or _SwinBackbone
+        Multi-scale backbone selected by ``config.backbone_type``.
+    pixel_decoder : _MultiScaleFPNDecoder
+        Multi-scale FPN-style pixel decoder producing per-pixel embeddings
+        at stride 4 plus three coarser memory levels.
+    query_embed : nn.Embedding
+        Learned segmentation queries ``(num_queries, d_model)``.
+    decoder_layers : list[_MaskedAttentionDecoderLayer]
+        ``num_decoder_layers`` decoder layers that cycle through the
+        three memory feature levels (P5 -> P4 -> P3 -> P5 -> ...) and
+        apply masked cross-attention using the previous layer's
+        predicted mask as an attention bias.
+    class_head : nn.Linear
+        Per-query :math:`(K + 1)` class head.
+    mask_embed : nn.Linear
+        Mask-embedding projection used for the dot-product mask
+        prediction with the pixel embedding.
+
+    Notes
+    -----
+    See Cheng et al., "Masked-attention Mask Transformer for Universal
+    Image Segmentation", CVPR 2022 (arXiv:2112.01527).  The masked
+    cross-attention at decoder layer :math:`l` replaces the standard
+    softmax with
+
+    .. math::
+
+        \mathrm{Attn}(Q_l, K, V) =
+            \mathrm{softmax}\!\bigl(\mathcal{M}_{l-1} + Q_l K^\top\bigr) V,
+
+    where :math:`\mathcal{M}_{l-1}` is a binary bias drawn from layer
+    :math:`l - 1`'s mask prediction (0 inside the predicted foreground,
+    :math:`-\infty` elsewhere).  Compared to MaskFormer's standard
+    cross-attention this restricts each query to attend only to its own
+    object region, accelerating convergence and giving consistent
+    +1-3 AP gains.  The same Hungarian + class CE + mask BCE / dice loss
+    as MaskFormer is used.
+
+    Examples
+    --------
+    Semantic segmentation forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_resnet50
+    >>> model = mask2former_resnet50()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape   # (B, K + 1, H, W)
+    (1, 151, 512, 512)
     """
 
     config_class: ClassVar[type[Mask2FormerConfig]] = Mask2FormerConfig

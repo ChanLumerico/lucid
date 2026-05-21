@@ -10,9 +10,60 @@ and plus the RoPE-specific ``rotary_base``.
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
+from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig
 
 
+@model_family_meta(
+    canonical_name="RoFormer",
+    citation=(
+        'Su, Jianlin, et al. "RoFormer: Enhanced Transformer with '
+        'Rotary Position Embedding." Neurocomputing, vol. 568, 2024, '
+        "article 127063."
+    ),
+    theory=r"""
+    RoFormer replaces BERT's absolute (learned) position embedding with
+    **Rotary Position Embedding (RoPE)** — a position-encoding scheme
+    that injects relative-position information **multiplicatively**
+    inside attention rather than additively at the input.
+
+    Consider a query/key vector :math:`x \in \mathbb{R}^{d}` at position
+    :math:`m`.  RoPE groups the :math:`d` features into :math:`d/2`
+    complex coordinates and rotates the :math:`i`-th pair
+    :math:`(x_{2i}, x_{2i+1})` by angle :math:`m \theta_i`, where
+
+    .. math::
+
+        \theta_i = \text{base}^{-2 i / d},
+        \qquad i = 0, 1, \dots, d/2 - 1,
+
+    and ``base`` (default :math:`10\,000`) controls the spectrum of
+    rotational frequencies.  In complex form
+    :math:`z_i = x_{2i} + j\, x_{2i+1}`, the rotation is just
+    :math:`z_i \mapsto z_i\, e^{j m \theta_i}`.
+
+    The crucial property is that the **attention dot product becomes a
+    function of the relative offset** :math:`m - n` only:
+
+    .. math::
+
+        \langle R_m\, q,\; R_n\, k \rangle
+            = \operatorname{Re}\!\sum_i z_i^{(q)} \overline{z_i^{(k)}}\,
+              e^{j (m - n) \theta_i}
+            = f_{\text{rel}}(q, k, m - n),
+
+    so RoPE encodes relative positions without any extra parameters and
+    without an additive bias term.  This grants three practical
+    benefits: (i) it generalises to **longer sequences than seen during
+    training** (with mild quality decay), (ii) it composes naturally
+    with linear attention variants because it acts on :math:`Q, K`
+    before the softmax, and (iii) it requires the per-head dimension
+    :math:`d_{\text{head}} = d_{\text{model}} / h` to be even — enforced
+    by ``__post_init__`` above.  RoFormer otherwise mirrors BERT-base
+    (:math:`L=12`, :math:`H=768`, :math:`A=12`) and is the de-facto
+    position-encoding choice for modern LLaMA-/Mistral-style LLMs.
+    """,
+)
 @dataclass(frozen=True)
 class RoFormerConfig(LanguageModelConfig):
     """Configuration for every RoFormer variant.

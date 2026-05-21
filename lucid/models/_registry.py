@@ -93,6 +93,20 @@ class _RegistryEntry:
     # factory just to discover the class or default config.
     model_class: type[PretrainedModel] | None = field(default=None)
     default_config: ModelConfig | None = field(default=None)
+    # Paper-cited trainable parameter count of the factory's default config
+    # (e.g. ``61_100_840`` for ``alexnet_cls``).  Source: the original paper
+    # / official release notes.  Surfaced as the "MODEL SIZE" card on the
+    # docs site and as a ``"61.1M"``-style tag on factory cards.  ``None``
+    # when no authoritative count is known — UI then omits the tag.
+    params: int | None = field(default=None)
+    # Layer-summary policy for the docs site's expandable model tree:
+    #   "auto" (default) — ``tools/build_model_summaries.py`` instantiates
+    #     the factory at build time, walks ``named_modules()``, compresses
+    #     consecutive identical children with ``× N``, caches the result.
+    #   None — explicit opt-out (e.g. factories too large to instantiate
+    #     on a build machine, or models that require external resources).
+    #   dict — pre-built declarative tree (for legacy / special cases).
+    summary: object = field(default="auto")
 
 
 _REGISTRY: dict[str, _RegistryEntry] = {}
@@ -128,6 +142,8 @@ def register_model(
     model_type: str | None = None,
     model_class: type[PretrainedModel] | None = None,
     default_config: ModelConfig | None = None,
+    params: int | None = None,
+    summary: object = "auto",
 ) -> Callable[[ModelFactory], ModelFactory]:
     r"""Decorator that registers a factory function under its ``__name__``.
 
@@ -163,6 +179,13 @@ def register_model(
         The default config produced when ``pretrained=False``.  When
         supplied, :meth:`AutoConfig.from_pretrained` returns it without
         instantiating the model.
+    params : int or None, optional
+        Paper-cited trainable-parameter count for this factory's default
+        config (e.g. ``61_100_840`` for ``alexnet_cls``).  Surfaced on
+        the API docs site as a ``"61.1M"``-style tag on the factory
+        card and as a "Model Size" section on the detail page.  Omit
+        (``None``) when no authoritative count is available — the UI
+        then hides the tag rather than guessing.
 
     Returns
     -------
@@ -217,6 +240,8 @@ def register_model(
             model_type=mt,
             model_class=model_class,
             default_config=default_config,
+            params=params,
+            summary=summary,
         )
         return fn
 

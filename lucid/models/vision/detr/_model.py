@@ -243,21 +243,104 @@ def _hungarian_match(
 
 
 class DETRForObjectDetection(PretrainedModel):
-    """DETR end-to-end object detector (Carion et al., ECCV 2020).
+    r"""DETR end-to-end object detector (Carion et al., ECCV 2020).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch (values normalised to image mean/std).
-    ``targets`` : optional training list of B dicts with:
-                    ``"boxes"``  — (M_i, 4) xyxy **normalised** to [0,1] by H,W.
-                    ``"labels"`` — (M_i,)   integer foreground class ids.
+    The first detection model to formulate object detection as a direct
+    **set prediction** problem, eliminating anchors and NMS.  A ResNet
+    backbone produces a stride-32 feature map :math:`(B, C, H', W')` that
+    is projected to :math:`d_\mathrm{model}` channels, flattened to a
+    sequence, and processed by a stack of transformer encoder layers.
+    A learned set of :math:`N` *object queries* (default 100) is then
+    decoded against this memory by the transformer decoder, with each
+    query producing one class logit vector (K+1, including
+    "no-object") and one box prediction :math:`(c_x, c_y, w, h)`
+    normalised to :math:`[0, 1]`.
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (B, N, num_classes+1) raw class logits per query.
-      ``pred_boxes``: (B, N, 4) cxcywh normalised to [0,1] (sigmoid output).
-      ``loss``      : total set-prediction loss when targets provided.
+    During training, predictions and ground-truth boxes are matched by
+    the Hungarian algorithm under a cost combining class probability and
+    box L1 + GIoU, and the same combination defines the per-pair loss.
+
+    Parameters
+    ----------
+    config : DETRConfig
+        Frozen architecture spec.  Use :func:`detr_resnet50` /
+        :func:`detr_resnet101` for the paper-cited variants.
+
+    Attributes
+    ----------
+    config : DETRConfig
+        Stored copy of the config that built this model.
+    backbone : _ResNet50C5
+        ResNet trunk through stage 5, producing a stride-32 feature map.
+    input_proj : nn.Conv2d
+        1x1 conv projecting backbone output to ``d_model``.
+    query_embed : nn.Embedding
+        Learned object queries of shape ``(num_queries, d_model)``.
+    transformer : nn.Transformer
+        ``num_encoder_layers``-layer encoder + ``num_decoder_layers``-layer
+        decoder with ``n_head`` attention heads and FFN width
+        ``dim_feedforward``.
+    class_embed : nn.Linear
+        Per-query class head with output dim ``num_classes + 1`` (the
+        extra "no-object" slot is essential for matching).
+    bbox_embed : _MLP
+        Three-layer MLP producing per-query 4-D box predictions; the
+        final activation is a sigmoid so boxes lie in :math:`[0, 1]`.
+
+    Notes
+    -----
+    See Carion et al., "End-to-End Object Detection with Transformers",
+    ECCV 2020 (arXiv:2005.12872).  The bipartite Hungarian assignment
+    finds the permutation :math:`\hat{\sigma} \in \mathfrak{S}_N` that
+    minimises
+
+    .. math::
+
+        \hat{\sigma} = \arg\min_{\sigma \in \mathfrak{S}_N}
+                       \sum_{i=1}^{N}
+                       \mathcal{L}_\mathrm{match}\bigl(y_i, \hat{y}_{\sigma(i)}\bigr),
+
+    with the pair cost
+
+    .. math::
+
+        \mathcal{L}_\mathrm{match}(y, \hat{y}) =
+            -\mathbb{1}_{c \ne \varnothing}\,\hat{p}(c)
+            + \mathbb{1}_{c \ne \varnothing}\,
+              \bigl(\lambda_{\mathrm{L_1}}\|b - \hat{b}\|_1
+                    + \lambda_\mathrm{GIoU}\,
+                      (1 - \mathrm{GIoU}(b, \hat{b}))\bigr).
+
+    The final loss reuses the same per-pair terms, with "no-object"
+    matches penalised at reduced weight.  Removing NMS / anchors makes
+    DETR conceptually simple but training-data hungry — the paper
+    reports needing 500 epochs to fully converge on COCO.
+
+    Examples
+    --------
+    Inference returns class logits and normalised cxcywh boxes for every
+    query:
+
+    >>> import lucid
+    >>> from lucid.models.vision.detr import detr_resnet50
+    >>> model = detr_resnet50()
+    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> out = model(x)
+    >>> out.logits.shape   # (B, num_queries, K + 1)
+    (1, 100, 81)
+    >>> out.pred_boxes.shape
+    (1, 100, 4)
+
+    Training pass with normalised xyxy ground-truth boxes (Hungarian
+    matching computes the set loss):
+
+    >>> targets = [{
+    ...     "boxes":  lucid.tensor([[0.1, 0.1, 0.5, 0.5]]),
+    ...     "labels": lucid.tensor([3], dtype=lucid.int64),
+    ... }]
+    >>> out = model(x, targets=targets)
+    >>> out.loss.shape
+    ()
     """
 
     config_class: ClassVar[type[DETRConfig]] = DETRConfig

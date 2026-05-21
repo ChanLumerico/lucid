@@ -34,7 +34,57 @@ def _apply(cfg: RoFormerConfig, overrides: dict[str, object]) -> RoFormerConfig:
     default_config=_CFG_BASE,
 )
 def roformer(pretrained: bool = False, **overrides: object) -> RoFormerModel:
-    """RoFormer-Base (L=12, H=768) — Su et al., 2021."""
+    r"""Construct a RoFormer encoder trunk.
+
+    Canonical RoFormer architecture from Su, Lu, Pan, Murtadha, Wen, and
+    Liu, 2024: :math:`L=12` transformer layers, :math:`H=768` hidden,
+    :math:`A=12` attention heads, intermediate width 3072 — same shape as
+    BERT-base, but with absolute learned position embeddings replaced by
+    rotary position embedding (RoPE) applied to :math:`Q` and :math:`K`
+    inside every self-attention layer.  Max sequence length is extended
+    from 512 to 1536 to exercise RoPE's length-extrapolation property.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides (e.g.
+        ``vocab_size=...``, ``rotary_base=...``,
+        ``max_position_embeddings=...``) forwarded into the underlying
+        config.
+
+    Returns
+    -------
+    RoFormerModel
+        Encoder trunk configured with the paper defaults plus any
+        overrides.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024, article 127063 (arXiv:2104.09864).
+
+    Rotary rotation matrix per :math:`(\cos\theta_i, \sin\theta_i)` pair:
+
+    .. math::
+
+        R_\theta = \begin{pmatrix}
+            \cos\theta & -\sin\theta \\
+            \sin\theta & \cos\theta
+        \end{pmatrix}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer
+    >>> model = roformer().eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape, out.pooler_output.shape
+    ((1, 4, 768), (1, 768))
+    """
     return RoFormerModel(_apply(_CFG_BASE, overrides))
 
 
@@ -49,6 +99,43 @@ def roformer(pretrained: bool = False, **overrides: object) -> RoFormerModel:
     default_config=_CFG_BASE,
 )
 def roformer_mlm(pretrained: bool = False, **overrides: object) -> RoFormerForMaskedLM:
+    r"""Construct a RoFormer model with a tied masked-LM head.
+
+    Same trunk as :func:`roformer` (L=12, H=768, A=12), augmented with the
+    BERT-style two-layer projection mapping each hidden state to vocabulary
+    logits via a decoder whose weight matrix is tied to the input
+    ``word_embeddings`` table when ``config.tie_word_embeddings`` is True.
+    Use for MLM pre-training when RoPE relative-position semantics are
+    preferred to absolute position embeddings.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    RoFormerForMaskedLM
+        RoFormer trunk wrapped with the tied MLM head.
+
+    Notes
+    -----
+    Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
+    Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer_mlm
+    >>> model = roformer_mlm().eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, 4, vocab=50000)
+    (1, 4, 50000)
+    """
     return RoFormerForMaskedLM(_apply(_CFG_BASE, overrides))
 
 
@@ -62,6 +149,42 @@ def roformer_mlm(pretrained: bool = False, **overrides: object) -> RoFormerForMa
 def roformer_cls(
     pretrained: bool = False, **overrides: object
 ) -> RoFormerForSequenceClassification:
+    r"""Construct a RoFormer model with a sequence-classification head.
+
+    Same trunk as :func:`roformer` (L=12, H=768, A=12), augmented with a
+    dropout-regularised linear classifier on the pooled first-token
+    embedding.  Use for GLUE-style fine-tunes when the RoPE relative
+    position bias is preferred to absolute position embeddings.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides forwarded into the
+        underlying config.  Pass ``num_labels=N`` to set the number of
+        classes (default 2).
+
+    Returns
+    -------
+    RoFormerForSequenceClassification
+        RoFormer trunk wrapped with the pooled classifier head.
+
+    Notes
+    -----
+    Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
+    Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer_cls
+    >>> model = roformer_cls(num_labels=3).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, num_labels=3)
+    (1, 3)
+    """
     return RoFormerForSequenceClassification(_apply(_CFG_BASE, overrides))
 
 
@@ -75,4 +198,39 @@ def roformer_cls(
 def roformer_token_cls(
     pretrained: bool = False, **overrides: object
 ) -> RoFormerForTokenClassification:
+    r"""Construct a RoFormer model with a per-token classification head.
+
+    Same trunk as :func:`roformer` (L=12, H=768, A=12), augmented with a
+    dropout-regularised per-position linear classifier of output width
+    ``config.num_labels``.  Use for sequence-labelling tasks (NER, POS,
+    chunking) when a RoPE-trained encoder is preferred.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`RoFormerConfig` field overrides forwarded into the
+        underlying config.  Pass ``num_labels=N`` to set the tag set size.
+
+    Returns
+    -------
+    RoFormerForTokenClassification
+        RoFormer trunk wrapped with the per-token classifier head.
+
+    Notes
+    -----
+    Reference: Su et al., *"RoFormer: Enhanced Transformer with Rotary
+    Position Embedding"*, Neurocomputing, vol. 568, 2024 (arXiv:2104.09864).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import roformer_token_cls
+    >>> model = roformer_token_cls(num_labels=9).eval()
+    >>> input_ids = lucid.tensor([[101, 2198, 7592, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, T=4, num_labels=9)
+    (1, 4, 9)
+    """
     return RoFormerForTokenClassification(_apply(_CFG_BASE, overrides))

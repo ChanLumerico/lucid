@@ -116,7 +116,58 @@ class _AuxClassifier(nn.Module):
 
 @dataclass
 class GoogLeNetOutput:
-    """GoogLeNet output — includes optional auxiliary logits for training."""
+    r"""Structured forward output for :class:`GoogLeNetForImageClassification`.
+
+    Carries the main classifier logits plus the optional auxiliary
+    classifier logits emitted during training.  Auxiliary heads attach
+    at Inception 4a and 4d in the original paper and are evaluated
+    *only* in training mode when ``config.aux_logits=True``; at
+    inference both auxiliary fields are ``None``.
+
+    Parameters
+    ----------
+    logits : Tensor
+        Main classifier output of shape ``(B, num_classes)``.
+    aux_logits1 : Tensor or None, optional, default=None
+        Logits from the first auxiliary classifier (attached at
+        Inception 4a) of shape ``(B, num_classes)``; ``None`` at
+        inference or when ``aux_logits=False``.
+    aux_logits2 : Tensor or None, optional, default=None
+        Logits from the second auxiliary classifier (attached at
+        Inception 4d) of shape ``(B, num_classes)``; ``None`` at
+        inference or when ``aux_logits=False``.
+    loss : Tensor or None, optional, default=None
+        Cross-entropy loss including auxiliary terms when labels were
+        passed to :meth:`GoogLeNetForImageClassification.forward`;
+        ``None`` otherwise.
+
+    Notes
+    -----
+    From Szegedy et al., "Going Deeper with Convolutions", CVPR 2015,
+    §5.  When auxiliary heads are active the training loss combines
+    the main and auxiliary cross-entropies as
+
+    .. math::
+
+        \mathcal{L} = \mathcal{L}_{\text{main}}
+            + 0.3 \cdot \mathcal{L}_{\text{aux1}}
+            + 0.3 \cdot \mathcal{L}_{\text{aux2}},
+
+    a weighting taken directly from the paper that compensates for the
+    auxiliary heads' shallower position in the network.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.googlenet import googlenet_cls
+    >>> model = googlenet_cls().eval()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    >>> out.aux_logits1 is None
+    True
+    """
 
     logits: Tensor
     aux_logits1: Tensor | None = None
@@ -170,11 +221,80 @@ def _make_inception(spec: tuple[int, int, int, int, int, int, int]) -> _Inceptio
 
 
 class GoogLeNet(PretrainedModel, BackboneMixin):
-    """GoogLeNet feature extractor — outputs 1024-dim spatial map from Inception 5b.
+    r"""GoogLeNet (Inception v1) feature-extracting backbone.
 
-    ``forward_features`` returns shape ``(B, 1024, 1, 1)`` for 224×224 inputs
-    after AdaptiveAvgPool2d(1×1).
-    Auxiliary classifiers are not included in the backbone.
+    Implements the 22-layer Inception v1 network from Szegedy et al.,
+    "Going Deeper with Convolutions", CVPR 2015: a five-block stem
+    (Conv :math:`7\times7` stride-2 → MaxPool → :math:`1\times1` →
+    :math:`3\times3` → MaxPool) followed by nine
+    :class:`_InceptionModule` blocks grouped into three stages
+    (Inception 3a-3b → MaxPool → 4a-4e → MaxPool → 5a-5b) and a final
+    :class:`~lucid.nn.AdaptiveAvgPool2d` to a :math:`1\times1` spatial
+    map.  The two auxiliary classifiers attached at Inception 4a and
+    4d in the original paper are part of the classifier variant only,
+    not the backbone.
+
+    Parameters
+    ----------
+    config : GoogLeNetConfig
+        Frozen architecture spec.  Use :func:`googlenet` for the
+        paper-cited configuration; pass a custom config to switch input
+        channel count.  ``aux_logits`` is irrelevant for the backbone.
+
+    Attributes
+    ----------
+    config : GoogLeNetConfig
+        Stored copy of the config that built this model.
+    stem : nn.Sequential
+        The pre-Inception conv stack.
+    inception3a, inception3b : _InceptionModule
+        First Inception stage, producing a :math:`28\times28` spatial
+        map with 256 and 480 channels respectively.
+    inception4a … inception4e : _InceptionModule
+        Second Inception stage at :math:`14\times14` resolution; widths
+        ramp 512 → 512 → 512 → 528 → 832.
+    inception5a, inception5b : _InceptionModule
+        Third Inception stage at :math:`7\times7` resolution, producing
+        the final 1024-channel feature map.
+    maxpool3, maxpool4 : nn.MaxPool2d
+        :math:`3\times3` stride-2 max-pools between Inception stages.
+    avgpool : nn.AdaptiveAvgPool2d
+        Final global average pool collapsing the :math:`7\times7`
+        feature map to :math:`1\times1`.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin`.
+
+    Notes
+    -----
+    Each :class:`_InceptionModule` computes four parallel branches in a
+    single layer:
+
+    .. math::
+
+        y = \mathrm{concat}\bigl(
+            f_{1\times1}(x),\; f_{3\times3}(g_{1\times1}(x)),\;
+            f_{5\times5}(h_{1\times1}(x)),\;
+            p_{1\times1}(\mathrm{pool}(x))
+        \bigr).
+
+    The :math:`1\times1` bottlenecks before the larger spatial
+    convolutions keep the parameter count manageable: GoogLeNet has
+    only ≈6.8 M parameters compared with ≈60 M for AlexNet, despite
+    being substantially deeper and reaching a top-5 ImageNet validation
+    error of 6.67%.  This was the ILSVRC-2014 classification winner.
+
+    Examples
+    --------
+    Build a GoogLeNet backbone and run a single forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.googlenet import googlenet
+    >>> backbone = googlenet()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.logits.shape   # (B, 1024, 1, 1)
+    (2, 1024, 1, 1)
     """
 
     config_class: ClassVar[type[GoogLeNetConfig]] = GoogLeNetConfig
@@ -235,11 +355,82 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 
 
 class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """GoogLeNet with Dropout + FC head and (optionally) auxiliary classifiers.
+    r"""GoogLeNet image classifier with optional auxiliary classifiers.
 
-    During training (``model.train()``) and when ``config.aux_logits=True``,
-    ``forward`` returns ``GoogLeNetOutput`` with ``aux_logits1`` /
-    ``aux_logits2`` populated.  At inference these are ``None``.
+    Combines the GoogLeNet backbone with a global-average-pool +
+    :class:`~lucid.nn.Dropout` (``config.dropout``, default 0.4) +
+    :class:`~lucid.nn.Linear` head producing ``config.num_classes``
+    logits, plus two optional auxiliary classifiers attached at
+    Inception 4a (512-channel feature map) and Inception 4d
+    (528-channel feature map).  Auxiliary heads are evaluated only in
+    training mode and only when ``config.aux_logits=True``; their
+    contributions to the loss are weighted 0.3 each, following the
+    original paper.
+
+    Parameters
+    ----------
+    config : GoogLeNetConfig
+        Architecture spec.  Use :func:`googlenet_cls` for the
+        paper-cited configuration (auxiliary heads enabled).  Pass
+        ``aux_logits=False`` for an inference-only variant.
+
+    Attributes
+    ----------
+    config : GoogLeNetConfig
+        Stored copy of the config that built this model.
+    stem, inception3a, ..., inception5b, maxpool3, maxpool4
+        Same backbone components as on :class:`GoogLeNet`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Final global average pool to :math:`1\times1`.
+    drop : nn.Dropout
+        Dropout applied before the main classifier
+        (``p=config.dropout``, 0.4 in the paper).
+    classifier : nn.Module
+        Final linear projection 1024 → ``num_classes``, built by
+        :meth:`ClassificationHeadMixin._build_classifier`.
+    aux1, aux2 : nn.Module
+        Auxiliary classifiers (instances of :class:`_AuxClassifier`)
+        when ``config.aux_logits=True``; otherwise
+        :class:`~lucid.nn.Identity` placeholders.
+
+    Notes
+    -----
+    From Szegedy et al., "Going Deeper with Convolutions", CVPR 2015,
+    §5.  The full training loss with auxiliary heads is
+
+    .. math::
+
+        \mathcal{L} = \mathcal{L}_{\text{main}}
+            + 0.3 \cdot \mathcal{L}_{\text{aux1}}
+            + 0.3 \cdot \mathcal{L}_{\text{aux2}},
+
+    each term being the standard categorical cross-entropy
+    :math:`-\frac{1}{N} \sum_n \log \operatorname{softmax}(\cdot)_{y_n}`.
+    The :math:`0.3` weighting compensates for the auxiliary heads being
+    much shallower than the main classifier; at inference only the main
+    branch is evaluated.
+
+    Examples
+    --------
+    Inference path (no labels, auxiliary heads inactive):
+
+    >>> import lucid
+    >>> from lucid.models.vision.googlenet import googlenet_cls
+    >>> model = googlenet_cls().eval()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    >>> out.aux_logits1 is None
+    True
+
+    Training path (auxiliary heads active, labels provided):
+
+    >>> model = model.train()
+    >>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)
+    >>> out = model(x, labels=labels)
+    >>> out.aux_logits1.shape   # available during training
+    (4, 1000)
     """
 
     config_class: ClassVar[type[GoogLeNetConfig]] = GoogLeNetConfig

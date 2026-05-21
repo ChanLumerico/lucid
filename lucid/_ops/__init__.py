@@ -29,7 +29,6 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import OpEntry, _REGISTRY
 
-
 # 3.2.2: index ``_REGISTRY`` by ``free_fn_name`` so ``_make_free_fn`` and
 # ``_populate_free_fns`` skip the O(N) linear scan over ~500–1000 entries.
 # Built once at module load, before ``_populate_free_fns`` runs.  Entries
@@ -267,9 +266,7 @@ def _make_free_fn(name: str) -> object:
 
     if e.n_tensor_args == -1:
 
-        def _fn_list(
-            tensors: list[Tensor], *args: object, **kwargs: object
-        ) -> object:
+        def _fn_list(tensors: list[Tensor], *args: object, **kwargs: object) -> object:
             impls = [_unwrap(t) for t in tensors]
             result = e.engine_fn(impls, *args, **kwargs)
             if e.returns_tensor:

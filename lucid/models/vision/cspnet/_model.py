@@ -206,10 +206,75 @@ def _build_body(
 
 
 class CSPNet(PretrainedModel, BackboneMixin):
-    """CSPResNet feature extractor — no classification head.
+    r"""CSPResNet feature-extracting backbone (no classification head).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` shaped
-    ``(B, C, H/32, W/32)`` from stage 4.
+    Implements the Cross-Stage-Partial transformation from Wang
+    et al., "CSPNet: A New Backbone that can Enhance Learning
+    Capability of CNN", CVPR Workshops 2020 (arXiv:1911.11929),
+    wrapped around a ResNet-50 bottleneck topology.  At every
+    stage the input feature map is split along the channel
+    dimension into two halves; only one half is fed through the
+    stack of residual bottlenecks, the other bypasses the block
+    entirely and is concatenated back in at the end:
+
+    .. math::
+
+        y = \mathrm{Transition}\big([x', \mathcal{F}(x'')]\big),
+        \qquad x = [x', x''].
+
+    Because half of the channels skip the heavy block, FLOPs and
+    duplicate gradient flow are both cut substantially — by
+    roughly 10–20% per stage — while accuracy on ImageNet rises a
+    fraction of a percent.
+
+    The body is a 7×7 stride-2 stem followed by a 3×3 stride-2
+    max-pool and four CSP stages with explicit 3×3 stride-2
+    downsampling transitions between stages.  Output strides are
+    4, 8, 16, and 32 relative to the input.
+
+    Parameters
+    ----------
+    config : CSPNetConfig
+        Frozen architecture spec.  Use the factory function
+        :func:`cspresnet_50` for the canonical configuration.
+
+    Attributes
+    ----------
+    config : CSPNetConfig
+        Stored copy of the config that built this model.
+    stem : nn.Sequential
+        7×7 conv (stride 2) → BatchNorm → ReLU.
+    maxpool : nn.MaxPool2d
+        3×3 max-pool with stride 2.
+    stage0, stage1, stage2, stage3 : _CSPBottleneck
+        The four CSP-wrapped residual stages.  Each stage halves
+        the input channels into a 1×1-projected bypass branch
+        and a stack of :math:`n_i` :class:`_ResBottleneck` blocks.
+    down1, down2, down3 : nn.Sequential
+        3×3 stride-2 downsampling transitions inserted between
+        consecutive stages.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin`.
+
+    Notes
+    -----
+    The CSP transformation is *generic* — it can wrap any
+    dense-or-residual block, not just ResNet's.  In this Lucid
+    implementation the inner stack is ResNet-style bottlenecks
+    (``1×1 → 3×3 → 1×1`` with 4× expansion), giving CSPResNet-50.
+
+    Examples
+    --------
+    Build a CSPResNet-50 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnet_50
+    >>> backbone = cspresnet_50()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 512, 7, 7)
     """
 
     config_class: ClassVar[type[CSPNetConfig]] = CSPNetConfig
@@ -256,7 +321,58 @@ class CSPNet(PretrainedModel, BackboneMixin):
 
 
 class CSPNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """CSPResNet with global average pooling + linear classification head."""
+    r"""CSPResNet with global-average-pooled linear classification head.
+
+    Combines a :class:`CSPNet` backbone with global average
+    pooling and a linear projection to ``config.num_classes``
+    logits.  When ``labels`` are supplied to :meth:`forward`, a
+    cross-entropy loss is computed and returned alongside the
+    logits.
+
+    Parameters
+    ----------
+    config : CSPNetConfig
+        Architecture spec.  Use the :func:`cspresnet_50_cls`
+        factory for the canonical configuration.
+
+    Attributes
+    ----------
+    config : CSPNetConfig
+        Stored copy of the config that built this model.
+    stem, maxpool, stage0, …, stage3, down1, down2, down3
+        Same backbone components as on :class:`CSPNet`; see that
+        class for shape semantics.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    classifier : nn.Linear
+        Linear projection from ``config.channels[-1]`` (512 for
+        CSPResNet-50) to ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{GAP}(\mathrm{backbone}(x)) + b.
+
+    Wang et al., 2020 report 76.6% ImageNet-1k top-1 accuracy with
+    CSPResNet-50 — roughly the same as plain ResNet-50 (76.1%)
+    but at substantially lower FLOPs and memory.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.cspnet import cspresnet_50_cls
+    >>> model = cspresnet_50_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    """
 
     config_class: ClassVar[type[CSPNetConfig]] = CSPNetConfig
     base_model_prefix: ClassVar[str] = "cspnet"

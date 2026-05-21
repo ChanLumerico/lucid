@@ -4,8 +4,57 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="MaskFormer",
+    citation=(
+        'Cheng, Bowen, et al. "Per-Pixel Classification is Not All You '
+        'Need for Semantic Segmentation." Advances in Neural Information '
+        "Processing Systems, 2021."
+    ),
+    theory=r"""
+    MaskFormer recasts **semantic segmentation** as a
+    *mask-classification* problem rather than the standard
+    per-pixel-classification one.  Instead of predicting a
+    :math:`K`-way softmax at every pixel, the model emits :math:`N`
+    queries; each query produces a class label and a binary mask,
+    and the final segmentation is the soft sum
+
+    .. math::
+
+        \mathrm{seg}_{k}[h, w] =
+            \sum_{n=1}^{N} \mathrm{softmax}(\hat{c}_n)_k \,
+            \sigma(\hat{m}_n[h, w]),
+
+    where :math:`\hat{c}_n \in \mathbb{R}^{K+1}` is the per-query
+    class logit and :math:`\hat{m}_n` is its binary mask logit.  The
+    argmax over :math:`k` yields the predicted label map.
+
+    The architecture has three modules:
+
+    - **Pixel decoder** — an FPN-like up-sampler that produces a
+      per-pixel embedding :math:`\mathcal{E}_{\mathrm{pixel}} \in
+      \mathbb{R}^{C_\epsilon \times H/4 \times W/4}`.
+    - **Transformer decoder** — :math:`N` learnable queries attend
+      to a flattened backbone feature, producing per-query
+      embeddings :math:`\mathcal{E}_{\mathrm{query}} \in
+      \mathbb{R}^{N \times C_\epsilon}`.
+    - **Heads** — a linear classifier on each query and a
+      dot-product :math:`\mathcal{E}_{\mathrm{query}} \cdot
+      \mathcal{E}_{\mathrm{pixel}}` to produce per-query masks.
+
+    Training uses Hungarian matching (as in DETR) between predicted
+    and ground-truth segments and combines cross-entropy on the
+    class logits with focal/BCE + Dice losses on the mask logits.
+
+    The key insight — that mask classification subsumes per-pixel
+    classification — also unifies *semantic* and *instance*
+    segmentation under one model, foreshadowing the more general
+    Mask2Former.
+    """,
+)
 @dataclass(frozen=True)
 class MaskFormerConfig(ModelConfig):
     """Configuration for MaskFormer.

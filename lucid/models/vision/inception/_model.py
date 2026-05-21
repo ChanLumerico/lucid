@@ -274,7 +274,7 @@ class _InceptionE(nn.Module):
 class _InceptionAux(nn.Module):
     """Auxiliary classifier for Inception v3 (attaches after InceptionC[3]).
 
-    Matches torchvision / timm structure:
+    Matches the reference-framework / timm structure:
       AvgPool(5,s=3) → Conv(in→128, 1×1) → Conv(128→768, 5×5) → FC(768, num_classes)
     """
 
@@ -302,7 +302,48 @@ class _InceptionAux(nn.Module):
 
 @dataclass
 class InceptionV3Output:
-    """Inception v3 output — includes optional auxiliary logits for training."""
+    r"""Structured forward output for :class:`InceptionV3ForImageClassification`.
+
+    Carries the main classifier logits and the optional auxiliary
+    classifier logits emitted during training only.  The auxiliary head
+    in Inception v3 attaches after the last 17x17 stage
+    (``inception_c3`` / Mixed_6e in the paper diagram) and is only
+    active when both ``config.aux_logits=True`` and the model is in
+    training mode.
+
+    Parameters
+    ----------
+    logits : Tensor
+        Main classifier output of shape ``(B, num_classes)``.
+    aux_logits : Tensor or None, optional, default=None
+        Logits from the auxiliary classifier of shape
+        ``(B, num_classes)``; ``None`` at inference or when
+        ``aux_logits=False``.
+    loss : Tensor or None, optional, default=None
+        Cross-entropy loss with auxiliary term (weight 0.4) when labels
+        were passed to :meth:`forward`; ``None`` otherwise.
+
+    Notes
+    -----
+    From Szegedy et al., "Rethinking the Inception Architecture for
+    Computer Vision", CVPR 2016, §6.  Training loss with the auxiliary
+    head is
+
+    .. math::
+
+        \mathcal{L} = \mathcal{L}_{\text{main}}
+            + 0.4 \cdot \mathcal{L}_{\text{aux}}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.inception import inception_v3_cls
+    >>> model = inception_v3_cls(aux_logits=True).eval()
+    >>> x = lucid.randn(1, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.aux_logits is None   # inactive at eval
+    True
+    """
 
     logits: Tensor
     aux_logits: Tensor | None = None
@@ -332,7 +373,78 @@ def _build_inception_stem(in_channels: int) -> nn.Sequential:
 
 
 class InceptionV3(PretrainedModel, BackboneMixin):
-    """Inception v3 feature extractor — outputs (B, 2048, 1, 1) for 299×299 inputs."""
+    r"""Inception v3 feature-extracting backbone.
+
+    Implements the topology from Szegedy et al., "Rethinking the
+    Inception Architecture for Computer Vision", CVPR 2016: a deep
+    pre-Inception stem (3×Conv → MaxPool → 2×Conv → MaxPool), three
+    :class:`_InceptionA` blocks at :math:`35\times35`, a Reduction-A
+    block (:class:`_InceptionB`) down to :math:`17\times17`, four
+    :class:`_InceptionC` blocks with factorised :math:`1\times7` and
+    :math:`7\times1` convolutions, a Reduction-B block
+    (:class:`_InceptionD`) down to :math:`8\times8`, two
+    :class:`_InceptionE` blocks with the expanded
+    :math:`1\times3`/:math:`3\times1` parallel branches, and a final
+    :class:`~lucid.nn.AdaptiveAvgPool2d` to :math:`1\times1`.  Designed
+    for :math:`299\times299` RGB inputs.
+
+    Parameters
+    ----------
+    config : InceptionConfig
+        Frozen architecture spec.  Use :func:`inception_v3` for the
+        paper-cited configuration.  ``aux_logits`` only affects the
+        classifier variant.
+
+    Attributes
+    ----------
+    config : InceptionConfig
+        Stored copy of the config that built this model.
+    stem : nn.Sequential
+        The pre-Inception conv stack.
+    inception_a0, inception_a1, inception_a2 : _InceptionA
+        Three Inception-A blocks at :math:`35\times35` (factorised
+        :math:`5\times5` into two :math:`3\times3`).
+    reduction_a : _InceptionB
+        Reduction-A block reducing spatial size :math:`35\times35
+        \to 17\times17`.
+    inception_c0, inception_c1, inception_c2, inception_c3 : _InceptionC
+        Four Inception-C blocks at :math:`17\times17` with
+        :math:`1\times7` / :math:`7\times1` factorisation.
+    reduction_b : _InceptionD
+        Reduction-B block reducing spatial size :math:`17\times17
+        \to 8\times8`.
+    inception_e0, inception_e1 : _InceptionE
+        Two Inception-E blocks at :math:`8\times8` with expanded
+        :math:`1\times3` / :math:`3\times1` parallel branches.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool to :math:`1\times1`.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin`.
+
+    Notes
+    -----
+    The headline factorisation idea is to replace an
+    :math:`n\times n` convolution with an :math:`n\times1` followed by
+    a :math:`1\times n` convolution: for :math:`n = 7` this trades
+    :math:`49 C^2` parameters for :math:`14 C^2` while adding an extra
+    ReLU and matching the original receptive field along a separable
+    manifold.  Inception v3 uses three block topologies (A, B, C) at
+    three spatial resolutions (35×35, 17×17, 8×8), each tailored to
+    the receptive-field budget at that stage.  Approximately 23.8 M
+    parameters (without auxiliary head); achieves a top-5 ImageNet
+    error of 3.5% on the validation set.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.inception import inception_v3
+    >>> backbone = inception_v3()
+    >>> x = lucid.randn(1, 3, 299, 299)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, 1, 1)
+    (1, 2048, 1, 1)
+    """
 
     config_class: ClassVar[type[InceptionConfig]] = InceptionConfig
     base_model_prefix: ClassVar[str] = "inception_v3"
@@ -402,7 +514,71 @@ class InceptionV3(PretrainedModel, BackboneMixin):
 
 
 class InceptionV3ForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """Inception v3 with classification head and optional auxiliary classifier."""
+    r"""Inception v3 image classifier with optional auxiliary classifier.
+
+    Combines an :class:`InceptionV3` backbone with a global-average-pool
+    + :class:`~lucid.nn.Dropout` (``p=config.dropout``, default 0.5) +
+    :class:`~lucid.nn.Linear` head producing ``config.num_classes``
+    logits.  When ``config.aux_logits=True``, an auxiliary classifier
+    (:class:`_InceptionAux`) attaches after the last
+    :math:`17\times17` Inception-C block and contributes a 0.4-weighted
+    cross-entropy term during training.
+
+    Parameters
+    ----------
+    config : InceptionConfig
+        Architecture spec.  Use :func:`inception_v3_cls` for the
+        timm-compatible default (no auxiliary head).  Pass
+        ``aux_logits=True`` to enable the auxiliary classifier — used
+        during training to combat vanishing gradients and provide
+        intermediate supervision.
+
+    Attributes
+    ----------
+    config : InceptionConfig
+        Stored copy of the config that built this model.
+    stem, inception_a0, ..., inception_e1, reduction_a, reduction_b
+        Same backbone components as on :class:`InceptionV3`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Final global average pool to :math:`1\times1`.
+    drop : nn.Dropout
+        Dropout applied before the main classifier
+        (``p=config.dropout``, 0.5 in the paper).
+    classifier : nn.Module
+        Final linear projection 2048 → ``num_classes``.
+    aux : nn.Module
+        Auxiliary classifier (:class:`_InceptionAux`) when
+        ``config.aux_logits=True``; otherwise
+        :class:`~lucid.nn.Identity`.
+
+    Notes
+    -----
+    From Szegedy et al., "Rethinking the Inception Architecture for
+    Computer Vision", CVPR 2016, §6.  Total loss with auxiliary head is
+
+    .. math::
+
+        \mathcal{L} = \mathcal{L}_{\text{main}}
+            + 0.4 \cdot \mathcal{L}_{\text{aux}}.
+
+    The paper also introduces *label smoothing* — replacing the
+    one-hot target with :math:`(1 - \epsilon)\,\mathbf{1}_y +
+    \epsilon/K` — although that is a training-loop concern handled
+    outside this module.  Final top-5 ImageNet validation error in the
+    paper is 3.5% with ≈24 M parameters.
+
+    Examples
+    --------
+    Inference path (auxiliary head ignored even if enabled):
+
+    >>> import lucid
+    >>> from lucid.models.vision.inception import inception_v3_cls
+    >>> model = inception_v3_cls().eval()
+    >>> x = lucid.randn(2, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
+    """
 
     config_class: ClassVar[type[InceptionConfig]] = InceptionConfig
     base_model_prefix: ClassVar[str] = "inception_v3"

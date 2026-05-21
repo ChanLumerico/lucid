@@ -4,8 +4,62 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="SKNet",
+    citation=(
+        'Li, Xiang, et al. "Selective Kernel Networks." Proceedings '
+        "of the IEEE/CVF Conference on Computer Vision and Pattern "
+        "Recognition, 2019, pp. 510–519."
+    ),
+    theory=r"""
+    SKNet builds on the biological observation that the receptive
+    field size of cortical neurons is not fixed but is *modulated
+    by the stimulus*.  Standard ConvNets bake the receptive field
+    into the architecture (a :math:`3\times3` kernel always sees
+    a :math:`3\times3` neighbourhood); SKNet replaces that with a
+    **Selective Kernel** unit that dynamically chooses how much of
+    each receptive-field size to use for every input, on a
+    per-channel basis.
+
+    A Selective Kernel block runs the input :math:`x` through two
+    (or more) parallel branches with different effective receptive
+    fields — typically a :math:`3\times3` convolution and a
+    :math:`3\times3` dilation-2 convolution (giving an effective
+    :math:`5\times5` receptive field).  Their outputs
+    :math:`\tilde U_1` and :math:`\tilde U_2` are summed and pooled
+    to produce a compact channel descriptor, which is then passed
+    through a lightweight SE-style bottleneck and a *per-branch
+    softmax* to yield soft attention weights:
+
+    .. math::
+
+        a_c, b_c \in (0, 1), \quad a_c + b_c = 1
+        \qquad \forall c \in \{1, \dots, C\}.
+
+    The final output of the block is the channel-wise convex
+    combination
+
+    .. math::
+
+        V_c = a_c \cdot \tilde U_{1, c} + b_c \cdot \tilde U_{2, c}.
+
+    Because :math:`a_c` and :math:`b_c` are computed from the input
+    itself, every channel of every feature map can effectively
+    choose its own receptive field at every spatial location — a
+    form of soft kernel selection driven by data.
+
+    Plugging Selective Kernel units into the ResNet bottleneck in
+    place of the central :math:`3\times3` convolution gives the
+    SK-ResNet family (SKNet-50 / 101 / 200 in the paper).  An
+    aggressive ResNeXt-style cardinality / base-width split lets
+    the same block scale up to SK-ResNeXt-50 32×4d.  In Lucid these
+    are all parameterised by :class:`SKNetConfig`'s ``cardinality``,
+    ``base_width``, ``split_input`` and ``rd_ratio`` fields.
+    """,
+)
 @dataclass(frozen=True)
 class SKNetConfig(ModelConfig):
     """Unified config for all SK-ResNet variants (Li et al., 2019).

@@ -17,9 +17,52 @@ Differences from BERT:
 from dataclasses import dataclass
 from typing import ClassVar
 
+from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig, TextActivation
 
 
+@model_family_meta(
+    canonical_name="GPT",
+    citation=(
+        'Radford, Alec, et al. "Improving Language Understanding by '
+        'Generative Pre-Training." OpenAI Technical Report, 2018.'
+    ),
+    theory=r"""
+    GPT — *Generative Pre-Training* — is a decoder-only transformer trained
+    on an autoregressive (causal) language-modelling objective.  Given a
+    token sequence :math:`x = (x_1, \dots, x_T)`, the network factorises
+    the joint distribution left-to-right and maximises
+
+    .. math::
+
+        \mathcal{L}_{\text{LM}}(\theta)
+            = \sum_{t=1}^{T} \log p_\theta(x_t \mid x_{<t}),
+
+    where :math:`p_\theta(x_t \mid x_{<t}) =
+    \operatorname{softmax}(W_e h_t^{(L)})` and :math:`h_t^{(L)}` is the
+    final-layer hidden state at position :math:`t`.  Causality is enforced
+    by an upper-triangular mask inside scaled dot-product attention, so
+    position :math:`t` only attends to :math:`\{1, \dots, t\}`.
+
+    The architecture is a stack of :math:`L=12` transformer blocks
+    (``hidden_size=768``, 12 heads, ``intermediate_size=3072``) with
+    learned absolute position embeddings and the tanh-approximated GELU
+    activation (``gelu_new``).  Input and output token embeddings are
+    tied — the LM head reuses :math:`W_e^\top` — which halves the
+    parameter count of the softmax layer.  Unlike BERT, there is no
+    segment embedding and no masked-LM objective; downstream tasks are
+    handled by appending a task-specific delimiter sequence and reading
+    off the final hidden state.
+
+    Empirically, GPT established that **unsupervised pre-training on a
+    large unlabeled corpus** (BookCorpus, ~800M tokens) followed by
+    supervised fine-tuning transfers across a wide range of NLP tasks,
+    foreshadowing the scaling-law regime later formalised by Kaplan et
+    al. (2020).  Increasing depth, width, and corpus size yields smooth,
+    power-law improvements in held-out perplexity — the foundation that
+    GPT-2 and GPT-3 scale up.
+    """,
+)
 @dataclass(frozen=True)
 class GPTConfig(LanguageModelConfig):
     """Configuration for every GPT-1 variant.

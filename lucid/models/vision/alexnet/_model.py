@@ -60,10 +60,85 @@ def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
 
 
 class AlexNet(PretrainedModel, BackboneMixin):
-    """AlexNet feature extractor — outputs the 5-block conv activations.
+    r"""AlexNet feature-extracting backbone (no fully-connected head).
 
-    ``forward_features`` returns shape ``(B, 256, 6, 6)`` for 224×224 inputs
-    (after the AdaptiveAvgPool2d).
+    Implements the five-stage convolutional trunk from Krizhevsky,
+    Sutskever & Hinton, "ImageNet Classification with Deep
+    Convolutional Neural Networks", NIPS 2012: an :math:`11\times11`
+    stride-4 first convolution, an :math:`5\times5` second
+    convolution, three :math:`3\times3` convolutions, with
+    :class:`~lucid.nn.LocalResponseNorm` after the first two blocks
+    and overlapping :math:`3\times3` max-pools that reduce the spatial
+    size by an additional factor of 2 after blocks 1, 2, and 5.  A
+    final :class:`~lucid.nn.AdaptiveAvgPool2d` collapses the feature
+    map to :math:`6\times6` regardless of input resolution.  The
+    original two-GPU model-parallel split is collapsed into a single
+    merged stream — standard practice in modern reimplementations.
+
+    Parameters
+    ----------
+    config : AlexNetConfig
+        Frozen architecture spec.  Use :func:`alexnet` for the
+        paper-cited single-stream configuration; pass a custom config
+        to switch input channel count or to retarget the classifier
+        variant.
+
+    Attributes
+    ----------
+    config : AlexNetConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        The five conv blocks (Conv → ReLU → optional LRN → optional
+        MaxPool) — see :func:`_build_features` for the exact ordering.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global pool down to a :math:`6\times6` spatial map so the
+        backbone produces a fixed-size feature regardless of input
+        resolution.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin` for downstream decoder modules.
+
+    Notes
+    -----
+    From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  AlexNet's
+    contribution to deep-learning history is threefold: the
+    *rectified linear unit* :math:`\phi(x) = \max(0, x)` replaced
+    saturating nonlinearities and cut training time by several factors;
+    *dropout* with :math:`p = 0.5` regularised the 4096-dim
+    fully-connected layers against overfitting on a 1.2 M-image dataset;
+    and *local response normalisation*
+
+    .. math::
+
+        b_{x,y}^i = \frac{a_{x,y}^i}{
+            \left(k + \alpha \sum_{j=\max(0, i-n/2)}^{\min(N-1, i+n/2)}
+            (a_{x,y}^j)^2 \right)^{\beta}
+        }
+
+    provided implicit lateral inhibition between feature maps —
+    superseded later by :class:`~lucid.nn.BatchNorm2d`.  The total
+    parameter count is approximately 60 M (≈58 M of which sit in the
+    two 4096-dim fully-connected layers of the classifier variant).
+    With the original ImageNet-1k training recipe AlexNet reaches a
+    top-5 error of 15.3%.
+
+    Examples
+    --------
+    Build the backbone and run a single forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.alexnet import alexnet
+    >>> backbone = alexnet()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 256, 6, 6)
+    (2, 256, 6, 6)
+
+    Inspect per-stage feature descriptors:
+
+    >>> info = backbone.feature_info
+    >>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info[:2]]
+    [(1, 96, 4), (2, 256, 8)]
     """
 
     config_class: ClassVar[type[AlexNetConfig]] = AlexNetConfig
@@ -99,7 +174,76 @@ class AlexNet(PretrainedModel, BackboneMixin):
 
 
 class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """AlexNet with FC6→FC7→classifier head (4096→4096→num_classes)."""
+    r"""AlexNet with two 4096-dim fully-connected layers and a linear classifier head.
+
+    Combines an :class:`AlexNet` convolutional backbone with the
+    paper-cited three-layer classifier head: FC6 (256·6·6 → 4096),
+    FC7 (4096 → 4096), and the final linear projection to
+    ``config.num_classes``.  :class:`~lucid.nn.Dropout` with
+    ``config.dropout`` is applied after both ReLU activations in the
+    hidden layers — these two large FC layers dominate the parameter
+    count and are the main overfitting risk that dropout was introduced
+    to control.  When ``labels`` are supplied to :meth:`forward`, a
+    cross-entropy loss is returned alongside the logits.
+
+    Parameters
+    ----------
+    config : AlexNetConfig
+        Architecture spec.  Use :func:`alexnet_cls` for the paper-cited
+        ImageNet-1k configuration (1000-class head, ``dropout=0.5``).
+
+    Attributes
+    ----------
+    config : AlexNetConfig
+        Stored copy of the config that built this model.
+    features, avgpool
+        Same backbone components as on :class:`AlexNet`; see that class
+        for shape semantics.
+    fc6, fc7 : nn.Linear
+        The two hidden fully-connected layers, both projecting to 4096
+        dimensions.
+    drop6, drop7 : nn.Dropout
+        :class:`~lucid.nn.Dropout` layers applied after each ReLU in
+        the hidden FC stack, controlled by ``config.dropout``.
+    classifier : nn.Module
+        Final linear projection to ``num_classes``, built by
+        :meth:`ClassificationHeadMixin._build_classifier`.
+
+    Notes
+    -----
+    From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  The two
+    4096-dim hidden layers alone account for roughly 54 M of the
+    network's 60 M parameters — the original rationale for *dropout*,
+    which randomly zeros out half of each FC activation during training
+    so that no individual co-adapted neuron is critical for any single
+    decision.  Loss is the standard cross-entropy
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{N} \sum_{n=1}^{N}
+            \log \operatorname{softmax}(\text{logits}_n)_{\,y_n}.
+
+    Examples
+    --------
+    Run inference on a batch of 224x224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.alexnet import alexnet_cls
+    >>> model = alexnet_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    >>> out.loss is None
+    True
+
+    Compute a training loss given integer labels:
+
+    >>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)
+    >>> out = model(x, labels=labels)
+    >>> out.loss.shape
+    ()
+    """
 
     config_class: ClassVar[type[AlexNetConfig]] = AlexNetConfig
     base_model_prefix: ClassVar[str] = "alexnet"

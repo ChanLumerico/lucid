@@ -1,22 +1,28 @@
 // lucid/_C/ops/einops/_Pattern.h
 //
 // Parser and intermediate representation for einops pattern strings of the
-// form "lhs -> rhs", e.g. "b c h w -> b (c h w)".
+// form ``"lhs -> rhs"`` (e.g. ``"b c h w -> b (c h w)"``).
 //
-// The grammar supported here is:
+// Grammar
+// -------
 //   side     ::= (token SP)*
 //   token    ::= name | '(' inner ')' | literal
 //   inner    ::= (name SP)*
 //   name     ::= [A-Za-z_][A-Za-z0-9_]*
 //   literal  ::= [0-9]+
 //
-// Parentheses create a "group" token whose children are the inner names.
-// A group on the left-hand side represents axis decomposition (a merged
-// dimension is split into its constituent sizes); a group on the right-hand
-// side represents axis merging (multiple dimensions are collapsed into one).
+// Parentheses create a group token whose children are the inner names.  On
+// the left-hand side a group represents axis decomposition (one merged input
+// dimension is split into its constituent sizes); on the right-hand side a
+// group represents axis merging (several dimensions are collapsed into one).
 //
-// All functions are inline; this header is included directly by the .cpp
-// files for Rearrange, Reduce, Repeat, and Einsum.
+// All functions in this header are inline and the header is included
+// directly by the per-op ``.cpp`` files for ``Rearrange``, ``Reduce``,
+// ``Repeat``, and ``Einsum``.
+//
+// References
+// ----------
+// Rogozhnikov, "einops: Clear and Reliable Tensor Manipulations" (ICLR 2022).
 
 #pragma once
 
@@ -33,29 +39,44 @@ namespace lucid::einops_detail {
 
 struct Token;
 
-// A token in an einops pattern can be one of three things:
-//   std::string           — a named axis (e.g. "b", "c", "height")
-//   std::vector<Token>    — a group of axes inside parentheses
-//   std::int64_t          — a literal integer size (e.g. "1", "3")
+// Variant payload of a parsed einops token.
 //
-// The ordering of alternatives in the variant encodes the token kind index
-// used by Token::is_name(), is_group(), and is_literal().  Do not reorder.
+// A token can carry one of three shapes:
+//   - ``std::string``        — a named axis (e.g. ``"b"``, ``"height"``).
+//   - ``std::vector<Token>`` — a group of axes inside parentheses.
+//   - ``std::int64_t``       — a literal integer size (e.g. ``1``, ``3``).
+//
+// The ordering of alternatives in the variant encodes the token-kind index
+// returned by ``Token::is_name()`` / ``is_group()`` / ``is_literal()``.  Do
+// not reorder — the index numbers are baked into the predicates.
 using TokenVar = std::variant<std::string, std::vector<Token>, std::int64_t>;
 
-// Single token in a parsed einops pattern side.
+// One whitespace-delimited unit from one side of an einops pattern.
 //
-// A Token carries the result of parsing one whitespace-delimited unit from
-// one side of an einops pattern:
-//   - is_name(): a free axis label — appears in both lhs and rhs and has a
-//     size determined either from the input shape or from axes_lengths.
-//   - is_group(): a parenthesised axis list — on the lhs it means the input
-//     dimension is the product of the listed axis sizes (decomposition); on
-//     the rhs it means those axes will be merged into a single dimension.
-//   - is_literal(): a fixed integer size constraint — the corresponding input
-//     dimension must match exactly.  Literal tokens do not introduce free axes
-//     and are not included in flat_axes().
+// A ``Token`` is a tagged union over the three einops kinds (name / group /
+// literal).  The predicates ``is_name()`` / ``is_group()`` / ``is_literal()``
+// inspect ``v.index()`` to dispatch; the accessors ``name()`` / ``group()``
+// / ``literal()`` return the underlying value (their preconditions are the
+// matching predicate).
 //
-// The three predicates provide a readable API over the raw variant index.
+// Semantics by kind
+// -----------------
+// is_name()    — free axis label.  Must appear in both ``lhs`` and ``rhs``;
+//                its size is determined by the input shape or by
+//                ``axes_lengths``.
+// is_group()   — parenthesised axis list.  On the ``lhs`` it means the
+//                input dimension equals the product of the listed axis
+//                sizes (decomposition); on the ``rhs`` it means those axes
+//                will be merged into a single output dimension.
+// is_literal() — fixed integer size constraint.  The corresponding input
+//                dimension must match exactly.  Literal tokens do not
+//                introduce free axis names and are not included in
+//                ``flat_axes()``.
+//
+// Attributes
+// ----------
+// v : TokenVar
+//     The tagged variant payload.
 struct Token {
     TokenVar v;
 
@@ -74,19 +95,36 @@ struct Token {
     std::int64_t literal() const { return std::get<2>(v); }
 };
 
-// Parse one side of an einops pattern string (before or after "->") into a
-// sequence of Tokens.
+// Parse one side of an einops pattern (before or after ``"->"``) into a
+// sequence of tokens.
 //
 // Whitespace is consumed between tokens.  Parenthesised groups are parsed
-// recursively so nested parentheses are handled correctly (though the einops
-// grammar does not require nesting; this is just a natural consequence of
-// the depth-tracking loop).  Raises an error on unmatched '(' or any
-// character that is not alphanumeric, underscore, parenthesis, or whitespace.
+// recursively, so nested parentheses are handled correctly even though the
+// einops grammar does not normally require nesting — it falls out naturally
+// from the depth-tracking scanner.  Three dispatch branches correspond to
+// the three token kinds:
 //
-// The three scanning branches correspond to the three token kinds:
-//   '('        — start of a group; depth-tracked scan to the matching ')'.
-//   digit      — a literal integer; digits consumed until the first non-digit.
-//   alpha/'_'  — an axis name; alphanumerics and underscores consumed.
+//   ``'('``       — start of a group; depth-tracked scan to the matching
+//                   ``')'``, then a recursive call on the interior.
+//   digit         — a literal integer; digits consumed until the first
+//                   non-digit, then ``std::stoll`` for the value.
+//   alpha / ``_`` — an axis name; alphanumerics and underscores consumed.
+//
+// Parameters
+// ----------
+// s : const std::string&
+//     One side of the pattern string (already split at ``"->"``).
+//
+// Returns
+// -------
+// std::vector<Token>
+//     The parsed token sequence in source order.
+//
+// Raises
+// ------
+// EinopsPatternError
+//     On unmatched ``'('`` or any character outside the allowed set
+//     (alphanumeric, underscore, parenthesis, whitespace).
 inline std::vector<Token> parse_side(const std::string& s) {
     std::vector<Token> out;
     std::size_t i = 0;
@@ -146,13 +184,23 @@ inline std::vector<Token> parse_side(const std::string& s) {
 }
 
 // Flatten a token sequence to the ordered list of named axes it represents,
-// recursively expanding group tokens.  Literal tokens are skipped because they
-// do not correspond to free axis names that need tracking in the size map.
+// recursively expanding group tokens.  Literal tokens are skipped because
+// they do not introduce free axis names.
 //
-// The returned vector is used to:
+// The returned vector is the canonical "flat axis list" used downstream to:
 //   - Determine the number of free axes on each side of the pattern.
-//   - Build permutation vectors by comparing the flat lhs vs flat rhs order.
+//   - Build permutation vectors by comparing flat ``lhs`` vs flat ``rhs``.
 //   - Construct intermediate reshape targets.
+//
+// Parameters
+// ----------
+// tokens : const std::vector<Token>&
+//     A parsed pattern side (or the children of a group).
+//
+// Returns
+// -------
+// std::vector<std::string>
+//     Axis names in source order, with groups expanded depth-first.
 inline std::vector<std::string> flat_axes(const std::vector<Token>& tokens) {
     std::vector<std::string> out;
     for (const auto& tk : tokens) {
@@ -168,14 +216,27 @@ inline std::vector<std::string> flat_axes(const std::vector<Token>& tokens) {
     return out;
 }
 
-// Split a full pattern string at the "->" arrow and return {lhs, rhs} with
-// leading and trailing whitespace trimmed from each half.
+// Split a full pattern string at the ``"->"`` arrow into trimmed ``{lhs, rhs}``
+// halves.
 //
-// The two-character arrow "->" is consumed; neither half retains it.
-// Only the outermost whitespace is trimmed; interior spaces within a side
-// serve as token delimiters and are retained for parse_side.
-// Raises an error if the arrow is absent, since all supported einops ops
-// require explicit input and output side specifications.
+// The two-character arrow is consumed; neither half retains it.  Only the
+// outermost whitespace is trimmed — interior spaces serve as token
+// delimiters for ``parse_side`` and are preserved.
+//
+// Parameters
+// ----------
+// pat : const std::string&
+//     The full einops pattern string.
+//
+// Returns
+// -------
+// std::pair<std::string, std::string>
+//     ``{lhs, rhs}`` with leading/trailing whitespace removed.
+//
+// Raises
+// ------
+// EinopsPatternError
+//     If the ``"->"`` arrow is absent from the pattern.
 inline std::pair<std::string, std::string> split_arrow(const std::string& pat) {
     auto pos = pat.find("->");
     if (pos == std::string::npos)

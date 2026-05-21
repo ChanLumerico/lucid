@@ -330,23 +330,92 @@ def _fpn_roi_align(
 
 
 class MaskRCNNForObjectDetection(PretrainedModel):
-    """Mask R-CNN end-to-end instance segmentation model (He et al., ICCV 2017).
+    r"""Mask R-CNN end-to-end instance segmentation model (He et al., ICCV 2017).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional training list of B dicts with:
-                    ``"boxes"``  — (M_i, 4) xyxy ground-truth boxes
-                    ``"labels"`` — (M_i,)   integer foreground class ids
-                    ``"masks"``  — (M_i, H, W) binary instance masks
+    Extends Faster R-CNN with two changes that together unlock high-quality
+    instance segmentation: (1) :func:`roi_align` replaces RoI Pool to remove
+    quantisation artefacts that hurt fine localisation, and (2) a third
+    parallel head — the FCN-style mask head — predicts a binary
+    ``28 x 28`` mask per class for each detected instance.  The backbone is
+    ResNet-50 with a 5-level Feature Pyramid Network (FPN) on top
+    (``P2-P6``); anchors are assigned to FPN levels by size, RPN runs once
+    across all levels, and per-RoI detection / mask heads run on the
+    level-appropriate FPN feature map.
 
-    Output contract
-    ---------------
-    ``InstanceSegmentationOutput``:
-      ``logits``     : (Σ proposals, K+1)      raw class logits.
-      ``pred_boxes`` : (Σ proposals, 4)         decoded xyxy boxes.
-      ``pred_masks`` : (Σ proposals, K, 28, 28) raw mask logits.
-      ``loss``       : total loss when targets provided.
+    Parameters
+    ----------
+    config : MaskRCNNConfig
+        Frozen architecture spec.  Use the :func:`mask_rcnn` factory for
+        the paper-cited ResNet-50-FPN configuration (80 COCO classes,
+        100 max detections per image).
+
+    Attributes
+    ----------
+    config : MaskRCNNConfig
+        Stored copy of the config that built this model.
+    backbone : _ResNet50Backbone
+        ResNet-50 trunk producing multi-scale features ``C2-C5`` at
+        strides 4 / 8 / 16 / 32.
+    fpn : FPN
+        Top-down feature pyramid producing ``P2-P6`` at the same
+        FPN width (default 256) — ``P6`` is used by RPN only, ``P2-P5``
+        by the detection and mask heads.
+    _rpn : RPN
+        Anchor-based proposal generator shared across all FPN levels;
+        produces 1000 post-NMS proposals at inference.
+    det_head : RoIHead
+        7x7 RoI Align -> 2-layer FC (1024 units) -> sibling K+1
+        class and 4K class-specific box heads.
+    mask_head : _MaskHead
+        14x14 RoI Align -> four 3x3 conv (``mask_hidden_channels``)
+        -> 2x2 transpose conv (28x28 upsample) -> 1x1 conv producing
+        ``(N, K, 28, 28)`` per-class mask logits.
+
+    Notes
+    -----
+    See He et al., "Mask R-CNN", ICCV 2017 (arXiv:1703.06870).  Mask R-CNN's
+    multi-task loss adds a binary cross-entropy mask term to the
+    Faster R-CNN losses:
+
+    .. math::
+
+        L = L_{\mathrm{cls}} + L_{\mathrm{box}} + L_{\mathrm{mask}},
+
+    where :math:`L_{\mathrm{mask}}` is averaged over the foreground-class
+    channel only (``ground-truth class`` slice of the K-channel mask
+    output), keeping the mask prediction decoupled from class prediction
+    — the central insight that gives Mask R-CNN its quality edge over
+    earlier joint approaches.  RoI Align uses bilinear interpolation
+    over four sampling points per output bin to preserve sub-pixel
+    accuracy:
+
+    .. math::
+
+        y_{ij} = \frac{1}{4} \sum_{(u, v) \in S_{ij}}
+                 \mathrm{bilinear}(x; u, v).
+
+    Examples
+    --------
+    Inference forward pass on an 800x800 image:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mask_rcnn import mask_rcnn
+    >>> model = mask_rcnn(num_classes=80)
+    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> out = model(x)
+    >>> out.pred_masks.shape[-2:]
+    (28, 28)
+
+    Training pass with full annotations (boxes + labels + masks):
+
+    >>> targets = [{
+    ...     "boxes":  lucid.tensor([[100.0, 100.0, 400.0, 400.0]]),
+    ...     "labels": lucid.tensor([5], dtype=lucid.int64),
+    ...     "masks":  lucid.zeros((1, 800, 800)),
+    ... }]
+    >>> out = model(x, targets=targets)
+    >>> out.loss.shape
+    ()
     """
 
     config_class: ClassVar[type[MaskRCNNConfig]] = MaskRCNNConfig

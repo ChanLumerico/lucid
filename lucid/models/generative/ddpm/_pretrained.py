@@ -79,7 +79,45 @@ def _apply(cfg: DDPMConfig, overrides: dict[str, object]) -> DDPMConfig:
     default_config=_CFG_CIFAR,
 )
 def ddpm_cifar(pretrained: bool = False, **overrides: object) -> DDPMModel:
-    """DDPM on CIFAR-10 (Ho et al., 2020 Appendix B.1)."""
+    r"""Construct a DDPM U-Net trunk for the CIFAR-10 setup.
+
+    Paper-faithful CIFAR-10 configuration from Ho, Jain, and Abbeel, 2020
+    Appendix B.1 / Table 9: sample size 32x32, ``base_channels=128``,
+    ``channel_mult=(1, 2, 2, 2)`` (four spatial stages — 32 -> 16 -> 8 ->
+    4), 2 ResBlocks per stage, self-attention at the 16x16 feature map,
+    1 attention head, dropout 0.1, and a 1000-step linear ``beta``
+    schedule.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides (e.g. ``dropout=...``,
+        ``num_train_timesteps=...``) forwarded into the underlying config.
+
+    Returns
+    -------
+    DDPMModel
+        Bare U-Net trunk configured with the CIFAR-10 setup and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_cifar
+    >>> model = ddpm_cifar().eval()
+    >>> x_t = lucid.randn((1, 3, 32, 32))
+    >>> t = lucid.tensor([42]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 32, 32) — predicted noise
+    (1, 3, 32, 32)
+    """
     return DDPMModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -91,7 +129,45 @@ def ddpm_cifar(pretrained: bool = False, **overrides: object) -> DDPMModel:
     default_config=_CFG_LSUN,
 )
 def ddpm_lsun(pretrained: bool = False, **overrides: object) -> DDPMModel:
-    """DDPM on LSUN / CelebA-HQ 256×256 (Ho et al., 2020 Appendix B.2)."""
+    r"""Construct a DDPM U-Net trunk for the LSUN / CelebA-HQ 256x256 setup.
+
+    Paper-faithful 256x256 configuration from Ho, Jain, and Abbeel, 2020
+    Appendix B.2 (LSUN church / bedroom and CelebA-HQ): sample size
+    256x256, ``base_channels=128``, ``channel_mult=(1, 1, 2, 2, 4, 4)``
+    (six spatial stages — 256 -> 128 -> ... -> 8), 2 ResBlocks per stage,
+    self-attention at the 16x16 feature map, 1 attention head, no
+    dropout, and a 1000-step linear ``beta`` schedule.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    DDPMModel
+        Bare U-Net trunk configured with the LSUN / CelebA-HQ setup and
+        any overrides.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_lsun
+    >>> model = ddpm_lsun().eval()
+    >>> x_t = lucid.randn((1, 3, 256, 256))
+    >>> t = lucid.tensor([500]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 256, 256)
+    (1, 3, 256, 256)
+    """
     return DDPMModel(_apply(_CFG_LSUN, overrides))
 
 
@@ -103,7 +179,46 @@ def ddpm_lsun(pretrained: bool = False, **overrides: object) -> DDPMModel:
     default_config=_CFG_IMAGENET64,
 )
 def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
-    """Improved DDPM on ImageNet 64×64 (Nichol & Dhariwal, 2021 Table 1)."""
+    r"""Construct an Improved-DDPM U-Net trunk for ImageNet 64x64.
+
+    Paper-faithful ImageNet 64x64 configuration from Nichol and Dhariwal,
+    2021 Table 1: sample size 64x64, ``base_channels=128``,
+    ``channel_mult=(1, 2, 3, 4)`` (four spatial stages — 64 -> 32 -> 16
+    -> 8), 3 ResBlocks per stage, multi-scale self-attention at the 8 /
+    16 / 32 feature maps, 4 attention heads, learned variance head
+    enabled (``learn_sigma=True``), and a 4000-step cosine ``beta``
+    schedule.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    DDPMModel
+        Bare U-Net trunk configured with the Improved-DDPM ImageNet 64x64
+        setup and any overrides.
+
+    Notes
+    -----
+    Reference: Nichol and Dhariwal, *"Improved Denoising Diffusion
+    Probabilistic Models"*, ICML, 2021 (arXiv:2102.09672), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_imagenet64
+    >>> model = ddpm_imagenet64().eval()
+    >>> x_t = lucid.randn((1, 3, 64, 64))
+    >>> t = lucid.tensor([1234]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # learn_sigma=True -> 2 * 3 = 6 channels
+    (1, 6, 64, 64)
+    """
     return DDPMModel(_apply(_CFG_IMAGENET64, overrides))
 
 
@@ -120,6 +235,41 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
 def ddpm_cifar_gen(
     pretrained: bool = False, **overrides: object
 ) -> DDPMForImageGeneration:
+    r"""Construct a DDPM CIFAR-10 model with training loss and ``.generate()``.
+
+    Same trunk as :func:`ddpm_cifar` (sample size 32x32, 4-stage U-Net),
+    wrapped with the Ho 2020 simplified training objective and
+    :meth:`DiffusionMixin.generate` for ancestral sampling.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    DDPMForImageGeneration
+        CIFAR-10 DDPM wrapped with the noise-prediction loss head.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_cifar_gen
+    >>> model = ddpm_cifar_gen().eval()
+    >>> x_t = lucid.randn((1, 3, 32, 32))
+    >>> t = lucid.tensor([42]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 32, 32)
+    (1, 3, 32, 32)
+    """
     return DDPMForImageGeneration(_apply(_CFG_CIFAR, overrides))
 
 
@@ -133,6 +283,41 @@ def ddpm_cifar_gen(
 def ddpm_lsun_gen(
     pretrained: bool = False, **overrides: object
 ) -> DDPMForImageGeneration:
+    r"""Construct a DDPM LSUN / CelebA-HQ model with training loss and ``.generate()``.
+
+    Same trunk as :func:`ddpm_lsun` (sample size 256x256, 6-stage U-Net),
+    wrapped with the Ho 2020 simplified training objective and
+    :meth:`DiffusionMixin.generate` for ancestral sampling.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    DDPMForImageGeneration
+        LSUN / CelebA-HQ DDPM wrapped with the noise-prediction loss head.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239), Appendix B.2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_lsun_gen
+    >>> model = ddpm_lsun_gen().eval()
+    >>> x_t = lucid.randn((1, 3, 256, 256))
+    >>> t = lucid.tensor([500]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 256, 256)
+    (1, 3, 256, 256)
+    """
     return DDPMForImageGeneration(_apply(_CFG_LSUN, overrides))
 
 
@@ -146,4 +331,45 @@ def ddpm_lsun_gen(
 def ddpm_imagenet64_gen(
     pretrained: bool = False, **overrides: object
 ) -> DDPMForImageGeneration:
+    r"""Construct an Improved-DDPM ImageNet 64x64 model with training loss and ``.generate()``.
+
+    Same trunk as :func:`ddpm_imagenet64` (sample size 64x64, 4-stage U-Net
+    with ``learn_sigma=True``).
+
+    .. warning::
+        This factory currently raises :class:`NotImplementedError` at
+        construction time — the default config has ``learn_sigma=True``,
+        which requires the Improved-DDPM hybrid
+        :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}` loss not yet
+        implemented in Lucid.  Pass ``learn_sigma=False`` to override.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`DDPMConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    DDPMForImageGeneration
+        Improved-DDPM ImageNet 64x64 wrapper.
+
+    Notes
+    -----
+    Reference: Nichol and Dhariwal, *"Improved Denoising Diffusion
+    Probabilistic Models"*, ICML, 2021 (arXiv:2102.09672), Table 1.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import ddpm_imagenet64_gen
+    >>> model = ddpm_imagenet64_gen(learn_sigma=False).eval()
+    >>> x_t = lucid.randn((1, 3, 64, 64))
+    >>> t = lucid.tensor([1234]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 64, 64)
+    (1, 3, 64, 64)
+    """
     return DDPMForImageGeneration(_apply(_CFG_IMAGENET64, overrides))

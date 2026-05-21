@@ -16,40 +16,155 @@
 
 namespace lucid {
 
-// Autograd node for element-wise subtraction: c = a - b.
+// Autograd node for element-wise subtraction $y = a - b$ with NumPy
+// broadcasting.
 //
-// Forward:  c[i] = a[i] - b[i]  (broadcasting supported).
-// Backward: dA = +grad_out  (gradient passes through to a unchanged)
-//           dB = -grad_out  (gradient is negated for b because c decreases as b
-//                            increases)
+// Inherits forward dispatch, broadcasting logic, and the apply() trampoline
+// from BinaryOp<SubBackward>.  No forward inputs are saved because the
+// gradient depends only on the upstream gradient: $a$ receives it unchanged
+// and $b$ receives it negated.  Broadcast-reduces each branch back to the
+// original input shape via :func:`sum_to_shape` inside
+// :func:`BinaryKernel::apply`.
 //
-// kSavesInputs = false: the subtraction gradient depends only on the sign of
-// the output gradient, not on the forward input values.
+// Math
+// ----
+// $$
+//   y = a - b, \qquad
+//   \frac{\partial L}{\partial a} = \frac{\partial L}{\partial y}, \qquad
+//   \frac{\partial L}{\partial b} = -\frac{\partial L}{\partial y}
+// $$
+//
+// Shape
+// -----
+// Inputs follow NumPy broadcasting; output has the broadcasted shape.  Each
+// gradient is then reduced to the original input's shape.
+//
+// Attributes
+// ----------
+// kSavesInputs : bool
+//     ``false`` — gradient is value-independent.
+// schema_v1 : OpSchema
+//     ``"sub"``, schema version 1, ``AmpPolicy::Promote``, deterministic.
+//
+// Notes
+// -----
+// CPU dispatch uses Accelerate ``vDSP_vsub`` / ``vDSP_vsubD`` for F32 / F64.
+// GPU dispatch uses MLX's broadcast-aware ``subtract`` primitive.
+//
+// See Also
+// --------
+// AddBackward, MulBackward, DivBackward
 class LUCID_API SubBackward : public BinaryOp<SubBackward> {
 public:
-    // Disables retaining the forward input Storage objects for the backward pass.
+    // Disables saving of forward input Storages — the subtractive gradient is
+    // independent of input values.
     static constexpr bool kSavesInputs = false;
 
-    // Op registration metadata: name "sub", schema version 1, dtype promotion,
-    // deterministic.
+    // Op registration metadata.
+    //
+    // Attributes
+    // ----------
+    // name : const char*
+    //     ``"sub"``.
+    // version : int
+    //     ``1``.
+    // amp_policy : AmpPolicy
+    //     ``Promote``.
+    // deterministic : bool
+    //     ``true``.
     static const OpSchema schema_v1;
 
-    // Route the forward computation through the backend's sub primitive.
+    // Forward dispatch hook called by BinaryKernel::forward.
+    //
+    // Parameters
+    // ----------
+    // be : backend::IBackend&
+    //     Active backend (CPU Accelerate or GPU MLX).
+    // a, b : const Storage&
+    //     Operands already broadcast-expanded to ``shape``.
+    // shape : const Shape&
+    //     Broadcasted output shape.
+    // dt : Dtype
+    //     Promoted output dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Output storage holding $a - b$.
     static Storage dispatch(
         backend::IBackend& be, const Storage& a, const Storage& b, const Shape& shape, Dtype dt) {
         return be.sub(a, b, shape, dt);
     }
 
-    // Compute the gradients for both inputs given the output gradient.
+    // Compute the storage-level gradients for both operands.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const Storage&
+    //     Upstream gradient at the broadcasted output shape.
+    //
+    // Returns
+    // -------
+    // std::pair<Storage, Storage>
+    //     ``(dA, dB)`` where ``dA`` is a clone of ``grad_out`` and ``dB`` is
+    //     its element-wise negation.
+    //
+    // Math
+    // ----
+    // $$
+    //   \mathrm{dA} = \frac{\partial L}{\partial y}, \qquad
+    //   \mathrm{dB} = -\frac{\partial L}{\partial y}
+    // $$
     std::pair<Storage, Storage> grad_formula(const Storage& grad_out);
 
-    // Graph-mode: da = grad_out, db = -grad_out.
+    // Graph-mode (TensorImpl) variant of the gradient.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const TensorImplPtr&
+    //     Upstream gradient node.
+    // a, b : const TensorImplPtr&
+    //     Forward inputs (unused — values irrelevant to subtraction gradient).
+    //
+    // Returns
+    // -------
+    // std::pair<TensorImplPtr, TensorImplPtr>
+    //     ``(grad_out, -grad_out)``.
     std::pair<TensorImplPtr, TensorImplPtr> grad_formula_impl(const TensorImplPtr& grad_out,
                                                               const TensorImplPtr& /*a*/,
                                                               const TensorImplPtr& /*b*/);
 };
 
-// Public entry point: compute a - b with full broadcasting and autograd support.
+// Public entry point — element-wise subtraction with autograd support.
+//
+// Parameters
+// ----------
+// a, b : const TensorImplPtr&
+//     Operands of any rank.  Shapes must be NumPy-broadcast-compatible.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of shape ``broadcast_shapes(a.shape, b.shape)`` and
+//     promoted dtype.  Participates in autograd via :class:`SubBackward`.
+//
+// Math
+// ----
+// $$ y = a - b $$
+//
+// Raises
+// ------
+// LucidError
+//     If ``a`` and ``b`` have incompatible shapes under NumPy broadcasting
+//     rules, or if their devices differ.
+//
+// Examples
+// --------
+// >>> auto c = sub_op(a, b);    // c = a - b
+//
+// See Also
+// --------
+// add_op, mul_op, div_op
 LUCID_API TensorImplPtr sub_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

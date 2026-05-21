@@ -17,8 +17,8 @@ both runtime and docs.
 Convention rationale: see ``arch-models-canonical-name``.
 """
 
-from dataclasses import dataclass
-from typing import Callable, TypeVar
+from dataclasses import dataclass, is_dataclass, field, fields
+from typing import Callable, TypeVar, dataclass_transform
 
 from lucid.models._base import ModelConfig
 
@@ -48,6 +48,7 @@ class ModelFamilyMeta:
     theory: str
 
 
+@dataclass_transform(frozen_default=True, field_specifiers=(field,))
 def model_family_meta(
     *,
     canonical_name: str,
@@ -114,6 +115,22 @@ def model_family_meta(
     ...     model_type: ClassVar[str] = "resnet"
     """
 
+    # Layer-2 contract checks (see arch-models-family-contract).
+    # Validate decorator arguments *before* class wrap so misuse raises
+    # at module-import time with a clear message instead of producing a
+    # silently-malformed JSON.
+    for _name, _val in (
+        ("canonical_name", canonical_name),
+        ("citation", citation),
+        ("theory", theory),
+    ):
+        if not isinstance(_val, str) or not _val.strip():
+            raise ValueError(
+                f"@model_family_meta: '{_name}' must be a non-empty string "
+                f"literal (got {_val!r}).  See "
+                f"arch-models-family-contract.md."
+            )
+
     meta = ModelFamilyMeta(
         canonical_name=canonical_name,
         citation=citation,
@@ -121,6 +138,37 @@ def model_family_meta(
     )
 
     def _wrap(cls: _C) -> _C:
+        # Per-class structural checks at decorator-application time.
+        if not isinstance(cls, type) or not issubclass(cls, ModelConfig):
+            raise TypeError(
+                f"@model_family_meta can only decorate ModelConfig subclasses; "
+                f"got {cls!r}.  See arch-models-family-contract.md."
+            )
+        if not is_dataclass(cls):
+            raise TypeError(
+                f"@model_family_meta on {cls.__name__}: class must be a "
+                f"@dataclass.  Place @dataclass(frozen=True) BELOW "
+                f"@model_family_meta so the dataclass transformation runs first."
+            )
+        # Frozen-dataclass check — ``fields()`` works on any dataclass, so
+        # we inspect via the ``__dataclass_params__`` marker instead.
+        params = getattr(cls, "__dataclass_params__", None)
+        if params is not None and not getattr(params, "frozen", False):
+            raise TypeError(
+                f"@model_family_meta on {cls.__name__}: dataclass must be "
+                f"frozen — use @dataclass(frozen=True) (see "
+                f"arch-models-family-contract.md)."
+            )
+        if cls.model_type == "base":
+            raise TypeError(
+                f"@model_family_meta on {cls.__name__}: family Config must "
+                f"override 'model_type' ClassVar with a unique family "
+                f"identifier (e.g. 'resnet', 'bert')."
+            )
+        # ``fields(cls)`` access guards against ABC-only declarations that
+        # bypass the dataclass transform — accessing it surfaces a clear
+        # TypeError early.
+        _ = fields(cls)
         cls.__model_family_meta__ = meta  # type: ignore[attr-defined]
         return cls
 

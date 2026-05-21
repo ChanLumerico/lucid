@@ -4,8 +4,47 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="Fast R-CNN",
+    citation=(
+        'Girshick, Ross. "Fast R-CNN." Proceedings of the IEEE '
+        "International Conference on Computer Vision, 2015, pp. 1440–1448."
+    ),
+    theory=r"""
+    Fast R-CNN closes the dominant performance gap of R-CNN — the
+    one-CNN-forward-per-proposal cost — by sharing convolutional
+    computation across all proposals in an image.
+
+    The CNN is run **once** on the full image, producing a feature
+    map at stride :math:`s` (e.g. :math:`s = 16` for VGG-16).  For
+    each region proposal, **RoI Pooling** extracts a fixed-size
+    :math:`H \times W` (paper: :math:`7 \times 7`) sub-window from
+    the shared feature map by quantising the proposal coordinates to
+    the feature grid and max-pooling adaptively inside each cell.
+
+    The pooled features feed two FC layers and **two sibling output
+    heads**:
+
+    .. math::
+
+        L(p, u, t^u, v) = L_{\mathrm{cls}}(p, u)
+            + \lambda \, [u \ge 1] \, L_{\mathrm{loc}}(t^u, v),
+
+    where :math:`L_{\mathrm{cls}}` is softmax log-loss over
+    :math:`K+1` classes and :math:`L_{\mathrm{loc}}` is the smooth
+    :math:`\ell_1` regression loss on the parameterised offsets
+    :math:`t^u` for the predicted class :math:`u`.  The Iverson
+    bracket :math:`[u \ge 1]` disables regression on background RoIs.
+
+    Beyond the speedup (≈9× training, ≈213× inference over R-CNN),
+    Fast R-CNN replaces the SVM + post-hoc regressor with a single
+    multi-task network, which **improves accuracy** because gradients
+    from both heads jointly tune the shared trunk.
+    """,
+)
 @dataclass(frozen=True)
 class FastRCNNConfig(ModelConfig):
     """Configuration for Fast R-CNN.

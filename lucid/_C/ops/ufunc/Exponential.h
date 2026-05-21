@@ -1,10 +1,11 @@
 // lucid/_C/ops/ufunc/Exponential.h
 //
-// Autograd backward nodes and entry points for the exponential and logarithmic
-// family: exp, log, log2, sqrt.  On CPU, the backend routes to vForce
-// (vvexpf, vvlogf, …) for SIMD throughput.  All ops request AmpPolicy::
-// ForceFP32 (exp/log/log2) or AmpPolicy::Promote (sqrt) so that
-// lower-precision inputs are upcast before computation.
+// Autograd backward nodes and entry points for the exponential, logarithmic,
+// root, and error-function family: exp, log, log2, sqrt, rsqrt, erf, erfinv.
+// On CPU, the backend routes to vForce (vvexpf, vvlogf, …) for SIMD
+// throughput.  ``exp`` / ``log`` / ``log2`` request ``AmpPolicy::ForceFP32``
+// so half-precision inputs are upcast before computation; the remainder use
+// ``AmpPolicy::Promote``.
 
 #pragma once
 
@@ -20,11 +21,35 @@
 
 namespace lucid {
 
-// Backward node for element-wise exp: y = e^x.
+// Autograd node for element-wise exponential $y = e^x$.
 //
-// Gradient rule: dL/dx = y * dL/dy.
-// Saves the *output* rather than the input because the backward formula uses y,
-// not x, avoiding a redundant re-evaluation of exp.
+// Saves the *output* $y$ rather than the input because the backward
+// formula is $\partial y / \partial x = e^x = y$ and reusing the saved
+// output avoids a second ``vvexpf`` pass.
+//
+// Math
+// ----
+// $$y = e^x, \qquad
+// \frac{\partial y}{\partial x} = e^x = y, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// y\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"exp"`` with ``AmpPolicy::ForceFP32`` — half-
+//     precision inputs are upcast to F32 prior to dispatch to avoid
+//     premature overflow / underflow.
+// kSavesInput : bool
+//     ``false``.
+// kSavesOutput : bool
+//     ``true`` — saved tensor is $y = e^x$.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vvexpf``/``vvexp`` (CPU) / MLX ``exp`` (GPU).
+// Large-magnitude positive inputs overflow to ``+inf``; large-magnitude
+// negative inputs flush to ``0``.
 class LUCID_API ExpBackward : public UnaryOp<ExpBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -39,10 +64,27 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
-// Backward node for element-wise natural logarithm: y = ln(x).
+// Autograd node for the element-wise natural logarithm $y = \ln(x)$.
 //
-// Gradient rule: dL/dx = dL/dy / x.
-// Saves the input so that grad_formula can divide by x.
+// Saves the input ``x`` so the backward pass can divide the upstream
+// gradient by it.  Defined only for strictly positive inputs; non-positive
+// values produce NaN / $-\infty$, matching the reference framework.
+//
+// Math
+// ----
+// $$y = \ln(x), \qquad
+// \frac{\partial y}{\partial x} = \frac{1}{x}, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \frac{1}{x}\,\frac{\partial \mathcal{L}}{\partial y}, \quad x > 0.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"log"`` with ``AmpPolicy::ForceFP32``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vvlogf``/``vvlog`` (CPU) / MLX ``log`` (GPU).
 class LUCID_API LogBackward : public UnaryOp<LogBackward> {
 public:
     static const OpSchema schema_v1;
@@ -55,10 +97,27 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
-// Backward node for element-wise base-2 logarithm: y = log2(x).
+// Autograd node for the element-wise base-2 logarithm $y = \log_2(x)$.
 //
-// Gradient rule: dL/dx = dL/dy / (x * ln(2)).
-// The ln(2) constant is embedded in grad_formula as a high-precision literal.
+// Saves the input ``x``; the backward divides by $x \ln 2$.  The constant
+// $\ln 2$ is materialised in ``grad_formula`` as a high-precision literal
+// so accuracy is identical to scaling by ``1 / log(2.0)``.
+//
+// Math
+// ----
+// $$y = \log_2(x), \qquad
+// \frac{\partial y}{\partial x} = \frac{1}{x \ln 2}, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \frac{1}{x \ln 2}\,\frac{\partial \mathcal{L}}{\partial y}, \quad x > 0.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"log2"`` with ``AmpPolicy::ForceFP32``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vvlog2f``/``vvlog2`` (CPU) / MLX ``log2`` (GPU).
 class LUCID_API Log2Backward : public UnaryOp<Log2Backward> {
 public:
     static const OpSchema schema_v1;
@@ -68,11 +127,34 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-// Backward node for element-wise square root: y = sqrt(x).
+// Autograd node for the element-wise square root $y = \sqrt{x}$.
 //
-// Gradient rule: dL/dx = dL/dy / (2 * y).
-// Saves the *output* y because that avoids recomputing sqrt(x) and is
-// numerically identical.
+// Saves the *output* $y$ because the backward formula
+// $\partial y / \partial x = 1 / (2y)$ is cheaper and numerically
+// identical to recomputing $\sqrt{x}$.  Defined for $x \geq 0$; negative
+// inputs produce NaN.
+//
+// Math
+// ----
+// $$y = \sqrt{x}, \qquad
+// \frac{\partial y}{\partial x} = \frac{1}{2\sqrt{x}} = \frac{1}{2y},
+// \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \frac{1}{2y}\,\frac{\partial \mathcal{L}}{\partial y}, \quad x \geq 0.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"sqrt"`` with ``AmpPolicy::Promote``.
+// kSavesInput : bool
+//     ``false``.
+// kSavesOutput : bool
+//     ``true`` — saved tensor is $y = \sqrt{x}$.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vvsqrtf``/``vvsqrt`` (CPU) / MLX ``sqrt`` (GPU).
+// Gradient is unbounded as $x \to 0^+$.
 class LUCID_API SqrtBackward : public UnaryOp<SqrtBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -87,10 +169,33 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
-// Backward node for reciprocal square root: y = 1 / sqrt(x).
+// Autograd node for the element-wise reciprocal square root
+// $y = 1/\sqrt{x}$.
 //
-// Gradient rule: dL/dx = -0.5 * dL/dy * y^3 = -0.5 * dL/dy / x^(3/2).
-// Saves the *output* y to avoid recomputing rsqrt(x) in the backward pass.
+// Saves the *output* $y$ so the backward pass can form $y^3$ without
+// re-evaluating ``rsqrt``.  Defined for $x > 0$.
+//
+// Math
+// ----
+// $$y = \frac{1}{\sqrt{x}}, \qquad
+// \frac{\partial y}{\partial x} = -\tfrac{1}{2}\,x^{-3/2} =
+// -\tfrac{1}{2}\,y^3, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// -\tfrac{1}{2}\,y^3\,\frac{\partial \mathcal{L}}{\partial y},
+// \quad x > 0.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"rsqrt"`` with ``AmpPolicy::Promote``.
+// kSavesInput : bool
+//     ``false``.
+// kSavesOutput : bool
+//     ``true`` — saved tensor is $y = 1/\sqrt{x}$.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vvrsqrtf``/``vvrsqrt`` (CPU) / MLX ``rsqrt`` (GPU).
 class LUCID_API RsqrtBackward : public UnaryOp<RsqrtBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -102,10 +207,28 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-// Backward node for element-wise error function: y = erf(x).
+// Autograd node for the element-wise error function
+// $y = \mathrm{erf}(x) = (2/\sqrt{\pi})\int_0^x e^{-t^2}\,dt$.
 //
-// Gradient rule: dL/dx = (2/√π) * exp(-x²) * dL/dy.
-// Saves the input x so that the backward pass can compute exp(-x²).
+// Saves the input ``x`` so the backward pass can build $e^{-x^2}$.
+// Defined on all of $\mathbb{R}$ with range $(-1, 1)$.
+//
+// Math
+// ----
+// $$y = \mathrm{erf}(x), \qquad
+// \frac{\partial y}{\partial x} = \frac{2}{\sqrt{\pi}}\,e^{-x^2},
+// \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \frac{2}{\sqrt{\pi}}\,e^{-x^2}\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"erf"`` with ``AmpPolicy::Promote``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``erf`` kernel (CPU) / MLX ``erf`` (GPU).
 class LUCID_API ErfBackward : public UnaryOp<ErfBackward> {
 public:
     static const OpSchema schema_v1;
@@ -118,22 +241,149 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
+// Compute $y = e^x$ element-wise.  Allocates a fresh output of the same
+// shape and dtype as ``a`` and delegates to :class:`ExpBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Half-precision inputs are upcast to F32
+//     before computation, per ``AmpPolicy::ForceFP32``.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.  Large positive values
+//     overflow to ``+inf``; large negative values flush to ``0``.
+//
+// See Also
+// --------
+// :class:`ExpBackward` — backward node.
 LUCID_API TensorImplPtr exp_op(const TensorImplPtr& a);
 
+// Compute $y = \ln(x)$ element-wise.  Allocates a fresh output of the same
+// shape and dtype as ``a`` and delegates to :class:`LogBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Must be strictly positive for finite
+//     output; non-positive values produce NaN / $-\infty$.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`LogBackward` — backward node.
 LUCID_API TensorImplPtr log_op(const TensorImplPtr& a);
 
+// Compute $y = \log_2(x)$ element-wise.  Allocates a fresh output of the
+// same shape and dtype as ``a`` and delegates to
+// :class:`Log2Backward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Must be strictly positive.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`Log2Backward` — backward node.
 LUCID_API TensorImplPtr log2_op(const TensorImplPtr& a);
 
+// Compute $y = \sqrt{x}$ element-wise.  Allocates a fresh output of the
+// same shape and dtype as ``a`` and delegates to
+// :class:`SqrtBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Must be non-negative; negative values
+//     produce NaN.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`SqrtBackward` — backward node.
 LUCID_API TensorImplPtr sqrt_op(const TensorImplPtr& a);
 
+// Compute $y = 1/\sqrt{x}$ element-wise.  Allocates a fresh output of the
+// same shape and dtype as ``a`` and delegates to
+// :class:`RsqrtBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Must be strictly positive.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`RsqrtBackward` — backward node.
 LUCID_API TensorImplPtr rsqrt_op(const TensorImplPtr& a);
 
+// Compute $y = \mathrm{erf}(x)$ element-wise.  Allocates a fresh output of
+// the same shape and dtype as ``a`` and delegates to
+// :class:`ErfBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Domain is all of $\mathbb{R}$.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype, values in $(-1, 1)$.
+//
+// See Also
+// --------
+// :class:`ErfBackward` — backward node.
 LUCID_API TensorImplPtr erf_op(const TensorImplPtr& a);
 
-// Backward node for element-wise inverse error function: y = erfinv(x).
+// Autograd node for the element-wise inverse error function
+// $y = \mathrm{erfinv}(x)$.
 //
-// Gradient rule: dL/dx = (sqrt(π)/2) * exp(y²) * dL/dy
-// where y = erfinv(x) is the saved output.
+// Saves the *output* $y$ so the backward pass can form $e^{y^2}$ without
+// needing to invert $\mathrm{erf}$ a second time.  Defined on $(-1, 1)$;
+// the gradient is unbounded as $x \to \pm 1$.
+//
+// Math
+// ----
+// $$y = \mathrm{erfinv}(x), \qquad
+// \frac{\partial y}{\partial x} = \frac{\sqrt{\pi}}{2}\,e^{y^2},
+// \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \frac{\sqrt{\pi}}{2}\,e^{y^2}\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"erfinv"`` with ``AmpPolicy::Promote``.
+// kSavesInput : bool
+//     ``false``.
+// kSavesOutput : bool
+//     ``true`` — saved tensor is $y = \mathrm{erfinv}(x)$.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``erfinv`` kernel (CPU) / MLX ``erfinv`` (GPU).
 class LUCID_API ErfinvBackward : public UnaryOp<ErfinvBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -148,6 +398,24 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
 
+// Compute $y = \mathrm{erfinv}(x)$ element-wise.  Allocates a fresh output
+// of the same shape and dtype as ``a`` and delegates to
+// :class:`ErfinvBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape with values in $(-1, 1)$.  Values at
+//     $\pm 1$ map to $\pm\infty$; out-of-domain values produce NaN.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`ErfinvBackward` — backward node.
 LUCID_API TensorImplPtr erfinv_op(const TensorImplPtr& a);
 
 }  // namespace lucid

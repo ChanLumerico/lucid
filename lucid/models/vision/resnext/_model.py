@@ -197,10 +197,72 @@ def _build_body(
 
 
 class ResNeXt(PretrainedModel, BackboneMixin):
-    """ResNeXt feature extractor — no classification head.
+    r"""ResNeXt feature-extracting backbone (no classification head).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` of shape
-    ``(B, 2048, 7, 7)`` for 224×224 inputs (same topology as ResNet-50+).
+    Implements the grouped-convolution residual topology from Xie et
+    al., "Aggregated Residual Transformations for Deep Neural
+    Networks", CVPR 2017.  Macroscopically identical to ResNet-50+ — a
+    :math:`7\times7` stride-2 stem, a :math:`3\times3` stride-2
+    max-pool, then four stages of :class:`_ResNeXtBottleneck` blocks
+    producing feature maps at strides 4, 8, 16, 32.  Microscopically
+    different: the :math:`3\times3` convolution inside each bottleneck
+    is *grouped* into ``config.cardinality`` groups of
+    ``config.width_per_group`` channels each, which is mathematically
+    equivalent to summing the outputs of ``cardinality`` parallel
+    low-dimensional residual branches.
+
+    Parameters
+    ----------
+    config : ResNeXtConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`resnext_50_32x4d`, :func:`resnext_101_32x8d`, …) for
+        paper-cited configurations.
+
+    Attributes
+    ----------
+    config : ResNeXtConfig
+        Stored copy of the config that built this model.
+    stem : nn.Sequential
+        Conv :math:`7\times7` stride-2 → BatchNorm → ReLU.
+    maxpool : nn.MaxPool2d
+        :math:`3\times3` stride-2 max-pool (further reduces spatial
+        size to :math:`H/4 \times W/4`).
+    layer1, layer2, layer3, layer4 : nn.Sequential
+        The four residual stages of :class:`_ResNeXtBottleneck` blocks.
+        ``layer1`` keeps the input spatial size; ``layer2`` / ``layer3``
+        / ``layer4`` each halve it.  All four end with 2048 channels
+        (same as ResNet-50+ — only the *internal* width changes).
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin`.
+
+    Notes
+    -----
+    A ResNeXt block of cardinality :math:`C` computes
+
+    .. math::
+
+        y = x + \sum_{i=1}^{C} \mathcal{T}_i(x),
+
+    where each :math:`\mathcal{T}_i` is a low-dimensional
+    :math:`1\times1 \to 3\times3 \to 1\times1` bottleneck.  This
+    "split-transform-merge" pattern is implemented as a single
+    bottleneck with a ``groups=C`` :math:`3\times3` convolution — a
+    one-line change versus ResNet but a substantial accuracy gain at
+    matched FLOPs.  ResNeXt-50 (32x4d) outperforms ResNet-50 by roughly
+    one percentage point on ImageNet top-1 at the same compute budget.
+
+    Examples
+    --------
+    Build a ResNeXt-50 (32x4d) backbone:
+
+    >>> import lucid
+    >>> from lucid.models.vision.resnext import resnext_50_32x4d
+    >>> backbone = resnext_50_32x4d()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 2048, 7, 7)
+    (1, 2048, 7, 7)
     """
 
     config_class: ClassVar[type[ResNeXtConfig]] = ResNeXtConfig
@@ -240,7 +302,63 @@ class ResNeXt(PretrainedModel, BackboneMixin):
 
 
 class ResNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """ResNeXt with global average pooling + linear classification head."""
+    r"""ResNeXt image classifier (backbone + GAP + linear head).
+
+    Combines a :class:`ResNeXt` backbone with the standard ImageNet
+    head: :class:`~lucid.nn.AdaptiveAvgPool2d` to pool every spatial
+    location into a single 2048-dim feature, an optional
+    :class:`~lucid.nn.Dropout` (controlled by ``config.dropout``), and
+    a :class:`~lucid.nn.Linear` projection to ``config.num_classes``.
+    When ``labels`` are supplied to :meth:`forward`, a cross-entropy
+    loss is returned alongside the logits.
+
+    Parameters
+    ----------
+    config : ResNeXtConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`resnext_50_32x4d_cls`, :func:`resnext_101_32x8d_cls`,
+        …) for paper-cited configurations.
+
+    Attributes
+    ----------
+    config : ResNeXtConfig
+        Stored copy of the config that built this model.
+    stem, maxpool, layer1, layer2, layer3, layer4
+        Same backbone components as on :class:`ResNeXt`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool to :math:`1\times1`.
+    classifier : nn.Module
+        Final classifier built by
+        :meth:`ClassificationHeadMixin._build_classifier`; bare linear
+        if ``dropout == 0.0``, otherwise a
+        :class:`~lucid.nn.Sequential` wrapping
+        :class:`~lucid.nn.Dropout` and :class:`~lucid.nn.Linear`.
+
+    Notes
+    -----
+    From Xie et al., "Aggregated Residual Transformations for Deep
+    Neural Networks", CVPR 2017.  Loss is the standard categorical
+    cross-entropy
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{N} \sum_{n=1}^{N}
+            \log \operatorname{softmax}(\text{logits}_n)_{\,y_n}.
+
+    The headline ImageNet result is ResNeXt-101 (64x4d) reaching
+    20.4% top-1 error — meaningfully better than ResNet-152 at the same
+    FLOP budget.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.resnext import resnext_50_32x4d_cls
+    >>> model = resnext_50_32x4d_cls()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
+    """
 
     config_class: ClassVar[type[ResNeXtConfig]] = ResNeXtConfig
     base_model_prefix: ClassVar[str] = "resnext"

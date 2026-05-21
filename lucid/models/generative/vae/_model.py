@@ -268,17 +268,75 @@ class _VAEDecoder(nn.Module):
 
 
 class VAEModel(PretrainedModel):
-    """Convolutional VAE — vanilla / β-VAE / hierarchical.
+    r"""Bare convolutional VAE — vanilla / :math:`\beta`-VAE / hierarchical.
 
-    Mode selection is implicit: ``config.latent_dim`` chooses between
-    vanilla (``int``) and hierarchical (``tuple``).  The :meth:`encode` /
-    :meth:`decode` shapes adapt accordingly:
+    Implements the variational auto-encoder of Kingma and Welling, 2014
+    in three operating modes selected implicitly by
+    :attr:`VAEConfig.latent_dim`:
 
-    * Vanilla: ``encode(x) → (mu: (B, D), logvar: (B, D))``,
-      ``decode(z: (B, D)) → x̂``.
-    * Hierarchical: ``encode(x) → (mus: list[Tensor], logvars: list[Tensor])``
-      with ``mus[l]`` of shape ``(B, latent_dims[l])``.  ``decode(zs:
-      list[Tensor]) → x̂``.
+    * **Vanilla / :math:`\beta`-VAE** (``int`` latent_dim): a single
+      bottleneck ``z`` is projected from the flattened final encoder
+      stage.  ``encode(x) -> (mu, logvar)`` with shape ``(B, D)`` each;
+      ``decode(z: (B, D)) -> x_hat``.
+    * **Hierarchical / Ladder VAE** (``tuple`` latent_dim, length :math:`L`
+      = ``len(down_block_channels)``): one ``z_l`` per encoder stage;
+      the decoder injects ``z_l`` back at the matching upsampling spatial
+      scale.  ``encode(x) -> (mus: list[Tensor], logvars: list[Tensor])``
+      with ``mus[l]`` of shape ``(B, latent_dims[l])``; ``decode(zs:
+      list[Tensor]) -> x_hat``.
+
+    Reparameterisation is applied internally in :meth:`forward` —
+    :math:`z = \mu + \sigma \odot \epsilon`,
+    :math:`\epsilon \sim \mathcal{N}(0, \mathbf{I})` — so gradients flow
+    pathwise through the stochastic sample.
+
+    Parameters
+    ----------
+    config : VAEConfig
+        Hyperparameters controlling sample size, channel widths
+        (``down_block_channels``), latent topology (``latent_dim``), and
+        loss-related options.  See :class:`VAEConfig` for the full list.
+
+    Attributes
+    ----------
+    encoder : nn.Module
+        Conv-stack encoder producing the posterior parameters
+        :math:`(\mu, \log \sigma^2)`.  Output shape depends on the mode
+        (see class summary).
+    decoder : nn.Module
+        Top-down ConvTranspose decoder mapping the latent (or list of
+        per-level latents) back to image space.
+
+    Notes
+    -----
+    Reference: Kingma and Welling, *"Auto-Encoding Variational Bayes"*,
+    ICLR, 2014 (arXiv:1312.6114); hierarchical extension from Sønderby,
+    Raiko, Maaløe, Sønderby, and Winther, *"Ladder Variational
+    Autoencoders"*, NeurIPS, 2016 (arXiv:1602.02282).
+
+    The closed-form KL term used by the loss head is
+
+    .. math::
+
+        \mathrm{KL}\!\big(
+            \mathcal{N}(\mu, \sigma^2) \,\big\|\,
+            \mathcal{N}(0, \mathbf{I})
+        \big)
+            = \tfrac{1}{2} \sum_i \!\big(
+                \mu_i^2 + \sigma_i^2 - 1 - \log \sigma_i^2
+              \big).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.vae import VAEConfig, VAEModel
+    >>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,
+    ...                 latent_dim=16, down_block_channels=(16, 32, 64))
+    >>> model = VAEModel(cfg).eval()
+    >>> x = lucid.randn((1, 3, 32, 32))
+    >>> out = model(x)
+    >>> out.sample.shape, out.latent.shape   # reconstruction + latent
+    ((1, 3, 32, 32), (1, 16))
     """
 
     config_class: ClassVar[type[VAEConfig]] = VAEConfig
@@ -347,17 +405,67 @@ class VAEModel(PretrainedModel):
 
 
 class VAEForImageGeneration(PretrainedModel):
-    """VAE + ELBO loss + prior-sample ``.generate()``.
+    r"""VAE with the ELBO training loss and prior-sample ``.generate()``.
 
-    ``forward(x)`` returns a :class:`VAEOutput` carrying the reconstruction,
-    latent (concatenated across levels in HVAE mode), posterior parameters,
-    and the three loss components (``recon_loss``, ``kl_loss``,
-    ``loss = recon + β · kl``).  In hierarchical mode ``kl_loss`` is the
-    sum of per-level KL terms.
+    Wraps :class:`VAEModel` with the standard reconstruction +
+    :math:`\beta`-weighted KL training loss and a prior-sampler convenience
+    method.  ``forward(x)`` returns a :class:`VAEOutput` carrying the
+    reconstruction, latent (concatenated across levels in HVAE mode),
+    posterior parameters, and the three loss components
+    (``recon_loss``, ``kl_loss``, ``loss = recon + beta * kl``).  In
+    hierarchical mode ``kl_loss`` is the sum of per-level KL terms.
 
-    ``generate(n_samples)`` samples from the prior — ``z ~ N(0, I)`` for
-    vanilla, ``(z_0, …, z_{L-1}) ~ N(0, I)`` per level for HVAE — and
-    returns the decoder output.
+    ``generate(n_samples)`` samples from the prior —
+    :math:`z \sim \mathcal{N}(0, \mathbf{I})` for vanilla, one
+    :math:`z_l \sim \mathcal{N}(0, \mathbf{I})` per level for HVAE — and
+    returns the decoder output.  BCE reconstructions are squashed through
+    a sigmoid before being returned.
+
+    Parameters
+    ----------
+    config : VAEConfig
+        Hyperparameters.  ``config.kl_weight`` is the :math:`\beta`
+        coefficient (Higgins 2017); ``config.recon_loss`` toggles between
+        Gaussian (``"mse"``) and Bernoulli (``"bce"``) likelihoods.
+
+    Attributes
+    ----------
+    vae : VAEModel
+        Underlying VAE trunk providing ``encode`` and ``decode``.
+
+    Notes
+    -----
+    Reference: Kingma and Welling, *"Auto-Encoding Variational Bayes"*,
+    ICLR, 2014 (arXiv:1312.6114); :math:`\beta`-VAE in Higgins et al.,
+    ICLR, 2017; hierarchical extension in Sønderby et al., NeurIPS, 2016
+    (arXiv:1602.02282).
+
+    Training objective — evidence lower bound:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{ELBO}}
+            = \mathbb{E}_{q_\phi(z \mid x)}\!\big[\log p_\theta(x \mid z)\big]
+              - \beta \cdot \mathrm{KL}\!\big(
+                    q_\phi(z \mid x) \,\big\|\, p(z)
+                \big).
+
+    In hierarchical mode the KL term is the sum
+    :math:`\sum_l \mathrm{KL}(q_\phi(z_l \mid x) \| p(z_l))`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.vae import (
+    ...     VAEConfig, VAEForImageGeneration,
+    ... )
+    >>> cfg = VAEConfig(sample_size=32, in_channels=3, out_channels=3,
+    ...                 latent_dim=16, down_block_channels=(16, 32, 64))
+    >>> model = VAEForImageGeneration(cfg).eval()
+    >>> x = lucid.randn((1, 3, 32, 32))
+    >>> out = model(x)
+    >>> out.sample.shape, out.loss.shape   # reconstruction + scalar loss
+    ((1, 3, 32, 32), ())
     """
 
     config_class: ClassVar[type[VAEConfig]] = VAEConfig

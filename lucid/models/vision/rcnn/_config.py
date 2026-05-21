@@ -4,8 +4,43 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="R-CNN",
+    citation=(
+        'Girshick, Ross, et al. "Rich Feature Hierarchies for Accurate '
+        'Object Detection and Semantic Segmentation." Proceedings of the '
+        "IEEE Conference on Computer Vision and Pattern Recognition, "
+        "2014, pp. 580–587."
+    ),
+    theory=r"""
+    R-CNN (Regions with CNN features) is the first deep-learning
+    detector to demonstrate that ImageNet-pretrained CNN features
+    transfer to localisation.  The pipeline is deliberately modular:
+
+    1. **Region proposals.**  An external method (selective search in
+       the original paper) yields :math:`\sim 2000` class-agnostic
+       candidate windows per image.
+    2. **CNN feature extraction.**  Each proposal is *warped* to a
+       fixed :math:`227 \times 227` patch and forwarded through an
+       ImageNet-pretrained CNN (AlexNet).  The ``pool5`` activations
+       (effectively :math:`6 \times 6 \times 256 = 9216` features) are
+       flattened and passed through two fully-connected layers.
+    3. **Per-class linear SVMs** score each region; a class-specific
+       bounding-box regressor refines the proposal coordinates with
+       a parameterised :math:`(t_x, t_y, t_w, t_h)` offset.
+
+    The cost is dominated by **redundant CNN forward passes** — one
+    per proposal — because no feature sharing across overlapping
+    regions exists.  Despite that inefficiency, R-CNN jumped mean
+    average precision on PASCAL VOC 2012 from :math:`\sim 35\%`
+    (DPM) to :math:`53.3\%`, making CNNs the dominant detection
+    paradigm and motivating every successor in the family
+    (Fast R-CNN, Faster R-CNN, Mask R-CNN).
+    """,
+)
 @dataclass(frozen=True)
 class RCNNConfig(ModelConfig):
     """Configuration for R-CNN.

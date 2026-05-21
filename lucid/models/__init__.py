@@ -25,6 +25,12 @@ from lucid.models._output import (
     SemanticSegmentationOutput, CausalLMOutput, MaskedLMOutput, Seq2SeqLMOutput,
     DiffusionModelOutput, VAEOutput, GenerationOutput,
 )
+from lucid.models._protocols import (
+    BackboneProtocol, ConfigT,
+    HasConfigClass, HasFamilyMeta, HasModelType,
+    ModelConfigProtocol, OutputDataclassProtocol,
+    PretrainedModelProtocol, TaskWrapperProtocol,
+)
 from lucid.models._registry import create_model, is_model, list_models, model_entrypoint, register_model
 
 # Text-domain infrastructure (Phase 4 base layer).
@@ -410,6 +416,12 @@ __all__ = [
     "AutoModelForQuestionAnswering",
     "AutoModelForImageGeneration",
     "create_model", "is_model", "list_models", "model_entrypoint", "register_model",
+    # Structural-typing contracts (advisory; see arch-models-family-contract).
+    "HasModelType", "HasFamilyMeta", "HasConfigClass",
+    "ModelConfigProtocol", "PretrainedModelProtocol",
+    "BackboneProtocol", "TaskWrapperProtocol",
+    "OutputDataclassProtocol",
+    "ConfigT",
     # ── Vision (1998) LeNet ───────────────────────────────────────────────────
     "LeNetConfig", "LeNet", "LeNetForImageClassification",
     "lenet_5", "lenet_5_cls",

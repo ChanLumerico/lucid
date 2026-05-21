@@ -377,21 +377,84 @@ def _focal_loss(
 
 
 class EfficientDetForObjectDetection(PretrainedModel):
-    """EfficientDet object detector (Tan et al., CVPR 2020).
+    r"""EfficientDet object detector (Tan et al., CVPR 2020).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional training list of B dicts with:
-                    ``"boxes"``  — (M_i, 4) xyxy pixel-coordinate GT boxes.
-                    ``"labels"`` — (M_i,)   integer foreground class ids (1-indexed).
+    A family of compound-scaled single-stage detectors combining an
+    EfficientNet backbone, a **BiFPN** (bidirectional weighted feature
+    pyramid) neck, and shared classification + box regression heads
+    applied to 5 feature levels (P3-P7).  The family is parameterised
+    by a compound coefficient :math:`\varphi \in \{0, 1, \dots, 7\}`
+    that simultaneously scales backbone depth / width, BiFPN width and
+    repeat count, head depth, and input resolution — yielding D0-D7
+    variants that span ~4M to ~52M parameters and trade speed for
+    accuracy along a Pareto-optimal curve.
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (B, total_anchors, num_classes) per-class sigmoid logits.
-      ``pred_boxes``: (B, total_anchors, 4) decoded xyxy boxes.
-      ``loss``      : focal loss + smooth-L1 when targets provided.
+    Parameters
+    ----------
+    config : EfficientDetConfig
+        Frozen architecture spec.  Use the per-:math:`\varphi` factories
+        (:func:`efficientdet_d0` through :func:`efficientdet_d7`) for the
+        paper-cited compound-scaled variants.
+
+    Attributes
+    ----------
+    config : EfficientDetConfig
+        Stored copy of the config that built this model.
+    backbone : _EfficientNetBackbone
+        EfficientNet trunk producing C3 / C4 / C5 features at strides
+        8 / 16 / 32.
+    p3_proj, p4_proj, p5_proj : nn.Sequential
+        1x1 conv + BatchNorm channel projections from backbone widths
+        to ``config.fpn_channels``.
+    p6_pool, p7_pool : nn.MaxPool2d
+        2x downsamples producing P6 and P7 at strides 64 and 128.
+    bifpn : nn.ModuleList
+        ``config.fpn_repeats`` :class:`_BiFPNLayer` blocks performing
+        weighted bidirectional top-down + bottom-up feature fusion.
+    cls_head, box_head : _PredictionHead
+        Shared per-level prediction heads with ``config.head_repeats``
+        3x3 separable convolutions; outputs ``K * num_anchors`` and
+        ``4 * num_anchors`` channels respectively.
+    _anchor_gen : AnchorGenerator
+        Anchor generator covering 5 levels with
+        :math:`|\mathrm{scales}| \times |\mathrm{ratios}|` anchors per cell.
+
+    Notes
+    -----
+    See Tan et al., "EfficientDet: Scalable and Efficient Object
+    Detection", CVPR 2020 (arXiv:1911.09070).  The BiFPN's defining
+    feature is weighted feature fusion at each node:
+
+    .. math::
+
+        O = \sum_{i} \frac{w_i}{\epsilon + \sum_j w_j} \cdot I_i,
+
+    with non-negative weights :math:`w_i` learned end-to-end (the paper
+    calls this "fast normalized fusion").  Compound scaling follows
+
+    .. math::
+
+        \begin{aligned}
+            W_\mathrm{BiFPN} &= 64 \cdot 1.35^\varphi, &
+            D_\mathrm{BiFPN} &= 3 + \varphi, \\
+            D_\mathrm{head}  &= 3 + \lfloor \varphi / 3 \rfloor, &
+            R_\mathrm{input} &= 512 + 128\varphi,
+        \end{aligned}
+
+    so D0 (:math:`\varphi = 0`) trains on 512x512 inputs while D7
+    (:math:`\varphi = 7`) uses 1536x1536.  Training uses focal loss
+    :math:`\mathrm{FL}(p_t) = -\alpha_t (1 - p_t)^\gamma \log p_t` on
+    the K-channel class output plus smooth-:math:`L_1` on box deltas.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientdet import efficientdet_d0
+    >>> model = efficientdet_d0()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[-1], out.pred_boxes.shape[-1]
+    (90, 4)
     """
 
     config_class: ClassVar[type[EfficientDetConfig]] = EfficientDetConfig

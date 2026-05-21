@@ -139,26 +139,83 @@ class _FCHead(nn.Module):
 
 
 class RCNNForObjectDetection(PretrainedModel):
-    """R-CNN object detector (Girshick et al., CVPR 2014).
+    r"""R-CNN object detector (Girshick et al., CVPR 2014).
 
-    Applies an AlexNet-style CNN to each warped region proposal independently,
-    then predicts a class label and a bounding-box refinement for each region.
+    The first deep-learning detector to demonstrate that ImageNet-pretrained
+    CNN features transfer to localisation.  At inference the pipeline runs an
+    externally-supplied region-proposal set (typically from selective search)
+    through an AlexNet-style convolutional trunk *per proposal*, then feeds
+    the flattened pool5 features into a two-layer FC trunk with sibling
+    classification (``cls_head``) and bounding-box regression (``bbox_head``)
+    outputs.  This module covers the CNN + heads — proposals must be supplied
+    by the caller; ``postprocess()`` applies score thresholding and per-class
+    NMS to recover final detections.
 
-    Input contract
-    --------------
-    ``x``         : (B, C, H, W) batch of images.
-    ``proposals`` : list of B tensors, each (N_i, 4) xyxy pixel coordinates
-                    of region proposals for image i.  At inference time these
-                    typically come from selective search or similar.
-                    If ``None`` or empty for an image, that image contributes
-                    zero detections.
+    Parameters
+    ----------
+    config : RCNNConfig
+        Frozen architecture spec.  Use the :func:`rcnn` factory for the
+        paper-cited AlexNet configuration (227x227 RoIs, 80 COCO classes);
+        override individual fields via ``**kwargs`` on the factory.
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (Σ N_i, num_classes + 1) class logits (raw, pre-softmax).
-      ``pred_boxes``: (Σ N_i, 4) decoded xyxy boxes after applying the
-                      top-class bbox delta to each proposal.
+    Attributes
+    ----------
+    config : RCNNConfig
+        Stored copy of the config that built this model.
+    conv_features : _ConvFeatures
+        AlexNet conv1-conv5 trunk applied to each warped RoI crop.  Output
+        is a 9216-dim vector for the default ``roi_size=227``.
+    fc_head : _FCHead
+        Two-layer FC trunk (``fc6``, ``fc7``) followed by sibling
+        :class:`~lucid.nn.Linear` heads:
+        ``cls_head`` produces :math:`(N, K+1)` class logits (background +
+        ``num_classes`` foreground classes) and ``bbox_head`` produces
+        :math:`(N, 4K)` class-specific bounding-box deltas.
+
+    Notes
+    -----
+    See Girshick et al., "Rich Feature Hierarchies for Accurate Object
+    Detection and Semantic Segmentation", CVPR 2014 (arXiv:1311.2524).
+    For each proposal :math:`P` with centre :math:`(P_x, P_y)` and size
+    :math:`(P_w, P_h)`, the bounding-box regressor predicts a
+    parameterised offset :math:`(t_x, t_y, t_w, t_h)` so that the
+    refined box centre and size are
+
+    .. math::
+
+        \begin{aligned}
+            \hat{G}_x &= P_w t_x + P_x, & \hat{G}_y &= P_h t_y + P_y, \\
+            \hat{G}_w &= P_w e^{t_w},   & \hat{G}_h &= P_h e^{t_h}.
+        \end{aligned}
+
+    The original paper trains per-class linear SVMs on top of frozen CNN
+    features; this implementation follows the more common modern
+    softmax-end-to-end form (matching the Caffe reference code).  Cost
+    is dominated by the redundant per-proposal CNN forward — the main
+    motivation for the Fast R-CNN successor's shared feature map.
+
+    Examples
+    --------
+    Run inference on a single image with three external proposals:
+
+    >>> import lucid
+    >>> from lucid.models.vision.rcnn import rcnn
+    >>> model = rcnn(num_classes=80)
+    >>> x = lucid.randn(1, 3, 600, 600)
+    >>> proposals = [lucid.tensor(
+    ...     [[10.0,  10.0, 200.0, 200.0],
+    ...      [50.0,  60.0, 300.0, 280.0],
+    ...      [100.0, 80.0, 450.0, 400.0]])]
+    >>> out = model(x, proposals)
+    >>> out.logits.shape, out.pred_boxes.shape
+    ((3, 81), (3, 4))
+
+    Apply post-processing (score threshold + per-class NMS) on the raw
+    output to obtain final per-image detections:
+
+    >>> detections = model.postprocess(out, proposals)
+    >>> set(detections[0].keys()) == {"boxes", "scores", "labels"}
+    True
     """
 
     config_class: ClassVar[type[RCNNConfig]] = RCNNConfig

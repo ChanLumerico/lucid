@@ -1,21 +1,35 @@
 // lucid/_C/core/Allocator.h
 //
-// Public interface for Lucid's CPU memory allocator.  All tensor data
-// allocated for the CPU stream goes through allocate_aligned_bytes rather
-// than new / malloc, for two reasons:
+// Aligned, pooled byte allocator for Lucid's CPU tensor storage.
 //
-//   1. Alignment: Accelerate BLAS and vDSP routines require 16- or 64-byte
-//      aligned buffers for maximum throughput.  kCpuAlignment = 64 satisfies
-//      both requirements and matches typical ARM64 cache-line size.
+// All host-side tensor data goes through :func:`allocate_aligned_bytes`
+// rather than ``new`` / ``malloc`` for two reasons:
 //
-//   2. Pooling: The implementation (Allocator.cpp) maintains a thread-local
-//      slab pool for allocations up to 4 MB.  Returning a buffer to the pool
-//      avoids the kernel round-trip of posix_memalign / free, which is
-//      significant for short-lived intermediate tensors.
+//   1. **Alignment** — Apple Accelerate BLAS and vDSP routines require
+//      16- or 64-byte aligned buffers for maximum throughput.  Lucid
+//      pins the alignment to :data:`kCpuAlignment` (64 B), which both
+//      satisfies the Accelerate requirement and matches a typical ARM64
+//      cache line.
+//   2. **Pooling** — The implementation in ``Allocator.cpp`` maintains a
+//      thread-local slab pool (23 power-of-two size classes, up to 4 MB,
+//      ``kMaxDepth = 32`` blocks per class).  Returning a buffer to the
+//      pool avoids the kernel round-trip of ``posix_memalign`` / ``free``,
+//      which is a significant cost for the short-lived intermediate
+//      tensors produced by ML workloads.
 //
-// MLX allocations (GpuStorage) are managed entirely by the MLX runtime and
-// must not go through this allocator — they live in GPU-private memory and
-// would cause a SIGBUS if accessed via a CPU pointer.
+// MLX GPU allocations (``GpuStorage``) are managed by the MLX runtime
+// and must not be served through this allocator — they live in
+// GPU-private memory and would raise a ``SIGBUS`` if accessed via a CPU
+// pointer.  The :class:`Device` parameter on :func:`allocate_aligned_bytes`
+// exists primarily to (a) update the correct :class:`MemoryTracker`
+// counter bank and (b) opt out of the pool path for non-CPU devices.
+//
+// See Also
+// --------
+// :class:`MemoryTracker` — receives ``track_alloc`` / ``track_free``
+//     hooks installed by this allocator.
+// :class:`Storage`       — owner of the ``shared_ptr<std::byte[]>`` block
+//     returned here.
 
 #pragma once
 
@@ -26,21 +40,76 @@
 
 namespace lucid {
 
-// Required alignment for all CPU tensor buffers, in bytes.
-// 64 bytes = one typical ARM64 / x86-64 cache line, and satisfies the
-// minimum alignment required by Accelerate vDSP and BLAS routines.
+// Required alignment, in bytes, for every CPU tensor buffer.
+//
+// Equal to one ARM64 / x86-64 cache line, and satisfies the minimum
+// alignment expected by Accelerate vDSP and BLAS routines.  The value
+// is also used as the smallest size-class boundary inside the pool —
+// every pooled block is therefore both ``kCpuAlignment``-aligned and a
+// multiple of ``kCpuAlignment`` in capacity.
+//
+// Notes
+// -----
+// Changing this constant requires re-validating the pool size-class
+// table in ``Allocator.cpp`` (``kMinClass`` is hard-coded to equal
+// ``kCpuAlignment``).
 constexpr std::size_t kCpuAlignment = 64;
 
-// Allocates nbytes of kCpuAlignment-aligned memory and returns ownership as a
-// shared_ptr<byte[]> whose deleter either returns the block to the thread-local
-// pool (for small allocations on CPU) or calls std::free directly (for large
-// allocations and GPU device).
+// Allocates an aligned, optionally-pooled byte buffer of ``nbytes``.
 //
-// Throws OutOfMemory if posix_memalign fails.  Returns an empty shared_ptr for
-// nbytes == 0.
+// The returned ``shared_ptr<std::byte[]>`` owns the block via a custom
+// deleter that either (a) returns the block to the thread-local pool —
+// for CPU allocations up to 4 MB whose class still has free slots — or
+// (b) calls ``std::free`` directly, for large allocations, full pool
+// slots, and non-CPU devices.  In both paths the deleter also fires the
+// matching :func:`MemoryTracker::track_free` hook.
 //
-// The device parameter controls which MemoryTracker counter is updated and
-// whether the pool path is used (pooling is only enabled for Device::CPU).
+// On every successful allocation the matching
+// :func:`MemoryTracker::track_alloc` hook is fired, so per-device
+// counters stay in sync with the live byte total.
+//
+// Parameters
+// ----------
+// nbytes : std::size_t
+//     Number of bytes to allocate.  A value of ``0`` returns an empty
+//     ``shared_ptr`` (no allocation, no tracker update).
+// device : Device, optional
+//     Device tag controlling (a) which :class:`MemoryTracker` counter
+//     bank is updated and (b) whether the pool path is taken — only
+//     ``Device::CPU`` is poolable.  Defaults to :attr:`Device::CPU`.
+//
+// Returns
+// -------
+// std::shared_ptr<std::byte[]>
+//     Owning handle to a ``kCpuAlignment``-aligned byte buffer at least
+//     ``nbytes`` long.  Empty when ``nbytes == 0``.  The capacity may
+//     exceed ``nbytes`` for pooled allocations (rounded up to the next
+//     power of two ≥ ``kCpuAlignment``).
+//
+// Raises
+// ------
+// OutOfMemory
+//     ``posix_memalign`` failed.  The exception carries the requested
+//     size, the current live bytes, and the historical peak for the
+//     target device so the caller can format an informative message.
+//
+// Notes
+// -----
+// The pool is **thread-local**, so allocation and deallocation are
+// lock-free on the fast path.  Cached blocks are released when the
+// owning thread exits.  Blocks freed on a different thread than the
+// one that allocated them still work correctly, but they will be
+// returned to the freeing thread's pool — long-running thread-pool
+// workloads with cross-thread tensor ownership may therefore observe
+// slight imbalance in retained free-list size.
+//
+// Examples
+// --------
+// ::
+//
+//     auto block = allocate_aligned_bytes(1024);                // CPU, pooled
+//     auto huge  = allocate_aligned_bytes(64 << 20);            // CPU, bypass pool
+//     auto gpu   = allocate_aligned_bytes(N, Device::GPU);      // GPU, tracker only
 std::shared_ptr<std::byte[]> allocate_aligned_bytes(std::size_t nbytes,
                                                     Device device = Device::CPU);
 

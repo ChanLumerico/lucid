@@ -52,10 +52,47 @@ def maskformer_resnet50(
     pretrained: bool = False,
     **overrides: object,
 ) -> MaskFormerForSemanticSegmentation:
-    """MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).
+    r"""MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).
 
-    Mask-classification segmentation: 100 queries, 6-layer transformer decoder,
-    d_model=256, 8 attention heads.  ADE20K default (150 classes).
+    Builds a :class:`MaskFormerForSemanticSegmentation` with the paper-cited
+    ResNet-50 configuration: 100 segmentation queries, a 6-layer transformer
+    decoder with ``d_model = 256``, 8 attention heads, ``dim_feedforward =
+    2048``, and a 256-channel FPN pixel decoder.  Default targets ADE20K
+    (150 semantic classes); reaches ADE20K validation mIoU of 44.5%
+    (paper Table 3, MaskFormer-R50 row) — competitive with much heavier
+    per-pixel baselines.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`MaskFormerConfig`
+        (``num_classes``, ``num_queries``, ``d_model``,
+        ``num_decoder_layers``, ``dropout``, ``fpn_out_channels``).
+
+    Returns
+    -------
+    MaskFormerForSemanticSegmentation
+        Segmentation model with the MaskFormer-R50 configuration applied
+        (or with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Cheng et al., "Per-Pixel Classification is Not All You Need for
+    Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  The
+    unification of semantic / instance / panoptic under mask
+    classification is the conceptual key idea.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.maskformer import maskformer_resnet50
+    >>> model = maskformer_resnet50(num_classes=21)
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    22
     """
     return _build(_CFG_R50, overrides)
 
@@ -71,9 +108,41 @@ def maskformer_resnet101(
     pretrained: bool = False,
     **overrides: object,
 ) -> MaskFormerForSemanticSegmentation:
-    """MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).
+    r"""MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).
 
-    Deeper backbone variant (23 layer3 blocks vs 6 for ResNet-50).
-    Same transformer head configuration as the ResNet-50 variant.
+    Builds a :class:`MaskFormerForSemanticSegmentation` with the same
+    transformer head as :func:`maskformer_resnet50` but a deeper ResNet-101
+    backbone (``[3, 4, 23, 3]`` bottleneck blocks).  Reaches ADE20K
+    validation mIoU of 45.5% (paper Table 3, MaskFormer-R101 row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`MaskFormerConfig`.
+
+    Returns
+    -------
+    MaskFormerForSemanticSegmentation
+        Segmentation model with the MaskFormer-R101 configuration applied
+        (or with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Cheng et al., "Per-Pixel Classification is Not All You Need for
+    Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  Switching
+    backbones is the only change versus :func:`maskformer_resnet50`; all
+    transformer-head hyperparameters are shared.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.maskformer import maskformer_resnet101
+    >>> model = maskformer_resnet101()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
     """
     return _build(_CFG_R101, overrides)

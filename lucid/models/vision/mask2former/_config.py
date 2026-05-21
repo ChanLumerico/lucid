@@ -4,8 +4,57 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="Mask2Former",
+    citation=(
+        'Cheng, Bowen, et al. "Masked-attention Mask Transformer for '
+        'Universal Image Segmentation." Proceedings of the IEEE/CVF '
+        "Conference on Computer Vision and Pattern Recognition, 2022, "
+        "pp. 1290–1299."
+    ),
+    theory=r"""
+    Mask2Former generalises MaskFormer into a single architecture
+    that wins on **semantic**, **instance**, and **panoptic**
+    segmentation simultaneously.  It keeps the mask-classification
+    framing — :math:`N` object queries each predict a class and a
+    binary mask — and improves it with three orthogonal changes.
+
+    **Masked cross-attention.**  In every decoder layer the queries
+    attend only to feature locations that the *previous* layer
+    already considered foreground for that query:
+
+    .. math::
+
+        \mathrm{attn}_{ij} = \mathrm{softmax}_j\!\bigl(
+            Q_i K_j^{\top} / \sqrt{d} + \mathcal{M}_{ij}^{\,\ell-1}
+        \bigr),
+
+    where :math:`\mathcal{M}^{\ell-1}_{ij} = 0` if the predicted
+    binary mask of query :math:`i` at layer :math:`\ell - 1`
+    activates pixel :math:`j` and :math:`-\infty` otherwise.  This
+    confines query updates to plausible mask regions and accelerates
+    convergence.
+
+    **Multi-scale features.**  The decoder layers cycle through three
+    pyramid levels :math:`(P_3, P_4, P_5)` of an enhanced FPN-style
+    *pixel decoder*, so high-resolution semantic detail and broad
+    contextual features are both available to every query.
+
+    **Improved pixel decoder.**  A multi-scale deformable-attention
+    encoder fuses the backbone feature maps before producing the
+    per-pixel embeddings against which the query embeddings are dotted
+    to form binary masks.
+
+    Training uses the same Hungarian-matched class CE + mask BCE/Dice
+    losses as MaskFormer (with auxiliary losses at intermediate
+    decoder layers).  Mask2Former sets a new SOTA on each of ADE20K,
+    Cityscapes, and COCO with a *single* model, eliminating the need
+    for task-specific architectures.
+    """,
+)
 @dataclass(frozen=True)
 class Mask2FormerConfig(ModelConfig):
     """Configuration for Mask2Former.

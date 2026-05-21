@@ -50,7 +50,45 @@ def _apply(cfg: GPT2Config, overrides: dict[str, object]) -> GPT2Config:
     default_config=_CFG_SMALL,
 )
 def gpt2_small(pretrained: bool = False, **overrides: object) -> GPT2Model:
-    """GPT-2 small (124M) — Radford et al., 2019."""
+    r"""Construct a GPT-2 small (124M) decoder trunk.
+
+    Smallest of the four canonical OpenAI variants from Radford, Wu, Child,
+    Luan, Amodei, and Sutskever, 2019: :math:`L=12` transformer blocks,
+    :math:`H=768` hidden, :math:`A=12` attention heads, intermediate width
+    3072.  Roughly 124M parameters (historically released as the "117M"
+    file before a re-count).  This is the default entry point for GPT-2
+    research and the parameter-count match for GPT-1.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2Model
+        Decoder trunk configured with the GPT-2 small size and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Radford, Wu, Child, Luan, Amodei, and Sutskever,
+    *"Language Models are Unsupervised Multitask Learners"*, OpenAI
+    Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_small
+    >>> model = gpt2_small().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])   # "Hello, world."
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (1, 4, 768)
+    (1, 4, 768)
+    """
     return GPT2Model(_apply(_CFG_SMALL, overrides))
 
 
@@ -62,7 +100,44 @@ def gpt2_small(pretrained: bool = False, **overrides: object) -> GPT2Model:
     default_config=_CFG_MEDIUM,
 )
 def gpt2_medium(pretrained: bool = False, **overrides: object) -> GPT2Model:
-    """GPT-2 medium (355M)."""
+    r"""Construct a GPT-2 medium (355M) decoder trunk.
+
+    Second of the four canonical OpenAI variants: :math:`L=24` transformer
+    blocks, :math:`H=1024` hidden, :math:`A=16` attention heads,
+    intermediate width 4096.  Roughly 355M parameters — the inflection
+    point at which zero-shot performance on reading comprehension /
+    summarisation begins to substantially outperform random baselines
+    (Radford 2019 Table 3).
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2Model
+        Decoder trunk configured with the GPT-2 medium size and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_medium
+    >>> model = gpt2_medium().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (1, 4, 1024)
+    (1, 4, 1024)
+    """
     return GPT2Model(_apply(_CFG_MEDIUM, overrides))
 
 
@@ -74,7 +149,43 @@ def gpt2_medium(pretrained: bool = False, **overrides: object) -> GPT2Model:
     default_config=_CFG_LARGE,
 )
 def gpt2_large(pretrained: bool = False, **overrides: object) -> GPT2Model:
-    """GPT-2 large (774M)."""
+    r"""Construct a GPT-2 large (774M) decoder trunk.
+
+    Third of the four canonical OpenAI variants: :math:`L=36` transformer
+    blocks, :math:`H=1280` hidden, :math:`A=20` attention heads,
+    intermediate width 5120.  Roughly 774M parameters — released in
+    August 2019 after the staged-release decision; SOTA zero-shot on
+    LAMBADA at release time.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2Model
+        Decoder trunk configured with the GPT-2 large size and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_large
+    >>> model = gpt2_large().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (1, 4, 1280)
+    (1, 4, 1280)
+    """
     return GPT2Model(_apply(_CFG_LARGE, overrides))
 
 
@@ -86,7 +197,42 @@ def gpt2_large(pretrained: bool = False, **overrides: object) -> GPT2Model:
     default_config=_CFG_XLARGE,
 )
 def gpt2_xlarge(pretrained: bool = False, **overrides: object) -> GPT2Model:
-    """GPT-2 XL (1.5B)."""
+    r"""Construct a GPT-2 XL (1.5B) decoder trunk.
+
+    Largest of the four canonical OpenAI variants: :math:`L=48` transformer
+    blocks, :math:`H=1600` hidden, :math:`A=25` attention heads,
+    intermediate width 6400.  Roughly 1.5B parameters — fully released in
+    November 2019 after staged disclosure; remained the largest publicly
+    available autoregressive LM until GPT-3 (Brown 2020).
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2Model
+        Decoder trunk configured with the GPT-2 XL size and any overrides.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_xlarge
+    >>> model = gpt2_xlarge().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (1, 4, 1600)
+    (1, 4, 1600)
+    """
     return GPT2Model(_apply(_CFG_XLARGE, overrides))
 
 
@@ -101,6 +247,40 @@ def gpt2_xlarge(pretrained: bool = False, **overrides: object) -> GPT2Model:
     default_config=_CFG_SMALL,
 )
 def gpt2_small_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+    r"""Construct a GPT-2 small (124M) model with the tied causal-LM head.
+
+    Same trunk as :func:`gpt2_small` (L=12, H=768, A=12, ~124M parameters),
+    wrapped with the tied LM head used for pre-training and free-form
+    generation via :meth:`lucid.models.GenerationMixin.generate`.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2LMHeadModel
+        GPT-2 small trunk wrapped with the tied LM head.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_small_lm
+    >>> model = gpt2_small_lm().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, 4, 50257)
+    (1, 4, 50257)
+    """
     return GPT2LMHeadModel(_apply(_CFG_SMALL, overrides))
 
 
@@ -112,6 +292,39 @@ def gpt2_small_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadMo
     default_config=_CFG_MEDIUM,
 )
 def gpt2_medium_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+    r"""Construct a GPT-2 medium (355M) model with the tied causal-LM head.
+
+    Same trunk as :func:`gpt2_medium` (L=24, H=1024, A=16, ~355M parameters),
+    wrapped with the tied LM head for pre-training and free-form generation.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2LMHeadModel
+        GPT-2 medium trunk wrapped with the tied LM head.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_medium_lm
+    >>> model = gpt2_medium_lm().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, 4, 50257)
+    (1, 4, 50257)
+    """
     return GPT2LMHeadModel(_apply(_CFG_MEDIUM, overrides))
 
 
@@ -123,6 +336,39 @@ def gpt2_medium_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadM
     default_config=_CFG_LARGE,
 )
 def gpt2_large_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+    r"""Construct a GPT-2 large (774M) model with the tied causal-LM head.
+
+    Same trunk as :func:`gpt2_large` (L=36, H=1280, A=20, ~774M parameters),
+    wrapped with the tied LM head for pre-training and free-form generation.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2LMHeadModel
+        GPT-2 large trunk wrapped with the tied LM head.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_large_lm
+    >>> model = gpt2_large_lm().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, 4, 50257)
+    (1, 4, 50257)
+    """
     return GPT2LMHeadModel(_apply(_CFG_LARGE, overrides))
 
 
@@ -134,6 +380,39 @@ def gpt2_large_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadMo
     default_config=_CFG_XLARGE,
 )
 def gpt2_xlarge_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+    r"""Construct a GPT-2 XL (1.5B) model with the tied causal-LM head.
+
+    Same trunk as :func:`gpt2_xlarge` (L=48, H=1600, A=25, ~1.5B parameters),
+    wrapped with the tied LM head for pre-training and free-form generation.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    GPT2LMHeadModel
+        GPT-2 XL trunk wrapped with the tied LM head.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_xlarge_lm
+    >>> model = gpt2_xlarge_lm().eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, 4, 50257)
+    (1, 4, 50257)
+    """
     return GPT2LMHeadModel(_apply(_CFG_XLARGE, overrides))
 
 
@@ -150,4 +429,41 @@ def gpt2_xlarge_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadM
 def gpt2_small_cls(
     pretrained: bool = False, **overrides: object
 ) -> GPT2ForSequenceClassification:
+    r"""Construct a GPT-2 small (124M) model with a sequence-classification head.
+
+    Same trunk as :func:`gpt2_small` (L=12, H=768, A=12), augmented with a
+    last-token linear classifier of output width ``config.num_labels``.
+    The canonical recipe for fine-tuning GPT-2 on GLUE-style sentence
+    classification tasks when decoder-style features are preferred to
+    bidirectional ones.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`GPT2Config` field overrides forwarded into the
+        underlying config.  Pass ``num_labels=N`` to set the number of
+        classes (default 2).
+
+    Returns
+    -------
+    GPT2ForSequenceClassification
+        GPT-2 small trunk wrapped with the last-token classifier head.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Language Models are Unsupervised
+    Multitask Learners"*, OpenAI Technical Report, 2019.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt2 import gpt2_small_cls
+    >>> model = gpt2_small_cls(num_labels=3).eval()
+    >>> input_ids = lucid.tensor([[15496, 11, 995, 13]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, num_labels=3)
+    (1, 3)
+    """
     return GPT2ForSequenceClassification(_apply(_CFG_SMALL, overrides))

@@ -4,21 +4,121 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="CoAtNet",
+    citation=(
+        'Dai, Zihang, et al. "CoAtNet: Marrying Convolution and '
+        'Attention for All Data Sizes." Advances in Neural Information '
+        "Processing Systems, vol. 34, 2021."
+    ),
+    theory=r"""
+    CoAtNet hybridises depthwise convolution and relative self-attention
+    in a single backbone, motivated by the observation that
+    convolutions excel at *generalization* (strong local inductive
+    bias) while attention excels at *capacity* (data-dependent global
+    mixing).  The network is a four-stage pyramid preceded by a
+    two-layer convolutional stem; the early stages use *MBConv* blocks
+    (squeeze-and-excitation, expansion ratio 4) and the later stages
+    use *relative-attention* transformer blocks operating on
+    :math:`\sqrt{HW}`-length token sequences.
+
+    The key building block of the transformer stages is *relative*
+    self-attention:
+
+    .. math::
+
+        \mathrm{Attn}(Q, K, V)_{ij} = \mathrm{softmax}\!\left(
+            \frac{Q_i K_j^\top}{\sqrt{d}} + r_{i - j}
+        \right) V_j,
+
+    where :math:`r_{i-j}` is a learned bias indexed by the *relative*
+    spatial offset between tokens.  This recovers the translation
+    equivariance that convolutions provide for free while still
+    permitting global, data-dependent mixing.  CoAtNet stacks two
+    MBConv stages (C-stages) followed by two transformer stages
+    (T-stages) so that strong local features are extracted first and
+    long-range dependencies are modelled at lower resolutions where
+    attention is cheap.  The CoAtNet-0 through CoAtNet-7 variants
+    simply scale stage depths and channel widths along this skeleton.
+    """,
+)
 @dataclass(frozen=True)
 class CoAtNetConfig(ModelConfig):
-    """Configuration for CoAtNet variants.
+    r"""Configuration dataclass for every CoAtNet variant.
 
-    ``variant`` selects the preset.  CoAtNet uses 4 stages after a 2-conv stem:
+    ``CoAtNetConfig`` is an immutable container that fully specifies
+    the architecture of a CoAtNet (Dai et al., 2021).  CoAtNet uses
+    *four stages* after a two-conv stem, with the first two stages
+    being depthwise-convolutional (MBConv) and the last two stages
+    being relative-attention transformer blocks.
 
-      Stage 1 / Stage 2 — MBConv (C-stages)
-      Stage 3 / Stage 4 — Relative-attention Transformer (T-stages)
+    Parameters
+    ----------
+    num_classes : int, optional
+        Number of output classes for the classification head.  Defaults
+        to ``1000`` (ImageNet-1k).
+    in_channels : int, optional
+        Number of input image channels.  Defaults to ``3`` (RGB).
+    image_size : int, optional
+        Spatial side length of the square input image (used to build
+        the fixed-size relative-position bias tables in T-stages).
+        Defaults to ``224``.
+    variant : str, optional
+        Informational label identifying the canonical CoAtNet variant
+        (``"coatnet_0"`` through ``"coatnet_7"``).  Defaults to
+        ``"coatnet_0"``.
+    blocks_per_stage : tuple of int, optional
+        Number of blocks in each of the four stages
+        :math:`(S_1, S_2, S_3, S_4)`.  Defaults to ``(2, 3, 5, 2)``
+        (CoAtNet-0).
+    dims : tuple of int, optional
+        Channel widths for each of the four stages.  Defaults to
+        ``(96, 192, 384, 768)`` (CoAtNet-0).
+    stem_width : int, optional
+        Output channels of the two-layer convolutional stem (before
+        :math:`S_1`).  Defaults to ``64``.
+    attn_heads : tuple of int, optional
+        Number of attention heads for each of the two T-stages
+        :math:`(S_3, S_4)`.  Defaults to ``(12, 24)``, derived from
+        ``dim / 32`` with head dim 32.
+    mbconv_expand : int, optional
+        Expansion ratio of the inverted bottleneck inside MBConv blocks
+        (``mid = out_ch * expand``).  Defaults to ``4``.
+    head_hidden_size : int or None, optional
+        If not ``None``, inserts an extra pre-classifier linear layer
+        of the given width with a tanh activation between the pooled
+        feature and the final classifier.  Defaults to ``768``
+        (matches the reference recipe).
+    dropout : float, optional
+        Dropout probability inside the classifier head.  Defaults to
+        ``0.0``.
 
-    Channel layout (96, 192, 384, 768) expands across the four stages;
-    ``stem_width`` gives the initial conv channel count before S1.
+    Attributes
+    ----------
+    model_type : ClassVar[str]
+        Constant string ``"coatnet"`` used by the model registry.
 
-    CoAtNet-0 reference: timm coatnet_0 ≈ 25.6 M params.
+    Notes
+    -----
+    The canonical CoAtNet-0 (registered as :func:`coatnet_0`) has
+    approximately **25.6M parameters** and reaches **81.6% top-1 on
+    ImageNet-1k** at 224x224 (Dai et al., 2021, Table 5).
+
+    Reference: Zihang Dai *et al.*, *"CoAtNet: Marrying Convolution
+    and Attention for All Data Sizes"*, NeurIPS 2021,
+    `arXiv:2106.04803 <https://arxiv.org/abs/2106.04803>`_.
+
+    Examples
+    --------
+    Build a CoAtNet-0 configuration with a 10-class head for CIFAR-10:
+
+    >>> from lucid.models.vision.coatnet import CoAtNetConfig
+    >>> cfg = CoAtNetConfig(num_classes=10)
+    >>> cfg.dims, cfg.blocks_per_stage, cfg.num_classes
+    ((96, 192, 384, 768), (2, 3, 5, 2), 10)
     """
 
     model_type: ClassVar[str] = "coatnet"

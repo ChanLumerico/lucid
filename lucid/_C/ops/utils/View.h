@@ -19,21 +19,55 @@
 
 namespace lucid {
 
-// Autograd node for reshape (and the squeeze/unsqueeze ops that are built on
-// top of it).
+// Autograd node for reshape, squeeze, and unsqueeze.
 //
-// Forward:  reinterpret the flat element buffer under a new shape.  The
-//           backend dispatcher's reshape creates a new Storage alias over the
-//           same physical buffer; no data movement occurs.
-// Backward: reshape the incoming gradient back to the original input shape
-//           recorded in input_shapes_[0].  Because reshape is its own inverse
-//           (element ordering in a contiguous buffer is unchanged), the
-//           backward pass is simply another reshape call targeting the saved
-//           input shape.
+// Forward reinterprets the flat element buffer under a new shape.  The
+// backend dispatcher's reshape creates a new ``Storage`` alias over the same
+// physical buffer; no data movement occurs.  Backward reshapes the incoming
+// gradient back to the original input shape recorded in ``input_shapes_[0]``;
+// because reshape is its own inverse on contiguous buffers (element ordering
+// is unchanged), the backward pass is simply another reshape call.
 //
-// Invariants:
-//   input_shapes_[0] — the shape of the input tensor before the reshape.
-//   out_shape_       — the shape after the reshape (inherited from FuncOp).
+// Parameters
+// ----------
+// grad_out : Storage
+//     Incoming gradient, shaped according to the forward output
+//     (``out_shape_``).
+//
+// Returns
+// -------
+// vector<Storage>
+//     Single-element vector containing the gradient reshaped to
+//     ``input_shapes_[0]``.
+//
+// Shape
+// -----
+// ``input_shapes_[0]`` — shape of the input tensor before the reshape.
+// ``out_shape_``       — shape after the reshape (inherited from
+//                        ``FuncOp``).  Both must have identical element
+//                        counts.
+//
+// Math
+// ----
+// $$ y_k = x_k \quad \text{for } k \in [0, \mathrm{numel}(x)), $$
+// where indices are taken in row-major flat ordering.  The mapping between
+// multi-dim indices changes, but the linear element ordering does not.
+//
+// Notes
+// -----
+// In graph mode ``apply_for_graph`` routes through :func:`reshape_op` so the
+// reshape itself becomes a tracked node and the upstream gradient flow
+// participates in graph optimisation.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     ``"view"``, ``AmpPolicy::KeepInput``, requires_grad=true, is_view=true.
+//
+// See Also
+// --------
+// :func:`reshape_op`, :func:`squeeze_op`, :func:`unsqueeze_op`,
+// :func:`contiguous_op`.
 class LUCID_API ViewBackward : public FuncOp<ViewBackward, 1> {
 public:
     static const OpSchema schema_v1;
@@ -44,27 +78,133 @@ public:
     std::string node_name() const override { return "reshape"; }
 };
 
-// Reshape tensor `a` to `new_shape`.  Exactly one element of `new_shape` may
-// be -1, in which case that dimension is inferred so that the total element
-// count is preserved.  Raises ShapeMismatch if the total element count does
-// not match after inference.  The input must be contiguous; a non-contiguous
-// tensor should be passed through contiguous_op first.
-// Shape == vector<int64_t>, so this declaration also accepts Shape directly.
+// Reinterpret a tensor under a new shape (no data copy).
+//
+// The total element count must be preserved.  Exactly one entry of
+// ``new_shape`` may be ``-1``, in which case that dimension is inferred from
+// the remaining sizes.  The input must be contiguous; pass non-contiguous
+// inputs through :func:`contiguous_op` first.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor.  Must be C-contiguous.
+// new_shape : vector<int64_t>
+//     Target shape.  At most one entry may be ``-1``.  All other entries
+//     must be non-negative.  Since ``Shape == vector<int64_t>``, this
+//     overload also accepts ``Shape`` directly.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     A view tensor with shape ``new_shape`` (with ``-1`` resolved) sharing
+//     storage with ``a``.
+//
+// Shape
+// -----
+// $\mathrm{numel}(a) = \prod_d \text{new\_shape}[d]$, after resolving any
+// ``-1`` entry.
+//
+// Raises
+// ------
+// ShapeMismatch
+//     If element counts do not match, multiple ``-1`` entries are given, or
+//     the input is non-contiguous.
+//
+// Examples
+// --------
+// ``reshape_op(t_2x3, {6})`` flattens a 2x3 to a 1-D length-6 view.
+// ``reshape_op(t_2x6, {-1, 3})`` infers the first dim as ``4``.
+//
+// See Also
+// --------
+// :func:`flatten_op`, :func:`squeeze_op`, :func:`contiguous_op`.
 LUCID_API TensorImplPtr reshape_op(const TensorImplPtr& a,
                                    const std::vector<std::int64_t>& new_shape);
 
-// Remove the dimension at `dim`, which must have size 1.  Raises an index
-// error if `dim` is out of range and a ValueError if the targeted dimension
-// is not size 1.  Negative `dim` wraps relative to the input rank.
+// Remove a single size-1 dimension.
+//
+// Drops the axis at position ``dim``, which must currently have size 1.
+// Negative ``dim`` wraps relative to the input rank.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor with rank >= 1.
+// dim : int
+//     Axis to remove.  Must satisfy ``-ndim <= dim < ndim`` and
+//     ``a.shape[dim] == 1``.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     A view with rank ``ndim - 1``.
+//
+// Raises
+// ------
+// IndexError
+//     If ``dim`` is out of range.
+// ValueError
+//     If the targeted dimension is not of size 1.
+//
+// See Also
+// --------
+// :func:`squeeze_all_op`, :func:`unsqueeze_op`.
 LUCID_API TensorImplPtr squeeze_op(const TensorImplPtr& a, int dim);
 
-// Remove all size-1 dimensions from `a`.  If no size-1 dimensions exist, the
-// output is a view of the input with the same shape.
+// Remove every size-1 dimension from a tensor.
+//
+// Equivalent to repeated application of :func:`squeeze_op` on each size-1
+// axis.  If no such axes exist, returns a view with the same shape.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     A view with all size-1 dimensions removed.  Rank may equal the
+//     input's rank if no size-1 axes were present.
+//
+// See Also
+// --------
+// :func:`squeeze_op`.
 LUCID_API TensorImplPtr squeeze_all_op(const TensorImplPtr& a);
 
-// Insert a new size-1 dimension before position `dim` in the output.
-// Negative values wrap relative to the output rank (ndim + 1), so dim=-1
-// inserts before the last existing dimension.
+// Insert a new size-1 dimension at a given position.
+//
+// The new axis is added before position ``dim`` in the output, so the output
+// rank is ``ndim + 1``.  Negative ``dim`` wraps relative to the output rank
+// (so ``dim = -1`` inserts before the last existing dimension).
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor.
+// dim : int
+//     Insertion position.  Must satisfy ``-(ndim + 1) <= dim <= ndim``.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     A view with rank ``ndim + 1`` and a size-1 dimension inserted at
+//     ``dim``.
+//
+// Raises
+// ------
+// IndexError
+//     If ``dim`` is out of range.
+//
+// Examples
+// --------
+// A length-5 1-D tensor unsqueezed at ``dim=0`` becomes a ``(1, 5)`` view;
+// unsqueezed at ``dim=1`` becomes a ``(5, 1)`` view.
+//
+// See Also
+// --------
+// :func:`squeeze_op`, :func:`reshape_op`.
 LUCID_API TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim);
 
 }  // namespace lucid

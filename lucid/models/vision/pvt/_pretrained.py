@@ -83,7 +83,43 @@ def _c(cfg: PVTConfig, kw: dict[str, object]) -> PVTForImageClassification:
     default_config=_CFG_B0,
 )
 def pvt_v2_b0(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B0 backbone (~3.7 M params)."""
+    r"""PVT v2-B0 backbone (Wang et al., 2022).
+
+    Builds the smallest PVT v2 variant: ``embed_dims=(32, 64, 160, 256)``,
+    ``depths=(2, 2, 2, 2)``, ``num_heads=(1, 2, 5, 8)``,
+    ``sr_ratios=(8, 4, 2, 1)``.  Approximately **3.7M parameters** —
+    targeted at mobile / edge deployments.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available in the model zoo.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B0 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 256)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B0 reaches **70.5% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).  See
+    `arXiv:2106.13797 <https://arxiv.org/abs/2106.13797>`_.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b0
+    >>> model = pvt_v2_b0()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape
+    (1, 256)
+    """
     return _b(_CFG_B0, overrides)
 
 
@@ -95,7 +131,42 @@ def pvt_v2_b0(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_B1,
 )
 def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B1 backbone (~14.0 M params)."""
+    r"""PVT v2-B1 backbone (Wang et al., 2022).
+
+    Builds the canonical *PVT v2-B1* configuration:
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(2, 2, 4, 2)``,
+    ``num_heads=(1, 2, 5, 8)``, ``sr_ratios=(8, 4, 2, 1)``.
+    Approximately **14.0M parameters** — ResNet-18 / 34 class on the
+    accuracy/cost trade-off.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B1 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B1 reaches **78.7% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b1
+    >>> model = pvt_v2_b1()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_B1, overrides)
 
 
@@ -107,7 +178,40 @@ def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_B2,
 )
 def pvt_v2_b2(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B2 backbone (~25.4 M params)."""
+    r"""PVT v2-B2 backbone (Wang et al., 2022).
+
+    Builds the canonical *PVT v2-B2* configuration:
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(3, 4, 6, 3)``.
+    Approximately **25.4M parameters** — ResNet-50 class on accuracy/cost.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B2 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B2 reaches **82.0% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b2
+    >>> model = pvt_v2_b2()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_B2, overrides)
 
 
@@ -119,7 +223,41 @@ def pvt_v2_b2(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_B3,
 )
 def pvt_v2_b3(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B3 backbone (~45.2 M params)."""
+    r"""PVT v2-B3 backbone (Wang et al., 2022).
+
+    Builds the canonical *PVT v2-B3* configuration:
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(3, 4, 18, 3)`` (a
+    deeper stage 3 than B2).  Approximately **45.2M parameters** —
+    ResNet-101 class on accuracy/cost.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B3 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B3 reaches **83.1% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b3
+    >>> model = pvt_v2_b3()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_B3, overrides)
 
 
@@ -131,7 +269,40 @@ def pvt_v2_b3(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_B4,
 )
 def pvt_v2_b4(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B4 backbone (~62.6 M params)."""
+    r"""PVT v2-B4 backbone (Wang et al., 2022).
+
+    Builds the canonical *PVT v2-B4* configuration:
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(3, 8, 27, 3)``.
+    Approximately **62.6M parameters**.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B4 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B4 reaches **83.6% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b4
+    >>> model = pvt_v2_b4()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_B4, overrides)
 
 
@@ -143,7 +314,42 @@ def pvt_v2_b4(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_B5,
 )
 def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT v2-B5 backbone (~82.9 M params)."""
+    r"""PVT v2-B5 backbone (Wang et al., 2022).
+
+    Builds the largest PVT v2 variant *B5*:
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(3, 6, 40, 3)``,
+    and ``mlp_ratios=(4.0, 4.0, 4.0, 4.0)`` (uniform MLP ratio).
+    Approximately **82.9M parameters** — the largest variant in the
+    paper.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B5 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    Notes
+    -----
+    PVT v2-B5 reaches **83.8% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1) — the headline result of the paper.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b5
+    >>> model = pvt_v2_b5()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_B5, overrides)
 
 
@@ -155,7 +361,39 @@ def pvt_v2_b5(pretrained: bool = False, **overrides: object) -> PVT:
     default_config=_CFG_TINY,
 )
 def pvt_tiny(pretrained: bool = False, **overrides: object) -> PVT:
-    """PVT-Tiny backbone — alias for pvt_v2_b1 (backwards compat)."""
+    r"""PVT-Tiny backbone — alias for :func:`pvt_v2_b1`.
+
+    Backwards-compatible alias kept for users on older releases that
+    referred to the ~14M-parameter variant as "PVT-Tiny".  Identical
+    to :func:`pvt_v2_b1` in every respect.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B1 config.
+
+    Returns
+    -------
+    PVT
+        A :class:`PVT` backbone returning a flat :math:`(B, 512)`
+        feature.
+
+    See Also
+    --------
+    pvt_v2_b1 : The canonical factory this alias forwards to.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_tiny
+    >>> model = pvt_tiny()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_TINY, overrides)
 
 
@@ -172,7 +410,40 @@ def pvt_tiny(pretrained: bool = False, **overrides: object) -> PVT:
 def pvt_v2_b0_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B0 image classifier (~3.7 M params)."""
+    r"""PVT v2-B0 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b0` backbone with a mean pool + single
+    :class:`nn.Linear` classification head.  Default output is
+    ``num_classes=1000`` (ImageNet-1k).  ~3.7M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B0 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier returning :class:`ImageClassificationOutput` whose
+        ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B0 reaches **70.5% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b0_cls
+    >>> model = pvt_v2_b0_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B0, overrides)
 
 
@@ -186,7 +457,38 @@ def pvt_v2_b0_cls(
 def pvt_v2_b1_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B1 image classifier (~14.0 M params)."""
+    r"""PVT v2-B1 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b1` backbone with a mean pool + linear
+    classification head.  ~14.0M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B1 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B1 reaches **78.7% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b1_cls
+    >>> model = pvt_v2_b1_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B1, overrides)
 
 
@@ -200,7 +502,38 @@ def pvt_v2_b1_cls(
 def pvt_v2_b2_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B2 image classifier (~25.4 M params)."""
+    r"""PVT v2-B2 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b2` backbone with a mean pool + linear
+    classification head.  ~25.4M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B2 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B2 reaches **82.0% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b2_cls
+    >>> model = pvt_v2_b2_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B2, overrides)
 
 
@@ -214,7 +547,38 @@ def pvt_v2_b2_cls(
 def pvt_v2_b3_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B3 image classifier (~45.2 M params)."""
+    r"""PVT v2-B3 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b3` backbone with a mean pool + linear
+    classification head.  ~45.2M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B3 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B3 reaches **83.1% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b3_cls
+    >>> model = pvt_v2_b3_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B3, overrides)
 
 
@@ -228,7 +592,38 @@ def pvt_v2_b3_cls(
 def pvt_v2_b4_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B4 image classifier (~62.6 M params)."""
+    r"""PVT v2-B4 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b4` backbone with a mean pool + linear
+    classification head.  ~62.6M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B4 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B4 reaches **83.6% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b4_cls
+    >>> model = pvt_v2_b4_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B4, overrides)
 
 
@@ -242,7 +637,39 @@ def pvt_v2_b4_cls(
 def pvt_v2_b5_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT v2-B5 image classifier (~82.9 M params)."""
+    r"""PVT v2-B5 image classifier (Wang et al., 2022).
+
+    Combines the :func:`pvt_v2_b5` backbone with a mean pool + linear
+    classification head.  ~82.9M parameters — the largest PVT v2
+    variant.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B5 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    PVT v2-B5 reaches **83.8% top-1 on ImageNet-1k** at 224x224 (Wang
+    et al., 2022, Table 1) — the headline result of the paper.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_v2_b5_cls
+    >>> model = pvt_v2_b5_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_B5, overrides)
 
 
@@ -256,5 +683,36 @@ def pvt_v2_b5_cls(
 def pvt_tiny_cls(
     pretrained: bool = False, **overrides: object
 ) -> PVTForImageClassification:
-    """PVT-Tiny image classifier — alias for pvt_v2_b1_cls (backwards compat)."""
+    r"""PVT-Tiny image classifier — alias for :func:`pvt_v2_b1_cls`.
+
+    Backwards-compatible alias kept for users on older releases that
+    referred to the ~14M-parameter classifier as "PVT-Tiny".  Identical
+    to :func:`pvt_v2_b1_cls` in every respect.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical PVT v2-B1 config.
+
+    Returns
+    -------
+    PVTForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    See Also
+    --------
+    pvt_v2_b1_cls : The canonical factory this alias forwards to.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import pvt_tiny_cls
+    >>> model = pvt_tiny_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_TINY, overrides)

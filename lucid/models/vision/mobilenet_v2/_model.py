@@ -126,7 +126,75 @@ def _build_features(cfg: MobileNetV2Config) -> tuple[nn.Sequential, int]:
 
 
 class MobileNetV2(PretrainedModel, BackboneMixin):
-    """MobileNet v2 feature extractor."""
+    r"""MobileNet v2 feature-extracting backbone (no classification head).
+
+    Implements the inverted-residual / linear-bottleneck topology
+    from Sandler et al., "MobileNetV2: Inverted Residuals and Linear
+    Bottlenecks", CVPR 2018 (arXiv:1801.04381).  Each block expands
+    a low-dimensional input up by an integer ``expand_ratio``, runs
+    a depthwise :math:`3 \times 3` convolution in the wider interior
+    space, then projects back to a narrow bottleneck — *without* a
+    final non-linearity (the "linear bottleneck").  When stride and
+    channel counts match, an identity shortcut is added around the
+    whole block:
+
+    .. math::
+
+        y = x + \mathrm{Proj}\big(
+            \mathrm{DW}\big( \mathrm{Expand}(x) \big)
+        \big).
+
+    The body is a 3×3 stem (stride 2) followed by seven inverted-residual
+    stages and a final 1×1 head expansion to 1280 channels.  A global
+    average pool collapses the final feature map to a single 1×1
+    descriptor.
+
+    Parameters
+    ----------
+    config : MobileNetV2Config
+        Frozen architecture spec.  Use the factory functions
+        (:func:`mobilenet_v2`, :func:`mobilenet_v2_075`) for
+        paper-cited width-multiplier variants.
+
+    Attributes
+    ----------
+    config : MobileNetV2Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Stem + seven inverted-residual stages + 1×1 head expansion.
+        Channel counts scale with ``config.width_mult``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``(B, C, 1, 1)``.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin` for downstream FPN / decoder
+        modules.
+
+    Notes
+    -----
+    The inverted-residual block is the *inverse* of the classical
+    bottleneck shape: instead of wide → narrow → wide, it does
+    narrow → wide → narrow, with the residual connection on the
+    *narrow* (low-dimensional) tensor.  Combined with the linear
+    bottleneck (no ReLU on the projection), this preserves the
+    representational capacity of the narrow channels while letting
+    the wide interior use ReLU6 freely.  The result is roughly
+    :math:`30\%` fewer parameters and FLOPs than MobileNet-v1 at
+    comparable accuracy.
+
+    Examples
+    --------
+    Build a MobileNet-v2 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2
+    >>> backbone = mobilenet_v2()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 1280, 1, 1)
+    """
 
     config_class: ClassVar[type[MobileNetV2Config]] = MobileNetV2Config
     base_model_prefix: ClassVar[str] = "mobilenet_v2"
@@ -170,7 +238,72 @@ class MobileNetV2(PretrainedModel, BackboneMixin):
 
 
 class MobileNetV2ForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """MobileNet v2 with AdaptiveAvgPool + Dropout + FC classifier."""
+    r"""MobileNet v2 with global-average-pooled linear classification head.
+
+    Combines a :class:`MobileNetV2` backbone with the standard
+    ImageNet classification head: an :class:`~lucid.nn.AdaptiveAvgPool2d`
+    to pool every spatial location into a single feature vector,
+    a :class:`~lucid.nn.Dropout` (probability ``config.dropout``,
+    default 0.2), and a :class:`~lucid.nn.Linear` projection to
+    ``config.num_classes`` logits.  When ``labels`` are supplied to
+    :meth:`forward`, a cross-entropy loss is computed and returned
+    alongside the logits.
+
+    Parameters
+    ----------
+    config : MobileNetV2Config
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`mobilenet_v2_cls`, :func:`mobilenet_v2_075_cls`) for
+        paper-cited configurations.
+
+    Attributes
+    ----------
+    config : MobileNetV2Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Same inverted-residual stack as on :class:`MobileNetV2`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    drop : nn.Dropout
+        Dropout layer (probability ``config.dropout``) applied
+        before the linear classifier.
+    classifier : nn.Linear
+        Linear projection from the 1280-ch head (scaled by
+        ``max(1.0, width_mult)``) to ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{Drop}\!\left(
+            \operatorname{GAP}(\,\mathrm{backbone}(x)\,)
+        \right) + b,
+
+    where :math:`\operatorname{GAP}` is the global average pool.
+    Loss is the standard categorical cross-entropy, computed only
+    when ``labels`` is not ``None``.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet_v2 import mobilenet_v2_cls
+    >>> model = mobilenet_v2_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+
+    Retarget to CIFAR-10:
+
+    >>> model = mobilenet_v2_cls(num_classes=10)
+    >>> model.config.num_classes
+    10
+    """
 
     config_class: ClassVar[type[MobileNetV2Config]] = MobileNetV2Config
     base_model_prefix: ClassVar[str] = "mobilenet_v2"

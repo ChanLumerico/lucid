@@ -43,6 +43,46 @@ def _c(key: str, kw: dict[str, object]) -> EfficientNetForImageClassification:
     default_config=_CFGS["b0"],
 )
 def efficientnet_b0(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B0 feature-extracting backbone (compound coefficient :math:`\phi = 0`).
+
+    Builds an :class:`EfficientNet` with the NAS-designed baseline
+    topology from Tan & Le, 2019 (Table 1): seven MBConv stages
+    with block repeats ``(1, 2, 2, 3, 3, 4, 1)``, channel
+    progression ``16 → 24 → 40 → 80 → 112 → 192 → 320``, and a
+    1×1 head expansion to 1280 channels.  Approximately 5.3M
+    parameters and 77.1% ImageNet-1k top-1 accuracy at the
+    224×224 native resolution (Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored — the returned model is randomly initialised.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B0 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 1 and Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b0
+    >>> model = efficientnet_b0()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 1280, 1, 1)
+    """
     return _b("b0", overrides)
 
 
@@ -54,6 +94,44 @@ def efficientnet_b0(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b1"],
 )
 def efficientnet_b1(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B1 feature-extracting backbone (compound coefficient :math:`\phi = 0.5`).
+
+    Builds an :class:`EfficientNet` with depth multiplier 1.1 and
+    width multiplier 1.0 — same channel counts as B0 but with
+    block repeats scaled up by ``ceil(n · 1.1)``.  Approximately
+    7.8M parameters and 79.1% ImageNet-1k top-1 accuracy at the
+    240×240 native resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B1 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b1
+    >>> model = efficientnet_b1()
+    >>> x = lucid.randn(1, 3, 240, 240)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 1280, 1, 1)
+    """
     return _b("b1", overrides)
 
 
@@ -65,6 +143,44 @@ def efficientnet_b1(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b2"],
 )
 def efficientnet_b2(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B2 feature-extracting backbone (compound coefficient :math:`\phi = 1`).
+
+    Builds an :class:`EfficientNet` with width multiplier 1.1 and
+    depth multiplier 1.2.  Approximately 9.2M parameters and
+    80.1% ImageNet-1k top-1 accuracy at the 260×260 native
+    resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B2 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 1.1) = 1408``
+    channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b2
+    >>> model = efficientnet_b2()
+    >>> x = lucid.randn(1, 3, 260, 260)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 1408, 1, 1)
+    """
     return _b("b2", overrides)
 
 
@@ -76,6 +192,44 @@ def efficientnet_b2(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b3"],
 )
 def efficientnet_b3(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B3 feature-extracting backbone (compound coefficient :math:`\phi = 2`).
+
+    Builds an :class:`EfficientNet` with width multiplier 1.2 and
+    depth multiplier 1.4.  Approximately 12M parameters and
+    81.6% ImageNet-1k top-1 accuracy at the 300×300 native
+    resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B3 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 1.2) = 1536``
+    channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b3
+    >>> model = efficientnet_b3()
+    >>> x = lucid.randn(1, 3, 300, 300)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 1536, 1, 1)
+    """
     return _b("b3", overrides)
 
 
@@ -87,6 +241,44 @@ def efficientnet_b3(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b4"],
 )
 def efficientnet_b4(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B4 feature-extracting backbone (compound coefficient :math:`\phi = 3`).
+
+    Builds an :class:`EfficientNet` with width multiplier 1.4 and
+    depth multiplier 1.8.  Approximately 19M parameters and
+    82.9% ImageNet-1k top-1 accuracy at the 380×380 native
+    resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B4 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 1.4) = 1792``
+    channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b4
+    >>> model = efficientnet_b4()
+    >>> x = lucid.randn(1, 3, 380, 380)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 1792, 1, 1)
+    """
     return _b("b4", overrides)
 
 
@@ -98,6 +290,44 @@ def efficientnet_b4(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b5"],
 )
 def efficientnet_b5(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B5 feature-extracting backbone (compound coefficient :math:`\phi = 4`).
+
+    Builds an :class:`EfficientNet` with width multiplier 1.6 and
+    depth multiplier 2.2.  Approximately 30M parameters and
+    83.6% ImageNet-1k top-1 accuracy at the 456×456 native
+    resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B5 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 1.6) = 2048``
+    channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b5
+    >>> model = efficientnet_b5()
+    >>> x = lucid.randn(1, 3, 456, 456)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 2048, 1, 1)
+    """
     return _b("b5", overrides)
 
 
@@ -109,6 +339,44 @@ def efficientnet_b5(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b6"],
 )
 def efficientnet_b6(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B6 feature-extracting backbone (compound coefficient :math:`\phi = 5`).
+
+    Builds an :class:`EfficientNet` with width multiplier 1.8 and
+    depth multiplier 2.6.  Approximately 43M parameters and
+    84.0% ImageNet-1k top-1 accuracy at the 528×528 native
+    resolution (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B6 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 1.8) = 2304``
+    channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b6
+    >>> model = efficientnet_b6()
+    >>> x = lucid.randn(1, 3, 528, 528)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 2304, 1, 1)
+    """
     return _b("b6", overrides)
 
 
@@ -120,6 +388,46 @@ def efficientnet_b6(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b7"],
 )
 def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientNet:
+    r"""EfficientNet-B7 feature-extracting backbone (compound coefficient :math:`\phi = 6`).
+
+    Builds an :class:`EfficientNet` with width multiplier 2.0 and
+    depth multiplier 3.1 — the largest variant in the original
+    paper.  Approximately 66M parameters and 84.4% ImageNet-1k
+    top-1 accuracy at the 600×600 native resolution (Tan & Le,
+    2019, Table 2), state-of-the-art at the time of publication.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNet
+        Backbone with the B7 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  Head expansion: ``round(1280 · 2.0) = 2560``
+    channels.  Memory footprint at 600×600 is substantial — plan
+    accordingly for training.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b7
+    >>> model = efficientnet_b7()
+    >>> x = lucid.randn(1, 3, 600, 600)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape
+    (1, 2560, 1, 1)
+    """
     return _b("b7", overrides)
 
 
@@ -136,6 +444,46 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
 def efficientnet_b0_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B0 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    NAS-designed B0 topology followed by global average pooling,
+    dropout (:math:`p = 0.2`), and a linear projection to
+    ``config.num_classes`` (default 1000 for ImageNet-1k).
+    Approximately 5.3M parameters and 77.1% ImageNet-1k top-1
+    accuracy at 224×224 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`
+        (typically ``num_classes`` to retarget the classifier).
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B0 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b0_cls
+    >>> model = efficientnet_b0_cls(num_classes=10)
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 10)
+    """
     return _c("b0", overrides)
 
 
@@ -149,6 +497,44 @@ def efficientnet_b0_cls(
 def efficientnet_b1_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B1 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B1 compound-scaling configuration (depth × 1.1, width × 1.0)
+    followed by dropout (:math:`p = 0.2`) and a linear classifier.
+    Approximately 7.8M parameters and 79.1% ImageNet-1k top-1
+    accuracy at 240×240 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B1 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b1_cls
+    >>> model = efficientnet_b1_cls()
+    >>> x = lucid.randn(1, 3, 240, 240)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b1", overrides)
 
 
@@ -162,6 +548,44 @@ def efficientnet_b1_cls(
 def efficientnet_b2_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B2 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B2 compound-scaling configuration (width × 1.1, depth × 1.2)
+    followed by dropout (:math:`p = 0.3`) and a linear classifier.
+    Approximately 9.2M parameters and 80.1% ImageNet-1k top-1
+    accuracy at 260×260 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B2 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b2_cls
+    >>> model = efficientnet_b2_cls()
+    >>> x = lucid.randn(1, 3, 260, 260)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b2", overrides)
 
 
@@ -175,6 +599,44 @@ def efficientnet_b2_cls(
 def efficientnet_b3_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B3 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B3 compound-scaling configuration (width × 1.2, depth × 1.4)
+    followed by dropout (:math:`p = 0.3`) and a linear classifier.
+    Approximately 12M parameters and 81.6% ImageNet-1k top-1
+    accuracy at 300×300 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B3 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b3_cls
+    >>> model = efficientnet_b3_cls()
+    >>> x = lucid.randn(1, 3, 300, 300)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b3", overrides)
 
 
@@ -188,6 +650,44 @@ def efficientnet_b3_cls(
 def efficientnet_b4_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B4 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B4 compound-scaling configuration (width × 1.4, depth × 1.8)
+    followed by dropout (:math:`p = 0.4`) and a linear classifier.
+    Approximately 19M parameters and 82.9% ImageNet-1k top-1
+    accuracy at 380×380 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B4 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b4_cls
+    >>> model = efficientnet_b4_cls()
+    >>> x = lucid.randn(1, 3, 380, 380)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b4", overrides)
 
 
@@ -201,6 +701,44 @@ def efficientnet_b4_cls(
 def efficientnet_b5_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B5 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B5 compound-scaling configuration (width × 1.6, depth × 2.2)
+    followed by dropout (:math:`p = 0.4`) and a linear classifier.
+    Approximately 30M parameters and 83.6% ImageNet-1k top-1
+    accuracy at 456×456 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B5 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b5_cls
+    >>> model = efficientnet_b5_cls()
+    >>> x = lucid.randn(1, 3, 456, 456)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b5", overrides)
 
 
@@ -214,6 +752,44 @@ def efficientnet_b5_cls(
 def efficientnet_b6_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B6 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B6 compound-scaling configuration (width × 1.8, depth × 2.6)
+    followed by dropout (:math:`p = 0.5`) and a linear classifier.
+    Approximately 43M parameters and 84.0% ImageNet-1k top-1
+    accuracy at 528×528 (Tan & Le, 2019, Table 2).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B6 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b6_cls
+    >>> model = efficientnet_b6_cls()
+    >>> x = lucid.randn(1, 3, 528, 528)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b6", overrides)
 
 
@@ -227,4 +803,45 @@ def efficientnet_b6_cls(
 def efficientnet_b7_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientNetForImageClassification:
+    r"""EfficientNet-B7 image classifier (backbone + GAP + linear head).
+
+    Builds an :class:`EfficientNetForImageClassification` with the
+    B7 compound-scaling configuration (width × 2.0, depth × 3.1)
+    followed by dropout (:math:`p = 0.5`) and a linear classifier —
+    the largest variant in the original paper.  Approximately
+    66M parameters and 84.4% ImageNet-1k top-1 accuracy at
+    600×600 (Tan & Le, 2019, Table 2), state-of-the-art at the
+    time of publication.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently
+        ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`EfficientNetConfig`.
+
+    Returns
+    -------
+    EfficientNetForImageClassification
+        Classifier with the B7 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Tan & Le, "EfficientNet: Rethinking Model Scaling for
+    Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
+    Table 2.  At 600×600 input resolution memory usage is
+    substantial — plan training accordingly.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b7_cls
+    >>> model = efficientnet_b7_cls()
+    >>> x = lucid.randn(1, 3, 600, 600)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
     return _c("b7", overrides)

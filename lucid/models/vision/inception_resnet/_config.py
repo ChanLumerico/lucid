@@ -4,8 +4,51 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="Inception-ResNet",
+    citation=(
+        'Szegedy, Christian, et al. "Inception-v4, Inception-ResNet and '
+        'the Impact of Residual Connections on Learning." Proceedings of '
+        "the AAAI Conference on Artificial Intelligence, 2017."
+    ),
+    theory=r"""
+    Inception-ResNet hybridises the two dominant architectural ideas
+    of the early ResNet era: the *multi-branch Inception module* and
+    the *residual shortcut*.  Each Inception sub-network is wrapped in
+    an identity skip connection, so the block computes
+
+    .. math::
+
+        y = x + \alpha \cdot \mathcal{F}_{\text{inception}}(x),
+
+    where :math:`\alpha` is a small fixed scale factor (typically
+    0.10–0.30) applied to the Inception branch before addition.  This
+    *residual scaling* trick was introduced specifically for
+    Inception-ResNet because the unscaled residual branches
+    occasionally caused training to diverge on networks with many
+    filters per Inception module.
+
+    Three block families — Block35, Block17, Block8 — mirror
+    Inception v3's A/B/C topologies at the 35×35, 17×17, and 8×8
+    resolutions respectively, but each is now a residual unit.  The
+    network's stem is shared with Inception v4 (an aggressive
+    multi-branch downsampler).  Reduction-A and Reduction-B blocks
+    perform spatial reduction between groups of residual Inception
+    blocks while doubling the channel budget.
+
+    The empirical message of the paper is precise and influential:
+    residual connections *do not* improve final accuracy beyond what
+    a comparably-sized non-residual Inception v4 achieves, but they
+    *dramatically* accelerate convergence — Inception-ResNet v2
+    reaches the same accuracy roughly twice as fast.  Final top-5
+    error on ImageNet is 3.08%, with the residual variants holding a
+    convergence-speed edge over their non-residual siblings throughout
+    training.
+    """,
+)
 @dataclass(frozen=True)
 class InceptionResNetConfig(ModelConfig):
     """Configuration for Inception-ResNet v2.

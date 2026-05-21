@@ -644,7 +644,70 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
 
 
 class MaxViT(PretrainedModel, BackboneMixin):
-    """MaxViT feature extractor — global avg-pooled final stage features."""
+    r"""MaxViT backbone (Tu et al., 2022).
+
+    MaxViT combines a convolutional MBConv stage with two complementary
+    sparse self-attention mechanisms — *block attention* and *grid
+    attention* — to obtain dense local plus dense global receptive
+    fields at linear complexity in the number of tokens.  The backbone
+    is a four-stage pyramid preceded by a two-conv stem, and every
+    MaxViT block applies (i) MobileNetV3-style MBConv, (ii) block
+    attention, and (iii) grid attention in sequence.
+
+    Given a feature map of shape :math:`(H, W, C)`, *block attention*
+    partitions it into non-overlapping :math:`P \times P` windows
+    (default :math:`P = 7`) and runs full self-attention inside each
+    window — identical to Swin's W-MSA.  *Grid attention* takes the
+    same feature map and gathers tokens that share the same intra-window
+    position across all windows.  Formally, with :math:`H = h \cdot P`,
+    :math:`W = w \cdot P`:
+
+    .. math::
+
+        \mathrm{Block}: (H, W) \to (h \cdot w,\ P \cdot P),\quad
+        \mathrm{Grid} : (H, W) \to (P \cdot P,\ h \cdot w).
+
+    :meth:`forward_features` returns the global-average-pooled
+    :math:`(B, \texttt{dims[-1]})` feature.
+
+    Parameters
+    ----------
+    config : MaxViTConfig
+        Frozen dataclass specifying ``depths``, ``dims``,
+        ``window_size``, ``num_heads``, ``mlp_ratio``, ``in_channels``,
+        and ``num_classes``.  See :class:`MaxViTConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Module
+        Two-layer convolutional stem with stride-2 first conv.
+    stages : nn.ModuleList
+        Four MaxViT stages, each containing a stack of MaxViT blocks.
+    head : _HeadNorm
+        Pre-classification head: LayerNorm → ``Linear + Tanh`` → final
+        Linear (also present on the backbone for parameter sharing).
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with reductions
+        :math:`(4, 8, 16, 32)`.
+
+    Notes
+    -----
+    Reference: Zhengzhong Tu *et al.*, *"MaxViT: Multi-Axis Vision
+    Transformer"*, ECCV 2022,
+    `arXiv:2204.01697 <https://arxiv.org/abs/2204.01697>`_.
+
+    Examples
+    --------
+    Build a MaxViT-Tiny backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.maxvit import MaxViT, MaxViTConfig
+    >>> model = MaxViT(MaxViTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, dims[-1])
+    (1, 512)
+    """
 
     config_class: ClassVar[type[MaxViTConfig]] = MaxViTConfig
     base_model_prefix: ClassVar[str] = "maxvit"
@@ -706,11 +769,57 @@ class _HeadNorm(nn.Module):
 
 
 class MaxViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """MaxViT with global avg-pool + FC classifier head.
+    r"""MaxViT with a linear classification head (Tu et al., 2022).
 
-    State-dict keys match timm's maxvit_tiny_tf_224 exactly:
-      stem.conv1/norm1/conv2, stages.N.blocks.M.conv.*, stages.N.blocks.M.attn_block.*,
-      stages.N.blocks.M.attn_grid.*, head.norm, head.pre_logits.fc, head.fc
+    Wraps the same multi-axis attention trunk as :class:`MaxViT`
+    (stem + four MaxViT stages) and adds the reference-recipe head:
+    global average pool → LayerNorm → ``Linear(dim) + Tanh`` → final
+    linear classifier:
+
+    .. math::
+
+        \text{logits} = W_{\text{cls}}\,
+            \mathrm{Tanh}\!\bigl(W_{\text{pre}}\,
+            \mathrm{LN}(\mathrm{GAP}(z^{L}))\bigr) + b_{\text{cls}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : MaxViTConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See :class:`MaxViTConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Module
+        Two-layer stride-2 convolutional stem.
+    stages : nn.ModuleList
+        Four MaxViT stages.
+    head : _HeadNorm
+        LayerNorm → pre_logits.fc (Linear) → Tanh → fc (Linear).
+
+    Notes
+    -----
+    Reference: Zhengzhong Tu *et al.*, *"MaxViT: Multi-Axis Vision
+    Transformer"*, ECCV 2022.  MaxViT-Tiny / Small / Base / Large /
+    XLarge reach **83.6 / 84.5 / 84.9 / 85.2 / 85.5 % top-1 on
+    ImageNet-1k** (Tu et al., 2022, Table 6).
+
+    Examples
+    --------
+    End-to-end inference with the default MaxViT-Tiny classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.maxvit import (
+    ...     MaxViTConfig, MaxViTForImageClassification,
+    ... )
+    >>> model = MaxViTForImageClassification(MaxViTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
     """
 
     config_class: ClassVar[type[MaxViTConfig]] = MaxViTConfig

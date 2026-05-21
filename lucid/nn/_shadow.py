@@ -71,8 +71,13 @@ class PhantomImpl:
         if isinstance(shape, int):
             shape = (shape,)
         self.shape = tuple(int(s) for s in shape)
-        self.dtype = dtype
-        self.device = device
+        # Default dtype/device to F32/CPU when None — empty values trip
+        # ``_maybe_promote`` (it then calls ``astype(impl, None)`` which
+        # the engine binding rejects).  RoFormer / CoAtNet hit this path
+        # during ``__init__`` via arithmetic on freshly-created
+        # ``arange`` phantoms.
+        self.dtype = dtype if dtype is not None else _C_engine.F32
+        self.device = device if device is not None else _C_engine.CPU
         self.requires_grad = requires_grad
         self.ndim = len(self.shape)
 
@@ -92,6 +97,19 @@ class PhantomImpl:
         for s in self.shape:
             n *= int(s)
         return n
+
+    # ── Indexing ────────────────────────────────────────────────────────────
+    # Swin / Mask2Former call ``relative_position_bias_table[index]`` on a
+    # phantom Parameter during ``__init__`` to materialise a lookup
+    # table.  Returning a same-shape phantom is best-effort but enough
+    # for the layer-summary walker — the shape downstream code reads off
+    # the indexed result is irrelevant when no actual values flow.
+    def __getitem__(self, key: Any) -> PhantomImpl:
+        return PhantomImpl(self.shape, self.dtype, self.device, self.requires_grad)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        # In-place assignment — no-op in shadow mode.
+        return None
 
     # Universal absorber for any other engine method invoked on an impl
     # (init helpers in nn/init.py call lots of these).  Returns a
@@ -160,6 +178,26 @@ def _reshape_factory(impl: Any, shape: Any, *args: Any, **kwargs: Any) -> Phanto
     if isinstance(impl, PhantomImpl):
         return PhantomImpl(shape, impl.dtype, impl.device, impl.requires_grad)
     return _ORIGINAL["reshape"](impl, shape, *args, **kwargs)
+
+
+def _meshgrid_factory(tensors: Any, *args: Any, **kwargs: Any) -> list[Any]:
+    """``meshgrid([t1, t2, ...], indexing=...)`` returns **N tensors**
+    (one per input) — generic shape-preserving wrapper would collapse
+    that to a single phantom and break the caller's tuple unpack
+    (``gy, gx = lucid.meshgrid(a, b)`` in Swin's window attention).
+    Output shape per tensor: combined dim sizes of all inputs.
+    """
+    if isinstance(tensors, (list, tuple)) and any(
+        isinstance(t, PhantomImpl) for t in tensors
+    ):
+        # Combined shape = product of input lengths
+        combined = tuple(
+            t.shape[0] if isinstance(t, PhantomImpl) and t.shape else 1 for t in tensors
+        )
+        # Pick a representative phantom for dtype/device
+        rep = next(t for t in tensors if isinstance(t, PhantomImpl))
+        return [PhantomImpl(combined, rep.dtype, rep.device, False) for _ in tensors]
+    return _ORIGINAL["meshgrid"](tensors, *args, **kwargs)
 
 
 def _find_phantom(args: tuple[Any, ...]) -> PhantomImpl | None:
@@ -251,6 +289,7 @@ _SPECIFIC_WRAPPERS: dict[str, Any] = {
     "full": _full_factory,
     "arange": _arange_factory,
     "reshape": _reshape_factory,
+    "meshgrid": _meshgrid_factory,
 }
 
 _ORIGINAL: dict[str, Any] = {}
@@ -291,35 +330,58 @@ def shadow_alloc() -> Iterator[None]:
         yield
         return
 
-    # Patch ``_unwrap`` to accept phantom impls.  High-level op dispatch
-    # (``lucid.where``, comparison ops, …) routes every Tensor through
-    # ``_unwrap`` before calling the engine; the default impl rejects
-    # anything that isn't an actual ``_C_engine.TensorImpl``.  In shadow
-    # mode we extend the gate to also pass phantoms through.  Note:
-    # ``_unwrap`` was imported as a name into ``lucid._ops`` and
-    # ``lucid._ops._adapters`` at module-load time, so simply rebinding
-    # ``_disp._unwrap`` isn't enough — we also rebind the already-
-    # captured references in those modules.
+    # Patch ``_unwrap`` to accept phantom impls.  ~20+ modules across
+    # ``lucid/`` do ``from lucid._dispatch import _unwrap`` at
+    # module-load time, so we can't just rebind ``_dispatch._unwrap``
+    # — each importer captured the function object then.  Walk
+    # ``sys.modules`` once and replace every module-level ``_unwrap``
+    # attribute that *is* the original (identity check).
+    import sys
     from lucid import _dispatch as _disp
-    from lucid import _ops as _ops_pkg
-    from lucid._ops import _adapters as _adapters_mod
 
-    _orig_unwrap_disp = _disp._unwrap
-    _orig_unwrap_ops = _ops_pkg._unwrap
-    _orig_unwrap_adap = _adapters_mod._unwrap
+    _orig_unwrap = _disp._unwrap
 
     def _shadow_unwrap(t: Any) -> Any:
         impl = getattr(t, "_impl", None)
         if isinstance(impl, PhantomImpl):
             return impl
-        return _orig_unwrap_disp(t)
+        return _orig_unwrap(t)
 
-    _disp._unwrap = _shadow_unwrap
-    _ops_pkg._unwrap = _shadow_unwrap
-    _adapters_mod._unwrap = _shadow_unwrap
-    _ORIGINAL["__unwrap_disp__"] = _orig_unwrap_disp
-    _ORIGINAL["__unwrap_ops__"] = _orig_unwrap_ops
-    _ORIGINAL["__unwrap_adap__"] = _orig_unwrap_adap
+    _unwrap_rebindings: list[Any] = []
+    for _mod in list(sys.modules.values()):
+        if _mod is None:
+            continue
+        if getattr(_mod, "_unwrap", None) is _orig_unwrap:
+            _mod._unwrap = _shadow_unwrap
+            _unwrap_rebindings.append(_mod)
+    _ORIGINAL["__unwrap_sites__"] = (_orig_unwrap, _unwrap_rebindings)
+
+    # Same treatment for ``_unwrap_or_scalar`` — defined in
+    # ``lucid._tensor._dunders`` and used by every binary-arithmetic
+    # dunder.  CoAtNet's ``_init_rel_idx`` exercises this path during
+    # ``__init__`` (computing relative-position offsets on tiny
+    # arange-backed tensors).  The default impl rejects anything whose
+    # impl isn't a TensorImpl; we extend it to also accept phantoms.
+    from lucid._tensor import _dunders as _dunders_mod
+
+    _orig_uos = _dunders_mod._unwrap_or_scalar
+
+    def _shadow_uos(x: Any, ref_impl: Any = None) -> Any:
+        impl = getattr(x, "_impl", None)
+        if isinstance(impl, PhantomImpl):
+            return impl
+        if isinstance(x, PhantomImpl):
+            return x
+        return _orig_uos(x, ref_impl)
+
+    _uos_rebindings: list[Any] = []
+    for _mod in list(sys.modules.values()):
+        if _mod is None:
+            continue
+        if getattr(_mod, "_unwrap_or_scalar", None) is _orig_uos:
+            _mod._unwrap_or_scalar = _shadow_uos
+            _uos_rebindings.append(_mod)
+    _ORIGINAL["__uos_sites__"] = (_orig_uos, _uos_rebindings)
 
     # Snapshot + patch every callable attribute on the engine module.
     # Tensor-creating ops with shape semantics that differ from "pass
@@ -351,12 +413,24 @@ def shadow_alloc() -> Iterator[None]:
     # original C++ binding and reject phantom inputs.
     from lucid._ops._registry import _REGISTRY as _OP_REGISTRY
 
+    # IMPORTANT: only rebind when ``engine_fn`` IS the (pre-patch)
+    # engine attribute — entries whose engine_fn is a Python *adapter*
+    # (e.g. ``_where_adapter``) handle their own ``_unwrap`` /
+    # pre-processing internally and break if blindly replaced with the
+    # engine-level patch.  Adapters already call into ``_C_engine.<op>``
+    # which we *did* patch, so phantom routing still happens via them.
     _op_originals: list[tuple[Any, Any]] = []
     for _e in _OP_REGISTRY:
+        orig_engine_attr = _ORIGINAL.get(_e.name)
+        if orig_engine_attr is None:
+            continue
+        if _e.engine_fn is not orig_engine_attr:
+            continue  # adapter or already-wrapped — leave alone
         new_fn = getattr(_C_engine, _e.name, None)
-        if new_fn is not None and new_fn is not _e.engine_fn:
-            _op_originals.append((_e, _e.engine_fn))
-            _e.engine_fn = new_fn
+        if new_fn is None or new_fn is _e.engine_fn:
+            continue
+        _op_originals.append((_e, _e.engine_fn))
+        _e.engine_fn = new_fn
     _ORIGINAL["__op_registry__"] = _op_originals
 
     _SHADOW_ENABLED = True
@@ -364,13 +438,18 @@ def shadow_alloc() -> Iterator[None]:
         yield
     finally:
         _SHADOW_ENABLED = False
-        # Restore dispatch unwraps first (sentinel keys — not on engine).
-        if "__unwrap_disp__" in _ORIGINAL:
-            _disp._unwrap = _ORIGINAL.pop("__unwrap_disp__")
-        if "__unwrap_ops__" in _ORIGINAL:
-            _ops_pkg._unwrap = _ORIGINAL.pop("__unwrap_ops__")
-        if "__unwrap_adap__" in _ORIGINAL:
-            _adapters_mod._unwrap = _ORIGINAL.pop("__unwrap_adap__")
+        # Restore the ``_unwrap`` rebindings.
+        sites = _ORIGINAL.pop("__unwrap_sites__", None)
+        if sites is not None:
+            _orig_uw, _mods = sites
+            for _mod in _mods:
+                _mod._unwrap = _orig_uw
+        # Restore the ``_unwrap_or_scalar`` rebindings.
+        sites = _ORIGINAL.pop("__uos_sites__", None)
+        if sites is not None:
+            _orig_uw, _mods = sites
+            for _mod in _mods:
+                _mod._unwrap_or_scalar = _orig_uw
         # Roll back the OpEntry.engine_fn rebindings.
         op_pairs = _ORIGINAL.pop("__op_registry__", [])
         for _e, _orig_fn in op_pairs:

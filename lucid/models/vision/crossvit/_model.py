@@ -205,10 +205,80 @@ def _build_trunk(
 
 
 class CrossViT(PretrainedModel, BackboneMixin):
-    """CrossViT feature extractor — returns large branch CLS token.
+    r"""CrossViT backbone (Chen et al., 2021).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` shaped
-    ``(B, 1, large_dim)``.
+    CrossViT runs *two parallel ViT branches* with different patch
+    sizes (``small_patch`` and ``large_patch``), each maintaining its
+    own learnable CLS token and positional embedding.  Within each
+    CrossViT stage every branch first performs ordinary self-attention,
+    then the two branches exchange information *only through their CLS
+    tokens* using bidirectional cross-attention:
+
+    .. math::
+
+        \tilde{x}_{\text{cls}}^{\,l} = x_{\text{cls}}^{l} +
+            \mathrm{Attn}\!\bigl(W_q x_{\text{cls}}^{l},\,
+            W_k x_{\text{patch}}^{s},\, W_v x_{\text{patch}}^{s}\bigr),
+
+    and symmetrically for the large-to-small direction.  Because
+    cross-attention only updates the CLS tokens, the multi-scale fusion
+    cost is :math:`\mathcal{O}(N_s + N_l)` instead of
+    :math:`\mathcal{O}(N_s \cdot N_l)`.
+
+    :meth:`forward_features` returns the *large-branch* CLS token after
+    the final LayerNorm — a flat :math:`(B, \texttt{large\_dim})`
+    feature.  For end-to-end classification use
+    :class:`CrossViTForImageClassification`, which averages the logits
+    from both per-branch heads.
+
+    Parameters
+    ----------
+    config : CrossViTConfig
+        Frozen dataclass specifying ``image_size``, ``small_patch``,
+        ``large_patch``, ``small_dim``, ``large_dim``, ``small_heads``,
+        ``large_heads``, ``depth``, ``mlp_ratio``, ``dropout``, and
+        ``in_channels``.  See :class:`CrossViTConfig`.
+
+    Attributes
+    ----------
+    embed_s, embed_l : _PatchEmbed
+        Patch-embedding convolutions for the small / large branches.
+    cls_s, cls_l : Tensor
+        Learnable CLS tokens for the small / large branches.
+    pos_s, pos_l : Tensor
+        Learnable positional embeddings for each branch.
+    pos_drop : nn.Dropout
+        Dropout applied right after the positional embedding sum.
+    stages : nn.ModuleList
+        ``config.depth`` stacked :class:`_CrossViTStage` modules.
+    norm_s, norm_l : nn.LayerNorm
+        Final LayerNorms applied to each branch before extracting the
+        CLS token.
+    feature_info : list[FeatureInfo]
+        Single-stage feature description with channel count
+        ``config.large_dim`` and reduction ``config.large_patch``.
+
+    Notes
+    -----
+    Reference: Chun-Fu Chen *et al.*, *"CrossViT: Cross-Attention
+    Multi-Scale Vision Transformer for Image Classification"*,
+    ICCV 2021, `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
+
+    Examples
+    --------
+    Build a CrossViT-9 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import CrossViT, CrossViTConfig
+    >>> cfg = CrossViTConfig(
+    ...     depth=3, small_dim=128, large_dim=256,
+    ...     small_heads=4, large_heads=4, mlp_ratio=3.0,
+    ... )
+    >>> model = CrossViT(cfg)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, large_dim)
+    (1, 256)
     """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig
@@ -281,7 +351,76 @@ class CrossViT(PretrainedModel, BackboneMixin):
 
 
 class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """CrossViT with dual-head classification using both branch CLS tokens."""
+    r"""CrossViT with a dual-head classifier (Chen et al., 2021).
+
+    Wraps the same two-branch trunk as :class:`CrossViT` and attaches
+    *one independent linear head per branch*.  Per paper §3.3, the
+    final prediction averages the two per-branch logits:
+
+    .. math::
+
+        \text{logits} = \tfrac{1}{2}\bigl(
+            W_s\, z_{\text{cls}}^{s,(L)}
+            + W_l\, z_{\text{cls}}^{l,(L)}
+        \bigr) + \tfrac{1}{2}(b_s + b_l),
+
+    where :math:`z_{\text{cls}}^{\cdot,(L)}` denotes the post-LayerNorm
+    CLS token at the final stage of each branch.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : CrossViTConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See :class:`CrossViTConfig`.
+
+    Attributes
+    ----------
+    embed_s, embed_l : _PatchEmbed
+        Patch-embedding convolutions for the small / large branches.
+    cls_s, cls_l : Tensor
+        Learnable CLS tokens for each branch.
+    pos_s, pos_l : Tensor
+        Learnable positional embeddings for each branch.
+    pos_drop : nn.Dropout
+        Dropout applied right after positional embedding.
+    stages : nn.ModuleList
+        Stacked CrossViT stages (self-attention + cross-attention).
+    norm_s, norm_l : nn.LayerNorm
+        Final LayerNorms per branch.
+    classifier : nn.Linear
+        Small-branch classification head of shape
+        ``(num_classes, small_dim)``.
+    head_l : nn.Linear
+        Large-branch classification head of shape
+        ``(num_classes, large_dim)``, kept in sync with ``classifier``
+        by :meth:`reset_classifier`.
+
+    Notes
+    -----
+    Reference: Chen *et al.*, *"CrossViT: Cross-Attention Multi-Scale
+    Vision Transformer for Image Classification"*, ICCV 2021.
+
+    Examples
+    --------
+    End-to-end inference with a CrossViT-9 classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.crossvit import (
+    ...     CrossViTConfig, CrossViTForImageClassification,
+    ... )
+    >>> cfg = CrossViTConfig(
+    ...     depth=3, small_dim=128, large_dim=256,
+    ...     small_heads=4, large_heads=4, mlp_ratio=3.0,
+    ... )
+    >>> model = CrossViTForImageClassification(cfg)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig
     base_model_prefix: ClassVar[str] = "crossvit"

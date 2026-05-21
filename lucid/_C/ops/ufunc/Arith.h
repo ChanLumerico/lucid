@@ -20,10 +20,31 @@
 
 namespace lucid {
 
-// Backward node for element-wise negation: y = -x.
+// Autograd node for element-wise negation $y = -x$.
 //
-// Gradient rule: dL/dx = -dL/dy (negate the upstream gradient).
-// kSavesInput = false because the backward pass requires no saved value.
+// The gradient is the negation of the upstream signal; no input or output
+// needs to be saved because the rule contains no functional dependence on
+// $x$.  ``kSavesInput = false`` opts out of the default save behaviour
+// provided by :class:`UnaryKernel`.
+//
+// Math
+// ----
+// $$y = -x, \qquad \frac{\partial y}{\partial x} = -1, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} = -\frac{\partial \mathcal{L}}
+// {\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"neg"`` with ``AmpPolicy::Promote`` — integer inputs
+//     are upcast to float before dispatch so the algebraic identity holds
+//     for the same dtype on the return path.
+// kSavesInput : bool
+//     ``false``.  Backward needs no saved value.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vDSP_vneg`` (CPU) / MLX ``negative`` (GPU).
 class LUCID_API NegBackward : public UnaryOp<NegBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -36,11 +57,28 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
 
-// Backward node for element-wise absolute value: y = |x|.
+// Autograd node for the element-wise absolute value $y = |x|$.
 //
-// Gradient rule: dL/dx = sign(x) * dL/dy.
-// Saves the input so that grad_formula can compute sign(x) during the backward
-// pass.
+// Saves the input ``x`` so the backward pass can recover $\mathrm{sign}(x)$
+// and scale the upstream gradient by it.  The derivative is undefined at
+// $x = 0$; the implementation follows the reference framework's convention
+// of returning $0$ there (sub-gradient).
+//
+// Math
+// ----
+// $$y = |x|, \qquad
+// \frac{\partial y}{\partial x} = \mathrm{sign}(x), \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// \mathrm{sign}(x)\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"abs"`` with ``AmpPolicy::Promote``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vDSP_vabs`` (CPU) / MLX ``abs`` (GPU).
 class LUCID_API AbsBackward : public UnaryOp<AbsBackward> {
 public:
     static const OpSchema schema_v1;
@@ -50,11 +88,34 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-// Backward node for element-wise sign: y = sign(x).
+// Autograd node for the element-wise sign function
+// $y = \mathrm{sign}(x) \in \{-1, 0, +1\}$.
 //
-// Gradient rule: dL/dx = 0 everywhere (sign is piecewise constant).
-// kHasGradient = false tells UnaryKernel::forward to skip autograd wiring
-// entirely; grad_formula returns an empty CpuStorage as a no-op sentinel.
+// Because ``sign`` is piecewise constant its derivative vanishes almost
+// everywhere; the node therefore carries no gradient information.
+// ``kHasGradient = false`` tells :class:`UnaryKernel::forward` to skip the
+// autograd wiring entirely, and ``grad_formula`` returns an empty
+// ``CpuStorage`` only as a defensive zero-sentinel if it is ever invoked
+// manually.
+//
+// Math
+// ----
+// $$y = \mathrm{sign}(x), \qquad
+// \frac{\partial y}{\partial x} = 0 \text{ almost everywhere}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"sign"`` with ``AmpPolicy::KeepInput`` — integer
+//     dtypes pass through unmodified.
+// kSavesInput : bool
+//     ``false``.
+// kHasGradient : bool
+//     ``false`` — no autograd edge is created.
+//
+// Notes
+// -----
+// Dispatch: Accelerate sign kernel (CPU) / MLX ``sign`` (GPU).
 class LUCID_API SignBackward : public UnaryOp<SignBackward> {
 public:
     static constexpr bool kSavesInput = false;
@@ -66,10 +127,29 @@ public:
     Storage grad_formula(const Storage& g);
 };
 
-// Backward node for element-wise reciprocal: y = 1/x.
+// Autograd node for the element-wise reciprocal $y = 1/x$.
 //
-// Gradient rule: dL/dx = -dL/dy / x^2.
-// Saves the input so that grad_formula can compute x^2.
+// Saves the input ``x`` so the backward pass can form $x^2$ in the
+// denominator without recomputing the forward result.  The forward and
+// backward are both undefined at $x = 0$ and the caller is responsible for
+// avoiding that domain point.
+//
+// Math
+// ----
+// $$y = \frac{1}{x}, \qquad
+// \frac{\partial y}{\partial x} = -\frac{1}{x^2}, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// -\frac{1}{x^2}\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"reciprocal"`` with ``AmpPolicy::Promote``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vForce`` reciprocal kernel (CPU) / MLX
+// element-wise reciprocal (GPU).
 class LUCID_API ReciprocalBackward : public UnaryOp<ReciprocalBackward> {
 public:
     static const OpSchema schema_v1;
@@ -82,10 +162,26 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
-// Backward node for element-wise square: y = x^2.
+// Autograd node for the element-wise square $y = x^2$.
 //
-// Gradient rule: dL/dx = 2*x * dL/dy.
-// Saves the input to evaluate 2*x in grad_formula.
+// Saves the input ``x`` so the backward pass can scale the upstream
+// gradient by $2x$.
+//
+// Math
+// ----
+// $$y = x^2, \qquad
+// \frac{\partial y}{\partial x} = 2x, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// 2x\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"square"`` with ``AmpPolicy::Promote``.
+//
+// Notes
+// -----
+// Dispatch: Accelerate ``vDSP_vsq`` (CPU) / MLX ``square`` (GPU).
 class LUCID_API SquareBackward : public UnaryOp<SquareBackward> {
 public:
     static const OpSchema schema_v1;
@@ -98,10 +194,26 @@ public:
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
 
-// Backward node for element-wise cube: y = x^3.
+// Autograd node for the element-wise cube $y = x^3$.
 //
-// Gradient rule: dL/dx = 3*x^2 * dL/dy.
-// Saves the input to evaluate 3*x^2 in grad_formula.
+// Saves the input ``x`` so the backward pass can build $3x^2$ in
+// ``grad_formula`` and multiply it against the upstream gradient.
+//
+// Math
+// ----
+// $$y = x^3, \qquad
+// \frac{\partial y}{\partial x} = 3x^2, \qquad
+// \frac{\partial \mathcal{L}}{\partial x} =
+// 3x^2\,\frac{\partial \mathcal{L}}{\partial y}.$$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered as ``"cube"`` with ``AmpPolicy::Promote``.
+//
+// Notes
+// -----
+// Dispatch: dedicated Accelerate kernel (CPU) / MLX element-wise cube (GPU).
 class LUCID_API CubeBackward : public UnaryOp<CubeBackward> {
 public:
     static const OpSchema schema_v1;
@@ -114,16 +226,127 @@ public:
 // Public entry points.  Each thin wrapper delegates to the corresponding
 // backward node's static forward() method, which handles dispatch and autograd.
 
+// Compute $y = -x$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and routes
+// the forward pass through :class:`NegBackward`, which also installs the
+// autograd edge.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`NegBackward` — backward node.
 LUCID_API TensorImplPtr neg_op(const TensorImplPtr& a);
 
+// Compute $y = |x|$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and
+// delegates to :class:`AbsBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype, with non-negative values.
+//
+// See Also
+// --------
+// :class:`AbsBackward` — backward node.
 LUCID_API TensorImplPtr abs_op(const TensorImplPtr& a);
 
+// Compute $y = \mathrm{sign}(x) \in \{-1, 0, +1\}$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and
+// delegates to :class:`SignBackward::forward`.  No autograd edge is
+// recorded because ``sign`` has a zero gradient almost everywhere.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any real dtype, including integer.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype, with values in
+//     $\{-1, 0, +1\}$.
+//
+// See Also
+// --------
+// :class:`SignBackward` — backward node.
 LUCID_API TensorImplPtr sign_op(const TensorImplPtr& a);
 
+// Compute $y = 1 / x$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and
+// delegates to :class:`ReciprocalBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.  Behaviour is undefined at $x = 0$.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`ReciprocalBackward` — backward node.
 LUCID_API TensorImplPtr reciprocal_op(const TensorImplPtr& a);
 
+// Compute $y = x^2$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and
+// delegates to :class:`SquareBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`SquareBackward` — backward node.
 LUCID_API TensorImplPtr square_op(const TensorImplPtr& a);
 
+// Compute $y = x^3$ element-wise.
+//
+// Allocates a fresh output of the same shape and dtype as ``a`` and
+// delegates to :class:`CubeBackward::forward`.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input tensor of any shape.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Output tensor of the same shape and dtype.
+//
+// See Also
+// --------
+// :class:`CubeBackward` — backward node.
 LUCID_API TensorImplPtr cube_op(const TensorImplPtr& a);
 
 }  // namespace lucid

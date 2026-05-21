@@ -29,79 +29,379 @@ namespace lucid {
 
 class TensorImpl;
 
-// Allocate a zero-filled Storage of the given shape, dtype, and device.
+// Allocate a zero-filled :class:`Storage` on the requested device.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     N-D shape of the resulting storage.
+// dtype : Dtype
+//     Element dtype.
+// device : Device
+//     Target device (``CPU`` uses Accelerate; ``GPU`` allocates an MLX
+//     array).
+//
+// Returns
+// -------
+// Storage
+//     Newly allocated storage with every element equal to zero.
 Storage make_zero_storage(const Shape& shape, Dtype dtype, Device device);
 
-// Allocate a ones-filled Storage of the given shape, dtype, and device.
-// Used as the default grad_seed when Engine::backward() is called without
-// an explicit initial gradient.
+// Allocate a ones-filled :class:`Storage` on the requested device.
+//
+// Used by :func:`Engine::backward` as the default seed gradient when the
+// caller does not supply an explicit ``grad`` argument.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     N-D shape of the resulting storage.
+// dtype : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     Storage with every element equal to one.
 Storage make_ones_storage(const Shape& shape, Dtype dtype, Device device);
 
-// Reduce grad (shape grad_shape) to target_shape by summing over broadcast
-// dimensions.  Used in the backward pass of binary ops that broadcast one
-// operand to the other's shape.
+// Reduce ``grad`` back to ``target_shape`` by summing over broadcast axes.
+//
+// Used in the backward pass of any binary op that broadcast one operand
+// against the other.  The gradient initially has the broadcast (output)
+// shape; this helper walks the trailing dimensions and sums along any
+// axis where ``target_shape`` is size 1 or absent, so the result matches
+// the original input shape ready to be accumulated into ``.grad``.
+//
+// Parameters
+// ----------
+// grad : const Storage&
+//     Incoming gradient at the broadcast shape.
+// grad_shape : const Shape&
+//     Shape of ``grad``.
+// target_shape : const Shape&
+//     Original (pre-broadcast) input shape to reduce back to.
+// dtype : Dtype
+//     Working dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     Storage of shape ``target_shape`` with broadcast axes summed.
+//
+// Math
+// ----
+// For each output index :math:`i`,
+//
+// $$
+// \text{out}[i] = \sum_{j \in \text{broadcast}(i)} \text{grad}[j].
+// $$
+//
+// Notes
+// -----
+// No-op when ``grad_shape == target_shape``.
 Storage reduce_grad_to_shape(const Storage& grad,
                              const Shape& grad_shape,
                              const Shape& target_shape,
                              Dtype dtype,
                              Device device);
 
-// Add src into dst element-wise in-place (dst += src).
+// Accumulate ``src`` into ``dst`` element-wise (``dst += src``).
 //
-// Handles all three Storage variants:
-//   CpuStorage / CpuStorage  — hand-written typed loop (F32, F64, I32, I64).
-//   GpuStorage / GpuStorage  — MLX add then rewrap the result.
-//   SharedStorage variants   — obtain a CpuStorage view and delegate.
-// Throws DtypeMismatch if dtype fields differ, DeviceMismatch if the
-// variants belong to different device categories.
+// Handles all three :class:`Storage` variants:
+//
+// - ``CpuStorage / CpuStorage`` — hand-written typed loop for
+//   ``F32 / F64 / I32 / I64``.
+// - ``GpuStorage / GpuStorage`` — MLX add followed by rewrap.
+// - ``SharedStorage`` variants — obtain a ``CpuStorage`` view of the
+//   shared region and delegate to the CPU path.
+//
+// Parameters
+// ----------
+// dst : Storage&
+//     Accumulator buffer; modified in place.
+// src : const Storage&
+//     Buffer to add into ``dst``.
+//
+// Raises
+// ------
+// DtypeMismatch
+//     ``dst`` and ``src`` have different element dtypes.
+// DeviceMismatch
+//     ``dst`` and ``src`` belong to different device categories.
+//
+// Notes
+// -----
+// The most common caller is :class:`AccumulateGrad`, which uses this to
+// fold each newly-arrived gradient into a leaf's running ``.grad``.
 void accumulate_into(Storage& dst, const Storage& src);
 
-// Element-wise negation: returns -s.
+// Element-wise negation: returns ``-s``.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements (used to build a 1-D Shape for the dispatcher).
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``-s``.
 Storage negate_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise multiplication: returns a * b.
+// Element-wise multiplication: returns ``a * b``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Input buffers (must match ``numel`` and ``dt``).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the element-wise product.
 Storage
 multiply_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise division: returns a / b.
+// Element-wise division: returns ``a / b``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Numerator / denominator buffers.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the element-wise quotient.
 Storage
 divide_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise addition: returns a + b.
+// Element-wise addition: returns ``a + b``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Input buffers.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the element-wise sum.
 Storage
 add_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise subtraction: returns a - b.
+// Element-wise subtraction: returns ``a - b``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Input buffers.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the element-wise difference.
 Storage
 subtract_storages(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise square: returns s * s.
+// Element-wise square: returns ``s * s``.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the element-wise square.
 Storage square_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Deep copy of s into a new Storage buffer.
+// Allocate a fresh copy of ``s`` (deep clone).
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Source buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     Newly allocated buffer with the same contents as ``s``.
 Storage clone_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise natural logarithm: returns ln(s).
+// Element-wise natural logarithm: returns :math:`\ln(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (assumed strictly positive).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``ln(s)`` element-wise.
 Storage log_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise power: returns base^expo.
+// Element-wise power: returns ``base ** expo``.
+//
+// Parameters
+// ----------
+// base, expo : const Storage&
+//     Base and exponent buffers.  Both must have ``numel`` elements.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding :math:`\text{base}^{\text{expo}}`.
 Storage
 pow_storage(const Storage& base, const Storage& expo, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise greater-or-equal mask: returns (a >= b) ? 1 : 0 cast to dt.
-// Used in the backward pass of max/clamp-style ops.
+// Element-wise greater-or-equal mask: ``(a >= b) ? 1 : 0``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Inputs to compare.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Output dtype the mask is cast to.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the gated mask.
+//
+// Notes
+// -----
+// Used by max / clamp-style backward passes to route the gradient only
+// through the "winning" element of each comparison.
 Storage
 ge_mask_storage(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise less-than mask: returns (a < b) ? 1 : 0 cast to dt.
+// Element-wise less-than mask: ``(a < b) ? 1 : 0``.
+//
+// Parameters
+// ----------
+// a, b : const Storage&
+//     Inputs to compare.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Output dtype the mask is cast to.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the gated mask.
 Storage
 lt_mask_storage(const Storage& a, const Storage& b, std::size_t numel, Dtype dt, Device device);
 
-// Broadcast-add a scalar to every element: returns s + scalar.
+// Broadcast-add a scalar to every element: returns ``s + scalar``.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// scalar : double
+//     Value added to every element.  Cast to ``dt`` internally.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``s + scalar`` element-wise.
 Storage
 add_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device);
 
-// Broadcast-multiply every element by a scalar: returns s * scalar.
+// Broadcast-multiply every element by a scalar: returns ``s * scalar``.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// scalar : double
+//     Multiplier; cast to ``dt`` internally.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``s * scalar`` element-wise.
 Storage
 mul_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt, Device device);
 
@@ -110,73 +410,524 @@ mul_scalar_storage(const Storage& s, double scalar, std::size_t numel, Dtype dt,
 // the LUCID_UNARY_HELPER macro in the .cpp file and declared individually
 // here for clarity.
 
+// Element-wise exponential: returns :math:`e^{s}`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``exp(s)``.
 Storage exp_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise square root: returns :math:`\sqrt{s}`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (assumed non-negative).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``sqrt(s)``.
 Storage sqrt_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise absolute value: returns :math:`|s|`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``abs(s)``.
 Storage abs_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise sign function: returns -1, 0, or +1.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage with values in {-1, 0, +1} matching the sign of ``s``.
 Storage sign_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise reciprocal: returns :math:`1 / s`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (non-zero).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``1 / s``.
 Storage reciprocal_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
 // Trigonometric functions.
+
+// Element-wise sine: returns :math:`\sin(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (radians).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``sin(s)``.
 Storage sin_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise cosine: returns :math:`\cos(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (radians).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``cos(s)``.
 Storage cos_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise tangent: returns :math:`\tan(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (radians).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``tan(s)``.
 Storage tan_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise arcsine: returns :math:`\arcsin(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer with elements in ``[-1, 1]``.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``asin(s)`` in radians.
 Storage asin_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise arccosine: returns :math:`\arccos(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer with elements in ``[-1, 1]``.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``acos(s)`` in radians.
 Storage acos_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise arctangent: returns :math:`\arctan(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``atan(s)`` in radians.
 Storage atan_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
 // Hyperbolic functions.
+
+// Element-wise hyperbolic sine: returns :math:`\sinh(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``sinh(s)``.
 Storage sinh_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise hyperbolic cosine: returns :math:`\cosh(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``cosh(s)``.
 Storage cosh_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
+
+// Element-wise hyperbolic tangent: returns :math:`\tanh(s)`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding ``tanh(s)``.
 Storage tanh_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise mask: returns 1 where lo <= s <= hi, else 0.
-// Used in the backward pass of clamp/hardtanh to gate gradients.
+// Mask elements that fall inside the closed range ``[lo, hi]``.
+//
+// Returns ``1`` where ``lo <= s <= hi`` and ``0`` everywhere else, used
+// by clamp / hardtanh backward passes to gate the gradient through the
+// active region.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer being clamped.
+// lo, hi : double
+//     Inclusive lower / upper bounds.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Output dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the {0, 1} gate.
 Storage in_range_mask_storage(
     const Storage& s, double lo, double hi, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise mask: returns 1 where s > 0, else 0.
-// Used in the ReLU backward pass.
+// Mask elements that are strictly positive: ``(s > 0) ? 1 : 0``.
+//
+// Used by the ReLU backward pass to gate the gradient through positive
+// activations.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (typically the ReLU's saved input).
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Output dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the {0, 1} gate.
 Storage positive_mask_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise mask: returns 1 where s >= 0, else slope.
-// Used in the LeakyReLU backward pass.
+// LeakyReLU gradient mask: returns ``1`` where ``s >= 0`` else ``slope``.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer (LeakyReLU's saved input).
+// slope : double
+//     Negative-side slope; the LeakyReLU's ``negative_slope`` parameter.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Output dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage suitable for element-wise multiplication into
+//     ``grad_output``.
 Storage
 leaky_mask_storage(const Storage& s, double slope, std::size_t numel, Dtype dt, Device device);
 
-// Element-wise sigmoid: returns 1 / (1 + exp(-s)).
+// Element-wise sigmoid: returns :math:`1 / (1 + e^{-s})`.
+//
+// Parameters
+// ----------
+// s : const Storage&
+//     Input buffer.
+// numel : std::size_t
+//     Number of elements.
+// dt : Dtype
+//     Element dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage holding the logistic sigmoid of ``s``.
+//
+// Math
+// ----
+// $$
+// \sigma(s) = \frac{1}{1 + e^{-s}}.
+// $$
 Storage sigmoid_storage(const Storage& s, std::size_t numel, Dtype dt, Device device);
 
 // Forward declaration needed by the bernoulli helpers below.
 class Generator;
 
-// Generate a Bernoulli dropout mask as a flat 1-D Storage with the given
-// numel.  Each element is 1.0 with probability keep_prob, else 0.0.
-// Supports F32 and F64.  The mask is generated on CPU then transferred to
-// the target device via Dispatcher::from_cpu().
+// Generate a Bernoulli dropout mask as a flat 1-D storage.
+//
+// Each element is independently set to ``1.0`` with probability
+// ``keep_prob`` and to ``0.0`` otherwise.  The mask is generated on CPU
+// using ``gen`` and then transferred to ``device`` via
+// ``Dispatcher::from_cpu`` to keep the random number stream deterministic
+// regardless of where the consuming op runs.
+//
+// Parameters
+// ----------
+// keep_prob : double
+//     Probability of keeping each element (``1 - dropout_rate``).
+// numel : std::size_t
+//     Number of mask elements.
+// dt : Dtype
+//     Output dtype; ``F32`` or ``F64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator owning the PRNG state.
+//
+// Returns
+// -------
+// Storage
+//     New 1-D storage holding the dropout mask.
 Storage bernoulli_mask_storage(
     double keep_prob, std::size_t numel, Dtype dt, Device device, Generator& gen);
 
-// Same as bernoulli_mask_storage but uses an explicit N-D shape instead of
-// a flat numel count.  The resulting Storage carries the given shape.
+// Generate a Bernoulli dropout mask matching an explicit N-D shape.
+//
+// Same semantics as :func:`bernoulli_mask_storage` but the returned
+// storage carries ``shape`` directly instead of a flat 1-D shape.
+//
+// Parameters
+// ----------
+// keep_prob : double
+//     Probability of keeping each element.
+// shape : const Shape&
+//     Target shape.
+// dt : Dtype
+//     Output dtype; ``F32`` or ``F64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``shape`` holding the mask.
 Storage bernoulli_mask_storage_shape(
     double keep_prob, const Shape& shape, Dtype dt, Device device, Generator& gen);
 
-// Generate uniform random samples in [lo, hi).  F32 and F64 only.
-// Samples are produced on CPU then copied to device.
+// Generate uniform random samples in the half-open interval ``[lo, hi)``.
+//
+// Samples are produced on the CPU using ``gen`` and transferred to
+// ``device`` to make the stream deterministic and reproducible.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     Output shape.
+// lo, hi : double
+//     Half-open interval bounds.
+// dt : Dtype
+//     Output dtype; ``F32`` or ``F64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``shape`` with uniform samples.
 Storage random_uniform_storage(
     const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen);
 
-// Generate normally distributed samples with the given mean and stddev.
-// Uses the Box-Muller transform.  F32 and F64 only.
+// Generate normally distributed samples using the Box-Muller transform.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     Output shape.
+// mean : double
+//     Mean of the resulting normal distribution.
+// std : double
+//     Standard deviation (non-negative).
+// dt : Dtype
+//     Output dtype; ``F32`` or ``F64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``shape`` with i.i.d.
+//     :math:`\mathcal{N}(\text{mean}, \text{std}^2)` samples.
 Storage random_normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen);
 
-// Generate Bernoulli samples with probability p for value 1.  F32 and F64.
+// Generate Bernoulli samples with success probability ``p``.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     Output shape.
+// p : double
+//     Success probability for value ``1``; failure value is ``0``.
+// dt : Dtype
+//     Output dtype; ``F32`` or ``F64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``shape`` with Bernoulli samples.
 Storage
 random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, Generator& gen);
 
-// Generate uniform random integers in [low, high).  I32 and I64 only.
-// Uses batched uint32 generation from the Generator for efficiency.
+// Generate uniform random integers in the half-open interval ``[low, high)``.
+//
+// Uses batched ``uint32`` generation from ``gen`` for throughput, then
+// folds the raw bytes into the requested integer range.
+//
+// Parameters
+// ----------
+// shape : const Shape&
+//     Output shape.
+// low : std::int64_t
+//     Inclusive lower bound.
+// high : std::int64_t
+//     Exclusive upper bound (``high > low``).
+// dt : Dtype
+//     Output dtype; ``I32`` or ``I64`` only.
+// device : Device
+//     Target device.
+// gen : Generator&
+//     Random-number generator.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``shape`` with integer samples.
 Storage random_randint_storage(const Shape& shape,
                                std::int64_t low,
                                std::int64_t high,
@@ -184,44 +935,160 @@ Storage random_randint_storage(const Shape& shape,
                                Device device,
                                Generator& gen);
 
-// Normalise a list of axis indices for an ndim-dimensional tensor.
-// Wraps negative indices, deduplicates, sorts, and returns a new vector.
-// If axes is empty, returns all indices [0, ndim).
-// Throws an index error for any axis outside [-ndim, ndim).
+// Canonicalise a list of axis indices for an ``ndim``-rank tensor.
+//
+// Wraps each negative axis to its positive counterpart, deduplicates the
+// result, sorts ascending, and returns the canonical list.  When ``axes``
+// is empty the function treats the call as "reduce over everything" and
+// returns ``[0, ndim)``.
+//
+// Parameters
+// ----------
+// axes : const std::vector<int>&
+//     Raw axis list; may contain negatives and duplicates.
+// ndim : int
+//     Rank of the tensor the axes refer to.
+//
+// Returns
+// -------
+// std::vector<int>
+//     Sorted, deduplicated, all-positive axis list.
+//
+// Raises
+// ------
+// IndexError
+//     Some entry of ``axes`` falls outside ``[-ndim, ndim)``.
 std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
-// Compute the output shape of a reduction over input_shape along axes.
-// Reduced dimensions are removed unless keepdims is true, in which case
-// they become size 1 (matching NumPy / reference semantics).
+// Compute the output shape of a reduction over selected axes.
+//
+// Reduced dimensions are removed by default; passing ``keepdims=true``
+// leaves them in place as size-1 axes (matching reference-framework
+// semantics) so the result broadcasts cleanly against the input.
+//
+// Parameters
+// ----------
+// input_shape : const Shape&
+//     Shape of the tensor being reduced.
+// axes : const std::vector<int>&
+//     Pre-normalised axis list (see :func:`normalize_axes`).
+// keepdims : bool
+//     Whether to retain reduced axes as size 1.
+//
+// Returns
+// -------
+// Shape
+//     Resulting shape after the reduction.
 Shape reduce_output_shape(const Shape& input_shape, const std::vector<int>& axes, bool keepdims);
 
-// Verify that the live tensor referenced by live still has the same version
-// counter value as saved_version.  If the counters differ, throws
-// VersionMismatch naming op_name and input_idx to identify the violating op.
-// If live has expired (the TensorImpl was destroyed), the check is skipped.
+// Forward declaration so :func:`check_version_match` can reference the
+// owning tensor implementation.
 class TensorImpl;
+
+// Verify that a saved tensor's version counter has not advanced.
+//
+// Compares the current ``version()`` of the tensor referenced by ``live``
+// against ``saved_version``.  When they differ the saved data has been
+// mutated in place since it was stashed for backward, which would silently
+// corrupt the gradient — so a :class:`VersionMismatch` is raised naming
+// the op and input that owns the broken contract.
+//
+// Parameters
+// ----------
+// live : const std::weak_ptr<TensorImpl>&
+//     Weak reference to the still-live tensor.  When the referent has been
+//     destroyed the check is skipped (no harm if it cannot be mutated
+//     after the fact).
+// saved_version : std::int64_t
+//     Version counter value captured when the tensor was saved.
+// op_name : std::string_view
+//     Name of the op for diagnostic messages (e.g. ``"matmul"``).
+// input_idx : std::size_t
+//     Zero-based index of the offending input within ``op_name``.
+//
+// Raises
+// ------
+// VersionMismatch
+//     The live counter differs from ``saved_version`` and the safety
+//     override (:func:`is_mutation_on_saved_allowed`) is false.
 void check_version_match(const std::weak_ptr<TensorImpl>& live,
                          std::int64_t saved_version,
                          std::string_view op_name,
                          std::size_t input_idx);
 
-// Toggle the process-wide flag that disables ``check_version_match``.
-// Used by ``lucid.autograd.graph.allow_mutation_on_saved_tensors`` —
-// the user opts into the unsafe contract that they will not mutate a
-// saved tensor in a way that would corrupt the gradient.
+// Read the process-wide "allow mutation on saved tensors" flag.
+//
+// Returns
+// -------
+// bool
+//     Current state of the override.  When ``true``,
+//     :func:`check_version_match` becomes a no-op.
+//
+// See Also
+// --------
+// :func:`set_mutation_on_saved_allowed`
+// :func:`lucid.autograd.graph.allow_mutation_on_saved_tensors`
 bool is_mutation_on_saved_allowed();
+
+// Toggle the process-wide "allow mutation on saved tensors" flag.
+//
+// Used by ``lucid.autograd.graph.allow_mutation_on_saved_tensors`` to let
+// users opt into the unsafe contract that they will not mutate a saved
+// tensor in a way that would corrupt the gradient.
+//
+// Parameters
+// ----------
+// v : bool
+//     New state of the override.  ``true`` disables version-counter
+//     checks; ``false`` re-enables them.
+//
+// Notes
+// -----
+// The flag is global to the process — there is no per-thread or
+// per-graph scoping.  The Python context manager is responsible for
+// restoring the previous value on exit.
 void set_mutation_on_saved_allowed(bool v);
 
-// Broadcast grad back to input_shape after a reduction.
+// Broadcast ``grad`` back to ``input_shape`` after a forward reduction.
 //
-// grad         — the gradient arriving from the consumer, with shape
-//                reduce_output_shape(input_shape, axes, keepdims).
-// grad_shape   — the shape of grad (must match the expected reduced shape).
-// input_shape  — the shape to broadcast back to.
-// axes/keepdims — must match the parameters used in the forward reduction.
+// The backward pass for any reduction op (``sum``, ``mean``, ``var``,
+// ...) receives a gradient at the reduced shape and must re-expand it
+// across the squeezed axes so that the result matches the original input
+// shape.  This helper performs that expansion, taking the same
+// ``axes`` / ``keepdims`` parameters as the forward call to know which
+// dimensions to broadcast back along.
 //
-// Throws ShapeMismatch if grad_shape does not equal the expected reduced
-// shape computed from input_shape, axes, and keepdims.
+// Parameters
+// ----------
+// grad : const Storage&
+//     Incoming gradient at the reduced shape.
+// grad_shape : const Shape&
+//     Shape of ``grad``; must equal
+//     ``reduce_output_shape(input_shape, axes, keepdims)``.
+// input_shape : const Shape&
+//     Shape to broadcast back to (the original forward input shape).
+// axes : const std::vector<int>&
+//     Axis list used in the forward reduction.
+// keepdims : bool
+//     Same value as passed to the forward reduction.
+// dt : Dtype
+//     Working dtype.
+// device : Device
+//     Target device.
+//
+// Returns
+// -------
+// Storage
+//     New storage of shape ``input_shape`` carrying the expanded gradient.
+//
+// Raises
+// ------
+// ShapeMismatch
+//     ``grad_shape`` does not equal the expected reduced shape.
+//
+// See Also
+// --------
+// :func:`reduce_output_shape` — the inverse direction.
 Storage broadcast_back_for_reduce(const Storage& grad,
                                   const Shape& grad_shape,
                                   const Shape& input_shape,

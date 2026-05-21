@@ -225,22 +225,88 @@ class _DecoderBlock(nn.Module):
 
 
 class UNetForSemanticSegmentation(PretrainedModel):
-    """U-Net semantic segmentation model (Ronneberger et al., MICCAI 2015).
+    r"""U-Net encoder-decoder for semantic segmentation (Ronneberger et al., MICCAI 2015).
 
-    Supports both 2-D (default) and 3-D inputs via ``config.dim``, and a
-    residual ``block="res"`` variant for the ResUNet family.
+    The canonical encoder-decoder segmentation architecture.  A contracting
+    path (encoder) halves the spatial resolution and doubles the channel
+    count at every stage; an expanding path (decoder) inverts this, with
+    **skip connections** concatenating each encoder feature map onto the
+    corresponding decoder stage to preserve fine localisation detail that
+    would otherwise be lost during downsampling.
 
-    Input contract
-    --------------
-    ``x``       : (B, in_channels, *spatial) image batch.
-                  spatial = (H, W) for dim=2 or (D, H, W) for dim=3.
-    ``targets`` : optional integer segmentation masks with the same spatial dims.
+    Each stage uses a *DoubleConv* block (two 3x3 convolutions with
+    BatchNorm and ReLU); the optional ``block="res"`` ResUNet variant
+    adds an identity shortcut inside each DoubleConv to ease gradient
+    flow.  Switching ``config.dim`` to 3 swaps every Conv2d / BatchNorm2d
+    / MaxPool2d for its 3-D counterpart, yielding the volumetric U-Net
+    used in biomedical 3-D segmentation (Cicek et al., 2016).
 
-    Output contract
-    ---------------
-    ``SemanticSegmentationOutput``:
-      ``logits`` : (B, num_classes, *spatial) — same spatial resolution as input.
-      ``loss``   : cross-entropy loss when targets provided.
+    Parameters
+    ----------
+    config : UNetConfig
+        Frozen architecture spec.  Use the factories (:func:`unet`,
+        :func:`res_unet_2d`, :func:`unet_3d`, :func:`res_unet_3d`) for
+        standard variants.
+
+    Attributes
+    ----------
+    config : UNetConfig
+        Stored copy of the config that built this model.
+    encoders : list[_EncoderBlock]
+        ``config.depth`` encoder stages, each producing one downsampled
+        feature and one skip feature.  Channel widths follow
+        ``base_channels * 2 ** i`` for i in 0 .. depth - 1.
+    bottleneck : _DoubleConv
+        DoubleConv at the bottom of the U with ``base_channels * 2 ** depth``
+        channels.
+    decoders : list[_DecoderBlock]
+        ``config.depth`` decoder stages applied bottom-up; each
+        upsamples (transpose conv or trilinear/bilinear interpolation
+        when ``bilinear=True``), concatenates the matching skip feature,
+        and runs another DoubleConv.
+    head : nn.Conv2d or nn.Conv3d
+        Final 1x1 (or 1x1x1) convolution mapping the topmost decoder
+        feature to ``num_classes`` channels.
+
+    Notes
+    -----
+    See Ronneberger et al., "U-Net: Convolutional Networks for Biomedical
+    Image Segmentation", MICCAI 2015 (arXiv:1505.04597).  The defining
+    skip-connection update at decoder stage :math:`s` is
+
+    .. math::
+
+        d_s = \mathrm{DoubleConv}\!\bigl(
+                \mathrm{Concat}\bigl(\mathrm{Up}(d_{s+1}),\; e_s\bigr)
+              \bigr),
+
+    with :math:`e_s` the encoder feature at the same spatial scale.
+    The original paper applies the network at 572x572 input and outputs
+    388x388 unpadded; this implementation uses padding throughout so
+    the output spatial size matches the input.  ResUNet (Zhang et al.,
+    2018) and 3-D U-Net (Cicek et al., 2016) are covered by the
+    ``block`` and ``dim`` config switches respectively.
+
+    Examples
+    --------
+    Standard 2-D U-Net for 2-class biomedical segmentation:
+
+    >>> import lucid
+    >>> from lucid.models.vision.unet import unet
+    >>> model = unet()
+    >>> x = lucid.randn(1, 1, 256, 256)
+    >>> out = model(x)
+    >>> out.logits.shape   # (B, num_classes, H, W)
+    (1, 2, 256, 256)
+
+    3-D U-Net on a volumetric input:
+
+    >>> from lucid.models.vision.unet import unet_3d
+    >>> model = unet_3d()
+    >>> x = lucid.randn(1, 1, 64, 64, 64)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 2, 64, 64, 64)
     """
 
     config_class: ClassVar[type[UNetConfig]] = UNetConfig

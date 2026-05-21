@@ -68,10 +68,78 @@ def _key_padding_to_kpm(mask: Tensor | None) -> Tensor | None:
 
 
 class TransformerModel(PretrainedModel):
-    """Vaswani et al. (2017) seq2seq encoder-decoder trunk.
+    r"""Bare Vaswani encoder-decoder Transformer trunk.
 
-    Forward inputs / outputs follow the :class:`lucid.models.Seq2SeqLMOutput`
-    contract.  For task-specific outputs use the ``TransformerForXxx`` wrappers.
+    Implements the canonical seq2seq architecture of Vaswani, Shazeer,
+    Parmar, Uszkoreit, Jones, Gomez, Kaiser, and Polosukhin, 2017.  A
+    stack of :math:`N` encoder layers (multi-head self-attention + FFN)
+    processes the source ``input_ids``; a stack of :math:`N` decoder
+    layers (masked self-attention + cross-attention + FFN) consumes the
+    right-shifted ``decoder_input_ids`` and the encoder memory.  Token
+    embeddings are scaled by :math:`\sqrt{d_{\text{model}}}` and combined
+    with sinusoidal positional encodings before the trunk.
+
+    Forward inputs / outputs follow the :class:`Seq2SeqLMOutput` contract.
+    For task-specific outputs use the ``TransformerForXxx`` wrappers; this
+    bare trunk is exposed so callers needing raw decoder hidden states
+    (e.g. for custom heads) can skip the default LM projection.
+
+    Parameters
+    ----------
+    config : TransformerConfig
+        Hyperparameters controlling vocabularies, depth, width, head count,
+        max sequence length, and the ``share_embeddings`` /
+        ``tie_word_embeddings`` toggles.
+
+    Attributes
+    ----------
+    src_tok_emb : nn.Embedding
+        Source-side token embedding of shape ``(vocab_size, d_model)``.
+    tgt_tok_emb : nn.Embedding
+        Target-side token embedding.  Identical object as ``src_tok_emb``
+        when ``config.share_embeddings`` is ``True``.
+    positional_encoding : nn.SinusoidalEmbedding
+        Fixed sinusoidal positional encoding of size
+        ``(max_position_embeddings, d_model)`` (Vaswani 2017 §3.5).
+    dropout : nn.Dropout
+        Post-embedding dropout layer.
+    transformer : nn.Transformer
+        Underlying encoder-decoder stack built from
+        ``nn.TransformerEncoder`` + ``nn.TransformerDecoder``.
+
+    Notes
+    -----
+    Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,
+    and Polosukhin, *"Attention Is All You Need"*, NeurIPS, 2017
+    (arXiv:1706.03762).
+
+    Scaled dot-product attention:
+
+    .. math::
+
+        \mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(
+            \frac{Q K^{\top}}{\sqrt{d_k}}
+        \right) V,
+
+    with :math:`d_k = d_{\text{model}} / h`.  The decoder applies an
+    additional lower-triangular causal mask on its self-attention so
+    position :math:`t` cannot attend to positions :math:`> t`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.transformer import TransformerConfig, TransformerModel
+    >>> cfg = TransformerConfig(num_hidden_layers=2, num_decoder_layers=2,
+    ...                         hidden_size=64, num_attention_heads=2,
+    ...                         intermediate_size=128, vocab_size=1000)
+    >>> model = TransformerModel(cfg).eval()
+    >>> src = lucid.tensor([[1, 234, 567, 2]])
+    >>> tgt = lucid.tensor([[1, 100, 200]])
+    >>> out = model(src, decoder_input_ids=tgt)
+    >>> out.logits.shape   # decoder hidden (B=1, T_tgt=3, d_model=64)
+    (1, 3, 64)
+    >>> out.encoder_last_hidden_state.shape
+    (1, 4, 64)
     """
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
@@ -214,11 +282,62 @@ class TransformerModel(PretrainedModel):
 
 
 class TransformerForSeq2SeqLM(PretrainedModel):
-    """Encoder-decoder Transformer + LM head (tied to target embeddings).
+    r"""Encoder-decoder Transformer with a tied seq2seq language-modeling head.
 
-    Standard translation / summarisation interface — pass ``input_ids`` (the
-    source) and ``decoder_input_ids`` (the right-shifted target); supply
-    ``labels`` to also compute the shift-loss for training.
+    Wraps :class:`TransformerModel` with a linear LM head projecting decoder
+    hidden states to the target vocabulary.  The head weight is tied to
+    ``tgt_tok_emb.weight`` when ``config.tie_word_embeddings`` is ``True``,
+    matching the Vaswani 2017 §3.4 convention that halves the parameter cost
+    of the output softmax.  Standard interface for translation and
+    summarisation — pass ``input_ids`` (the source) and
+    ``decoder_input_ids`` (the right-shifted target); supply ``labels`` to
+    also compute the shift-loss for training.  Greedy inference is exposed
+    through :meth:`generate`.
+
+    Parameters
+    ----------
+    config : TransformerConfig
+        Hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        controls the LM-head weight tying.
+
+    Attributes
+    ----------
+    transformer : TransformerModel
+        Underlying encoder-decoder trunk.
+    lm_head : nn.Linear
+        Output projection of shape ``(d_model, effective_decoder_vocab_size)``
+        mapping decoder hidden states to target-vocabulary logits.
+
+    Notes
+    -----
+    Reference: Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser,
+    and Polosukhin, *"Attention Is All You Need"*, NeurIPS, 2017
+    (arXiv:1706.03762).
+
+    Loss when ``labels`` is supplied is the per-token cross-entropy over
+    the right-shifted target sequence:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{S2S}}
+            = -\frac{1}{BT} \sum_{b, t}
+              \log p_\theta(y_{b, t} \mid x_b, y_{b, < t}),
+
+    with positions labelled ``-100`` excluded.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.transformer import TransformerConfig, TransformerForSeq2SeqLM
+    >>> cfg = TransformerConfig(num_hidden_layers=2, num_decoder_layers=2,
+    ...                         hidden_size=64, num_attention_heads=2,
+    ...                         intermediate_size=128, vocab_size=1000)
+    >>> model = TransformerForSeq2SeqLM(cfg).eval()
+    >>> src = lucid.tensor([[1, 234, 567, 2]])
+    >>> tgt = lucid.tensor([[1, 100, 200]])
+    >>> out = model(src, decoder_input_ids=tgt)
+    >>> out.logits.shape   # (B=1, T_tgt=3, vocab=1000)
+    (1, 3, 1000)
     """
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
@@ -342,11 +461,59 @@ class TransformerForSeq2SeqLM(PretrainedModel):
 
 
 class TransformerForSequenceClassification(PretrainedModel):
-    """Encoder-only sentence classifier — pools the first source-side token.
+    r"""Encoder-only sentence classifier — pools the first source-side token.
 
-    Pattern mirrors :class:`BertForSequenceClassification`; the decoder half
-    of the transformer is unused so this head trains the same trunk
-    efficiently for GLUE-style downstream tasks.
+    Wraps :class:`TransformerModel` and runs only the encoder half during
+    ``forward``; the first source-side token's hidden state is
+    dropout-regularised and projected through a linear of output width
+    ``config.num_labels``.  Pattern mirrors
+    :class:`BertForSequenceClassification` — the decoder half of the trunk
+    is unused so this head trains the same encoder weights efficiently for
+    GLUE-style fine-tunes on the Vaswani backbone.
+
+    Parameters
+    ----------
+    config : TransformerConfig
+        Hyperparameters.  ``config.num_labels`` sets the output dimension;
+        ``config.classifier_dropout`` (falling back to ``hidden_dropout``)
+        sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    transformer : TransformerModel
+        Underlying encoder-decoder trunk; only ``encode`` is invoked here.
+    dropout : nn.Dropout
+        Dropout layer applied to the pooled first-token embedding.
+    classifier : nn.Linear
+        Final linear of shape ``(d_model, num_labels)`` producing per-class
+        logits.
+
+    Notes
+    -----
+    Reference: Vaswani et al., *"Attention Is All You Need"*, NeurIPS, 2017
+    (arXiv:1706.03762).
+
+    When ``labels`` is supplied, the loss is the standard cross-entropy:
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{B} \sum_{b=1}^{B}
+            \log p_\theta(y_b \mid x_b).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.transformer import (
+    ...     TransformerConfig, TransformerForSequenceClassification,
+    ... )
+    >>> cfg = TransformerConfig(num_labels=3, num_hidden_layers=2,
+    ...                         hidden_size=64, num_attention_heads=2,
+    ...                         intermediate_size=128, vocab_size=1000)
+    >>> model = TransformerForSequenceClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[1, 234, 567, 2]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, num_labels=3)
+    (1, 3)
     """
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig
@@ -382,10 +549,58 @@ class TransformerForSequenceClassification(PretrainedModel):
 
 
 class TransformerForTokenClassification(PretrainedModel, MaskedLMMixin):
-    """Encoder-only per-token classifier — NER / POS heads.
+    r"""Encoder-only per-token classifier — NER / POS / chunking heads.
 
-    Uses :class:`MaskedLMMixin` for the standard ``(B, T, V) → loss`` reduction
-    that BERT / RoFormer also share.
+    Wraps :class:`TransformerModel` and runs only the encoder half during
+    ``forward``; every source-side token's hidden state is
+    dropout-regularised and projected through a linear of output width
+    ``config.num_labels``.  Uses :class:`MaskedLMMixin` for the standard
+    masked ``(B, T, V) → loss`` reduction shared with BERT and RoFormer.
+
+    Parameters
+    ----------
+    config : TransformerConfig
+        Hyperparameters.  ``config.num_labels`` sets the per-position output
+        dimension; ``config.classifier_dropout`` (falling back to
+        ``hidden_dropout``) sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    transformer : TransformerModel
+        Underlying encoder-decoder trunk; only ``encode`` is invoked here.
+    dropout : nn.Dropout
+        Dropout layer applied to the full sequence hidden states.
+    classifier : nn.Linear
+        Final linear of shape ``(d_model, num_labels)`` mapping each token's
+        hidden state to per-class logits.
+
+    Notes
+    -----
+    Reference: Vaswani et al., *"Attention Is All You Need"*, NeurIPS, 2017
+    (arXiv:1706.03762).
+
+    Loss (when ``labels`` is provided) is the masked cross-entropy over
+    positions whose label is not ``-100``:
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{|V|} \sum_{(b, t) \in V}
+            \log p_\theta(y_{b, t} \mid x_b).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.transformer import (
+    ...     TransformerConfig, TransformerForTokenClassification,
+    ... )
+    >>> cfg = TransformerConfig(num_labels=9, num_hidden_layers=2,
+    ...                         hidden_size=64, num_attention_heads=2,
+    ...                         intermediate_size=128, vocab_size=1000)
+    >>> model = TransformerForTokenClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[1, 234, 567, 2]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, num_labels=9)
+    (1, 4, 9)
     """
 
     config_class: ClassVar[type[TransformerConfig]] = TransformerConfig

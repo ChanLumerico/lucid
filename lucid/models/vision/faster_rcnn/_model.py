@@ -240,21 +240,93 @@ class _RoIHead(nn.Module):
 
 
 class FasterRCNNForObjectDetection(PretrainedModel):
-    """Faster R-CNN end-to-end object detector (Ren et al., NeurIPS 2015).
+    r"""Faster R-CNN end-to-end object detector (Ren et al., NeurIPS 2015).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional training list of B dicts with:
-                  ``"boxes"``  — (M_i, 4) xyxy ground-truth boxes
-                  ``"labels"`` — (M_i,)   integer foreground class ids
+    Folds region proposal generation into the network via the Region
+    Proposal Network (RPN), eliminating the external selective-search
+    bottleneck of R-CNN / Fast R-CNN.  The RPN shares the backbone feature
+    map with the detection head: at every spatial location it predicts
+    objectness scores and bounding-box deltas for :math:`k = |\mathrm{sizes}|
+    \times |\mathrm{ratios}|` anchors, applies NMS to retain the
+    ``post_nms_top_n`` highest-scoring proposals, and forwards them to
+    the Fast R-CNN-style RoI head for class-specific classification and
+    box refinement.  The pipeline is end-to-end trainable with a four-term
+    loss
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (Σ proposals_i, num_classes+1) raw class logits.
-      ``pred_boxes``: (Σ proposals_i, 4) decoded xyxy boxes.
-      ``loss``      : total loss (rpn + detection) when targets provided.
+    .. math::
+
+        L = L^{\mathrm{rpn}}_{\mathrm{cls}} + L^{\mathrm{rpn}}_{\mathrm{loc}}
+            + L^{\mathrm{det}}_{\mathrm{cls}} + L^{\mathrm{det}}_{\mathrm{loc}}.
+
+    Parameters
+    ----------
+    config : FasterRCNNConfig
+        Frozen architecture spec.  Use the :func:`faster_rcnn` factory for
+        the paper-cited VGG16 configuration (3-scale, 3-ratio anchors at
+        stride 16; 2000 / 1000 pre/post-NMS proposals at training time).
+
+    Attributes
+    ----------
+    config : FasterRCNNConfig
+        Stored copy of the config that built this model.
+    backbone : _VGG16Features
+        Shared VGG16 conv1_1 .. conv5_3 trunk producing a stride-16
+        feature map :math:`(B, 512, H/16, W/16)`.
+    rpn_head : _RPNHead
+        3x3 conv + sibling 1x1 conv heads for objectness logits
+        (``B, k, fH, fW``) and per-anchor box deltas (``B, 4k, fH, fW``).
+    roi_head : _RoIHead
+        Fast R-CNN-style head: RoI Pool (7x7) -> ``fc6`` -> ``fc7`` ->
+        sibling class (K + 1) and class-specific box (4K) outputs.
+    _anchor_gen : AnchorGenerator
+        Anchor box generator with ``sizes`` x ``ratios`` boxes per cell;
+        produces :math:`fH \cdot fW \cdot k` reference boxes per image.
+
+    Notes
+    -----
+    See Ren et al., "Faster R-CNN: Towards Real-Time Object Detection with
+    Region Proposal Networks", NeurIPS 2015 (arXiv:1506.01497).  The
+    Region Proposal Network performs anchor-based regression: for each
+    anchor :math:`A`, the predicted offset :math:`(t_x, t_y, t_w, t_h)`
+    decodes to a proposal
+
+    .. math::
+
+        \begin{aligned}
+            \hat{G}_x &= A_w t_x + A_x, & \hat{G}_w &= A_w \exp(t_w), \\
+            \hat{G}_y &= A_h t_y + A_y, & \hat{G}_h &= A_h \exp(t_h).
+        \end{aligned}
+
+    The RPN is trained with binary cross-entropy on objectness and
+    smooth-:math:`L_1` on box deltas; anchors with IoU :math:`\geq`
+    ``rpn_fg_iou_thresh`` are positive and IoU :math:`<` ``rpn_bg_iou_thresh``
+    are negative.  Detection head losses match Fast R-CNN.  Default
+    ``bbox_reg_weights = (10, 10, 5, 5)`` matches the reference Caffe
+    implementation.
+
+    Examples
+    --------
+    Run inference with internal proposal generation (no external proposals
+    required):
+
+    >>> import lucid
+    >>> from lucid.models.vision.faster_rcnn import faster_rcnn
+    >>> model = faster_rcnn(num_classes=80)
+    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> out = model(x)
+    >>> out.logits.shape[-1]   # K + 1
+    81
+
+    Training pass with ground-truth targets (computes RPN + detection
+    multi-task loss):
+
+    >>> targets = [{
+    ...     "boxes":  lucid.tensor([[100.0, 100.0, 400.0, 400.0]]),
+    ...     "labels": lucid.tensor([5], dtype=lucid.int64),
+    ... }]
+    >>> out = model(x, targets=targets)
+    >>> out.loss.shape
+    ()
     """
 
     config_class: ClassVar[type[FasterRCNNConfig]] = FasterRCNNConfig

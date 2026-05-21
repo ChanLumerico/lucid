@@ -220,7 +220,75 @@ def _build_classifier_head(
 
 
 class MobileNetV3(PretrainedModel, BackboneMixin):
-    """MobileNet v3 feature extractor (Large or Small)."""
+    r"""MobileNet v3 feature-extracting backbone (no classification head).
+
+    Implements the NAS-designed topology from Howard et al.,
+    "Searching for MobileNetV3", ICCV 2019 (arXiv:1905.02244).  The
+    architecture combines MobileNet-v2's inverted-residual block
+    with three new ingredients selected by a platform-aware
+    architecture search: a lightweight squeeze-and-excitation
+    module in selected blocks, the **hard-swish** activation
+    (:math:`x \cdot \mathrm{ReLU6}(x+3) / 6`) in the deeper half
+    of the network, and a redesigned head that moves the expensive
+    1×1 expansion *after* the global average pool.
+
+    Two hand-tuned variants are exposed: ``"large"`` (15 blocks,
+    targeting higher-accuracy mobile deployments) and ``"small"``
+    (11 blocks, targeting tight latency budgets).  Channel counts
+    scale uniformly with ``config.width_mult``.
+
+    Parameters
+    ----------
+    config : MobileNetV3Config
+        Frozen architecture spec.  Use the factory functions
+        (:func:`mobilenet_v3_large`, :func:`mobilenet_v3_small`) for
+        paper-cited variants.
+
+    Attributes
+    ----------
+    config : MobileNetV3Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Stem + 11 (Small) or 15 (Large) inverted-residual SE blocks
+        + 1×1 penultimate expansion.  Channel counts scale with
+        ``config.width_mult``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``(B, C, 1, 1)``.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin` for downstream FPN / decoder
+        modules.
+
+    Notes
+    -----
+    The hard-swish activation,
+
+    .. math::
+
+        \mathrm{h\text{-}swish}(x) = x \cdot \frac{\mathrm{ReLU6}(x + 3)}{6},
+
+    closely approximates swish/SiLU using only piecewise-linear
+    primitives, making it dramatically cheaper to evaluate on
+    mobile-friendly fixed-point hardware.  Combined with the
+    redesigned tail (moving the 1×1 expansion to operate on a
+    single spatial location after global average pooling), the
+    overall network achieves :math:`3.2\%` higher ImageNet top-1
+    accuracy than MobileNet-v2 at :math:`20\%` lower latency on a
+    Pixel-1 CPU.
+
+    Examples
+    --------
+    Build a MobileNet-v3-Large backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_large
+    >>> backbone = mobilenet_v3_large()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 960, 1, 1)
+    """
 
     config_class: ClassVar[type[MobileNetV3Config]] = MobileNetV3Config
     base_model_prefix: ClassVar[str] = "mobilenet_v3"
@@ -261,7 +329,67 @@ class MobileNetV3(PretrainedModel, BackboneMixin):
 
 
 class MobileNetV3ForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """MobileNet v3 with inverted-classifier head."""
+    r"""MobileNet v3 image classifier with the redesigned inverted head.
+
+    Combines a :class:`MobileNetV3` feature stack with the paper's
+    *redesigned* classification head, which is the central
+    efficiency innovation of v3.  Instead of the conventional
+    ``GAP → Linear`` head, v3 places a :math:`1 \times 1`
+    convolution *after* the global average pool — when the spatial
+    map has already collapsed to ``1 × 1`` — saving roughly
+    :math:`10\%` of total latency compared to v2's pre-pool
+    expansion.  The full head is
+
+    .. math::
+
+        \operatorname{AvgPool} \to \operatorname{Conv}_{1\times1}
+            \to \mathrm{h\text{-}swish} \to \operatorname{Flatten}
+            \to \operatorname{Dropout} \to \operatorname{Linear}.
+
+    Parameters
+    ----------
+    config : MobileNetV3Config
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`mobilenet_v3_large_cls`, :func:`mobilenet_v3_small_cls`)
+        for paper-cited variants.
+
+    Attributes
+    ----------
+    config : MobileNetV3Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Same NAS-designed feature stack as on :class:`MobileNetV3`.
+    classifier : nn.Sequential
+        The redesigned head described above, projecting from the
+        penultimate channel count (960 for Large, 576 for Small) to
+        ``config.num_classes`` via a 1280-ch (Large) or 1024-ch
+        (Small) intermediate width.
+
+    Notes
+    -----
+    When ``labels`` are supplied to :meth:`forward`, a categorical
+    cross-entropy loss is computed against the logits and returned
+    alongside them.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_large_cls
+    >>> model = mobilenet_v3_large_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+
+    Build the smaller variant for latency-critical deployment:
+
+    >>> from lucid.models.vision.mobilenet_v3 import mobilenet_v3_small_cls
+    >>> small = mobilenet_v3_small_cls(num_classes=10)
+    >>> small.config.variant
+    'small'
+    """
 
     config_class: ClassVar[type[MobileNetV3Config]] = MobileNetV3Config
     base_model_prefix: ClassVar[str] = "mobilenet_v3"

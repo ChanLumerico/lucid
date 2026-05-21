@@ -4,8 +4,54 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="Faster R-CNN",
+    citation=(
+        'Ren, Shaoqing, et al. "Faster R-CNN: Towards Real-Time Object '
+        'Detection with Region Proposal Networks." Advances in Neural '
+        "Information Processing Systems, 2015."
+    ),
+    theory=r"""
+    Faster R-CNN removes the last hand-engineered component of the
+    R-CNN family — the external selective-search proposal step — by
+    introducing a **Region Proposal Network (RPN)** that *shares
+    convolutional features* with the detection head.
+
+    The RPN is a small fully-convolutional network that slides over
+    the backbone feature map.  At every spatial position it evaluates
+    :math:`k` reference boxes called **anchors** (the paper uses
+    :math:`k = 9` from 3 scales × 3 aspect ratios) and emits two
+    heads:
+
+    - **Objectness** — a :math:`2k`-dim softmax classifying each
+      anchor as foreground or background.
+    - **Box regression** — a :math:`4k`-dim parameterised offset
+      :math:`t = (t_x, t_y, t_w, t_h)` refining anchors toward
+      ground-truth boxes.
+
+    Anchors with IoU :math:`\ge 0.7` against any GT are positive;
+    :math:`\le 0.3` are negative.  The multi-task loss is
+
+    .. math::
+
+        L(\{p_i\}, \{t_i\}) =
+            \tfrac{1}{N_{\mathrm{cls}}} \sum_i L_{\mathrm{cls}}(p_i, p_i^*)
+            + \lambda \, \tfrac{1}{N_{\mathrm{reg}}} \sum_i p_i^*
+              \, L_{\mathrm{reg}}(t_i, t_i^*).
+
+    Top-scoring proposals (after NMS) replace selective search
+    completely.  The **same backbone** then feeds the Fast R-CNN
+    head, so the entire detector is end-to-end trainable.  With a
+    VGG-16 trunk the whole pipeline runs at ≈5 fps while matching
+    or exceeding selective-search Fast R-CNN accuracy — a milestone
+    that established two-stage anchor-based detection as the
+    dominant paradigm and seeded all later FPN / Mask R-CNN / Cascade
+    R-CNN extensions.
+    """,
+)
 @dataclass(frozen=True)
 class FasterRCNNConfig(ModelConfig):
     """Configuration for Faster R-CNN.

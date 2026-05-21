@@ -1,26 +1,30 @@
 // lucid/_C/kernel/UnaryKernel.h
 //
-// CRTP base for single-input, single-output op kernels. A concrete op
-// declares itself as:
+// CRTP base for single-input, single-output op kernels — pairs a typed
+// ``forward()`` trampoline with the one-input saved-tensor bookkeeping
+// every unary op needs.
 //
-//   struct ReluOp : UnaryKernel<ReluOp> {
-//       static constexpr OpSchema schema_v1 = {"relu", ...};
-//       static CpuStorage cpu_kernel(const CpuStorage&, const Shape&, Dtype);
-//       static GpuStorage gpu_kernel(const GpuStorage&, const Shape&, Dtype);
-//       Storage grad_formula(Storage grad_out);
-//   };
+// Concrete unary ops (``NegBackward``, ``LogBackward``, ``ReluBackward``,
+// :class:`Abs`, :class:`Sin`, …) inherit as
+// ``class FooBackward : public UnaryKernel<FooBackward>`` and supply the
+// op-specific schema and compute hooks; the base owns dtype promotion,
+// contiguity enforcement, backend dispatch, and full autograd wiring so
+// concrete ops only have to write the math.
 //
-// UnaryKernel::forward() then handles dtype negotiation (SchemaGuard),
-// contiguous enforcement, dispatch to cpu_kernel / gpu_kernel / dispatch,
-// and autograd graph wiring. Derived ops only implement the math.
+// Forward dispatch priority
+// -------------------------
+// 1. ``Derived::dispatch(IBackend&, ...)`` — preferred when the op has
+//    a fused backend-aware implementation (matched by
+//    :type:`detail::HasUnaryDispatch`).
+// 2. ``Derived::gpu_kernel(GpuStorage, ...)`` — chosen on GPU when the
+//    op exposes a typed GPU kernel (matched by
+//    :type:`detail::HasUnaryGpuKernel`).
+// 3. ``Derived::cpu_kernel(CpuStorage, ...)`` — fallback CPU path.
 //
-// Dispatch priority inside forward():
-//   1. Derived::dispatch(IBackend&, ...)  — if HasUnaryDispatch<Derived>
-//   2. Derived::gpu_kernel(GpuStorage, ...)  — GPU path
-//   3. Derived::cpu_kernel(CpuStorage, ...)  — CPU path
-//
-// The apply() override calls Derived::grad_formula(grad_out) and
-// broadcasts the result back to the original input shape.
+// The :meth:`apply` override delegates to ``Derived::grad_formula(grad_out)``
+// and broadcast-reduces the result back to the original input shape;
+// :meth:`apply_for_graph` provides the create_graph=True higher-order
+// path via ``Derived::grad_formula_impl``.
 
 #pragma once
 
@@ -49,16 +53,39 @@ namespace lucid {
 
 namespace detail {
 
-// Satisfied when Derived provides a gpu_kernel static method matching the
-// signature required for unary GPU dispatch.
+// Concept satisfied when ``Derived`` exposes a typed unary GPU kernel.
+//
+// Template Parameters
+// -------------------
+// T : class
+//     The candidate Derived kernel class.
+//
+// Notes
+// -----
+// Matches the call ``T::gpu_kernel(GpuStorage, Shape, Dtype) -> GpuStorage``.
+// :class:`UnaryKernel` uses this concept to enable the typed GPU path
+// only for ops that implement it; ops without a GPU kernel fall through
+// to a clear ``not_implemented`` error.
 template <class T>
 concept HasUnaryGpuKernel = requires(GpuStorage a, Shape s, Dtype d) {
     { T::gpu_kernel(a, s, d) } -> std::same_as<GpuStorage>;
 };
 
-// Satisfied when Derived provides a dispatch static method that routes
-// through the IBackend abstraction (used by ops with backend-specific
-// implementations).
+// Concept satisfied when ``Derived`` opts in to backend-agnostic dispatch.
+//
+// Template Parameters
+// -------------------
+// T : class
+//     The candidate Derived kernel class.
+//
+// Notes
+// -----
+// Matches the call
+// ``T::dispatch(IBackend&, Storage, Shape, Dtype) -> Storage``.  Ops
+// that need to route through the :class:`backend::IBackend` abstraction
+// (rather than typed CPU/GPU kernels) provide this; the trampoline in
+// :meth:`UnaryKernel::forward` prefers ``dispatch`` over the typed
+// kernel paths when both are present.
 template <class T>
 concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, Dtype d) {
     { T::dispatch(be, a, s, d) } -> std::same_as<Storage>;
@@ -66,26 +93,104 @@ concept HasUnaryDispatch = requires(backend::IBackend& be, Storage a, Shape s, D
 
 }  // namespace detail
 
-// CRTP unary-op base. Inherits AutogradNode<Derived, 1> (one saved input)
-// and IKernel so it can be used via the polymorphic IKernel* interface.
+// CRTP base for single-input, single-output op kernels.
 //
-// kSavesInput, kSavesOutput, and kHasGradient may be overridden by
-// Derived as static constexpr bool constants to suppress unnecessary
-// allocations when e.g. no backward pass is required.
+// Inherits :class:`AutogradNode\<Derived, 1\>` (one saved input slot)
+// and :class:`kernel::IKernel` so an instance can be held polymorphically
+// while still exposing the typed static ``forward()`` trampoline.
+//
+// Concrete ops declare themselves as
+// ``class FooBackward : public UnaryKernel<FooBackward>`` and provide:
+//
+//   - ``static constexpr OpSchema schema_v1`` — op name + AMP policy.
+//   - ``static cpu_kernel(a, out_shape, dtype) -> CpuStorage`` and/or
+//     ``static gpu_kernel(a, out_shape, dtype) -> GpuStorage``, **or**
+//     ``static dispatch(IBackend&, a, out_shape, dtype) -> Storage``.
+//   - ``Storage grad_formula(Storage grad_out)`` — the local Jacobian
+//     product computed at backward time.
+//   - Optional ``grad_formula_impl(grad_out, a_impl, out_impl) -> TensorImplPtr``
+//     for graph-mode (create_graph=True) higher-order differentiation.
+//
+// Template Parameters
+// -------------------
+// Derived : class
+//     The concrete CRTP self-type.
+//
+// Attributes
+// ----------
+// kSavesInput : static constexpr bool
+//     Whether ``forward()`` snapshots ``a->storage()`` into
+//     ``saved_inputs_[0]`` for use in ``grad_formula``.  Defaults to
+//     ``true``; set ``false`` when the gradient formula uses only the
+//     saved output (e.g. :class:`ReLU` keyed on output sign).
+// kSavesOutput : static constexpr bool
+//     Whether ``forward()`` additionally snapshots the output storage
+//     into ``saved_output_``.  Defaults to ``false``.  Set ``true`` for
+//     ops whose backward is cheap in terms of ``y`` (e.g. :class:`Exp`,
+//     :class:`Sigmoid`).
+// kHasGradient : static constexpr bool
+//     Whether the op participates in autograd.  Defaults to ``true``;
+//     set ``false`` for non-differentiable ops to skip all graph wiring.
+//
+// Notes
+// -----
+// AMP policy and dtype promotion are forwarded through
+// :class:`SchemaGuard` using ``Derived::schema_v1``; the effective dtype
+// returned drives both the input cast and the saved-input dtype.
+//
+// See Also
+// --------
+// :class:`BinaryKernel`, :class:`NaryKernel`, :class:`VariadicKernel`.
+// :class:`IKernel` — the abstract base above the CRTP layer.
 template <class Derived>
 class UnaryKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
-    // Whether to snapshot a->storage() for use in grad_formula(). When
-    // the gradient formula does not need the forward input (e.g. for
-    // ReLU using the saved output) set to false to avoid the copy.
+    // Snapshot the forward input storage into ``saved_inputs_[0]``.
+    //
+    // Defaults to ``true``.  Set ``false`` in concrete ops whose
+    // backward formula does not need the input — this elides the
+    // per-forward storage copy.
     static constexpr bool kSavesInput = true;
-    // Whether to snapshot the output storage for use in grad_formula().
+
+    // Snapshot the forward output storage into ``saved_output_``.
+    //
+    // Defaults to ``false``.  Enable when the gradient is more cheaply
+    // expressed in terms of the output (e.g. :class:`Exp` whose
+    // derivative equals ``y`` itself).
     static constexpr bool kSavesOutput = false;
-    // Set to false for in-place or non-differentiable ops to skip graph wiring.
+
+    // Whether the op participates in autograd at all.
+    //
+    // Defaults to ``true``.  Set ``false`` for non-differentiable
+    // ops (integer cast, copy, in-place mutations) so ``forward()``
+    // skips graph wiring entirely.
     static constexpr bool kHasGradient = true;
 
-    // Default graph-mode gradient formula: throws NotImplementedError.
-    // Override in concrete Derived classes to support create_graph=True.
+    // Default graph-mode gradient formula — concrete ops override.
+    //
+    // Parameters
+    // ----------
+    // g : const TensorImplPtr&
+    //     Gradient of the loss with respect to this op's output, as a
+    //     :class:`TensorImpl` that itself carries ``grad_fn`` so the
+    //     backward computation is differentiable.
+    // a : const TensorImplPtr&
+    //     The saved forward input (possibly broadcast / cast to the
+    //     effective dtype).
+    // out : const TensorImplPtr&
+    //     The saved forward output (populated only when
+    //     ``kSavesOutput == true``).
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     ``grad_input`` as a fully-traced :class:`TensorImpl`.
+    //
+    // Raises
+    // ------
+    // std::runtime_error
+    //     The default base implementation always throws.  Concrete ops
+    //     must override to support ``create_graph=True``.
     TensorImplPtr grad_formula_impl(const TensorImplPtr& /*g*/,
                                     const TensorImplPtr& /*a*/,
                                     const TensorImplPtr& /*out*/) {
@@ -95,22 +200,95 @@ public:
                                  "Implement grad_formula_impl() to add support.");
     }
 
+    // Return the canonical schema name of the concrete op.
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+
+    // Return the autograd node label (same string as :meth:`name`).
     std::string node_name() const override { return std::string(Derived::schema_v1.name); }
 
-    // Forward pass: validate, cast dtype, enforce contiguity, dispatch,
-    // then wire the autograd graph if any input requires gradients.
+    // Typed forward trampoline for a single-input op.
+    //
+    // Parameters
+    // ----------
+    // a : const std::shared_ptr<TensorImpl>&
+    //     The input tensor.
+    //
+    // Returns
+    // -------
+    // std::shared_ptr<TensorImpl>
+    //     The output tensor.  If ``a`` requires a gradient (and grad
+    //     mode is enabled) the result has its ``grad_fn`` set to a
+    //     freshly constructed ``Derived`` backward node.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     If the schema's shape contract is violated.
+    // DtypeMismatch
+    //     If the input dtype is not compatible with the schema's
+    //     accepted dtype set.
+    //
+    // Notes
+    // -----
+    // Behaviour
+    //
+    //   1. Validate ``a`` is non-null.
+    //   2. Resolve the effective dtype via :class:`SchemaGuard`.
+    //   3. Materialise contiguous on CPU when ``a`` is non-contiguous.
+    //   4. Cast to the effective dtype if needed.
+    //   5. Dispatch to ``dispatch`` / ``gpu_kernel`` / ``cpu_kernel``
+    //      (see file header for priority).
+    //   6. Wire the autograd graph when ``kHasGradient`` and any input
+    //      requires a gradient.
     static std::shared_ptr<TensorImpl> forward(const std::shared_ptr<TensorImpl>& a);
 
-    // Backward pass: delegate to Derived::grad_formula, then reduce the
-    // gradient back to the original input shape (for broadcast ops).
+    // Backward implementation invoked by the autograd engine.
+    //
+    // Parameters
+    // ----------
+    // grad_out : Storage
+    //     The upstream gradient with respect to this op's output.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     Single-element vector containing ``grad_input`` reduced back
+    //     to ``input_shapes_[0]`` via :func:`reduce_grad_to_shape`.
+    //
+    // Notes
+    // -----
+    // The reduction step is needed when the forward broadcast the
+    // input to a larger output shape; for purely shape-preserving
+    // unary ops it is a no-op.
     std::vector<Storage> apply(Storage grad_out) override;
 
-    // Graph-mode backward: Derived::grad_formula_impl(grad_out, a_impl, out_impl)
-    // returns a TensorImplPtr gradient so the backward itself is differentiable.
+    // Graph-mode backward — supports create_graph=True.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const TensorImplPtr&
+    //     The upstream gradient, retained as a :class:`TensorImpl` with
+    //     its own ``grad_fn`` for higher-order differentiation.
+    //
+    // Returns
+    // -------
+    // std::vector<TensorImplPtr>
+    //     Single-element vector containing the fully-traced
+    //     ``grad_input`` reduced back to the original input shape via
+    //     :func:`sum_op` / :func:`reshape_op`.
+    //
+    // Raises
+    // ------
+    // std::runtime_error
+    //     If the saved input pointer was not captured (i.e. the forward
+    //     ran without create_graph=True), or if the concrete op did not
+    //     override :meth:`grad_formula_impl`.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
+// Out-of-class definition of :meth:`UnaryKernel::forward`.
+//
+// See the in-class declaration for parameter and return semantics.
 template <class Derived>
 std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a) {
     if (!a)
@@ -191,8 +369,11 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     }
 }
 
-// Delegate to the concrete grad_formula, then broadcast-reduce the result
-// to match the original input shape if the op changed the shape.
+// Out-of-class definition of :meth:`UnaryKernel::apply`.
+//
+// Delegates to ``Derived::grad_formula(grad_out)`` and broadcast-reduces
+// the resulting :class:`Storage` back to ``input_shapes_[0]`` via
+// :func:`reduce_grad_to_shape`.
 template <class Derived>
 std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
@@ -200,8 +381,13 @@ std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
                                  this->device_)};
 }
 
-// Graph-mode backward: call Derived::grad_formula_impl(grad_out, a_impl, out_impl).
-// The returned TensorImplPtr carries grad_fn for higher-order differentiation.
+// Out-of-class definition of :meth:`UnaryKernel::apply_for_graph`.
+//
+// Invokes ``Derived::grad_formula_impl(grad_out, a, out)`` then reduces
+// the traced gradient back to the original input shape using
+// :func:`sum_op` and :func:`reshape_op` so the returned
+// :class:`TensorImpl` carries a complete autograd subgraph suitable for
+// higher-order differentiation.
 template <class Derived>
 std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImplPtr& grad_out) {
     extern TensorImplPtr sum_op(const TensorImplPtr&, const std::vector<int>&, bool);

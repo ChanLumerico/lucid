@@ -1,19 +1,30 @@
 // lucid/_C/kernel/VariadicKernel.h
 //
-// CRTP base for ops that take a runtime-variable number of inputs, the
-// canonical example being concatenation (cat) which accepts any number of
-// tensors along a specified dimension. Unlike NaryKernel<Derived, N>,
-// which fixes N at compile time, VariadicKernel stores per-input metadata
-// in std::vector rather than std::array.
+// CRTP base for ops whose input count is **only known at runtime** —
+// canonical example :class:`Cat` (concatenate any number of tensors
+// along an axis); also :class:`Stack`, :class:`Sum` of a tensor list,
+// and certain multi-input pointwise fusions.
 //
-// Because the input count is dynamic, VariadicKernel inherits directly from
-// Node (not from AutogradNode<Derived, N>). It replicates the input_shapes_,
-// input_tensors_, saved_inputs_, and out_shape_ pattern but in vector form
-// (suffixed _v_ to avoid collisions with AutogradNode members when a Derived
-// type also inherits another kernel base).
+// Contrast with :class:`NaryKernel\<Derived, N\>` which fixes ``N`` at
+// compile time: :class:`VariadicKernel` stores per-input metadata in
+// :type:`std::vector` containers so the fan-out can be discovered at
+// forward time and replayed during backward.  Because the slot count is
+// dynamic, the base inherits :class:`Node` directly rather than
+// :class:`AutogradNode\<Derived, N\>`, and re-declares the
+// ``input_shapes_`` / ``input_tensors_`` / ``saved_inputs_`` /
+// ``out_shape_`` members as vector-typed siblings suffixed ``_v_`` to
+// avoid colliding with the :class:`AutogradNode` array members when a
+// derived type happens to inherit both kernel bases (uncommon).
 //
-// A variadic op's forward() allocates its output, then calls:
-//   VariadicKernel<Derived>::wire_autograd(inputs, out);
+// Typical usage::
+//
+//     auto out = std::make_shared<TensorImpl>(...);
+//     VariadicKernel<CatBackward>::wire_autograd(inputs, out);
+//
+// :meth:`validate_versions` is overridden to walk the runtime vector
+// and check in-place mutations on every input; :meth:`apply` must be
+// implemented by the concrete op (no shared backward formula is
+// imposed because variadic backward shapes vary too widely).
 
 #pragma once
 
@@ -40,16 +51,67 @@ class TensorImpl;
 
 namespace kernel {
 
-// CRTP base for variable-arity ops. Inherits Node directly rather than
-// AutogradNode<N> to support a runtime input count. Derived classes must
-// implement apply(Storage) for the backward pass.
+// CRTP base for runtime-variable-arity op kernels.
+//
+// Inherits :class:`Node` directly (not :class:`AutogradNode\<Derived, N\>`)
+// so the saved-input and edge containers can grow at runtime, and
+// :class:`IKernel` for polymorphic invocation.  Derived ops own their
+// own ``forward()`` and ``apply()`` — only the autograd wiring helper
+// is shared.
+//
+// Template Parameters
+// -------------------
+// Derived : class
+//     The concrete CRTP self-type.
+//
+// Attributes
+// ----------
+// input_tensors_v_ : std::vector<std::weak_ptr<TensorImpl>>
+//     Weak references to the original inputs, used for in-place
+//     mutation version checks.
+// input_shapes_v_ : std::vector<Shape>
+//     Shapes of the original inputs, preserved for backward shape math.
+// out_shape_ : Shape
+//     Shape of the produced output tensor.
+// dtype_ : Dtype
+//     Effective dtype, taken from the first non-null input.
+// device_ : Device
+//     Effective device, taken from the first non-null input.
+// saved_inputs_v_ : std::vector<Storage>
+//     Snapshots of each input's :class:`Storage` at forward time,
+//     populated when :meth:`wire_autograd` is called with
+//     ``save_ins=true``.
+// saved_output_ : Storage
+//     Optional snapshot of the output storage for ops whose backward
+//     needs the forward output value (e.g. softmax-style ops).
+//
+// Notes
+// -----
+// All inputs must share dtype and device — :meth:`wire_autograd` does
+// **not** validate this; the concrete op's ``forward()`` is expected
+// to have already enforced consistency before calling wire_autograd.
+// :meth:`validate_versions` walks the runtime vector and invokes
+// :func:`check_version_match` per input.
+//
+// See Also
+// --------
+// :class:`NaryKernel` — fixed-arity sibling using :type:`std::array`.
+// :class:`UnaryKernel`, :class:`BinaryKernel`.
+// :class:`IKernel` — the abstract base above the CRTP layer.
 template <class Derived>
 class VariadicKernel : public Node, public IKernel {
 public:
+    // Return the canonical schema name of the concrete op.
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
 
-    // Version-staleness check for all variadic inputs. Called by the
-    // autograd engine before apply() to detect in-place mutations.
+    // Verify no saved input was mutated in-place between forward and backward.
+    //
+    // Notes
+    // -----
+    // Iterates over the runtime input vector and calls
+    // :func:`check_version_match` on each, raising a clear error
+    // (with the op name and slot index) if any version drifted.
+    // Invoked by the autograd engine before :meth:`apply`.
     void validate_versions() override {
         for (std::size_t i = 0; i < input_tensors_v_.size(); ++i) {
             ::lucid::check_version_match(input_tensors_v_[i],
@@ -64,19 +126,43 @@ public:
     std::vector<Shape> input_shapes_v_;
     // Shape of the produced output tensor.
     Shape out_shape_;
-    // Dtype and device of the first non-null input (all inputs must match).
+    // Dtype taken from the first non-null input (all inputs must match).
     Dtype dtype_ = Dtype::F32;
+    // Device taken from the first non-null input (all inputs must match).
     Device device_ = Device::CPU;
-    // Snapshots of each input's Storage at forward time, available to apply().
+    // Snapshots of each input's Storage at forward time, used by apply().
     std::vector<Storage> saved_inputs_v_;
-    // Optional snapshot of the output storage (used by ops whose backward
-    // needs the forward output value, e.g., softmax).
+    // Optional snapshot of the output storage; populated by ops whose
+    // backward consumes the forward output (e.g. softmax-style).
     Storage saved_output_;
 
-    // Wire the provided backward node bwd to out and to each input edge.
-    // Returns false if grad mode is off or no input requires a gradient.
-    // When save_ins is true, each input's storage is captured into
-    // saved_inputs_v_ for use in apply().
+    // Attach an existing backward node to the autograd graph.
+    //
+    // Parameters
+    // ----------
+    // bwd : std::shared_ptr<Derived>
+    //     The backward node instance to install on ``out``.
+    // inputs : const std::vector<TensorImplPtr>&
+    //     The forward inputs in canonical order; slots may be ``nullptr``.
+    // out : const TensorImplPtr&
+    //     The freshly produced output tensor.
+    // save_ins : bool, default ``true``
+    //     Whether to snapshot each non-null input's storage into
+    //     ``saved_inputs_v_`` for use during backward.
+    //
+    // Returns
+    // -------
+    // bool
+    //     ``true`` when the autograd graph was wired; ``false`` when
+    //     grad mode is off or no input requires a gradient (no-op).
+    //
+    // Notes
+    // -----
+    // Side effects on success: derives dtype/device from the first
+    // non-null input, records ``out_shape_``, populates the per-input
+    // vectors, records one :class:`Edge` per input via
+    // :func:`detail::ensure_grad_fn`, captures versions, and marks
+    // ``out`` as a non-leaf requires_grad tensor.
     static bool wire_autograd(std::shared_ptr<Derived> bwd,
                               const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
@@ -129,7 +215,26 @@ public:
         return true;
     }
 
-    // Convenience overload that creates the backward node internally.
+    // Convenience overload that constructs the backward node internally.
+    //
+    // Parameters
+    // ----------
+    // inputs : const std::vector<TensorImplPtr>&
+    //     The forward inputs in canonical order.
+    // out : const TensorImplPtr&
+    //     The freshly produced output tensor.
+    // save_ins : bool, default ``true``
+    //     Forwarded to the primary overload.
+    //
+    // Returns
+    // -------
+    // bool
+    //     See the primary :meth:`wire_autograd` overload.
+    //
+    // Notes
+    // -----
+    // Equivalent to
+    // ``wire_autograd(std::make_shared<Derived>(), inputs, out, save_ins)``.
     static bool wire_autograd(const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
                               bool save_ins = true) {

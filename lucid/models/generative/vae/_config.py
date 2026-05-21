@@ -19,9 +19,77 @@ three modes.
 from dataclasses import dataclass, field
 from typing import ClassVar, Literal
 
+from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import GenerativeModelConfig
 
 
+@model_family_meta(
+    canonical_name="VAE",
+    citation=(
+        'Kingma, Diederik P., and Max Welling. "Auto-Encoding '
+        'Variational Bayes." International Conference on Learning '
+        "Representations, 2014."
+    ),
+    theory=r"""
+    The Variational Auto-Encoder defines a latent-variable generative
+    model :math:`p_\theta(x, z) = p_\theta(x \mid z)\, p(z)` with a
+    standard-normal prior :math:`p(z) = \mathcal{N}(0, \mathbf{I})` and
+    a neural decoder :math:`p_\theta(x \mid z)`.  Because the marginal
+    likelihood :math:`p_\theta(x) = \int p_\theta(x \mid z)\, p(z)\, dz`
+    is intractable, training maximises the **evidence lower bound
+    (ELBO)** instead:
+
+    .. math::
+
+        \log p_\theta(x) \;\geq\;
+            \underbrace{
+                \mathbb{E}_{q_\phi(z \mid x)}\!
+                    \big[\log p_\theta(x \mid z)\big]
+            }_{\text{reconstruction}}
+            \;-\;
+            \underbrace{
+                \mathrm{KL}\!\big(
+                    q_\phi(z \mid x)\,\big\|\,p(z)
+                \big)
+            }_{\text{regulariser}}.
+
+    Here :math:`q_\phi(z \mid x) = \mathcal{N}\!\big(z;\, \mu_\phi(x),\;
+    \mathrm{diag}\,\sigma_\phi^2(x)\big)` is the **encoder** (the
+    variational posterior).  Gradients flow through the stochastic
+    sample via the **reparameterization trick** —
+    :math:`z = \mu_\phi(x) + \sigma_\phi(x) \odot \epsilon`,
+    :math:`\epsilon \sim \mathcal{N}(0, \mathbf{I})` — which keeps the
+    Monte-Carlo gradient low-variance and pathwise-differentiable.  The
+    KL term enjoys the closed form
+
+    .. math::
+
+        \mathrm{KL}\!\big(\mathcal{N}(\mu, \sigma^2)\,\big\|\,
+            \mathcal{N}(0, \mathbf{I})\big)
+            = \tfrac{1}{2} \sum_{i} \!\big(
+                \mu_i^2 + \sigma_i^2 - 1 - \log \sigma_i^2
+              \big).
+
+    The **β-VAE** (Higgins et al., 2017) variant rescales the KL term
+    by a coefficient :math:`\beta` to trade reconstruction fidelity for
+    posterior compression / latent disentanglement, recovering vanilla
+    ELBO at :math:`\beta = 1`.  The **hierarchical / Ladder VAE**
+    (Sønderby et al., 2016) extends the latent to a stack
+    :math:`z = (z_1, \dots, z_L)`, with one :math:`z_\ell` extracted per
+    encoder stage and re-injected at the matching decoder resolution;
+    the KL becomes a sum
+    :math:`\sum_\ell \mathrm{KL}(q_\phi(z_\ell \mid x) \,\|\, p(z_\ell))`,
+    granting strictly tighter bounds and richer multi-scale priors.
+
+    The encoder/decoder backbones here are convolutional with stride-2
+    down-/up-sampling blocks; the reconstruction term is selectable
+    between Gaussian (`mse`) and Bernoulli (`bce`) likelihoods to match
+    the data domain.  Despite being eclipsed by diffusion on raw sample
+    quality, the VAE remains the workhorse of representation learning
+    and a key component inside latent-diffusion pipelines (Stable
+    Diffusion's first-stage autoencoder).
+    """,
+)
 @dataclass(frozen=True)
 class VAEConfig(GenerativeModelConfig):
     """Configuration for every VAE / β-VAE / HVAE variant.

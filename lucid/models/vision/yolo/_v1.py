@@ -41,6 +41,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
@@ -94,6 +95,60 @@ _ARCH_TINY: list[object] = [
 ]
 
 
+@model_family_meta(
+    canonical_name="YOLO",
+    citation=(
+        'Redmon, Joseph, et al. "You Only Look Once: Unified, Real-Time '
+        'Object Detection." Proceedings of the IEEE Conference on '
+        "Computer Vision and Pattern Recognition, 2016, pp. 779–788."
+    ),
+    theory=r"""
+    YOLOv1 reframes detection as a **single regression problem**.
+    The input image is divided into an :math:`S \times S` grid; each
+    cell is responsible for objects whose centre falls inside it.
+    For each cell the network predicts :math:`B` candidate boxes
+    :math:`(x, y, w, h, \mathrm{conf})` plus one shared class
+    distribution over :math:`C` categories, so the head output has
+    shape :math:`S \times S \times (B \cdot 5 + C)`.
+
+    A single CNN (the Darknet trunk in the paper) processes the full
+    image once and emits all detections in one forward pass.  The
+    confidence target is :math:`\Pr(\mathrm{obj}) \cdot
+    \mathrm{IoU}^{\mathrm{truth}}_{\mathrm{pred}}` so that confidence
+    encodes both objectness and localisation quality.  Training uses
+    a weighted sum-squared-error loss
+
+    .. math::
+
+        \mathcal{L} =
+            \lambda_{\mathrm{coord}} \sum_{i,j}
+              \mathbb{1}^{\mathrm{obj}}_{ij}
+              \bigl[(x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2\bigr]
+          + \lambda_{\mathrm{coord}} \sum_{i,j}
+              \mathbb{1}^{\mathrm{obj}}_{ij}
+              \bigl[(\sqrt{w_i} - \sqrt{\hat{w}_i})^2
+                  + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2\bigr]
+          + \sum_{i,j} \mathbb{1}^{\mathrm{obj}}_{ij}
+              (C_i - \hat{C}_i)^2
+          + \lambda_{\mathrm{noobj}} \sum_{i,j}
+              \mathbb{1}^{\mathrm{noobj}}_{ij}
+              (C_i - \hat{C}_i)^2
+          + \sum_{i} \mathbb{1}^{\mathrm{obj}}_{i}
+              \sum_{c}(p_i(c) - \hat{p}_i(c))^2,
+
+    where :math:`\sqrt{w}, \sqrt{h}` make the regression less
+    sensitive to absolute scale and :math:`\lambda_{\mathrm{coord}},
+    \lambda_{\mathrm{noobj}}` rebalance the dense background term.
+
+    Because the entire pipeline is a single CNN, YOLOv1 runs at
+    45 fps (155 fps for the *tiny* variant) — orders of magnitude
+    faster than the two-stage R-CNN family — establishing the
+    one-stage detection paradigm.  Trade-off: each cell predicts a
+    fixed small :math:`B`, limiting recall on clustered small
+    objects, which is exactly what YOLOv2/v3/v4 progressively fix
+    with anchors, multi-scale heads, and a stronger backbone/neck.
+    """,
+)
 @dataclass(frozen=True)
 class YOLOV1Config(ModelConfig):
     """Configuration for YOLOv1 (Redmon et al., CVPR 2016).
@@ -182,10 +237,77 @@ def _build_darknet(
 
 
 class YOLOV1ForObjectDetection(PretrainedModel):
-    """YOLOv1 object detector (Redmon et al., CVPR 2016).
+    r"""YOLOv1 single-shot object detector (Redmon et al., CVPR 2016).
 
-    Args:
-        config: :class:`YOLOV1Config` controlling architecture and loss hyperparams.
+    The original "You Only Look Once" detector — recasts object detection
+    as a single regression problem.  An AlexNet-derived Darknet backbone
+    processes the whole image, then an adaptive-average-pool + two FC
+    layers produce an :math:`S \times S \times (B \cdot 5 + C)` tensor:
+    for each of :math:`S^2` grid cells, :math:`B` candidate boxes
+    :math:`(x, y, w, h, \mathrm{conf})` and :math:`C` class probabilities.
+    A box is responsible for an object iff the object's centre falls
+    inside that cell.  No anchors, no region proposals — a single
+    forward pass yields all detections at 45 fps on a Titan X.
+
+    Parameters
+    ----------
+    config : YOLOV1Config
+        Frozen architecture spec.  Use :func:`yolo_v1` for the full
+        Darknet backbone or :func:`yolo_v1_tiny` for the lightweight
+        Tiny variant; both default to PASCAL VOC's ``S = 7``,
+        ``B = 2``, ``C = 20``.
+
+    Attributes
+    ----------
+    config : YOLOV1Config
+        Stored copy of the config that built this model.
+    darknet : nn.Sequential
+        Backbone convolutional stack (full or tiny depending on
+        ``config.tiny``).
+    pool : nn.AdaptiveAvgPool2d
+        Pools backbone output to a fixed :math:`S \times S` map.
+    fc1, fc2 : nn.Linear
+        Two-layer FC head producing the
+        :math:`S \cdot S \cdot (B \cdot 5 + C)` flat prediction tensor.
+
+    Notes
+    -----
+    See Redmon et al., "You Only Look Once: Unified, Real-Time Object
+    Detection", CVPR 2016 (arXiv:1506.02640).  The defining multi-part
+    loss is
+
+    .. math::
+
+        \begin{aligned}
+            \mathcal{L} =\;
+                & \lambda_\mathrm{coord} \sum_{i, j}
+                    \mathbb{1}_{ij}^\mathrm{obj}
+                    \bigl[(x_i - \hat{x}_i)^2 + (y_i - \hat{y}_i)^2\bigr] \\
+                & + \lambda_\mathrm{coord} \sum_{i, j}
+                    \mathbb{1}_{ij}^\mathrm{obj}
+                    \bigl[(\sqrt{w_i} - \sqrt{\hat{w}_i})^2 + (\sqrt{h_i} - \sqrt{\hat{h}_i})^2\bigr] \\
+                & + \sum_{i, j} \mathbb{1}_{ij}^\mathrm{obj} (C_i - \hat{C}_i)^2
+                + \lambda_\mathrm{noobj}
+                    \sum_{i, j} \mathbb{1}_{ij}^\mathrm{noobj}
+                    (C_i - \hat{C}_i)^2 \\
+                & + \sum_i \mathbb{1}_i^\mathrm{obj}
+                    \sum_{c \in \mathcal{C}} (p_i(c) - \hat{p}_i(c))^2,
+        \end{aligned}
+
+    with :math:`\lambda_\mathrm{coord} = 5`,
+    :math:`\lambda_\mathrm{noobj} = 0.5` to balance localisation vs.
+    background regression.  The square-root parameterisation on width
+    / height down-weights errors in large boxes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v1 import yolo_v1
+    >>> model = yolo_v1()
+    >>> x = lucid.randn(1, 3, 448, 448)   # YOLOv1 trained at 448
+    >>> out = model(x)
+    >>> out.logits.shape[-1] >= 20
+    True
     """
 
     config_class: ClassVar[type[YOLOV1Config]] = YOLOV1Config
@@ -667,10 +789,43 @@ def yolo_v1(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV1ForObjectDetection:
-    """YOLOv1 with full Darknet backbone (Redmon et al., CVPR 2016).
+    r"""YOLOv1 with full Darknet backbone (Redmon et al., CVPR 2016).
 
-    Single-shot detector that divides the image into a 7×7 grid and predicts
-    2 bounding boxes + 80 class scores per cell in one forward pass.
+    Builds the paper-cited full YOLOv1 detector: 24-layer Darknet
+    backbone, 7x7 grid, 2 boxes per cell, 20 PASCAL VOC classes (or
+    80 COCO classes if overridden).  Approximately 270M parameters
+    (most in the two 4096-dim FC layers) and 63.4% mAP on VOC 2007
+    test (paper Table 1) at 45 fps.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV1Config` —
+        ``num_classes``, ``split_size`` (S), ``num_boxes`` (B),
+        ``score_thresh``, ``nms_thresh``, and loss weights.
+
+    Returns
+    -------
+    YOLOV1ForObjectDetection
+        Detector with the full YOLOv1 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Redmon et al., "You Only Look Once: Unified, Real-Time Object
+    Detection", CVPR 2016 (arXiv:1506.02640).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v1 import yolo_v1
+    >>> model = yolo_v1()
+    >>> x = lucid.randn(1, 3, 448, 448)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     return _make_v1(_CFG_V1, overrides)
 
@@ -686,9 +841,41 @@ def yolo_v1_tiny(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV1ForObjectDetection:
-    """YOLOv1 with tiny Darknet backbone — lightweight variant.
+    r"""YOLOv1-Tiny with reduced Darknet backbone (Redmon et al., CVPR 2016).
 
-    Uses a smaller convolutional backbone for faster inference at the cost
-    of detection accuracy.
+    Builds the lightweight variant explicitly described in the YOLOv1
+    paper alongside the full model: 9-layer Darknet-Tiny backbone with
+    the same 7x7 grid and 2 boxes per cell.  Approximately 45M
+    parameters and 52.7% mAP on VOC 2007 at 155 fps (paper Table 1) —
+    trades accuracy for speed.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV1Config`.
+
+    Returns
+    -------
+    YOLOV1ForObjectDetection
+        Detector with the YOLOv1-Tiny configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Redmon et al., "You Only Look Once: Unified, Real-Time Object
+    Detection", CVPR 2016 (arXiv:1506.02640).  The tiny variant uses
+    fewer / shallower conv stages but keeps the same FC head topology.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v1 import yolo_v1_tiny
+    >>> model = yolo_v1_tiny()
+    >>> x = lucid.randn(1, 3, 448, 448)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     return _make_v1(_CFG_V1_TINY, overrides)

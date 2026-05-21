@@ -18,16 +18,52 @@
 
 namespace lucid {
 
-// Autograd node for element-wise power: c = a ^ b.
+// Autograd node for elementwise tensor-tensor power $y = a^b$ with NumPy
+// broadcasting.
 //
-// Forward:  c[i] = a[i] ^ b[i]  (broadcasting supported).
-// Backward: dA = b * a^(b-1) * grad_out   (power rule)
-//           dB = log(a) * a^b * grad_out   (exponential rule)
+// Saves both inputs ``a`` and ``b`` (``kSavesInputs = true`` inherited from
+// :class:`BinaryKernel`) because both are needed in the backward formulas.
+// The gradient w.r.t. ``a`` is finite for any real $a$; the gradient w.r.t.
+// ``b`` is undefined when $a \leq 0$ because $\log(a)$ is not real — in that
+// regime the returned gradient is non-finite and should be masked by the
+// caller.
 //
-// AmpPolicy::ForceFP32 is used because log() and fractional exponentiation are
-// numerically unsafe in reduced-precision formats.  Both inputs are saved
-// (kSavesInputs = true, inherited default) since both are needed in the
-// backward formulas.
+// Math
+// ----
+// $$
+//   y = a^b
+// $$
+// $$
+//   \frac{\partial L}{\partial a} = b \cdot a^{b - 1} \cdot \frac{\partial L}{\partial y}
+// $$
+// $$
+//   \frac{\partial L}{\partial b} = \log(a) \cdot a^b \cdot \frac{\partial L}{\partial y}
+// $$
+//
+// Shape
+// -----
+// Inputs ``a``, ``b`` follow NumPy broadcasting rules; the output ``y`` takes
+// the broadcast shape.  Both backward branches are sum-reduced back to the
+// original input shapes by :func:`sum_to_shape` in the apply trampoline.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     ``"pow"``, version ``1``, :enum:`AmpPolicy::ForceFP32`, deterministic.
+//     FP32 is forced because ``log()`` and fractional exponentiation are
+//     numerically unstable in half/bfloat precision.
+//
+// Notes
+// -----
+// For tensor-scalar power (constant exponent) prefer the scalar variant in
+// ``ScalarParam.h`` — it skips saving the exponent tensor and avoids the
+// ``log(a) * a^b`` branch entirely.  See :class:`BinaryKernel` for the
+// broadcasting / save-tensor / reduce-to-shape machinery.
+//
+// See Also
+// --------
+// mul_op : Elementwise multiplication.
+// log_op : Natural logarithm (used by the $\partial L/\partial b$ branch).
 class LUCID_API PowBackward : public BinaryOp<PowBackward> {
 public:
     // Op registration metadata: name "pow", schema version 1, always computed
@@ -72,7 +108,29 @@ public:
     }
 };
 
-// Public entry point: compute a ^ b with full broadcasting and autograd support.
+// Compute the elementwise tensor-tensor power $y = a^b$ with broadcasting and
+// autograd support.
+//
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Base tensor.
+// b : TensorImplPtr
+//     Exponent tensor.  Broadcast-compatible with ``a``.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Tensor of shape ``broadcast(a.shape, b.shape)`` holding $a^b$.
+//
+// Notes
+// -----
+// Always computed in FP32 (see :class:`PowBackward` schema).  When grad-tracking
+// is on, registers a :class:`PowBackward` node which saves both inputs.
+//
+// Examples
+// --------
+// >>> auto y = pow_op(a, b);  // y[i] = a[i] ** b[i] with broadcasting
 LUCID_API TensorImplPtr pow_op(const TensorImplPtr& a, const TensorImplPtr& b);
 
 }  // namespace lucid

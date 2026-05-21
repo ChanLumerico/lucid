@@ -18,6 +18,10 @@ export interface SidebarItem {
   /** Optional secondary label rendered next to the title (e.g. the real
    *  Python slug "lucid.nn" next to the friendly alias "Neural Networks"). */
   tag?: string;
+  /** When true, render as a horizontal divider — all other fields ignored.
+   *  Used to visually break the top-level list before pinned-to-bottom
+   *  entries like the C++ engine surface. */
+  separator?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -32,11 +36,38 @@ function KindBadge({
   depth: number;
   active: boolean;
 }) {
-  // Leaf-level kind indicators ("C" = class, "f" = function/fn)
+  // Leaf-level kind indicators — single-letter pills coloured to match
+  // the class-kind palette used by ClassBadge / ClassDoc.
+  //   "C" = concrete class (violet)
+  //   "D" = @dataclass     (cyan)
+  //   "A" = abstract       (magenta, dashed)
+  //   "P" = Protocol       (teal, dashed)
+  //   "f" = function       (blue)
   if (badge === "C") {
     return (
       <span className="rounded px-1 py-px text-[8px] font-bold tracking-wide border bg-api-class/10 border-api-class/30 text-api-class">
         C
+      </span>
+    );
+  }
+  if (badge === "D") {
+    return (
+      <span className="rounded px-1 py-px text-[8px] font-bold tracking-wide border bg-api-class-dataclass/10 border-api-class-dataclass/35 text-api-class-dataclass">
+        D
+      </span>
+    );
+  }
+  if (badge === "A") {
+    return (
+      <span className="rounded px-1 py-px text-[8px] font-bold tracking-wide border border-dashed bg-api-class-abstract/10 border-api-class-abstract/35 text-api-class-abstract">
+        A
+      </span>
+    );
+  }
+  if (badge === "P") {
+    return (
+      <span className="rounded px-1 py-px text-[8px] font-bold tracking-wide border border-dashed bg-api-class-protocol/10 border-api-class-protocol/40 text-api-class-protocol">
+        P
       </span>
     );
   }
@@ -80,6 +111,16 @@ function TitleWithTag({ title, tag }: { title: string; tag?: string }) {
 interface SidebarGroupProps {
   item: SidebarItem;
   depth?: number;
+}
+
+function SidebarSeparator() {
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      className="my-3 mx-2 border-t border-lucid-border"
+    />
+  );
 }
 
 function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
@@ -199,9 +240,13 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
             className="overflow-hidden"
           >
             <div className="mt-0.5 space-y-0.5 border-l border-lucid-border ml-3 pl-0">
-              {item.items.map((child) => (
-                <SidebarGroup key={child.href ?? child.title} item={child} depth={depth + 1} />
-              ))}
+              {item.items.map((child, idx) =>
+                child.separator ? (
+                  <SidebarSeparator key={`sep-${idx}`} />
+                ) : (
+                  <SidebarGroup key={child.href ?? child.title} item={child} depth={depth + 1} />
+                ),
+              )}
             </div>
           </motion.div>
         )}
@@ -226,9 +271,13 @@ export function Sidebar({ items, className }: SidebarProps) {
     >
       <ScrollArea className="flex-1 pt-8 pb-6 pr-4">
         <nav className="space-y-0.5">
-          {items.map((item) => (
-            <SidebarGroup key={item.href ?? item.title} item={item} />
-          ))}
+          {items.map((item, idx) =>
+            item.separator ? (
+              <SidebarSeparator key={`sep-${idx}`} />
+            ) : (
+              <SidebarGroup key={item.href ?? item.title} item={item} />
+            ),
+          )}
         </nav>
       </ScrollArea>
     </aside>

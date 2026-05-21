@@ -1,11 +1,20 @@
 // lucid/_C/nn/LayerNorm.h
 //
-// Autograd-aware Layer Normalization: normalizes over the last D dimensions
-// specified by the shape of gamma (and beta), then applies an affine transform
-// y = gamma * x_hat + beta.  D may be any value from 1 to rank(x).
+// Autograd-aware Layer Normalization.
 //
-// The operation is forced to FP32 (AmpPolicy::ForceFP32) to avoid numerical
-// instability in half-precision accumulations.
+// Normalises the input over its trailing $D$ dimensions — where $D$ is
+// the rank of ``gamma`` (and ``beta``) — by the per-slice mean and
+// variance, then applies the per-element affine
+// $y = \gamma \hat{x} + \beta$.  $D$ may be any value from 1 to
+// ``rank(x)``: for ``(N, T, C)`` input with ``gamma`` of shape ``(C,)``
+// the reduction is per ``(n, t)`` position; for ``gamma`` of shape
+// ``(T, C)`` it reduces over the last two axes.
+//
+// The kernel is registered with :member:`AmpPolicy::ForceFP32`:
+// reductions over the trailing axes accumulate enough terms that
+// half-precision variance suffers from catastrophic cancellation, so
+// the math is always carried out in FP32 even under an outer
+// ``AutocastGuard(F16)``.
 
 #pragma once
 
@@ -22,36 +31,161 @@ namespace lucid {
 
 // Autograd node for Layer Normalization.
 //
-// Saves the per-slice mean (saved_mean_) and reciprocal standard deviation
-// (saved_rstd_) computed during the forward pass; these are required by the
-// backward formula.  outer_ * N_ == numel(x).
-// Thread safety: single-use; create during forward, consume during backward.
+// Computes
+// $\hat{x} = (x - \mu) / \sqrt{\sigma^2 + \epsilon}$ over the last $D$
+// dimensions of ``x`` (one ``(\mu, \sigma^2)`` pair per leading-axis
+// slice), then applies the element-wise affine
+// $y = \gamma\,\hat{x} + \beta$.  The per-slice mean
+// :member:`saved_mean_` and reciprocal standard deviation
+// :member:`saved_rstd_` are cached for the backward closed-form.
+//
+// Inherits ``FuncOp<LayerNormBackward, 3>`` with three saved-input
+// slots — ``x``, ``gamma``, and ``beta``.  ``outer_ * N_`` always
+// equals ``numel(x)``: ``outer_`` is the product of the leading
+// (non-normalised) dims and ``N_`` is the product of the trailing
+// (normalised) dims.
+//
+// Math
+// ----
+// For each leading-axis slice of ``x`` (flattened length $N$):
+//
+// $$
+//   \mu = \frac{1}{N}\sum_i x_i, \qquad
+//   \sigma^2 = \frac{1}{N}\sum_i (x_i - \mu)^2
+// $$
+//
+// $$
+//   \hat{x}_i = (x_i - \mu) \cdot \frac{1}{\sqrt{\sigma^2 + \epsilon}},
+//   \qquad y_i = \gamma_i\,\hat{x}_i + \beta_i
+// $$
+//
+// Mean and variance use the biased estimator (``correction=0``), as is
+// standard for layer norm.
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered schema (``name="layer_norm"``, ``version=1``,
+//     ``amp_policy=ForceFP32``, ``produces_grad=true``).
+// saved_mean_ : Storage
+//     Per-slice mean $\mu$, shape ``(outer_,)``.
+// saved_rstd_ : Storage
+//     Per-slice reciprocal standard deviation
+//     $1 / \sqrt{\sigma^2 + \epsilon}$, shape ``(outer_,)``.
+// outer_ : std::size_t
+//     Product of all leading (non-normalised) dimensions of ``x``.
+// N_ : std::size_t
+//     Product of all normalised (trailing) dimensions of ``x``
+//     (== ``numel(gamma)``).
+//
+// Notes
+// -----
+// Thread safety: instances are created during forward and consumed
+// during backward — no concurrent access expected.
+//
+// References
+// ----------
+// Ba, Kiros & Hinton, "Layer Normalization" (arXiv:1607.06450, 2016).
 class LUCID_API LayerNormBackward : public FuncOp<LayerNormBackward, 3> {
 public:
+    // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
-    Storage saved_mean_;     // Shape (outer,), one mean per normalized slice.
-    Storage saved_rstd_;     // Shape (outer,), reciprocal std per slice.
-    std::size_t outer_ = 0;  // Product of all leading (non-normalized) dims.
-    std::size_t N_ = 0;      // Product of all normalized (trailing) dims.
+    // Per-slice mean $\mu$, shape ``(outer_,)``.
+    Storage saved_mean_;
+    // Per-slice reciprocal standard deviation, shape ``(outer_,)``.
+    Storage saved_rstd_;
+    // Product of leading (non-normalised) dims of ``x``.
+    std::size_t outer_ = 0;
+    // Product of normalised (trailing) dims of ``x`` (== numel(gamma)).
+    std::size_t N_ = 0;
 
     // Run the forward pass.
-    // x      – input of any shape.
-    // gamma  – scale, shape must match the trailing dims of x.
-    // beta   – shift, same shape as gamma.
-    // eps    – small constant added to variance for numerical stability.
-    // Returns a tensor with the same shape as x.
-    // Throws ShapeMismatch if gamma has more dims than x, or if the trailing
-    // dims of x do not match gamma, or if gamma and beta shapes differ.
+    //
+    // Reduces ``x`` over its last $D$ dimensions (where $D$ is the rank
+    // of ``gamma``), normalises, applies the affine, and (when grad mode
+    // is on) registers ``this`` as the ``grad_fn`` of the returned
+    // output.  Caches ``saved_mean_`` and ``saved_rstd_`` for backward.
+    //
+    // Parameters
+    // ----------
+    // x : TensorImplPtr
+    //     Input tensor of any shape ``(*, normalized_shape)``.
+    // gamma : TensorImplPtr
+    //     Per-element scale; its shape must match the trailing dims of
+    //     ``x``.
+    // beta : TensorImplPtr
+    //     Per-element shift; must have the same shape as ``gamma``.
+    // eps : double
+    //     Small constant added to the variance for numerical stability.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     Normalised output, same shape as ``x``.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     If ``gamma.ndim > x.ndim``, if the trailing dims of ``x`` do
+    //     not match ``gamma``, or if ``gamma.shape != beta.shape``.
     static TensorImplPtr forward(const TensorImplPtr& x,
                                  const TensorImplPtr& gamma,
                                  const TensorImplPtr& beta,
                                  double eps);
 
-    // Compute gradients for x (dx), gamma (d_gamma), and beta (d_beta).
+    // Compute gradients for the three saved inputs.
+    //
+    // Returns ``{dx, d_gamma, d_beta}`` in the saved-input order.
+    // Closed-form (per leading slice of length $N$):
+    //
+    // $$
+    //   d\gamma_i = \sum_{\text{slice}} \hat{x}_i\,\text{grad\_out}_i,
+    //   \qquad
+    //   d\beta_i  = \sum_{\text{slice}} \text{grad\_out}_i
+    // $$
+    //
+    // and the input gradient follows the standard LN backward expansion
+    // (a difference of the centred grad and two reduction terms scaled
+    // by $\text{rstd}$).
+    //
+    // Parameters
+    // ----------
+    // grad_out : Storage
+    //     Incoming gradient, same shape as the forward output.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     Three-element vector ``{dx, d_gamma, d_beta}``.
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// Public entry point: delegates to LayerNormBackward::forward.
+// Public free-function entry point for Layer Normalization.
+//
+// Thin wrapper that delegates to :func:`LayerNormBackward::forward`.
+// This is the symbol the pybind11 binding layer forwards to from
+// :func:`lucid.nn.functional.layer_norm`.
+//
+// Parameters
+// ----------
+// x : TensorImplPtr
+//     Input tensor of any shape.
+// gamma : TensorImplPtr
+//     Per-element scale; must match the trailing dims of ``x``.
+// beta : TensorImplPtr
+//     Per-element shift; same shape as ``gamma``.
+// eps : double
+//     Numerical-stability constant.
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Normalised output, same shape as ``x``.
+//
+// See Also
+// --------
+// LayerNormBackward : Autograd node implementing the forward + backward.
+// rms_norm_op       : Variant that omits mean subtraction.
 LUCID_API TensorImplPtr layer_norm_op(const TensorImplPtr& x,
                                       const TensorImplPtr& gamma,
                                       const TensorImplPtr& beta,

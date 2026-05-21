@@ -54,10 +54,67 @@ def _build_features(cfg: VGGConfig) -> nn.Sequential:
 
 
 class VGG(PretrainedModel, BackboneMixin):
-    """VGG feature extractor — outputs 5-block conv activations.
+    r"""VGG feature-extracting backbone (no fully-connected head).
 
-    ``forward_features`` returns shape ``(B, 512, 7, 7)`` for 224×224 inputs
-    after AdaptiveAvgPool2d.
+    Implements the unified VGG topology from Simonyan & Zisserman,
+    "Very Deep Convolutional Networks for Large-Scale Image
+    Recognition", ICLR 2015.  All variants (VGG-11/13/16/19, with or
+    without :class:`~lucid.nn.BatchNorm2d`) share the same macro
+    structure: five blocks of stacked :math:`3\times3` convolutions
+    interleaved with :math:`2\times2` max-pools, with channel widths
+    fixed at ``(64, 128, 256, 512, 512)``.  Only the number of
+    convolutions per block changes between variants.  A final
+    :class:`~lucid.nn.AdaptiveAvgPool2d` collapses the feature map to
+    :math:`7\times7` so the backbone output is fixed-size regardless of
+    input resolution.
+
+    Parameters
+    ----------
+    config : VGGConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`vgg_11`, :func:`vgg_13`, :func:`vgg_16`, :func:`vgg_19`
+        and their ``*_bn`` variants) for paper-cited configurations.
+
+    Attributes
+    ----------
+    config : VGGConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        The five conv blocks; structure depends on ``config.arch`` and
+        ``config.batch_norm`` — see :func:`_build_features`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global pool down to :math:`7\times7` so the backbone produces a
+        fixed-size feature regardless of input resolution.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin` for downstream decoder modules.
+
+    Notes
+    -----
+    From Simonyan & Zisserman, ICLR 2015, Table 1.  The motivating
+    insight is that two stacked :math:`3\times3` convolutions cover the
+    same receptive field as a single :math:`5\times5` convolution but
+    use only :math:`2 \cdot 9 C^2 = 18 C^2` parameters versus
+    :math:`25 C^2`, while inserting an extra nonlinearity between them.
+    Three stacked :math:`3\times3` layers match a :math:`7\times7`
+    receptive field at :math:`27 C^2` versus :math:`49 C^2` parameters
+    and *two* extra nonlinearities.  Depth at a fixed receptive field
+    therefore buys representational power essentially for free.  VGG
+    backbones became the standard feature extractor for downstream
+    tasks (Faster R-CNN, neural style transfer) for several years
+    after publication.
+
+    Examples
+    --------
+    Build a VGG-16 backbone and run a single forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.vgg import vgg_16
+    >>> backbone = vgg_16()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 512, 7, 7)
+    (2, 512, 7, 7)
     """
 
     config_class: ClassVar[type[VGGConfig]] = VGGConfig
@@ -90,7 +147,61 @@ class VGG(PretrainedModel, BackboneMixin):
 
 
 class VGGForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """VGG with two 4096-dim FC layers + final classifier."""
+    r"""VGG with two 4096-dim fully-connected layers and a linear classifier.
+
+    Combines a :class:`VGG` convolutional backbone with the standard
+    paper-cited classifier head: FC6 (512·7·7 = 25088 → 4096), FC7
+    (4096 → 4096), and a final linear projection to
+    ``config.num_classes`` (default 1000 for ImageNet-1k).
+    :class:`~lucid.nn.Dropout` with ``config.dropout`` (0.5 in the
+    paper) is applied after both ReLU activations.  When ``labels`` are
+    supplied to :meth:`forward`, cross-entropy loss is returned
+    alongside the logits.
+
+    Parameters
+    ----------
+    config : VGGConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`vgg_11_cls`, :func:`vgg_16_cls`, …) for paper-cited
+        configurations.
+
+    Attributes
+    ----------
+    config : VGGConfig
+        Stored copy of the config that built this model.
+    features, avgpool
+        Same backbone components as on :class:`VGG`.
+    fc6, fc7 : nn.Linear
+        The two 4096-dim hidden fully-connected layers.
+    drop6, drop7 : nn.Dropout
+        Dropout layers applied after each ReLU in the hidden FC stack,
+        controlled by ``config.dropout``.
+    classifier : nn.Module
+        Final linear projection 4096 → ``num_classes``.
+
+    Notes
+    -----
+    From Simonyan & Zisserman, ICLR 2015.  The two 4096-dim FC layers
+    dominate the parameter count: VGG-16 has 138 M parameters total, of
+    which roughly 124 M sit in FC6 + FC7.  This is a recognised
+    weakness — almost all later architectures (ResNet, DenseNet, …)
+    replace the giant FC head with a single :class:`~lucid.nn.Linear`
+    after :class:`~lucid.nn.AdaptiveAvgPool2d` to slash the parameter
+    cost.  VGG-16 reaches a top-5 ImageNet validation error of 7.3% and
+    VGG-19 reaches 7.5%.
+
+    Examples
+    --------
+    Run inference on a 224x224 RGB batch:
+
+    >>> import lucid
+    >>> from lucid.models.vision.vgg import vgg_16_cls
+    >>> model = vgg_16_cls()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
+    """
 
     config_class: ClassVar[type[VGGConfig]] = VGGConfig
     base_model_prefix: ClassVar[str] = "vgg"

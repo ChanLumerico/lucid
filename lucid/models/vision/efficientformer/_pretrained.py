@@ -58,7 +58,45 @@ def _c(
 def efficientformer_l1(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormer:
-    """EfficientFormer-L1 backbone (Li et al., 2022)."""
+    r"""EfficientFormer-L1 backbone (Li et al., 2022).
+
+    Builds the canonical *EfficientFormer-L1* configuration:
+    ``depths=(3, 2, 6, 4)``, ``embed_dims=(48, 96, 224, 448)``,
+    ``mlp_ratios=(4.0, 4.0, 4.0, 4.0)``, ``drop_path_rate=0.0``.
+    Approximately **12.3M parameters** — the smallest, lowest-latency
+    variant in the paper.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available in the model zoo.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L1 config.  Each
+        override must match a field of :class:`EfficientFormerConfig`.
+
+    Returns
+    -------
+    EfficientFormer
+        An :class:`EfficientFormer` backbone returning a flat
+        :math:`(B, 448)` feature.
+
+    Notes
+    -----
+    EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at
+    MobileNetV2-class on-device latency (Li et al., 2022, Table 4).
+    See `arXiv:2206.01191 <https://arxiv.org/abs/2206.01191>`_.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l1
+    >>> model = efficientformer_l1()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape
+    (1, 448)
+    """
     return _b(_CFG_L1, overrides)
 
 
@@ -72,7 +110,40 @@ def efficientformer_l1(
 def efficientformer_l3(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormer:
-    """EfficientFormer-L3 backbone (Li et al., 2022), ~30.9M params."""
+    r"""EfficientFormer-L3 backbone (Li et al., 2022).
+
+    Builds the canonical *EfficientFormer-L3* configuration:
+    ``depths=(4, 4, 12, 6)``, ``embed_dims=(64, 128, 320, 512)``,
+    ``drop_path_rate=0.1``.  Approximately **30.9M parameters**.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L3 config.
+
+    Returns
+    -------
+    EfficientFormer
+        An :class:`EfficientFormer` backbone returning a flat
+        :math:`(B, 512)` feature.
+
+    Notes
+    -----
+    EfficientFormer-L3 reaches **82.4% top-1 on ImageNet-1k** (Li
+    et al., 2022, Table 4).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l3
+    >>> model = efficientformer_l3()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 512)
+    """
     return _b(_CFG_L3, overrides)
 
 
@@ -86,7 +157,41 @@ def efficientformer_l3(
 def efficientformer_l7(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormer:
-    """EfficientFormer-L7 backbone (Li et al., 2022), ~81.5M params."""
+    r"""EfficientFormer-L7 backbone (Li et al., 2022).
+
+    Builds the canonical *EfficientFormer-L7* configuration:
+    ``depths=(6, 6, 18, 8)``, ``embed_dims=(96, 192, 384, 768)``,
+    ``drop_path_rate=0.2``.  Approximately **81.5M parameters** — the
+    largest variant in the paper.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L7 config.
+
+    Returns
+    -------
+    EfficientFormer
+        An :class:`EfficientFormer` backbone returning a flat
+        :math:`(B, 768)` feature.
+
+    Notes
+    -----
+    EfficientFormer-L7 reaches **83.3% top-1 on ImageNet-1k** (Li
+    et al., 2022, Table 4) — the headline result of the paper.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l7
+    >>> model = efficientformer_l7()
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model.forward_features(x).shape
+    (1, 768)
+    """
     return _b(_CFG_L7, overrides)
 
 
@@ -103,7 +208,41 @@ def efficientformer_l7(
 def efficientformer_l1_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormerForImageClassification:
-    """EfficientFormer-L1 image classifier (Li et al., 2022)."""
+    r"""EfficientFormer-L1 image classifier (Li et al., 2022).
+
+    Combines the :func:`efficientformer_l1` backbone with a mean pool
+    + LayerNorm + single :class:`nn.Linear` classification head.
+    Default output is ``num_classes=1000`` (ImageNet-1k).  ~12.3M
+    parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L1 config.
+
+    Returns
+    -------
+    EfficientFormerForImageClassification
+        Classifier returning :class:`ImageClassificationOutput` whose
+        ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at
+    MobileNetV2-class latency (Li et al., 2022, Table 4).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l1_cls
+    >>> model = efficientformer_l1_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_L1, overrides)
 
 
@@ -117,7 +256,39 @@ def efficientformer_l1_cls(
 def efficientformer_l3_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormerForImageClassification:
-    """EfficientFormer-L3 image classifier (Li et al., 2022), ~30.9M params."""
+    r"""EfficientFormer-L3 image classifier (Li et al., 2022).
+
+    Combines the :func:`efficientformer_l3` backbone (``depths=
+    (4, 4, 12, 6)``, ``embed_dims=(64, 128, 320, 512)``) with a mean
+    pool + LayerNorm + linear classification head.  ~30.9M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L3 config.
+
+    Returns
+    -------
+    EfficientFormerForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    EfficientFormer-L3 reaches **82.4% top-1 on ImageNet-1k** (Li
+    et al., 2022, Table 4).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l3_cls
+    >>> model = efficientformer_l3_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_L3, overrides)
 
 
@@ -131,5 +302,38 @@ def efficientformer_l3_cls(
 def efficientformer_l7_cls(
     pretrained: bool = False, **overrides: object
 ) -> EfficientFormerForImageClassification:
-    """EfficientFormer-L7 image classifier (Li et al., 2022), ~81.5M params."""
+    r"""EfficientFormer-L7 image classifier (Li et al., 2022).
+
+    Combines the :func:`efficientformer_l7` backbone (``depths=
+    (6, 6, 18, 8)``, ``embed_dims=(96, 192, 384, 768)``) with a mean
+    pool + LayerNorm + linear classification head.  ~81.5M parameters
+    — the largest EfficientFormer variant.
+
+    Parameters
+    ----------
+    pretrained : bool, optional
+        If ``True``, loads ImageNet-1k pretrained weights when
+        available.  Defaults to ``False``.
+    **overrides : object
+        Keyword overrides on top of the canonical L7 config.
+
+    Returns
+    -------
+    EfficientFormerForImageClassification
+        Classifier whose ``logits`` has shape ``(B, num_classes)``.
+
+    Notes
+    -----
+    EfficientFormer-L7 reaches **83.3% top-1 on ImageNet-1k** (Li
+    et al., 2022, Table 4) — the headline result of the paper.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import efficientformer_l7_cls
+    >>> model = efficientformer_l7_cls(num_classes=1000)
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> model(x).logits.shape
+    (1, 1000)
+    """
     return _c(_CFG_L7, overrides)

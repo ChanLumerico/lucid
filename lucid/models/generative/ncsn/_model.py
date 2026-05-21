@@ -61,13 +61,65 @@ def _to_unet_config(cfg: NCSNConfig) -> DDPMConfig:
 
 
 class NCSNModel(PretrainedModel):
-    """Score network ``s_θ(x̃, σ_i)`` over the geometric σ schedule.
+    r"""Score network :math:`s_\theta(\tilde{x}, \sigma_i)` over a geometric :math:`\sigma` schedule.
 
-    Forward consumes the **integer noise-level index** ``i ∈ [0, L)`` rather
-    than the raw σ value, matching the way NCSNv2 / NCSN++ feed the
-    conditioning signal through the U-Net's :class:`TimestepEmbedding`.
-    The raw σ table is kept as a non-persistent buffer so it travels with
-    ``.to(device=...)``.
+    Implements the noise-conditional score network of Song and Ermon, 2019
+    (and the NCSNv2 / NCSN++ refinements of Song 2020, Song et al. 2021).
+    Reuses :class:`DDPMUNet` as the score backbone — modern NCSN variants
+    converged on the same U-Net architecture as diffusion — but feeds the
+    integer noise-level index :math:`i \in [0, L)` rather than a raw
+    :math:`\sigma` value through the timestep embedding (matching the
+    NCSNv2 / NCSN++ recipe).  The geometric :math:`\sigma` table itself is
+    held as a non-persistent buffer so it travels with ``.to(device=...)``.
+
+    Parameters
+    ----------
+    config : NCSNConfig
+        Hyperparameters controlling the U-Net topology
+        (``base_channels``, ``channel_mult``, ``num_res_blocks``,
+        ``attention_resolutions``, ``num_heads``, ``dropout``,
+        ``resnet_groups``) and the score-based extras
+        (``num_noise_levels``, ``sigma_max``, ``sigma_min``).
+
+    Attributes
+    ----------
+    unet : DDPMUNet
+        Shared U-Net backbone instantiated from a derived
+        :class:`DDPMConfig`.
+    sigmas : Tensor
+        Buffer of shape ``(num_noise_levels,)`` holding the geometric
+        :math:`\sigma_1 > \sigma_2 > \cdots > \sigma_L` schedule.
+
+    Notes
+    -----
+    Reference: Song and Ermon, *"Generative Modeling by Estimating
+    Gradients of the Data Distribution"*, NeurIPS, 2019
+    (arXiv:1907.05600); NCSNv2 refinements in Song and Ermon, 2020
+    (arXiv:2006.09011).
+
+    The trained score satisfies
+
+    .. math::
+
+        s_\theta(\tilde{x}, \sigma)
+            \;\approx\; \nabla_{\tilde{x}} \log p_\sigma(\tilde{x}),
+
+    where :math:`p_\sigma` is the data distribution convolved with a
+    Gaussian of standard deviation :math:`\sigma`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import NCSNConfig, NCSNModel
+    >>> cfg = NCSNConfig(sample_size=32, base_channels=32,
+    ...                  channel_mult=(1, 2), num_res_blocks=1,
+    ...                  resnet_groups=16, num_noise_levels=10)
+    >>> model = NCSNModel(cfg).eval()
+    >>> x_tilde = lucid.randn((1, 3, 32, 32))
+    >>> sigma_idx = lucid.tensor([3]).long()
+    >>> out = model(x_tilde, sigma_idx)
+    >>> out.sample.shape   # (1, 3, 32, 32) — raw score
+    (1, 3, 32, 32)
     """
 
     config_class: ClassVar[type[NCSNConfig]] = NCSNConfig
@@ -115,19 +167,74 @@ class NCSNModel(PretrainedModel):
 
 
 class NCSNForImageGeneration(PretrainedModel):
-    """NCSN + DSM training loss + annealed Langevin ``.generate()``.
+    r"""NCSN with the DSM training loss and annealed Langevin ``.generate()``.
 
-    Training contract:
-        ``forward(x)`` samples a random noise level per image, perturbs
-        ``x`` accordingly, runs the score network, and returns the DSM
-        loss (Song 2019 Eq. 6).
+    Wraps :class:`NCSNModel` with denoising score matching (DSM) for
+    training and annealed Langevin dynamics for inference.  Sampling does
+    **not** reuse :class:`DiffusionMixin.generate` because NCSN's nested
+    (per-:math:`\sigma` x per-step) loop has different semantics from the
+    DDPM scheduler step.
 
-    Sampling:
-        ``.generate(n_samples)`` runs annealed Langevin dynamics across
-        the full σ schedule.  Does **not** reuse
-        :class:`DiffusionMixin.generate` because NCSN's nested
-        (per-σ × per-step) loop has different semantics from the DDPM
-        scheduler step.
+    Training contract
+        ``forward(x)`` samples a random noise-level index per image,
+        perturbs ``x`` accordingly, runs the score network, and returns
+        the DSM loss (Song 2019 Eq. 6).
+
+    Sampling
+        ``generate(n_samples)`` runs annealed Langevin dynamics across the
+        full :math:`\sigma` schedule (Song 2019 Algorithm 1).
+
+    Parameters
+    ----------
+    config : NCSNConfig
+        Hyperparameters controlling architecture, noise schedule, and
+        Langevin sampler.
+
+    Attributes
+    ----------
+    ncsn : NCSNModel
+        Underlying score network (see :class:`NCSNModel`).
+    sigmas : Tensor
+        Buffer of shape ``(num_noise_levels,)`` holding the geometric
+        :math:`\sigma` schedule (mirrored from ``self.ncsn.sigmas`` for
+        convenience in loss / sampling code).
+
+    Notes
+    -----
+    Reference: Song and Ermon, *"Generative Modeling by Estimating
+    Gradients of the Data Distribution"*, NeurIPS, 2019 (arXiv:1907.05600);
+    NCSNv2 refinements in Song and Ermon, 2020 (arXiv:2006.09011).
+
+    Denoising score matching loss:
+
+    .. math::
+
+        \mathcal{L}_{\text{DSM}}(\theta)
+            = \tfrac{1}{2}\,
+              \mathbb{E}_{\sigma, x, \tilde{x}}\!\left[
+                \big\lVert
+                    \sigma\, s_\theta(\tilde{x}, \sigma) + z
+                \big\rVert^2
+              \right],
+
+    with :math:`\tilde{x} = x + \sigma z`, :math:`z \sim
+    \mathcal{N}(0, \mathbf{I})`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import (
+    ...     NCSNConfig, NCSNForImageGeneration,
+    ... )
+    >>> cfg = NCSNConfig(sample_size=32, base_channels=32,
+    ...                  channel_mult=(1, 2), num_res_blocks=1,
+    ...                  resnet_groups=16, num_noise_levels=10,
+    ...                  langevin_steps=2)
+    >>> model = NCSNForImageGeneration(cfg).eval()
+    >>> x = lucid.randn((1, 3, 32, 32))
+    >>> out = model(x)
+    >>> out.sample.shape, out.loss.shape   # score field + scalar loss
+    ((1, 3, 32, 32), ())
     """
 
     config_class: ClassVar[type[NCSNConfig]] = NCSNConfig

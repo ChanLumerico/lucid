@@ -52,11 +52,46 @@ def detr_resnet50(
     pretrained: bool = False,
     **overrides: object,
 ) -> DETRForObjectDetection:
-    """DETR with ResNet-50 backbone (Carion et al., ECCV 2020).
+    r"""DETR with ResNet-50 backbone (Carion et al., ECCV 2020).
 
-    Detection Transformer with 100 object queries, 6-layer encoder/decoder,
-    d_model=256, 8 attention heads.  Trained with the set-prediction (Hungarian)
-    loss — no anchors, no NMS.
+    Builds a :class:`DETRForObjectDetection` with the paper-cited
+    ResNet-50 + transformer configuration: 100 object queries, a 6-layer
+    encoder + 6-layer decoder with ``d_model = 256``, 8 attention heads,
+    and ``dim_feedforward = 2048``.  Reaches COCO test-dev mAP of 42.0%
+    (paper Table 1).  Approximately 41M parameters and a notable
+    *no-anchor / no-NMS* design.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`DETRConfig`
+        (``num_queries``, ``num_classes``, ``dropout``,
+        ``num_encoder_layers``, ``num_decoder_layers``, ``d_model``, ...).
+
+    Returns
+    -------
+    DETRForObjectDetection
+        Detector with the DETR ResNet-50 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Carion et al., "End-to-End Object Detection with Transformers",
+    ECCV 2020 (arXiv:2005.12872).  The key insight is bipartite Hungarian
+    matching during training, which makes the set-prediction loss
+    permutation-invariant in the query dimension.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.detr import detr_resnet50
+    >>> model = detr_resnet50()
+    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 100, 81)
     """
     return _det(_CFG_R50, overrides)
 
@@ -72,9 +107,41 @@ def detr_resnet101(
     pretrained: bool = False,
     **overrides: object,
 ) -> DETRForObjectDetection:
-    """DETR with ResNet-101 backbone (Carion et al., ECCV 2020).
+    r"""DETR with ResNet-101 backbone (Carion et al., ECCV 2020).
 
-    Same transformer head configuration as the ResNet-50 variant, with a
-    deeper backbone (23 layer-3 blocks instead of 6) for higher capacity.
+    Builds a :class:`DETRForObjectDetection` with the same transformer
+    head as :func:`detr_resnet50` but a deeper ResNet-101 backbone
+    (``[3, 4, 23, 3]`` bottleneck blocks).  Approximately 60M parameters
+    and COCO test-dev mAP of 43.5% (paper Table 1, DETR-R101 row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`DETRConfig`.
+
+    Returns
+    -------
+    DETRForObjectDetection
+        Detector with the DETR ResNet-101 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Carion et al., "End-to-End Object Detection with Transformers",
+    ECCV 2020 (arXiv:2005.12872).  Switching to ResNet-101 buys ~1.5
+    points of AP at the cost of ~50% more parameters in the backbone;
+    the transformer head is unchanged.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.detr import detr_resnet101
+    >>> model = detr_resnet101()
+    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 100, 81)
     """
     return _det(_CFG_R101, overrides)

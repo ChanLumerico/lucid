@@ -4,8 +4,56 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="Mask R-CNN",
+    citation=(
+        'He, Kaiming, et al. "Mask R-CNN." Proceedings of the IEEE '
+        "International Conference on Computer Vision, 2017, pp. 2961–2969."
+    ),
+    theory=r"""
+    Mask R-CNN extends Faster R-CNN with a **parallel mask branch**
+    that predicts a per-RoI binary segmentation, turning the
+    two-stage detector into a unified instance-segmentation model
+    with negligible runtime overhead.
+
+    Three design changes are critical:
+
+    1. **Feature Pyramid Network backbone.**  Lateral :math:`1 \times 1`
+       convolutions fuse top-down semantically strong features with
+       bottom-up spatially precise ones, yielding multi-scale outputs
+       :math:`\{P_2, \dots, P_6\}` all at the same channel depth (256).
+       Each RoI is routed to the level
+
+       .. math::
+
+           k = \lfloor k_0 + \log_2(\sqrt{wh}/224) \rfloor,
+
+       so small objects use high-resolution maps and large ones use
+       deeper, semantically richer features.
+
+    2. **RoI Align.**  RoI Pool quantises coordinates twice
+       (proposal → feature grid, then feature grid → output cells),
+       which misaligns mask predictions by several pixels.  RoI Align
+       removes both quantisations and bilinearly interpolates four
+       regularly-sampled points per cell.  This single change adds
+       :math:`\sim 10\%` AP on the mask task.
+
+    3. **Decoupled mask head.**  Unlike FCN-style approaches that
+       compete classes via per-pixel softmax, Mask R-CNN emits a
+       :math:`K \times m \times m` tensor of *per-class* binary masks
+       and applies sigmoid + binary cross-entropy.  The classification
+       branch alone chooses *which* class's mask to use at inference,
+       avoiding inter-class competition during training.
+
+    The total loss is a sum of the Faster R-CNN classification +
+    regression terms and an additional mean BCE on the predicted
+    mask channel of the ground-truth class, :math:`L = L_{\mathrm{cls}}
+    + L_{\mathrm{box}} + L_{\mathrm{mask}}`.
+    """,
+)
 @dataclass(frozen=True)
 class MaskRCNNConfig(ModelConfig):
     """Configuration for Mask R-CNN.

@@ -4,8 +4,57 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="DenseNet",
+    citation=(
+        'Huang, Gao, et al. "Densely Connected Convolutional Networks." '
+        "Proceedings of the IEEE Conference on Computer Vision and Pattern "
+        "Recognition (CVPR), 2017, pp. 4700–4708."
+    ),
+    theory=r"""
+    DenseNet takes the residual-shortcut idea to its logical extreme.
+    Inside each *dense block*, every layer receives as input the
+    concatenated feature maps of *all* previous layers in the block,
+    not just the immediately preceding layer.  For a block of
+    :math:`L` layers the :math:`\ell`-th layer computes
+
+    .. math::
+
+        x_\ell = H_\ell\bigl(
+            [x_0,\; x_1,\; \dots,\; x_{\ell-1}]
+        \bigr),
+
+    where :math:`[\cdot]` denotes channel-wise concatenation and
+    :math:`H_\ell` is a BN → ReLU → :math:`3\times3` Conv composite
+    (optionally preceded by a :math:`1\times1` bottleneck).  Each
+    :math:`H_\ell` contributes a small fixed number :math:`k` of new
+    feature maps — the *growth rate* — so the input width of layer
+    :math:`\ell` grows linearly as :math:`k_0 + (\ell - 1)\,k`.
+
+    This dense connectivity has three notable consequences.  First,
+    every layer has direct supervision-style access to the loss
+    gradient through the concatenation paths, easing optimisation in
+    very deep networks.  Second, parameter efficiency is excellent:
+    because each layer only adds :math:`k` (typically 12, 24, or 32)
+    new channels rather than transforming the full activation, a
+    DenseNet with 0.8 M parameters matches the accuracy of a 1.7 M
+    parameter ResNet on CIFAR.  Third, feature *reuse* is explicit —
+    later layers can directly combine raw early features with refined
+    deep features without re-encoding them.
+
+    The four ImageNet variants — DenseNet-121, 169, 201, and 264 —
+    differ only in the per-block layer counts (``block_config``).  All
+    use four dense blocks separated by *transition* layers
+    (:math:`1\times1` Conv + :math:`2\times2` average pool) that
+    compress the channel count and halve the spatial resolution.
+    DenseNet-121 reaches a top-1 ImageNet error of 25.0% with 8 M
+    parameters, substantially better parameter efficiency than the
+    contemporary ResNet-50.
+    """,
+)
 @dataclass(frozen=True)
 class DenseNetConfig(ModelConfig):
     """Configuration for all DenseNet variants (121/169/201/264).

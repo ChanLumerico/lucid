@@ -1,12 +1,34 @@
 // lucid/_C/backend/IBackend.h
 //
-// Pure-virtual interface that every hardware backend must implement.  All
-// compute operations in the Lucid ML engine — elementwise math, reductions,
-// matrix multiply, convolution, normalization, pooling, loss functions, SDPA,
-// LSTM, and more — are declared here as abstract virtual methods.  Higher-
-// level tensor code calls through the Dispatcher to whichever concrete backend
-// is registered for a given Device.  Adding a new backend means subclassing
-// IBackend and registering an instance with Dispatcher::register_backend().
+// Pure-virtual interface that every hardware backend must implement.
+//
+// All compute operations in the Lucid ML engine — elementwise math,
+// reductions, matrix multiply, convolution, normalization, pooling,
+// loss functions, SDPA, LSTM, RoPE, interpolation, grid sample, and more
+// — are declared here as abstract virtual methods.  Higher-level tensor
+// code calls through :class:`Dispatcher` to whichever concrete backend
+// is registered for a given :class:`Device`.  Adding a new backend means
+// subclassing :class:`IBackend` and registering an instance via
+// :func:`Dispatcher::register_backend`.
+//
+// Notes
+// -----
+// The current device split (per DEVELOPMENT.md H3) is:
+//
+// - ``Device::CPU`` → :class:`CpuBackend` (Apple Accelerate only —
+//   vDSP / vForce / BLAS / LAPACK).
+// - ``Device::GPU`` → :class:`GpuBackend` (MLX / Metal only).
+//
+// All op methods take :class:`Storage` by const-reference and return a
+// new :class:`Storage`; no in-place mutation is exposed at this layer.
+// Concrete backends choose the most efficient internal representation
+// (``CpuStorage`` for CPU, ``GpuStorage`` for GPU).
+//
+// See Also
+// --------
+// :class:`Dispatcher` — routes per-device calls to the right backend.
+// :class:`CpuBackend` — concrete CPU implementation.
+// :class:`GpuBackend` — concrete GPU implementation.
 
 #pragma once
 
@@ -27,9 +49,33 @@ namespace backend {
 
 // Parameter bag for a single matrix-multiplication call.
 //
-// All dimensions are in logical (not transposed) order: the product is
-// (M x K) @ (K x N) = (M x N).  batch > 1 indicates a batched matmul where
-// the same A/B strides repeat batch times.
+// Carries the logical shape and transposition flags for one ``a @ b``
+// product.  Dimensions are interpreted in *logical* (not transposed)
+// order so the result is always $(M \times K) \cdot (K \times N) = (M
+// \times N)$ regardless of the ``transA`` / ``transB`` flags.
+//
+// Attributes
+// ----------
+// transA : bool
+//     If ``true`` the dispatched kernel treats the left operand as
+//     transposed before contraction.
+// transB : bool
+//     If ``true`` the dispatched kernel treats the right operand as
+//     transposed before contraction.
+// M : int
+//     Number of rows of the (post-transpose) left operand.
+// K : int
+//     Contracted inner dimension.
+// N : int
+//     Number of columns of the (post-transpose) right operand.
+// batch : std::size_t
+//     Number of independent matmuls stacked along the leading axis.
+//     ``batch == 1`` is the standard 2-D case; ``batch > 1`` indicates a
+//     batched matmul where the same A/B strides repeat ``batch`` times.
+//
+// See Also
+// --------
+// :func:`IBackend::matmul` — consumes this struct.
 struct MatmulOpts {
     bool transA = false;
     bool transB = false;
@@ -37,10 +83,34 @@ struct MatmulOpts {
     std::size_t batch = 1;
 };
 
-// Parameter bag for a convolution op (used by some legacy paths).
+// Parameter bag for a convolution op (legacy compatibility path).
 //
-// The primary convolution paths use ConvNdOpts and explicit dimension
-// arguments; this struct is kept for compatibility.
+// Bundles batch / channel counts together with shape, stride, padding,
+// dilation, and grouping for an N-D convolution.  The primary
+// convolution code paths now use :class:`IBackend::ConvNdOpts` plus
+// explicit dimension arguments; this struct is retained for older
+// callers that build a free-standing ``ConvOpts`` value.
+//
+// Attributes
+// ----------
+// ndim : int
+//     Number of spatial dimensions (1, 2, or 3).
+// N : int
+//     Batch size.
+// C_in, C_out : int
+//     Input and output channel counts.
+// input_shape, kernel_shape : Shape
+//     Logical input feature-map and kernel-tensor shapes.
+// stride, padding, dilation : std::vector<int>
+//     Per-spatial-dimension geometry.
+// groups : int
+//     Channel grouping factor; ``1`` is standard convolution.
+// with_bias : bool
+//     Whether a bias term participates in the forward pass.
+//
+// See Also
+// --------
+// :class:`IBackend::ConvNdOpts` — modern, fixed-size parameter bag.
 struct ConvOpts {
     int ndim = 2;
     int N = 0, C_in = 0, C_out = 0;
@@ -55,9 +125,23 @@ struct ConvOpts {
 
 // Parameter bag for axis-reduction operations.
 //
-// axes is the list of dimensions to reduce over (may be negative).  If axes
-// is empty the caller should interpret that as "reduce all axes".  keepdims
-// controls whether collapsed dimensions are kept as size-1.
+// Used by :func:`IBackend::reduce_sum`, :func:`reduce_mean`,
+// :func:`variance`, :func:`reduce_max`, :func:`reduce_min`, and similar
+// axis-collapsing ops.
+//
+// Attributes
+// ----------
+// axes : std::vector<int>
+//     List of dimensions to reduce over.  Entries may be negative
+//     (Python-style) and are normalised by the callee.  An empty list is
+//     interpreted as *reduce over all axes*.
+// keepdims : bool
+//     If ``true`` the collapsed dimensions are retained as size-1 in the
+//     output shape; otherwise they are removed.
+//
+// See Also
+// --------
+// :func:`IBackend::reduce_sum` — primary consumer.
 struct ReduceOpts {
     std::vector<int> axes;
     bool keepdims = false;
@@ -65,18 +149,41 @@ struct ReduceOpts {
 
 // Aggregated return value from classification-loss forward passes.
 //
-// output is the scalar or per-sample loss.  saved_aux holds intermediate
-// values needed by the backward pass (e.g. log-softmax activations for
-// cross-entropy).  valid_count records the number of un-ignored samples so
-// that mean reduction can be computed correctly.
+// Used by :func:`IBackend::cross_entropy_loss` and
+// :func:`IBackend::nll_loss` to ship the forward output together with
+// the saved tensors the corresponding backward pass needs.
+//
+// Attributes
+// ----------
+// output : Storage
+//     Scalar (reduction != 0) or per-sample (reduction == 0) loss.
+// saved_aux : Storage
+//     Intermediate values needed by the backward pass — e.g. the
+//     log-softmax activations for cross-entropy.
+// valid_count : Storage
+//     Scalar I64 count of un-ignored samples; consumed by mean reduction
+//     so that ``ignore_index`` entries are excluded from the denominator.
+//
+// See Also
+// --------
+// :func:`IBackend::cross_entropy_backward` — consumer.
 struct ClassLossForwardResult {
     Storage output;
     Storage saved_aux;
     Storage valid_count;
 };
 
-// Convenience wrapper that bundles two Storage objects returned from ops
-// that produce a pair of outputs (e.g. QR decomposition, sort+argsort).
+// Convenience wrapper bundling two Storage outputs from one op call.
+//
+// Used by ops that naturally return a pair of arrays — QR
+// decomposition, eigendecomposition, RMSNorm forward (output + saved
+// rstd), sort+argsort, LU factor, LDL factor, and similar.
+//
+// Attributes
+// ----------
+// first, second : Storage
+//     The two output tensors; the semantic role of each is documented
+//     on the method that returns this struct.
 struct StoragePair {
     Storage first;
     Storage second;
@@ -84,45 +191,146 @@ struct StoragePair {
 
 // Abstract compute backend interface.
 //
-// Ownership: each concrete backend is created once and stored inside the
-// Dispatcher singleton.  The Dispatcher owns the backends via unique_ptr, so
-// the lifetime of every IBackend equals the lifetime of the process.
+// One concrete :class:`IBackend` exists per :class:`Device` slot (CPU,
+// GPU); :class:`Dispatcher` holds them and routes every op based on the
+// tensor's device tag.  Implementations dispatch the actual math to
+// their device-native library — Apple Accelerate (vDSP / vForce / BLAS
+// / LAPACK) for CPU, MLX for GPU.
 //
-// Thread safety: methods are not internally synchronized.  Callers that share
-// a backend across threads must provide their own serialization, or ensure
-// that the underlying framework (e.g. MLX) is thread-safe for its own
-// operations.
+// Notes
+// -----
+// **Ownership.**  Each concrete backend is created once and stored
+// inside the :class:`Dispatcher` singleton via ``std::unique_ptr``; the
+// lifetime of every :class:`IBackend` therefore equals the lifetime of
+// the process.
 //
-// Design rationale: all methods take Storage by const-reference and return
-// a new Storage.  No in-place mutation is exposed at this interface level.
-// Concrete implementations (CpuBackend / GpuBackend) choose the most
-// efficient representation internally.
+// **Thread safety.**  Methods are *thread-compatible* but not internally
+// synchronised: the engine never calls into the same backend from
+// multiple threads simultaneously on the same op, though distinct ops
+// on distinct tensors may overlap.  Callers that share a backend across
+// threads must provide their own serialisation, or rely on the
+// underlying framework (e.g. MLX's own thread-safety guarantees).
+//
+// **Design rationale.**  All methods take :class:`Storage` by
+// const-reference and return a new :class:`Storage`; no in-place
+// mutation is exposed at this layer.  Concrete implementations choose
+// the most efficient internal representation — ``CpuStorage`` (Apple
+// aligned host buffer) for CPU, ``GpuStorage`` (``mlx::core::array``)
+// for GPU.
+//
+// See Also
+// --------
+// :class:`CpuBackend` — Accelerate-backed concrete CPU.
+// :class:`GpuBackend` — MLX-backed concrete GPU.
+// :class:`Dispatcher` — selects which to use.
 class IBackend {
 public:
     virtual ~IBackend() = default;
 
-    // Returns the Device tag associated with this backend.
+    // Returns the :class:`Device` tag associated with this backend.
+    //
+    // Returns
+    // -------
+    // Device
+    //     ``Device::CPU`` for :class:`CpuBackend`, ``Device::GPU`` for
+    //     :class:`GpuBackend`.
     virtual Device device() const noexcept = 0;
 
     // Transfers a CPU buffer into the backend's native storage format.
-    // For CpuBackend this is a no-op move; for GpuBackend it copies data
-    // to GPU-private memory via mlx::core::copy().
+    //
+    // Parameters
+    // ----------
+    // cpu : CpuStorage
+    //     Source CPU-side buffer (owning).
+    // shape : Shape
+    //     Logical shape of the buffer.  Used by GPU backends to set the
+    //     ``mlx::core::array`` shape; CPU is shape-agnostic at this layer.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Backend-native storage variant.
+    //
+    // Notes
+    // -----
+    // For :class:`CpuBackend` this is a no-op move into the
+    // ``CpuStorage`` slot of the variant; for :class:`GpuBackend` it
+    // copies the data to GPU-private memory via ``mlx::core::copy``.
     virtual Storage from_cpu(CpuStorage cpu, const Shape& shape) = 0;
 
-    // Allocates a zero-filled buffer of shape `shape` with element type `dt`.
+    // Allocates a zero-filled buffer of shape ``shape`` with element type ``dt``.
+    //
+    // Parameters
+    // ----------
+    // shape : Shape
+    //     Output shape.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Newly-allocated zero buffer.
     virtual Storage zeros(const Shape& shape, Dtype dt) = 0;
 
-    // Allocates a one-filled buffer of shape `shape` with element type `dt`.
+    // Allocates a one-filled buffer of shape ``shape`` with element type ``dt``.
+    //
+    // Parameters
+    // ----------
+    // shape : Shape
+    //     Output shape.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Newly-allocated buffer where every element equals 1.
     virtual Storage ones(const Shape& shape, Dtype dt) = 0;
 
-    // Returns a deep copy of `src` reinterpreted with the given shape/dtype.
+    // Returns a deep copy of ``src`` reinterpreted with the given shape/dtype.
+    //
+    // Parameters
+    // ----------
+    // src : const Storage&
+    //     Source buffer.  Must already match ``shape`` and ``dt``.
+    // shape : Shape
+    //     Logical shape of the result.
+    // dt : Dtype
+    //     Element dtype of the result.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     A fresh, independent allocation containing the same bytes.
     virtual Storage clone(const Storage& src, const Shape& shape, Dtype dt) = 0;
 
     // Returns a contiguous copy of a (possibly strided or offset) view.
     //
-    // When already_contiguous is true and storage_offset is 0 the
-    // implementation may use a fast memcpy path.  Otherwise it must walk the
-    // stride/offset layout to produce a densely-packed output buffer.
+    // Walks the stride / offset layout to produce a densely-packed
+    // output buffer suitable for kernels that assume row-major
+    // contiguous data.
+    //
+    // Parameters
+    // ----------
+    // src : const Storage&
+    //     Source buffer (may overlap a larger allocation).
+    // shape : Shape
+    //     Logical shape of the view.
+    // stride : const Stride&
+    //     Per-dimension byte (or element, depending on backend) stride.
+    // storage_offset : std::size_t
+    //     Byte offset from the start of ``src`` where the view begins.
+    // already_contiguous : bool
+    //     Hint that the layout is already row-major contiguous; enables
+    //     a fast ``memcpy`` path when combined with ``storage_offset == 0``.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Densely-packed copy of the view.
     virtual Storage contiguous(const Storage& src,
                                const Shape& shape,
                                const Stride& stride,
@@ -130,29 +338,130 @@ public:
                                bool already_contiguous,
                                Dtype dt) = 0;
 
-    // Elementwise arithmetic: a op b, both already broadcast to `shape`.
+    // Elementwise arithmetic on two broadcast-prepared operands.
+    //
+    // Each of the five primitives below computes ``out[i] = a[i] op b[i]``
+    // for every element, with both ``a`` and ``b`` already broadcast (by
+    // the caller) to the common output ``shape``.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     Operands, already broadcast to ``shape``.
+    // shape : const Shape&
+    //     Output shape (used for ``numel`` computation).
+    // dt : Dtype
+    //     Element dtype (common to ``a``, ``b``, and the result).
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Newly-allocated output buffer of the same shape and dtype.
+    //
+    // Math
+    // ----
+    // $$\mathrm{out}[i] = \begin{cases}
+    //   a[i] + b[i] & \text{add} \\
+    //   a[i] - b[i] & \text{sub} \\
+    //   a[i] \cdot b[i] & \text{mul} \\
+    //   a[i] / b[i] & \text{div} \\
+    //   a[i]^{b[i]} & \text{pow}
+    // \end{cases}$$
     virtual Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage sub(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
 
-    // Elementwise bitwise operation selected by op: 0=AND, 1=OR, 2=XOR.
-    // Only valid for integer and Bool dtypes.
+    // Elementwise bitwise operation selected by integer ``op`` code.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     Operands, already broadcast to ``shape``.
+    // shape : const Shape&
+    //     Output shape.
+    // dt : Dtype
+    //     Element dtype.  Only integer and Bool dtypes are valid.
+    // op : int
+    //     Op selector: ``0=AND``, ``1=OR``, ``2=XOR`` (GPU also supports
+    //     ``3=left_shift``, ``4=right_shift``).
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Newly-allocated result of the same shape and dtype.
     virtual Storage
     bitwise_binary(const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) = 0;
 
     // Elementwise comparison returning a Bool Storage of the same shape.
-    // op: 0=EQ, 1=NE, 2=GT, 3=GE, 4=LT, 5=LE.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     Operands, already broadcast to ``shape``.
+    // shape : const Shape&
+    //     Output shape.
+    // dt : Dtype
+    //     Dtype of the *operands* (the output is always Bool).
+    // op : int
+    //     Comparison selector: ``0=EQ``, ``1=NE``, ``2=GT``, ``3=GE``,
+    //     ``4=LT``, ``5=LE``.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Bool buffer of shape ``shape``.
     virtual Storage
     compare_binary(const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) = 0;
 
-    // Elementwise max(a, b) and min(a, b).
+    // Elementwise ``max(a, b)`` and ``min(a, b)``.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     Operands, already broadcast to ``shape``.
+    // shape : const Shape&
+    //     Output shape.
+    // dt : Dtype
+    //     Common element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Element-wise max or min, same shape and dtype.
     virtual Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
     virtual Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) = 0;
 
-    // Elementwise unary math ops.  All operate element-by-element on the
-    // flattened buffer; shape is used only for numel computation.
+    // Elementwise unary math ops.
+    //
+    // The group below — :func:`exp`, :func:`log`, :func:`sqrt`,
+    // :func:`rsqrt`, :func:`abs`, :func:`neg`, :func:`sign`,
+    // :func:`floor`, :func:`ceil`, :func:`round`, :func:`sin`,
+    // :func:`cos`, :func:`tanh`, :func:`sigmoid`, :func:`relu` — all
+    // share the same call shape.  Each applies the named scalar
+    // function element-by-element to the flattened buffer; ``shape`` is
+    // used only for ``numel`` computation.
+    //
+    // Parameters
+    // ----------
+    // a : const Storage&
+    //     Input buffer.
+    // shape : const Shape&
+    //     Logical shape (drives the element count).
+    // dt : Dtype
+    //     Element dtype (matches the result).
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Newly-allocated output of the same shape and dtype.
+    //
+    // Notes
+    // -----
+    // Dispatch: CPU implementations call ``vForce`` (transcendentals) or
+    // ``vDSP`` (algebraic ops); GPU implementations call the matching
+    // ``mlx::core::*`` primitive.
     virtual Storage exp(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage log(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage sqrt(const Storage& a, const Shape& shape, Dtype dt) = 0;
@@ -169,8 +478,14 @@ public:
     virtual Storage sigmoid(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage relu(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
-    // Additional elementwise unary ops: logarithmic, trigonometric, and
-    // activation functions not covered by the basic set above.
+    // Additional elementwise unary ops.
+    //
+    // Logarithmic (:func:`log2`), error function (:func:`erf`,
+    // :func:`erfinv`), reciprocal / power (:func:`reciprocal`,
+    // :func:`square`, :func:`cube`, :func:`cube_root`), trigonometric
+    // (:func:`tan`, :func:`asin`, :func:`acos`, :func:`atan`,
+    // :func:`sinh`, :func:`cosh`) that are not part of the core unary
+    // set above.  Same call shape and dispatch contract as that group.
     virtual Storage log2(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage erf(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) = 0;
@@ -185,13 +500,28 @@ public:
     virtual Storage sinh(const Storage& a, const Shape& shape, Dtype dt) = 0;
     virtual Storage cosh(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
-    // Bitwise NOT (integer types only).
+    // Bitwise NOT.
+    //
+    // Parameters
+    // ----------
+    // a : const Storage&
+    //     Input buffer (integer or Bool dtype only).
+    // shape : const Shape&
+    //     Logical shape.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Per-element bitwise complement.
     virtual Storage invert(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // ── Complex viewing ────────────────────────────────────────────────────
+    //
     // Each backend implements these on its native primitive: CPU uses
-    // Apple Accelerate (vDSP / interleaved-complex element walks), GPU uses
-    // ``mlx::core::real`` / ``imag`` / ``conjugate``.
+    // Apple Accelerate (vDSP plus interleaved-complex element walks),
+    // GPU uses ``mlx::core::real`` / ``imag`` / ``conjugate``.
 
     // Real part of a complex (C64) input — output dtype is F32.
     virtual Storage complex_real(const Storage& a, const Shape& shape) = 0;
@@ -207,9 +537,36 @@ public:
     // unchanged); negates the imaginary part for C64.
     virtual Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
-    // Activation functions that need both a forward and a backward pass.
-    // The *_backward variants receive the pre-activation input `a` and the
-    // upstream gradient `grad`, and return the input gradient.
+    // Activation functions with paired forward / backward kernels.
+    //
+    // Each forward op below has a matching ``*_backward`` that receives
+    // the original pre-activation input ``a`` together with the upstream
+    // gradient ``grad`` and returns the input gradient $\partial
+    // \mathcal{L}/\partial x$.
+    //
+    // Parameters
+    // ----------
+    // a : const Storage&
+    //     Pre-activation input.
+    // grad : const Storage&
+    //     Upstream gradient $\partial \mathcal{L}/\partial y$ (for the
+    //     ``*_backward`` variants).
+    // shape : const Shape&
+    //     Common shape of input, output, and gradient.
+    // dt : Dtype
+    //     Common element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Forward output, or input gradient for the ``*_backward`` form.
+    //
+    // Notes
+    // -----
+    // Backward kernels exist as fused single-op delegates so the GPU
+    // backend can route to MPSGraph and the CPU backend to hand-rolled
+    // scalar loops; previously the autograd composed these from
+    // primitive storage ops.
     virtual Storage silu(const Storage& a, const Shape& shape, Dtype dt) = 0;
     // silu_backward — dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Lucid's
     // autograd node previously composed this from storage primitives; the
@@ -248,11 +605,58 @@ public:
     virtual Storage relu6(const Storage& a, const Shape& shape, Dtype dt) = 0;
 
     // Numerically stable log-softmax along a single axis.
+    //
+    // Math
+    // ----
+    // $$y_i = x_i - \log\sum_j \exp(x_j),$$
+    //
+    // computed via the max-subtraction trick to avoid overflow.
+    //
+    // Parameters
+    // ----------
+    // a : const Storage&
+    //     Input logits.
+    // shape : const Shape&
+    //     Shape of ``a``.
+    // axis : int
+    //     Dimension to normalise over (may be negative).
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Log-probabilities of the same shape and dtype as ``a``.
     virtual Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) = 0;
 
-    // Backward pass for log_softmax:
-    //   dL/dx = dL/dy - exp(y) * sum(dL/dy, axis, keepdims=true)
-    // where y = log_softmax(x) is the saved forward output.
+    // Backward pass for :func:`log_softmax`.
+    //
+    // Math
+    // ----
+    // $$\frac{\partial \mathcal{L}}{\partial x} =
+    //   \frac{\partial \mathcal{L}}{\partial y}
+    //   - \exp(y) \sum_{\text{axis}}\frac{\partial \mathcal{L}}{\partial y},$$
+    //
+    // where ``y = log_softmax(x)`` is the saved forward output.
+    //
+    // Parameters
+    // ----------
+    // y : const Storage&
+    //     Saved forward output.
+    // grad_out : const Storage&
+    //     Upstream gradient.
+    // shape : const Shape&
+    //     Common shape of ``y``, ``grad_out``, and the returned input
+    //     gradient.
+    // axis : int
+    //     Axis along which the forward log-softmax was taken.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Input gradient $\partial \mathcal{L}/\partial x$.
     virtual Storage log_softmax_backward(
         const Storage& y, const Storage& grad_out, const Shape& shape, int axis, Dtype dt) = 0;
 
@@ -491,13 +895,56 @@ public:
     virtual Storage
     unfold_dim(const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) = 0;
 
-    // General batched matrix multiplication.  Shapes and transpose flags are
-    // encoded in opts; the implementation must handle both 2-D and batched cases.
+    // General batched matrix multiplication.
+    //
+    // Math
+    // ----
+    // $$\mathrm{out} = a \cdot b,$$
+    //
+    // where ``a`` and ``b`` may have a leading batch dimension and may
+    // be transposed before contraction.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     Operand matrices (or batches of matrices).
+    // opts : const MatmulOpts&
+    //     Shape (``M``, ``K``, ``N``, ``batch``) and transpose flags.
+    // dt : Dtype
+    //     Element dtype of all participants.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Result of shape ``(batch?, M, N)``.
+    //
+    // Notes
+    // -----
+    // CPU dispatches to ``cblas_sgemm`` / ``cblas_dgemm`` via
+    // Accelerate; GPU dispatches to ``mlx::core::matmul`` (which selects
+    // an MPS or Metal-shader kernel internally).
     virtual Storage
     matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) = 0;
 
-    // Fused linear projection: out = x @ weight.T + bias.
-    // x_shape is (*, K), weight_shape is (N, K), out_shape is (*, N).
+    // Fused linear projection $\mathrm{out} = x \cdot W^\top + b$.
+    //
+    // Parameters
+    // ----------
+    // x : const Storage&
+    //     Input activations of shape ``(*, K)``.
+    // weight : const Storage&
+    //     Weight matrix of shape ``(N, K)`` (note: pre-transposed).
+    // bias : const Storage&
+    //     Bias vector of shape ``(N,)``.
+    // x_shape, weight_shape, out_shape : const Shape&
+    //     Logical shapes of the three operands and result.
+    // dt : Dtype
+    //     Element dtype.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Output activations of shape ``(*, N)``.
     virtual Storage linear(const Storage& x,
                            const Storage& weight,
                            const Storage& bias,
@@ -872,8 +1319,27 @@ public:
                                       int ignore_index,
                                       int reduction) = 0;
 
-    // Materialises the tensor's data in CPU-accessible memory.  For GpuBackend
-    // this calls mlx::core::array::eval() and copies to a fresh CpuStorage.
+    // Materialises the tensor's data in CPU-accessible memory.
+    //
+    // Parameters
+    // ----------
+    // a : const Storage&
+    //     Backend-native storage to materialise.
+    // shape : const Shape&
+    //     Logical shape of ``a``.
+    //
+    // Returns
+    // -------
+    // CpuStorage
+    //     Host-side aligned buffer containing the evaluated data.
+    //
+    // Notes
+    // -----
+    // For :class:`CpuBackend` this is effectively a copy of the existing
+    // ``CpuStorage``; for :class:`GpuBackend` it calls
+    // ``mlx::core::array::eval()`` first (triggering execution of the
+    // pending lazy graph) and then copies the result into a fresh
+    // ``CpuStorage`` on the host.
     virtual CpuStorage to_cpu(const Storage& a, const Shape& shape) = 0;
 
     // Scaled dot-product attention forward.  Returns [output, saved_weights]
@@ -935,8 +1401,23 @@ public:
                                                             int N,
                                                             Dtype dt) = 0;
 
-    // Compact parameter bag for N-D standard convolution (N in {1,2,3}).
-    // Arrays are indexed 0..N-1; unused trailing entries are ignored.
+    // Compact parameter bag for N-D standard convolution.
+    //
+    // Used by :func:`IBackend::conv_nd_forward` and
+    // :func:`conv_nd_backward` for ``N`` in ``{1, 2, 3}``.  The
+    // fixed-size arrays are indexed ``0..N-1``; any unused trailing
+    // entries are ignored by the implementation.
+    //
+    // Attributes
+    // ----------
+    // N : int
+    //     Number of spatial dimensions (1, 2, or 3).
+    // groups : int
+    //     Channel grouping factor; ``1`` means standard convolution and
+    //     ``Cin`` means depthwise.
+    // stride, pad, dilation : int[3]
+    //     Per-spatial-dimension geometry (only the first ``N`` entries
+    //     are meaningful).
     struct ConvNdOpts {
         int N;       // number of spatial dimensions
         int groups;  // channel grouping factor for grouped convolution
@@ -1101,7 +1582,21 @@ public:
                                   bool interleaved,
                                   Dtype dt) = 0;
 
-    // Compact parameter bag for N-D pooling (N in {1,2,3}).
+    // Compact parameter bag for N-D pooling.
+    //
+    // Used by :func:`max_pool_nd_forward`, :func:`avg_pool_nd_forward`,
+    // and their backward counterparts for ``N`` in ``{1, 2, 3}``.
+    //
+    // Attributes
+    // ----------
+    // K : int[3]
+    //     Kernel size per spatial dimension.
+    // stride : int[3]
+    //     Stride per spatial dimension.
+    // pad : int[3]
+    //     Symmetric (both-sides) padding per spatial dimension.
+    // N : int
+    //     Number of spatial dimensions actually used.
     struct PoolOpts {
         int K[3];       // kernel size per spatial dimension
         int stride[3];  // stride per spatial dimension
@@ -1472,14 +1967,38 @@ public:
 
     // Parameter bag for LSTM operations.
     //
-    // weights is expected in the order [W_ih, W_hh, b_ih, b_hh] per layer;
-    // bidirectional layers double the weight count.  When ``proj_size > 0``
-    // (the projected-LSTM / LSTMP variant) an additional weight tensor
-    // ``W_hr`` of shape ``(proj_size, hidden_size)`` is appended per layer
-    // so the order becomes [W_ih, W_hh, b_ih, b_hh, W_hr].  The recurrent
-    // weight ``W_hh`` then has its second axis sized ``proj_size`` instead
-    // of ``hidden_size`` because the projected hidden state feeds the
-    // next time step.  ``c_n`` keeps shape ``hidden_size`` regardless.
+    // Used by :func:`lstm_forward`, :func:`lstm_forward_train`, and
+    // :func:`lstm_backward`.  ``weights`` is supplied separately as
+    // ``std::vector<Storage>`` in the order
+    // ``[W_ih, W_hh, b_ih, b_hh]`` per layer; bidirectional layers
+    // double the count (forward block followed by reverse block).
+    //
+    // When ``proj_size > 0`` (the projected-LSTM / LSTMP variant) an
+    // additional weight tensor ``W_hr`` of shape ``(proj_size,
+    // hidden_size)`` is appended per layer so the order becomes
+    // ``[W_ih, W_hh, b_ih, b_hh, W_hr]``.  The recurrent weight
+    // ``W_hh`` then has its second axis sized ``proj_size`` instead of
+    // ``hidden_size`` because the projected hidden state feeds the
+    // next time step.  The cell state ``c_n`` keeps shape
+    // ``hidden_size`` regardless.
+    //
+    // Attributes
+    // ----------
+    // input_size, hidden_size : int
+    //     Input feature size and recurrent hidden size.
+    // num_layers : int
+    //     Number of stacked LSTM layers.
+    // seq_len, batch_size : int
+    //     Time and batch dimensions of the input sequence.
+    // batch_first : bool
+    //     If ``true`` the input is laid out as ``(batch, seq, input)``;
+    //     otherwise ``(seq, batch, input)``.
+    // bidirectional : bool
+    //     Whether to run a reverse-direction stack alongside the forward.
+    // has_bias : bool
+    //     Whether the per-gate bias terms are present.
+    // proj_size : int
+    //     ``0`` ⇒ standard LSTM; ``> 0`` ⇒ projected (LSTMP) variant.
     struct LstmOpts {
         int input_size = 0;
         int hidden_size = 0;

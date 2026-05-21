@@ -4,8 +4,55 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="GoogLeNet",
+    citation=(
+        'Szegedy, Christian, et al. "Going Deeper with Convolutions." '
+        "Proceedings of the IEEE Conference on Computer Vision and Pattern "
+        "Recognition (CVPR), 2015, pp. 1–9."
+    ),
+    theory=r"""
+    GoogLeNet (Inception v1) is the ILSVRC-2014 classification winner
+    and introduced the *Inception module* — a multi-branch building
+    block that lets a single layer apply convolutions at several
+    receptive-field scales in parallel and concatenate their outputs.
+    The motivation is that natural images contain salient structure at
+    multiple sizes, and forcing the network to commit to a single
+    kernel per layer wastes capacity.
+
+    Each Inception module computes, in parallel, a :math:`1\times1`
+    convolution, a :math:`3\times3` convolution, a :math:`5\times5`
+    convolution, and a :math:`3\times3` max-pool branch.  To keep the
+    computation tractable, *cheap* :math:`1\times1` bottlenecks are
+    placed before the larger spatial convolutions and after the
+    pooling branch.  Concatenating along the channel axis gives the
+    next layer an enriched, multi-scale feature representation.
+    Formally, an Inception block produces
+
+    .. math::
+
+        y = \mathrm{concat}\bigl(
+            f_{1\times1}(x),\; f_{3\times3}(g_{1\times1}(x)),\;
+            f_{5\times5}(h_{1\times1}(x)),\; p_{1\times1}(\mathrm{pool}(x))
+        \bigr),
+
+    where each :math:`f` is a learned convolution and each
+    :math:`g, h, p_{1\times1}` is a dimensionality-reducing
+    :math:`1\times1` projection.
+
+    GoogLeNet stacks nine such modules into a 22-layer network with
+    only 5 M parameters — roughly **12×** fewer than AlexNet — while
+    achieving a top-5 error of 6.67%.  Two auxiliary classifiers were
+    attached to intermediate layers during training to combat
+    vanishing gradients and add a regularising effect; they are
+    discarded at inference.  The Inception family launched here led to
+    Inception v2/v3 (factorised convolutions, label smoothing) and
+    eventually Inception-ResNet.
+    """,
+)
 @dataclass(frozen=True)
 class GoogLeNetConfig(ModelConfig):
     """Configuration for GoogLeNet (Inception v1).

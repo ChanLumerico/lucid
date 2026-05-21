@@ -35,18 +35,51 @@ using ::lucid::gpu::mlx_shape_to_lucid;
 using ::lucid::helpers::allocate_cpu;
 using ::lucid::helpers::fresh;
 
-// Thin wrapper around shape_numel for brevity in ops that need element counts.
-// Returns the product of all dimension sizes, or 1 for a 0-D tensor.
+// Compute the total element count of a shape.
+//
+// Thin wrapper around :func:`shape_numel` provided so call sites in
+// ops/utils/*.cpp can use the shorter ``numel(s)`` form.  Returns ``1`` for
+// 0-D (scalar) shapes by convention.
+//
+// Parameters
+// ----------
+// s : Shape
+//     Shape vector (length == rank).
+//
+// Returns
+// -------
+// size_t
+//     Product of ``s[d]`` for all dimensions; ``1`` if ``s`` is empty.
 inline std::size_t numel(const Shape& s) {
     return shape_numel(s);
 }
 
-// Verify that every tensor in xs shares the same dtype and device, raising the
-// appropriate typed error on the first mismatch.  Also rejects an empty list
-// because all multi-tensor ops require at least one input.
+// Validate that a batch of tensors share dtype and device.
 //
-// `op` is a C-string label used to prefix error messages (e.g. "concatenate").
-// Throws DtypeMismatch or DeviceMismatch on the first pair that disagrees.
+// Iterates ``xs`` once and raises on the first mismatching dtype or device.
+// Also rejects empty input (multi-tensor utility ops require at least one
+// argument).  Each tensor is null-checked via ``Validator::input``.
+//
+// Parameters
+// ----------
+// xs : vector<TensorImplPtr>
+//     Non-empty list of input tensors.
+// op : const char*
+//     Operation label used to prefix error messages (e.g. ``"concatenate"``).
+//
+// Raises
+// ------
+// ErrorBuilder
+//     If ``xs`` is empty.
+// DtypeMismatch
+//     If any tensor's dtype differs from ``xs[0]``'s.
+// DeviceMismatch
+//     If any tensor's device differs from ``xs[0]``'s.
+//
+// Notes
+// -----
+// Shape compatibility is *not* checked here — each caller has its own
+// axis-specific shape contract (see e.g. :func:`concatenate_op`).
 inline void check_dtype_device_match(const std::vector<TensorImplPtr>& xs, const char* op) {
     if (xs.empty())
         ErrorBuilder(op).fail("empty input");
@@ -63,12 +96,28 @@ inline void check_dtype_device_match(const std::vector<TensorImplPtr>& xs, const
     }
 }
 
-// Normalise axis to a non-negative index in [0, ndim).  Negative values are
-// wrapped by adding ndim (Python semantics).  Raises an index error if the
-// result falls outside the valid range.
+// Normalise a possibly negative axis to a non-negative index.
 //
-// `axis` may be any signed integer; `ndim` must be positive.
-// Returns a value in [0, ndim).  Throws via ErrorBuilder on out-of-range input.
+// Wraps negative ``axis`` by adding ``ndim`` (Python semantics) and verifies
+// the result lies in ``[0, ndim)``.  Used by every ops/utils function that
+// accepts an axis parameter.
+//
+// Parameters
+// ----------
+// axis : int
+//     Signed axis index; negative values count from the end.
+// ndim : int
+//     Number of dimensions of the target tensor.  Must be > 0.
+//
+// Returns
+// -------
+// int
+//     A non-negative axis in ``[0, ndim)``.
+//
+// Raises
+// ------
+// ErrorBuilder
+//     If the wrapped axis falls outside ``[0, ndim)``.
 inline int wrap_axis(int axis, int ndim) {
     int a = axis;
     if (a < 0)

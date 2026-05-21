@@ -60,6 +60,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms
@@ -81,6 +82,45 @@ _COCO_ANCHORS: tuple[tuple[float, float], ...] = (
 )
 
 
+@model_family_meta(
+    canonical_name="YOLO",
+    citation=(
+        'Redmon, Joseph, et al. "You Only Look Once: Unified, Real-Time '
+        'Object Detection." Proceedings of the IEEE Conference on '
+        "Computer Vision and Pattern Recognition, 2016, pp. 779–788."
+    ),
+    theory=r"""
+    YOLOv2 (a.k.a. YOLO9000) keeps the one-stage, full-image-in-one-pass
+    spirit of YOLOv1 and addresses its main weaknesses with a number of
+    careful engineering changes.
+
+    **Anchor boxes from data.**  Instead of regressing absolute box
+    coordinates from each grid cell, the model predicts offsets relative
+    to :math:`k` *anchor priors* per cell.  The priors are obtained by
+    running k-means on ground-truth boxes (with a :math:`1 - \mathrm{IoU}`
+    distance) so they match the dataset's true aspect-ratio distribution.
+
+    **Constrained location prediction.**  For each anchor the network
+    outputs :math:`(t_x, t_y, t_w, t_h, t_o)` decoded as
+
+    .. math::
+
+        b_x = \sigma(t_x) + c_x, \quad b_y = \sigma(t_y) + c_y, \quad
+        b_w = p_w e^{t_w}, \quad b_h = p_h e^{t_h},
+
+    where :math:`(c_x, c_y)` is the cell offset and :math:`(p_w, p_h)`
+    the prior size.  The :math:`\sigma` on :math:`(t_x, t_y)` keeps the
+    centre inside its cell, stabilising early training.
+
+    **Better backbone and tricks.**  Darknet-19, BatchNorm on every
+    conv, high-resolution classifier fine-tuning, a passthrough/route
+    layer that fuses stride-16 features into the stride-32 head,
+    multi-scale training (random :math:`\{320, \dots, 608\}`), and
+    joint COCO + ImageNet training (the "9000-class" variant) all
+    contribute to a Pareto improvement in both speed and accuracy
+    over v1.
+    """,
+)
 @dataclass(frozen=True)
 class YOLOV2Config(ModelConfig):
     """Configuration for YOLOv2 / YOLO9000 (Redmon & Farhadi, CVPR 2017).
@@ -309,10 +349,72 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
 
 
 class YOLOV2ForObjectDetection(PretrainedModel):
-    """YOLOv2 / YOLO9000 object detector (Redmon & Farhadi, CVPR 2017).
+    r"""YOLOv2 / YOLO9000 object detector (Redmon & Farhadi, CVPR 2017).
 
-    Args:
-        config: :class:`YOLOV2Config` controlling architecture and hyperparams.
+    The successor to YOLOv1 with several decisive upgrades: a deeper
+    **Darknet-19** backbone with batch normalisation, **anchor boxes**
+    (5 k-means-clustered priors on COCO instead of YOLOv1's
+    direct-regression "anchor-free" approach), and a **passthrough**
+    layer that injects fine-grained stride-16 features into the
+    stride-32 detection head via space-to-depth reorganisation.
+    Anchors give per-cell predictions an inductive bias on shape that
+    YOLOv1 lacks, and the passthrough recovers spatial detail lost in
+    the final downsample — together they bump VOC 2007 mAP from 63.4%
+    (YOLOv1) to 78.6% (paper Table 4).
+
+    The output tensor :math:`(B, A \cdot (5 + C), fH, fW)` encodes
+    :math:`A` anchors per cell with :math:`(t_x, t_y, t_w, t_h,
+    \mathrm{conf})` deltas plus :math:`C` class scores.
+
+    Parameters
+    ----------
+    config : YOLOV2Config
+        Frozen architecture spec.  Use :func:`yolo_v2` or
+        :func:`yolo_v2_tiny` for the standard variants.
+
+    Attributes
+    ----------
+    config : YOLOV2Config
+        Stored copy of the config that built this model.
+    backbone : _Darknet19 or _Darknet19Tiny
+        Darknet-19 trunk producing a 512-channel stride-16 route feature
+        and a 1024-channel stride-32 trunk feature.
+    det1, det2, det3 : _conv_bn_lrelu
+        Stride-32 head convolutions; ``det3`` consumes the concatenation
+        of the 2048-channel space-to-depth passthrough and the 1024-channel
+        ``det2`` output.
+    pred : nn.Conv2d
+        Final 1x1 conv producing :math:`A \cdot (5 + C)` channels (no
+        BatchNorm, no activation).
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLO9000: Better, Faster, Stronger",
+    CVPR 2017 (arXiv:1612.08242).  Per-anchor box decoding uses the
+    "direct location prediction" parameterisation:
+
+    .. math::
+
+        \begin{aligned}
+            b_x &= \sigma(t_x) + c_x, & b_w &= p_w \exp(t_w), \\
+            b_y &= \sigma(t_y) + c_y, & b_h &= p_h \exp(t_h),
+        \end{aligned}
+
+    where :math:`(c_x, c_y)` is the cell top-left in feature coords and
+    :math:`(p_w, p_h)` is the anchor's prior size.  The
+    sigmoid-on-:math:`t_{x,y}` bounds the centre to lie inside the
+    responsible cell — a stability win over YOLOv1's unbounded
+    regression.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v2 import yolo_v2
+    >>> model = yolo_v2()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
 
     config_class: ClassVar[type[YOLOV2Config]] = YOLOV2Config
@@ -774,10 +876,45 @@ def yolo_v2(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV2ForObjectDetection:
-    """YOLOv2 (YOLO9000) with Darknet-19 backbone (Redmon & Farhadi, CVPR 2017).
+    r"""YOLOv2 / YOLO9000 with Darknet-19 backbone (Redmon & Farhadi, CVPR 2017).
 
-    Anchor-based single-shot detector with passthrough layer and 5 COCO
-    anchor clusters.  Runs at 13×13 (stride 32) output resolution by default.
+    Builds the paper-cited YOLOv2 detector: 19-layer Darknet-19 backbone,
+    5 anchor priors clustered by k-means on the training set, passthrough
+    space-to-depth layer, and 80 COCO classes by default.  At the
+    standard 416x416 input the output grid is 13x13 (stride 32).
+    Approximately 50M parameters; COCO test-dev mAP@.5 of 44.0%
+    (paper Table 4).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV2Config` —
+        ``num_classes``, ``num_anchors``, anchor priors, ``score_thresh``,
+        ``nms_thresh``, etc.
+
+    Returns
+    -------
+    YOLOV2ForObjectDetection
+        Detector with the standard YOLOv2 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLO9000: Better, Faster, Stronger",
+    CVPR 2017 (arXiv:1612.08242).  The five default anchors come from
+    k-means clustering of VOC / COCO ground-truth boxes (paper Table 1).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v2 import yolo_v2
+    >>> model = yolo_v2()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     return _make_v2(_CFG_V2, overrides)
 
@@ -793,9 +930,39 @@ def yolo_v2_tiny(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV2ForObjectDetection:
-    """YOLOv2 with tiny Darknet backbone — lightweight variant.
+    r"""YOLOv2-Tiny — lightweight Darknet variant of YOLOv2.
 
-    Uses a compact Darknet backbone without bottleneck layers for faster
-    inference at the cost of detection accuracy.
+    Builds a compact YOLOv2 detector with a slimmer Darknet backbone
+    (no bottleneck stages); same anchor priors and detection head shape
+    as :func:`yolo_v2`.  Used as the speed-optimised reference variant
+    in the YOLO9000 release notes.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV2Config`.
+
+    Returns
+    -------
+    YOLOV2ForObjectDetection
+        Detector with the YOLOv2-Tiny configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    Lighter backbone alternative to :func:`yolo_v2`; head topology is
+    unchanged.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v2 import yolo_v2_tiny
+    >>> model = yolo_v2_tiny()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     return _make_v2(_CFG_V2_TINY, overrides)

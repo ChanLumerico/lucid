@@ -79,6 +79,45 @@
   --color-api-class:          var(--color-lucid-primary);  /* concrete class   */
   --color-api-class-abstract: #e879f9;                     /* abstract class   */
   --color-api-class-dataclass: #22d3ee;                    /* @dataclass       */
+  --color-api-class-protocol: #a3e635;                     /* typing.Protocol  */
+
+}
+
+/* --- Task-tag palette ----------------------------------------------------
+ * Defined on :root (NOT @theme) so the variables are unconditionally
+ * emitted as runtime CSS custom properties — they're consumed via
+ * inline ``style={{ color: var(--color-task-...) }}`` in TaskTag, not as
+ * Tailwind utility classes, so Tailwind's lazy-emission heuristic would
+ * otherwise drop them.
+ *
+ * Hue bands are reserved per category so the eye still groups visually:
+ *   vision      — cool spectrum  (sky / blue / cyan / teal / indigo)
+ *   text        — warm spectrum  (amber / orange / yellow / red / rose)
+ *   generative  — pink / magenta
+ *   meta        — neutral slate
+ * The task→swatch mapping lives in TS (ModuleOverview.tsx); retheme an
+ * entire category by editing only the swatches here. */
+:root {
+  --color-task-vision-1: #38bdf8;   /* sky-400          */
+  --color-task-vision-2: #3b82f6;   /* blue-500         */
+  --color-task-vision-3: #22d3ee;   /* cyan-400         */
+  --color-task-vision-4: #2dd4bf;   /* teal-400         */
+  --color-task-vision-5: #818cf8;   /* indigo-400       */
+  --color-task-vision-6: #06b6d4;   /* cyan-500 (deep)  */
+  --color-task-vision-7: #0ea5e9;   /* sky-500 (deep)   */
+
+  --color-task-text-1:   #f59e0b;   /* amber-500        */
+  --color-task-text-2:   #f97316;   /* orange-500       */
+  --color-task-text-3:   #fb923c;   /* orange-400       */
+  --color-task-text-4:   #eab308;   /* yellow-500       */
+  --color-task-text-5:   #fbbf24;   /* amber-400        */
+  --color-task-text-6:   #ef4444;   /* red-500          */
+  --color-task-text-7:   #facc15;   /* yellow-400       */
+  --color-task-text-8:   #fb7185;   /* rose-400         */
+
+  --color-task-generative-1: #ec4899; /* pink-500       */
+
+  --color-task-meta-1:   #64748b;   /* slate-500        */
 }
 
 /* --- Base (inside @layer base so utilities can override) ----------------- */

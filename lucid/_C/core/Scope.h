@@ -2,20 +2,33 @@
 //
 // Combined error-context and profiling RAII scope for op entry points.
 //
-// OpScopeFull bundles an ErrorContextGuard (which pushes the op name onto the
-// thread-local error call-stack) and an OpScope (which starts wall-clock
-// timing and memory tracking) into a single object.  Op implementations that
-// want both behaviours declare one OpScopeFull at function entry instead of
-// managing two separate guards.
+// :class:`OpScopeFull` bundles an :class:`ErrorContextGuard` — which
+// pushes the op name onto the thread-local error call-stack so any
+// raised :class:`LucidError` carries the surrounding op as context —
+// and an :class:`OpScope` — which starts wall-clock timing and memory
+// tracking — into a single object.  Op implementations that want both
+// behaviours can declare one :class:`OpScopeFull` at function entry
+// instead of managing two separate guards.
 //
-// The destruction order is significant: the member initialisation order
-// (ctx_ before op_) means ErrorContextGuard is destroyed last, so the op name
-// remains on the error stack for the entire duration of the OpScope event —
-// including the record() call in OpScope's destructor.
+// Destruction order is significant: members are listed with ``ctx_``
+// before ``op_`` so the context guard is constructed first and
+// destroyed last.  The op name therefore remains on the error stack
+// for the entire duration of the OpScope event — including the
+// :func:`Profiler::record` call inside :class:`OpScope`'s destructor —
+// which means any allocator or profiler-side exception still inherits
+// the right error context.
 //
-// Usage:
-//   OpScopeFull scope("conv2d", input->device(), input->dtype(), input->shape());
-//   scope.set_flops(2LL * N * C * H * W * K);
+// Notes
+// -----
+// Typical usage at op entry::
+//
+//     OpScopeFull scope("conv2d", x->device(), x->dtype(), out_shape);
+//     scope.set_flops(2LL * N * C * H * W * K);
+//
+// See Also
+// --------
+// :class:`OpScope` — profiler-only RAII.
+// :class:`ErrorContextGuard` — error-context-only RAII.
 
 #pragma once
 
@@ -32,28 +45,97 @@
 
 namespace lucid {
 
-// Composite RAII guard that activates both error-context annotation and
-// profiler timing for the lifetime of the enclosing scope.
+// Composite RAII guard activating both error-context annotation and
+// profiler timing for the duration of an op's body.
 //
-// Non-copyable and non-movable: the guards hold thread-local state whose
-// correct nesting depends on stack-discipline construction/destruction order.
+// Holds an :class:`ErrorContextGuard` (constructed first, destroyed
+// last) and an :class:`OpScope` (constructed second, destroyed first)
+// as members.  Construction pushes the op name onto the error stack
+// and starts the profiler timer; destruction first stops the profiler
+// (recording the event) and then pops the error frame.  This ordering
+// ensures the error frame is still active if the profiler's
+// :func:`record` call itself throws.
+//
+// Attributes
+// ----------
+// ctx_ : ErrorContextGuard
+//     Pushes ``name`` onto the thread-local error call-stack at
+//     construction; pops it on destruction.  Declared first so it
+//     outlives ``op_``.
+// op_ : OpScope
+//     Wall-clock and memory-tracking RAII recorder.  Declared second
+//     so it is destroyed first, while ``ctx_`` is still on the stack.
+//
+// Notes
+// -----
+// Non-copyable and non-movable — both member guards hold thread-local
+// state whose correct LIFO nesting depends on stack-discipline
+// construction and destruction.  Copying or moving the composite
+// would either duplicate the error frame or move it out from under
+// the inner scope.
+//
+// Examples
+// --------
+// Declare once at op entry::
+//
+//     auto matmul(TensorPtr a, TensorPtr b) {
+//         OpScopeFull scope("matmul", a->device(), a->dtype(),
+//                           {a->shape()[0], b->shape()[1]});
+//         scope.set_flops(2LL * M * N * K);
+//         // ... kernel body — any error here carries "matmul" in its
+//         // context; the OpEvent records the full body's time.
+//     }
+//
+// See Also
+// --------
+// :class:`OpScope` — timing-only RAII (no error context).
+// :class:`ErrorContextGuard` — error-context-only RAII (no timing).
 class LUCID_API OpScopeFull {
 public:
-    // Pushes name onto the error-context stack and starts an OpScope for
-    // (name, device, dtype, shape).  Both are torn down when this object
-    // goes out of scope.
+    // Pushes ``name`` onto the error-context stack and starts an
+    // :class:`OpScope` for ``(name, device, dtype, shape)``.
+    //
+    // Parameters
+    // ----------
+    // name : std::string_view
+    //     Op name; used both as the error-context frame label and the
+    //     :class:`OpEvent::name` field.
+    // device : Device
+    //     Device on which the op is executing.
+    // dtype : Dtype
+    //     Output element dtype.
+    // shape : Shape
+    //     Output shape; moved into the underlying :class:`OpScope`.
+    //
+    // Notes
+    // -----
+    // Both guards are torn down when the composite object goes out of
+    // scope.  The profiler-side teardown happens first; the
+    // error-context teardown second.
     OpScopeFull(std::string_view name, Device device, Dtype dtype, Shape shape)
         : ctx_(std::string(name)), op_(name, device, dtype, std::move(shape)) {}
 
     OpScopeFull(const OpScopeFull&) = delete;
     OpScopeFull& operator=(const OpScopeFull&) = delete;
 
-    // Forwards the FLOPs estimate to the underlying OpScope.
+    // Forwards the FLOPs estimate to the underlying :class:`OpScope`.
+    //
+    // Parameters
+    // ----------
+    // f : int64_t
+    //     Estimated floating-point operations performed by the op
+    //     body.  Stored on the pending :class:`OpEvent` for later
+    //     aggregation.
+    //
+    // See Also
+    // --------
+    // :func:`OpScope::set_flops` — receiver of the forwarded value.
     void set_flops(std::int64_t f) { op_.set_flops(f); }
 
 private:
-    // Declared before op_ so it is constructed first and destroyed last,
-    // keeping the op name on the error stack during the profiler record call.
+    // Declared before ``op_`` so it is constructed first and destroyed
+    // last, keeping the op name on the error stack throughout the
+    // profiler's :func:`record` call.
     ErrorContextGuard ctx_;
     OpScope op_;
 };

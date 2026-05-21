@@ -1,47 +1,62 @@
 // lucid/_C/backend/cpu/CpuBackend.h
 //
-// Concrete IBackend implementation for Apple Silicon CPU using the Apple
-// Accelerate framework.  All compute is performed on CpuStorage (host-side
-// aligned allocations); no raw loops are used where a vDSP or vForce vector
-// intrinsic exists.
+// Concrete :class:`IBackend` implementation for Apple Silicon CPU using
+// the Apple Accelerate framework.
 //
-// Design overview:
-//   Elementwise ops (add, sub, mul, exp, …) delegate to cpu::vadd_f32 and
-//   friends (vDSP / vForce wrappers) through the private unary_op / binary_op
-//   template helpers, which dispatch on the runtime Dtype.
+// All compute runs on ``CpuStorage`` (host-side aligned allocations);
+// no raw scalar loops are used where a ``vDSP`` or ``vForce`` vector
+// intrinsic exists.  Per DEVELOPMENT.md H3 this is the *only* compute
+// path allowed on the CPU stream — no NumPy / SciPy / external library
+// fallbacks.
 //
-//   Axis reductions (reduce_sum, reduce_mean, reduce_max, reduce_min) use the
-//   private reduce_axes helper, which iterates axes from highest to lowest
-//   (sorted descending) and calls the corresponding cpu::sum_axis_f32 etc.
-//   primitives from Reduce.h.  For mean reduction the result is scaled by
-//   1/reduce_dim after the sum.
+// Notes
+// -----
+// **Elementwise ops** (add, sub, mul, exp, …) delegate to ``cpu::vadd_f32``
+// and friends (vDSP / vForce wrappers) through the private
+// ``unary_op`` / ``binary_op`` template helpers, which dispatch on the
+// runtime :class:`Dtype`.
 //
-//   Convolution uses the im2col + GEMM strategy: for each batch element the
-//   input patches are unrolled into a column matrix by conv_nd_im2col_f32/f64,
-//   then cblas_sgemm/dgemm computes the full output in a single call.  The
-//   backward pass uses col2im for the input gradient and a second GEMM for the
-//   weight gradient.
+// **Axis reductions** (``reduce_sum``, ``reduce_mean``, ``reduce_max``,
+// ``reduce_min``) use the private ``reduce_axes`` helper, which iterates
+// axes from highest to lowest (sorted descending) and calls
+// ``cpu::sum_axis_f32`` etc. from :file:`Reduce.h`.  For mean reduction
+// the result is scaled by $1 / d$ after the sum.
 //
-//   Normalization (BatchNorm, LayerNorm, GroupNorm, RMSNorm) delegates to the
-//   Norm.h wrappers which use per-row vDSP operations for f32 throughput.
+// **Convolution** uses an im2col + GEMM strategy: for each batch element
+// the input patches are unrolled into a column matrix by
+// ``conv_nd_im2col_f32`` / ``_f64``, then ``cblas_sgemm`` / ``dgemm``
+// computes the full output in a single call.  The backward pass uses
+// col2im for the input gradient and a second GEMM for the weight gradient.
 //
-//   Linear algebra (eig, eigh, svd, qr, chol, inv, solve) delegates to the
-//   Lapack.h wrappers which handle the row-major ↔ column-major conversion
-//   required by Accelerate's LAPACK interface.
+// **Normalization** (BatchNorm, LayerNorm, GroupNorm, RMSNorm) delegates
+// to the :file:`Norm.h` wrappers which use per-row vDSP operations for
+// F32 throughput.
 //
-//   Pooling (MaxPool, AvgPool) delegates to Pool.h for 1-D, 2-D, and 3-D.
+// **Linear algebra** (eig, eigh, svd, qr, chol, inv, solve) delegates to
+// the :file:`Lapack.h` wrappers which handle the row-major ↔
+// column-major conversion required by Accelerate's LAPACK interface.
 //
-// Private helpers:
-//   fill_ones(ptr, n, dt)           — fills a raw buffer with the value 1.
-//   unary_op(a, shape, dt, …)       — allocates output, dispatches f32/f64/i32.
-//   binary_op(a, b, shape, dt, …)   — allocates output, dispatches f32/f64/i32/i64.
-//   reduce_axes(a, in_shape, opts, dt, op) — single-axis reduction loop.
-//   cast_impl(src, dst, n, src_dt, dst_dt) — element-by-element type cast.
+// **Pooling** (MaxPool, AvgPool) delegates to :file:`Pool.h` for 1-D,
+// 2-D, and 3-D.
 //
-// Self-registration:
-//   An anonymous-namespace CpuBackendRegistrar struct at the bottom of the
-//   file registers a CpuBackend singleton with the Dispatcher at static-init
-//   time.  BackendInit.cpp includes this header to trigger registration.
+// **Private helpers.**  ``fill_ones(ptr, n, dt)`` fills a raw buffer
+// with 1.  ``unary_op(a, shape, dt, …)`` / ``binary_op(a, b, shape, dt,
+// …)`` allocate the output and dispatch by ``Dtype`` (F32 / F64 / I32 /
+// I64).  ``reduce_axes(a, in_shape, opts, dt, op)`` runs a single-axis
+// reduction loop.  ``cast_impl(src, dst, n, src_dt, dst_dt)`` performs
+// an element-by-element type cast.
+//
+// **Self-registration.**  An anonymous-namespace
+// :class:`CpuBackendRegistrar` struct at the bottom of the file
+// registers a :class:`CpuBackend` singleton with :class:`Dispatcher` at
+// static-init time.  ``BackendInit.cpp`` includes this header to
+// trigger that registration.
+//
+// See Also
+// --------
+// :class:`IBackend` — abstract interface fulfilled by this class.
+// :class:`Dispatcher` — routes ``Device::CPU`` tensors here.
+// :class:`GpuBackend` — MLX/Metal sibling backend.
 
 #pragma once
 
@@ -73,22 +88,60 @@
 namespace lucid {
 namespace backend {
 
-// CPU (Accelerate-backed) concrete backend.
+// CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
-// All public methods satisfy the IBackend contract.  The private section
-// contains low-level type-dispatch helpers (unary_op, binary_op, reduce_axes)
-// and per-op compute routines that delegate to the Accelerate helpers in
-// Blas.h, Lapack.h, Norm.h, Pool.h, Reduce.h, Vdsp.h, and Vforce.h.
+// Every public method satisfies the :class:`IBackend` contract; the
+// private section holds low-level type-dispatch helpers (``unary_op``,
+// ``binary_op``, ``reduce_axes``) plus per-op compute routines that
+// delegate to the Accelerate helpers in :file:`Blas.h`,
+// :file:`Lapack.h`, :file:`Norm.h`, :file:`Pool.h`, :file:`Reduce.h`,
+// :file:`Vdsp.h`, and :file:`Vforce.h`.
+//
+// Notes
+// -----
+// Marked ``final`` — there is exactly one CPU backend at runtime,
+// installed by :class:`CpuBackendRegistrar` at static-init time.
+//
+// See Also
+// --------
+// :class:`IBackend` — abstract base.
+// :class:`GpuBackend` — MLX/Metal counterpart.
+// :class:`Dispatcher` — owns the singleton instance.
 class CpuBackend final : public IBackend {
 public:
-    // Registers this backend with the Dispatcher for Device::CPU.
+    // Registers this backend with the :class:`Dispatcher` for ``Device::CPU``.
+    //
+    // Invoked exactly once at process start by ``BackendInit.cpp``.
+    //
+    // See Also
+    // --------
+    // :func:`Dispatcher::register_backend` — receiving end.
     static void register_self() {
         Dispatcher::register_backend(Device::CPU, std::make_unique<CpuBackend>());
     }
 
+    // Returns ``Device::CPU``.
+    //
+    // Returns
+    // -------
+    // Device
+    //     The device tag this backend services.
     Device device() const noexcept override { return Device::CPU; }
 
-    // CpuStorage is already in the correct form; move it into Storage directly.
+    // Wraps an incoming ``CpuStorage`` into the variant directly.
+    //
+    // The CPU backend already operates on ``CpuStorage`` natively, so
+    // this is a move with no copy.  The ``shape`` argument is ignored.
+    //
+    // Parameters
+    // ----------
+    // cpu : CpuStorage
+    //     Source host buffer (consumed).
+    //
+    // Returns
+    // -------
+    // Storage
+    //     ``cpu`` re-wrapped as a :class:`Storage` variant.
     Storage from_cpu(CpuStorage cpu, const Shape&) override { return Storage{std::move(cpu)}; }
 
     Storage zeros(const Shape& shape, Dtype dt) override {
@@ -11236,11 +11289,27 @@ private:
 }  // namespace backend
 }  // namespace lucid
 
-// Anonymous-namespace static registrar that calls Dispatcher::register_backend
-// for Device::CPU at process startup, before any tensor code executes.
-// BackendInit.cpp includes this header to trigger the registration.
+// Static-init registrar that installs :class:`CpuBackend` into the
+// :class:`Dispatcher` for ``Device::CPU``.
+//
+// A single anonymous-namespace instance (``g_cpu_registrar``) runs its
+// constructor at process startup, before any tensor code executes, so
+// the dispatcher is always populated by the time the first op fires.
+// ``BackendInit.cpp`` includes this header to trigger the registration.
+//
+// Notes
+// -----
+// Anonymous namespace ⇒ one translation-unit-local copy.  The class
+// itself has no public methods; only its constructor side-effect matters.
+//
+// See Also
+// --------
+// :func:`Dispatcher::register_backend` — installer endpoint.
+// :class:`CpuBackend` — the backend being registered.
 namespace {
 struct CpuBackendRegistrar {
+    // Registers a fresh :class:`CpuBackend` instance with the
+    // :class:`Dispatcher` for ``Device::CPU``.
     CpuBackendRegistrar() {
         lucid::backend::Dispatcher::register_backend(
             lucid::Device::CPU, std::make_unique<lucid::backend::CpuBackend>());

@@ -161,18 +161,71 @@ class _DecoderBlock(nn.Module):
 
 
 class AttentionUNetForSemanticSegmentation(PretrainedModel):
-    """Attention U-Net semantic segmentation model (Oktay et al., MIDL 2018).
+    r"""Attention U-Net for medical image segmentation (Oktay et al., MIDL 2018).
 
-    Input contract
-    --------------
-    ``x``       : (B, in_channels, H, W) image batch.
-    ``targets`` : optional (B, H, W) integer segmentation masks for training.
+    A U-Net variant that inserts a soft **attention gate** on every skip
+    connection.  Each gate fuses the encoder feature :math:`x^\ell` (the
+    "input" branch) with the up-sampled decoder feature :math:`g^\ell`
+    (the "gating signal") via
 
-    Output contract
-    ---------------
-    ``SemanticSegmentationOutput``:
-      ``logits`` : (B, num_classes, H, W) — same spatial resolution as input.
-      ``loss``   : cross-entropy loss when targets provided.
+    .. math::
+
+        \alpha^\ell = \sigma\!\bigl(\psi^\top \tanh(W_x x^\ell + W_g g^\ell)\bigr),
+        \qquad
+        \hat{x}^\ell = \alpha^\ell \odot x^\ell,
+
+    suppressing skip-feature activations outside the regions of interest
+    highlighted by the decoder.  This focuses the decoder's attention on
+    relevant anatomy and removes the "noise" carried over from encoder
+    layers — a consistent +1-3 Dice gain on medical-imaging benchmarks
+    in the original paper.
+
+    Parameters
+    ----------
+    config : AttentionUNetConfig
+        Frozen architecture spec.  Use :func:`attention_unet` for the
+        standard 4-level configuration.
+
+    Attributes
+    ----------
+    config : AttentionUNetConfig
+        Stored copy of the config that built this model.
+    encoders : list[_EncoderBlock]
+        ``config.depth`` 2-D encoder stages (DoubleConv + MaxPool).
+    bottleneck : _DoubleConv
+        DoubleConv at the bottom of the U.
+    decoders : list[_DecoderBlock]
+        ``config.depth`` decoder stages, each applying an attention gate
+        to the corresponding skip feature *before* concatenating it into
+        the decoder DoubleConv.
+    head : nn.Conv2d
+        1x1 convolution producing ``num_classes`` channels.
+
+    Notes
+    -----
+    See Oktay et al., "Attention U-Net: Learning Where to Look for the
+    Pancreas", MIDL 2018 (arXiv:1804.03999).  The additive attention
+    gate is identical to that of Bahdanau et al. (2015) generalised to
+    feature maps:
+
+    .. math::
+
+        q^\ell = \psi^\top \sigma_1\!\bigl(W_x x^\ell + W_g g^\ell + b_g\bigr),
+        \quad
+        \alpha^\ell = \sigma_2(q^\ell + b_\psi),
+
+    with :math:`\sigma_1 = \mathrm{ReLU}`, :math:`\sigma_2 = \mathrm{sigmoid}`.
+    The intermediate channel count is typically half the input channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.attention_unet import attention_unet
+    >>> model = attention_unet()
+    >>> x = lucid.randn(1, 1, 256, 256)
+    >>> out = model(x)
+    >>> out.logits.shape   # (B, num_classes, H, W)
+    (1, 2, 256, 256)
     """
 
     config_class: ClassVar[type[AttentionUNetConfig]] = AttentionUNetConfig

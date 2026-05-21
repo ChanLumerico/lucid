@@ -10,9 +10,52 @@ choices that follow from them.
 from dataclasses import dataclass
 from typing import ClassVar
 
+from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig, TextActivation
 
 
+@model_family_meta(
+    canonical_name="GPT-2",
+    citation=(
+        'Radford, Alec, et al. "Language Models are Unsupervised '
+        'Multitask Learners." OpenAI Technical Report, 2019.'
+    ),
+    theory=r"""
+    GPT-2 retains GPT-1's decoder-only causal-LM objective
+
+    .. math::
+
+        \mathcal{L}_{\text{LM}}(\theta)
+            = \sum_{t=1}^{T} \log p_\theta(x_t \mid x_{<t}),
+
+    but introduces three architectural refinements that have since
+    become standard for autoregressive transformers.  **Pre-LayerNorm**
+    moves the LayerNorm to the input of every sub-block (attention and
+    MLP), so each block computes :math:`h \leftarrow h + f(\mathrm{LN}(h))`
+    instead of :math:`h \leftarrow \mathrm{LN}(h + f(h))`; combined with
+    a **final LayerNorm** (``ln_f``) after the last block, this yields
+    much more stable optimisation at depth.  Residual projection weights
+    are initialised with an extra :math:`1/\sqrt{2N}` factor (where
+    :math:`N` is the layer count), which keeps activation variance
+    roughly invariant to depth.
+
+    The tokenizer switches to a byte-level BPE with a 50257-symbol
+    vocabulary (50256 merges plus the ``<|endoftext|>`` sentinel), and
+    context length doubles from 512 to 1024.  The released family spans
+    four sizes — *small* (124M, the defaults above), *medium* (355M),
+    *large* (774M), and *xl* (1.5B) — by scaling
+    :math:`(\text{hidden\_size}, \text{num\_hidden\_layers},
+    \text{num\_attention\_heads})` while holding ``intermediate_size =
+    4 \cdot \text{hidden\_size}`` and head-dim = 64 fixed.
+
+    The paper's headline finding is that a sufficiently large LM trained
+    on WebText (~40 GB scraped from outbound Reddit links) performs
+    competitive **zero-shot** transfer across reading comprehension,
+    translation, summarisation, and QA — without any task-specific
+    fine-tuning.  This is the empirical seed of in-context learning and
+    the modern prompting paradigm.
+    """,
+)
 @dataclass(frozen=True)
 class GPT2Config(LanguageModelConfig):
     """Configuration for every GPT-2 variant.

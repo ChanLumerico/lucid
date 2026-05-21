@@ -34,10 +34,53 @@ def attention_unet(
     pretrained: bool = False,
     **overrides: object,
 ) -> AttentionUNetForSemanticSegmentation:
-    """Attention U-Net (Oktay et al., MIDL 2018).
+    r"""Attention U-Net (Oktay et al., MIDL 2018).
 
-    Standard configuration: 4-level encoder/decoder, base_channels=64,
-    in_channels=1 (medical imaging default), 2 output classes.
-    Soft attention gates suppress irrelevant skip-connection features.
+    Builds an :class:`AttentionUNetForSemanticSegmentation` with the
+    standard configuration: 4-level encoder / decoder, ``base_channels =
+    64`` (channel schedule 64 -> 128 -> 256 -> 512 -> 1024),
+    ``in_channels = 1`` (medical imaging default), and ``num_classes = 2``.
+    Soft attention gates on every skip connection suppress irrelevant
+    encoder activations.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`AttentionUNetConfig`
+        (``num_classes``, ``in_channels`` for RGB inputs,
+        ``base_channels``, ``depth``, ``bilinear``).
+
+    Returns
+    -------
+    AttentionUNetForSemanticSegmentation
+        Segmentation model with the standard Attention U-Net
+        configuration applied (or with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Oktay et al., "Attention U-Net: Learning Where to Look for the
+    Pancreas", MIDL 2018 (arXiv:1804.03999).  The defining attention-gate
+    update is
+
+    .. math::
+
+        \hat{x}^\ell = \sigma\!\bigl(\psi^\top
+            \tanh(W_x x^\ell + W_g g^\ell)\bigr) \odot x^\ell,
+
+    where :math:`x^\ell` is the encoder feature at level :math:`\ell`
+    and :math:`g^\ell` is the up-sampled decoder feature serving as the
+    gating signal.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.attention_unet import attention_unet
+    >>> model = attention_unet(num_classes=4, in_channels=3)
+    >>> x = lucid.randn(1, 3, 256, 256)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 4, 256, 256)
     """
     return _build(_CFG_BASE, overrides)

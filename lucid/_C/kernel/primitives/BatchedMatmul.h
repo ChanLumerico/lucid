@@ -28,10 +28,38 @@ namespace lucid {
 namespace kernel {
 namespace primitives {
 
-// Precomputed plan for a batched N-D matmul.
-// out_shape includes the broadcast batch dimensions followed by [M, N].
-// a_bcast_shape and b_bcast_shape hold the shapes to broadcast each
-// operand to before the GEMM loop.
+// Precomputed plan for an N-dimensional batched matrix multiplication.
+//
+// Resolves both operand shapes into a single triplet of broadcast batch
+// dimensions plus the inner $(M, K, N)$ contraction tuple, so that the
+// downstream GEMM loop can iterate a flat batch counter without
+// re-inspecting per-axis shape information.
+//
+// Attributes
+// ----------
+// out_shape : Shape
+//     Shape of the matmul output: broadcast batch dims concatenated with
+//     ``[M, N]``.
+// a_bcast_shape : Shape
+//     Shape that operand $A$ is conceptually broadcast to before the
+//     GEMM loop — batch dims concatenated with ``[M, K]``.
+// b_bcast_shape : Shape
+//     Shape that operand $B$ is conceptually broadcast to — batch dims
+//     concatenated with ``[K, N]``.
+// M : int
+//     Row count of each per-batch left matrix.
+// K : int
+//     Shared inner (contraction) dimension.
+// N : int
+//     Column count of each per-batch right matrix.
+// batch : std::size_t
+//     Product of all broadcast batch dimensions; the number of 2-D GEMM
+//     calls dispatched in the inner loop.
+//
+// See Also
+// --------
+// plan_nd_matmul : Builds an ``NdMatmulInfo`` from two operand shapes.
+// cpu_matmul_nd  : Consumes an ``NdMatmulInfo`` and runs the GEMM loop.
 struct NdMatmulInfo {
     Shape out_shape;          // Shape of the output tensor.
     Shape a_bcast_shape;      // Shape of operand a after batch broadcast.
@@ -40,9 +68,51 @@ struct NdMatmulInfo {
     std::size_t batch = 1;    // Product of all broadcast batch dimensions.
 };
 
-// Compute NdMatmulInfo from operand shapes a and b. Raises ShapeMismatch
-// if the inner dimensions are incompatible or the batch dimensions cannot
-// be broadcast together.
+// Plan an N-D matmul from two operand shapes.
+//
+// Validates that both operands are at least 2-D, that the inner
+// contraction dimensions agree, and that the leading batch dimensions
+// broadcast against each other under NumPy rules.  Returns a fully
+// populated :struct:`NdMatmulInfo` describing the GEMM loop bounds.
+//
+// Math
+// ----
+// Splits each operand into a leading batch shape and a trailing matrix
+// shape, then broadcasts the batch shapes:
+// $$
+//   A \in \mathbb{R}^{B_a \times M \times K}, \quad
+//   B \in \mathbb{R}^{B_b \times K \times N}, \quad
+//   B_\text{out} = \mathrm{broadcast}(B_a, B_b)
+// $$
+// so that the output has shape ``out_shape = B_out + [M, N]``.
+//
+// Parameters
+// ----------
+// a : const Shape&
+//     Shape of the left operand; must satisfy ``a.size() >= 2`` with
+//     trailing dims ``[..., M, K]``.
+// b : const Shape&
+//     Shape of the right operand; must satisfy ``b.size() >= 2`` with
+//     trailing dims ``[..., K, N]``.
+//
+// Returns
+// -------
+// NdMatmulInfo
+//     Plan describing the output shape, per-operand broadcast shapes,
+//     contraction dims, and total batch count.
+//
+// Raises
+// ------
+// ShapeMismatch
+//     If either operand has rank below 2, the inner contraction
+//     dimensions disagree, or the leading batch dimensions cannot be
+//     broadcast under NumPy rules (a leading dim of 1 expands to match
+//     the other operand's value).
+//
+// Notes
+// -----
+// Either operand may have an empty batch shape — in that case the other
+// operand's batch dims become the output's batch dims unchanged.
 inline NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
     if (a.size() < 2 || b.size() < 2)
         throw ShapeMismatch(a, b, "matmul: both operands must be ≥2-D");
@@ -85,10 +155,67 @@ inline NdMatmulInfo plan_nd_matmul(const Shape& a, const Shape& b) {
     return info;
 }
 
-// Execute the batched N-D matmul described by info. transA and transB
-// control whether the corresponding operand is transposed before the GEMM
-// call, which is needed for backward-pass gradient computations. Only F32
-// and F64 are supported; other dtypes raise not_implemented.
+// Execute a batched N-D matrix multiplication on the CPU.
+//
+// Iterates over the flattened batch dimension described by ``info`` and
+// dispatches one ``sgemm`` (or ``dgemm``) per batch slice via the
+// Accelerate BLAS wrappers in ``backend/cpu/Blas.h``.  Optional transpose
+// flags reuse the same kernel for the matmul backward pass:
+// $dA = dOut \cdot B^T$ uses ``transB = true`` and
+// $dB = A^T \cdot dOut$ uses ``transA = true``.
+//
+// Math
+// ----
+// For each batch index $\mathbf{b}$ in ``info.out_shape[:-2]``:
+// $$
+//   C[\mathbf{b}] = \mathrm{op}_A(A[\mathbf{b}]) \cdot \mathrm{op}_B(B[\mathbf{b}])
+// $$
+// where $\mathrm{op}_X(X) = X^T$ if the corresponding transpose flag is
+// set, else $X$.
+//
+// Parameters
+// ----------
+// a : const CpuStorage&
+//     Left operand; logical shape ``info.a_bcast_shape``.  Assumed to be
+//     pre-broadcast and contiguous in row-major layout.
+// b : const CpuStorage&
+//     Right operand; logical shape ``info.b_bcast_shape``.  Assumed to
+//     be pre-broadcast and contiguous in row-major layout.
+// info : const NdMatmulInfo&
+//     Plan produced by :func:`plan_nd_matmul`.
+// transA : bool
+//     If true, treat each $A$ slice as $K \times M$ (transposed) before
+//     the GEMM call — adjusts the leading dimension accordingly.
+// transB : bool
+//     If true, treat each $B$ slice as $N \times K$ (transposed) before
+//     the GEMM call.
+// dt : Dtype
+//     Element dtype; only :data:`Dtype::F32` and :data:`Dtype::F64` are
+//     supported.
+//
+// Returns
+// -------
+// CpuStorage
+//     Newly allocated, aligned output buffer of shape
+//     ``info.out_shape`` (flattened, row-major).  All-zero contraction
+//     dims ($M$, $N$, or $K$ equal to 0) yield a zero-filled output.
+//
+// Raises
+// ------
+// ErrorBuilder("matmul")::not_implemented
+//     If ``dt`` is not one of :data:`Dtype::F32` or :data:`Dtype::F64`.
+//
+// Notes
+// -----
+// Leading dimensions are set based on the transpose flags: the
+// untransposed $M \times K$ slice has ``lda = K``, while a transposed
+// $K \times M$ view has ``lda = M``.  The output leading dimension is
+// always $N$ (untransposed output).
+//
+// See Also
+// --------
+// backend::cpu::sgemm : Single-precision Accelerate GEMM wrapper.
+// backend::cpu::dgemm : Double-precision Accelerate GEMM wrapper.
 inline CpuStorage cpu_matmul_nd(const CpuStorage& a,
                                 const CpuStorage& b,
                                 const NdMatmulInfo& info,

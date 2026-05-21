@@ -4,8 +4,47 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="VGG",
+    citation=(
+        'Simonyan, Karen, and Andrew Zisserman. "Very Deep Convolutional '
+        'Networks for Large-Scale Image Recognition." International '
+        "Conference on Learning Representations (ICLR), 2015."
+    ),
+    theory=r"""
+    VGG demonstrated that *uniformity and depth* — rather than
+    bespoke layer designs — were the dominant factors driving image-
+    classification accuracy in 2014.  The network is built from a
+    single recipe: stack :math:`3\times3` convolutions with stride 1
+    and padding 1, periodically halve the spatial resolution with a
+    :math:`2\times2` max-pool, double the channel count at each
+    pooling boundary, and end with three large fully-connected
+    layers.
+
+    The :math:`3\times3` kernel choice is theoretically motivated.
+    Two stacked :math:`3\times3` convolutions have the same receptive
+    field as a single :math:`5\times5` convolution but use only
+    :math:`2 \cdot 9 C^2 = 18 C^2` parameters versus :math:`25 C^2`,
+    while inserting an extra nonlinearity between them.  Three stacked
+    :math:`3\times3` layers match a :math:`7\times7` receptive field at
+    :math:`27 C^2` versus :math:`49 C^2` parameters and *two* extra
+    nonlinearities.  Depth at a fixed receptive field therefore buys
+    representational power essentially for free.
+
+    The paper's variants (configurations A, B, D, E corresponding to
+    VGG-11/13/16/19) differ only in how many :math:`3\times3` convs are
+    stacked between pooling layers.  Despite a parameter count of
+    138 M — most of it locked up in the 4096-dim fully-connected layers
+    — VGG-16 achieves a top-5 ImageNet error of 7.3%, second only to
+    GoogLeNet in ILSVRC-2014, and its features transferred so well
+    that "VGG features" became the standard backbone for downstream
+    tasks (object detection, segmentation, style transfer) for years
+    after publication.
+    """,
+)
 @dataclass(frozen=True)
 class VGGConfig(ModelConfig):
     """Configuration for all VGG variants (A/B/D/E ≡ 11/13/16/19).

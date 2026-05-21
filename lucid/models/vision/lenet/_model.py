@@ -72,10 +72,70 @@ def _build_features(cfg: LeNetConfig) -> nn.Sequential:
 
 
 class LeNet(PretrainedModel, BackboneMixin):
-    """LeNet-5 feature extractor — outputs C5 activations (120-dim spatial).
+    r"""LeNet-5 feature extractor (no fully-connected head).
 
-    ``forward_features`` returns shape ``(B, 120, 1, 1)`` for 32×32 inputs.
-    ``forward`` wraps it in ``BaseModelOutput``.
+    Implements the canonical convolutional trunk of the original LeNet-5
+    network from LeCun et al., "Gradient-Based Learning Applied to
+    Document Recognition", Proc. IEEE 1998: three convolutional layers
+    (C1, C3, C5) interleaved with two sub-sampling layers (S2, S4).  The
+    receptive field grows from a single :math:`5\times5` patch in C1 to
+    the entire :math:`32\times32` input by C5 — so for the canonical
+    input size the C5 output collapses to a :math:`1\times1` spatial map
+    of 120 channels, acting as a fully-connected layer in conv form.
+    Used as the canonical "Hello World" of convolutional networks and
+    as the smallest paper-cited baseline in the model zoo.
+
+    Parameters
+    ----------
+    config : LeNetConfig
+        Frozen architecture spec.  Use :func:`lenet_5` for the
+        paper-cited tanh + average-pool variant; pass a custom config to
+        switch to modern ``activation="relu"`` / ``pooling="max"`` or to
+        accept RGB input via ``in_channels=3``.
+
+    Attributes
+    ----------
+    config : LeNetConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        The C1-S2-C3-S4-C5 convolutional stack — see
+        :func:`_build_features` for the exact layer chain.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin` for downstream decoder modules.
+
+    Notes
+    -----
+    From LeCun et al., "Gradient-Based Learning Applied to Document
+    Recognition", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  Each
+    convolution computes
+
+    .. math::
+
+        h_{i,j}^{(k)} = \phi\!\left(
+            \sum_{c}\sum_{u,v} W_{u,v,c}^{(k)} \, x_{i+u,\,j+v,\,c}
+            + b^{(k)}
+        \right),
+
+    where :math:`\phi` is :math:`\tanh` in the paper.  The original
+    sub-sampling layer was a *trainable* :math:`2\times2` average pool
+    with learnable scale and bias; this implementation uses standard
+    parameter-free :class:`~lucid.nn.AvgPool2d` for compatibility with
+    modern training recipes.  Total parameter count is approximately
+    60 k — small enough to train to convergence on MNIST in minutes on
+    a CPU.
+
+    Examples
+    --------
+    Run a single forward pass on a batch of MNIST-shaped inputs:
+
+    >>> import lucid
+    >>> from lucid.models.vision.lenet import lenet_5
+    >>> backbone = lenet_5()
+    >>> x = lucid.randn(8, 1, 32, 32)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 120, 1, 1)
+    (8, 120, 1, 1)
     """
 
     config_class: ClassVar[type[LeNetConfig]] = LeNetConfig
@@ -107,7 +167,79 @@ class LeNet(PretrainedModel, BackboneMixin):
 
 
 class LeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """LeNet-5 with F6 (120→84) and output (84→num_classes) fully-connected layers."""
+    r"""LeNet-5 with F6 fully-connected layer and final classifier.
+
+    Combines a :class:`LeNet` convolutional trunk with the original
+    paper's two-layer fully-connected head: a hidden layer F6 mapping
+    120 → 84 followed by the output layer mapping 84 →
+    ``config.num_classes``.  When ``labels`` are supplied to
+    :meth:`forward`, a cross-entropy loss is returned alongside the
+    logits; otherwise ``loss`` is ``None``.  Used as a teaching baseline
+    on MNIST / Fashion-MNIST and as a parity reference for LeNet-style
+    architectures.
+
+    Parameters
+    ----------
+    config : LeNetConfig
+        Architecture spec.  Use :func:`lenet_5_cls` for the paper-cited
+        configuration (10-way classifier, tanh, average pooling); pass a
+        custom config to retarget ``num_classes`` or to switch the
+        activation/pooling family.
+
+    Attributes
+    ----------
+    config : LeNetConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        The C1-S2-C3-S4-C5 convolutional stack inherited from the
+        backbone.
+    f6 : nn.Linear
+        Hidden fully-connected layer projecting 120 → 84.
+    act_f6 : nn.Module
+        Activation applied after F6 — :class:`~lucid.nn.Tanh` in the
+        paper, :class:`~lucid.nn.ReLU` if ``config.activation="relu"``.
+    classifier : nn.Module
+        Final linear projection 84 → ``num_classes``, built by
+        :meth:`ClassificationHeadMixin._build_classifier`.
+
+    Notes
+    -----
+    From LeCun et al., "Gradient-Based Learning Applied to Document
+    Recognition", Proc. IEEE 86(11):2278–2324, 1998, Figure 2.  The
+    original output layer was a Gaussian-RBF unit comparing F6
+    activations against fixed digit templates; this implementation uses
+    the modern linear + cross-entropy head, which gave essentially the
+    same accuracy in subsequent reimplementations.  Loss is the standard
+    categorical cross-entropy
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{N} \sum_{n=1}^{N}
+            \log \operatorname{softmax}(\text{logits}_n)_{\,y_n},
+
+    computed only when ``labels`` is not ``None``.
+
+    Examples
+    --------
+    Run inference on a small MNIST-style batch:
+
+    >>> import lucid
+    >>> from lucid.models.vision.lenet import lenet_5_cls
+    >>> model = lenet_5_cls()
+    >>> x = lucid.randn(4, 1, 32, 32)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 10)
+    >>> out.loss is None
+    True
+
+    Compute a training loss given labels:
+
+    >>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)
+    >>> out = model(x, labels=labels)
+    >>> out.loss.shape
+    ()
+    """
 
     config_class: ClassVar[type[LeNetConfig]] = LeNetConfig
     base_model_prefix: ClassVar[str] = "lenet"

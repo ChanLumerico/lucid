@@ -18,9 +18,73 @@ the same modern U-Net as diffusion).  The differences live in:
 from dataclasses import dataclass, field
 from typing import ClassVar
 
+from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import GenerativeModelConfig
 
 
+@model_family_meta(
+    canonical_name="NCSN",
+    citation=(
+        'Song, Yang, and Stefano Ermon. "Generative Modeling by '
+        'Estimating Gradients of the Data Distribution." NeurIPS, 2019.'
+    ),
+    theory=r"""
+    NCSN — *Noise-Conditional Score Network* — is the score-based
+    counterpart of DDPM.  Rather than predicting noise inside a discrete
+    Markov chain, it directly learns the **(Stein) score function**
+    :math:`s_\theta(x, \sigma) \approx \nabla_x \log p_\sigma(x)`, where
+    :math:`p_\sigma` is the data distribution convolved with Gaussian
+    noise of standard deviation :math:`\sigma`.
+
+    Training uses **denoising score matching** (Vincent 2011): for a
+    noised sample
+    :math:`\tilde{x} = x + \sigma \epsilon,\; \epsilon \sim
+    \mathcal{N}(0, \mathbf{I})`, the conditional score is available in
+    closed form,
+    :math:`\nabla_{\tilde{x}} \log p_\sigma(\tilde{x} \mid x) =
+    -(\tilde{x} - x)/\sigma^2`, giving the loss
+
+    .. math::
+
+        \mathcal{L}_{\text{DSM}}(\theta)
+            = \mathbb{E}_{\sigma, x, \tilde{x}}\!\left[
+                \frac{1}{2}\, \lambda(\sigma)
+                \left\lVert
+                    s_\theta(\tilde{x}, \sigma)
+                    + \frac{\tilde{x} - x}{\sigma^2}
+                \right\rVert^2
+              \right],
+
+    with the standard weighting :math:`\lambda(\sigma) = \sigma^2` so
+    every noise level contributes comparable magnitude.  The
+    architecture reuses the same U-Net as DDPM but conditions on
+    :math:`\sigma` (continuous) rather than a discrete timestep
+    :math:`t`.
+
+    The key innovation is **noise annealing**: a geometric schedule
+    :math:`\sigma_1 > \sigma_2 > \cdots > \sigma_L` (defaults
+    :math:`\sigma_1 = 50`, :math:`\sigma_L = 0.01`, :math:`L = 10`)
+    where the largest :math:`\sigma_1` smooths the data distribution
+    enough that low-density regions become traversable, then sampling
+    refines toward :math:`\sigma_L \approx 0` where the score
+    approximates that of clean data.  Sampling uses **annealed Langevin
+    dynamics** — for each level :math:`i` in order, run :math:`T_i`
+    steps of
+
+    .. math::
+
+        x \leftarrow x + \frac{\alpha_i}{2}\, s_\theta(x, \sigma_i)
+            + \sqrt{\alpha_i}\; z,
+        \qquad z \sim \mathcal{N}(0, \mathbf{I}),
+
+    with the per-level step size
+    :math:`\alpha_i = \epsilon \cdot \sigma_i^2 / \sigma_L^2` (Song
+    2019, §4.3) — large early on, decaying as noise shrinks.  The
+    score-based view unifies with diffusion through the **continuous
+    SDE framework** (Song et al., 2021), where DDPM and NCSN become
+    different discretisations of the same reverse-time process.
+    """,
+)
 @dataclass(frozen=True)
 class NCSNConfig(GenerativeModelConfig):
     """Configuration for every NCSN variant.

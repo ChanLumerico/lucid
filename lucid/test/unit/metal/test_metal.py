@@ -63,6 +63,7 @@ class TestMetalLazyTransposeBridge:
 
     def test_grouped_conv2d_output_bytes(self) -> None:
         import lucid.nn.functional as F
+
         x = lucid.randn(1, 2, 2, 2, device="metal")
         w = lucid.randn(2, 1, 1, 1, device="metal")
         y = F.conv2d(x, w, groups=2)
@@ -70,6 +71,7 @@ class TestMetalLazyTransposeBridge:
 
     def test_grad_bytes_through_grouped_backward(self) -> None:
         import lucid.nn.functional as F
+
         x = lucid.randn(2, 4, 4, 4, device="metal", requires_grad=True)
         w = lucid.randn(4, 1, 3, 3, device="metal", requires_grad=True)
         F.conv2d(x, w, groups=4).sum().backward()

@@ -49,16 +49,44 @@ namespace lucid {
 
 namespace detail {
 
-// Satisfied when Derived provides a gpu_kernel static method matching the
-// reduction GPU kernel signature (axes and keepdims are additional params).
+// Concept: ``Derived`` exposes a static ``gpu_kernel`` matching the
+// reduction GPU signature.
+//
+// Required signature
+// ------------------
+// ``static GpuStorage Derived::gpu_kernel(const GpuStorage& a,
+// const Shape& in_shape, const std::vector<int>& axes, bool keepdims,
+// Dtype dt)``.
+//
+// Notes
+// -----
+// When satisfied, ``ReduceKernel::forward`` dispatches GPU storage
+// directly through this static instead of routing through
+// :class:`backend::IBackend`.  Concepts are checked at the call site
+// with ``if constexpr`` so non-conforming derived classes silently fall
+// through to the dispatch-interface or CPU branches.
 template <class T>
 concept HasReduceGpuKernel =
     requires(GpuStorage a, Shape s, std::vector<int> ax, bool kd, Dtype d) {
         { T::gpu_kernel(a, s, ax, kd, d) } -> std::same_as<GpuStorage>;
     };
 
-// Satisfied when Derived routes through the IBackend dispatch interface
-// for the reduction operation.
+// Concept: ``Derived`` routes through :class:`backend::IBackend` for
+// the forward reduction.
+//
+// Required signature
+// ------------------
+// ``static Storage Derived::dispatch(backend::IBackend& be,
+// const Storage& a, const Shape& in_shape, const std::vector<int>& axes,
+// bool keepdims, Dtype dt)``.
+//
+// Notes
+// -----
+// This is the preferred wiring style for canonical reductions
+// (``SumBackward``, ``MeanBackward``, …) because it lets a single
+// derived class drive both CPU (Accelerate) and GPU (MLX) by delegating
+// to the per-device backend implementation.  Takes precedence over
+// :concept:`HasReduceGpuKernel` when both are satisfied.
 template <class T>
 concept HasReduceDispatch =
     requires(backend::IBackend& be, Storage a, Shape s, std::vector<int> ax, bool kd, Dtype d) {
@@ -67,9 +95,91 @@ concept HasReduceDispatch =
 
 }  // namespace detail
 
-// CRTP reduction-op base. Inherits AutogradNode<Derived, 1>.
-// Extra backward state is stored in the instance fields below and
-// populated by forward() before the node is attached to the graph.
+// CRTP base for single-input multi-axis reduction ops (``sum``,
+// ``mean``, ``prod``, ``max``, ``min``, …).
+//
+// Concrete reductions inherit as
+// ``class SumBackward : public ReduceKernel<SumBackward>`` and supply
+// (a) a ``static constexpr OpSchema schema_v1``, (b) one of the kernel
+// hooks recognised by :concept:`HasReduceDispatch` /
+// :concept:`HasReduceGpuKernel` (or a plain ``cpu_kernel`` static), and
+// (c) a ``grad_formula(grad_out) -> Storage`` that converts the upstream
+// gradient into the input gradient.  The base owns axis normalisation,
+// output-shape computation, GPU/CPU dispatch, and the extra
+// reduction-state plumbing that the backward formula needs.
+//
+// Unlike :class:`UnaryKernel`, the forward output has a *different*
+// shape than the input, so the backward pass must broadcast the
+// gradient from the reduced shape back to the full input extent.  That
+// broadcast is encoded once in :meth:`apply_for_graph` (graph-mode) and
+// is the responsibility of ``grad_formula`` in storage-mode.
+//
+// Math
+// ----
+// $$
+//   y = \mathrm{reduce}_{i \in \text{axes}}(x), \qquad
+//   \frac{\partial \mathcal{L}}{\partial x_i}
+//     = \mathrm{scale}_{\text{op}}\!\left(
+//       \mathrm{broadcast}\!\left(
+//         \frac{\partial \mathcal{L}}{\partial y}
+//       \right)
+//     \right).
+// $$
+//
+// ``scale_op`` is identity for ``sum``, $1/N$ for ``mean``,
+// $y / x_i$ for ``prod``, an argmax/argmin indicator for ``max``/``min``.
+//
+// Template Parameters
+// -------------------
+// Derived : class
+//     CRTP self-type.  Must expose ``schema_v1``, a kernel hook
+//     satisfying one of the reduction concepts (or ``cpu_kernel``), and
+//     ``grad_formula``.  May override ``scale_graph_grad`` for graph-mode
+//     scaling (``mean``, ``prod``, …).
+//
+// Attributes
+// ----------
+// kSavesInput : bool
+//     ``true`` by default — most reductions need the input activation
+//     during backward.  ``SumBackward`` overrides this to ``false``.
+// kSavesOutput : bool
+//     ``false`` by default.  ``ProdBackward`` / ``MaxBackward`` /
+//     ``MinBackward`` override to ``true`` so they can route gradient
+//     through the saved output (or its argmax indicator).
+// kHasGradient : bool
+//     ``true``.  All canonical reductions participate in autograd.
+// reduce_axes_ : std::vector<int>
+//     Normalised (non-negative, sorted, deduplicated) axis list saved by
+//     :meth:`forward` for use in :meth:`apply_for_graph` and in the
+//     derived ``grad_formula``.
+// keepdims_ : bool
+//     Whether reduced axes were retained as size-1 dims in the output.
+//     Controls whether the backward pass must re-insert those size-1
+//     axes before broadcasting.
+// full_input_shape_ : Shape
+//     Shape of the input tensor *before* reduction — the broadcast
+//     target during backward.
+//
+// Notes
+// -----
+// **Dispatch order.**  :meth:`forward` chooses the kernel path with
+// ``if constexpr``:
+//
+// 1. :concept:`HasReduceDispatch` — call ``Derived::dispatch(backend,
+//    storage, shape, axes, keepdims, dtype)``.
+// 2. GPU + :concept:`HasReduceGpuKernel` — call ``Derived::gpu_kernel``.
+// 3. CPU — call ``Derived::cpu_kernel``.
+//
+// **Contiguity.**  CPU inputs are routed through :func:`contiguous_op`
+// before dispatch; GPU inputs are passed through as MLX handles strides
+// natively.
+//
+// See Also
+// --------
+// :class:`UnaryKernel`, :class:`BinaryKernel`, :class:`NaryKernel` —
+// sibling CRTP bases for shape-preserving ops.
+// :class:`SumBackward`, :class:`MeanBackward`, :class:`ProdBackward`,
+// :class:`MaxBackward`, :class:`MinBackward` — canonical consumers.
 template <class Derived>
 class ReduceKernel : public AutogradNode<Derived, 1>, public kernel::IKernel {
 public:
@@ -77,40 +187,170 @@ public:
     static constexpr bool kSavesOutput = false;
     static constexpr bool kHasGradient = true;
 
+    // Schema-derived op name, exposed to the :class:`IKernel` virtual
+    // interface for error messages and profiler scopes.
+    //
+    // Returns
+    // -------
+    // std::string_view
+    //     ``Derived::schema_v1.name`` (e.g. ``"sum"``, ``"mean"``).
     std::string_view name() const noexcept override { return Derived::schema_v1.name; }
+
+    // Schema-derived node name used by the autograd graph display and
+    // ``create_graph`` error reports.
+    //
+    // Returns
+    // -------
+    // std::string
+    //     Owning copy of ``Derived::schema_v1.name``.
     std::string node_name() const override { return std::string(Derived::schema_v1.name); }
 
-    // Axes that were reduced during forward(), stored for use in grad_formula.
+    // Normalised reduction axes captured during :meth:`forward`.
+    //
+    // Sorted, non-negative, and deduplicated.  ``grad_formula`` and
+    // :meth:`apply_for_graph` use this to invert the shape change.
     std::vector<int> reduce_axes_;
-    // Whether keepdims was requested; grad_formula uses this to know whether
-    // to insert size-1 dimensions before broadcasting back to full_input_shape_.
+    // Whether ``keepdims=True`` was requested for the forward call.
+    //
+    // When ``false``, the backward pass must re-insert size-1 axes at
+    // the reduced positions before broadcasting back to
+    // :attr:`full_input_shape_`.
     bool keepdims_ = false;
-    // The shape of the input tensor before reduction; needed to broadcast
-    // the gradient back to the original extent during backward.
+    // Original input shape — the broadcast target for the gradient.
+    //
+    // Captured before any contiguity / dtype-cast hops so the broadcast
+    // matches the user's view of the tensor, not the kernel's internal
+    // representation.
     Shape full_input_shape_;
 
-    // Default scale: pass gradient through unchanged (used by SumBackward).
-    // Override in Derived for scaling ops like MeanBackward.
+    // Graph-mode gradient scaling hook.
+    //
+    // Default implementation passes the gradient through unchanged,
+    // matching the ``sum`` rule (every reduced element contributed with
+    // unit weight).  Derived classes whose rule has a non-trivial scale
+    // — :class:`MeanBackward` divides by $N$, :class:`ProdBackward`
+    // multiplies by $y / x$, the argmax variants apply an indicator
+    // mask — override this method to inject their factor before the
+    // gradient is returned.
+    //
+    // Parameters
+    // ----------
+    // g : const TensorImplPtr&
+    //     Broadcast-back gradient already shaped like the original
+    //     input.  Always non-null.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     The scaled gradient — either ``g`` itself or a fresh tensor
+    //     produced by a graph-tracked op.
     TensorImplPtr scale_graph_grad(const TensorImplPtr& g) { return g; }
 
-    // Forward pass: normalize axes, compute output shape, dispatch kernel,
-    // and wire the backward node with the extra reduction state.
+    // Forward entry point: run the reduction and wire the backward node.
+    //
+    // Normalises ``axes_user`` (negative indices → positive, dedup),
+    // computes the output shape (respecting ``keepdims``), enforces CPU
+    // contiguity, dispatches to the most specific kernel hook the
+    // ``Derived`` class exposes, and — when ``GradMode`` is enabled and
+    // the input requires grad — constructs the backward node with the
+    // extra reduction state (:attr:`reduce_axes_`, :attr:`keepdims_`,
+    // :attr:`full_input_shape_`) populated.
+    //
+    // Parameters
+    // ----------
+    // a : const std::shared_ptr<TensorImpl>&
+    //     Input tensor.  Must be non-null.
+    // axes_user : const std::vector<int>&
+    //     Raw axis list as supplied by the caller.  May contain
+    //     negative indices and duplicates; they are normalised before
+    //     dispatch.  An empty list reduces over every axis.
+    // keepdims : bool
+    //     If ``true``, every reduced axis appears as a size-1 dim in
+    //     the output; otherwise it is removed.
+    //
+    // Returns
+    // -------
+    // std::shared_ptr<TensorImpl>
+    //     Output tensor with the reduced shape and the AMP-effective
+    //     dtype (driven by ``schema_v1.amp_policy``).
+    //
+    // Raises
+    // ------
+    // LucidError
+    //     If ``a`` is null.
+    // NotImplemented
+    //     If the input lives on GPU and ``Derived`` exposes neither
+    //     :concept:`HasReduceDispatch` nor :concept:`HasReduceGpuKernel`.
     static std::shared_ptr<TensorImpl>
     forward(const std::shared_ptr<TensorImpl>& a, const std::vector<int>& axes_user, bool keepdims);
 
-    // Backward pass: call Derived::grad_formula(grad_out) and return the
-    // single input gradient (no shape reduction needed here; grad_formula
-    // is responsible for restoring the reduced dimensions).
+    // Storage-mode backward: delegate the full broadcast-and-scale to
+    // ``Derived::grad_formula``.
+    //
+    // Unlike :class:`UnaryKernel::apply`, this method performs no
+    // ``reduce_grad_to_shape`` step — the reduction kernel's
+    // ``grad_formula`` is responsible for broadcasting the upstream
+    // gradient back to :attr:`full_input_shape_` using the saved
+    // :attr:`reduce_axes_` and :attr:`keepdims_` fields, and for any
+    // reduction-specific scaling.
+    //
+    // Parameters
+    // ----------
+    // grad_out : Storage
+    //     Gradient of the loss with respect to this op's output, shaped
+    //     like the forward output.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     Single-element vector containing the input gradient, shaped
+    //     like :attr:`full_input_shape_`.
     std::vector<Storage> apply(Storage grad_out) override;
 
-    // Graph-mode backward: broadcast grad_out back to full_input_shape_ via
-    // sum_op and reshape_op, keeping the computation tracked for 2nd-order grad.
+    // Graph-mode backward: rebuild the broadcast in tracked ops.
+    //
+    // Re-inserts size-1 axes for any dims that were dropped because
+    // ``keepdims=False``, runs :func:`broadcast_to_op` to expand the
+    // gradient back to :attr:`full_input_shape_`, then defers to
+    // :meth:`scale_graph_grad` for the reduction-specific factor.  The
+    // entire chain participates in the autograd graph so higher-order
+    // gradients work correctly.
+    //
+    // Parameters
+    // ----------
+    // grad_out : const TensorImplPtr&
+    //     Upstream gradient as a live :class:`TensorImpl` (i.e. a graph
+    //     node), not just a :class:`Storage`.
+    //
+    // Returns
+    // -------
+    // std::vector<TensorImplPtr>
+    //     Single-element vector containing the input gradient tensor.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
-// Normalize axes to canonical positive form, compute the output shape,
-// enforce contiguity on CPU, dispatch the reduce kernel, and record the
-// reduction axes + keepdims on the backward node for grad_formula.
+// Out-of-line definition of :meth:`ReduceKernel::forward`.
+//
+// Pipeline
+// --------
+// 1. Validate ``a`` is non-null.
+// 2. Enter the :class:`SchemaGuard` to resolve the AMP-effective dtype.
+// 3. On CPU, route through :func:`contiguous_op` so the kernel sees a
+//    stride-1 layout; on GPU, pass through unchanged.
+// 4. Cast inputs to ``eff_dt`` via ``maybe_cast_for_kernel`` when AMP
+//    requires it.
+// 5. Normalise the user axis list and compute the reduced output shape
+//    (``keepdims`` controls whether reduced axes become size-1 or are
+//    dropped entirely).
+// 6. Dispatch in priority order: ``Derived::dispatch`` →
+//    ``Derived::gpu_kernel`` (GPU only) → ``Derived::cpu_kernel``.
+// 7. If gradient tracking is active, allocate the backward node, copy
+//    saved inputs / output per the ``kSavesInput`` / ``kSavesOutput``
+//    flags, store the extra reduction metadata
+//    (:attr:`reduce_axes_`, :attr:`keepdims_`, :attr:`full_input_shape_`),
+//    wire next-edges, and attach the node to the output.
+//
+// See class-level docstring for parameter / return contract.
 template <class Derived>
 std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr<TensorImpl>& a,
                                                            const std::vector<int>& axes_user,
@@ -190,19 +430,40 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     }
 }
 
-// Delegate entirely to Derived::grad_formula. Unlike UnaryKernel::apply(),
-// no reduce_grad_to_shape call is made here because the reduction kernel's
-// grad_formula is responsible for broadcasting grad_out back to
-// full_input_shape_ using the saved reduce_axes_ and keepdims_ fields.
+// Out-of-line definition of :meth:`ReduceKernel::apply`.
+//
+// Delegates the entire backward computation to
+// ``Derived::grad_formula(grad_out)``.  No ``reduce_grad_to_shape``
+// step is performed here (in contrast to :meth:`UnaryKernel::apply`),
+// because the reduction's gradient already needs a broadcast — the
+// opposite shape transformation — and that broadcast logic lives inside
+// each derived ``grad_formula``.
+//
+// See class-level docstring for parameter / return contract.
 template <class Derived>
 std::vector<Storage> ReduceKernel<Derived>::apply(Storage grad_out) {
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
     return {std::move(dx)};
 }
 
-// Graph-mode backward for reductions: broadcast the incoming gradient back to
-// full_input_shape_ using unsqueeze + broadcast_to_op so the expansion itself
-// is tracked in the autograd graph.
+// Out-of-line definition of :meth:`ReduceKernel::apply_for_graph`.
+//
+// Pipeline
+// --------
+// 1. If ``keepdims_ == false``, re-insert size-1 axes at each reduced
+//    position by chaining :func:`unsqueeze_op` over a sorted axis list.
+//    Sorting ensures earlier inserts do not shift the indices of later
+//    ones.
+// 2. Call :func:`broadcast_to_op` to expand the gradient up to
+//    :attr:`full_input_shape_` — for ``sum`` this is the full backward
+//    rule, since every reduced element contributed with unit weight.
+// 3. Defer to :meth:`scale_graph_grad` for the reduction-specific
+//    scale factor (identity for ``sum``, $1/N$ for ``mean``, …).
+//
+// All three steps build tracked graph nodes so second-order derivatives
+// flow naturally through the reduction.
+//
+// See class-level docstring for parameter / return contract.
 template <class Derived>
 std::vector<TensorImplPtr> ReduceKernel<Derived>::apply_for_graph(const TensorImplPtr& grad_out) {
     extern TensorImplPtr broadcast_to_op(const TensorImplPtr&, const Shape&);

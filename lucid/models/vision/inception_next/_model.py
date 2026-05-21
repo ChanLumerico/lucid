@@ -242,7 +242,69 @@ def _build_inception_next(cfg: InceptionNeXtConfig) -> tuple[
 
 
 class InceptionNeXt(PretrainedModel, BackboneMixin):
-    """InceptionNeXt feature extractor — global avg-pooled final-stage features."""
+    r"""InceptionNeXt backbone (Yu et al., 2024).
+
+    A drop-in replacement for the ConvNeXt backbone that factorizes
+    the single large :math:`7 \times 7` depthwise conv into four
+    parallel Inception-style branches operating on disjoint channel
+    splits:
+
+    .. math::
+
+        \mathrm{IDWConv}(x) = \mathrm{Concat}\bigl(
+            x^{(1)},\;
+            \mathrm{DW}_{3 \times 3}(x^{(2)}),\;
+            \mathrm{DW}_{1 \times K}(x^{(3)}),\;
+            \mathrm{DW}_{K \times 1}(x^{(4)})\bigr),
+
+    with :math:`K = \texttt{band\_kernel}` (default 11).  The four
+    branches together preserve a large effective receptive field
+    while cutting depthwise FLOPs and memory traffic relative to a
+    single :math:`7 \times 7` depthwise conv.  Each MetaNeXtBlock
+    further applies BatchNorm, a 1x1 Conv-MLP, and a layer-scale
+    parameter on the residual branch.
+
+    :meth:`forward_features` returns the global-average-pooled
+    :math:`(B, \texttt{dims[-1]})` feature.
+
+    Parameters
+    ----------
+    config : InceptionNeXtConfig
+        Frozen dataclass specifying ``depths``, ``dims``,
+        ``band_kernel``, ``mlp_ratios``, ``in_channels``, and
+        ``num_classes``.  See :class:`InceptionNeXtConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Patchify stem: :math:`4 \times 4` stride-4 Conv2d + BatchNorm2d.
+    stages : nn.ModuleList
+        Four :class:`_Stage` modules, each containing an optional
+        downsampler and a sequence of MetaNeXt blocks.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with reductions
+        :math:`(4, 8, 16, 32)`.
+
+    Notes
+    -----
+    Reference: Weihao Yu *et al.*, *"InceptionNeXt: When Inception
+    Meets ConvNeXt"*, CVPR 2024,
+    `arXiv:2303.16900 <https://arxiv.org/abs/2303.16900>`_.
+
+    Examples
+    --------
+    Build an InceptionNeXt-T backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.inception_next import (
+    ...     InceptionNeXt, InceptionNeXtConfig,
+    ... )
+    >>> model = InceptionNeXt(InceptionNeXtConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, dims[-1])
+    (1, 768)
+    """
 
     config_class: ClassVar[type[InceptionNeXtConfig]] = InceptionNeXtConfig
     base_model_prefix: ClassVar[str] = "inception_next"
@@ -276,7 +338,58 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 
 
 class InceptionNeXtForImageClassification(PretrainedModel):
-    """InceptionNeXt with MlpClassifierHead (fc1 → GELU → LN → fc2)."""
+    r"""InceptionNeXt with an MLP classification head (Yu et al., 2024).
+
+    Wraps the same trunk as :class:`InceptionNeXt` (patchify stem +
+    four stages of MetaNeXt blocks) and adds the reference-recipe MLP
+    classifier head: global average pool → ``Linear(dim, 3*dim)`` →
+    GELU → LayerNorm → ``Linear(3*dim, num_classes)``:
+
+    .. math::
+
+        \text{logits} = W_2\,
+            \mathrm{LN}\!\bigl(\mathrm{GELU}(W_1\,
+            \mathrm{GAP}(z^{L}))\bigr) + b_2.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : InceptionNeXtConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See
+        :class:`InceptionNeXtConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Patchify stem: :math:`4 \times 4` stride-4 Conv2d + BN.
+    stages : nn.ModuleList
+        Four MetaNeXt stages.
+    head : _MlpClassifierHead
+        MLP head: ``fc1 → GELU → LayerNorm → fc2``.
+
+    Notes
+    -----
+    Reference: Weihao Yu *et al.*, *"InceptionNeXt: When Inception
+    Meets ConvNeXt"*, CVPR 2024.  InceptionNeXt-T matches or exceeds
+    ConvNeXt-T accuracy at noticeably lower wall-clock latency.
+
+    Examples
+    --------
+    End-to-end inference with the default InceptionNeXt-T classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.inception_next import (
+    ...     InceptionNeXtConfig, InceptionNeXtForImageClassification,
+    ... )
+    >>> model = InceptionNeXtForImageClassification(InceptionNeXtConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[InceptionNeXtConfig]] = InceptionNeXtConfig
     base_model_prefix: ClassVar[str] = "inception_next"

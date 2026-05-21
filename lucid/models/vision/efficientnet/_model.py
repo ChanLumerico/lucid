@@ -217,7 +217,81 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
 
 
 class EfficientNet(PretrainedModel, BackboneMixin):
-    """EfficientNet feature extractor — outputs (B, head_ch, 1, 1) after AvgPool."""
+    r"""EfficientNet feature-extracting backbone (no classification head).
+
+    Implements the compound-scaled topology from Tan & Le,
+    "EfficientNet: Rethinking Model Scaling for Convolutional Neural
+    Networks", ICML 2019 (arXiv:1905.11946).  The baseline (B0) is a
+    NAS-designed network of MBConv blocks — inverted-residual
+    bottlenecks (MobileNet-v2 style) augmented with a
+    squeeze-and-excitation module and the swish (SiLU) activation.
+    Successive B-variants (B0 through B7) apply the paper's
+    compound-scaling rule
+
+    .. math::
+
+        d = \alpha^\phi, \quad w = \beta^\phi, \quad r = \gamma^\phi,
+        \qquad \alpha \beta^2 \gamma^2 \approx 2,
+
+    to scale depth, width, and resolution jointly along a single
+    coefficient :math:`\phi`.
+
+    The body is a 3×3 stem (stride 2) followed by seven MBConv
+    stages and a final 1×1 head expansion to ``round(1280 ·
+    width_mult)`` channels.  Stochastic depth (``drop_connect_rate``)
+    is applied linearly across blocks as a strong regulariser at
+    large depth.
+
+    Parameters
+    ----------
+    config : EfficientNetConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`efficientnet_b0` through :func:`efficientnet_b7`)
+        for paper-cited variants.
+
+    Attributes
+    ----------
+    config : EfficientNetConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Stem + seven MBConv stages + 1×1 head.  Channel and depth
+        counts scale with ``config.width_mult`` and
+        ``config.depth_mult``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``(B, C, 1, 1)``.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin` for downstream FPN / decoder
+        modules.
+
+    Notes
+    -----
+    Each MBConv block applies
+
+    .. math::
+
+        x \to \mathrm{Expand}_{1\times1} \to \mathrm{DW}_{k\times k}
+            \to \mathrm{SE} \to \mathrm{Proj}_{1\times1},
+
+    with a residual when stride is 1 and channel counts match.
+    During training the residual branch is randomly dropped with
+    probability ``drop_connect_rate * block_idx / (total - 1)`` —
+    deeper blocks get a higher drop probability, matching the
+    "deep network regularisation" recipe of stochastic depth.
+
+    Examples
+    --------
+    Build an EfficientNet-B0 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b0
+    >>> backbone = efficientnet_b0()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 1280, 1, 1)
+    """
 
     config_class: ClassVar[type[EfficientNetConfig]] = EfficientNetConfig
     base_model_prefix: ClassVar[str] = "efficientnet"
@@ -263,7 +337,72 @@ class EfficientNet(PretrainedModel, BackboneMixin):
 
 
 class EfficientNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """EfficientNet with AdaptiveAvgPool + Dropout + FC classifier."""
+    r"""EfficientNet with global-average-pooled linear classification head.
+
+    Combines an :class:`EfficientNet` backbone with the standard
+    ImageNet classification head: an :class:`~lucid.nn.AdaptiveAvgPool2d`
+    to pool every spatial location into a single feature vector,
+    a :class:`~lucid.nn.Dropout` (probability ``config.dropout``,
+    scaled per B-variant from 0.2 at B0 up to 0.5 at B7), and a
+    :class:`~lucid.nn.Linear` projection to ``config.num_classes``
+    logits.  When ``labels`` are supplied to :meth:`forward`, a
+    cross-entropy loss is computed and returned alongside the
+    logits.
+
+    Parameters
+    ----------
+    config : EfficientNetConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`efficientnet_b0_cls` through
+        :func:`efficientnet_b7_cls`) for paper-cited configurations.
+
+    Attributes
+    ----------
+    config : EfficientNetConfig
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Same MBConv stack as on :class:`EfficientNet`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    drop : nn.Dropout
+        Dropout layer (probability ``config.dropout``) applied
+        before the linear classifier.
+    classifier : nn.Linear
+        Linear projection from ``round(1280 · width_mult)`` to
+        ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{Drop}\!\left(
+            \operatorname{GAP}(\,\mathrm{backbone}(x)\,)
+        \right) + b,
+
+    with cross-entropy loss computed when ``labels`` is provided.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.efficientnet import efficientnet_b0_cls
+    >>> model = efficientnet_b0_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+
+    Retarget B3 to CIFAR-10:
+
+    >>> from lucid.models.vision.efficientnet import efficientnet_b3_cls
+    >>> model = efficientnet_b3_cls(num_classes=10)
+    >>> model.config.num_classes
+    10
+    """
 
     config_class: ClassVar[type[EfficientNetConfig]] = EfficientNetConfig
     base_model_prefix: ClassVar[str] = "efficientnet"

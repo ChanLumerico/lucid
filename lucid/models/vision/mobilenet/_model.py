@@ -95,7 +95,84 @@ def _build_features(cfg: MobileNetV1Config) -> tuple[nn.Sequential, int]:
 
 
 class MobileNetV1(PretrainedModel, BackboneMixin):
-    """MobileNet v1 feature extractor — 1024-ch spatial map (1×1 after AvgPool)."""
+    r"""MobileNet v1 feature-extracting backbone (no classification head).
+
+    Implements the depthwise-separable convolutional topology from
+    Howard et al., "MobileNets: Efficient Convolutional Neural
+    Networks for Mobile Vision Applications", arXiv:1704.04861, 2017.
+    The network alternates a per-channel :math:`3 \times 3` depthwise
+    convolution with a :math:`1 \times 1` pointwise convolution that
+    mixes channels — a factorisation that reduces FLOPs by roughly
+    :math:`1/N + 1/D_K^2` relative to a standard
+    :math:`D_K \times D_K` convolution, an 8–9× saving for the
+    :math:`3 \times 3` case.
+
+    The body is a 3×3 stem (stride 2) followed by 13 depthwise +
+    pointwise blocks producing feature maps at strides 2, 4, 8, 16,
+    and 32 relative to the input.  A global average pool collapses
+    the final spatial map to a single 1×1 descriptor.  This class
+    is the canonical feature extractor used by detection /
+    segmentation heads when deployed on mobile / embedded devices.
+
+    Parameters
+    ----------
+    config : MobileNetV1Config
+        Frozen architecture spec.  Use the factory functions
+        (:func:`mobilenet_v1`, :func:`mobilenet_v1_075`, …) for
+        paper-cited width-multiplier variants.
+
+    Attributes
+    ----------
+    config : MobileNetV1Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Stem :math:`3 \times 3` conv (stride 2) followed by 13
+        depthwise+pointwise blocks; channel counts scale with
+        ``config.width_mult``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``(B, C, 1, 1)``.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin` for downstream FPN / decoder
+        modules.
+
+    Notes
+    -----
+    Each depthwise-separable block computes
+
+    .. math::
+
+        \mathrm{PW}\big(\sigma(\mathrm{BN}(\mathrm{DW}_{3\times3}(x)))\big)
+        \;\;\to\;\; \sigma(\mathrm{BN}(\,\cdot\,)),
+
+    where :math:`\mathrm{DW}_{3\times3}` is the per-channel
+    :math:`3 \times 3` spatial filter (``groups=in_channels``),
+    :math:`\mathrm{PW}` is the :math:`1 \times 1` channel-mixing
+    convolution, and :math:`\sigma` is ReLU.  The width multiplier
+    :math:`\alpha \in (0, 1]` uniformly scales every channel count
+    so that the same architecture can target sub-mW edge devices
+    (:math:`\alpha = 0.25`) up to full desktop deployment
+    (:math:`\alpha = 1.0`).
+
+    Examples
+    --------
+    Build a MobileNet-v1 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet import mobilenet_v1
+    >>> backbone = mobilenet_v1()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 1024, 1, 1)
+
+    Inspect the per-stage feature map descriptors for FPN integration:
+
+    >>> info = backbone.feature_info
+    >>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info]
+    [(1, 64, 2), (2, 128, 4), (3, 256, 8), (4, 512, 16), (5, 1024, 32)]
+    """
 
     config_class: ClassVar[type[MobileNetV1Config]] = MobileNetV1Config
     base_model_prefix: ClassVar[str] = "mobilenet_v1"
@@ -138,7 +215,76 @@ class MobileNetV1(PretrainedModel, BackboneMixin):
 
 
 class MobileNetV1ForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """MobileNet v1 with AvgPool + Dropout + FC classifier."""
+    r"""MobileNet v1 with global-average-pooled linear classification head.
+
+    Combines a :class:`MobileNetV1` backbone with the standard
+    ImageNet classification head: an :class:`~lucid.nn.AdaptiveAvgPool2d`
+    to pool every spatial location into a single feature vector,
+    a :class:`~lucid.nn.Dropout` (probability ``config.dropout``,
+    default 0.001 per the paper), and a :class:`~lucid.nn.Linear`
+    projection to ``config.num_classes`` logits.  When ``labels``
+    are supplied to :meth:`forward`, a cross-entropy loss is
+    computed and returned alongside the logits.
+
+    Parameters
+    ----------
+    config : MobileNetV1Config
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`mobilenet_v1_cls`, :func:`mobilenet_v1_075_cls`, …)
+        to obtain a paper-cited configuration; pass a custom config
+        to retarget ``num_classes`` or change ``width_mult``.
+
+    Attributes
+    ----------
+    config : MobileNetV1Config
+        Stored copy of the config that built this model.
+    features : nn.Sequential
+        Same depthwise-separable stack as on :class:`MobileNetV1`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    drop : nn.Dropout
+        Dropout layer (probability ``config.dropout``) applied
+        before the linear classifier.
+    classifier : nn.Linear
+        Linear projection from ``round(1024 * width_mult)`` to
+        ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{Drop}\!\left(
+            \operatorname{GAP}(\,\mathrm{backbone}(x)\,)
+        \right) + b,
+
+    where :math:`\operatorname{GAP}` is the global average pool.
+    Loss is the standard categorical cross-entropy, computed only
+    when ``labels`` is not ``None``.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.mobilenet import mobilenet_v1_cls
+    >>> model = mobilenet_v1_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    >>> out.loss is None
+    True
+
+    Compute a loss given labels (e.g. during training):
+
+    >>> labels = lucid.tensor([0, 1, 2, 3], dtype=lucid.int64)
+    >>> out = model(x, labels=labels)
+    >>> out.loss.shape
+    ()
+    """
 
     config_class: ClassVar[type[MobileNetV1Config]] = MobileNetV1Config
     base_model_prefix: ClassVar[str] = "mobilenet_v1"

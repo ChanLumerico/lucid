@@ -52,6 +52,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import (
@@ -64,6 +65,50 @@ from lucid.models._utils._detection import (
 # ---------------------------------------------------------------------------
 
 
+@model_family_meta(
+    canonical_name="YOLO",
+    citation=(
+        'Redmon, Joseph, et al. "You Only Look Once: Unified, Real-Time '
+        'Object Detection." Proceedings of the IEEE Conference on '
+        "Computer Vision and Pattern Recognition, 2016, pp. 779–788."
+    ),
+    theory=r"""
+    YOLOv3 scales up the one-stage YOLO recipe with a deeper backbone
+    and **multi-scale prediction**, eliminating the original family's
+    main blind spots on small objects.
+
+    **Darknet-53 backbone.**  53 conv layers organised into residual
+    stacks (1× / 2× / 8× / 8× / 4×) with stride-2 downsampling between
+    stages.  Throughput is comparable to ResNet-101 at ResNet-152
+    accuracy.
+
+    **Multi-scale FPN-style head.**  Predictions are made at three
+    feature levels :math:`(P_3, P_4, P_5)` with strides 8, 16, 32.
+    Each level uses 3 anchors (9 in total, clustered from the dataset
+    by k-means) so small / medium / large objects are detected on
+    high- / mid- / low-resolution maps.  Top-down upsampling +
+    concatenation with the corresponding backbone tap mirrors the
+    FPN idea.
+
+    **Independent class predictors.**  v3 drops the softmax in
+    favour of independent **logistic classifiers** per class, using
+    binary cross-entropy.  This handles overlapping labels (e.g.
+    "woman" and "person") and prepares the model for multi-label
+    datasets like Open Images.
+
+    Each cell still predicts :math:`(t_x, t_y, t_w, t_h, t_o)` decoded
+    against its anchor exactly as in v2:
+
+    .. math::
+
+        b_x = \sigma(t_x) + c_x, \quad b_y = \sigma(t_y) + c_y, \quad
+        b_w = p_w e^{t_w}, \quad b_h = p_h e^{t_h}.
+
+    The combination of multi-scale prediction + better backbone makes
+    v3 substantially better on small objects, the chronic weakness
+    of v1/v2.
+    """,
+)
 @dataclass(frozen=True)
 class YOLOV3Config(ModelConfig):
     """Configuration for YOLOv3.
@@ -627,21 +672,66 @@ def _yolov3_loss(
 
 
 class YOLOV3ForObjectDetection(PretrainedModel):
-    """YOLOv3 object detector (Redmon & Farhadi, 2018).
+    r"""YOLOv3 multi-scale object detector (Redmon & Farhadi, 2018).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional list of B dicts with:
-                    ``"boxes"``  — (M_i, 4) xyxy pixel-coordinate boxes.
-                    ``"labels"`` — (M_i,)   integer class ids (0-indexed).
+    Adds a 53-layer **Darknet-53** backbone (residual connections, more
+    capacity than Darknet-19) and an FPN-style multi-scale detection
+    head that predicts on three feature levels — :math:`P_3` (stride 8),
+    :math:`P_4` (stride 16), :math:`P_5` (stride 32) — with three
+    anchors per cell per level (9 anchors total).  This multi-scale
+    detection dramatically improves small-object recall over YOLOv2,
+    bringing COCO AP up to 33.0% (paper Table 3).  Per-class predictions
+    use independent sigmoids rather than softmax — supporting
+    multi-label classification.
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (B, total_anchors, num_classes) raw sigmoid class logits.
-      ``pred_boxes``: (B, total_anchors, 4) decoded xyxy pixel boxes.
-      ``loss``      : detection loss scalar when targets provided.
+    Parameters
+    ----------
+    config : YOLOV3Config
+        Frozen architecture spec.  Use :func:`yolo_v3` for the full
+        Darknet-53 model or :func:`yolo_v3_tiny` for the lightweight
+        2-scale variant.
+
+    Attributes
+    ----------
+    config : YOLOV3Config
+        Stored copy of the config that built this model.
+    backbone : _Darknet53
+        Residual backbone producing P3 / P4 / P5 features at strides
+        8 / 16 / 32 (128 / 256 / 1024 channels).
+    p5_compress, p5_predict : nn.Sequential
+        Stride-32 detection head: five-conv compress + 3x3 + 1x1
+        prediction conv producing :math:`3(5 + C)` channels.
+    p4_compress, p4_predict, p4_to_p3_conv : nn.Sequential
+        Stride-16 head with FPN-style top-down upsample + concatenation
+        with the P4 backbone feature.
+    p3_compress, p3_predict, p5_to_p4_conv : nn.Sequential
+        Stride-8 head with another top-down upsample + concatenation
+        with the P3 backbone feature.
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018
+    (arXiv:1804.02767).  Per-anchor box decoding reuses the YOLOv2
+    direct-location parameterisation; the multi-class objective swaps
+    YOLOv2's softmax for per-class binary cross-entropy:
+
+    .. math::
+
+        \mathcal{L}_\mathrm{cls} = -\sum_{c = 1}^{C}
+            \bigl[\,y_c \log \sigma(s_c) + (1 - y_c) \log(1 - \sigma(s_c))\bigr],
+
+    enabling multi-label predictions where a single object can belong
+    to multiple categories (e.g. "Woman" + "Person").
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v3 import yolo_v3
+    >>> model = yolo_v3()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
 
     config_class: ClassVar[type[YOLOV3Config]] = YOLOV3Config
@@ -932,16 +1022,43 @@ def yolo_v3(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV3ForObjectDetection:
-    """YOLOv3 with Darknet-53 backbone, 3-scale detection (COCO 80 classes).
+    r"""YOLOv3 with Darknet-53 backbone, 3-scale detection (Redmon & Farhadi, 2018).
 
-    Reference: Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018.
+    Builds the paper-cited YOLOv3 detector: 53-layer residual Darknet
+    backbone + FPN-style top-down head producing predictions at
+    strides 8 / 16 / 32 with 3 anchors per cell per scale (9 anchors
+    total, COCO k-means clustered).  Default 80 COCO classes; reaches
+    COCO test-dev AP of 33.0% at 416x416 input (paper Table 3).
 
-    Args:
-        pretrained: If True, attempt to load pretrained COCO weights.
-        **overrides: Override any ``YOLOV3Config`` field.
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        If ``True``, attempt to load pretrained COCO weights.  Currently
+        raises :class:`NotImplementedError`.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV3Config`.
 
-    Returns:
-        ``YOLOV3ForObjectDetection`` instance.
+    Returns
+    -------
+    YOLOV3ForObjectDetection
+        Detector with the standard YOLOv3 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018
+    (arXiv:1804.02767).  The multi-scale head is the principal upgrade
+    over YOLOv2 and the source of its small-object accuracy gain.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v3 import yolo_v3
+    >>> model = yolo_v3()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     config = YOLOV3Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
     model = YOLOV3ForObjectDetection(config)
@@ -960,16 +1077,43 @@ def yolo_v3_tiny(
     pretrained: bool = False,
     **overrides: object,
 ) -> _YOLOV3Tiny:
-    """YOLOv3-Tiny — lightweight 2-scale variant with Darknet-Tiny backbone.
+    r"""YOLOv3-Tiny — 2-scale lightweight variant (Redmon & Farhadi, 2018).
 
-    Reference: Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018.
+    Builds the YOLOv3-Tiny detector explicitly defined in the paper's
+    accompanying release: shallower Darknet-Tiny backbone with only two
+    detection scales (strides 16 and 32) and 3 anchors per scale.
+    Approximately 8.7M parameters; targets edge / real-time deployment.
 
-    Args:
-        pretrained: If True, attempt to load pretrained weights.
-        **overrides: Override any ``YOLOV3Config`` field.
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        If ``True``, attempt to load pretrained COCO weights.  Currently
+        raises :class:`NotImplementedError`.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV3Config`.
 
-    Returns:
-        ``_YOLOV3Tiny`` instance.
+    Returns
+    -------
+    _YOLOV3Tiny
+        Detector with the YOLOv3-Tiny configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Redmon & Farhadi, "YOLOv3: An Incremental Improvement", 2018
+    (arXiv:1804.02767).  Drops one detection scale and uses a much
+    smaller backbone — the standard "tiny" variant ships alongside the
+    full release for embedded inference.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v3 import yolo_v3_tiny
+    >>> model = yolo_v3_tiny()
+    >>> x = lucid.randn(1, 3, 416, 416)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     config = YOLOV3Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
     model = _YOLOV3Tiny(config)

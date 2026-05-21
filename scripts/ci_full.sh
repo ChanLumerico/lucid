@@ -81,6 +81,13 @@ echo "==> Storage API compliance"
 echo "==> H4 numpy guard (sanctioned bridge files only)"
 "$PYTHON_BIN" tools/check_numpy_h4.py
 
+# Model-zoo family contract — verifies the 5-slot structure and Protocol
+# conformance of every family under lucid/models/.  Strict mode is OFF so
+# advisory warnings don't fail CI; flip to --strict when ready to enforce.
+# Spec: obsidian/architecture/arch-models-family-contract.md
+echo "==> Model-zoo family contract"
+"$PYTHON_BIN" -m tools.validate_model_zoo --runtime
+
 # ── 8. Build tools ────────────────────────────────────────────────────────────
 echo "==> Compile commands"
 ./scripts/build_compile_commands.sh

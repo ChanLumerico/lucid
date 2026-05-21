@@ -42,11 +42,45 @@ def fcn_resnet50(
     pretrained: bool = False,
     **overrides: object,
 ) -> FCNForSemanticSegmentation:
-    """FCN with ResNet-50 backbone (Long et al., CVPR 2015).
+    r"""FCN with ResNet-50 backbone (Long et al., CVPR 2015).
 
-    Standard configuration: ResNet-50 backbone with dilated convolutions
-    (layer3 dilation=2, layer4 dilation=4), 21 output classes (Pascal VOC),
-    512-channel FCN head, 256-channel auxiliary head.
+    Builds an :class:`FCNForSemanticSegmentation` with a dilated
+    ResNet-50 backbone (``layer3`` dilation = 2, ``layer4`` dilation = 4),
+    21 output classes (Pascal VOC default), a 512-channel main FCN head,
+    and a 256-channel auxiliary head.  The dilation trick keeps the
+    final feature map at stride 8 instead of stride 32, retaining 16x
+    more spatial sampling for dense prediction.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`FCNConfig` (``num_classes``,
+        ``in_channels``, ``classifier_hidden_channels``, ``dropout``, ...).
+
+    Returns
+    -------
+    FCNForSemanticSegmentation
+        Segmentation model with the FCN-R50 configuration applied (or
+        with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Long et al., "Fully Convolutional Networks for Semantic
+    Segmentation", CVPR 2015 (arXiv:1411.4038).  The dilated variant
+    follows the DeepLab v1 trick (Chen et al., 2015) of replacing
+    stride-2 downsampling in layer3 / layer4 with atrous convolution.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.fcn import fcn_resnet50
+    >>> model = fcn_resnet50()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 21, 512, 512)
     """
     return _build(_CFG_RESNET50, overrides)
 
@@ -62,10 +96,34 @@ def fcn_resnet101(
     pretrained: bool = False,
     **overrides: object,
 ) -> FCNForSemanticSegmentation:
-    """FCN with ResNet-101 backbone (Long et al., CVPR 2015).
+    r"""FCN with ResNet-101 backbone (Long et al., CVPR 2015).
 
-    Deeper backbone variant: ResNet-101 with 23 blocks in layer3 vs. 6.
-    Same head configuration as fcn_resnet50.  Typically yields higher
-    mean IoU at the cost of additional compute.
+    Builds an :class:`FCNForSemanticSegmentation` with the same head
+    configuration as :func:`fcn_resnet50` but a deeper dilated ResNet-101
+    backbone (23 blocks in layer3 vs 6 for ResNet-50).  Typically gains
+    1-2 mIoU points on Pascal VOC at the cost of ~70% more FLOPs.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`FCNConfig`.
+
+    Returns
+    -------
+    FCNForSemanticSegmentation
+        Segmentation model with the FCN-R101 configuration applied (or
+        with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.fcn import fcn_resnet101
+    >>> model = fcn_resnet101()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 21, 512, 512)
     """
     return _build(_CFG_RESNET101, overrides)

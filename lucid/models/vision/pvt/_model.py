@@ -302,7 +302,75 @@ def _build_pvt(cfg: PVTConfig) -> tuple[
 
 
 class PVT(PretrainedModel, BackboneMixin):
-    """PVT v2 feature extractor — mean-pooled final-stage token features."""
+    r"""PVT v2 backbone (Wang et al., 2022).
+
+    The Pyramid Vision Transformer v2 is a pure-transformer backbone
+    that produces a *hierarchical* feature pyramid — making it a
+    drop-in replacement for ResNet-style backbones in dense prediction
+    tasks (detection, segmentation).  The trunk has four stages, each
+    beginning with an *overlapping* convolutional patch embedding
+    (:math:`7 \times 7` stride 4 for stage 0; :math:`3 \times 3`
+    stride 2 for subsequent stages).  Inside each stage every
+    transformer block applies *Spatial-Reduction Attention* (SRA):
+
+    .. math::
+
+        K, V \leftarrow \mathrm{LN}\!\bigl(
+            W_R \cdot \mathrm{Reshape}_{R_i \times R_i}(x)\bigr),
+        \qquad
+        \mathrm{SRA}(x) = \mathrm{softmax}\!\left(
+            \frac{Q K^\top}{\sqrt{d}}\right) V,
+
+    where :math:`R_i` decreases with depth (e.g. :math:`8, 4, 2, 1`).
+    This cuts the per-stage attention cost from
+    :math:`\mathcal{O}((HW)^2)` to :math:`\mathcal{O}((HW)^2 / R_i^2)`.
+    PVT v2 additionally inserts a depthwise :math:`3 \times 3`
+    convolution between the two MLP linears, providing spatial mixing
+    inside the feed-forward sublayer and removing the need for
+    explicit positional embeddings.
+
+    :meth:`forward_features` returns the mean-pooled final-stage
+    feature :math:`(B, \texttt{embed\_dims[-1]})`.
+
+    Parameters
+    ----------
+    config : PVTConfig
+        Frozen dataclass specifying ``embed_dims``, ``depths``,
+        ``num_heads``, ``sr_ratios``, ``mlp_ratios``, ``in_channels``,
+        and ``num_classes``.  See :class:`PVTConfig`.
+
+    Attributes
+    ----------
+    patch_embed : _OverlapPatchEmbed
+        Top-level :math:`7 \times 7` stride-4 patch embedding feeding
+        stage 0.
+    stages : nn.ModuleList
+        Four :class:`_PVTStage` modules; stages 1-3 each contain their
+        own :math:`3 \times 3` stride-2 patch-embedding downsampler.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with cumulative reductions
+        :math:`(4, 8, 16, 32)`.
+
+    Notes
+    -----
+    Reference (v1): Wenhai Wang *et al.*, *"Pyramid Vision Transformer:
+    A Versatile Backbone for Dense Prediction without Convolutions"*,
+    ICCV 2021, `arXiv:2102.12122 <https://arxiv.org/abs/2102.12122>`_.
+    Reference (v2): Wenhai Wang *et al.*, *"PVT v2: Improved Baselines
+    with Pyramid Vision Transformer"*, CVMJ 2022.
+
+    Examples
+    --------
+    Build a PVT v2-B1 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import PVT, PVTConfig
+    >>> model = PVT(PVTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, embed_dims[-1])
+    (1, 512)
+    """
 
     config_class: ClassVar[type[PVTConfig]] = PVTConfig
     base_model_prefix: ClassVar[str] = "pvt"
@@ -338,7 +406,60 @@ class PVT(PretrainedModel, BackboneMixin):
 
 
 class PVTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """PVT v2 with global avg-pool + FC head."""
+    r"""PVT v2 with a linear classification head (Wang et al., 2022).
+
+    Wraps the same hierarchical four-stage trunk as :class:`PVT`
+    (overlapping patch embeddings + Spatial-Reduction Attention) and
+    adds a global mean pool + single :class:`nn.Linear` classification
+    head:
+
+    .. math::
+
+        \text{logits} = W_{\text{head}}\,
+            \mathrm{Mean}(z^{L}) + b_{\text{head}},
+        \qquad W_{\text{head}} \in
+            \mathbb{R}^{C_{\text{out}} \times d_{L}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : PVTConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See :class:`PVTConfig`.
+
+    Attributes
+    ----------
+    patch_embed : _OverlapPatchEmbed
+        Top-level :math:`7 \times 7` stride-4 patch embedding.
+    stages : nn.ModuleList
+        Four PVT v2 stages.
+    classifier : nn.Linear
+        Final linear projection of width
+        ``(num_classes, embed_dims[-1])``.
+
+    Notes
+    -----
+    Reference: Wang *et al.*, *"PVT v2: Improved Baselines with
+    Pyramid Vision Transformer"*, CVMJ 2022.  PVT v2-B0 / B1 / B2 / B3
+    / B4 / B5 reach **70.5 / 78.7 / 82.0 / 83.1 / 83.6 / 83.8 %
+    top-1 on ImageNet-1k** at 224x224 (Wang et al., 2022, Table 1).
+
+    Examples
+    --------
+    End-to-end inference with the default PVT v2-B1 classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.pvt import (
+    ...     PVTConfig, PVTForImageClassification,
+    ... )
+    >>> model = PVTForImageClassification(PVTConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[PVTConfig]] = PVTConfig
     base_model_prefix: ClassVar[str] = "pvt"

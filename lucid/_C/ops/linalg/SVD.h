@@ -1,31 +1,53 @@
 // lucid/_C/ops/linalg/SVD.h
 //
-// Singular Value Decomposition op: given a matrix A of shape (..., m, n),
-// compute the reduced SVD:
-//   A = U diag(S) Vhᵀ   (note: Vh is Vᵀ, not V)
-// where:
-//   U  has shape (..., m, k) — left singular vectors (columns are orthonormal)
-//   S  has shape (..., k)    — singular values in descending order
-//   Vh has shape (..., k, n) — right singular vectors (rows are orthonormal)
-// with k = min(m, n).
+// Singular Value Decomposition (SVD) forward op for arbitrary-shape matrices.
 //
-// The "reduced" (economy) SVD is returned; the full SVD padding to min/max
-// shapes is not currently exposed.
+// Factorises any (possibly rectangular) input $A \in \mathbb{R}^{m \times n}$
+// into $A = U \Sigma V^\top$ where $U$ has orthonormal columns, $V$ has
+// orthonormal columns, and $\Sigma$ is a diagonal matrix of non-negative
+// singular values in descending order.  The op returns the "reduced" (a.k.a.
+// economy / thin) SVD: $U$ is $(m, k)$, $V^\top$ is $(k, n)$, and $\Sigma$
+// collapses to a length-$k$ vector with $k = \min(m, n)$.  The full-square
+// variant (where $U$ is $(m, m)$ and $V^\top$ is $(n, n)$) is assembled by
+// the Python wrapper from this reduced form, not by this op.
 //
-// Forward dispatch goes to IBackend::linalg_svd(), which uses LAPACK's
-// dgesdd (divide-and-conquer SVD) on the CPU path, and
-// mlx::core::linalg::svd on the GPU path.
+// Math
+// ----
+// $$
+//   A = U\,\Sigma\,V^\top,
+//   \qquad U^\top U = I_k,\quad V^\top V = I_k,\quad
+//   \Sigma = \mathrm{diag}(\sigma_1, \ldots, \sigma_k),\quad
+//   \sigma_1 \ge \cdots \ge \sigma_k \ge 0.
+// $$
 //
-// When compute_uv=true (the default), returns {U, S, Vh}.
-// When compute_uv=false, returns {S} only (more efficient when only singular
-// values are needed).
+// Notes
+// -----
+// CPU backend dispatches to LAPACK's divide-and-conquer ``*gesdd`` driver,
+// which is asymptotically faster than the QR-iteration based ``*gesvd`` for
+// large matrices at the cost of a larger temporary workspace.  GPU backend
+// calls ``mlx::core::linalg::svd`` (which itself routes through the CPU
+// stream — MLX has no native Metal SVD kernel yet, see H3 carve-out).
 //
-// Note: no backward node is registered.  A future backward would implement
-// the Papadopoulo-Lourakis formula (from "Estimating the Jacobian of the SVD",
-// 2000):
-//   ∂L/∂A = U (K ⊙ (Uᵀ G_U)) Vhᵀ + U diag(G_S) Vhᵀ + U (K' ⊙ (Vhᵀ G_Vh)) Vhᵀ
-// where K is a matrix of 1/(sᵢ² - sⱼ²) factors and G_U, G_S, G_Vh are the
-// upstream gradients.  The formula must handle degenerate singular values.
+// Autograd is **not** wired at the C++ level.  Differentiation is handled by
+// three Python-side ``Function`` wrappers (``_SVDUGrad`` / ``_SVDSGrad`` /
+// ``_SVDVhGrad``) that implement the Giles 2008 closed form in terms of the
+// Loewner matrix $F_{ij} = \sigma_i / (\sigma_i^2 - \sigma_j^2)$.  That
+// closed form is well-conditioned for distinct singular values but diverges
+// near repeated $\sigma$'s; caller responsibility to regularise in that
+// regime (e.g. by adding a small diagonal jitter to $A$).
+//
+// References
+// ----------
+// - Papadopoulo & Lourakis, "Estimating the Jacobian of the SVD" (2000).
+// - Giles, "Collected Matrix Derivative Results for Forward and Reverse
+//   Mode Algorithmic Differentiation" (2008).
+// - Townsend, "Differentiating the SVD" (2016).
+//
+// See Also
+// --------
+// - ``Eigh.h`` — symmetric eigendecomposition uses an analogous Loewner
+//   structure for its backward.
+// - ``Pinv.h`` — Moore-Penrose pseudoinverse built on top of the SVD.
 
 #pragma once
 
@@ -37,15 +59,52 @@
 
 namespace lucid {
 
-// Compute the SVD of matrix a.
+// Compute the reduced singular value decomposition of a rectangular matrix.
 //
-// When compute_uv=true (default), returns {U, S, Vh} where:
-//   U   has shape (..., m, k)  — left singular vectors
-//   S   has shape (..., k)     — singular values, descending
-//   Vh  has shape (..., k, n)  — right singular vectors (transposed)
-// When compute_uv=false, returns {S} only (skips materialising U and Vh).
-// Validates that a is at least 2-D and float-typed.
-// Autograd is not wired; outputs are leaf nodes in the gradient graph.
+// Parameters
+// ----------
+// a : TensorImplPtr
+//     Input matrix of shape ``(..., m, n)`` with leading batch dims.  Must
+//     be at least 2-D and have a floating-point dtype.
+// compute_uv : bool, optional
+//     When ``true`` (default) returns the full reduced factorisation
+//     $\{U, \Sigma, V^\top\}$.  When ``false`` returns $\{\Sigma\}$ only,
+//     which lets the backend skip assembly of the singular vectors —
+//     roughly 2x faster and used by ``svdvals`` / ``matrix_rank`` / ``cond``.
+//
+// Returns
+// -------
+// std::vector<TensorImplPtr>
+//     If ``compute_uv=true``: ``{U, S, Vh}`` with
+//     $U$ shape ``(..., m, k)``, $S$ shape ``(..., k)``,
+//     $V^\top$ shape ``(..., k, n)``, $k = \min(m, n)$.
+//     If ``compute_uv=false``: ``{S}`` only.
+//
+// Shape
+// -----
+// - Input ``a``: ``(..., m, n)``.
+// - ``U``:  ``(..., m, k)`` — left singular vectors as columns.
+// - ``S``:  ``(..., k)``    — singular values in descending order.
+// - ``Vh``: ``(..., k, n)`` — right singular vectors as rows (note: ``Vh``
+//   is $V^\top$, not $V$, matching NumPy/reference-framework convention).
+//
+// Raises
+// ------
+// std::runtime_error
+//     If ``a`` is null, has dtype that is not floating point, or has fewer
+//     than two dimensions.
+//
+// Notes
+// -----
+// Singular values are guaranteed non-negative and sorted in descending
+// order on output.  Outputs are leaf nodes in the autograd graph at the
+// C++ level — the Python wrapper attaches the gradient functions.
+//
+// Examples
+// --------
+// >>> // CPU equivalent of: U, S, Vh = svd(A, full_matrices=False)
+// >>> auto out = svd_op(a_impl, /*compute_uv=*/true);
+// >>> auto& U  = out[0];  auto& S = out[1];  auto& Vh = out[2];
 LUCID_API std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv = true);
 
 }  // namespace lucid

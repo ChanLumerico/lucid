@@ -170,7 +170,78 @@ class _StemWithNorm(nn.Module):
 
 
 class ConvNeXt(PretrainedModel, BackboneMixin):
-    """ConvNeXt feature extractor — global-average-pooled final-stage features."""
+    r"""ConvNeXt backbone (Liu et al., 2022).
+
+    ConvNeXt is a *pure-convolutional* backbone built by systematically
+    modernising a ResNet using design choices borrowed from the Swin
+    Transformer.  The trunk is a four-stage pyramid that starts with a
+    non-overlapping :math:`4 \times 4` patchify stem and processes the
+    feature map through stacks of identical *ConvNeXt blocks*:
+
+    .. math::
+
+        x \leftarrow x + \gamma \odot
+            \mathrm{Linear}_{4d \to d}\!\bigl(
+            \mathrm{GELU}\!\bigl(\mathrm{Linear}_{d \to 4d}\!\bigl(
+            \mathrm{LN}(\mathrm{DWConv}_{7 \times 7}(x))
+            \bigr)\bigr)\bigr),
+
+    where :math:`\gamma \in \mathbb{R}^d` is a per-channel *layer-scale*
+    parameter initialised to :math:`10^{-6}` (Touvron et al., 2021).
+    Between stages a :math:`2 \times 2` stride-2 LN + Conv2d downsampler
+    halves the resolution and doubles the channel width.
+
+    :meth:`forward_features` returns a global-average-pooled
+    :math:`(B, C_{\text{out}})` feature where
+    :math:`C_{\text{out}} = \texttt{dims[-1]}`.  Use this backbone when
+    you want features for transfer learning or dense prediction; for
+    end-to-end classification use
+    :class:`ConvNeXtForImageClassification`.
+
+    Parameters
+    ----------
+    config : ConvNeXtConfig
+        Frozen dataclass specifying ``depths``, ``dims``,
+        ``layer_scale_init``, ``dropout``, and ``in_channels``.  See
+        :class:`ConvNeXtConfig`.
+
+    Attributes
+    ----------
+    stem : _StemWithNorm
+        Patchify stem: :math:`4 \times 4` stride-4 Conv2d followed by a
+        channel-last LayerNorm.
+    stages : nn.ModuleList
+        Four stages of stacked :class:`_ConvNeXtBlock` modules.
+    downsamplers : nn.ModuleList
+        Three between-stage LN + stride-2 Conv2d downsamplers.
+    head_norm : nn.LayerNorm
+        Final LayerNorm applied (channel-last) to the pooled feature.
+    avgpool : nn.AdaptiveAvgPool2d
+        :math:`1 \times 1` adaptive average pool over spatial dims.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with reductions
+        :math:`(4, 8, 16, 32)` and channel counts from ``config.dims``.
+
+    Notes
+    -----
+    Reference: Zhuang Liu *et al.*, *"A ConvNet for the 2020s"*,
+    CVPR 2022, `arXiv:2201.03545 <https://arxiv.org/abs/2201.03545>`_.
+
+    Examples
+    --------
+    Build a ConvNeXt-T backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.convnext import ConvNeXt, ConvNeXtConfig
+    >>> model = ConvNeXt(ConvNeXtConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, dims[-1])
+    (1, 768)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape      # (B, 1, dims[-1])
+    (1, 1, 768)
+    """
 
     config_class: ClassVar[type[ConvNeXtConfig]] = ConvNeXtConfig
     base_model_prefix: ClassVar[str] = "convnext"
@@ -215,7 +286,66 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
 
 
 class ConvNeXtForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """ConvNeXt with AdaptiveAvgPool + LN + FC classifier."""
+    r"""ConvNeXt with a linear classification head (Liu et al., 2022).
+
+    Wraps the same four-stage trunk as :class:`ConvNeXt` (patchify stem
+    → four stages of ConvNeXt blocks with between-stage downsamplers)
+    and adds a global average pool, a final channel-last LayerNorm, and
+    a single :class:`nn.Linear` classification head:
+
+    .. math::
+
+        \text{logits} = W_{\text{head}}\,
+            \mathrm{LN}(\mathrm{GAP}(z^{L})) + b_{\text{head}},
+        \qquad W_{\text{head}} \in
+            \mathbb{R}^{C_{\text{out}} \times d_{L}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : ConvNeXtConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories (default 1000 for
+        ImageNet-1k).  See :class:`ConvNeXtConfig`.
+
+    Attributes
+    ----------
+    stem : _StemWithNorm
+        Patchify stem: :math:`4 \times 4` stride-4 Conv2d + LayerNorm.
+    stages : nn.ModuleList
+        Four stages of stacked ConvNeXt blocks.
+    downsamplers : nn.ModuleList
+        Three between-stage LN + stride-2 Conv2d downsamplers.
+    head_norm : nn.LayerNorm
+        Final LayerNorm applied to the pooled feature.
+    avgpool : nn.AdaptiveAvgPool2d
+        :math:`1 \times 1` adaptive average pool.
+    classifier : nn.Linear
+        Final linear projection of width ``(num_classes, dims[-1])``.
+
+    Notes
+    -----
+    Reference: Zhuang Liu *et al.*, *"A ConvNet for the 2020s"*,
+    CVPR 2022.  ConvNeXt-T / S / B / L / XL reach **82.1 / 83.1 /
+    83.8 / 84.3 / 85.5 % top-1 on ImageNet-1k** (Table 1 of the paper,
+    224x224 input) — matching or exceeding Swin at equal FLOPs.
+
+    Examples
+    --------
+    End-to-end inference with the default ConvNeXt-T classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.convnext import (
+    ...     ConvNeXtConfig, ConvNeXtForImageClassification,
+    ... )
+    >>> model = ConvNeXtForImageClassification(ConvNeXtConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[ConvNeXtConfig]] = ConvNeXtConfig
     base_model_prefix: ClassVar[str] = "convnext"

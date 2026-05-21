@@ -69,7 +69,47 @@ def _apply(cfg: NCSNConfig, overrides: dict[str, object]) -> NCSNConfig:
     default_config=_CFG_CIFAR,
 )
 def ncsn_cifar(pretrained: bool = False, **overrides: object) -> NCSNModel:
-    """NCSN on CIFAR-10 (Song & Ermon 2019 / NCSNv2 Table 1)."""
+    r"""Construct an NCSN score network for the CIFAR-10 setup.
+
+    Paper-faithful CIFAR-10 configuration combining Song and Ermon, 2019
+    §4.1 with the NCSNv2 (Song 2020) Table 1 refinements: sample size
+    32x32, ``base_channels=128``, ``channel_mult=(1, 2, 2, 2)``, 2
+    ResBlocks per stage, self-attention at the 16x16 feature map,
+    :math:`L = 232` geometric noise levels in :math:`[\sigma_{\min} = 0.01,
+    \sigma_{\max} = 50]`, and the NCSNv2 §3.3 Langevin schedule
+    (:math:`T = 5` steps per level, :math:`\epsilon = 2 \cdot 10^{-5}`).
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`NCSNConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    NCSNModel
+        Score network configured with the CIFAR-10 setup and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Song and Ermon, *"Generative Modeling by Estimating
+    Gradients of the Data Distribution"*, NeurIPS, 2019 (arXiv:1907.05600);
+    NCSNv2 refinements in Song and Ermon, 2020 (arXiv:2006.09011).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import ncsn_cifar
+    >>> model = ncsn_cifar().eval()
+    >>> x_tilde = lucid.randn((1, 3, 32, 32))
+    >>> sigma_idx = lucid.tensor([3]).long()
+    >>> out = model(x_tilde, sigma_idx)
+    >>> out.sample.shape   # (1, 3, 32, 32) — raw score
+    (1, 3, 32, 32)
+    """
     return NCSNModel(_apply(_CFG_CIFAR, overrides))
 
 
@@ -81,7 +121,47 @@ def ncsn_cifar(pretrained: bool = False, **overrides: object) -> NCSNModel:
     default_config=_CFG_CELEBA,
 )
 def ncsn_celeba(pretrained: bool = False, **overrides: object) -> NCSNModel:
-    """NCSN on CelebA 64×64 (NCSNv2 Appendix C)."""
+    r"""Construct an NCSN score network for the CelebA 64x64 setup.
+
+    Paper-faithful CelebA 64x64 configuration from NCSNv2 (Song 2020)
+    Appendix C: sample size 64x64, ``base_channels=128``,
+    ``channel_mult=(1, 1, 2, 2, 4, 4)``, 2 ResBlocks per stage,
+    self-attention at the 16x16 feature map, :math:`L = 500` geometric
+    noise levels in :math:`[\sigma_{\min} = 0.01, \sigma_{\max} = 90]`,
+    and the NCSNv2 Langevin schedule (:math:`T = 5` steps per level,
+    :math:`\epsilon = 2 \cdot 10^{-5}`).
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`NCSNConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    NCSNModel
+        Score network configured with the CelebA 64x64 setup and any
+        overrides.
+
+    Notes
+    -----
+    Reference: Song and Ermon, *"Improved Techniques for Training
+    Score-Based Generative Models"* (NCSNv2), NeurIPS, 2020
+    (arXiv:2006.09011), Appendix C.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import ncsn_celeba
+    >>> model = ncsn_celeba().eval()
+    >>> x_tilde = lucid.randn((1, 3, 64, 64))
+    >>> sigma_idx = lucid.tensor([10]).long()
+    >>> out = model(x_tilde, sigma_idx)
+    >>> out.sample.shape   # (1, 3, 64, 64)
+    (1, 3, 64, 64)
+    """
     return NCSNModel(_apply(_CFG_CELEBA, overrides))
 
 
@@ -98,6 +178,40 @@ def ncsn_celeba(pretrained: bool = False, **overrides: object) -> NCSNModel:
 def ncsn_cifar_gen(
     pretrained: bool = False, **overrides: object
 ) -> NCSNForImageGeneration:
+    r"""Construct an NCSN CIFAR-10 model with DSM loss and ``.generate()``.
+
+    Same trunk as :func:`ncsn_cifar` (CIFAR-10 setup, :math:`L = 232`
+    noise levels), wrapped with the denoising score-matching loss and
+    annealed Langevin sampling.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`NCSNConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    NCSNForImageGeneration
+        CIFAR-10 NCSN wrapped with the DSM loss head and Langevin sampler.
+
+    Notes
+    -----
+    Reference: Song and Ermon, NeurIPS, 2019 (arXiv:1907.05600); NCSNv2 in
+    Song and Ermon, 2020 (arXiv:2006.09011).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import ncsn_cifar_gen
+    >>> model = ncsn_cifar_gen().eval()
+    >>> x = lucid.randn((1, 3, 32, 32))
+    >>> out = model(x)
+    >>> out.sample.shape   # raw score field
+    (1, 3, 32, 32)
+    """
     return NCSNForImageGeneration(_apply(_CFG_CIFAR, overrides))
 
 
@@ -111,4 +225,40 @@ def ncsn_cifar_gen(
 def ncsn_celeba_gen(
     pretrained: bool = False, **overrides: object
 ) -> NCSNForImageGeneration:
+    r"""Construct an NCSN CelebA 64x64 model with DSM loss and ``.generate()``.
+
+    Same trunk as :func:`ncsn_celeba` (CelebA 64x64 setup, :math:`L = 500`
+    noise levels), wrapped with the denoising score-matching loss and
+    annealed Langevin sampling.
+
+    Parameters
+    ----------
+    pretrained : bool, default=False
+        Reserved for future weight registration; currently a no-op.
+    **overrides : object
+        Optional :class:`NCSNConfig` field overrides forwarded into the
+        underlying config.
+
+    Returns
+    -------
+    NCSNForImageGeneration
+        CelebA 64x64 NCSN wrapped with the DSM loss head and Langevin
+        sampler.
+
+    Notes
+    -----
+    Reference: Song and Ermon, *"Improved Techniques for Training
+    Score-Based Generative Models"* (NCSNv2), NeurIPS, 2020
+    (arXiv:2006.09011), Appendix C.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ncsn import ncsn_celeba_gen
+    >>> model = ncsn_celeba_gen().eval()
+    >>> x = lucid.randn((1, 3, 64, 64))
+    >>> out = model(x)
+    >>> out.sample.shape   # raw score field
+    (1, 3, 64, 64)
+    """
     return NCSNForImageGeneration(_apply(_CFG_CELEBA, overrides))

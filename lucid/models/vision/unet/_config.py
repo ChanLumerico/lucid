@@ -4,8 +4,63 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="U-Net",
+    citation=(
+        'Ronneberger, Olaf, et al. "U-Net: Convolutional Networks for '
+        'Biomedical Image Segmentation." Medical Image Computing and '
+        "Computer-Assisted Intervention, 2015, pp. 234–241."
+    ),
+    theory=r"""
+    U-Net is a symmetric **encoder–decoder** architecture with dense
+    skip connections, designed for biomedical segmentation where
+    training data is scarce and every pixel matters.
+
+    The encoder ("contracting path") follows the FCN philosophy of a
+    classification CNN: pairs of :math:`3 \times 3` convolutions
+    (with ReLU) followed by :math:`2 \times 2` max-pooling, doubling
+    channel depth at every spatial halving:
+
+    .. math::
+
+        C_\ell = 2 \cdot C_{\ell - 1}, \quad
+        (H, W)_\ell = (H, W)_{\ell - 1} / 2.
+
+    The decoder ("expansive path") mirrors this structure: each
+    stage performs a :math:`2 \times 2` *up-convolution* (transposed
+    conv) that halves the channel count and doubles spatial size,
+    **concatenates** the corresponding encoder feature map along the
+    channel axis, and applies two :math:`3 \times 3` convs:
+
+    .. math::
+
+        x_\ell^{\mathrm{dec}} = \phi\!\bigl(
+            [\, \mathrm{upconv}(x_{\ell+1}^{\mathrm{dec}}); \,
+            x_\ell^{\mathrm{enc}} \,]
+        \bigr).
+
+    The crucial design choice is the **skip connection by
+    concatenation** (not addition): it forwards the encoder's
+    high-resolution but semantically shallow features directly into
+    the decoder, letting the convs combine them with the deeper,
+    semantically rich up-sampled features.  This is what allows the
+    network to produce crisp pixel-level boundaries with very few
+    training images (the paper trains on 30 cell images via heavy
+    elastic augmentation).
+
+    The final layer is a :math:`1 \times 1` convolution mapping to
+    :math:`K` classes (softmax + per-pixel cross-entropy).
+    Weighted-pixel loss is recommended in the paper to emphasise
+    thin separating boundaries between touching cells — a small but
+    practically important detail for cell segmentation.  U-Net's
+    skip-connection pattern has since become the default starting
+    point for almost every dense-prediction task, from natural
+    images to volumetric medical scans (3-D U-Net, V-Net, …).
+    """,
+)
 @dataclass(frozen=True)
 class UNetConfig(ModelConfig):
     """Configuration for U-Net.

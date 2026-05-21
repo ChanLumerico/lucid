@@ -311,7 +311,34 @@ class _Block8(nn.Module):
 
 @dataclass
 class InceptionResNetOutput:
-    """Inception-ResNet v2 classification output."""
+    r"""Structured forward output for :class:`InceptionResNetV2ForImageClassification`.
+
+    Inception-ResNet v2 does not use auxiliary classifiers (unlike
+    Inception v3 / GoogLeNet) — the residual shortcuts already mitigate
+    the vanishing-gradient problem that auxiliary heads were originally
+    introduced to address — so this dataclass only carries the main
+    logits and an optional loss tensor.
+
+    Parameters
+    ----------
+    logits : Tensor
+        Main classifier output of shape ``(B, num_classes)``.
+    loss : Tensor or None, optional, default=None
+        Cross-entropy loss when labels were passed to :meth:`forward`;
+        ``None`` otherwise.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.inception_resnet import inception_resnet_v2_cls
+    >>> model = inception_resnet_v2_cls().eval()
+    >>> x = lucid.randn(1, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    >>> out.loss is None
+    True
+    """
 
     logits: Tensor
     loss: Tensor | None = None
@@ -355,9 +382,83 @@ def _build_body(config: InceptionResNetConfig) -> dict[str, nn.Module]:
 
 
 class InceptionResNetV2(PretrainedModel, BackboneMixin):
-    """Inception-ResNet v2 feature extractor.
+    r"""Inception-ResNet v2 feature-extracting backbone.
 
-    Final feature map before classifier: (B, 1536, 1, 1) for 299×299 input.
+    Implements the residual-Inception topology from Szegedy et al.,
+    "Inception-v4, Inception-ResNet and the Impact of Residual
+    Connections on Learning", AAAI 2017.  The body consists of three
+    residual Inception block families — :class:`_Block35` (×10),
+    :class:`_Block17` (×20), and :class:`_Block8` (×9 + 1 no-ReLU
+    block) — separated by Reduction-A (:class:`_Mixed6a`) and
+    Reduction-B (:class:`_Mixed7a`) blocks, with a leading Mixed_5b
+    pre-block (:class:`_Mixed5b`) and a final :math:`1\times1`
+    projection (``conv2d_7b``) to 1536 channels.  Designed for
+    :math:`299\times299` RGB inputs.  State-dict naming matches the
+    canonical timm / TensorFlow-Slim implementation so weight transfer
+    is straightforward.
+
+    Parameters
+    ----------
+    config : InceptionResNetConfig
+        Frozen architecture spec.  Use :func:`inception_resnet_v2` for
+        the paper-cited configuration with the recommended residual
+        scale factors (0.17 / 0.10 / 0.20).
+
+    Attributes
+    ----------
+    config : InceptionResNetConfig
+        Stored copy of the config that built this model.
+    conv2d_1a, conv2d_2a, conv2d_2b, conv2d_3b, conv2d_4a : nn.Module
+        Stem ConvBnReLU layers (TensorFlow-Slim naming preserved).
+    mixed_5b : _Mixed5b
+        Pre-Block35 Inception block (192 → 320 channels) at
+        :math:`35\times35`.
+    repeat : nn.Sequential
+        Stack of 10 :class:`_Block35` residual Inception-A blocks.
+    mixed_6a : _Mixed6a
+        Reduction-A block, :math:`35\times35 \to 17\times17`, widening
+        320 → 1088 channels.
+    repeat_1 : nn.Sequential
+        Stack of 20 :class:`_Block17` residual Inception-B blocks.
+    mixed_7a : _Mixed7a
+        Reduction-B block, :math:`17\times17 \to 8\times8`, widening
+        1088 → 2080 channels.
+    repeat_2 : nn.Sequential
+        Stack of 9 :class:`_Block8` residual Inception-C blocks.
+    block8 : _Block8
+        Final no-ReLU residual block (scale 1.0).
+    conv2d_7b : _ConvBnReLU
+        :math:`1\times1` projection 2080 → 1536.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool to :math:`1\times1`.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin`.
+
+    Notes
+    -----
+    Each residual Inception block computes
+
+    .. math::
+
+        y = \sigma\!\left(x + \alpha \cdot \mathcal{F}_{\text{inception}}(x)\right),
+
+    with :math:`\alpha` a small fixed scale factor (0.10–0.20).  The
+    residual-scale trick was introduced specifically for
+    Inception-ResNet because unscaled residuals caused training to
+    diverge on networks with many filters per Inception module.
+    Approximately 55.8 M parameters; achieves a top-5 ImageNet
+    validation error of 3.08% in the original paper.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.inception_resnet import inception_resnet_v2
+    >>> backbone = inception_resnet_v2()
+    >>> x = lucid.randn(1, 3, 299, 299)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 1536, 1, 1)
+    (1, 1536, 1, 1)
     """
 
     config_class: ClassVar[type[InceptionResNetConfig]] = InceptionResNetConfig
@@ -428,11 +529,67 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
 
 
 class InceptionResNetV2ForImageClassification(PretrainedModel):
-    """Inception-ResNet v2 with classification head.
+    r"""Inception-ResNet v2 image classifier (backbone + GAP + dropout + linear).
 
-    Input: (B, 3, 299, 299)
-    Output: InceptionResNetOutput with logits (B, num_classes)
-    Head attribute name ``classif`` matches timm's inception_resnet_v2.
+    Combines an :class:`InceptionResNetV2` backbone with a
+    global-average-pool, optional :class:`~lucid.nn.Dropout`
+    (``p=config.dropout``, default 0.2), and a single
+    :class:`~lucid.nn.Linear` projection producing
+    ``config.num_classes`` logits.  No auxiliary classifier — the
+    residual shortcuts already provide effective gradient flow
+    throughout the network.  The classifier attribute is named
+    ``classif`` (not ``classifier``) to match the canonical timm /
+    TensorFlow-Slim state-dict key.
+
+    Parameters
+    ----------
+    config : InceptionResNetConfig
+        Architecture spec.  Use :func:`inception_resnet_v2_cls` for the
+        paper-cited configuration.
+
+    Attributes
+    ----------
+    config : InceptionResNetConfig
+        Stored copy of the config that built this model.
+    conv2d_1a … conv2d_7b, mixed_5b, repeat, mixed_6a, repeat_1,
+        mixed_7a, repeat_2, block8
+        Same backbone components as on :class:`InceptionResNetV2`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Final global average pool to :math:`1\times1`.
+    dropout : nn.Module
+        :class:`~lucid.nn.Dropout` when ``config.dropout > 0`` (default
+        0.2), otherwise :class:`~lucid.nn.Identity`.
+    classif : nn.Linear
+        Final classifier projecting 1536 → ``num_classes`` — named
+        ``classif`` for state-dict compatibility.
+
+    Notes
+    -----
+    From Szegedy et al., "Inception-v4, Inception-ResNet and the
+    Impact of Residual Connections on Learning", AAAI 2017.  Loss is
+    the standard categorical cross-entropy
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{N} \sum_{n=1}^{N}
+            \log \operatorname{softmax}(\text{logits}_n)_{\,y_n},
+
+    computed only when ``labels`` is not ``None``.  Approximately
+    55.8 M parameters; top-5 ImageNet validation error 3.08%.  The key
+    empirical message of the paper is that residual connections do not
+    raise the final accuracy ceiling beyond a comparably-sized
+    non-residual Inception v4, but they *dramatically* accelerate
+    training convergence.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.inception_resnet import inception_resnet_v2_cls
+    >>> model = inception_resnet_v2_cls()
+    >>> x = lucid.randn(2, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
     """
 
     config_class: ClassVar[type[InceptionResNetConfig]] = InceptionResNetConfig

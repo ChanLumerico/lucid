@@ -56,6 +56,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import ModelConfig, PretrainedModel
+from lucid.models._meta import model_family_meta
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import (
@@ -68,6 +69,56 @@ from lucid.models._utils._detection import (
 # ---------------------------------------------------------------------------
 
 
+@model_family_meta(
+    canonical_name="YOLO",
+    citation=(
+        'Redmon, Joseph, et al. "You Only Look Once: Unified, Real-Time '
+        'Object Detection." Proceedings of the IEEE Conference on '
+        "Computer Vision and Pattern Recognition, 2016, pp. 779–788."
+    ),
+    theory=r"""
+    YOLOv4 (Bochkovskiy et al., 2020) is a systematic engineering
+    redesign rather than a new theoretical departure: the authors
+    enumerate "bag-of-freebies" (training-time tricks with no
+    inference cost) and "bag-of-specials" (small architectural
+    additions with marginal inference cost) and select the
+    combination that maximises AP at real-time throughput on a
+    single consumer GPU.
+
+    **CSPDarknet-53 backbone.**  Each residual stage is wrapped in a
+    *Cross-Stage Partial* block that splits the feature map along the
+    channel dimension, processes one half with the residual stack,
+    and concatenates the result back:
+
+    .. math::
+
+        y = \mathrm{conv}\bigl(
+            [x_1, \, \mathrm{Stack}(x_2)]
+        \bigr),
+        \qquad x = [x_1, x_2].
+
+    CSP cuts FLOPs while preserving (or improving) accuracy by
+    reducing gradient duplication across the stack.  The backbone
+    also swaps LeakyReLU for **Mish** activation
+    :math:`x \cdot \tanh(\mathrm{softplus}(x))` for smoother
+    gradient flow.
+
+    **SPP + PANet neck.**  An SPP block pools the deepest feature
+    with kernels :math:`\{5, 9, 13\}` for an enlarged receptive
+    field, then a **Path Aggregation Network** adds bottom-up
+    information flow to the standard FPN top-down path, shortening
+    the path length between low-level localisation features and the
+    deepest prediction head.
+
+    **Improved heads + losses.**  The same three-scale anchored
+    head as v3, trained with CIoU regression loss, Mosaic data
+    augmentation, DropBlock regularisation, label smoothing, cosine
+    LR schedule, and class-balanced sampling.  The result is the
+    new Pareto frontier on COCO at the time of release (≈43 AP at
+    65 fps on a V100) and a template that the v5/v6/v7/v8 lines
+    extend further.
+    """,
+)
 @dataclass(frozen=True)
 class YOLOV4Config(ModelConfig):
     """Configuration for YOLOv4.
@@ -745,21 +796,79 @@ def _yolov4_loss(
 
 
 class YOLOV4ForObjectDetection(PretrainedModel):
-    """YOLOv4 object detector (Bochkovskiy et al., 2020).
+    r"""YOLOv4 multi-scale object detector (Bochkovskiy et al., 2020).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional list of B dicts with:
-                    ``"boxes"``  — (M_i, 4) xyxy pixel-coordinate boxes.
-                    ``"labels"`` — (M_i,)   integer class ids (0-indexed).
+    A heavily engineered iteration over YOLOv3 that combines several
+    independently-published improvements ("bag of freebies" and "bag
+    of specials" in the paper's terminology) into a single
+    high-throughput detector.  The core architectural changes are:
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (B, total_anchors, num_classes) raw sigmoid class logits.
-      ``pred_boxes``: (B, total_anchors, 4) decoded xyxy pixel boxes.
-      ``loss``      : CIoU + BCE loss scalar when targets provided.
+    - **CSPDarknet-53** backbone — replaces residual blocks with
+      Cross-Stage-Partial blocks that split and re-merge the feature
+      stream, reducing FLOPs without hurting accuracy.
+    - **SPP** (Spatial Pyramid Pooling) module on the final backbone
+      stage — fuses three max-pooled receptive fields plus the identity,
+      widening the effective receptive field.
+    - **PANet** (Path Aggregation Network) neck — adds a bottom-up path
+      on top of the FPN top-down path, giving each prediction level
+      access to both fine and coarse features.
+
+    Heads remain YOLOv3-style (three scales, 3 anchors / scale), but
+    training switches the box-regression loss to **CIoU** which couples
+    centre distance, IoU, and aspect-ratio consistency in a single
+    differentiable objective.  COCO test-dev AP of 43.5% at 65 fps on a
+    Tesla V100 (paper Table 8).
+
+    Parameters
+    ----------
+    config : YOLOV4Config
+        Frozen architecture spec.  Use :func:`yolo_v4` for the standard
+        full-size model.
+
+    Attributes
+    ----------
+    config : YOLOV4Config
+        Stored copy of the config that built this model.
+    backbone : _CSPDarknet53
+        Cross-Stage-Partial Darknet-53 producing P3 / P4 / P5 features.
+    neck : _PANetNeck
+        SPP + PANet (top-down FPN + bottom-up path) producing the three
+        head input features.
+    p3_head, p4_head, p5_head : nn.Sequential
+        Three-scale prediction heads, each producing :math:`3 (5 + C)`
+        channels.
+
+    Notes
+    -----
+    See Bochkovskiy et al., "YOLOv4: Optimal Speed and Accuracy of
+    Object Detection", arXiv 2020 (arXiv:2004.10934).  Complete-IoU
+    (CIoU) loss is defined as
+
+    .. math::
+
+        \mathcal{L}_\mathrm{CIoU} =
+            1 - \mathrm{IoU} + \frac{\rho^2(b, b^\mathrm{gt})}{c^2}
+            + \alpha v,
+        \qquad
+        v = \frac{4}{\pi^2}
+            \Bigl(\arctan\frac{w^\mathrm{gt}}{h^\mathrm{gt}} -
+                  \arctan\frac{w}{h}\Bigr)^2,
+
+    where :math:`\rho` is the Euclidean distance between box centres,
+    :math:`c` is the diagonal of the smallest enclosing box, and
+    :math:`\alpha` is a balancing trade-off term.  CIoU converges faster
+    than IoU / GIoU and is the standard regression objective from
+    YOLOv4 onwards.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v4 import yolo_v4
+    >>> model = yolo_v4()
+    >>> x = lucid.randn(1, 3, 608, 608)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
 
     config_class: ClassVar[type[YOLOV4Config]] = YOLOV4Config
@@ -955,17 +1064,45 @@ def yolo_v4(
     pretrained: bool = False,
     **overrides: object,
 ) -> YOLOV4ForObjectDetection:
-    """YOLOv4 with CSPDarknet-53 + SPP + PANet, 3-scale detection (COCO 80 classes).
+    r"""YOLOv4 — CSPDarknet-53 + SPP + PANet (Bochkovskiy et al., 2020).
 
-    Reference: Bochkovskiy et al., "YOLOv4: Optimal Speed and Accuracy of
-    Object Detection", arXiv 2020.
+    Builds the paper-cited full-size YOLOv4 detector: CSPDarknet-53
+    backbone, SPP module on the final stage, PANet (top-down +
+    bottom-up) neck, and 3-scale detection at strides 8 / 16 / 32 with
+    3 anchors / scale.  Default 80 COCO classes; reaches COCO test-dev
+    AP of 43.5% at 65 fps on Tesla V100 (paper Table 8).
 
-    Args:
-        pretrained: If True, attempt to load pretrained COCO weights.
-        **overrides: Override any ``YOLOV4Config`` field.
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        If ``True``, attempt to load pretrained COCO weights.  Currently
+        raises :class:`NotImplementedError`.
+    **overrides
+        Keyword overrides forwarded into :class:`YOLOV4Config`.
 
-    Returns:
-        ``YOLOV4ForObjectDetection`` instance.
+    Returns
+    -------
+    YOLOV4ForObjectDetection
+        Detector with the standard YOLOv4 configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Bochkovskiy et al., "YOLOv4: Optimal Speed and Accuracy of
+    Object Detection", arXiv 2020 (arXiv:2004.10934).  The paper's
+    "bag of specials" includes Mish activation, CIoU loss, DropBlock
+    regularisation, Mosaic augmentation, and CmBN — all motivated by
+    independent prior work that YOLOv4 aggregates and tunes together.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.yolo._v4 import yolo_v4
+    >>> model = yolo_v4()
+    >>> x = lucid.randn(1, 3, 608, 608)
+    >>> out = model(x)
+    >>> out.logits.shape[0]
+    1
     """
     config = YOLOV4Config(**{k: v for k, v in overrides.items()})  # type: ignore[arg-type]
     model = YOLOV4ForObjectDetection(config)

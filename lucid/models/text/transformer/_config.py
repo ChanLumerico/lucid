@@ -16,9 +16,65 @@ side) and adds the seq2seq-specific knobs:
 from dataclasses import dataclass
 from typing import ClassVar
 
+from lucid.models._meta import model_family_meta
 from lucid.models.text._config import LanguageModelConfig
 
 
+@model_family_meta(
+    canonical_name="Transformer",
+    citation=(
+        'Vaswani, Ashish, et al. "Attention Is All You Need." '
+        "Advances in Neural Information Processing Systems, 2017, "
+        "pp. 5998–6008."
+    ),
+    theory=r"""
+    The Transformer replaces the recurrence of RNN-based seq2seq models
+    with **scaled dot-product attention**, enabling fully parallel
+    sequence processing.  For query/key/value matrices
+    :math:`Q \in \mathbb{R}^{T_q \times d_k}`,
+    :math:`K \in \mathbb{R}^{T_k \times d_k}`, and
+    :math:`V \in \mathbb{R}^{T_k \times d_v}`, attention is
+
+    .. math::
+
+        \operatorname{Attention}(Q, K, V)
+            = \operatorname{softmax}\!\left(
+                \frac{Q K^\top}{\sqrt{d_k}}
+              \right) V,
+
+    where the :math:`1/\sqrt{d_k}` factor counteracts the variance of
+    dot products in high dimensions and keeps softmax gradients
+    well-conditioned.
+
+    **Multi-head attention** runs :math:`h` parallel attention heads on
+    learned projections of :math:`(Q, K, V)` into :math:`d_k = d_v =
+    d_{\text{model}} / h` subspaces, concatenates the outputs, and
+    applies a final linear:
+
+    .. math::
+
+        \operatorname{MultiHead}(Q, K, V) =
+            \operatorname{Concat}(\text{head}_1, \dots, \text{head}_h)\, W^O,
+        \qquad
+        \text{head}_i = \operatorname{Attention}(Q W_i^Q, K W_i^K, V W_i^V).
+
+    Each encoder layer stacks multi-head self-attention and a
+    position-wise feed-forward network (with hidden width
+    :math:`d_{\text{ff}}=2048`), wrapped in residual connections and
+    post-LayerNorm.  Each decoder layer adds **causal self-attention**
+    over previously generated targets and **cross-attention** over the
+    encoder output.
+
+    Position information is injected via **sinusoidal positional
+    encodings** of fixed (untrained) frequencies, which generalise to
+    sequence lengths unseen during training.  The paper's *base* model
+    (:math:`N=6` encoder/decoder layers, :math:`d_{\text{model}}=512`,
+    :math:`h=8`) achieves state-of-the-art WMT 2014 En-De / En-Fr BLEU
+    while training in a fraction of the time of prior recurrent and
+    convolutional seq2seq systems — the architectural foundation for
+    essentially every modern language model.
+    """,
+)
 @dataclass(frozen=True)
 class TransformerConfig(LanguageModelConfig):
     """Configuration for every Vaswani-style Transformer variant.

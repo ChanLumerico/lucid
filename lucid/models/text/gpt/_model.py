@@ -148,7 +148,66 @@ class _GPTBlock(nn.Module):
 
 
 class GPTModel(PretrainedModel):
-    """GPT-1 decoder trunk — returns the per-token hidden states."""
+    r"""Bare GPT-1 decoder-only Transformer trunk.
+
+    Implements the original generative pre-training architecture from
+    Radford, Narasimhan, Salimans, and Sutskever, 2018: a 12-layer stack
+    of decoder blocks with fused-QKV multi-head causal self-attention, a
+    2-layer feed-forward block, post-LayerNorm residuals, learned absolute
+    position embeddings, and a tanh-approximated GELU activation
+    (``gelu_new``).  Returns the per-token hidden states; the LM and
+    classifier heads sit on top of this trunk.
+
+    Parameters
+    ----------
+    config : GPTConfig
+        Hyperparameters controlling vocabulary, depth, width, head count,
+        and regularisation.  See :class:`GPTConfig` for the full field
+        list.
+
+    Attributes
+    ----------
+    tokens_embed : nn.Embedding
+        Token embedding table of shape ``(vocab_size, hidden_size)``.
+        HuggingFace name retained for state-dict portability.
+    positions_embed : nn.Embedding
+        Learned absolute position embedding of shape
+        ``(max_position_embeddings, hidden_size)``.
+    drop : nn.Dropout
+        Post-embedding dropout layer.
+    h : nn.ModuleList
+        Stack of ``config.num_hidden_layers`` GPT-1 transformer blocks.
+    config_class : type[GPTConfig]
+        Registry pointer for matching-config instantiation.
+    base_model_prefix : str
+        State-dict prefix (``"transformer"``) under which the trunk is
+        nested in task-head variants.
+
+    Notes
+    -----
+    Reference: Radford, Narasimhan, Salimans, and Sutskever, *"Improving
+    Language Understanding by Generative Pre-Training"*, OpenAI Technical
+    Report, 2018.
+
+    Causal LM factorisation:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{LM}}(\theta)
+            = \sum_{t=1}^{T} \log p_\theta(x_t \mid x_{<t}).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt import GPTConfig, GPTModel
+    >>> cfg = GPTConfig(num_hidden_layers=2, hidden_size=128,
+    ...                 num_attention_heads=2, intermediate_size=512)
+    >>> model = GPTModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape   # (B=1, T=4, H=128)
+    (1, 4, 128)
+    """
 
     config_class: ClassVar[type[GPTConfig]] = GPTConfig
     base_model_prefix: ClassVar[str] = "transformer"
@@ -211,12 +270,56 @@ class GPTModel(PretrainedModel):
 
 
 class GPTLMHeadModel(PretrainedModel, GenerationMixin):
-    """GPT-1 + tied LM head — the pre-training objective and the entry point
-    for :meth:`GenerationMixin.generate`.
+    r"""GPT-1 with a tied causal-language-modeling head.
 
-    HF parity:
-        - ``transformer.*``  : trunk (matches HF ``transformer`` prefix)
-        - ``lm_head.weight`` : tied to ``transformer.tokens_embed.weight``
+    Wraps :class:`GPTModel` with an output linear whose weight matrix is
+    bound to the input ``tokens_embed`` table when
+    ``config.tie_word_embeddings`` is ``True`` — halving the parameter
+    cost of the softmax layer.  This is both the pre-training entry point
+    and the host of :meth:`lucid.models.GenerationMixin.generate` for
+    free-form autoregressive sampling.
+
+    Parameters
+    ----------
+    config : GPTConfig
+        Hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        controls weight tying.
+
+    Attributes
+    ----------
+    transformer : GPTModel
+        Underlying decoder trunk.
+    lm_head : nn.Linear
+        Output projection of shape ``(hidden_size, vocab_size)`` mapping
+        each token's hidden state to vocabulary logits.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Improving Language Understanding by
+    Generative Pre-Training"*, OpenAI Technical Report, 2018.
+
+    Loss when ``labels`` is supplied is the standard next-token-shifted
+    causal-LM cross-entropy
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{CLM}}
+            = -\frac{1}{B(T-1)} \sum_{b, t}
+              \log p_\theta(y_{b, t+1} \mid x_{b, \le t}),
+
+    with positions labelled ``-100`` excluded.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt import GPTConfig, GPTLMHeadModel
+    >>> cfg = GPTConfig(num_hidden_layers=2, hidden_size=128,
+    ...                 num_attention_heads=2, intermediate_size=512)
+    >>> model = GPTLMHeadModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, V=40478)
+    (1, 4, 40478)
     """
 
     config_class: ClassVar[type[GPTConfig]] = GPTConfig
@@ -262,12 +365,52 @@ class GPTLMHeadModel(PretrainedModel, GenerationMixin):
 
 
 class GPTForSequenceClassification(PretrainedModel):
-    """Decoder-style classifier — reads the final token's hidden vector.
+    r"""GPT-1 with a last-token sequence-classification head.
 
-    Unlike BERT (CLS-at-position-0), GPT-style classifiers pool the *last*
-    real token, because every preceding position has attended to a strict
-    prefix only.  When ``attention_mask`` is provided we honour it; otherwise
-    the last position of every row is used.
+    Wraps :class:`GPTModel` with a dropout-regularised linear classifier
+    operating on the **rightmost non-pad token's** hidden state — the
+    canonical decoder-style pooling.  Unlike BERT (CLS at position 0),
+    decoder LMs only have a meaningful summary at the final attended
+    position because every preceding position has attended to a strict
+    prefix only.  When ``attention_mask`` is provided we honour it;
+    otherwise the last position of every row is used.
+
+    Parameters
+    ----------
+    config : GPTConfig
+        Hyperparameters.  ``config.num_labels`` sets the output dimension;
+        ``config.classifier_dropout`` (falling back to ``hidden_dropout``)
+        sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    transformer : GPTModel
+        Underlying decoder trunk.
+    dropout : nn.Dropout
+        Dropout layer applied to the pooled last-token embedding.
+    classifier : nn.Linear
+        Final linear of shape ``(hidden_size, num_labels)`` producing
+        per-class logits.
+
+    Notes
+    -----
+    Reference: Radford et al., *"Improving Language Understanding by
+    Generative Pre-Training"*, OpenAI Technical Report, 2018, §3.3.
+
+    Pooling picks index :math:`t^\star = \sum_t \mathbf{1}[\mathrm{mask}_t]
+    - 1` (the rightmost real token) per row.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt import GPTConfig, GPTForSequenceClassification
+    >>> cfg = GPTConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,
+    ...                 num_attention_heads=2, intermediate_size=512)
+    >>> model = GPTForSequenceClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, num_labels=3)
+    (1, 3)
     """
 
     config_class: ClassVar[type[GPTConfig]] = GPTConfig
@@ -326,7 +469,48 @@ class GPTForSequenceClassification(PretrainedModel):
 
 @dataclass
 class GPTDoubleHeadsOutput(ModelOutput):
-    """Joint LM + multiple-choice output for :class:`GPTDoubleHeadsModel`."""
+    r"""Joint LM + multiple-choice output for :class:`GPTDoubleHeadsModel`.
+
+    Aggregates the per-choice causal-LM logits, per-choice classification
+    logits, and the optional per-objective and combined losses produced
+    when training Radford-style multiple-choice fine-tunes.
+
+    Parameters
+    ----------
+    lm_logits : Tensor
+        LM head logits of shape ``(N, C, L, vocab_size)`` — one
+        distribution per token of every batch x choice pair.
+    mc_logits : Tensor
+        Multiple-choice head logits of shape ``(N, C)`` — one scalar per
+        candidate completion.
+    loss : Tensor or None, default=None
+        Sum of ``lm_loss`` and ``mc_loss`` when both are available;
+        otherwise the single available loss, or ``None``.
+    lm_loss : Tensor or None, default=None
+        Shift-cross-entropy on the LM head when ``labels`` is supplied.
+    mc_loss : Tensor or None, default=None
+        Cross-entropy on the multiple-choice head when ``mc_labels`` is
+        supplied.
+
+    Notes
+    -----
+    Reference: Radford, Narasimhan, Salimans, and Sutskever, *"Improving
+    Language Understanding by Generative Pre-Training"*, OpenAI Technical
+    Report, 2018, §3.3.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt import GPTConfig, GPTDoubleHeadsModel
+    >>> cfg = GPTConfig(num_hidden_layers=2, hidden_size=64,
+    ...                 num_attention_heads=2, intermediate_size=256)
+    >>> model = GPTDoubleHeadsModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[[101, 7592, 102]]])      # (N=1, C=1, L=3)
+    >>> mc_ids = lucid.tensor([[2]]).long()
+    >>> out = model(input_ids, mc_token_ids=mc_ids)
+    >>> out.lm_logits.shape, out.mc_logits.shape
+    ((1, 1, 3, 40478), (1, 1))
+    """
 
     lm_logits: Tensor
     mc_logits: Tensor
@@ -371,17 +555,61 @@ class _GPTMultipleChoiceHead(nn.Module):
 
 
 class GPTDoubleHeadsModel(PretrainedModel):
-    """GPT-1 + LM head + multiple-choice head — Radford 2018 fine-tuning recipe.
+    r"""GPT-1 + LM head + multiple-choice classification head.
 
-    Used for tasks like RACE / Story Cloze where each example presents a
-    prompt followed by C candidate completions; the model is jointly trained
-    with the standard LM objective on each choice and a C-way classification
-    loss picking the correct completion.
+    Implements the Radford 2018 §3.3 multi-task fine-tuning recipe.  Used
+    for tasks like RACE / Story Cloze where each example presents a prompt
+    followed by :math:`C` candidate completions; the model is jointly
+    trained with the standard LM objective on each choice and a
+    :math:`C`-way classification loss picking the correct completion.
 
     Inputs are 3-D: ``input_ids`` of shape ``(N, C, L)`` flattens to
-    ``(N * C, L)`` for the trunk and reshapes back to ``(N, C, …)`` at the
-    heads.  ``mc_token_ids`` of shape ``(N, C)`` indexes the per-choice
+    ``(N * C, L)`` for the trunk and reshapes back to ``(N, C, ...)`` at
+    the heads.  ``mc_token_ids`` of shape ``(N, C)`` indexes the per-choice
     pooling position (typically the trailing CLF token of each completion).
+
+    Parameters
+    ----------
+    config : GPTConfig
+        Hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        ties the LM head weight to the input embedding matrix.
+
+    Attributes
+    ----------
+    transformer : GPTModel
+        Underlying decoder trunk.
+    lm_head : nn.Linear
+        Tied output projection of shape ``(hidden_size, vocab_size)``.
+    mc_head : nn.Module
+        Per-choice pooled-token scalar projection of shape
+        ``(hidden_size, 1)``.
+
+    Notes
+    -----
+    Reference: Radford, Narasimhan, Salimans, and Sutskever, *"Improving
+    Language Understanding by Generative Pre-Training"*, OpenAI Technical
+    Report, 2018, §3.3.
+
+    Combined loss when both objectives are supplied:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{joint}}
+            = \mathcal{L}_{\mathrm{CLM}} + \mathcal{L}_{\mathrm{MC}}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.gpt import GPTConfig, GPTDoubleHeadsModel
+    >>> cfg = GPTConfig(num_hidden_layers=2, hidden_size=64,
+    ...                 num_attention_heads=2, intermediate_size=256)
+    >>> model = GPTDoubleHeadsModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[[101, 7592, 102],
+    ...                            [101, 2088, 102]]])    # (N=1, C=2, L=3)
+    >>> mc_ids = lucid.tensor([[2, 2]]).long()
+    >>> out = model(input_ids, mc_token_ids=mc_ids)
+    >>> out.mc_logits.shape   # (N=1, C=2)
+    (1, 2)
     """
 
     config_class: ClassVar[type[GPTConfig]] = GPTConfig

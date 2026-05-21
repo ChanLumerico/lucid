@@ -96,8 +96,8 @@ class TestConvGroupedParity:
     @pytest.mark.parametrize(
         "in_ch, out_ch, groups",
         [
-            (4, 8, 2),   # 2 groups, asymmetric channel counts per group
-            (8, 8, 4),   # 4 groups, equal in/out per group
+            (4, 8, 2),  # 2 groups, asymmetric channel counts per group
+            (8, 8, 4),  # 4 groups, equal in/out per group
             (16, 16, 16),  # depthwise (groups == in_ch == out_ch)
         ],
         ids=["g2", "g4", "depthwise"],
@@ -106,7 +106,9 @@ class TestConvGroupedParity:
         self, ref: Any, in_ch: int, out_ch: int, groups: int
     ) -> None:
         np.random.seed(in_ch * 31 + groups)
-        w = np.random.standard_normal((out_ch, in_ch // groups, 3, 3)).astype(np.float32)
+        w = np.random.standard_normal((out_ch, in_ch // groups, 3, 3)).astype(
+            np.float32
+        )
         b = np.random.standard_normal((out_ch,)).astype(np.float32)
         x = np.random.standard_normal((2, in_ch, 8, 8)).astype(np.float32)
 
@@ -128,7 +130,11 @@ class TestConvGroupedParity:
         [
             (4, 8, 2),
             (8, 8, 4),
-            (16, 16, 16),  # the depthwise case that used to raise inside engine_backward
+            (
+                16,
+                16,
+                16,
+            ),  # the depthwise case that used to raise inside engine_backward
         ],
         ids=["g2", "g4", "depthwise"],
     )
@@ -136,7 +142,9 @@ class TestConvGroupedParity:
         self, ref: Any, in_ch: int, out_ch: int, groups: int
     ) -> None:
         np.random.seed(in_ch * 17 + groups + 1)
-        w = np.random.standard_normal((out_ch, in_ch // groups, 3, 3)).astype(np.float32)
+        w = np.random.standard_normal((out_ch, in_ch // groups, 3, 3)).astype(
+            np.float32
+        )
         b = np.random.standard_normal((out_ch,)).astype(np.float32)
         x = np.random.standard_normal((2, in_ch, 8, 8)).astype(np.float32)
 

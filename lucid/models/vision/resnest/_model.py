@@ -488,7 +488,79 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
 
 
 class ResNeSt(PretrainedModel, BackboneMixin):
-    """ResNeSt feature extractor — outputs (B, 2048, H/32, W/32)."""
+    r"""ResNeSt feature-extracting backbone (no classification head).
+
+    Implements the Split-Attention augmentation of the ResNet
+    topology from Zhang et al., "ResNeSt: Split-Attention
+    Networks", CVPR Workshops 2022 (arXiv:2004.08955).  Each
+    bottleneck's :math:`3 \times 3` is replaced by a *Split-Attention*
+    block that fuses ResNeXt cardinality, SKNet kernel selection,
+    and SENet channel attention into a single unified primitive.
+    The block splits the feature map into :math:`K` cardinal
+    groups, then further splits each group into :math:`R` parallel
+    *radix* branches, and computes per-radix softmax attention
+    weights
+
+    .. math::
+
+        a_{r, c} = \frac{\exp(z_{r, c})}{\sum_{r'=1}^{R} \exp(z_{r', c})},
+        \qquad V_c = \sum_{r=1}^{R} a_{r, c} \cdot U_{r, c}.
+
+    Two further refinements complete the architecture: a *deep
+    stem* (three 3×3 convolutions replacing the original 7×7
+    stem) and an *average-pool downsampling* path that replaces
+    strided convolutions in residual shortcuts and inside the
+    Split-Attention block itself.
+
+    Parameters
+    ----------
+    config : ResNeStConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`resnest_50`, :func:`resnest_101`, …) for
+        paper-cited variants.
+
+    Attributes
+    ----------
+    config : ResNeStConfig
+        Stored copy of the config that built this model.
+    conv1 : nn.Module
+        Deep stem (three 3×3 convolutions) or single 7×7 conv,
+        depending on ``config.deep_stem``.
+    bn1 : nn.BatchNorm2d
+        BatchNorm paired with the stem output.
+    act1 : nn.ReLU
+        Post-stem ReLU activation.
+    maxpool : nn.MaxPool2d
+        3×3 max-pool at stride 2.
+    layer1, layer2, layer3, layer4 : nn.Sequential
+        The four Split-Attention residual stages.  Output strides
+        are 4, 8, 16, and 32 relative to the input.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin`.
+
+    Notes
+    -----
+    When :math:`R = 1` the Split-Attention block degenerates to
+    ResNeXt; at :math:`R \geq 2` it generalises SKNet to arbitrary
+    radix counts with a softmax (rather than two-way sigmoid)
+    gate.  ResNeSt-50 outperforms plain ResNet-50 by roughly 3
+    ImageNet top-1 percentage points at the same parameter count,
+    and serves as a strong backbone for downstream detection /
+    segmentation pipelines.
+
+    Examples
+    --------
+    Build a ResNeSt-50 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.resnest import resnest_50
+    >>> backbone = resnest_50()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 2048, 7, 7)
+    """
 
     config_class: ClassVar[type[ResNeStConfig]] = ResNeStConfig
     base_model_prefix: ClassVar[str] = "resnest"
@@ -532,7 +604,60 @@ class ResNeSt(PretrainedModel, BackboneMixin):
 
 
 class ResNeStForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """ResNeSt with global average pooling + linear classification head."""
+    r"""ResNeSt with global-average-pooled linear classification head.
+
+    Combines a :class:`ResNeSt` backbone with global average
+    pooling, an optional :class:`~lucid.nn.Dropout` (probability
+    ``config.dropout``), and a linear projection to
+    ``config.num_classes`` logits.  When ``labels`` are supplied
+    to :meth:`forward`, a cross-entropy loss is computed and
+    returned alongside the logits.
+
+    Parameters
+    ----------
+    config : ResNeStConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`resnest_50_cls`, :func:`resnest_101_cls`, …) for
+        paper-cited configurations.
+
+    Attributes
+    ----------
+    config : ResNeStConfig
+        Stored copy of the config that built this model.
+    conv1, bn1, act1, maxpool, layer1, layer2, layer3, layer4
+        Same backbone components as on :class:`ResNeSt`; see that
+        class for shape semantics.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    classifier : nn.Module
+        Built by :meth:`ClassificationHeadMixin._build_classifier` —
+        a :class:`~lucid.nn.Linear` (or :class:`~lucid.nn.Sequential`
+        with dropout) projecting from 2048 channels to
+        ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{Drop}\!\left(
+            \operatorname{GAP}(\,\mathrm{backbone}(x)\,)
+        \right) + b.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.resnest import resnest_50_cls
+    >>> model = resnest_50_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    """
 
     config_class: ClassVar[type[ResNeStConfig]] = ResNeStConfig
     base_model_prefix: ClassVar[str] = "resnest"

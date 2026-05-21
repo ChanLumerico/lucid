@@ -1,11 +1,19 @@
 // lucid/_C/nn/RMSNorm.h
 //
 // Autograd-aware Root Mean Square Layer Normalization (RMSNorm).
-// Normalizes the input by its RMS over the trailing D dimensions and applies
-// an element-wise scale: y = (x / rms(x)) * gamma.  No bias term.
 //
-// Compared with LayerNorm, RMSNorm omits the mean subtraction step, halving
-// the number of required statistics.  The operation is forced to FP32.
+// Normalises the input by its root-mean-square value over the trailing
+// $D$ dimensions (where $D$ is the rank of ``gamma``) and applies a
+// per-element scale: $y = (x / \text{rms}(x))\,\gamma$.  Unlike
+// LayerNorm there is *no* mean-subtraction step and *no* bias term —
+// the layer is rescale-invariant by design and the parameter count is
+// half of LayerNorm's.  This is the normalisation layer used by modern
+// LLM architectures (LLaMA, T5).
+//
+// The kernel is registered with :member:`AmpPolicy::ForceFP32`: the
+// RMS reduction over a hidden dimension of thousands accumulates
+// enough terms that half-precision is unsafe, so the math runs in
+// FP32 even under ``AutocastGuard(F16)``.
 
 #pragma once
 
@@ -22,28 +30,148 @@ namespace lucid {
 
 // Autograd node for RMS Normalization.
 //
-// Saves the per-slice reciprocal RMS (saved_rstd_) from the forward pass
-// for use in the backward formula.  No mean is saved because RMSNorm does
-// not center the input.
+// Computes the per-slice reciprocal RMS
+// $\text{rstd} = 1 / \sqrt{\tfrac{1}{N}\sum_i x_i^2 + \epsilon}$ over
+// the trailing $D$ dimensions of ``x``, scales the input by it, and
+// applies the per-element gain $\gamma$.  Only ``saved_rstd_`` is
+// cached for backward — no mean is needed because RMSNorm does not
+// centre the input.
+//
+// Inherits ``FuncOp<RMSNormBackward, 2>`` with two saved-input slots —
+// ``x`` and ``gamma`` (RMSNorm has no bias).  ``outer_ * N_`` always
+// equals ``numel(x)``.
+//
+// Math
+// ----
+// For each leading-axis slice of ``x`` (flattened length $N$):
+//
+// $$
+//   \text{rms}(x) = \sqrt{\frac{1}{N}\sum_{i=1}^{N} x_i^2 + \epsilon},
+//   \qquad
+//   y_i = \frac{x_i}{\text{rms}(x)} \cdot \gamma_i
+// $$
+//
+// Equivalently, with the saved $\text{rstd} = 1/\text{rms}(x)$:
+//
+// $$
+//   y_i = x_i \cdot \text{rstd} \cdot \gamma_i
+// $$
+//
+// Attributes
+// ----------
+// schema_v1 : OpSchema
+//     Registered schema (``name="rms_norm"``, ``version=1``,
+//     ``amp_policy=ForceFP32``, ``produces_grad=true``).
+// saved_rstd_ : Storage
+//     Per-slice reciprocal RMS, shape ``(outer_,)``.
+// outer_ : std::size_t
+//     Product of leading (non-normalised) dimensions of ``x``.
+// N_ : std::size_t
+//     Product of normalised (trailing) dimensions of ``x``
+//     (== ``numel(gamma)``).
+//
+// Notes
+// -----
+// Thread safety: instances are created during forward and consumed
+// during backward — no concurrent access expected.
+//
+// References
+// ----------
+// Zhang & Sennrich, "Root Mean Square Layer Normalization"
+// (NeurIPS 2019, arXiv:1910.07467).
 class LUCID_API RMSNormBackward : public FuncOp<RMSNormBackward, 2> {
 public:
+    // Registered op schema (see class docstring).
     static const OpSchema schema_v1;
-    Storage saved_rstd_;     // Reciprocal RMS per normalized slice.
-    std::size_t outer_ = 0;  // Product of all non-normalized leading dims.
-    std::size_t N_ = 0;      // Product of all normalized trailing dims.
+    // Per-slice reciprocal RMS, shape ``(outer_,)``.
+    Storage saved_rstd_;
+    // Product of leading (non-normalised) dims of ``x``.
+    std::size_t outer_ = 0;
+    // Product of normalised (trailing) dims of ``x`` (== numel(gamma)).
+    std::size_t N_ = 0;
 
     // Run the forward pass.
-    // x     – input of any rank >= rank(gamma).
-    // gamma – scale; shape must match the trailing dims of x.
-    // eps   – added to the variance for numerical stability.
-    // Returns a tensor with the same shape as x.
+    //
+    // Reduces ``x`` over its last $D$ dimensions (where $D$ is the rank
+    // of ``gamma``), divides by the RMS, applies the gain, and (when
+    // grad mode is on) registers ``this`` as the ``grad_fn`` of the
+    // returned output.  Caches ``saved_rstd_`` for backward.
+    //
+    // Parameters
+    // ----------
+    // x : TensorImplPtr
+    //     Input tensor of any shape ``(*, normalized_shape)``.
+    //     Rank must be ``>= rank(gamma)``.
+    // gamma : TensorImplPtr
+    //     Per-element scale; its shape must match the trailing dims of
+    //     ``x``.
+    // eps : double
+    //     Small constant added inside the square root for numerical
+    //     stability.
+    //
+    // Returns
+    // -------
+    // TensorImplPtr
+    //     Normalised output, same shape as ``x``.
+    //
+    // Raises
+    // ------
+    // ShapeMismatch
+    //     If ``gamma.ndim > x.ndim`` or if the trailing dims of ``x``
+    //     do not match ``gamma``.
     static TensorImplPtr forward(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps);
 
-    // Compute gradients for x (dx) and gamma (d_gamma).
+    // Compute gradients for the two saved inputs.
+    //
+    // Returns ``{dx, d_gamma}`` in the saved-input order.  Closed-form
+    // (per leading slice of length $N$, using the cached
+    // $\text{rstd} = 1/\text{rms}(x)$):
+    //
+    // $$
+    //   d\gamma_i = \sum_{\text{slice}}
+    //              \text{grad\_out}_i\,x_i\,\text{rstd}
+    // $$
+    //
+    // and the input gradient is the standard RMSNorm backward formula
+    // (the centred grad is replaced by the *un-centred* grad since
+    // RMSNorm has no mean subtraction).
+    //
+    // Parameters
+    // ----------
+    // grad_out : Storage
+    //     Incoming gradient, same shape as the forward output.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     Two-element vector ``{dx, d_gamma}``.
     std::vector<Storage> apply(Storage grad_out) override;
 };
 
-// Public entry point: delegates to RMSNormBackward::forward.
+// Public free-function entry point for RMS Normalization.
+//
+// Thin wrapper that delegates to :func:`RMSNormBackward::forward`.
+// This is the symbol the pybind11 binding layer forwards to from
+// :func:`lucid.nn.functional.rms_norm`.
+//
+// Parameters
+// ----------
+// x : TensorImplPtr
+//     Input tensor of any shape with rank ``>= rank(gamma)``.
+// gamma : TensorImplPtr
+//     Per-element scale; must match the trailing dims of ``x``.
+// eps : double
+//     Numerical-stability constant (typically ``1e-8``).
+//
+// Returns
+// -------
+// TensorImplPtr
+//     Normalised output, same shape as ``x``.
+//
+// See Also
+// --------
+// RMSNormBackward : Autograd node implementing the forward + backward.
+// layer_norm_op   : Variant that also subtracts the mean and adds a bias.
 LUCID_API TensorImplPtr rms_norm_op(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps);
 
 }  // namespace lucid

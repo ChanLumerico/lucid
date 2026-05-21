@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getAllModuleSlugs, loadApiData, findMember } from "@/lib/api-loader";
 import { isApiClass, isApiFunction, isApiModule, isApiClassModule } from "@/lib/types";
 import { ModuleOverview } from "@/components/api/ModuleOverview";
+import { CppEngineOverview } from "@/components/api/CppEngineOverview";
 import { ClassDoc } from "@/components/api/ClassDoc";
 import { FunctionSignature } from "@/components/api/FunctionSignature";
 import { FadeIn } from "@/components/motion/FadeIn";
@@ -132,6 +133,17 @@ export default async function ApiSlugPage({
   }
 
   // ── Module overview page ───────────────────────────────────────────────────
+  // The C++ engine module gets a curated landing treatment — 813 member
+  // cards would be unscannable, so ``CppEngineOverview`` surfaces only the
+  // top-level surfaces (Core / Tensor / Backends / Ops / NN / Autograd / …)
+  // and relies on the sidebar tree for the full drill-down.
+  if (moduleSlug === "lucid._C.engine" && isApiModule(data)) {
+    return (
+      <FadeIn className="max-w-4xl">
+        <CppEngineOverview data={data} />
+      </FadeIn>
+    );
+  }
   return (
     <FadeIn className="max-w-4xl">
       <ModuleOverview data={data} />

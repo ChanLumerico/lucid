@@ -75,6 +75,21 @@ export function ClassBadge({
       />
     );
   }
+  if (kind === "protocol") {
+    return (
+      <Pill
+        label="proto"
+        className={cn(
+          // Dashed border echoes the "abstract" pill — Protocol is a
+          // structural contract, not a concrete implementation — but
+          // tinted with its own teal accent so the two are easy to
+          // tell apart at a glance.
+          "border-dashed bg-api-class-protocol/10 border-api-class-protocol/40 text-api-class-protocol",
+          className,
+        )}
+      />
+    );
+  }
   return (
     <Pill
       label="class"

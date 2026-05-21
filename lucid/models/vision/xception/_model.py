@@ -254,7 +254,41 @@ class _ExitSepConv(nn.Module):
 
 @dataclass
 class XceptionOutput:
-    """Xception classification output."""
+    r"""Forward-return dataclass for :class:`XceptionForImageClassification`.
+
+    Carries the per-class logits and the optional supervised loss
+    computed when training labels are supplied to ``forward``.
+
+    Attributes
+    ----------
+    logits : Tensor
+        Pre-softmax classification scores of shape
+        ``(batch_size, num_classes)``.  Apply :func:`lucid.softmax` or
+        :func:`lucid.argmax` to convert to probabilities or hard
+        predictions.
+    loss : Tensor or None, optional, default=None
+        Scalar cross-entropy loss; present only when ``labels`` were
+        passed to the forward call.  ``None`` during inference.
+
+    Notes
+    -----
+    Returned by :meth:`XceptionForImageClassification.forward` so the
+    public API stays decoupled from raw tensor tuples — callers can
+    address fields by name (``out.logits``) and ignore irrelevant
+    entries.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.xception import xception_cls
+    >>> model = xception_cls()
+    >>> x = lucid.randn(2, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
+    >>> out.loss is None
+    True
+    """
 
     logits: Tensor
     loss: Tensor | None = None
@@ -333,7 +367,85 @@ def _build_xception_body(ic: int) -> dict[str, nn.Module]:
 
 
 class Xception(PretrainedModel, BackboneMixin):
-    """Xception feature extractor — outputs (B, 2048, 1, 1) for 299×299 inputs."""
+    r"""Xception feature-extracting backbone (no classification head).
+
+    Implements the "Extreme Inception" topology from Chollet,
+    "Xception: Deep Learning with Depthwise Separable Convolutions",
+    CVPR 2017 (arXiv:1610.02357).  The architecture replaces every
+    Inception module of Inception-v3 with a depthwise separable
+    convolution — the limiting case of an Inception block in which
+    every output channel of the pointwise convolution receives its
+    own independent spatial filter.  This makes the cross-channel
+    and spatial correlations *fully decoupled*, dramatically
+    reducing parameters and FLOPs:
+
+    .. math::
+
+        D_K^2 \cdot M \cdot N \;\longrightarrow\;
+            M \cdot N \;+\; D_K^2 \cdot M.
+
+    The body is organised into three phases — *entry flow* (3
+    blocks, with 1×1 strided residuals and channel doubling from
+    64 → 728), *middle flow* (8 identical 728-ch blocks with
+    additive identity shortcuts), and *exit flow* (1 strided
+    transition block plus two final separable convolutions
+    expanding to 1536 → 2048 channels).  Designed for a 299×299
+    input — the same crop size as Inception-v3 — so the
+    spatial-reduction schedule isolates the depthwise-separable
+    factorisation as the sole source of accuracy improvement.
+
+    Parameters
+    ----------
+    config : XceptionConfig
+        Frozen architecture spec.  Use the :func:`xception` factory
+        for the paper-cited configuration.
+
+    Attributes
+    ----------
+    config : XceptionConfig
+        Stored copy of the config that built this model.
+    conv1, conv2 : nn.Conv2d
+        Two 3×3 stem convolutions; ``conv1`` carries stride 2.
+    bn1, bn2 : nn.BatchNorm2d
+        BatchNorm layers paired with the stem convs.
+    block1, block2, block3 : nn.Module
+        Entry-flow blocks — strided 1×1 residual shortcuts with
+        channel projections 64→128, 128→256, 256→728.
+    block4, …, block11 : nn.Module
+        Eight identical middle-flow blocks with additive identity
+        shortcuts at 728 channels.
+    block12 : nn.Module
+        Exit-flow strided transition block (728 → 1024).
+    conv3, conv4 : _ExitSepConv
+        Final two separable convolutions expanding to 1536 and
+        2048 channels.
+    bn3, bn4 : nn.BatchNorm2d
+        BatchNorm layers paired with ``conv3`` and ``conv4``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the 2048-ch feature map to
+        ``(B, 2048, 1, 1)``.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor exposed via :class:`BackboneMixin`.
+
+    Notes
+    -----
+    Sub-module attribute names match timm's ``legacy_xception``
+    layout so that state-dict round-trips are key-compatible with
+    standard pretrained weight files.
+
+    Examples
+    --------
+    Build an Xception backbone and run a forward pass at the
+    native 299×299 resolution:
+
+    >>> import lucid
+    >>> from lucid.models.vision.xception import xception
+    >>> backbone = xception()
+    >>> x = lucid.randn(2, 3, 299, 299)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 2048, 1, 1)
+    """
 
     config_class: ClassVar[type[XceptionConfig]] = XceptionConfig
     base_model_prefix: ClassVar[str] = "xception"
@@ -367,7 +479,60 @@ class Xception(PretrainedModel, BackboneMixin):
 
 
 class XceptionForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """Xception with Dropout + FC classification head."""
+    r"""Xception with dropout + linear classification head.
+
+    Combines an :class:`Xception` backbone with a dropout layer
+    (probability ``config.dropout``, default 0.5 per the paper) and
+    a linear projection to ``config.num_classes`` logits.  When
+    ``labels`` are supplied to :meth:`forward`, a cross-entropy
+    loss is computed and returned alongside the logits inside an
+    :class:`XceptionOutput` dataclass.
+
+    Parameters
+    ----------
+    config : XceptionConfig
+        Architecture spec.  Use the :func:`xception_cls` factory for
+        the paper-cited configuration.
+
+    Attributes
+    ----------
+    config : XceptionConfig
+        Stored copy of the config that built this model.
+    conv1, conv2, bn1, bn2, block1, …, block12, conv3, conv4, bn3, bn4, avgpool
+        Same backbone components as on :class:`Xception`; see that
+        class for shape semantics.
+    classifier : nn.Module
+        Built by :meth:`ClassificationHeadMixin._build_classifier` —
+        a :class:`~lucid.nn.Sequential` wrapping
+        :class:`~lucid.nn.Dropout` and :class:`~lucid.nn.Linear`.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{Drop}\!\left(
+            \operatorname{GAP}(\,\mathrm{backbone}(x)\,)
+        \right) + b.
+
+    Chollet (2017) reports 79.0% top-1 ImageNet validation
+    accuracy with this configuration at the 299×299 input
+    resolution, edging out Inception-v3's 78.2% at the same
+    parameter count (~22.9M).
+
+    Examples
+    --------
+    Run inference at the native 299×299 input resolution:
+
+    >>> import lucid
+    >>> from lucid.models.vision.xception import xception_cls
+    >>> model = xception_cls()
+    >>> x = lucid.randn(4, 3, 299, 299)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    """
 
     config_class: ClassVar[type[XceptionConfig]] = XceptionConfig
     base_model_prefix: ClassVar[str] = "xception"

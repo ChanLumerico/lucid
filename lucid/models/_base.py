@@ -67,6 +67,35 @@ class ModelConfig(ABC):
 
     model_type: ClassVar[str] = "base"
 
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        r"""Layer-1 contract checks for family Configs (see
+        ``arch-models-family-contract``).
+
+        Triggered at class-creation time.  Only validates *concrete*
+        family Configs: intermediate abstract bases
+        (``LanguageModelConfig``, ``DiffusionModelConfig``,
+        ``GenerativeModelConfig``, …) keep ``model_type == "base"`` and
+        are silently skipped — they are not user-facing entry points
+        themselves, only super-classes.
+
+        Raises
+        ------
+        TypeError
+            When a concrete subclass either keeps ``model_type == "base"``
+            (no family identifier set) or has a class name that does not
+            end with ``"Config"``.
+        """
+        super().__init_subclass__(**kwargs)
+        # Intermediate abstract bases keep the default and skip validation.
+        if cls.model_type == "base":
+            return
+        if not cls.__name__.endswith("Config"):
+            raise TypeError(
+                f"{cls.__qualname__}: family Config class name must end with "
+                f"'Config' (got {cls.__name__!r}).  See "
+                f"arch-models-family-contract.md."
+            )
+
     def to_dict(self) -> dict[str, object]:
         r"""Serialise the config (including ``model_type``) to a plain dict.
 

@@ -224,7 +224,73 @@ class _RoFormerPooler(nn.Module):
 
 
 class RoFormerModel(PretrainedModel):
-    """RoFormer encoder trunk."""
+    r"""Bare RoFormer encoder trunk with rotary position embeddings.
+
+    Architecturally a BERT-base encoder (12 layers, 768 hidden, 12 heads,
+    intermediate width 3072) where the absolute learned position embedding
+    is removed and rotary position embedding (RoPE) is applied to the query
+    and key vectors inside every self-attention layer.  RoPE injects
+    relative-position information **multiplicatively** inside attention so
+    the dot product :math:`\langle R_m q, R_n k \rangle` depends only on
+    the offset :math:`m - n` — granting better length extrapolation and
+    composing naturally with linear attention.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters controlling vocabulary, depth, width, head count,
+        and the RoPE ``rotary_base``.  The per-head dimension
+        ``hidden_size / num_attention_heads`` must be even (enforced by
+        :class:`RoFormerConfig`).
+
+    Attributes
+    ----------
+    embeddings : nn.Module
+        Token + token-type embedding block followed by LayerNorm and
+        dropout.  Notably *no* learned position embedding.
+    rotary : nn.RotaryEmbedding
+        Pre-computed ``(cos, sin)`` tables of shape
+        ``(max_position_embeddings, head_dim)``, sliced to the actual
+        sequence length at each ``forward``.
+    encoder : nn.Module
+        Stack of ``config.num_hidden_layers`` rotary-attention transformer
+        layers.
+    pooler : nn.Module
+        Dense + tanh projection of the first token's hidden state used by
+        sentence-level classification heads.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024, article 127063 (arXiv:2104.09864).
+
+    Rotary rotation per :math:`(\cos\theta_i, \sin\theta_i)` pair, with
+    :math:`\theta_i = \mathrm{base}^{-2i/d_{\text{head}}}`:
+
+    .. math::
+
+        R_\theta = \begin{pmatrix}
+            \cos\theta & -\sin\theta \\
+            \sin\theta & \cos\theta
+        \end{pmatrix}.
+
+    Applied independently to every :math:`(x_{2i}, x_{2i+1})` pair of
+    :math:`Q` and :math:`K` so :math:`q_m^\top k_n` becomes a function of
+    :math:`m - n` only.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import RoFormerConfig, RoFormerModel
+    >>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,
+    ...                      num_attention_heads=2, intermediate_size=512)
+    >>> model = RoFormerModel(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.last_hidden_state.shape, out.pooler_output.shape
+    ((1, 4, 128), (1, 128))
+    """
 
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
     base_model_prefix: ClassVar[str] = "roformer"
@@ -326,6 +392,60 @@ class _RoFormerOnlyMLMHead(nn.Module):
 
 
 class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
+    r"""RoFormer with a tied masked-language-modeling head.
+
+    Wraps :class:`RoFormerModel` with the BERT-style two-layer projection
+    (dense + activation + LayerNorm) mapping each hidden state to
+    vocabulary logits.  The decoder weight is tied to the input
+    ``word_embeddings`` table when ``config.tie_word_embeddings`` is
+    ``True``.  Use for MLM pre-training when RoPE-based relative position
+    information is preferred to absolute position embeddings.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters.  ``config.tie_word_embeddings`` (default True)
+        controls whether the MLM decoder weight is bound to the input
+        embedding matrix.
+
+    Attributes
+    ----------
+    roformer : RoFormerModel
+        Underlying RoPE encoder trunk.
+    cls : nn.Module
+        Masked-LM prediction head — dense + LayerNorm transform plus a
+        decoder of shape ``(hidden_size, vocab_size)``.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024 (arXiv:2104.09864).
+
+    When ``labels`` is provided, the loss is the standard masked
+    cross-entropy
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{MLM}} = -\frac{1}{|M|}
+            \sum_{i \in M} \log p_\theta(x_i \mid x_{\setminus M}),
+
+    over the set :math:`M` of masked positions (positions whose label
+    equals ``-100`` are excluded).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import RoFormerConfig, RoFormerForMaskedLM
+    >>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,
+    ...                      num_attention_heads=2, intermediate_size=512)
+    >>> model = RoFormerForMaskedLM(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, V=50000)
+    (1, 4, 50000)
+    """
+
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
     base_model_prefix: ClassVar[str] = "roformer"
 
@@ -363,6 +483,60 @@ class RoFormerForMaskedLM(PretrainedModel, MaskedLMMixin):
 
 
 class RoFormerForSequenceClassification(PretrainedModel):
+    r"""RoFormer with a pooled-CLS sequence-classification head.
+
+    Wraps :class:`RoFormerModel` with a dropout-regularised linear
+    classifier operating on the pooled first-token embedding.  Pattern
+    mirrors :class:`BertForSequenceClassification`; use for GLUE-style
+    fine-tunes when the RoPE-based relative position bias is preferred.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters.  ``config.num_labels`` sets the output dimension;
+        ``config.classifier_dropout`` (falling back to ``hidden_dropout``)
+        sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    roformer : RoFormerModel
+        Underlying RoPE encoder trunk.
+    dropout : nn.Dropout
+        Dropout layer applied to the pooled first-token embedding.
+    classifier : nn.Linear
+        Final linear of shape ``(hidden_size, num_labels)`` producing
+        per-class logits.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024 (arXiv:2104.09864).
+
+    Loss (when ``labels`` is provided) is the standard softmax
+    cross-entropy:
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{B} \sum_{b=1}^{B}
+            \log p_\theta(y_b \mid x_b).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import (
+    ...     RoFormerConfig, RoFormerForSequenceClassification,
+    ... )
+    >>> cfg = RoFormerConfig(num_labels=3, num_hidden_layers=2,
+    ...                      hidden_size=128, num_attention_heads=2,
+    ...                      intermediate_size=512)
+    >>> model = RoFormerForSequenceClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, num_labels=3)
+    (1, 3)
+    """
+
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
     base_model_prefix: ClassVar[str] = "roformer"
 
@@ -403,6 +577,62 @@ class RoFormerForSequenceClassification(PretrainedModel):
 
 
 class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
+    r"""RoFormer with a per-token classification head.
+
+    Wraps :class:`RoFormerModel` with a dropout-regularised linear
+    classifier applied independently at every sequence position.  Pattern
+    mirrors :class:`BertForTokenClassification` — used for sequence-
+    labelling tasks (NER / POS / chunking) on RoPE-trained encoders.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters.  ``config.num_labels`` sets the per-position output
+        dimension; ``config.classifier_dropout`` (falling back to
+        ``hidden_dropout``) sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    roformer : RoFormerModel
+        Underlying RoPE encoder trunk.
+    dropout : nn.Dropout
+        Dropout applied to the full sequence hidden states.
+    classifier : nn.Linear
+        Final linear of shape ``(hidden_size, num_labels)`` mapping each
+        token's hidden state to per-class logits.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024 (arXiv:2104.09864).
+
+    Loss when ``labels`` is provided is the masked cross-entropy inherited
+    from :class:`MaskedLMMixin`:
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{|V|} \sum_{(b, t) \in V}
+            \log p_\theta(y_{b, t} \mid x_b),
+
+    where :math:`V` is the set of positions with ``label != -100``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import (
+    ...     RoFormerConfig, RoFormerForTokenClassification,
+    ... )
+    >>> cfg = RoFormerConfig(num_labels=9, num_hidden_layers=2,
+    ...                      hidden_size=128, num_attention_heads=2,
+    ...                      intermediate_size=512)
+    >>> model = RoFormerForTokenClassification(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=4, num_labels=9)
+    (1, 4, 9)
+    """
+
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
     base_model_prefix: ClassVar[str] = "roformer"
 
@@ -448,11 +678,57 @@ class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
 
 
 class RoFormerForMultipleChoice(PretrainedModel):
-    """RoFormer + per-choice CLS classifier — RACE / SWAG-style fine-tunes.
+    r"""RoFormer with a per-choice multiple-choice classification head.
 
-    Input ``(N, C, L)`` flattens to ``(N*C, L)`` for the encoder; the pooled
-    CLS embedding of each choice is projected to a scalar and the resulting
-    ``(N, C)`` matrix is the per-choice logit.
+    Wraps :class:`RoFormerModel` with a per-choice CLS classifier.  Input
+    ``(N, C, L)`` flattens to ``(N*C, L)`` for the encoder; the pooled CLS
+    embedding of each choice is projected to a scalar and the resulting
+    ``(N, C)`` matrix is the per-choice logit.  Used for fine-tunes on
+    SWAG / RACE-style commonsense and reading-comprehension tasks.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters.  ``config.classifier_dropout`` (falling back to
+        ``hidden_dropout``) sets the dropout applied before the linear.
+
+    Attributes
+    ----------
+    roformer : RoFormerModel
+        Underlying RoPE encoder trunk.
+    dropout : nn.Dropout
+        Dropout layer applied to each choice's pooled embedding.
+    classifier : nn.Linear
+        Per-choice scalar projection of shape ``(hidden_size, 1)``.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024 (arXiv:2104.09864).
+
+    When ``labels`` is supplied the loss is the softmax cross-entropy over
+    the ``C`` candidates:
+
+    .. math::
+
+        \mathcal{L}_{\mathrm{MC}}
+            = -\frac{1}{N} \sum_{n=1}^{N}
+              \log \mathrm{softmax}(z_n)_{y_n}.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import (
+    ...     RoFormerConfig, RoFormerForMultipleChoice,
+    ... )
+    >>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,
+    ...                      num_attention_heads=2, intermediate_size=512)
+    >>> model = RoFormerForMultipleChoice(cfg).eval()
+    >>> input_ids = lucid.tensor([[[101, 7592, 102], [101, 2088, 102]]])    # (N=1, C=2, L=3)
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (N=1, C=2)
+    (1, 2)
     """
 
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig
@@ -512,12 +788,59 @@ class RoFormerForMultipleChoice(PretrainedModel):
 
 
 class RoFormerForQuestionAnswering(PretrainedModel):
-    """RoFormer + SQuAD-style span (start / end) head.
+    r"""RoFormer with a 2-way span head for extractive question answering.
 
-    Identical contract to :class:`BertForQuestionAnswering` — output logits
-    are ``(B, T, 2)`` where ``[..., 0]`` are start scores and ``[..., 1]``
-    are end scores; supply ``start_positions`` + ``end_positions`` to get
-    the averaged span loss.
+    Wraps :class:`RoFormerModel` with a single linear of output width 2,
+    producing start- and end-position logits over each token in the input.
+    Identical contract to :class:`BertForQuestionAnswering`; the SQuAD
+    v1.1 / v2.0 fine-tuning recipe applied to a RoPE-trained encoder.
+
+    Parameters
+    ----------
+    config : RoFormerConfig
+        Hyperparameters.  The QA head is always 2-way; ``num_labels`` is
+        ignored.
+
+    Attributes
+    ----------
+    roformer : RoFormerModel
+        Underlying RoPE encoder trunk.
+    qa_outputs : nn.Linear
+        Final linear of shape ``(hidden_size, 2)`` mapping each token's
+        hidden state to ``(start_logit, end_logit)``.
+
+    Notes
+    -----
+    Reference: Su, Lu, Pan, Murtadha, Wen, and Liu, *"RoFormer: Enhanced
+    Transformer with Rotary Position Embedding"*, Neurocomputing,
+    vol. 568, 2024 (arXiv:2104.09864).
+
+    When both ``start_positions`` and ``end_positions`` are supplied the
+    loss is the symmetric average of two cross-entropies:
+
+    .. math::
+
+        \mathcal{L} = \tfrac{1}{2}\!\left(
+            \mathrm{CE}(z^{\mathrm{start}}, y^{\mathrm{start}})
+          + \mathrm{CE}(z^{\mathrm{end}},   y^{\mathrm{end}})
+        \right).
+
+    The returned ``logits`` tensor has shape ``(B, T, 2)``; index
+    ``[..., 0]`` for start scores and ``[..., 1]`` for end scores.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.roformer import (
+    ...     RoFormerConfig, RoFormerForQuestionAnswering,
+    ... )
+    >>> cfg = RoFormerConfig(num_hidden_layers=2, hidden_size=128,
+    ...                      num_attention_heads=2, intermediate_size=512)
+    >>> model = RoFormerForQuestionAnswering(cfg).eval()
+    >>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (B=1, T=7, 2)
+    (1, 7, 2)
     """
 
     config_class: ClassVar[type[RoFormerConfig]] = RoFormerConfig

@@ -251,7 +251,75 @@ def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
 
 
 class EfficientFormer(PretrainedModel, BackboneMixin):
-    """EfficientFormer feature extractor."""
+    r"""EfficientFormer backbone (Li et al., 2022).
+
+    EfficientFormer is a *mobile-grade* vision backbone designed so
+    that its on-device latency, rather than its FLOP count, matches
+    MobileNet on the same hardware while retaining transformer-level
+    accuracy.  The trunk has four stages preceded by a 2x stride-2
+    convolutional stem.  Stages 1-3 are MetaFormer-style *pooling*
+    blocks operating in :math:`(B, C, H, W)` layout — no reshape, no
+    self-attention:
+
+    .. math::
+
+        \begin{aligned}
+        x &\leftarrow x + \gamma_1 \odot \bigl(
+            \mathrm{AvgPool}_{3 \times 3}(x) - x\bigr), \\
+        x &\leftarrow x + \gamma_2 \odot \mathrm{MLP}(x),
+        \end{aligned}
+
+    with :math:`\gamma_1, \gamma_2` initialised to :math:`10^{-5}`
+    (CaiT-style layer scale).  Stage 4 is the only stage that pays the
+    cost of a reshape and runs standard multi-head self-attention on
+    the now-tiny token grid.
+
+    :meth:`forward_features` returns the mean-pooled
+    :math:`(B, \texttt{embed\_dims[-1]})` feature.
+
+    Parameters
+    ----------
+    config : EfficientFormerConfig
+        Frozen dataclass specifying ``depths``, ``embed_dims``,
+        ``mlp_ratios``, ``drop_path_rate``, ``layer_scale_init``,
+        ``in_channels``, and ``num_classes``.  See
+        :class:`EfficientFormerConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Two stride-2 :math:`3 \times 3` convolutions reducing the
+        input by 4x.
+    stages : nn.ModuleList
+        Four stages — three pooling stages and one attention stage.
+    downsamplers : nn.ModuleList
+        Three between-stage stride-2 convolutional downsamplers.
+    head_norm : nn.LayerNorm
+        Final LayerNorm applied to the channel-last pooled feature map.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with reductions
+        :math:`(4, 8, 16, 32)`.
+
+    Notes
+    -----
+    Reference: Yanyu Li *et al.*, *"EfficientFormer: Vision
+    Transformers at MobileNet Speed"*, NeurIPS 2022,
+    `arXiv:2206.01191 <https://arxiv.org/abs/2206.01191>`_.
+
+    Examples
+    --------
+    Build an EfficientFormer-L1 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import (
+    ...     EfficientFormer, EfficientFormerConfig,
+    ... )
+    >>> model = EfficientFormer(EfficientFormerConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, embed_dims[-1])
+    (1, 448)
+    """
 
     config_class: ClassVar[type[EfficientFormerConfig]] = EfficientFormerConfig
     base_model_prefix: ClassVar[str] = "efficientformer"
@@ -306,7 +374,65 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
 
 
 class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """EfficientFormer with mean-pool + LayerNorm + FC head."""
+    r"""EfficientFormer with a linear classification head (Li et al., 2022).
+
+    Wraps the same trunk as :class:`EfficientFormer` (stem + three
+    pooling stages + one attention stage) and adds a mean pool over
+    tokens, a final LayerNorm, and a single :class:`nn.Linear`
+    classification head:
+
+    .. math::
+
+        \text{logits} = W_{\text{head}}\,
+            \mathrm{Mean}(\mathrm{LN}(z^{L}))
+            + b_{\text{head}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : EfficientFormerConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  See
+        :class:`EfficientFormerConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Two stride-2 convolutions.
+    stages : nn.ModuleList
+        Three pooling stages + one attention stage.
+    downsamplers : nn.ModuleList
+        Three between-stage downsamplers.
+    head_norm : nn.LayerNorm
+        Final LayerNorm.
+    classifier : nn.Linear
+        Final linear projection of width
+        ``(num_classes, embed_dims[-1])``.
+
+    Notes
+    -----
+    Reference: Li *et al.*, *"EfficientFormer: Vision Transformers at
+    MobileNet Speed"*, NeurIPS 2022.  EfficientFormer-L1 / L3 / L7
+    reach **79.2 / 82.4 / 83.3 % top-1 on ImageNet-1k** at MobileNetV2-
+    class on-device latency (Li et al., 2022, Table 4).
+
+    Examples
+    --------
+    End-to-end inference with the default EfficientFormer-L1
+    classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.efficientformer import (
+    ...     EfficientFormerConfig, EfficientFormerForImageClassification,
+    ... )
+    >>> model = EfficientFormerForImageClassification(EfficientFormerConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[EfficientFormerConfig]] = EfficientFormerConfig
     base_model_prefix: ClassVar[str] = "efficientformer"

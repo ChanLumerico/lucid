@@ -8,7 +8,27 @@ import { AutoKindBadge } from "./ApiKindBadge";
 import { getMemberNameColor } from "@/lib/api-kind-utils";
 import { MathText } from "./MathText";
 import type { ApiFunction, ApiMethod } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatCompactCount } from "@/lib/utils";
+import { ModelSizeCard } from "./ModelSizeCard";
+
+
+/** Inline pill rendering a factory function's paper-cited model size
+ *  ("61.1M" / "1.4B" / "234K").  Shared by FunctionCard and
+ *  FunctionSignature so the wording / colour stay in lockstep. */
+function ParamCountPill({ count }: { count: number }) {
+  return (
+    <span
+      title={`${count.toLocaleString()} parameters`}
+      className={cn(
+        "inline-flex items-center rounded-md border px-1.5 py-0.5",
+        "text-[10px] font-mono font-medium leading-snug",
+        "bg-lucid-text-low/10 text-lucid-text-mid border-lucid-text-low/30",
+      )}
+    >
+      {formatCompactCount(count)}
+    </span>
+  );
+}
 
 interface FunctionSignatureProps {
   fn: ApiFunction | ApiMethod;
@@ -51,6 +71,9 @@ export async function FunctionSignature({
                 <TypeAnnotation annotation={fn.returns.annotation} />
               </>
             )}
+            {"param_count" in fn && fn.param_count !== undefined && (
+              <ParamCountPill count={fn.param_count} />
+            )}
           </div>
 
           {/* Signature */}
@@ -88,6 +111,13 @@ export async function FunctionSignature({
           )}
           {fn.extended && (
             <MathText text={fn.extended} block className="text-sm text-lucid-text-mid leading-relaxed" />
+          )}
+
+          {fn.kind === "function" && (("param_count" in fn && fn.param_count !== undefined) || (("model_summary" in fn) && fn.model_summary)) && (
+            <ModelSizeCard
+              paramCount={(fn as ApiFunction).param_count}
+              summary={(fn as ApiFunction).model_summary}
+            />
           )}
 
           {fn.parameters.length > 0 && <ParameterTable parameters={fn.parameters} />}
@@ -155,6 +185,9 @@ export function FunctionCard({ fn, moduleSlug }: FunctionCardProps) {
             <span className="text-[11px] font-mono text-lucid-text-disabled">
               → {fn.returns.annotation}
             </span>
+          )}
+          {fn.param_count !== undefined && (
+            <ParamCountPill count={fn.param_count} />
           )}
         </div>
         {fn.summary && (

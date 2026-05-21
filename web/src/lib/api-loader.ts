@@ -61,13 +61,20 @@ export function findMember(data: ApiData, memberName: string): ApiMember | undef
 // Static params helpers (used in generateStaticParams)
 // ---------------------------------------------------------------------------
 
-/** Return all valid module slugs that have a corresponding JSON file. */
+/** Return all valid module slugs that have a corresponding JSON file.
+ *
+ *  Convention: files whose basename begins with ``_`` are side-channel
+ *  caches (e.g. ``_summaries.json``, ``_summaries.meta.json`` written by
+ *  ``tools/build_model_summaries.py``), not module data — they share the
+ *  directory only because the consumers happen to need them at the same
+ *  build-time read path.  Excluding them here is what keeps the sidebar
+ *  from sprouting phantom ``Summaries`` / ``Summaries.meta`` entries. */
 export function getAllModuleSlugs(): string[] {
   const fs = require("fs") as typeof import("fs");
   try {
     return fs
       .readdirSync(API_DATA_DIR)
-      .filter((f: string) => f.endsWith(".json"))
+      .filter((f: string) => f.endsWith(".json") && !f.startsWith("_"))
       .map((f: string) => f.replace(".json", ""));
   } catch {
     return [];

@@ -315,21 +315,86 @@ def _hungarian_match_masks(
 
 
 class MaskFormerForSemanticSegmentation(PretrainedModel):
-    """MaskFormer semantic segmentation model (Cheng et al., NeurIPS 2021).
+    r"""MaskFormer semantic / panoptic segmentation model (Cheng et al., NeurIPS 2021).
 
-    Input contract
-    --------------
-    ``x``       : (B, C, H, W) image batch.
-    ``targets`` : optional dict with ``"masks"`` key — (B, H, W) integer
-                  segmentation labels — for computing training loss.
+    Recasts semantic segmentation as **mask classification**: instead of
+    per-pixel cross-entropy, the model predicts a fixed set of
+    :math:`N` (mask, class-probability) pairs, computes the per-pixel
+    class probability as
 
-    Output contract
-    ---------------
-    ``SemanticSegmentationOutput``:
-      ``logits`` : (B, num_classes+1, H, W) — per-pixel class logits
-                   (weighted combination of query predictions).
-      ``loss``   : Hungarian-matched BCE mask + CE class loss when targets
-                   provided.
+    .. math::
+
+        p_\mathrm{px}(c) = \sum_{i=1}^{N} p_i(c)\, m_i(\mathrm{px}),
+
+    and supervises the set with bipartite (Hungarian) matching to ground-
+    truth masks.  This unification lets a single architecture handle
+    semantic, instance, and panoptic segmentation with the same training
+    objective — the breakthrough that the follow-up Mask2Former extends
+    with masked attention.
+
+    Architecturally: a ResNet backbone -> FPN-style pixel decoder
+    produces a per-pixel embedding of dimension ``d_model``, and a
+    transformer decoder operates on :math:`N` query embeddings, attending
+    to the encoder memory; sibling heads then produce :math:`(N, K+1)`
+    class logits and :math:`(N, d)` mask embeddings.  Each query's binary
+    mask is recovered by a dot product with the pixel embedding.
+
+    Parameters
+    ----------
+    config : MaskFormerConfig
+        Frozen architecture spec.  Use :func:`maskformer_resnet50` /
+        :func:`maskformer_resnet101` for the paper-cited variants
+        (ADE20K, 150 classes).
+
+    Attributes
+    ----------
+    config : MaskFormerConfig
+        Stored copy of the config that built this model.
+    backbone : _ResNetBackbone
+        ResNet trunk producing multi-scale features ``C2-C5``.
+    pixel_decoder : _FPNPixelDecoder
+        FPN-style top-down decoder yielding a per-pixel embedding
+        :math:`(B, d, H/4, W/4)`.
+    query_embed : nn.Embedding
+        Learned segmentation queries ``(num_queries, d_model)``.
+    transformer_decoder : nn.TransformerDecoder
+        ``num_decoder_layers``-layer transformer decoder applied to the
+        queries with memory drawn from the backbone's final stage.
+    class_head : nn.Linear
+        Per-query :math:`(K + 1)` classification head (``+1`` for the
+        "no object" class).
+    mask_embed : nn.Linear
+        Per-query embedding producing the dot-product mask weights.
+
+    Notes
+    -----
+    See Cheng et al., "Per-Pixel Classification is Not All You Need for
+    Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  The total
+    loss combines a CE term over query class predictions and a per-mask
+    binary CE + dice term, summed only over the Hungarian-matched query
+    permutation :math:`\hat{\sigma}`:
+
+    .. math::
+
+        \mathcal{L} = \sum_{i=1}^{N}
+            \bigl[\mathcal{L}_\mathrm{cls}\bigl(c_i, p_{\hat{\sigma}(i)}\bigr)
+            + \mathbb{1}_{c_i \ne \varnothing}\,
+              \mathcal{L}_\mathrm{mask}\bigl(m_i, \hat{m}_{\hat{\sigma}(i)}\bigr)
+            \bigr].
+
+    For semantic-segmentation inference the model collapses queries by
+    softmax-weighted summation into a standard :math:`(B, K + 1, H, W)`
+    logit map for direct argmax evaluation.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.maskformer import maskformer_resnet50
+    >>> model = maskformer_resnet50()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape   # (B, K + 1, H, W)
+    (1, 151, 512, 512)
     """
 
     config_class: ClassVar[type[MaskFormerConfig]] = MaskFormerConfig

@@ -451,10 +451,73 @@ def _build_body(
 
 
 class SKNet(PretrainedModel, BackboneMixin):
-    """SK-ResNet feature extractor — no classification head.
+    r"""SK-ResNet feature-extracting backbone (no classification head).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` of shape
-    ``(B, 2048, H/32, W/32)`` for typical inputs.
+    Implements the Selective Kernel augmentation of the ResNet
+    topology from Li et al., "Selective Kernel Networks", CVPR
+    2019 (arXiv:1903.06586).  Each :math:`3 \times 3` convolution
+    inside a residual block is replaced by a two-branch
+    Selective Kernel unit: a :math:`3 \times 3` convolution and a
+    dilation-2 :math:`3 \times 3` convolution (effective receptive
+    field :math:`5 \times 5`) run in parallel, with a softmax gate
+    that produces *per-radix, per-channel* attention weights
+
+    .. math::
+
+        a_c + b_c = 1, \quad
+        V_c = a_c \cdot \tilde U_{1, c} + b_c \cdot \tilde U_{2, c}.
+
+    Because :math:`a_c` and :math:`b_c` are computed from the
+    input itself, every channel of every feature map can
+    effectively choose its own receptive-field size at every
+    spatial location.
+
+    The block topology supports both basic (SK-ResNet-18/34) and
+    bottleneck (SK-ResNet-50/101) variants, plus ResNeXt-style
+    grouped widening via the ``cardinality`` and ``base_width``
+    knobs (``sk_resnext_50_32x4d``).
+
+    Parameters
+    ----------
+    config : SKNetConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`sk_resnet_18`, :func:`sk_resnet_50`,
+        :func:`sk_resnext_50_32x4d`, …) for paper-cited variants.
+
+    Attributes
+    ----------
+    config : SKNetConfig
+        Stored copy of the config that built this model.
+    stem : nn.Sequential
+        7×7 conv (stride 2) → BatchNorm → ReLU.
+    maxpool : nn.MaxPool2d
+        3×3 max-pool at stride 2.
+    layer1, layer2, layer3, layer4 : nn.Sequential
+        The four SK-augmented residual stages.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin`.
+
+    Notes
+    -----
+    The Selective Kernel attention is a generalisation of SE
+    attention to multiple parallel branches with a softmax gate;
+    when only one branch is used it reduces to plain SE.  At
+    ``radix == 2`` (the default), the block roughly matches the
+    receptive-field diversity of an Inception module while
+    keeping the parameter overhead small.
+
+    Examples
+    --------
+    Build an SK-ResNet-50 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.sknet import sk_resnet_50
+    >>> backbone = sk_resnet_50()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 2048, 7, 7)
     """
 
     config_class: ClassVar[type[SKNetConfig]] = SKNetConfig
@@ -494,7 +557,58 @@ class SKNet(PretrainedModel, BackboneMixin):
 
 
 class SKNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """SK-ResNet with global average pooling + linear classification head."""
+    r"""SK-ResNet with global-average-pooled linear classification head.
+
+    Combines an :class:`SKNet` backbone with global average
+    pooling and a linear projection to ``config.num_classes``
+    logits.  When ``labels`` are supplied to :meth:`forward`, a
+    cross-entropy loss is computed and returned alongside the
+    logits.
+
+    Parameters
+    ----------
+    config : SKNetConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`sk_resnet_18_cls` through
+        :func:`sk_resnext_50_32x4d_cls`) for paper-cited
+        configurations.
+
+    Attributes
+    ----------
+    config : SKNetConfig
+        Stored copy of the config that built this model.
+    stem, maxpool, layer1, layer2, layer3, layer4
+        Same backbone components as on :class:`SKNet`; see that
+        class for shape semantics.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    classifier : nn.Module
+        Built by :meth:`ClassificationHeadMixin._build_classifier` —
+        a :class:`~lucid.nn.Linear` (or :class:`~lucid.nn.Sequential`
+        with dropout) projecting from 512 (basic) or 2048
+        (bottleneck) channels to ``config.num_classes``.
+
+    Notes
+    -----
+    The classification flow is
+
+    .. math::
+
+        \text{logits} = W \,\operatorname{GAP}(\mathrm{backbone}(x)) + b.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.sknet import sk_resnet_50_cls
+    >>> model = sk_resnet_50_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
+    """
 
     config_class: ClassVar[type[SKNetConfig]] = SKNetConfig
     base_model_prefix: ClassVar[str] = "sknet"

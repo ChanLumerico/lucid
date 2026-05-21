@@ -378,7 +378,88 @@ def _build_swin(
 
 
 class SwinTransformer(PretrainedModel, BackboneMixin):
-    """Swin Transformer feature extractor — outputs (B, C) global avg-pooled feature."""
+    r"""Swin Transformer backbone (Liu et al., 2021).
+
+    A Swin Transformer first splits the input image into non-overlapping
+    :math:`4 \times 4` patches via a strided convolution and then
+    progresses through four hierarchical stages.  Each stage stacks
+    pairs of Swin blocks alternating between *window* attention (W-MSA)
+    and *shifted-window* attention (SW-MSA), with patch-merging
+    downsamplers between stages that halve spatial resolution and
+    double channel width:
+
+    .. math::
+
+        \begin{aligned}
+        \hat{z}^{l} &= \mathrm{W\text{-}MSA}(\mathrm{LN}(z^{l-1})) + z^{l-1}, \\
+        z^{l} &= \mathrm{MLP}(\mathrm{LN}(\hat{z}^{l})) + \hat{z}^{l}, \\
+        \hat{z}^{l+1} &= \mathrm{SW\text{-}MSA}(\mathrm{LN}(z^{l})) + z^{l}, \\
+        z^{l+1} &= \mathrm{MLP}(\mathrm{LN}(\hat{z}^{l+1})) + \hat{z}^{l+1}.
+        \end{aligned}
+
+    Window attention partitions the feature map into non-overlapping
+    :math:`M \times M` windows and runs self-attention inside each,
+    making the per-image cost linear in :math:`HW`.  The shifted variant
+    cycles each window by :math:`\lfloor M/2 \rfloor` pixels so that
+    information flows between neighbouring windows across pairs of
+    blocks.  A learnable *relative position bias* is added inside the
+    softmax of every window attention.
+
+    :meth:`forward_features` returns a global-average-pooled
+    :math:`(B, 8C)` feature where :math:`C = \texttt{embed\_dim}`.  Use
+    this backbone when you need features rather than logits — e.g.
+    transfer learning, dense prediction, or contrastive pretraining.
+    For end-to-end image classification, use
+    :class:`SwinTransformerForImageClassification` instead.
+
+    Parameters
+    ----------
+    config : SwinConfig
+        Frozen dataclass specifying ``image_size``, ``patch_size``,
+        ``embed_dim``, ``depths``, ``num_heads``, ``window_size``,
+        ``mlp_ratio``, ``dropout``, ``attention_dropout``,
+        ``drop_path_rate``, and ``in_channels``.  See :class:`SwinConfig`.
+
+    Attributes
+    ----------
+    patch_embed : _PatchEmbed
+        Strided patch-extraction convolution + LayerNorm.
+    stages : nn.ModuleList
+        Four hierarchical :class:`_SwinStage` modules, each containing a
+        stack of Swin blocks and (for the first three) a patch-merging
+        downsampler.
+    norm : nn.LayerNorm
+        Final LayerNorm applied to the channel-last feature map before
+        global pooling.
+    avgpool : nn.AdaptiveAvgPool2d
+        :math:`1 \times 1` adaptive average pool used to produce the
+        final :math:`(B, 8C)` feature.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with per-stage channel counts
+        :math:`(C, 2C, 4C, 8C)` and spatial reductions
+        :math:`(p, 2p, 4p, 8p)` relative to the input.
+
+    Notes
+    -----
+    Reference: Ze Liu *et al.*, *"Swin Transformer: Hierarchical Vision
+    Transformer using Shifted Windows"*, ICCV 2021,
+    `arXiv:2103.14030 <https://arxiv.org/abs/2103.14030>`_.
+
+    Examples
+    --------
+    Build a Swin-Tiny backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.swin import SwinTransformer, SwinConfig
+    >>> model = SwinTransformer(SwinConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, 8 * embed_dim)
+    (1, 768)
+    >>> out = model(x)
+    >>> out.last_hidden_state.shape      # (B, 1, 8 * embed_dim)
+    (1, 1, 768)
+    """
 
     config_class: ClassVar[type[SwinConfig]] = SwinConfig
     base_model_prefix: ClassVar[str] = "swin"
@@ -419,7 +500,66 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
 
 
 class SwinTransformerForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """Swin Transformer with global average pool + FC classification head."""
+    r"""Swin Transformer with a linear classification head (Liu et al., 2021).
+
+    Wraps the same hierarchical trunk as :class:`SwinTransformer` (patch
+    embedding → four stages of window / shifted-window attention →
+    LayerNorm) and adds a global average pool plus a single
+    :class:`nn.Linear` classification head that maps the
+    :math:`(B, 8C)` feature to ``config.num_classes`` logits:
+
+    .. math::
+
+        \text{logits} = W_{\text{head}}\,
+            \mathrm{GAP}(\mathrm{LN}(z^{L})) + b_{\text{head}},
+        \qquad W_{\text{head}} \in \mathbb{R}^{C_{\text{out}} \times 8C}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : SwinConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories (default 1000 for ImageNet).
+        See :class:`SwinConfig`.
+
+    Attributes
+    ----------
+    patch_embed : _PatchEmbed
+        Strided patch-extraction convolution + LayerNorm.
+    stages : nn.ModuleList
+        Four hierarchical Swin stages with patch-merging downsamplers.
+    norm : nn.LayerNorm
+        Final LayerNorm applied to the channel-last feature map.
+    avgpool : nn.AdaptiveAvgPool2d
+        :math:`1 \times 1` adaptive average pool over spatial dims.
+    classifier : nn.Linear
+        Final linear projection of width ``(num_classes, 8 * embed_dim)``
+        built via :meth:`ClassificationHeadMixin._build_classifier`.
+
+    Notes
+    -----
+    Reference: Ze Liu *et al.*, *"Swin Transformer: Hierarchical Vision
+    Transformer using Shifted Windows"*, ICCV 2021,
+    `arXiv:2103.14030 <https://arxiv.org/abs/2103.14030>`_.  Swin-T /
+    S / B / L reach **81.3 / 83.0 / 83.5 / 86.4 % top-1 on ImageNet-1k**
+    (Table 1 of the paper, 224x224 input).
+
+    Examples
+    --------
+    End-to-end inference with the default Swin-T classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.swin import (
+    ...     SwinConfig, SwinTransformerForImageClassification,
+    ... )
+    >>> model = SwinTransformerForImageClassification(SwinConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
+    """
 
     config_class: ClassVar[type[SwinConfig]] = SwinConfig
     base_model_prefix: ClassVar[str] = "swin"

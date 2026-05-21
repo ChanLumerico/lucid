@@ -4,8 +4,59 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="EfficientDet",
+    citation=(
+        'Tan, Mingxing, et al. "EfficientDet: Scalable and Efficient '
+        'Object Detection." Proceedings of the IEEE/CVF Conference on '
+        "Computer Vision and Pattern Recognition, 2020, pp. 10781–10790."
+    ),
+    theory=r"""
+    EfficientDet jointly applies the **compound scaling** idea of
+    EfficientNet to the entire detection pipeline — backbone, feature
+    network, and prediction heads — instead of scaling any single
+    axis (width, depth, resolution) in isolation.  A single compound
+    coefficient :math:`\varphi` controls all three:
+
+    .. math::
+
+        D_{\mathrm{bifpn}} = 3 + \varphi, \quad
+        W_{\mathrm{bifpn}} = 64 \cdot 1.35^{\varphi}, \quad
+        D_{\mathrm{head}} = 3 + \lfloor \varphi / 3 \rfloor, \quad
+        R_{\mathrm{input}} = 512 + 128 \varphi,
+
+    so EfficientDet-D0 through D7 form a family with predictable
+    accuracy–latency trade-offs without manual hyper-tuning.
+
+    The feature network is a **BiFPN** (Bi-directional Feature
+    Pyramid Network).  Unlike a one-way FPN, BiFPN adds bottom-up
+    paths back into the pyramid and learns **fast normalised
+    fusion** weights so each merged level is a convex combination
+    of its inputs:
+
+    .. math::
+
+        O = \sum_{i} \frac{w_i}{\varepsilon + \sum_j w_j} \cdot I_i,
+        \qquad w_i \ge 0,
+
+    where the ReLU on :math:`w_i` (here written as a non-negativity
+    constraint) keeps fusion stable without an explicit softmax,
+    and the small :math:`\varepsilon = 10^{-4}` prevents division
+    by zero.  BiFPN is then **stacked** :math:`D_{\mathrm{bifpn}}`
+    times.
+
+    The detection heads (classification + box) share weights across
+    levels and use sigmoid + **focal loss** for classification, the
+    same anchor-based formulation as RetinaNet.  Combined with the
+    EfficientNet-B\ :math:`_{\varphi}` backbone, the result is the
+    Pareto-optimal one-stage detector family of its time —
+    EfficientDet-D7 reaches 55.1 AP on COCO at far fewer FLOPs than
+    contemporaries.
+    """,
+)
 @dataclass(frozen=True)
 class EfficientDetConfig(ModelConfig):
     """Configuration for EfficientDet.

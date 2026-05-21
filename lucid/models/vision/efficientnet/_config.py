@@ -4,8 +4,56 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from lucid.models._base import ModelConfig
+from lucid.models._meta import model_family_meta
 
 
+@model_family_meta(
+    canonical_name="EfficientNet",
+    citation=(
+        'Tan, Mingxing, and Quoc V. Le. "EfficientNet: Rethinking Model '
+        'Scaling for Convolutional Neural Networks." Proceedings of the '
+        "36th International Conference on Machine Learning, PMLR 97, "
+        "2019, pp. 6105–6114."
+    ),
+    theory=r"""
+    EfficientNet is built on the empirical observation that the three
+    axes used to scale a ConvNet — **depth** :math:`d` (number of
+    layers), **width** :math:`w` (number of channels per layer), and
+    input **resolution** :math:`r` — are not independent.  Scaling any
+    one of them in isolation gives rapidly diminishing returns, but
+    scaling all three together along a carefully chosen ratio gives a
+    much better accuracy/FLOPs frontier.
+
+    The paper formalises this as **compound scaling**: a single
+    user-facing scalar :math:`\phi` controls all three axes through
+
+    .. math::
+
+        d = \alpha^\phi, \quad
+        w = \beta^\phi, \quad
+        r = \gamma^\phi,
+
+    subject to the FLOPs-balance constraint
+    :math:`\alpha \cdot \beta^2 \cdot \gamma^2 \approx 2`.  The
+    constants :math:`\alpha, \beta, \gamma` are found once by a
+    small grid search on the baseline network (giving roughly
+    :math:`\alpha = 1.2, \beta = 1.1, \gamma = 1.15`); from then on,
+    a single :math:`\phi` indexes the whole family.  Successive
+    integer values produce the standard B0 → B7 variants, each
+    requiring approximately :math:`2^\phi` more FLOPs than B0.
+
+    The baseline B0 itself is *not* manually designed.  It is the
+    output of a multi-objective neural-architecture search that
+    optimises accuracy *and* FLOPs jointly.  Each block is an
+    inverted-residual MBConv (MobileNet-v2 style) augmented with a
+    squeeze-and-excitation module, and the network uses the swish
+    activation throughout.  **Stochastic depth** with linearly
+    increasing drop rate (the ``drop_connect_rate`` field) acts as
+    a strong regulariser as depth grows, which is what allows
+    B6/B7 to keep gaining accuracy where naively-deepened
+    baselines would overfit or fail to train.
+    """,
+)
 @dataclass(frozen=True)
 class EfficientNetConfig(ModelConfig):
     """Configuration for EfficientNet B0–B7.

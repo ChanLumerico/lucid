@@ -164,15 +164,90 @@ class _Upsample(nn.Module):
 
 
 class DDPMUNet(nn.Module):
-    """U-Net denoiser shared by every DDPM variant.
+    r"""U-Net denoiser shared by every DDPM variant.
 
-    Spatial layout per stage ``l ∈ [0, L)``:
-        * ``num_res_blocks`` ResBlocks (with optional attention).
+    Implements the architecture introduced by Ho, Jain, and Abbeel, 2020:
+    a symmetric U-Net augmented with sinusoidal-timestep conditioning,
+    GroupNorm-equipped residual blocks, and self-attention at low-resolution
+    feature maps.  The encoder reduces spatial resolution by a factor of
+    :math:`2^{L-1}` over :math:`L = \mathrm{len}(\text{channel\_mult})`
+    stages; the middle block applies ResBlock → Attn → ResBlock at the
+    bottleneck; the decoder mirrors the encoder with concatenated skip
+    connections.  The output convolution emits ``out_channels_effective``
+    channels — equal to ``in_channels`` (or ``2 * in_channels`` when
+    ``learn_sigma`` is enabled for variance prediction).
+
+    Spatial layout per stage :math:`l \in [0, L)`:
+        * ``num_res_blocks`` ResBlocks (with optional attention at
+          ``attention_resolutions``).
         * Downsample → next stage (skipped for ``l == L - 1``).
 
     Decoder mirrors the encoder with concatenated skip features; the extra
-    ResBlock per stage (``num_res_blocks + 1`` total in the decoder side)
+    ResBlock per stage (``num_res_blocks + 1`` total on the decoder side)
     consumes the post-downsample skip.
+
+    Parameters
+    ----------
+    config : DDPMConfig
+        Hyperparameters controlling ``base_channels``, ``channel_mult``,
+        ``num_res_blocks``, ``attention_resolutions``, ``num_heads``,
+        ``dropout``, ``resnet_groups``, and ``learn_sigma``.
+
+    Attributes
+    ----------
+    time_mlp : nn.TimestepEmbedding
+        Sinusoidal timestep embedding + 2-layer MLP producing the per-
+        timestep conditioning vector of width ``4 * base_channels``.
+    conv_in : nn.Conv2d
+        Stem convolution lifting input channels to ``base_channels``.
+    down_res, down_attn, down_sample : nn.ModuleList
+        Encoder ResBlocks, optional AttentionBlocks, and Downsamples.
+    mid_block1, mid_attn, mid_block2 : nn.Module
+        Bottleneck stack at the lowest spatial resolution.
+    up_res, up_attn, up_sample : nn.ModuleList
+        Decoder ResBlocks, optional AttentionBlocks, and Upsamples.
+    norm_out : nn.GroupNorm
+        Output GroupNorm before the final convolution.
+    conv_out : nn.Conv2d
+        Final 3x3 convolution projecting to ``out_channels_effective``.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239); architecture details in
+    Appendix B.  Improved-DDPM additions follow Nichol and Dhariwal, *
+    "Improved Denoising Diffusion Probabilistic Models"*, ICML, 2021
+    (arXiv:2102.09672).
+
+    ResBlock conditioning recipe:
+
+    .. math::
+
+        h = \mathrm{Conv}_2\!\big(
+            \mathrm{SiLU}(
+                \mathrm{Norm}_2(
+                    \mathrm{SiLU}(t \cdot W_t) + \mathrm{Conv}_1(
+                        \mathrm{SiLU}(\mathrm{Norm}_1(x))
+                    )
+                )
+            )
+        \big)
+        + \mathrm{Skip}(x).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import DDPMConfig
+    >>> from lucid.models.generative.ddpm._model import DDPMUNet
+    >>> cfg = DDPMConfig(sample_size=32, base_channels=32,
+    ...                  channel_mult=(1, 2), num_res_blocks=1,
+    ...                  attention_resolutions=(16,), resnet_groups=16)
+    >>> unet = DDPMUNet(cfg).eval()
+    >>> x = lucid.randn((1, 3, 32, 32))
+    >>> t = lucid.tensor([42]).long()
+    >>> out = unet(x, t)
+    >>> out.shape   # (1, 3, 32, 32)
+    (1, 3, 32, 32)
     """
 
     def __init__(self, config: DDPMConfig) -> None:
@@ -366,13 +441,67 @@ class DDPMUNet(nn.Module):
 
 
 class DDPMModel(PretrainedModel, DiffusionMixin):
-    """DDPM trunk + :class:`DiffusionMixin` for sampling.
+    r"""Bare DDPM U-Net trunk with the sampling-capable :class:`DiffusionMixin`.
 
     Returns a :class:`DiffusionModelOutput` whose ``sample`` field is the
-    raw network output (interpreted per ``config.prediction_type``).  When
-    ``config.learn_sigma`` is ``True`` the channels are
-    ``2 * in_channels`` — first half is the mean prediction, second half
-    the (raw) variance prediction; downstream code splits if needed.
+    raw network output — interpreted as predicted noise :math:`\epsilon`,
+    clean signal :math:`x_0`, or velocity :math:`v` depending on
+    ``config.prediction_type``.  When ``config.learn_sigma`` is ``True``
+    the output channels are ``2 * in_channels``: the first half is the
+    mean prediction, the second half the (raw) variance prediction;
+    downstream code splits the two if needed.
+
+    Parameters
+    ----------
+    config : DDPMConfig
+        Hyperparameters governing the U-Net topology and the diffusion
+        noise schedule (``num_train_timesteps``, ``beta_start``,
+        ``beta_end``, ``beta_schedule``, ``prediction_type``).
+
+    Attributes
+    ----------
+    unet : DDPMUNet
+        Underlying U-Net denoiser (see :class:`DDPMUNet`).
+    config_class : type[DDPMConfig]
+        Registry pointer for matching-config instantiation.
+    base_model_prefix : str
+        State-dict prefix (``"ddpm"``) under which the trunk is nested in
+        task-head variants.
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239).
+
+    The forward Markov chain has the closed-form marginal
+
+    .. math::
+
+        q(x_t \mid x_0)
+            = \mathcal{N}\!\big(
+                x_t;\;
+                \sqrt{\bar{\alpha}_t}\, x_0,\;
+                (1 - \bar{\alpha}_t)\, \mathbf{I}
+              \big),
+
+    with :math:`\bar{\alpha}_t = \prod_{s=1}^{t} (1 - \beta_s)`.  The
+    U-Net is trained to predict the injected noise so reverse sampling
+    iterates :math:`t = T, T-1, \ldots, 1` via the standard ancestral
+    Gaussian update.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import DDPMConfig, DDPMModel
+    >>> cfg = DDPMConfig(sample_size=32, base_channels=32,
+    ...                  channel_mult=(1, 2), num_res_blocks=1,
+    ...                  resnet_groups=16, num_train_timesteps=100)
+    >>> model = DDPMModel(cfg).eval()
+    >>> x_t = lucid.randn((1, 3, 32, 32))
+    >>> t = lucid.tensor([42]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 32, 32) — predicted noise
+    (1, 3, 32, 32)
     """
 
     config_class: ClassVar[type[DDPMConfig]] = DDPMConfig
@@ -395,19 +524,72 @@ class DDPMModel(PretrainedModel, DiffusionMixin):
 
 
 class DDPMForImageGeneration(PretrainedModel, DiffusionMixin):
-    """DDPM + training loss + :meth:`DiffusionMixin.generate` for inference.
+    r"""DDPM with the noise-prediction training loss and Markov-chain sampler.
 
-    Training:
-        * ``forward(sample, timestep, noise=None)`` returns the raw network
-          output.
-        * ``forward(sample, timestep, noise=None, target=None)`` (target =
-          ground-truth noise for ``epsilon`` parameterisation) also fills the
+    Wraps a :class:`DDPMUNet` denoiser, supplies the Ho 2020 §3.2
+    "simplified" training objective when ``target`` is provided, and inherits
+    :meth:`DiffusionMixin.generate` for ancestral sampling over the configured
+    noise schedule.  This is the standard entry point for training and
+    inference on the DDPM family.
+
+    Training
+        * ``forward(sample, timestep)`` returns the raw network output.
+        * ``forward(sample, timestep, target=...)`` (``target`` = ground-truth
+          noise for ``epsilon`` parameterisation) additionally fills the
           ``loss`` field with the MSE loss of the paper's simple objective
           (Ho 2020 Eq. 14).
 
-    Sampling:
+    Sampling
         * Use :meth:`generate` from :class:`DiffusionMixin` — pass any
           :class:`Scheduler` (``DDPMScheduler`` for ancestral sampling).
+
+    Parameters
+    ----------
+    config : DDPMConfig
+        Hyperparameters.  ``config.learn_sigma=True`` is rejected at
+        construction time — Improved-DDPM's hybrid
+        :math:`L_{\text{simple}} + \lambda L_{\text{vlb}}` loss is not yet
+        implemented in Lucid.
+
+    Attributes
+    ----------
+    unet : DDPMUNet
+        Underlying U-Net denoiser (see :class:`DDPMUNet`).
+
+    Notes
+    -----
+    Reference: Ho, Jain, and Abbeel, *"Denoising Diffusion Probabilistic
+    Models"*, NeurIPS, 2020 (arXiv:2006.11239); Improved-DDPM additions
+    from Nichol and Dhariwal, ICML 2021 (arXiv:2102.09672).
+
+    Training loss (when ``target`` is supplied):
+
+    .. math::
+
+        \mathcal{L}_{\text{simple}}(\theta)
+            = \mathbb{E}_{t, x_0, \epsilon}\!\left[
+                \big\lVert \epsilon - \epsilon_\theta(x_t, t)
+                \big\rVert^2
+              \right],
+
+    where :math:`x_t = \sqrt{\bar{\alpha}_t} x_0 +
+    \sqrt{1 - \bar{\alpha}_t}\, \epsilon`.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.generative.ddpm import (
+    ...     DDPMConfig, DDPMForImageGeneration,
+    ... )
+    >>> cfg = DDPMConfig(sample_size=32, base_channels=32,
+    ...                  channel_mult=(1, 2), num_res_blocks=1,
+    ...                  resnet_groups=16, num_train_timesteps=100)
+    >>> model = DDPMForImageGeneration(cfg).eval()
+    >>> x_t = lucid.randn((1, 3, 32, 32))
+    >>> t = lucid.tensor([42]).long()
+    >>> out = model(x_t, t)
+    >>> out.sample.shape   # (1, 3, 32, 32)
+    (1, 3, 32, 32)
     """
 
     config_class: ClassVar[type[DDPMConfig]] = DDPMConfig

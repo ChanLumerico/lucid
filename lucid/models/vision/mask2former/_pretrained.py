@@ -97,11 +97,43 @@ def mask2former_resnet50(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with ResNet-50 backbone (Cheng et al., CVPR 2022).
+    r"""Mask2Former with ResNet-50 backbone (Cheng et al., CVPR 2022).
 
-    Masked-attention transformer decoder with multi-scale FPN cross-attention
-    (3 levels: P3/P4/P5).  100 queries, d_model=256, 6-layer decoder,
-    8 attention heads.  ADE20K default (150 classes).
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the
+    paper-cited ResNet-50 configuration: masked-attention decoder
+    cycling through 3 FPN levels (P3 / P4 / P5), 100 queries,
+    ``d_model = 256``, 6 decoder layers, 8 attention heads, and a
+    256-channel pixel decoder.  Default targets ADE20K (150 classes);
+    reaches ADE20K validation mIoU of 47.2% (paper Table 2,
+    Mask2Former-R50 row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-R50 configuration applied
+        (or with ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    See Cheng et al., "Masked-attention Mask Transformer for Universal
+    Image Segmentation", CVPR 2022 (arXiv:2112.01527).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_resnet50
+    >>> model = mask2former_resnet50()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
     """
     return _build(_CFG_R50, overrides)
 
@@ -117,7 +149,36 @@ def mask2former_resnet101(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with ResNet-101 backbone (deeper Bottleneck variant)."""
+    r"""Mask2Former with ResNet-101 backbone (Cheng et al., CVPR 2022).
+
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the same
+    transformer head as :func:`mask2former_resnet50` but a deeper
+    ResNet-101 backbone (``[3, 4, 23, 3]`` bottleneck blocks).  Reaches
+    ADE20K validation mIoU of 47.8% (paper Table 2, Mask2Former-R101 row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-R101 configuration applied
+        (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_resnet101
+    >>> model = mask2former_resnet101()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
+    """
     return _build(_CFG_R101, overrides)
 
 
@@ -137,7 +198,38 @@ def mask2former_swin_tiny(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with Swin-Tiny backbone (embed_dim=96, depths=2/2/6/2)."""
+    r"""Mask2Former with Swin-Tiny backbone (Cheng et al., CVPR 2022).
+
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the
+    Swin-Tiny backbone (``embed_dim = 96``, ``depths = (2, 2, 6, 2)``,
+    ``num_heads = (3, 6, 12, 24)``, ``window_size = 7``) and the standard
+    masked-attention transformer head.  Defined by Liu et al., "Swin
+    Transformer", ICCV 2021 (arXiv:2103.14030).  Reaches ADE20K
+    validation mIoU of 49.6% (paper Table 2, Mask2Former-Swin-T row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-Swin-T configuration
+        applied (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_swin_tiny
+    >>> model = mask2former_swin_tiny()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
+    """
     return _build(_CFG_SWIN_TINY, overrides)
 
 
@@ -152,7 +244,37 @@ def mask2former_swin_small(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with Swin-Small backbone (embed_dim=96, depths=2/2/18/2)."""
+    r"""Mask2Former with Swin-Small backbone (Cheng et al., CVPR 2022).
+
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the
+    Swin-Small backbone (``embed_dim = 96``, ``depths = (2, 2, 18, 2)``,
+    ``num_heads = (3, 6, 12, 24)``).  Same transformer head as
+    :func:`mask2former_swin_tiny`; ADE20K validation mIoU of 51.0%
+    (paper Table 2, Mask2Former-Swin-S row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-Swin-S configuration
+        applied (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_swin_small
+    >>> model = mask2former_swin_small()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
+    """
     return _build(_CFG_SWIN_SMALL, overrides)
 
 
@@ -167,7 +289,36 @@ def mask2former_swin_base(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with Swin-Base backbone (embed_dim=128, depths=2/2/18/2)."""
+    r"""Mask2Former with Swin-Base backbone (Cheng et al., CVPR 2022).
+
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the
+    Swin-Base backbone (``embed_dim = 128``, ``depths = (2, 2, 18, 2)``,
+    ``num_heads = (4, 8, 16, 32)``).  ADE20K validation mIoU of 52.4%
+    (paper Table 2, Mask2Former-Swin-B row).
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-Swin-B configuration
+        applied (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_swin_base
+    >>> model = mask2former_swin_base()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
+    """
     return _build(_CFG_SWIN_BASE, overrides)
 
 
@@ -182,5 +333,35 @@ def mask2former_swin_large(
     pretrained: bool = False,
     **overrides: object,
 ) -> Mask2FormerForSemanticSegmentation:
-    """Mask2Former with Swin-Large backbone (embed_dim=192, depths=2/2/18/2)."""
+    r"""Mask2Former with Swin-Large backbone (Cheng et al., CVPR 2022).
+
+    Builds a :class:`Mask2FormerForSemanticSegmentation` with the largest
+    Swin backbone (``embed_dim = 192``, ``depths = (2, 2, 18, 2)``,
+    ``num_heads = (6, 12, 24, 48)``).  Reaches ADE20K validation mIoU of
+    56.1% (paper Table 2, Mask2Former-Swin-L row) — the headline result
+    of the paper.
+
+    Parameters
+    ----------
+    pretrained : bool, optional, default=False
+        Reserved for future pretrained-weight loading.  Currently ignored.
+    **overrides
+        Keyword overrides forwarded into :class:`Mask2FormerConfig`.
+
+    Returns
+    -------
+    Mask2FormerForSemanticSegmentation
+        Segmentation model with the Mask2Former-Swin-L configuration
+        applied (or with ``overrides`` merged on top of it).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask2former import mask2former_swin_large
+    >>> model = mask2former_swin_large()
+    >>> x = lucid.randn(1, 3, 512, 512)
+    >>> out = model(x)
+    >>> out.logits.shape[1]
+    151
+    """
     return _build(_CFG_SWIN_LARGE, overrides)

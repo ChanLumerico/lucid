@@ -163,26 +163,88 @@ def _smooth_l1(x: Tensor, sigma: float = 1.0) -> Tensor:
 
 
 class FastRCNNForObjectDetection(PretrainedModel):
-    """Fast R-CNN object detector (Girshick, ICCV 2015).
+    r"""Fast R-CNN object detector (Girshick, ICCV 2015).
 
-    Runs the VGG16 backbone once on the whole image, then uses RoI Pooling
-    to extract fixed-size (7 × 7) features for every region proposal before
-    running the shared FC head.
+    The successor to R-CNN that fixes its main bottleneck: rather than running
+    the CNN once *per proposal*, the backbone is applied **once** to the whole
+    image, and per-proposal features are extracted via :func:`roi_pool` over
+    the shared feature map (7x7 at stride 16 for the VGG16 default).  The
+    pooled tensor is flattened, passed through two FC layers
+    (``fc6``, ``fc7``), and split into sibling class (``cls_score``) and
+    class-specific bounding-box (``bbox_pred``) heads.  At training time the
+    model computes the paper's multi-task loss
 
-    Input contract
-    --------------
-    ``x``         : (B, C, H, W) image batch.
-    ``proposals`` : list of B tensors, each (N_i, 4) xyxy pixel coordinates.
-    ``targets``   : (optional training) list of B dicts with keys:
-                    ``"boxes"``  — (M_i, 4) xyxy ground-truth boxes
-                    ``"labels"`` — (M_i,)   integer foreground class ids
+    .. math::
 
-    Output contract
-    ---------------
-    ``ObjectDetectionOutput``:
-      ``logits``    : (Σ N_i, num_classes + 1) raw class logits.
-      ``pred_boxes``: (Σ N_i, 4) decoded xyxy top-class boxes.
-      ``loss``      : scalar multi-task loss (only when targets provided).
+        L = L_{\mathrm{cls}} + \lambda\, L_{\mathrm{loc}},
+
+    with :math:`L_{\mathrm{cls}}` the categorical cross-entropy and
+    :math:`L_{\mathrm{loc}}` the smooth-:math:`L_1` regression loss applied
+    only to foreground proposals.
+
+    Parameters
+    ----------
+    config : FastRCNNConfig
+        Frozen architecture spec.  Use the :func:`fast_rcnn` factory for
+        the paper-cited VGG16 configuration (RoI 7x7, stride-16 feature
+        map, 80 COCO classes).
+
+    Attributes
+    ----------
+    config : FastRCNNConfig
+        Stored copy of the config that built this model.
+    backbone : _VGG16Features
+        VGG16 conv1_1 .. conv5_3 trunk (pool5 omitted) producing a
+        :math:`(B, 512, H/16, W/16)` feature map.
+    roi_head : _FastRCNNHead
+        RoI feature processor: flatten -> ``fc6`` (4096) -> ``fc7`` (4096)
+        -> sibling ``cls_score`` (K + 1 logits) and ``bbox_pred``
+        (4K class-specific deltas).
+
+    Notes
+    -----
+    See Girshick, "Fast R-CNN", ICCV 2015 (arXiv:1504.08083).  Bounding-box
+    targets follow the paper's parameterisation
+
+    .. math::
+
+        t_x = w_x \frac{G_x - P_x}{P_w},\quad
+        t_y = w_y \frac{G_y - P_y}{P_h},\quad
+        t_w = w_w \log\!\frac{G_w}{P_w},\quad
+        t_h = w_h \log\!\frac{G_h}{P_h},
+
+    with the default normalisation weights :math:`(w_x, w_y, w_w, w_h) =
+    (10, 10, 5, 5)` matching the Fast R-CNN Caffe reference.  RoI Pool (not
+    RoI Align) is used to preserve faithfulness — see :class:`MaskRCNNForObjectDetection`
+    for the RoI Align successor.  Per-class boxes are decoded for all classes
+    and per-class NMS is applied by :meth:`postprocess`.
+
+    Examples
+    --------
+    Inference with externally-supplied proposals:
+
+    >>> import lucid
+    >>> from lucid.models.vision.fast_rcnn import fast_rcnn
+    >>> model = fast_rcnn(num_classes=20)
+    >>> x = lucid.randn(1, 3, 600, 800)
+    >>> proposals = [lucid.tensor(
+    ...     [[10.0, 10.0, 200.0, 200.0],
+    ...      [50.0, 60.0, 300.0, 280.0]])]
+    >>> out = model(x, proposals)
+    >>> out.logits.shape
+    (2, 21)
+    >>> out.loss is None
+    True
+
+    Training with ground-truth targets to compute the multi-task loss:
+
+    >>> targets = [{
+    ...     "boxes":  lucid.tensor([[20.0, 20.0, 180.0, 180.0]]),
+    ...     "labels": lucid.tensor([3], dtype=lucid.int64),
+    ... }]
+    >>> out = model(x, proposals, targets=targets)
+    >>> out.loss.shape
+    ()
     """
 
     config_class: ClassVar[type[FastRCNNConfig]] = FastRCNNConfig

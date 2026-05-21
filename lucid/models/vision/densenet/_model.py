@@ -214,10 +214,73 @@ class _Features(nn.Module):
 
 
 class DenseNet(PretrainedModel, BackboneMixin):
-    """DenseNet feature extractor — outputs final dense-block activations.
+    r"""DenseNet feature-extracting backbone (no classification head).
 
-    ``forward_features`` returns shape ``(B, C, 1, 1)`` for 224×224 inputs
-    after the final BN-ReLU and AdaptiveAvgPool2d(1×1).
+    Implements the densely-connected topology from Huang et al.,
+    "Densely Connected Convolutional Networks", CVPR 2017: a Conv-BN-
+    ReLU-MaxPool stem followed by four :class:`_DenseBlock` stages
+    interleaved with three :class:`_Transition` blocks that halve both
+    the channel and spatial dimensions.  Inside each dense block every
+    layer receives the concatenated feature maps of *all* preceding
+    layers in the block.  A final BatchNorm + ReLU + global average
+    pool produces a fixed-size feature regardless of input resolution.
+
+    Parameters
+    ----------
+    config : DenseNetConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`densenet_121`, :func:`densenet_169`, …) for the
+        paper-cited variants.
+
+    Attributes
+    ----------
+    config : DenseNetConfig
+        Stored copy of the config that built this model.
+    features : _Features
+        Flat container holding the stem (``conv0``, ``norm0``,
+        ``relu0``, ``pool0``), the four dense blocks
+        (``denseblock1`` … ``denseblock4``), the three transitions
+        (``transition1`` … ``transition3``), and the final BatchNorm
+        (``norm5``).  State-dict key prefix is ``features.*``.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        :math:`1\times1`.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed via
+        :class:`BackboneMixin`.
+
+    Notes
+    -----
+    From Huang et al., CVPR 2017.  Each layer in a dense block computes
+
+    .. math::
+
+        x_\ell = H_\ell\bigl(
+            [x_0,\; x_1,\; \dots,\; x_{\ell-1}]
+        \bigr),
+
+    where :math:`[\cdot]` is channel-wise concatenation and
+    :math:`H_\ell` is a BN → ReLU → :math:`1\times1` Conv → BN → ReLU
+    → :math:`3\times3` Conv composite (the bottleneck variant used in
+    all ImageNet DenseNets).  Each :math:`H_\ell` contributes
+    ``growth_rate`` new channels — typically :math:`k = 32` — so the
+    input width of layer :math:`\ell` grows linearly as :math:`k_0 +
+    (\ell - 1)\,k`.  Transition layers compress the channel count by
+    a factor of 2 between blocks.  DenseNet-121 has only 8 M parameters
+    yet matches the accuracy of ResNet-50 (25 M parameters) on
+    ImageNet.
+
+    Examples
+    --------
+    Build a DenseNet-121 backbone and run a single forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.densenet import densenet_121
+    >>> backbone = densenet_121()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape   # (B, 1024, 1, 1)
+    (2, 1024, 1, 1)
     """
 
     config_class: ClassVar[type[DenseNetConfig]] = DenseNetConfig
@@ -258,7 +321,58 @@ class DenseNet(PretrainedModel, BackboneMixin):
 
 
 class DenseNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """DenseNet with global average pool + linear classification head."""
+    r"""DenseNet image classifier (backbone + GAP + linear head).
+
+    Combines a :class:`DenseNet` backbone with a global-average-pool
+    and a single :class:`~lucid.nn.Linear` classifier producing
+    ``config.num_classes`` logits.  When ``labels`` are supplied to
+    :meth:`forward`, a categorical cross-entropy loss is returned
+    alongside the logits.
+
+    Parameters
+    ----------
+    config : DenseNetConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`densenet_121_cls`, :func:`densenet_169_cls`, …) for the
+        paper-cited variants.
+
+    Attributes
+    ----------
+    config : DenseNetConfig
+        Stored copy of the config that built this model.
+    features : _Features
+        Same dense feature stack as on :class:`DenseNet`.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool to :math:`1\times1`.
+    classifier : nn.Linear
+        Final linear projection ``features.num_features`` →
+        ``num_classes``.
+
+    Notes
+    -----
+    From Huang et al., "Densely Connected Convolutional Networks",
+    CVPR 2017.  Loss is the standard categorical cross-entropy
+
+    .. math::
+
+        \mathcal{L} = -\frac{1}{N} \sum_{n=1}^{N}
+            \log \operatorname{softmax}(\text{logits}_n)_{\,y_n}.
+
+    DenseNet's parameter efficiency makes it particularly attractive
+    for embedded / on-device deployment: DenseNet-121 reaches the same
+    ImageNet top-1 accuracy as ResNet-50 with roughly one-third the
+    parameter budget.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.densenet import densenet_121_cls
+    >>> model = densenet_121_cls()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (2, 1000)
+    """
 
     config_class: ClassVar[type[DenseNetConfig]] = DenseNetConfig
     base_model_prefix: ClassVar[str] = "densenet"

@@ -29,47 +29,158 @@ class array;
 
 namespace lucid::gpu::mps {
 
-// Process-wide initialised MTLDevice / MTLCommandQueue.  void* values are
-// the Obj-C `id` pointers; cast via `(__bridge id<MTLDevice>)` etc. inside
-// `.mm` callers.  Both calls are lazy + thread-safe.
+// Return the process-wide ``MTLDevice`` used by both MLX and MPSGraph.
+//
+// Lazily initialised on first call.  Reuses MLX's device pointer
+// (``mlx::core::metal::device``) so MPS kernels and MLX kernels
+// dispatch onto the same hardware queue family.
+//
+// Returns
+// -------
+// void*
+//     Opaque ``id<MTLDevice>``.  Cast via ``(__bridge id<MTLDevice>)``
+//     inside ``.mm`` callers.  Never null on a supported host.
+//
+// Notes
+// -----
+// Thread-safe; the underlying init is guarded by a one-shot flag.
 void* shared_mtl_device();
+
+// Return the process-wide ``MTLCommandQueue`` used by MPS kernels.
+//
+// Distinct from MLX's queue so MPS dispatches and MLX dispatches do
+// not contend on the same encoder.  Lazily initialised.
+//
+// Returns
+// -------
+// void*
+//     Opaque ``id<MTLCommandQueue>``.  Cast via
+//     ``(__bridge id<MTLCommandQueue>)`` inside ``.mm`` callers.
+//
+// Notes
+// -----
+// Thread-safe.
 void* shared_mtl_queue();
 
-// True if MetalPerformanceShadersGraph is available + the bridge initialised
-// successfully.  False return → all `should_dispatch_*` heuristics should
-// short-circuit to false and MLX path runs.
+// Report whether the MPSGraph bridge is usable on this host.
+//
+// Returns ``true`` iff Metal Performance Shaders Graph initialised
+// successfully (i.e. the device + queue are valid and the framework
+// loaded).  When ``false``, every :func:`should_dispatch_*` heuristic
+// in :doc:`MpsDispatch` must short-circuit and the MLX path runs.
+//
+// Returns
+// -------
+// bool
+//     ``true`` iff MPSGraph is available.
 bool bridge_available();
 
-// View into an MLX-owned MTLBuffer.  After this call:
-//   • The array is evaluated AND completed (status == available).
-//   • `mtl_buffer` is the underlying MTL::Buffer*, owned by MLX.
-//   • `offset_bytes` is `arr.offset() * arr.itemsize()` — apply when
-//     constructing MPSGraphTensorData.
-//   • `nbytes` is the logical size of the array's data slice.
+// Non-owning view of an MLX-array's underlying ``MTLBuffer``.
 //
-// Caller MUST NOT release `mtl_buffer`.  The MLX array remains alive for
-// the duration the caller holds the BufferView.
+// Returned by :func:`array_to_buffer` after the array has been
+// evaluated + its producing kernel has reached the ``available``
+// status.  All fields refer to memory owned by MLX — callers must
+// not release ``mtl_buffer`` or outlive the source array.
+//
+// Attributes
+// ----------
+// mtl_buffer : void*
+//     Opaque ``id<MTLBuffer>`` referencing MLX's allocation.
+// offset_bytes : std::size_t
+//     Byte offset from the start of ``mtl_buffer`` to the array's
+//     logical data slice (``arr.offset() * arr.itemsize()``).  Pass
+//     this when constructing an ``MPSGraphTensorData``.
+// nbytes : std::size_t
+//     Byte length of the array's data slice (logical size, not the
+//     full buffer capacity).
+//
+// Warns
+// -----
+// Calling release on ``mtl_buffer`` is a double-free.  The caller
+// MUST keep the source ``mlx::core::array`` alive while any
+// ``BufferView`` referring to it is in flight.
 struct BufferView {
     void* mtl_buffer;
     std::size_t offset_bytes;
     std::size_t nbytes;
 };
+
+// Materialise an MLX array and view its backing ``MTLBuffer``.
+//
+// Forces ``arr`` to evaluate (running any pending MLX graph nodes
+// that produced it) and blocks until the producing command buffer
+// reaches the ``available`` status, then returns a non-owning
+// view of the buffer + offset + size.
+//
+// Parameters
+// ----------
+// arr : const mlx::core::array&
+//     The MLX array whose buffer the caller wishes to bind into an
+//     MPSGraph dispatch.
+//
+// Returns
+// -------
+// BufferView
+//     Triple of (buffer handle, byte offset, byte length).  All
+//     fields are valid for the lifetime of ``arr``.
+//
+// Notes
+// -----
+// Used by every MPS kernel in :doc:`MpsKernels` to obtain Obj-C
+// ``MTLBuffer`` handles for ``MPSGraphTensorData`` construction
+// without copying.
 BufferView array_to_buffer(const ::mlx::core::array& arr);
 
-// Wrap a caller-allocated MTLBuffer into a fresh leaf mlx::core::array.
-// Caller must have one strong reference to the buffer before calling; this
-// function transfers that reference.  When the returned array (and all its
-// copies) die, the buffer is released exactly once.
+// Wrap a caller-allocated ``MTLBuffer`` as a fresh leaf MLX array.
 //
-// `shape` is the logical shape; the underlying buffer must have at least
-//   prod(shape) * sizeof(dtype) bytes starting at offset_bytes.
+// The caller must hold exactly one strong reference to
+// ``mtl_buffer`` going in; this function **transfers** that
+// reference into the returned ``mlx::core::array`` (and any copies
+// of it).  When the final copy dies, the buffer is released exactly
+// once via the array's custom deleter.
+//
+// Parameters
+// ----------
+// mtl_buffer : void*
+//     Opaque ``id<MTLBuffer>`` allocated by the caller, typically via
+//     MPSGraph's executable returning a fresh output buffer.
+// shape : std::vector<int>
+//     Logical MLX shape (int32 dimensions).  The buffer must hold
+//     at least ``prod(shape) * sizeof(dt)`` bytes starting at
+//     ``offset_bytes``.
+// dt : Dtype
+//     Lucid dtype of the elements.  Translated to MLX's dtype enum
+//     internally.
+// offset_bytes : std::size_t, optional
+//     Byte offset into ``mtl_buffer`` where the array's data begins.
+//     Defaults to 0.
+//
+// Returns
+// -------
+// mlx::core::array
+//     A leaf array (no upstream graph dependency) backed by
+//     ``mtl_buffer``.
+//
+// Warns
+// -----
+// Calling this with a buffer that the caller still intends to
+// release elsewhere causes a double-free.  Hand off ownership
+// cleanly.
 ::mlx::core::array buffer_to_array(void* mtl_buffer,
                                    std::vector<int> shape,
                                    Dtype dt,
                                    std::size_t offset_bytes = 0);
 
-// Block until all in-flight MPS command buffers complete.  Called from
-// tests + by callers that need to read the result on the CPU.
+// Block until every in-flight MPS command buffer has completed.
+//
+// Provided primarily for the test suite + callers that need
+// CPU-visible results from a kernel before the next op enqueues.
+// Routine code paths normally do not need this — MLX consumers of
+// an MPS-produced array automatically sync via :func:`array_to_buffer`.
+//
+// Notes
+// -----
+// Synchronous from the caller's perspective.
 void wait_all();
 
 }  // namespace lucid::gpu::mps

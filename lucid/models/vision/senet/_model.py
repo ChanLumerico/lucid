@@ -247,13 +247,73 @@ def _build_body(
 
 
 class SENet(PretrainedModel, BackboneMixin):
-    """SE-ResNet feature extractor — no classification head.
+    r"""SE-ResNet feature-extracting backbone (no classification head).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` of shape
-    ``(B, C, H/32, W/32)`` from stage-4.
+    Implements the Squeeze-and-Excitation augmentation of the
+    ResNet topology from Hu et al., "Squeeze-and-Excitation
+    Networks", CVPR 2018 (arXiv:1709.01507) — winner of the
+    ILSVRC 2017 classification challenge.  Each residual block in
+    the four-stage ResNet body is followed by a lightweight SE
+    module that recalibrates the relative importance of each
+    feature-map channel:
 
-    State-dict keys follow timm's seresnet layout:
-    ``conv1.*``, ``bn1.*``, ``layer1.*`` … ``layer4.*``.
+    .. math::
+
+        \tilde{u}_c = s_c \cdot u_c,
+        \qquad s = \sigma\big(W_2 \,\delta(W_1 z)\big),
+        \quad z_c = \frac{1}{HW} \sum_{i, j} u_c(i, j),
+
+    where :math:`\delta` is ReLU and :math:`\sigma` is the
+    sigmoid.  The two-layer FC bottleneck has reduction ratio
+    :math:`r` (default 16), making the SE module add only ~10%
+    extra parameters relative to ResNet while reducing ImageNet
+    top-5 error by roughly 1.5 percentage points.
+
+    Block topology follows ``config.block_type``: ``"basic"``
+    selects two-conv :class:`_SEBasicBlock`s (SE-ResNet-18/34) and
+    ``"bottleneck"`` selects three-conv :class:`_SEBottleneck`s
+    (SE-ResNet-50/101/152).
+
+    Parameters
+    ----------
+    config : SENetConfig
+        Frozen architecture spec.  Use the factory functions
+        (:func:`se_resnet_18`, :func:`se_resnet_50`, …) for
+        paper-cited variants.
+
+    Attributes
+    ----------
+    config : SENetConfig
+        Stored copy of the config that built this model.
+    conv1 : nn.Conv2d
+        7×7 stem convolution at stride 2.
+    bn1 : nn.BatchNorm2d
+        BatchNorm paired with the stem conv.
+    maxpool : nn.MaxPool2d
+        3×3 max-pool at stride 2.
+    layer1, layer2, layer3, layer4 : nn.Sequential
+        The four SE-augmented residual stages.
+    feature_info : list[FeatureInfo]
+        Per-stage descriptor (channels + reduction factor) exposed
+        via :class:`BackboneMixin`.
+
+    Notes
+    -----
+    State-dict keys follow timm's ``seresnet`` layout
+    (``conv1.*``, ``bn1.*``, ``layer{1-4}.*``) so that pretrained
+    weight files round-trip without renaming.
+
+    Examples
+    --------
+    Build an SE-ResNet-50 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.senet import se_resnet_50
+    >>> backbone = se_resnet_50()
+    >>> x = lucid.randn(2, 3, 224, 224)
+    >>> out = backbone(x)
+    >>> out.last_hidden_state.shape
+    (2, 2048, 7, 7)
     """
 
     config_class: ClassVar[type[SENetConfig]] = SENetConfig
@@ -294,10 +354,53 @@ class SENet(PretrainedModel, BackboneMixin):
 
 
 class SENetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """SE-ResNet with global average pooling + linear classification head.
+    r"""SE-ResNet with global-average-pooled linear classification head.
 
-    State-dict keys follow timm's seresnet layout:
-    ``conv1.*``, ``bn1.*``, ``layer1.*`` … ``layer4.*``, ``fc.*``.
+    Combines a :class:`SENet` backbone with global average pooling
+    and a linear projection (``fc``) to ``config.num_classes``
+    logits.  When ``labels`` are supplied to :meth:`forward`, a
+    cross-entropy loss is computed and returned alongside the
+    logits.
+
+    Parameters
+    ----------
+    config : SENetConfig
+        Architecture spec.  Use the ``*_cls`` factory functions
+        (:func:`se_resnet_18_cls` through :func:`se_resnet_152_cls`)
+        for paper-cited configurations.
+
+    Attributes
+    ----------
+    config : SENetConfig
+        Stored copy of the config that built this model.
+    conv1, bn1, maxpool, layer1, layer2, layer3, layer4
+        Same backbone components as on :class:`SENet`; see that
+        class for shape semantics.
+    avgpool : nn.AdaptiveAvgPool2d
+        Global average pool collapsing the final feature map to
+        ``1 × 1``.
+    fc : nn.Linear
+        Linear projection from ``hidden_sizes[3] * block.expansion``
+        (512 for BasicBlock, 2048 for Bottleneck) to
+        ``config.num_classes``.
+
+    Notes
+    -----
+    State-dict keys follow timm's ``seresnet`` layout
+    (``conv1.*``, ``bn1.*``, ``layer{1-4}.*``, ``fc.*``) so that
+    pretrained weight files round-trip without renaming.
+
+    Examples
+    --------
+    Run inference on a batch of 224×224 RGB images:
+
+    >>> import lucid
+    >>> from lucid.models.vision.senet import se_resnet_50_cls
+    >>> model = se_resnet_50_cls()
+    >>> x = lucid.randn(4, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (4, 1000)
     """
 
     config_class: ClassVar[type[SENetConfig]] = SENetConfig

@@ -14,6 +14,7 @@ export function getMemberNameColor(name: string, labels: ApiLabel[]): string {
 export function getClassNameColor(classKind: ApiClassKind): string {
   if (classKind === "abstract")  return "text-api-class-abstract";
   if (classKind === "dataclass") return "text-api-class-dataclass";
+  if (classKind === "protocol")  return "text-api-class-protocol";
   return "text-api-class";
 }
 
@@ -21,5 +22,6 @@ export function getClassNameColor(classKind: ApiClassKind): string {
 export function getClassHoverBorder(classKind: ApiClassKind): string {
   if (classKind === "abstract")  return "hover:border-api-class-abstract/40";
   if (classKind === "dataclass") return "hover:border-api-class-dataclass/40";
+  if (classKind === "protocol")  return "hover:border-api-class-protocol/40";
   return "hover:border-api-class/40";
 }

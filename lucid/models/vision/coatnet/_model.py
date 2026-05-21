@@ -339,10 +339,76 @@ def _build_body(
 
 
 class CoAtNet(PretrainedModel, BackboneMixin):
-    """CoAtNet feature extractor — returns spatial feature map from S4.
+    r"""CoAtNet backbone (Dai et al., 2021).
 
-    Output: ``BaseModelOutput`` with ``last_hidden_state`` shaped
-    ``(B, d[3], H/32, W/32)``.
+    CoAtNet is a *hybrid* backbone that interleaves depthwise
+    convolutions and relative self-attention in a single four-stage
+    pyramid (preceded by a two-layer convolutional stem).  The first
+    two stages (:math:`S_1, S_2`) use *MBConv* blocks (squeeze-and-
+    excitation, expansion ratio 4) and the last two stages
+    (:math:`S_3, S_4`) use *relative-attention* transformer blocks
+    operating on flattened token sequences:
+
+    .. math::
+
+        \mathrm{Attn}(Q, K, V)_{ij} = \mathrm{softmax}\!\left(
+            \frac{Q_i K_j^\top}{\sqrt{d}} + r_{i - j}
+        \right) V_j,
+
+    where :math:`r_{i-j}` is a learned bias indexed by the *relative*
+    spatial offset between tokens.  This recovers the translation
+    equivariance that convolutions provide while still permitting
+    global, data-dependent mixing.  Each stage downsamples
+    :math:`2\times`, so the final feature map is
+    :math:`(B, d_{S_4}, H/32, W/32)`.
+
+    :meth:`forward_features` returns the raw spatial feature map from
+    the last attention stage.  Use this backbone when you need
+    multi-scale or spatial features for detection / segmentation; for
+    end-to-end classification use
+    :class:`CoAtNetForImageClassification`.
+
+    Parameters
+    ----------
+    config : CoAtNetConfig
+        Frozen dataclass specifying ``blocks_per_stage``, ``dims``,
+        ``stem_width``, ``attn_heads``, ``mbconv_expand``,
+        ``image_size``, and ``in_channels``.  See :class:`CoAtNetConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Two-layer stride-2 convolutional stem
+        :math:`(3\times3 \,\mathrm{Conv}, \mathrm{BN}, \mathrm{GELU})^2`.
+    s1 : nn.Sequential
+        First MBConv stage with downsampling.
+    s2 : nn.Sequential
+        Second MBConv stage with downsampling.
+    s3 : _TransformerStage
+        First relative-attention transformer stage.
+    s4 : _TransformerStage
+        Second relative-attention transformer stage.
+    feature_info : list[FeatureInfo]
+        Four-stage feature description with reductions
+        :math:`(4, 8, 16, 32)`.
+
+    Notes
+    -----
+    Reference: Zihang Dai *et al.*, *"CoAtNet: Marrying Convolution
+    and Attention for All Data Sizes"*, NeurIPS 2021,
+    `arXiv:2106.04803 <https://arxiv.org/abs/2106.04803>`_.
+
+    Examples
+    --------
+    Build a CoAtNet-0 backbone and run a forward pass:
+
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import CoAtNet, CoAtNetConfig
+    >>> model = CoAtNet(CoAtNetConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> feat = model.forward_features(x)
+    >>> feat.shape                       # (B, dims[-1], H/32, W/32)
+    (1, 768, 7, 7)
     """
 
     config_class: ClassVar[type[CoAtNetConfig]] = CoAtNetConfig
@@ -380,10 +446,70 @@ class CoAtNet(PretrainedModel, BackboneMixin):
 
 
 class CoAtNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    """CoAtNet with global average pooling + classification head.
+    r"""CoAtNet with a linear classification head (Dai et al., 2021).
 
-    Head follows timm convention: AdaptiveAvgPool → LayerNorm → (optional)
-    head_hidden Linear → classifier Linear.
+    Wraps the same conv + attention trunk as :class:`CoAtNet` (stem
+    + two MBConv stages + two relative-attention transformer stages)
+    and adds the standard reference recipe head: global average pool
+    → LayerNorm → optional pre-logits Linear + Tanh → linear
+    classifier.
+
+    .. math::
+
+        \text{logits} = W_{\text{cls}}\,
+            \mathrm{Tanh}\!\bigl(W_{\text{pre}}\,
+            \mathrm{LN}(\mathrm{GAP}(z^{S_4}))\bigr) + b_{\text{cls}}.
+
+    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
+    loss in the same pass.
+
+    Parameters
+    ----------
+    config : CoAtNetConfig
+        Architecture specification.  Must set ``num_classes`` to the
+        desired number of output categories.  Set
+        ``head_hidden_size=None`` to drop the pre-logits projection.
+        See :class:`CoAtNetConfig`.
+
+    Attributes
+    ----------
+    stem : nn.Sequential
+        Two-layer stride-2 convolutional stem.
+    s1, s2 : nn.Sequential
+        Two MBConv stages.
+    s3, s4 : _TransformerStage
+        Two relative-attention transformer stages.
+    avgpool : nn.AdaptiveAvgPool2d
+        :math:`1 \times 1` adaptive average pool over spatial dims.
+    norm : nn.LayerNorm
+        LayerNorm applied to the pooled feature.
+    pre_logits : nn.Module
+        Either ``Linear + Tanh`` (when ``config.head_hidden_size`` is
+        set) or an identity ``nn.Sequential``.
+    classifier : nn.Linear
+        Final linear projection of width ``(num_classes, head_in)``
+        where ``head_in`` is either ``config.head_hidden_size`` or
+        ``config.dims[-1]``.
+
+    Notes
+    -----
+    Reference: Zihang Dai *et al.*, *"CoAtNet: Marrying Convolution
+    and Attention for All Data Sizes"*, NeurIPS 2021.  CoAtNet-0
+    reaches **81.6% top-1 on ImageNet-1k** at 224x224 (Table 5).
+
+    Examples
+    --------
+    End-to-end inference with the default CoAtNet-0 classifier:
+
+    >>> import lucid
+    >>> from lucid.models.vision.coatnet import (
+    ...     CoAtNetConfig, CoAtNetForImageClassification,
+    ... )
+    >>> model = CoAtNetForImageClassification(CoAtNetConfig())
+    >>> x = lucid.randn(1, 3, 224, 224)
+    >>> out = model(x)
+    >>> out.logits.shape
+    (1, 1000)
     """
 
     config_class: ClassVar[type[CoAtNetConfig]] = CoAtNetConfig

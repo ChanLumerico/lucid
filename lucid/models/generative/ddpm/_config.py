@@ -14,9 +14,81 @@ Inherits noise-schedule knobs from :class:`DiffusionModelConfig`
 from dataclasses import dataclass, field
 from typing import ClassVar
 
+from lucid.models._meta import model_family_meta
 from lucid.models.generative._config import DiffusionModelConfig
 
 
+@model_family_meta(
+    canonical_name="DDPM",
+    citation=(
+        'Ho, Jonathan, et al. "Denoising Diffusion Probabilistic Models." '
+        "Advances in Neural Information Processing Systems, 2020, "
+        "pp. 6840–6851."
+    ),
+    theory=r"""
+    DDPM — *Denoising Diffusion Probabilistic Models* — defines a latent
+    variable generative model through a pair of Markov chains.  The
+    **forward (noising) chain** progressively corrupts data
+    :math:`x_0 \sim q(x_0)` over :math:`T` steps with a fixed Gaussian
+    schedule :math:`\{\beta_t\}_{t=1}^{T}`:
+
+    .. math::
+
+        q(x_t \mid x_{t-1})
+            = \mathcal{N}\!\left(
+                x_t;\; \sqrt{1 - \beta_t}\, x_{t-1},\; \beta_t\, \mathbf{I}
+              \right).
+
+    With :math:`\alpha_t = 1 - \beta_t` and
+    :math:`\bar{\alpha}_t = \prod_{s=1}^{t} \alpha_s`, the marginal admits a
+    closed form that supports cheap one-shot sampling at any step:
+
+    .. math::
+
+        q(x_t \mid x_0)
+            = \mathcal{N}\!\left(
+                x_t;\; \sqrt{\bar{\alpha}_t}\, x_0,\;
+                (1 - \bar{\alpha}_t)\, \mathbf{I}
+              \right),
+        \qquad
+        x_t = \sqrt{\bar{\alpha}_t}\, x_0 +
+              \sqrt{1 - \bar{\alpha}_t}\, \epsilon,\;
+              \epsilon \sim \mathcal{N}(0, \mathbf{I}).
+
+    The **reverse (denoising) chain** is parameterised by a U-Net
+    :math:`\epsilon_\theta(x_t, t)` trained to predict the injected noise.
+    Ho et al. show that the variational ELBO
+
+    .. math::
+
+        \mathcal{L}_{\text{ELBO}} = \mathbb{E}_q\!\left[
+            \log \frac{q(x_{1:T} \mid x_0)}{p_\theta(x_{0:T})}
+        \right]
+
+    decomposes into per-timestep KL divergences which, after a
+    reweighting, simplify to the deceptively elegant noise-prediction
+    objective
+
+    .. math::
+
+        \mathcal{L}_{\text{simple}}(\theta) =
+            \mathbb{E}_{t, x_0, \epsilon}\!\left[
+                \big\lVert \epsilon -
+                    \epsilon_\theta(x_t, t)
+                \big\rVert^2
+            \right].
+
+    Sampling iterates :math:`t = T, T-1, \dots, 1` via
+    :math:`x_{t-1} = \tfrac{1}{\sqrt{\alpha_t}}
+    \big(x_t - \tfrac{\beta_t}{\sqrt{1 - \bar{\alpha}_t}}\,
+    \epsilon_\theta(x_t, t)\big) + \sigma_t z`.  The U-Net itself follows
+    the original architecture (Ronneberger 2015) augmented with
+    sinusoidal timestep embeddings, self-attention at low-resolution
+    feature maps (default :math:`16 \times 16`), and GroupNorm-equipped
+    residual blocks — the now-canonical recipe inherited by ADM, Imagen,
+    Stable Diffusion, and beyond.
+    """,
+)
 @dataclass(frozen=True)
 class DDPMConfig(DiffusionModelConfig):
     """Configuration for every DDPM variant.
