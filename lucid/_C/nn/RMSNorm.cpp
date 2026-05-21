@@ -14,14 +14,17 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
+#include "../core/AmpPolicy.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -31,47 +34,58 @@ TensorImplPtr
 RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, double eps) {
     if (!x || !gamma)
         ErrorBuilder("rms_norm").fail("null input");
-    if (x->dtype() != gamma->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(gamma->dtype())), "rms_norm");
     if (x->device() != gamma->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "rms_norm");
 
+    // 3.4+ Phase A.8: AMP plumbing (same as BatchNorm / LayerNorm).
+    // schema_v1.amp_policy = ForceFP32 — under autocast(F16) we upcast x
+    // and gamma to F32 before the kernel so RMS variance over normalised
+    // dims doesn't lose precision.
+    SchemaGuard sg{RMSNormBackward::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr gamma_eff = astype_op(gamma, eff_dt);
+
+    if (x_eff->dtype() != gamma_eff->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
+                            std::string(dtype_name(gamma_eff->dtype())), "rms_norm");
+
     // Validate that gamma's shape matches the trailing dims of x.
-    if (gamma->shape().size() > x->shape().size())
-        throw ShapeMismatch(x->shape(), gamma->shape(), "rms_norm: γ has more dims than x");
-    const std::size_t Dn = gamma->shape().size();
-    const std::size_t lead = x->shape().size() - Dn;
+    if (gamma_eff->shape().size() > x_eff->shape().size())
+        throw ShapeMismatch(x_eff->shape(), gamma_eff->shape(),
+                            "rms_norm: γ has more dims than x");
+    const std::size_t Dn = gamma_eff->shape().size();
+    const std::size_t lead = x_eff->shape().size() - Dn;
     for (std::size_t i = 0; i < Dn; ++i) {
-        if (x->shape()[lead + i] != gamma->shape()[i]) {
-            throw ShapeMismatch(x->shape(), gamma->shape(),
+        if (x_eff->shape()[lead + i] != gamma_eff->shape()[i]) {
+            throw ShapeMismatch(x_eff->shape(), gamma_eff->shape(),
                                 "rms_norm: γ must match trailing dims of x");
         }
     }
     std::size_t outer = 1, N = 1;
     for (std::size_t i = 0; i < lead; ++i)
-        outer *= static_cast<std::size_t>(x->shape()[i]);
+        outer *= static_cast<std::size_t>(x_eff->shape()[i]);
     for (std::size_t i = 0; i < Dn; ++i)
-        N *= static_cast<std::size_t>(gamma->shape()[i]);
+        N *= static_cast<std::size_t>(gamma_eff->shape()[i]);
 
-    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
+    OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
 
     // rms_norm_forward returns {y, rstd}.
-    auto forward = backend::Dispatcher::for_device(x->device())
-                       .rms_norm_forward(x->storage(), gamma->storage(), outer, N, eps, x->shape(),
-                                         x->dtype());
+    auto forward = backend::Dispatcher::for_device(x_eff->device())
+                       .rms_norm_forward(x_eff->storage(), gamma_eff->storage(), outer, N, eps,
+                                         x_eff->shape(), eff_dt);
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 4);
 
-    auto out = std::make_shared<TensorImpl>(std::move(forward.first), x->shape(), x->dtype(),
-                                            x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(forward.first), x_eff->shape(), eff_dt,
+                                            x_eff->device(), false);
 
     auto bwd = std::make_shared<RMSNormBackward>();
     bwd->saved_rstd_ = std::move(forward.second);
     bwd->outer_ = outer;
     bwd->N_ = N;
-    // saved_inputs_[0..1] will hold {x, gamma}.
-    kernel::NaryKernel<RMSNormBackward, 2>::wire_autograd(std::move(bwd), {x, gamma}, out);
+    // saved_inputs_[0..1] hold {x, gamma} at eff_dt.
+    kernel::NaryKernel<RMSNormBackward, 2>::wire_autograd(std::move(bwd), {x_eff, gamma_eff}, out);
     return out;
 }
 

@@ -16,14 +16,17 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
+#include "../core/AmpPolicy.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../kernel/NaryKernel.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -70,39 +73,64 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
                                          double eps) {
     if (!x || !gamma || !beta)
         ErrorBuilder("layer_norm").fail("null input");
-    if (x->dtype() != gamma->dtype() || x->dtype() != beta->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(gamma->dtype())), "layer_norm");
     if (x->device() != gamma->device() || x->device() != beta->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(gamma->device())), "layer_norm");
+
+    // 3.4+ AMP plumbing: schema_v1.amp_policy = ForceFP32.  Under
+    // ``AutocastGuard(F16)`` SchemaGuard returns ``F32`` regardless of x's
+    // input dtype — LayerNorm's per-sample mean/var reductions are
+    // numerically sensitive and running them in F16 risks catastrophic
+    // cancellation on the variance.  The cast must happen before the
+    // strict ``x->dtype() == gamma->dtype()`` check below: under autocast
+    // the preceding op (typically Embedding with ``AmpPolicy::Promote``)
+    // emits F16 while ``gamma``/``beta`` Parameter slots are still F32.
+    // After the cast all three operands share ``eff_dt`` and the dtype-
+    // match invariant holds.  Outside an autocast scope this is a no-op
+    // (``astype_op`` returns the input unchanged when dtypes already match).
+    //
+    // ``astype_op`` (not ``maybe_cast_for_kernel``) is used so the cast
+    // tensors carry an ``AstypeBackward`` grad_fn — without that the F32-
+    // cast x_eff has requires_grad=false and ``wire_autograd`` would drop
+    // the LayerNorm backward chain under AMP.
+    SchemaGuard sg{LayerNormBackward::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
+    const TensorImplPtr gamma_eff = astype_op(gamma, eff_dt);
+    const TensorImplPtr beta_eff = astype_op(beta, eff_dt);
+
+    if (x_eff->dtype() != gamma_eff->dtype() || x_eff->dtype() != beta_eff->dtype())
+        throw DtypeMismatch(std::string(dtype_name(x_eff->dtype())),
+                            std::string(dtype_name(gamma_eff->dtype())), "layer_norm");
     // Contiguity required on CPU; gamma/beta shape equality checked here.
-    if (x->device() == Device::CPU &&
-        (!x->is_contiguous() || !gamma->is_contiguous() || !beta->is_contiguous()))
-        if (gamma->shape() != beta->shape())
-            throw ShapeMismatch(gamma->shape(), beta->shape(),
+    if (x_eff->device() == Device::CPU &&
+        (!x_eff->is_contiguous() || !gamma_eff->is_contiguous() || !beta_eff->is_contiguous()))
+        if (gamma_eff->shape() != beta_eff->shape())
+            throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(),
                                 "layer_norm: γ and β must have the same shape");
 
-    const auto [outer, N] = resolve_shapes(x->shape(), gamma->shape());
+    const auto [outer, N] = resolve_shapes(x_eff->shape(), gamma_eff->shape());
 
-    OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
+    OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
 
     // layer_norm_forward returns {y, mean, rstd}.
-    auto forward = backend::Dispatcher::for_device(x->device())
-                       .layer_norm_forward(x->storage(), gamma->storage(), beta->storage(), outer,
-                                           N, eps, x->shape(), x->dtype());
+    auto forward = backend::Dispatcher::for_device(x_eff->device())
+                       .layer_norm_forward(x_eff->storage(), gamma_eff->storage(),
+                                           beta_eff->storage(), outer, N, eps, x_eff->shape(),
+                                           eff_dt);
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 5);
 
-    auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x->shape(), x->dtype(),
-                                            x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x_eff->shape(), eff_dt,
+                                            x_eff->device(), false);
 
     auto bwd = std::make_shared<LayerNormBackward>();
     bwd->saved_mean_ = std::move(forward[1]);
     bwd->saved_rstd_ = std::move(forward[2]);
     bwd->outer_ = outer;
     bwd->N_ = N;
-    // saved_inputs_[0..2] will hold {x, gamma, beta} for backward.
-    kernel::NaryKernel<LayerNormBackward, 3>::wire_autograd(std::move(bwd), {x, gamma, beta}, out);
+    // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
+    kernel::NaryKernel<LayerNormBackward, 3>::wire_autograd(std::move(bwd),
+                                                            {x_eff, gamma_eff, beta_eff}, out);
     return out;
 }
 

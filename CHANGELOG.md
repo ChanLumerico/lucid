@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adam — fold bias correction into pre-computed scalars
 - extend Phase A.2 (mean→sum/N) to LayerNorm, RMSNorm, GroupNorm
 
+### Fixed
+
+- AMP plumbing for LayerNorm / RMSNorm / GroupNorm forwards
+
 ---
 
 ## [3.4.0] — 2026-05-21
