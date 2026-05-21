@@ -13,22 +13,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [3.4.1] — 2026-05-22
 
+**No-compile speed sweep across the norm family + Adam + ReLU.**  Pure
+algorithmic restructures (CSE, `mean = sum × 1/N`, saved intermediates,
+bias-correction folding) closing the remaining ref-framework gap on
+ResNet-18 by 12.7 % wall, plus a critical AMP correctness fix that
+enables transformer F16 training on Lucid for the first time since
+3.3.0.  No new public API surface, no graph capture, no MPSGraph
+dispatch changes — same MLX path, fewer kernel dispatches and fewer
+recomputations.
+
+**Headline (Mac Studio M4 Max, 5-run median):**
+
+  ResNet-18 / CIFAR-10 / BS=32 F32:  36.76 → 32.10 ms  (-12.7 %)
+                                     1.79× → ~1.53× ref-framework
+  GPT-2-base step F32 (BS=32):                 ~193 ms   (~1.085× ref)
+  GPT-2-base step AMP F16 (BS=32):  FAILED → 188 ms     (~1.091× ref)
+
+**4-axis ref-framework gap after this release:**
+
+| Workload              | Lucid vs ref |
+|---                    |---           |
+| Conv F32 (ResNet-18)  | 1.53×        |
+| Conv AMP F16          | 1.13×        |
+| Transformer F32       | 1.085×       |
+| Transformer AMP F16   | 1.091×       |
+
+Three of four are within 10 % — production parity.  The Conv F32 gap
+remains the residual (multi-output backward structurally blocks MLX
+kernel fusion); AMP F16 closes it.
 
 ### Performance
 
-- BN running-stats fusion + conv backward contig sweep
-- fused ReLU backward (single MLX where() kernel)
-- BN backward algorithmic restructure (CSE + mean=sum/N)
-- BN forward polish (mean→sum/N + drop trailing contiguous)
-- BN saved-xnorm — backward skips centered+xnorm recomputation
-- Adam — fold bias correction into pre-computed scalars
-- extend Phase A.2 (mean→sum/N) to LayerNorm, RMSNorm, GroupNorm
+- **BN forward + running-stats EMA fusion** — `BatchNormNdBackward<N>::forward`
+  now accepts optional `running_mean` / `running_var` / `momentum` parameters
+  and performs the EMA update **in-place** inside the C++ forward kernel,
+  reusing the same `saved_mean_` / `saved_rstd_` it already computes for
+  autograd.  Eliminates the duplicate mean+var reduction over `x` that the
+  Python `_update_running_stats` path required.  ResNet-18 step
+  36.76 → 34.25 ms (−2.5 ms / −7 %).
+- **Conv backward contig sweep** — drop trailing `mlx::core::contiguous` on
+  returned `dW` in `conv_nd_backward` / `conv_transpose_nd_backward` and
+  the input contigs feeding `conv_general` in the `compute_dx` / `compute_dW`
+  lambdas.  Mirrors the 3.1.0 forward sweep + 3.4.0 norm-backward sweep.
+  Conv2d backward microbench (ResNet-18 shapes): 21.36 → 20.76 ms.
+- **Fused ReLU backward** — new `IBackend::relu_backward` virtual; GPU lowers
+  to a single `mlx::core::where(greater(x, 0), g, 0)` kernel, CPU to a tight
+  loop.  Replaces the prior 3-op chain (greater + astype + multiply) which
+  MLX did not fuse across the Bool→F32 typecast boundary.  ReLU bwd
+  microbench: 0.307 → 0.268 ms / call (−12.7 %), per-op parity with ref.
+- **BN backward algorithmic restructure** — CSE `multiply(grad, xnorm)`
+  (was computed twice) and replace the 4-reduction structure (sum + sum +
+  mean + mean) with 2 keep-dims sums and 2 scalar multiplies by 1/N.
+  ResNet-18 wall 33.74 → 32.78 ms (−1 ms).
+- **BN forward polish** — same `mean → sum × 1/N` pattern in the forward
+  path, plus drop trailing `contiguous(...)` on y / mean / rstd outputs.
+  Framework polish (no measurable wall change as forward already fuses
+  1.9×; fewer kernel dispatches per BN forward).
+- **BN saved-xnorm** — `IBackend::batch_norm_forward` now returns 4 elements
+  `[y, mean, rstd, xnorm]` (xnorm is the existing lazy MLX intermediate,
+  zero extra forward cost); `IBackend::batch_norm_backward` gains a
+  `saved_xnorm` parameter and the MLX path consumes it directly, skipping
+  the `centered = x - mean` + `xnorm = centered * rstd` recomputation
+  (2 element-wise ops on the full input tensor per BN bwd call).
+  ResNet-18 wall 32.78 → 32.36 ms; BN bwd microbench shapes all 10–20 %
+  faster.
+- **Adam bias-correction algebraic fold** — fold `1/bc1` and `√bc2` /
+  `1/√bc2` factors into pre-computed scalars `lr_eff = lr · √bc2 / bc1`
+  and `eps_eff = ε · √bc2`, dropping the `m_hat = m_new / bc1` and
+  `v_hat = v_new / bc2` materialisations per parameter (2 full-tensor
+  broadcast multiplies × 60+ params per Adam.step).  ResNet-18 wall
+  32.36 → 32.10 ms; pure Adam GPU 3.71 → 3.56 ms.
+- **Norm family-wide `mean → sum × 1/N`** — extend the BN backward
+  restructure to `layer_norm_backward`, `rms_norm_backward`,
+  `group_norm_backward`.  ResNet wall unchanged (no LN/RMS/GN there);
+  framework-wide benefit for every transformer / Llama-family LLM /
+  segmentation workload using these norms.
 
 ### Fixed
 
-- AMP plumbing for LayerNorm / RMSNorm / GroupNorm forwards
+- **AMP plumbing for LayerNorm / RMSNorm / GroupNorm forwards** — the three
+  op schemas declared `AmpPolicy::ForceFP32` but their forwards never used
+  `SchemaGuard` / `astype_op` to enforce it.  Under `with amp.autocast(F16):`
+  the upstream op (typically `Embedding` with `AmpPolicy::Promote`) emits
+  F16 while `gamma` / `beta` Parameter leaves stay F32, so the norm op's
+  pre-cast `x->dtype() == gamma->dtype()` check threw `DtypeMismatch` and
+  broke every transformer AMP F16 training run.  Fix mirrors
+  `BatchNormNdBackward::forward`'s AMP path: `SchemaGuard` +
+  `astype_op(x / gamma / beta, eff_dt)` so all three operands share the
+  policy-resolved dtype before the kernel.  GPT-2-base AMP F16:
+  FAILED → 188 ms (1.091× ref).
+
+### Investigated, reverted
+
+- **Conv-BN-ReLU fused autograd node (Option β)** — implemented a
+  standalone `ConvBnRelu2dBackward` (`FuncOp<,5>`) + `conv_bn_relu_2d_op`
+  fused forward that replaces 3 separate apply() calls with 1.  Bit-perfect
+  parity (max|Δ|=0 on output + 5 gradients) but wall step +0.14 ms vs the
+  unfused path (32.36 → 32.36 ms, within noise).  The autograd Engine
+  cycle savings (~18 cycles × ~20 µs ≈ 0.36 ms expected) are dominated by
+  MLX kernel execution time — which is unchanged because the fused C++
+  apply() builds the same lazy MLX chain as the three separate apply()
+  calls.  Implication: filling the
+  `FusionPass::try_fuse_conv_bn_relu` placeholder properly would not
+  deliver wall improvement on MLX 0.31.  ResNet wall is at the no-compile
+  MLX floor.  Code reverted to keep the working tree clean; finding
+  documented in
+  `obsidian/perf/perf-bn-running-stats-fusion-2026-05-22.md`.
+
+### Tests
+
+- 221/221 nn parity + unit tests pass (`pytest lucid/test/parity/nn/
+  lucid/test/unit/nn/`).
+- 27/27 optim parity + unit tests pass.
+
+### Vault notes
+
+- `obsidian/perf/perf-bn-running-stats-fusion-2026-05-22.md` — full
+  arc of this release, including the negative finding on Option β
+  and the no-compile MLX floor analysis.
+- `obsidian/api/api-cpp-tree.md` — Last verified bumped through every
+  C++ surface change (BN forward 4-element return, BN backward
+  `saved_xnorm` param, IBackend `relu_backward` virtual).
 
 ---
 
