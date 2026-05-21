@@ -32,6 +32,39 @@
 //   An anonymous-namespace GpuBackendRegistrar struct at the bottom of the
 //   file registers a GpuBackend singleton via Dispatcher at static-init time.
 //   BackendInit.cpp includes this header to trigger that registration.
+//
+// API surface
+// -----------
+// ~225 public method overrides grouped semantically into:
+//   • Construction      — ``from_cpu``, ``zeros``, ``ones``, ``clone``, ``contiguous``.
+//   • Arithmetic        — ``add``, ``sub``, ``mul``, ``div``, ``pow``, …
+//   • Elementwise unary — ``exp``, ``log``, ``sqrt``, ``abs``, ``neg``, trig,
+//                          hyperbolic, ``erf``, ``erfinv``, …
+//   • Activations       — ``relu``, ``gelu`` (+ exact + backward), ``silu``,
+//                          ``elu``, ``selu``, ``mish``, ``softplus``,
+//                          ``hard_sigmoid``, ``hard_swish``, ``relu6``, …
+//   • Reductions        — ``reduce_sum``, ``reduce_mean``, ``variance``,
+//                          ``reduce_max``, ``reduce_min``, ``cumsum``/``cumprod``/
+//                          ``cummax``/``cummin``.
+//   • Softmax           — ``softmax``, ``log_softmax`` (+ backwards).
+//   • Indexing          — ``gather``, ``scatter_add``, ``masked_select``,
+//                          ``masked_fill``, ``where_branch``, …
+//   • Shape ops         — ``reshape``, ``concatenate``, ``stack``, ``roll``,
+//                          ``slice_axis``, ``insert_axis_slice``, ``pad``, …
+//   • Sorting           — ``sort``, ``argsort``, ``arg_reduce_index``.
+//   • Linear algebra    — ``matmul``, ``linear``, ``linalg_cholesky``,
+//                          ``linalg_inv``, ``linalg_solve``, ``linalg_svd``,
+//                          ``linalg_norm``, ``linalg_det``, ``linalg_pinv``,
+//                          ``linalg_solve_triangular``, ``linalg_lu_solve``,
+//                          ``linalg_householder_product``.
+//   • Normalisation     — LayerNorm + BatchNorm (forward / backward) with
+//                          optional MPSGraph dispatch.
+//   • Convolutions      — Conv1d/2d/3d forward + backward (NHWC permutation).
+//   • Loss              — ``mse_loss``, ``huber_loss``, ``bce_loss``,
+//                          ``bce_with_logits_loss``, ``cross_entropy_backward``,
+//                          ``ctc_loss_forward``.
+//   • Misc              — ``embedding_bag_forward``, ``nn_fold``, ``astype``,
+//                          ``cast``, ``pad``, ``pow_scalar``, ``clip``, etc.
 
 #pragma once
 
@@ -61,41 +94,115 @@
 namespace lucid {
 namespace backend {
 
-// GPU (MLX/Metal) concrete backend.
+// Concrete GPU backend routing every Lucid op through Apple's MLX library.
 //
-// All public methods satisfy the IBackend contract.  The private section
-// contains layout-conversion helpers and the mlx_unary/mlx_binary/mlx_reduce
-// template dispatchers that eliminate boilerplate in the many op methods.
+// Inherits :class:`IBackend` and overrides each per-op virtual to call
+// the matching ``mlx::core::*`` primitive (broadcast, matmul, reduce,
+// activations, …).  Results are MLX lazy arrays — ``mx::eval()`` is
+// invoked when the engine needs the concrete buffer (e.g. for
+// :class:`MetalKernelRunner` or :func:`download_gpu_to_cpu`).  Stream
+// tagging uses :class:`Dispatcher`'s default GPU stream unless an op
+// requests another (linalg ops dispatch to a CPU MLX stream per the
+// H3 carve-out, since MLX's eigh / svd / qr run on CPU).
+//
+// Attributes
+// ----------
+// device() : Device
+//     Always returns ``Device::GPU``.
+//
+// Notes
+// -----
+// - CPU and GPU backends are static singletons registered with the
+//   :class:`Dispatcher` at process start (see :struct:`GpuBackendRegistrar`).
+// - All Storage values passed in MUST hold ``GpuStorage`` — the
+//   Dispatcher guarantees this by routing Device::GPU tensors here.
+// - MLX uses lazy evaluation; operations build a graph but defer
+//   execution until ``eval()`` or a CPU read forces it.
+// - ``Dtype::F64`` is unsupported on the GPU (Metal limitation); callers
+//   must cast to F32 or keep the tensor on the CPU.
+// - Convolutions internally permute NCHW ↔ NHWC because MLX expects
+//   channels-last; see ``gpu_nchw_to_nhwc_perm`` family of helpers.
+//
+// Examples
+// --------
+// Construction is automatic via static registration::
+//
+//     // BackendInit.cpp triggers GpuBackendRegistrar at process start.
+//     auto t = lucid::tensor({1,2,3}, lucid::Device::GPU);
+//     // → routed to GpuBackend::from_cpu → mlx::core::copy.
+//
+// See Also
+// --------
+// :class:`CpuBackend` — Accelerate-backed sibling.
+// :class:`MlxBridge` — Storage ↔ mlx::core::array conversion.
+// :struct:`GpuBackendRegistrar` — static-init registration.
 class GpuBackend final : public IBackend {
 public:
-    // Registers this backend with the Dispatcher for Device::GPU.
+    // Construct + register a fresh :class:`GpuBackend` singleton with the Dispatcher.
+    //
+    // Idempotent only insofar as the Dispatcher replaces any prior
+    // registration for ``Device::GPU``.  Normally invoked exactly once
+    // by :struct:`GpuBackendRegistrar` at process start.
     static void register_self() {
         Dispatcher::register_backend(Device::GPU, std::make_unique<GpuBackend>());
     }
 
+    // Return the device tag this backend services.
+    //
+    // Returns
+    // -------
+    // Device
+    //     Always ``Device::GPU``.
     Device device() const noexcept override { return Device::GPU; }
 
-    // Uploads cpu to GPU-private memory via mlx::core::copy() (see MlxBridge).
+    // ── Construction / cross-device ────────────────────────────────────────
+    // Upload a CPU storage to GPU-private memory.
+    //
+    // Delegates to :func:`gpu::upload_cpu_to_gpu`, which uses
+    // ``mlx::core::copy`` to obtain a fresh GPU-private allocation
+    // (the raw CPU pointer cannot be aliased on Metal).
+    //
+    // Parameters
+    // ----------
+    // cpu : CpuStorage
+    //     The source CPU buffer (taken by value so the caller can move).
+    // shape : const Shape&
+    //     Logical shape of the tensor.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     A ``GpuStorage`` participating in MemoryTracker accounting.
     Storage from_cpu(CpuStorage cpu, const Shape& shape) override {
         return Storage{gpu::upload_cpu_to_gpu(cpu, shape)};
     }
 
+    // Allocate a zero-initialised tensor on the GPU.  Delegates to ``mlx::core::zeros``.
     Storage zeros(const Shape& shape, Dtype dt) override {
         auto arr = ::mlx::core::zeros(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
+    // Allocate a ones-initialised tensor on the GPU.  Delegates to ``mlx::core::ones``.
     Storage ones(const Shape& shape, Dtype dt) override {
         auto arr = ::mlx::core::ones(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt));
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
+    // Deep-copy a tensor into a fresh contiguous MLX array.
+    //
+    // Calls ``mlx::core::contiguous`` to materialise the source array
+    // into row-major layout; result is disjoint from the input.
     Storage clone(const Storage& src, const Shape&, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(src);
         auto arr = ::mlx::core::contiguous(*gs.arr);
         return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
     }
 
+    // Materialise a non-contiguous view into a contiguous tensor.
+    //
+    // Identical to :meth:`clone` on this backend — MLX's
+    // ``contiguous`` already handles stride packing internally.
     Storage contiguous(const Storage& src,
                        const Shape& shape,
                        const Stride&,
@@ -105,6 +212,8 @@ public:
         return clone(src, shape, dt);
     }
 
+    // ── Arithmetic ─────────────────────────────────────────────────────────
+    // Elementwise add with broadcast.  Delegates to ``mlx::core::add``.
     Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return mlx_binary(a, b, shape, dt, [](auto& x, auto& y) { return ::mlx::core::add(x, y); });
     }
@@ -165,16 +274,21 @@ public:
         });
     }
 
+    // Elementwise max(a, b) with broadcast.
     Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return mlx_binary(a, b, shape, dt,
                           [](auto& x, auto& y) { return ::mlx::core::maximum(x, y); });
     }
 
+    // Elementwise min(a, b) with broadcast.
     Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
         return mlx_binary(a, b, shape, dt,
                           [](auto& x, auto& y) { return ::mlx::core::minimum(x, y); });
     }
 
+    // ── Elementwise unary ─────────────────────────────────────────────────
+    // Elementwise exp(x).  Each unary op below delegates to the matching
+    // ``mlx::core::*`` primitive through the :func:`mlx_unary` helper.
     Storage exp(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::exp(x); });
     }
@@ -345,11 +459,30 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(out), Dtype::C64)};
     }
 
+    // ── Activations ────────────────────────────────────────────────────────
+    // SiLU / Swish forward.
+    //
+    // Math
+    // ----
+    // $y = x \cdot \sigma(x)$ where $\sigma$ is the logistic sigmoid.
+    //
+    // See Also
+    // --------
+    // :meth:`silu_backward`.
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, dt,
                          [](auto& x) { return ::mlx::core::multiply(x, ::mlx::core::sigmoid(x)); });
     }
 
+    // SiLU / Swish backward.
+    //
+    // Dispatches to :func:`gpu::mps::silu_backward` when policy allows
+    // (universal dispatch — see :func:`should_dispatch_silu_backward`);
+    // otherwise computes the gradient as a single fused MLX expression.
+    //
+    // Math
+    // ----
+    // $\partial y/\partial x = \sigma(x) \, (1 + x \, (1 - \sigma(x)))$.
     Storage silu_backward(
         const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
@@ -371,6 +504,22 @@ public:
         });
     }
 
+    // GELU forward (tanh approximation).
+    //
+    // Math
+    // ----
+    // $y = 0.5 \, x \, (1 + \tanh[c_1 \, (x + c_2 x^3)])$ where
+    // $c_1 = \sqrt{2/\pi}$, $c_2 = 0.044715$.
+    //
+    // Notes
+    // -----
+    // Dispatches to :func:`gpu::mps::gelu_forward` when the per-op
+    // policy allows; otherwise expands to the 7-op MLX composition
+    // (kept bit-for-bit identical for parity).
+    //
+    // See Also
+    // --------
+    // :meth:`gelu_backward`, :meth:`gelu_exact`.
     Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override {
         // 3.4 Phase 2 pilot: dispatch to MPSGraph when policy allows.  MLX
         // path stays bit-for-bit identical below.  Per-op shortlist:
@@ -394,6 +543,16 @@ public:
         });
     }
 
+    // GELU exact (Gaussian-CDF) forward.
+    //
+    // Math
+    // ----
+    // $y = 0.5 \, x \, (1 + \operatorname{erf}(x / \sqrt{2}))$.
+    //
+    // Notes
+    // -----
+    // Dispatches to :func:`gpu::mps::gelu_exact_forward` when policy
+    // allows; otherwise composes via ``mlx::core::erf``.
     Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
@@ -649,6 +808,8 @@ public:
         });
     }
 
+    // ── Reductions / boolean predicates ───────────────────────────────────
+    // Logical-any over all elements; returns a 0-D bool tensor.
     Storage any(const Storage& a, const Shape&, Dtype dt) override {
         return mlx_unary(a, {}, Dtype::Bool, [](auto& x) { return ::mlx::core::any(x); });
     }
@@ -754,11 +915,26 @@ public:
     // are pure elementwise composition.  Dropping the contiguous() wraps lets
     // downstream loss ops (cross_entropy_loss is the typical consumer) fuse
     // into a single MLX kernel.
+    // ── Softmax family ────────────────────────────────────────────────────
+    // Softmax along ``axis``.  Delegates to ``mlx::core::softmax``.
+    //
+    // Math
+    // ----
+    // $y_i = e^{x_i} / \sum_j e^{x_j}$ along the chosen axis.
     Storage softmax(const Storage& a, const Shape&, int axis, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
         return Storage{gpu::wrap_mlx_array(::mlx::core::softmax(*gs.arr, axis, true), dt)};
     }
 
+    // Softmax backward, given the saved forward output ``z``.
+    //
+    // Dispatches to :func:`gpu::mps::softmax_backward` for large
+    // reduction axes (≥1024 by default); otherwise composes
+    // ``z * (grad - sum(z * grad, axis))`` via MLX.
+    //
+    // Math
+    // ----
+    // $\partial L / \partial x_i = z_i \, (g_i - \sum_j z_j g_j)$.
     Storage softmax_backward(
         const Storage& z, const Storage& grad_out, const Shape& shape_param, int axis, Dtype dt) override {
         const auto& z_gpu = std::get<GpuStorage>(z);
@@ -865,6 +1041,12 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
+    // ── Indexing / scatter ────────────────────────────────────────────────
+    // Gather values from ``a`` along ``dim`` using ``indices``.
+    //
+    // Math
+    // ----
+    // $\mathrm{out}[i_1, \ldots, i_d, \ldots, i_n] = a[i_1, \ldots, \mathrm{indices}[\ldots], \ldots, i_n]$.
     Storage gather(const Storage& a,
                    const Storage& indices,
                    const Shape&,
@@ -1162,6 +1344,14 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(out), dt)};
     }
 
+    // Scatter-add: ``base[indices] += src`` (out-of-place).
+    //
+    // Notes
+    // -----
+    // Builds explicit multi-axis index arrays so MLX's
+    // ``scatter_add`` can dispatch in one kernel; the helper
+    // :meth:`axis_scatter_via_multiaxis` is shared with
+    // scatter-amax / amin / prod.
     Storage scatter_add(const Storage& base,
                         const Storage& indices,
                         const Storage& src,
@@ -1355,6 +1545,12 @@ public:
             });
     }
 
+    // Sliding-window unfold along ``dim`` producing rank+1 windows of ``size``.
+    //
+    // Math
+    // ----
+    // Output dim ``L = (dim_size - size) / step + 1``.  Indices built
+    // as ``starts[l] = l * step``, ``offsets[s] = s``, then gathered.
     Storage unfold_dim(
         const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
@@ -1391,6 +1587,30 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    // ── Linear algebra ────────────────────────────────────────────────────
+    // General matrix multiply with optional broadcasted batch dims.
+    //
+    // Parameters
+    // ----------
+    // a, b : const Storage&
+    //     GPU tensors of compatible shapes.  Either side may be
+    //     transposed via ``opts``.
+    // opts : const MatmulOpts&
+    //     Transpose / batched flags (see :struct:`MatmulOpts`).
+    // dt : Dtype
+    //     Output dtype.  Must be a real / complex floating type.
+    //
+    // Returns
+    // -------
+    // Storage
+    //     Result of ``a @ b`` (possibly batched), wrapped as
+    //     ``GpuStorage``.
+    //
+    // Notes
+    // -----
+    // Calls ``mlx::core::matmul``.  Uses Metal's BLAS-equivalent
+    // tiled kernel internally; for very small matrices the dispatch
+    // overhead may dominate.
     Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         const auto& gb = std::get<GpuStorage>(b);
@@ -1408,6 +1628,18 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
 
+    // Fused affine: ``y = x @ W^T + b`` (the canonical ``nn.Linear`` op).
+    //
+    // Math
+    // ----
+    // $y_{i,j} = \sum_k x_{i,k} W_{j,k} + b_j$.
+    //
+    // Notes
+    // -----
+    // Uses ``mlx::core::addmm`` when ``b`` is present so the multiply +
+    // add fuse inside the MLX kernel; falls back to a separate ``matmul``
+    // when ``b`` is null.  Deferred contiguous wrap matches the conv2d
+    // path (cf perf-conv2d-deferred-contig).
     Storage linear(const Storage& x,
                    const Storage& weight,
                    const Storage& bias,
@@ -1535,6 +1767,26 @@ public:
                 Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)}};
     }
 
+    // ── Normalisation ─────────────────────────────────────────────────────
+    // LayerNorm forward via MLX's fused ``fast::layer_norm`` kernel.
+    //
+    // Math
+    // ----
+    // $$\mu = \mathbb{E}[x], \quad \mathrm{rstd} = (\operatorname{Var}[x] + \varepsilon)^{-1/2}$$
+    // $$y = \gamma \, (x - \mu) \, \mathrm{rstd} + \beta$$
+    // reducing along the trailing axis of size ``normalized_size``.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     ``{y, saved_mean, saved_rstd}`` — the activation plus saved
+    //     stats needed by :meth:`layer_norm_backward`.
+    //
+    // Notes
+    // -----
+    // Replaces the 7-op MLX chain (mean → subtract → square → mean →
+    // add+rsqrt → multiply → multiply+add) with one fused kernel.
+    // Mac Studio Llama-scale forward: 2.4 ms → ~0.6 ms.
     std::vector<Storage> layer_norm_forward(const Storage& x,
                                             const Storage& gamma,
                                             const Storage& beta,
@@ -1573,6 +1825,17 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
     }
 
+    // LayerNorm backward.
+    //
+    // Dispatches to :func:`gpu::mps::layer_norm_backward` for large
+    // ``normalized_size`` (see :func:`should_dispatch_layer_norm_backward`);
+    // otherwise composes the gradient as a single MLX expression
+    // using the saved mean / rstd.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     ``{dx, dgamma, dbeta}``.
     std::vector<Storage> layer_norm_backward(const Storage& x,
                                              const Storage& gamma,
                                              const Storage& saved_mean,
@@ -1624,6 +1887,26 @@ public:
                 Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
     }
 
+    // BatchNorm forward (training mode).
+    //
+    // Math
+    // ----
+    // Per-channel reduction over batch + spatial dims:
+    // $\mu_c = \mathbb{E}[x_{n,c,\ldots}]$,
+    // $\mathrm{rstd}_c = (\operatorname{Var}[x_{n,c,\ldots}] + \varepsilon)^{-1/2}$,
+    // $y = \gamma (x - \mu) \mathrm{rstd} + \beta$.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     ``{y, saved_mean, saved_rstd}``.
+    //
+    // Notes
+    // -----
+    // For very large activations (ImageNet-scale) dispatches to
+    // :func:`gpu::mps::batch_norm_train_forward` per
+    // :func:`should_dispatch_batch_norm_train`; otherwise hand-rolled
+    // MLX reductions over channel axes.
     std::vector<Storage> batch_norm_forward(const Storage& x,
                                             const Storage& gamma,
                                             const Storage& beta,
@@ -1679,6 +1962,14 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
     }
 
+    // BatchNorm backward (training mode).
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     ``{dx, dgamma, dbeta}``.  Dispatches to MPSGraph on large
+    //     activations; falls back to a MLX composite for ResNet-scale
+    //     shapes where MLX already matches reference parity.
     std::vector<Storage> batch_norm_backward(const Storage& x,
                                              const Storage& gamma,
                                              const Storage& saved_mean,
@@ -1859,6 +2150,19 @@ public:
                 Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
     }
 
+    // Matrix / vector norm.  Routed to MLX's CPU linalg stream per H3.
+    //
+    // Math
+    // ----
+    // Generic ``ord``-norm along ``axes``.  For ``ord=2`` and a matrix
+    // axis pair this is the Frobenius / spectral norm depending on
+    // mode; for a vector axis it is the L2 norm.
+    //
+    // Notes
+    // -----
+    // MLX implements ``linalg::norm`` on the CPU stream, so the result
+    // physically lives in unified memory but the compute happens on
+    // the CPU (H3 carve-out).
     Storage linalg_norm(const Storage& a,
                         const Shape&,
                         double ord,
@@ -1873,18 +2177,25 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(raw), dt)};
     }
 
+    // Cholesky factorisation $A = L L^T$ (or $U^T U$ if ``upper``).
+    //
+    // Notes
+    // -----
+    // Routed through MLX's CPU linalg stream (``k_linalg_stream``).
     Storage linalg_cholesky(const Storage& a, const Shape&, bool upper, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = ::mlx::core::linalg::cholesky(*ga.arr, upper, k_linalg_stream);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    // Dense matrix inverse $A^{-1}$ via the MLX CPU linalg stream.
     Storage linalg_inv(const Storage& a, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto out = ::mlx::core::linalg::inv(*ga.arr, k_linalg_stream);
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
     }
 
+    // Solve the linear system $A x = b$ for ``x``.  CPU linalg stream.
     Storage linalg_solve(
         const Storage& a, const Storage& b, const Shape&, const Shape&, Dtype dt) override {
         const auto& ga = std::get<GpuStorage>(a);
@@ -2187,6 +2498,12 @@ public:
     // input slices into the (N, C, outH*outW) output buffer along axis 2.
     // Invalid (out-of-bounds) source elements are zeroed via the mask, so
     // they scatter +0 to position 0 and have no effect on the result.
+    // ``nn.Fold`` — reverse of ``nn.Unfold``: scatters unfolded patches back into a feature map.
+    //
+    // Notes
+    // -----
+    // Built atop MLX's ``scatter_add`` because patches may overlap and
+    // must accumulate.
     Storage nn_fold(const Storage& x,
                     const Shape& x_shape,
                     const Shape& out_shape,
@@ -2598,6 +2915,13 @@ public:
     }
 
     // embedding_bag: use MLX gather + reduce
+    // EmbeddingBag forward — gather + per-bag reduction in one op.
+    //
+    // Notes
+    // -----
+    // Reduction mode (sum / mean / max) is encoded in the surrounding
+    // op-spec; this routine only handles the gather + reduction kernel
+    // dispatch.
     Storage embedding_bag_forward(const Storage& weight,
                                   const Storage& indices,
                                   const Storage& offsets,
@@ -2660,6 +2984,8 @@ public:
     }
 
     // ── astype ────────────────────────────────────────────────────────────────
+    // ── Type / casts / misc ───────────────────────────────────────────────
+    // Convert ``a`` to ``dst_dt``.  Identical to :meth:`cast` on this backend.
     Storage astype(const Storage& a, const Shape& shape, Dtype /*src_dt*/, Dtype dst_dt) override {
         const auto& ga = std::get<GpuStorage>(a);
         auto result = ::mlx::core::astype(*ga.arr, gpu::to_mlx_dtype(dst_dt));
@@ -2721,6 +3047,13 @@ public:
     }
 
     // ── ctc_loss ──────────────────────────────────────────────────────────────
+    // ── Loss functions ────────────────────────────────────────────────────
+    // Connectionist Temporal Classification (CTC) loss forward.
+    //
+    // Notes
+    // -----
+    // Implements Graves 2006 forward-only loss on the GPU with MLX
+    // primitives.  Backward lives separately in the autograd layer.
     Storage ctc_loss_forward(const Storage& log_probs,
                              const Storage& targets,
                              const Storage& input_lengths,
@@ -2825,6 +3158,12 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dst_dt)};
     }
 
+    // Mean-squared-error loss.
+    //
+    // Math
+    // ----
+    // $L = \mathrm{reduce}((x - t)^2)$ with the chosen reduction
+    // (``mean`` / ``sum`` / ``none``).
     Storage mse_loss(const Storage& input,
                      const Storage& target,
                      const Shape&,
@@ -2861,6 +3200,12 @@ public:
         };
     }
 
+    // Huber loss (smooth L1).
+    //
+    // Math
+    // ----
+    // Piecewise: $0.5 (x - t)^2$ for $|x - t| < \delta$,
+    // else $\delta \, (|x - t| - 0.5 \delta)$.
     Storage huber_loss(const Storage& input,
                        const Storage& target,
                        const Shape&,
@@ -2913,6 +3258,11 @@ public:
         };
     }
 
+    // Binary cross-entropy from probability inputs (not logits).
+    //
+    // Math
+    // ----
+    // $L = -(t \log p + (1 - t) \log (1 - p))$ then reduced.
     Storage bce_loss(const Storage& input,
                      const Storage& target,
                      const Storage& weight,
@@ -2979,6 +3329,12 @@ public:
         };
     }
 
+    // Binary cross-entropy from logits, numerically stable.
+    //
+    // Math
+    // ----
+    // $L = \max(x, 0) - x t + \log(1 + e^{-|x|})$ — the standard
+    // log-sum-exp-stable form.
     Storage bce_with_logits_loss(const Storage& input,
                                  const Storage& target,
                                  const Storage& weight,
@@ -3086,6 +3442,13 @@ public:
                 Storage{gpu::wrap_mlx_array(std::move(valid_count), dt)}};
     }
 
+    // Cross-entropy backward given the saved softmax output.
+    //
+    // Math
+    // ----
+    // $\partial L / \partial x_i = p_i - \delta_{i, \mathrm{target}}$
+    // (probability minus one-hot target), then scaled by the loss
+    // reduction weight.
     Storage cross_entropy_backward(const Storage& saved_softmax,
                                    const Storage& target,
                                    const Storage* weight,
@@ -3306,6 +3669,13 @@ public:
                 Storage{gpu::wrap_mlx_array(std::move(dV), dt)}};
     }
 
+    // N-D transposed convolution (fractionally-strided / "deconv") forward.
+    //
+    // Notes
+    // -----
+    // Same NHWC permutation strategy as :meth:`conv_nd_forward`.  MLX
+    // does not yet ship a fused conv-transpose kernel, so this expands
+    // to the equivalent dilated conv composition.
     Storage conv_transpose_nd_forward(const Storage& x,
                                       const Storage& W,
                                       const Storage& b,
@@ -3345,6 +3715,7 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
     }
 
+    // N-D transposed convolution backward producing ``{dx, dW, db}``.
     std::vector<Storage> conv_transpose_nd_backward(const Storage& grad_out,
                                                     const Storage& x,
                                                     const Storage& W,
@@ -3415,7 +3786,9 @@ public:
         dW_back.push_back(0);
         for (int i = 0; i < N; ++i)
             dW_back.push_back(1 + i);
-        auto dW = ::mlx::core::contiguous(::mlx::core::transpose(dW_perm, dW_back));
+        // 3.4+ Step 3.2 perf sweep: see conv_nd_backward — drop trailing
+        // contiguous on dW so the optimizer's update can fuse with it.
+        auto dW = ::mlx::core::transpose(dW_perm, dW_back);
 
         return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
@@ -3942,6 +4315,20 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(dx), dt)};
     }
 
+    // ── Convolutions ──────────────────────────────────────────────────────
+    // N-D convolution forward (N ∈ {1, 2, 3}).
+    //
+    // Math
+    // ----
+    // $$y_{n,c_o,p_1,\ldots,p_N} = b_{c_o} + \sum_{c_i} \sum_{\Delta} W_{c_o,c_i,\Delta} \, x_{n,c_i,p_1 s_1 + \Delta_1,\ldots}$$
+    // where $s$ is the stride and the sum runs over the kernel window.
+    //
+    // Notes
+    // -----
+    // MLX uses NHWC (channels-last) ordering, so this routine permutes
+    // input + weight NCHW → NHWC, dispatches ``mlx::core::conv1d`` /
+    // ``conv2d`` / ``conv3d`` based on ``ndim``, then permutes the
+    // result back to NCHW.  See ``gpu_nchw_to_nhwc_perm`` family.
     Storage conv_nd_forward(const Storage& x,
                             const Storage& W,
                             const Storage& b,
@@ -3995,6 +4382,19 @@ public:
         return Storage{gpu::wrap_mlx_array(std::move(y), dt)};
     }
 
+    // N-D convolution backward producing ``{dx, dW, db}``.
+    //
+    // Returns
+    // -------
+    // std::vector<Storage>
+    //     ``{dx, dW, db}`` in that order; ``db`` may be a stub when the
+    //     forward had no bias.
+    //
+    // Notes
+    // -----
+    // Like the forward, this routes through the NHWC permutation
+    // helpers.  Heavy lifting is two extra MLX convolutions (one for
+    // each weight slot) plus a reduction for ``db``.
     std::vector<Storage> conv_nd_backward(const Storage& grad_out,
                                           const Storage& x,
                                           const Storage& W,
@@ -4054,12 +4454,16 @@ public:
         // outside by slicing the Cin / Cout axes of x / W / grad_out per
         // group and concatenating the per-group results.  This mirrors the
         // per-group loop in CpuBackend::conv_nd_backward.
+        // 3.4+ Step 3.2 experiment: drop INPUT contigs to conv_general.  The
+        // forward path's -7.8% measurement was for a stand-alone microbench;
+        // in the backward chain context the upstream BN-bwd / relu-bwd outputs
+        // are already strided lazy views, and forcing them contiguous here
+        // breaks the conv-BN-relu backward fusion chain.  If this regresses
+        // numerical parity or wall time, restore.
         auto compute_dx = [&](const ::mlx::core::array& grad_arr,
                               const ::mlx::core::array& W_arr) -> ::mlx::core::array {
-            auto grad_nhwc = ::mlx::core::contiguous(
-                ::mlx::core::transpose(grad_arr, gpu_nchw_to_nhwc_perm(N)));
-            auto W_t_nhwc =
-                ::mlx::core::contiguous(::mlx::core::transpose(W_arr, W_t_perm));
+            auto grad_nhwc = ::mlx::core::transpose(grad_arr, gpu_nchw_to_nhwc_perm(N));
+            auto W_t_nhwc = ::mlx::core::transpose(W_arr, W_t_perm);
             auto dx_nhwc = ::mlx::core::conv_general(
                 grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx, dv, sv,
                 /*groups=*/1, /*flip=*/true);
@@ -4070,8 +4474,8 @@ public:
                               const ::mlx::core::array& grad_arr,
                               int local_Cin_g,
                               int local_Cout) -> ::mlx::core::array {
-            auto x_perm = ::mlx::core::contiguous(::mlx::core::transpose(x_arr, perm));
-            auto g_perm = ::mlx::core::contiguous(::mlx::core::transpose(grad_arr, perm));
+            auto x_perm = ::mlx::core::transpose(x_arr, perm);
+            auto g_perm = ::mlx::core::transpose(grad_arr, perm);
             auto dW_raw = ::mlx::core::conv_general(
                 x_perm, g_perm, conv_s, pv, pv, sv, dv, /*groups=*/1, /*flip=*/false);
             ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
@@ -4129,7 +4533,13 @@ public:
         dW_back.push_back(0);
         for (int i = 0; i < N; ++i)
             dW_back.push_back(1 + i);
-        auto dW = ::mlx::core::contiguous(::mlx::core::transpose(dW_perm, dW_back));
+        // 3.4+ Step 3.2 perf sweep: drop the trailing contiguous on dW.  The
+        // dW feeds into the optimizer's parameter update (Adam: lazy mul / add
+        // on the parameter tensor), which handles strided inputs natively.
+        // Forcing contiguous here would materialize dW immediately and break
+        // the lazy chain that Adam.step would otherwise fuse with.  Mirrors
+        // the 3.1.0 forward-output sweep and 3.4.0 norm-backward sweep.
+        auto dW = ::mlx::core::transpose(dW_perm, dW_back);
         return {Storage{gpu::wrap_mlx_array(std::move(dx_out), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(dW), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
@@ -6403,10 +6813,24 @@ private:
 }  // namespace backend
 }  // namespace lucid
 
-// Anonymous-namespace static registrar that calls Dispatcher::register_backend
-// for Device::GPU at process startup, before any tensor code executes.
-// BackendInit.cpp includes this header to trigger the registration.
 namespace {
+// Static initialiser that registers :class:`GpuBackend` with the Dispatcher.
+//
+// A single instance ``g_gpu_registrar`` lives in this header's anonymous
+// namespace; its constructor runs before ``main()`` and binds the
+// concrete :class:`GpuBackend` to ``Device::GPU``.  Including this
+// header from ``BackendInit.cpp`` is sufficient to trigger the
+// registration — no explicit call is required at runtime.
+//
+// Notes
+// -----
+// Pairs with :struct:`CpuBackendRegistrar` (sibling, registers the
+// Accelerate-backed :class:`CpuBackend` for ``Device::CPU``).
+//
+// See Also
+// --------
+// :meth:`GpuBackend::register_self` — the body of the constructor.
+// :class:`Dispatcher` — global op-routing registry.
 struct GpuBackendRegistrar {
     GpuBackendRegistrar() {
         lucid::backend::Dispatcher::register_backend(

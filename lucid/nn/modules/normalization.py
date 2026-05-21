@@ -627,18 +627,45 @@ class _BatchNormBase(Module):
         Tensor
             Normalised tensor of the same shape as ``input``.
         """
-        if self.training and self.track_running_stats:
+        # Running-stats path selection.
+        #
+        # Fast path (``self.momentum is not None``) — the common case,
+        # default 0.1 matches the reference framework.  The EMA update
+        # on ``running_mean`` / ``running_var`` is fused into the C++
+        # BN forward kernel: it reuses the same mean / rstd it already
+        # computes for autograd, avoiding a second reduction over ``x``.
+        # All Python has to do is bump ``num_batches_tracked`` (cheap,
+        # one I64 add) and hand the buffers to the functional below.
+        #
+        # Slow path (``self.momentum is None``) — cumulative MA, needs
+        # ``num_batches_tracked.item()`` which forces a GPU sync.  Keep
+        # the Python composition in :meth:`_update_running_stats` for
+        # correctness, and do not pass the buffers to the functional
+        # so the C++ kernel skips its EMA branch.
+        fuse_running_update: bool = (
+            self.training and self.track_running_stats and self.momentum is not None
+        )
+        if self.training and self.track_running_stats and not fuse_running_update:
             self._update_running_stats(x)
+        elif fuse_running_update:
+            self._buffers["num_batches_tracked"] = (
+                self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
+            )
 
         # Pick which stats path the functional uses:
-        #   - eval + tracking → precomputed running stats
-        #   - everything else (training, or no tracking)  → batch stats
+        #   - eval + tracking          → precomputed running stats (eval kernel)
+        #   - training + fused update  → buffers for in-place EMA inside BN fwd
+        #   - everything else          → batch stats only
         use_running: bool = (not self.training) and self.track_running_stats
         running_mean: Tensor | None = (
-            self._buffers.get("running_mean") if use_running else None
+            self._buffers.get("running_mean")
+            if use_running or fuse_running_update
+            else None
         )
         running_var: Tensor | None = (
-            self._buffers.get("running_var") if use_running else None
+            self._buffers.get("running_var")
+            if use_running or fuse_running_update
+            else None
         )
 
         return batch_norm(
@@ -660,9 +687,39 @@ class _BatchNormBase(Module):
         Variance for the running buffer uses the unbiased (Bessel-corrected)
         estimator while the *normalisation* itself uses the biased one;
         both follow the reference framework's behaviour.
+
+        Fast path: when ``self.momentum`` is a finite float (the common
+        case — default 0.1 matches the reference framework) the whole
+        update is a single ``_C_engine.nn.batch_norm_update_running_stats``
+        call.  Profile (Mac Studio M4 Max, ResNet-18 BS=32) shows the prior
+        Python composition cost ~8.8 ms / forward via ~160 pybind11
+        crossings; the fused entry collapses it to one.  The cumulative
+        path (``momentum is None``) requires reading ``num_batches_tracked``
+        as a host scalar which forces a GPU sync — keeps the slow Python
+        composition for correctness.
         """
         # Reduce over batch + spatial dims, keeping the channel dim.
         reduce_dims: list[int] = [d for d in range(x.ndim) if d != 1]
+
+        if self.momentum is not None:
+            # Fast C++ path — single pybind11 cross handles AutocastGuard(F32),
+            # mean/var reduction, EMA update, async_eval.  num_batches_tracked
+            # is incremented in Python (one cheap op; its I64 dtype isn't
+            # universally supported via backend add_scalar).
+            self._buffers["num_batches_tracked"] = (
+                self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
+            )
+            _C_engine.nn.batch_norm_update_running_stats(
+                self._buffers["running_mean"]._impl,
+                self._buffers["running_var"]._impl,
+                x._impl,
+                reduce_dims,
+                float(self.momentum),
+                True,  # unbiased_var = n/(n-1) Bessel correction for the running buffer
+            )
+            return
+
+        # Slow path: cumulative MA needs num_batches_tracked.item() (GPU sync).
         n: int = 1
         for d in reduce_dims:
             n *= x.shape[d]

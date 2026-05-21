@@ -108,17 +108,30 @@ def batch_norm(
         return _wrap(out_impl)
 
     # ── Training mode: dispatch by dimensionality ─────────────────────────────
+    # When ``running_mean`` / ``running_var`` are supplied the C++ kernel
+    # additionally fuses the EMA update — reusing the BN forward's
+    # saved_mean / saved_rstd instead of doing a second mean+var reduction
+    # over ``x``.  Pass None when the caller is not tracking running stats.
+    rm_impl = _unwrap(running_mean) if running_mean is not None else None
+    rv_impl = _unwrap(running_var) if running_var is not None else None
+
     if ndim == 2:
         # (N, C) → unsqueeze to (N, C, 1), batch_norm1d, squeeze back
         xi_3d = _C_engine.unsqueeze(xi, 2)
-        out_3d = _C_engine.nn.batch_norm1d(xi_3d, w, b, eps)
+        out_3d = _C_engine.nn.batch_norm1d(xi_3d, w, b, eps, rm_impl, rv_impl, momentum)
         return _wrap(_C_engine.squeeze(out_3d, 2))
     elif ndim == 3:
-        return _wrap(_C_engine.nn.batch_norm1d(xi, w, b, eps))
+        return _wrap(
+            _C_engine.nn.batch_norm1d(xi, w, b, eps, rm_impl, rv_impl, momentum)
+        )
     elif ndim == 4:
-        return _wrap(_C_engine.nn.batch_norm(xi, w, b, eps))  # type: ignore[call-arg, arg-type]
+        return _wrap(
+            _C_engine.nn.batch_norm(xi, w, b, eps, rm_impl, rv_impl, momentum)  # type: ignore[call-arg, arg-type]
+        )
     elif ndim == 5:
-        return _wrap(_C_engine.nn.batch_norm3d(xi, w, b, eps))
+        return _wrap(
+            _C_engine.nn.batch_norm3d(xi, w, b, eps, rm_impl, rv_impl, momentum)
+        )
     else:
         raise ValueError(f"batch_norm: expected 2–5D input, got ndim={ndim}")
 
