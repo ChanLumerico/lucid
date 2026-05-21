@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BN forward polish (mean→sum/N + drop trailing contiguous)
 - BN saved-xnorm — backward skips centered+xnorm recomputation
 - Adam — fold bias correction into pre-computed scalars
+- extend Phase A.2 (mean→sum/N) to LayerNorm, RMSNorm, GroupNorm
 
 ---
 

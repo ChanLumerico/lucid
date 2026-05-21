@@ -1753,8 +1753,13 @@ public:
         auto dgamma_2d =
             ::mlx::core::sum(::mlx::core::multiply(grad_2d, xnorm), std::vector<int>{0}, false);
         auto gx_scaled = ::mlx::core::multiply(grad_2d, gamma_2d);
-        auto m =
-            ::mlx::core::mean(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1}, true);
+        // 3.4+ Phase A.7: mean → sum × 1/N (same as Phase A.2 for BN).
+        // Helps Llama-style RMSNorm-using transformer workloads.
+        const ::mlx::core::array inv_N(1.0 / static_cast<double>(normalized_size),
+                                       gpu::to_mlx_dtype(dt));
+        auto sum_gx_xn_kept =
+            ::mlx::core::sum(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1}, true);
+        auto m = ::mlx::core::multiply(sum_gx_xn_kept, inv_N);
         auto dx_2d = ::mlx::core::multiply(
             *gr.arr, ::mlx::core::subtract(gx_scaled, ::mlx::core::multiply(xnorm, m)));
         auto dx = ::mlx::core::reshape(dx_2d, gpu::to_mlx_shape(x_shape));
@@ -1871,9 +1876,21 @@ public:
         auto dgamma_2d =
             ::mlx::core::sum(::mlx::core::multiply(grad_2d, xnorm), std::vector<int>{0}, false);
         auto gx_scaled = ::mlx::core::multiply(grad_2d, gamma_2d);
-        auto mean1 = ::mlx::core::mean(gx_scaled, std::vector<int>{1}, true);
-        auto mean2 =
-            ::mlx::core::mean(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1}, true);
+
+        // 3.4+ Phase A.7: same restructure as Phase A.2 (BN backward) — replace
+        // ``mean(...)`` with ``sum(..., keepdims=true) × 1/N`` so MLX dispatches
+        // a sum kernel + scalar broadcast multiply instead of the dedicated
+        // mean primitive.  Helps every transformer / NLP workload using
+        // LayerNorm: the per-op cost-per-bwd-call drops a small amount, and
+        // because the backward chain doesn't MLX-fuse (multi-output structural
+        // blocker), the savings translate directly to wall time.
+        const ::mlx::core::array inv_N(1.0 / static_cast<double>(normalized_size),
+                                       gpu::to_mlx_dtype(dt));
+        auto sum_gx_kept = ::mlx::core::sum(gx_scaled, std::vector<int>{1}, true);
+        auto sum_gx_xn_kept =
+            ::mlx::core::sum(::mlx::core::multiply(gx_scaled, xnorm), std::vector<int>{1}, true);
+        auto mean1 = ::mlx::core::multiply(sum_gx_kept, inv_N);
+        auto mean2 = ::mlx::core::multiply(sum_gx_xn_kept, inv_N);
         auto dx_2d = ::mlx::core::multiply(
             *gr.arr, ::mlx::core::subtract(::mlx::core::subtract(gx_scaled, mean1),
                                            ::mlx::core::multiply(xnorm, mean2)));
@@ -2220,8 +2237,20 @@ public:
         auto gamma_view = ::mlx::core::reshape(*gg.arr, br_c);
         auto gx_scaled4 = ::mlx::core::multiply(gamma_view, *ggrad.arr);
         auto gx_scaled_g = ::mlx::core::reshape(gx_scaled4, grouped);
-        auto mean1 = ::mlx::core::mean(gx_scaled_g, red_axes, true);
-        auto mean2 = ::mlx::core::mean(::mlx::core::multiply(gx_scaled_g, xnorm_g), red_axes, true);
+
+        // 3.4+ Phase A.7: mean → sum × 1/N (same as Phase A.2 for BN).
+        // N = channels_per_group × product(spatial_dims).  Helps segmentation
+        // models (U-Net) and ConvNeXt-family architectures using GroupNorm.
+        std::int64_t N_reduced = static_cast<std::int64_t>(channels_per_group);
+        for (int s : spatial_dims)
+            N_reduced *= static_cast<std::int64_t>(s);
+        const ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
+                                       gpu::to_mlx_dtype(dt));
+        auto sum_gx_kept = ::mlx::core::sum(gx_scaled_g, red_axes, true);
+        auto sum_gx_xn_kept =
+            ::mlx::core::sum(::mlx::core::multiply(gx_scaled_g, xnorm_g), red_axes, true);
+        auto mean1 = ::mlx::core::multiply(sum_gx_kept, inv_N);
+        auto mean2 = ::mlx::core::multiply(sum_gx_xn_kept, inv_N);
         auto inner = ::mlx::core::subtract(::mlx::core::subtract(gx_scaled_g, mean1),
                                            ::mlx::core::multiply(xnorm_g, mean2));
         auto dx_g = ::mlx::core::multiply(rstd_g, inner);
