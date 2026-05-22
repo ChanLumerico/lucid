@@ -6,6 +6,9 @@ import { ScrollProgress } from "@/components/layout/ScrollProgress";
 import { BackToTop } from "@/components/layout/BackToTop";
 import { ReducedMotionProvider } from "@/components/motion/ReducedMotionProvider";
 import { ThemeBoot, ThemeProvider } from "@/components/layout/ThemeProvider";
+import { RecentPageTracker } from "@/components/layout/RecentPageTracker";
+import { InlineCodeCopy } from "@/components/layout/InlineCodeCopy";
+import { RouteProgress } from "@/components/layout/RouteProgress";
 
 export const viewport: Viewport = {
   themeColor: [
@@ -82,6 +85,9 @@ export default function RootLayout({
       <body>
         <SkipLink />
         <ScrollProgress />
+        <RecentPageTracker />
+        <InlineCodeCopy />
+        <RouteProgress />
         <ThemeProvider>
           <ReducedMotionProvider>{children}</ReducedMotionProvider>
         </ThemeProvider>

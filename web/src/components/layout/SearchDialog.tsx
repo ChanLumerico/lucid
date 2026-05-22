@@ -1,10 +1,16 @@
 "use client";
 
 import * as React from "react";
-import Fuse from "fuse.js";
-import { Search, FileText, Box, Zap, BookOpen } from "lucide-react";
+// ``fuse.js`` is ~50 KB minified and only needed once the user opens
+// the dialog — pull the *type* eagerly (cheap) and the *runtime* via
+// dynamic import inside the open effect.  Cuts the layout shell's
+// initial JS by the full Fuse module on first paint.
+import type FuseModule from "fuse.js";
+type FuseInstance<T> = InstanceType<typeof FuseModule<T>>;
+import { Search, FileText, Box, Zap, BookOpen, Clock, ArrowRight } from "lucide-react";
+import { getRecentPages, type RecentPage } from "@/lib/recent-pages";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { SearchEntry } from "@/lib/search-index";
 
@@ -109,20 +115,42 @@ export function SearchDialog({
   // switching filters never re-runs the (cheap, but cache-warm-only)
   // Fuse search.
   const [rawResults, setRawResults] = React.useState<SearchEntry[]>([]);
+  // "Did you mean" suggestions surfaced when the primary search yields
+  // nothing — built by re-running Fuse with a much looser threshold so
+  // typos and partial-name recall still produce useful candidates.
+  const [fuzzyHits, setFuzzyHits] = React.useState<SearchEntry[]>([]);
   const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
   const [activeIndex, setActiveIndex] = React.useState(0);
-  const [index, setIndex] = React.useState<Fuse<SearchEntry> | null>(null);
+  const [index, setIndex] = React.useState<FuseInstance<SearchEntry> | null>(null);
+  const [fuzzyIndex, setFuzzyIndex] = React.useState<FuseInstance<SearchEntry> | null>(null);
+  // Recents are loaded each time the dialog opens — that way a page
+  // visited *after* the previous open shows up without a refresh.
+  // Stored separately from ``rawResults`` because the empty state
+  // renders them in their own section with different ranking semantics.
+  const [recents, setRecents] = React.useState<RecentPage[]>([]);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Load search index once
+  // Load search index once, lazy.  ``fuse.js`` is dynamic-imported
+  // so it only enters the JS bundle on the first dialog open — users
+  // who never press ``⌘K`` never pay its ~50 KB minified cost.
   React.useEffect(() => {
     if (!open) return;
     if (index) return;
-    fetch("/api/search-data")
-      .then((r) => r.json())
-      .then((data: SearchEntry[]) => {
+    let cancelled = false;
+    Promise.all([
+      import("fuse.js"),
+      fetch("/api/search-data").then((r) => r.json()),
+    ])
+      .then(([fuseModule, data]) => {
+        if (cancelled) return;
+        // ``fuse.js`` ships as an ES module with the class as the
+        // default export.  Some bundler configs unwrap it, others
+        // don't — handle both shapes defensively so swapping out
+        // Turbopack / Webpack / Vite later doesn't break us.
+        const Fuse = (fuseModule.default ?? fuseModule) as typeof FuseModule;
+        const entries = data as SearchEntry[];
         setIndex(
-          new Fuse(data, {
+          new Fuse(entries, {
             keys: [
               { name: "title", weight: 3 },
               { name: "summary", weight: 1 },
@@ -132,16 +160,35 @@ export function SearchDialog({
             includeScore: true,
           }),
         );
+        // Looser sibling index used only when the strict one returns
+        // nothing.  Title-only + ``threshold: 0.6`` catches single-
+        // char typos and partial-name recall (``linaer`` → ``linear``)
+        // without polluting the primary results list.
+        setFuzzyIndex(
+          new Fuse(entries, {
+            keys: [{ name: "title", weight: 1 }],
+            threshold: 0.6,
+            distance: 50,
+            includeScore: true,
+          }),
+        );
       })
       .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [open, index]);
 
-  // Focus input on open
+  // Focus input on open + refresh the recents snapshot.  Reading
+  // localStorage every open is cheap (one JSON.parse on a max-8-item
+  // array) and guarantees a freshly-visited page shows up without
+  // needing a page reload.
   React.useEffect(() => {
     if (open) {
       setQuery("");
       setKindFilter("all");
       setActiveIndex(0);
+      setRecents(getRecentPages());
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -150,13 +197,23 @@ export function SearchDialog({
   React.useEffect(() => {
     if (!index || !query.trim()) {
       setRawResults([]);
+      setFuzzyHits([]);
       setActiveIndex(0);
       return;
     }
     const hits = index.search(query, { limit: 50 });
     setRawResults(hits.map((h) => h.item));
     setActiveIndex(0);
-  }, [query, index]);
+    // Compute "did you mean" candidates only when the strict search
+    // returns nothing — saves the second Fuse pass on the common case
+    // where the user typed something that matches.
+    if (hits.length === 0 && fuzzyIndex) {
+      const fuzzyResults = fuzzyIndex.search(query, { limit: 5 });
+      setFuzzyHits(fuzzyResults.map((h) => h.item));
+    } else {
+      setFuzzyHits([]);
+    }
+  }, [query, index, fuzzyIndex]);
 
   // Reset highlight whenever the filter changes — the visible list shifts.
   React.useEffect(() => {
@@ -212,6 +269,18 @@ export function SearchDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
+        {/* Screen-reader-only title + description.  Radix Dialog
+            requires a ``DialogTitle`` for assistive-tech announcement;
+            the visible "Search" affordance is the input placeholder
+            and the Search icon, both already clear to sighted users,
+            so we mount the title via ``sr-only`` rather than adding a
+            redundant visible heading. */}
+        <DialogTitle className="sr-only">Search docs</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search across Lucid API symbols, guides, and the Tensor surface.
+          Use ↑↓ to navigate results, Enter to open, Esc to close.
+        </DialogDescription>
+
         {/* Search input */}
         <div className="flex items-center gap-3 border-b border-lucid-border px-4 py-3.5">
           <Search className="h-4 w-4 shrink-0 text-lucid-text-low" />
@@ -264,7 +333,7 @@ export function SearchDialog({
 
         {/* Results */}
         <div className="max-h-[360px] overflow-y-auto p-2">
-          {query.trim() === "" && (
+          {query.trim() === "" && recents.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10">
               <FileText className="h-8 w-8 text-lucid-text-disabled" />
               <p className="text-sm text-lucid-text-low">
@@ -273,8 +342,42 @@ export function SearchDialog({
             </div>
           )}
 
+          {query.trim() === "" && recents.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-widest text-lucid-text-disabled uppercase">
+                <Clock className="h-3 w-3" />
+                Recent
+              </div>
+              {recents.map((page) => (
+                <button
+                  key={page.href}
+                  type="button"
+                  onClick={() => {
+                    router.push(page.href);
+                    onClose();
+                  }}
+                  className={cn(
+                    "group flex w-full items-center justify-between gap-3",
+                    "rounded-xl px-3 py-2 text-left transition-colors",
+                    "hover:bg-lucid-elevated",
+                  )}
+                >
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate font-mono text-sm text-lucid-text-mid group-hover:text-lucid-text-high">
+                      {page.title}
+                    </span>
+                    <span className="hidden sm:inline truncate text-[11px] text-lucid-text-disabled">
+                      {page.href}
+                    </span>
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-lucid-text-disabled transition-colors group-hover:text-lucid-primary" />
+                </button>
+              ))}
+            </div>
+          )}
+
           {query.trim() !== "" && results.length === 0 && (
-            <div className="py-10 text-center space-y-2">
+            <div className="py-10 text-center space-y-3">
               <p className="text-sm text-lucid-text-low">
                 No results for{" "}
                 <span className="font-medium text-lucid-text-mid">
@@ -294,6 +397,31 @@ export function SearchDialog({
                 >
                   Show {rawResults.length} match{rawResults.length === 1 ? "" : "es"} in all kinds
                 </button>
+              )}
+              {/* "Did you mean" — only renders when the user's strict
+                  query genuinely returned nothing across every kind.
+                  Hidden when ``rawResults`` has hits but the active
+                  filter excluded them (we already offer the
+                  ``Show … in all kinds`` button above for that). */}
+              {kindFilter === "all" && fuzzyHits.length > 0 && (
+                <div className="text-left max-w-sm mx-auto space-y-1.5 pt-1">
+                  <p className="text-[11px] font-semibold tracking-widest text-lucid-text-disabled uppercase">
+                    Did you mean…
+                  </p>
+                  <ul className="space-y-1">
+                    {fuzzyHits.map((entry) => (
+                      <li key={entry.id}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(entry)}
+                          className="font-mono text-sm text-lucid-primary hover:text-lucid-primary-light hover:underline"
+                        >
+                          {entry.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           )}

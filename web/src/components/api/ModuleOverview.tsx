@@ -1,7 +1,10 @@
+import type * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { FunctionCard } from "./FunctionSignature";
 import { ClassCard, ClassDoc } from "./ClassDoc";
 import { MathText } from "./MathText";
+import { AnchorLink } from "./AnchorLink";
+import { ViewModeToggle } from "./ViewModeToggle";
 import type { ApiModule, ApiClassModule, ApiClass, FamilyGroup } from "@/lib/types";
 import { isApiClass, isApiFunction, isApiModule } from "@/lib/types";
 import { loadApiData } from "@/lib/api-loader";
@@ -54,9 +57,12 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
 
   // ``<article>`` is the heading-scope ``PageTableOfContents`` scans —
   // wrapping the overview in one is what lets the right rail pick up
-  // the per-subcategory ``<h2 id>`` anchors below.
+  // the per-subcategory ``<h2 id>`` anchors below.  The
+  // ``data-module-overview`` marker is the hook ``ViewModeToggle`` uses
+  // to find this article and stamp ``data-view`` on it, controlling
+  // the compact/detailed CSS variants applied to member cards.
   return (
-    <article>
+    <article data-module-overview>
       <ModuleHeader
         name={displayName}
         path={data.path}
@@ -65,6 +71,7 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
         notes={data.notes}
         kind="module"
         count={data.members.length}
+        toolbar={<ViewModeToggle />}
       />
       {hasFamilyMeta && (
         <section className="mb-10 space-y-5">
@@ -360,6 +367,10 @@ interface ModuleHeaderProps {
   notes?: string[];
   kind: "module" | "class";
   count: number;
+  /** Right-aligned slot for header-level controls — currently used by
+   *  ``ModuleOverview`` to mount the ``ViewModeToggle``.  Optional so
+   *  ``ClassDoc`` and other callers don't have to opt in. */
+  toolbar?: React.ReactNode;
 }
 
 function ModuleHeader({
@@ -370,6 +381,7 @@ function ModuleHeader({
   notes,
   kind,
   count,
+  toolbar,
 }: ModuleHeaderProps) {
   const kindColor = kind === "class" ? "text-api-class/60" : "text-lucid-text-disabled";
   const nameColor = kind === "class" ? "text-api-class" : "text-lucid-text-high";
@@ -383,6 +395,7 @@ function ModuleHeader({
         <Badge variant="secondary" className="font-mono text-[11px]">
           {count} members
         </Badge>
+        {toolbar && <div className="ml-auto">{toolbar}</div>}
       </div>
       <code className="text-sm text-lucid-text-low font-mono">{path}</code>
       {summary && (
@@ -441,12 +454,13 @@ function _sectionId(title: string): string {
 function MemberSection({ title, children }: MemberSectionProps) {
   const id = _sectionId(title);
   return (
-    <section id={id} className="mb-10 scroll-mt-24">
+    <section id={id} className="group mb-10 scroll-mt-24">
       <h2
         id={id}
-        className="text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled"
+        className="flex items-center gap-2 text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled"
       >
         {title}
+        <AnchorLink id={id} />
       </h2>
       <div className="space-y-2">{children}</div>
     </section>

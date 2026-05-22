@@ -8,6 +8,7 @@ import { ClassDoc } from "@/components/api/ClassDoc";
 import { FunctionSignature } from "@/components/api/FunctionSignature";
 import { PageTableOfContents } from "@/components/layout/TableOfContents";
 import { FadeIn } from "@/components/motion/FadeIn";
+import { BreadcrumbStep, type BreadcrumbSibling } from "@/components/api/BreadcrumbStep";
 
 // ---------------------------------------------------------------------------
 // Static generation
@@ -173,6 +174,14 @@ export default async function ApiSlugPage({
 interface BreadcrumbPart {
   label: string;
   href?: string;
+  /** Slugs at the same hierarchy level as this step — populated by
+   *  ``buildBreadcrumb`` and rendered as a dropdown for fast lateral
+   *  navigation.  Empty for the trailing member step (a function /
+   *  class name has no siblings in this sense). */
+  siblings: BreadcrumbSibling[];
+  /** Slug for this step itself — used by the renderer to flag it as
+   *  ``active`` inside the sibling list. */
+  selfSlug?: string;
 }
 
 /** Friendly label overrides for slugs whose raw last-segment doesn't
@@ -192,6 +201,35 @@ const BREADCRUMB_LABEL_OVERRIDES: Record<string, string> = {
  *  intermediate above ``lucid._C.engine``) are skipped to avoid dead
  *  links.  When the page renders a specific member (class / function),
  *  the member name is appended as the final non-link step. */
+/** Siblings of ``prefix`` = every valid slug that shares its parent
+ *  prefix and matches its depth.  ``lucid.nn`` is at depth 2 under
+ *  ``lucid``, so siblings are every other depth-2 slug under
+ *  ``lucid`` (``lucid.amp``, ``lucid.optim``, …).  The active prefix
+ *  itself is included so the dropdown can highlight it. */
+function _siblingsOf(
+  prefix: string,
+  validSlugs: Set<string>,
+): BreadcrumbSibling[] {
+  const segs = prefix.split(".");
+  if (segs.length === 0) return [];
+  const parent = segs.slice(0, -1).join(".");
+  const targetDepth = segs.length;
+  const out: BreadcrumbSibling[] = [];
+  for (const candidate of validSlugs) {
+    const cSegs = candidate.split(".");
+    if (cSegs.length !== targetDepth) continue;
+    const cParent = cSegs.slice(0, -1).join(".");
+    if (cParent !== parent) continue;
+    out.push({
+      slug: candidate,
+      label: BREADCRUMB_LABEL_OVERRIDES[candidate] ?? cSegs[cSegs.length - 1],
+      active: candidate === prefix,
+    });
+  }
+  out.sort((a, b) => a.slug.localeCompare(b.slug));
+  return out;
+}
+
 function buildBreadcrumb(
   moduleSlug: string,
   memberName: string | undefined,
@@ -203,15 +241,22 @@ function buildBreadcrumb(
     const prefix = segs.slice(0, i + 1).join(".");
     if (!validSlugs.has(prefix)) continue;
     const isFinalSlugStep = i === segs.length - 1;
+    const siblings = _siblingsOf(prefix, validSlugs);
     parts.push({
       label: BREADCRUMB_LABEL_OVERRIDES[prefix] ?? segs[i],
       // The terminal slug step links to itself only when there's a
       // deeper member step after it — otherwise it's the active page
       // and shouldn't be a link.
       href: !isFinalSlugStep || memberName ? `/api/${prefix}` : undefined,
+      // Only surface a sibling dropdown when there's actually another
+      // peer to jump to — single-entry dropdowns are noise.
+      siblings: siblings.length > 1 ? siblings : [],
+      selfSlug: prefix,
     });
   }
-  if (memberName) parts.push({ label: memberName });
+  if (memberName) {
+    parts.push({ label: memberName, siblings: [] });
+  }
   return parts;
 }
 
@@ -221,18 +266,16 @@ interface BreadcrumbProps {
 
 function Breadcrumb({ parts }: BreadcrumbProps) {
   return (
-    <nav className="flex items-center gap-1.5 text-sm text-lucid-text-low mb-2" aria-label="Breadcrumb">
+    <nav className="flex flex-wrap items-center gap-1.5 text-sm text-lucid-text-low mb-2" aria-label="Breadcrumb">
       {parts.map((part, i) => (
         <span key={i} className="flex items-center gap-1.5">
           {/* Separators sit BETWEEN parts; the first step renders bare. */}
           {i > 0 && <span className="text-lucid-text-disabled">/</span>}
-          {part.href ? (
-            <a href={part.href} className="font-mono hover:text-lucid-primary transition-colors">
-              {part.label}
-            </a>
-          ) : (
-            <span className="font-mono text-lucid-text-high">{part.label}</span>
-          )}
+          <BreadcrumbStep
+            label={part.label}
+            href={part.href}
+            siblings={part.siblings}
+          />
         </span>
       ))}
     </nav>

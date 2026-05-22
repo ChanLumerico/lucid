@@ -61,6 +61,79 @@ function useActiveId(ids: string[]): string {
   return activeId;
 }
 
+/** Per-section scroll progress in [0, 1].  Reads each section's
+ *  document position on every scroll tick and computes "how far past
+ *  the section's top has the viewport scrolled, normalised against
+ *  the section's own height plus any trailing whitespace before the
+ *  next section".  ``rAF``-throttled so even on a long page we run
+ *  the calc at most once per frame.
+ *
+ *  Returns a stable ``Map`` reference per render — consumers should
+ *  read values with ``progress.get(id) ?? 0``. */
+function useTocProgress(ids: string[]): Map<string, number> {
+  const [progress, setProgress] = React.useState<Map<string, number>>(
+    () => new Map(),
+  );
+
+  React.useEffect(() => {
+    if (ids.length === 0) return;
+    let rafId = 0;
+
+    function compute() {
+      const next = new Map<string, number>();
+      const viewportTop = window.scrollY;
+      const viewportHeight = window.innerHeight;
+      const viewportMid = viewportTop + viewportHeight * 0.3;
+
+      // Collect each section's absolute top so we can determine its
+      // end-of-section position from the *next* section's top —
+      // headings don't carry a height that maps to "section size", we
+      // have to derive it from gap-to-next.
+      const sections: Array<{ id: string; top: number }> = [];
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        sections.push({
+          id,
+          top: el.getBoundingClientRect().top + window.scrollY,
+        });
+      }
+      sections.sort((a, b) => a.top - b.top);
+
+      for (let i = 0; i < sections.length; i++) {
+        const { id, top } = sections[i];
+        const nextTop =
+          i + 1 < sections.length
+            ? sections[i + 1].top
+            : document.documentElement.scrollHeight;
+        const sectionHeight = Math.max(1, nextTop - top);
+        const raw = (viewportMid - top) / sectionHeight;
+        next.set(id, Math.min(1, Math.max(0, raw)));
+      }
+      setProgress(next);
+    }
+
+    function onScroll() {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        compute();
+      });
+    }
+
+    compute();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [ids]);
+
+  return progress;
+}
+
 interface PageTableOfContentsProps {
   /** Suppress rendering when the page has fewer than this many headings.
    *  Default 1 — keeps the right rail consistent across detail pages.
@@ -79,7 +152,9 @@ interface PageTableOfContentsProps {
  *  rail would crowd the main content. */
 export function PageTableOfContents({ minEntries = 1 }: PageTableOfContentsProps = {}) {
   const entries = useTocEntries();
-  const activeId = useActiveId(entries.map((e) => e.id));
+  const ids = React.useMemo(() => entries.map((e) => e.id), [entries]);
+  const activeId = useActiveId(ids);
+  const progress = useTocProgress(ids);
 
   if (entries.length < minEntries) return null;
 
@@ -90,23 +165,38 @@ export function PageTableOfContents({ minEntries = 1 }: PageTableOfContentsProps
           On this page
         </p>
         <nav aria-label="Table of contents">
-          <ul className="space-y-1">
-            {entries.map(({ id, text, level }) => (
-              <li key={id}>
-                <a
-                  href={`#${id}`}
-                  className={cn(
-                    "block rounded py-0.5 text-[13px] leading-snug transition-colors duration-100",
-                    level === 3 && "pl-3",
-                    activeId === id
-                      ? "text-lucid-primary font-medium"
-                      : "text-lucid-text-low hover:text-lucid-text-mid",
-                  )}
-                >
-                  {text}
-                </a>
-              </li>
-            ))}
+          {/* Each entry gets a 2 px-wide track on the left; the
+              ``span`` inside fills bottom-up from 0 → 100 % matching
+              the per-section scroll progress.  At rest the track is
+              the same colour as the panel border so empty progress
+              reads as a clean rail.  Once you scroll past a section,
+              its bar stays full so users see how far they've worked
+              through the page at a glance. */}
+          <ul className="space-y-1 border-l border-lucid-border/60">
+            {entries.map(({ id, text, level }) => {
+              const p = Math.round((progress.get(id) ?? 0) * 100);
+              return (
+                <li key={id} className="relative">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute -left-px top-0 w-px bg-lucid-primary/70 transition-[height] duration-150"
+                    style={{ height: `${p}%` }}
+                  />
+                  <a
+                    href={`#${id}`}
+                    className={cn(
+                      "block rounded py-0.5 pl-2 text-[13px] leading-snug transition-colors duration-100",
+                      level === 3 && "pl-5",
+                      activeId === id
+                        ? "text-lucid-primary font-medium"
+                        : "text-lucid-text-low hover:text-lucid-text-mid",
+                    )}
+                  >
+                    {text}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </nav>
       </div>

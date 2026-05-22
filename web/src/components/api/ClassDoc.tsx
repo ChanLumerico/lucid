@@ -1,10 +1,14 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
+import { sourceToEditUrl } from "@/lib/github-edit";
 import { highlight } from "@/lib/shiki";
 import { TypeAnnotation } from "./TypeAnnotation";
 import { ParameterTable, AttributeTable, RaisesTable } from "./ParameterTable";
 import { ExampleBlock } from "./ExampleBlock";
 import { SeeAlsoBlock } from "./SeeAlsoBlock";
+import { AnchorLink } from "./AnchorLink";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { UsedByBlock } from "./UsedByBlock";
 import { FunctionSignature } from "./FunctionSignature";
 import { ClassBadge, AutoKindBadge } from "./ApiKindBadge";
 import { getClassNameColor, getClassHoverBorder } from "@/lib/api-kind-utils";
@@ -85,16 +89,31 @@ export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
             )}
           </div>
           {cls.source && (
-            <a
-              href={cls.source}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-text-mid transition-colors border border-lucid-border hover:border-lucid-primary/40"
-              aria-label="View source"
-            >
-              <ExternalLink className="h-3 w-3" />
-              <span>source</span>
-            </a>
+            <div className="shrink-0 flex items-center gap-1.5">
+              <a
+                href={cls.source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-text-mid transition-colors border border-lucid-border hover:border-lucid-primary/40"
+                aria-label="View source on GitHub"
+              >
+                <ExternalLink className="h-3 w-3" />
+                <span>source</span>
+              </a>
+              {sourceToEditUrl(cls.source) && (
+                <a
+                  href={sourceToEditUrl(cls.source) ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-primary transition-colors border border-lucid-border hover:border-lucid-primary/40"
+                  aria-label="Edit this docstring on GitHub"
+                  title="Edit on GitHub — proposes a PR after you save"
+                >
+                  <Pencil className="h-3 w-3" />
+                  <span className="hidden sm:inline">edit</span>
+                </a>
+              )}
+            </div>
           )}
         </div>
 
@@ -127,6 +146,10 @@ export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
           {cls.see_also && cls.see_also.length > 0 && (
             <SeeAlsoBlock items={cls.see_also} />
           )}
+          {/* See FunctionSignature for the placement rationale — Used-by
+              sits at the end of the docstring body so it doesn't compete
+              with the symbol's own narrative. */}
+          <UsedByBlock path={cls.path} />
         </div>
       </div>
 
@@ -139,18 +162,29 @@ export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
       {totalMethods > 0 && (
         <div className="space-y-10">
           {groups.map((group) => (
-            <section key={group.id}>
-              <div className="flex items-baseline gap-2 mb-4">
-                <h2
-                  id={group.id}
-                  className="scroll-mt-24 text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase"
-                >
-                  {group.label}
-                </h2>
-                <span className="font-mono text-[10px] text-lucid-text-disabled">
-                  {group.methods.length}
-                </span>
-              </div>
+            <CollapsibleSection
+              key={group.id}
+              id={group.id}
+              // Auto-collapse very-large default groups so the user
+              // sees a structural overview first.  Five was picked
+              // by feel — under it, expanded reads naturally; over
+              // it, the scroll cost dominates the page.
+              defaultCollapsed={group.methods.length > 20}
+              header={
+                <>
+                  <h2
+                    id={group.id}
+                    className="scroll-mt-24 text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase"
+                  >
+                    {group.label}
+                  </h2>
+                  <span className="font-mono text-[10px] text-lucid-text-disabled">
+                    {group.methods.length}
+                  </span>
+                  <AnchorLink id={group.id} />
+                </>
+              }
+            >
               <div className="space-y-4">
                 {group.methods.map((method) => (
                   <FunctionSignature
@@ -160,7 +194,7 @@ export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
                   />
                 ))}
               </div>
-            </section>
+            </CollapsibleSection>
           ))}
         </div>
       )}
@@ -182,15 +216,18 @@ export function ClassCard({ cls, moduleSlug }: ClassCardProps) {
   return (
     <Link
       href={`/api/${moduleSlug}/${cls.name}`}
+      // See FunctionCard for why the compact-mode hooks are plain
+      // classes backed by globals.css rules instead of Tailwind
+      // arbitrary variants with nested attribute selectors.
       className={cn(
-        "group flex items-start justify-between gap-4",
+        "compact-card group flex items-start justify-between gap-4",
         "rounded-xl border border-lucid-border bg-lucid-surface px-4 py-3.5",
         "transition-all hover:bg-lucid-elevated",
         hoverBorder,
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
+        <div className="compact-card-row flex flex-wrap items-center gap-2 mb-1">
           <ClassBadge kind={clsKind} />
           <code className={cn("text-sm font-mono font-medium", nameColor)}>
             {cls.name}
@@ -202,7 +239,7 @@ export function ClassCard({ cls, moduleSlug }: ClassCardProps) {
           )}
         </div>
         {cls.summary && (
-          <p className="text-xs text-lucid-text-low leading-relaxed line-clamp-2">
+          <p className="compact-card-summary text-xs text-lucid-text-low leading-relaxed line-clamp-2">
             {cls.summary}
           </p>
         )}

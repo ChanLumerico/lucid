@@ -3,12 +3,18 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { FadeIn } from "@/components/motion/FadeIn";
+import { NotFoundSuggestions } from "@/components/layout/NotFoundSuggestions";
+import { getAllModuleSlugs } from "@/lib/api-loader";
 
 export const metadata = {
   title: "Page not found",
 };
 
 export default function NotFound() {
+  // Walk the emitted JSON list once on the server so the client
+  // suggestion component doesn't have to fetch anything — it just
+  // runs a Levenshtein-style fuzzy match against the pre-built list.
+  const slugs = getAllModuleSlugs();
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
@@ -44,6 +50,7 @@ export default function NotFound() {
                 <Link href="/docs/quickstart">Quickstart</Link>
               </Button>
             </div>
+            <NotFoundSuggestions slugs={slugs} />
           </div>
         </FadeIn>
       </main>

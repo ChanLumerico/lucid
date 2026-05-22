@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { springs } from "@/components/motion/springs";
 import { SearchDialog } from "@/components/layout/SearchDialog";
+import { KeyboardShortcuts } from "@/components/layout/KeyboardShortcuts";
 
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
@@ -197,6 +198,7 @@ export function Header() {
   const [scrolled, setScrolled] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   React.useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 8);
@@ -223,6 +225,11 @@ export function Header() {
   return (
     <>
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <KeyboardShortcuts
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        onOpen={() => setHelpOpen(true)}
+      />
       <header
         className={cn(
           "fixed inset-x-0 top-0 z-50 h-14 transition-all duration-300",

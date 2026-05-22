@@ -336,9 +336,39 @@ export function Sidebar({ items, className, variant = "desktop" }: SidebarProps)
   const filtered = React.useMemo(() => filterSidebarItems(items, query), [items, query]);
   const totalShown = countLeaves(filtered);
   const totalAll = countLeaves(items);
+  const pathname = usePathname();
+  const asideRef = React.useRef<HTMLElement>(null);
+
+  // When the route changes (direct URL hit, search-dialog navigation,
+  // breadcrumb-sibling jump, …) the active sidebar entry can end up
+  // off-screen below the fold — especially in deep sub-trees like
+  // ``lucid.nn / Modules / Conv2d``.  Scroll the active anchor into
+  // the viewport's middle so users see where they are without manual
+  // scrolling.  ``aria-current="page"`` is already stamped on every
+  // active Link, which gives us a single selector that works for both
+  // leaf items and group-with-href items.
+  React.useEffect(() => {
+    if (!asideRef.current) return;
+    // Defer one frame so the freshly-mounted tree has its
+    // ``aria-current`` attribute committed; otherwise the query runs
+    // against last render's DOM.
+    const id = requestAnimationFrame(() => {
+      const active = asideRef.current?.querySelector<HTMLElement>(
+        '[aria-current="page"]',
+      );
+      if (!active) return;
+      // ``scroll-margin`` on the active element does NOT help here
+      // — that's an anchor-link scroll behaviour, not an
+      // imperative ``scrollIntoView`` one.  We rely on
+      // ``block: "center"`` instead.
+      active.scrollIntoView({ block: "center", behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pathname, items]);
 
   return (
     <aside
+      ref={asideRef}
       className={cn(
         isMobile ? "flex flex-col w-full" : "hidden lg:flex flex-col w-80 shrink-0",
         className,
@@ -360,11 +390,19 @@ export function Sidebar({ items, className, variant = "desktop" }: SidebarProps)
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter sidebar…"
             aria-label="Filter sidebar items"
+            // Suppress the browser's native ``×`` clear button on
+            // ``type=search`` inputs — both WebKit and Edge render
+            // their own circle-X that collided with our custom clear
+            // button to the right.  Keeping ``type=search`` for its
+            // semantic (Esc-to-clear behaviour, screen-reader role)
+            // while hiding the native widget is the standard fix.
             className={cn(
               "w-full rounded-md border border-lucid-border bg-lucid-surface/40",
               "pl-8 pr-7 py-1.5 text-xs text-lucid-text-high placeholder:text-lucid-text-disabled",
               "focus:outline-none focus:border-lucid-primary/50 focus:bg-lucid-surface",
               "transition-colors",
+              "[&::-webkit-search-cancel-button]:appearance-none",
+              "[&::-webkit-search-decoration]:appearance-none",
             )}
           />
           {query && (

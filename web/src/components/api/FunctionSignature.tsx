@@ -1,10 +1,14 @@
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Pencil } from "lucide-react";
+import { sourceToEditUrl } from "@/lib/github-edit";
 import { highlight } from "@/lib/shiki";
 import { TypeAnnotation } from "./TypeAnnotation";
 import { ParameterTable, RaisesTable } from "./ParameterTable";
 import { ExampleBlock } from "./ExampleBlock";
 import { SeeAlsoBlock } from "./SeeAlsoBlock";
+import { AnchorLink } from "./AnchorLink";
+import { UsedByBlock } from "./UsedByBlock";
+import { linkifyTypesInHtml } from "@/lib/type-links";
 import { AutoKindBadge, AutoKindBadgeRow } from "./ApiKindBadge";
 import { getMemberNameColor } from "@/lib/api-kind-utils";
 import { MathText } from "./MathText";
@@ -52,14 +56,18 @@ export async function FunctionSignature({
   expanded = true,
   moduleSlug,
 }: FunctionSignatureProps) {
-  const sigHtml = fn.signature ? await highlight(fn.signature, "python") : null;
+  const sigHtmlRaw = fn.signature ? await highlight(fn.signature, "python") : null;
+  // Wrap recognised type names (``Tensor`` / ``Module`` / …) with
+  // hyperlinks to their docs page so users can jump straight from a
+  // signature to the underlying type without a sidebar detour.
+  const sigHtml = sigHtmlRaw ? linkifyTypesInHtml(sigHtmlRaw) : null;
   const labels = fn.labels ?? [];
   const nameColor = getMemberNameColor(fn.name, labels);
 
   return (
     <article
       className={cn(
-        "rounded-2xl border border-lucid-border bg-lucid-surface",
+        "group rounded-2xl border border-lucid-border bg-lucid-surface",
         "overflow-hidden",
         className,
       )}
@@ -81,6 +89,7 @@ export async function FunctionSignature({
             >
               {fn.name}
             </Tag>
+            <AnchorLink id={fn.name} />
             {fn.returns?.annotation && (
               <>
                 <span className="text-lucid-text-disabled text-sm">→</span>
@@ -106,16 +115,31 @@ export async function FunctionSignature({
         </div>
 
         {fn.source && (
-          <a
-            href={fn.source}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-text-mid transition-colors border border-lucid-border hover:border-lucid-primary/40"
-            aria-label="View source"
-          >
-            <ExternalLink className="h-3 w-3" />
-            <span>source</span>
-          </a>
+          <div className="shrink-0 flex items-center gap-1.5">
+            <a
+              href={fn.source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-text-mid transition-colors border border-lucid-border hover:border-lucid-primary/40"
+              aria-label="View source on GitHub"
+            >
+              <ExternalLink className="h-3 w-3" />
+              <span>source</span>
+            </a>
+            {sourceToEditUrl(fn.source) && (
+              <a
+                href={sourceToEditUrl(fn.source) ?? "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-lucid-text-disabled hover:text-lucid-primary transition-colors border border-lucid-border hover:border-lucid-primary/40"
+                aria-label="Edit this docstring on GitHub"
+                title="Edit on GitHub — proposes a PR after you save"
+              >
+                <Pencil className="h-3 w-3" />
+                <span className="hidden sm:inline">edit</span>
+              </a>
+            )}
+          </div>
         )}
       </div>
 
@@ -173,6 +197,12 @@ export async function FunctionSignature({
           {fn.see_also && fn.see_also.length > 0 && (
             <SeeAlsoBlock items={fn.see_also} />
           )}
+
+          {/* "Used by" backlinks live last because they're orientational
+              — readers usually want the symbol's own signature / examples
+              first, and only after understanding the function does
+              "where else is this called?" become a useful follow-up. */}
+          <UsedByBlock path={fn.path} />
         </div>
       )}
     </article>
@@ -192,14 +222,22 @@ export function FunctionCard({ fn, moduleSlug }: FunctionCardProps) {
   return (
     <Link
       href={`/api/${moduleSlug}/${fn.name}`}
+      // Compact-mode hooks are plain ``compact-card`` /
+      // ``compact-card-row`` / ``compact-card-summary`` classes whose
+      // CSS rules live in ``globals.css`` under the
+      // ``article[data-view="compact"]`` descendant selector.  Tried
+      // arbitrary Tailwind variants (``[article[data-view=compact]_&]:``)
+      // first and the nested attribute brackets parsed ambiguously —
+      // some rules leaked and shrank the page body width.  Explicit
+      // CSS is the reliable fix.
       className={cn(
-        "group flex items-start justify-between gap-4",
+        "compact-card group flex items-start justify-between gap-4",
         "rounded-xl border border-lucid-border bg-lucid-surface px-4 py-3.5",
         "transition-all hover:border-api-fn/40 hover:bg-lucid-elevated",
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
+        <div className="compact-card-row flex flex-wrap items-center gap-2 mb-1">
           <AutoKindBadge labels={labels} name={fn.name} fallback="fn" />
           <code className={cn("text-sm font-mono font-medium", nameColor)}>
             {fn.name}
@@ -214,7 +252,7 @@ export function FunctionCard({ fn, moduleSlug }: FunctionCardProps) {
           )}
         </div>
         {fn.summary && (
-          <p className="text-xs text-lucid-text-low leading-relaxed line-clamp-2">
+          <p className="compact-card-summary text-xs text-lucid-text-low leading-relaxed line-clamp-2">
             {fn.summary}
           </p>
         )}

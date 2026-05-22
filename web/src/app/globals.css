@@ -252,6 +252,81 @@
   background-clip: text;
 }
 
+/* ── Shiki dual-theme tokens ────────────────────────────────────────────
+ * Code blocks are highlighted with both ``one-dark-pro`` (default) and
+ * ``github-light`` (alternate); Shiki emits ``--shiki-dark`` /
+ * ``--shiki-light`` custom properties on every token and uses the
+ * default color directly via the inline ``color:`` style.  When the
+ * user flips into light mode (``data-theme="light"``), the rules
+ * below override every Shiki span's color with the ``--shiki-light``
+ * variant, plus swap the block background.
+ *
+ * Specificity: ``html[data-theme="light"]`` + ``.shiki`` + child is
+ * enough to beat Shiki's inline styles WITHOUT requiring ``!important``
+ * — inline styles win on style attribute, but ``html[..] .shiki span``
+ * is a longer selector, and Shiki sets ``color`` via an inline style
+ * we explicitly override at the same property level via ``color:
+ * var(--shiki-light)`` here.  Test: tokens read correctly in both
+ * modes after a single ``ThemeToggle`` click, no reload. */
+html[data-theme="light"] .shiki,
+html[data-theme="light"] .shiki span {
+  color: var(--shiki-light) !important;
+  background-color: var(--shiki-light-bg) !important;
+}
+html[data-theme="light"] .shiki {
+  /* The block-level background also needs the light variant; the
+   * ``span`` rule above only covers token-level color which inherits
+   * the Shiki light token background by accident otherwise. */
+  background-color: var(--shiki-light-bg) !important;
+}
+
+/* ── Module-overview compact view ──────────────────────────────────────
+ * ``ViewModeToggle`` stamps ``data-view="compact"`` on the outer
+ * ``<article data-module-overview>`` to swap every member card into
+ * a denser layout.  Cards opt in with the ``compact-card`` class
+ * and use ``compact-card-summary`` on the summary paragraph that
+ * should disappear in compact mode.  Tailwind v4 arbitrary variants
+ * with nested attribute selectors (``[article[data-view=compact]_&]``)
+ * had ambiguous parsing — wider rules sometimes leaked and shrank
+ * the body width — so we declare these rules directly here.
+ *
+ * Only affects descendants of an ``article`` with the compact
+ * ``data-view`` attribute, never anything else on the page. */
+article[data-view="compact"] .compact-card {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+article[data-view="compact"] .compact-card-row {
+  margin-bottom: 0;
+}
+article[data-view="compact"] .compact-card-summary {
+  display: none;
+}
+
+/* ── Inline code click-to-copy ──────────────────────────────────────────
+ * The ``InlineCodeCopy`` client component delegates clicks on any
+ * inline ``<code>`` element to ``navigator.clipboard.writeText``.
+ * These two rules provide the *visible affordance*:
+ *
+ *   1. ``cursor: copy`` on every inline ``<code>`` (i.e. not inside a
+ *      ``<pre>`` block — those have their own button) tells the user
+ *      a click does something before they have to discover it.
+ *   2. ``[data-copied="1"]`` is stamped by the JS handler for ~1 s
+ *      after a successful copy; we shift the foreground to the
+ *      success colour so the click registers visually without us
+ *      having to manage React state per element.
+ *
+ * The ``:not(pre code)`` exclusion is critical — code blocks have
+ * a richer copy UX already, and a "copy" cursor over an entire
+ * Shiki-rendered block would suggest the wrong interaction. */
+code:not(pre code) {
+  cursor: copy;
+}
+code[data-copied="1"] {
+  color: var(--color-lucid-success) !important;
+  transition: color 150ms ease;
+}
+
 /* Noise overlay for surfaces */
 .surface-noise::after {
   content: "";

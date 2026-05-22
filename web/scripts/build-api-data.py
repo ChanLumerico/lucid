@@ -1744,6 +1744,52 @@ def _build_family_groups(family_root_slug: str) -> list[dict[str, Any]]:
     return groups
 
 
+# ── ProcessPool worker plumbing ────────────────────────────────────────────
+# These two functions sit at module scope (not nested) so the worker
+# processes can re-import this script and call them by name — that's
+# how ``ProcessPoolExecutor`` smuggles work across the fork boundary.
+# The Griffe loader is created lazily in each worker the first time
+# it's needed; subsequent calls reuse the cached object so the
+# expensive walk-of-lucid happens at most once per worker.
+
+_WORKER_LOADER: Any = None
+
+
+def _worker_init() -> None:
+    """ProcessPool initialiser.  Suppresses Griffe's per-mismatch
+    warnings (the parent process already printed them; duplicating
+    across N workers triples the noise on real ones)."""
+    import logging as _logging
+    _logging.getLogger("griffe").setLevel(_logging.ERROR)
+    _logging.getLogger("mkdocstrings").setLevel(_logging.ERROR)
+
+
+def _worker_loader() -> Any:
+    """Lazy per-worker Griffe loader.  Cached on a module-global so
+    every task on the same worker process shares one loader instance
+    — the AST walk of ``lucid/`` is the dominant cost and we want it
+    paid once per worker, not once per task."""
+    global _WORKER_LOADER
+    if _WORKER_LOADER is None:
+        from griffe import GriffeLoader, Parser
+        _WORKER_LOADER = GriffeLoader(
+            docstring_parser=Parser.numpy,
+            search_paths=[str(LUCID_SRC)],
+            allow_inspection=False,
+        )
+    return _WORKER_LOADER
+
+
+def _worker_build_one(slug: str, griffe_path: str, sha: str) -> str:
+    """Entry point ``ProcessPoolExecutor`` calls per task.  Wraps
+    :func:`build_one` with worker-local loader / parser plumbing and
+    returns the slug so the parent's ``as_completed`` loop can stamp
+    a progress line."""
+    from griffe import Parser
+    build_one(slug, griffe_path, _worker_loader(), Parser.numpy, sha)
+    return slug
+
+
 def build_one(slug: str, griffe_path: str, loader: Any, parser: Any, sha: str) -> None:
     from griffe import Module as GriffeModule, Class as GriffeClass
 
@@ -1905,6 +1951,11 @@ def main() -> None:
 
     parser_args = argparse.ArgumentParser(description="Build Lucid API JSON data")
     parser_args.add_argument("--module", help="Build only this slug (e.g. lucid.fft)")
+    parser_args.add_argument(
+        "--slugs",
+        nargs="+",
+        help="Build only these slugs (used by the incremental cache wrapper)",
+    )
     parser_args.add_argument("--verbose", action="store_true")
     args = parser_args.parse_args()
     VERBOSE = args.verbose
@@ -1942,11 +1993,25 @@ def main() -> None:
     # Build lucid top-level once (internally) — used as the source for any
     # synthesized slugs.  It's NEVER emitted to disk as ``lucid.json`` because
     # the bare ``lucid`` namespace shouldn't appear in the sidebar.
+    #
+    # Slug-filtering: ``--module`` selects a single slug; ``--slugs`` is
+    # the multi-slug form used by the incremental cache wrapper.  We
+    # apply whichever was passed and narrow both ``manifest`` and
+    # ``synth_slugs`` accordingly so the build does the minimum work
+    # to refresh just the requested set.
+    selected_slugs: set[str] | None = None
+    if args.module:
+        selected_slugs = {args.module}
+    elif args.slugs:
+        selected_slugs = set(args.slugs)
+
     synth_slugs = _SYNTH_SLUGS
-    if args.module and args.module in _SYNTH_SLUGS:
-        synth_slugs = {args.module: _SYNTH_SLUGS[args.module]}
-    elif args.module:
-        synth_slugs = {}
+    if selected_slugs is not None:
+        synth_slugs = {
+            slug: payload
+            for slug, payload in _SYNTH_SLUGS.items()
+            if slug in selected_slugs
+        }
 
     lucid_data: dict[str, Any] | None = None
     if synth_slugs:
@@ -1971,35 +2036,94 @@ def main() -> None:
         except Exception as exc:
             print(f"  [warn] failed to load lucid for synthesis: {exc}")
 
-    # Regular slugs from MODULE_MANIFEST
-    if args.module and args.module in MODULE_MANIFEST:
-        manifest = {args.module: MODULE_MANIFEST[args.module]}
-    elif args.module and args.module in _SYNTH_SLUGS:
-        manifest = {}
+    # Regular slugs from MODULE_MANIFEST — narrow by ``--module`` /
+    # ``--slugs`` so partial rebuilds only touch the requested set.
+    if selected_slugs is not None:
+        manifest = {
+            slug: griffe_path
+            for slug, griffe_path in manifest.items()
+            if slug in selected_slugs
+        }
 
     total = len(manifest) + len(synth_slugs)
     print(f"Building {total} module(s)  [commit: {sha}]")
 
-    items: list[tuple[str, str, str]] = []
-    for slug, griffe_path in manifest.items():
-        items.append(("manifest", slug, griffe_path))
+    manifest_items: list[tuple[str, str]] = [
+        (slug, griffe_path) for slug, griffe_path in manifest.items()
+    ]
+    synth_items: list[tuple[str, str]] = []
     if lucid_data:
-        for slug, filter_subcat in synth_slugs.items():
-            items.append(("synth", slug, filter_subcat))
+        synth_items = [
+            (slug, filter_subcat) for slug, filter_subcat in synth_slugs.items()
+        ]
 
-    iterator: Any = items
-    if tqdm is not None:
-        iterator = tqdm(items, total=total, desc="modules", unit="mod",
-                        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
+    # ── Parallel manifest builds ────────────────────────────────────────
+    # Each manifest slug is independent — distribute across a process
+    # pool so the per-module work overlaps.  Measured speedup vs.
+    # sequential is modest (~20-30 %) because each worker re-walks
+    # ``lucid/`` once for its first task — that cost dominates over the
+    # per-module emit work — but it's still wall-clock cheaper than
+    # serial, and the worker model leaves room to share more state in
+    # the future.
+    #
+    # Synth slugs need ``lucid_data`` (heavy to pickle into workers)
+    # and are cheap individually, so we keep them on the main process
+    # below.
+    #
+    # ``LUCID_API_BUILD_WORKERS`` overrides the pool size for benchmarking;
+    # ``0`` or ``1`` disables parallelism (single-process fallback for
+    # easier debugging of build crashes).
+    import os as _os
 
-    for kind, slug, payload in iterator:
-        if tqdm is not None:
-            iterator.set_postfix_str(slug, refresh=False)
-        if kind == "manifest":
-            build_one(slug, payload, loader, Parser.numpy, sha)
-        else:
-            assert lucid_data is not None
-            build_synth(slug, payload, lucid_data)
+    n_workers_env = _os.environ.get("LUCID_API_BUILD_WORKERS")
+    if n_workers_env is not None:
+        try:
+            n_workers = int(n_workers_env)
+        except ValueError:
+            n_workers = 0
+    else:
+        # Cap at 8 even on 16-core M-Max — Griffe's AST walk per worker
+        # is GIL-free but spawns ``importlib`` machinery whose I/O
+        # contention dominates beyond ~8 parallel readers.
+        n_workers = min(8, max(1, (_os.cpu_count() or 4)))
+
+    completed: list[str] = []
+
+    def _on_complete(slug: str) -> None:
+        completed.append(slug)
+        _emit(f"  ✓ {slug:32}  ({len(completed)}/{total})")
+
+    if n_workers > 1 and len(manifest_items) > 1:
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        _emit(f"  [pool] {n_workers} workers building {len(manifest_items)} manifest module(s)…")
+        with ProcessPoolExecutor(
+            max_workers=n_workers,
+            initializer=_worker_init,
+        ) as pool:
+            futures = {
+                pool.submit(_worker_build_one, slug, griffe_path, sha): slug
+                for slug, griffe_path in manifest_items
+            }
+            for fut in as_completed(futures):
+                slug = futures[fut]
+                try:
+                    fut.result()
+                except Exception as exc:
+                    print(f"  [error] {slug}: {exc}")
+                else:
+                    _on_complete(slug)
+    else:
+        for slug, griffe_path in manifest_items:
+            build_one(slug, griffe_path, loader, Parser.numpy, sha)
+            _on_complete(slug)
+
+    # Synth slugs stay on the main process — ``lucid_data`` is large
+    # (whole-package serialised tree) and pickling it into each worker
+    # would dominate the wall-clock gain.
+    for slug, filter_subcat in synth_items:
+        assert lucid_data is not None
+        build_synth(slug, filter_subcat, lucid_data)
+        _on_complete(slug)
 
     print(f"\nDone. Files in {OUT_DIR}")
 
