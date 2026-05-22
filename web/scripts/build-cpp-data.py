@@ -420,6 +420,62 @@ def _comment_for(c: Cursor, source_lines: list[str] | None) -> str:
     return _collect_comment_above(source_lines, line - 1)
 
 
+def _cpp_labels(c: Cursor) -> list[str]:
+    """Extract C++-specific method kind labels for the docs site to
+    colour-code (mirrors Python's ``@property`` / ``@staticmethod`` /
+    etc. detection in ``_collect_labels``).
+
+    Emitted labels live in the ``ApiLabel`` union on the TS side and
+    drive both the kind-badge pill (e.g. ``CTOR`` / ``DTOR`` / ``OP``)
+    and the per-name colour in ``api-kind-utils.ts``.  Order matches
+    the precedence in the renderer (most specific first):
+
+      cpp-ctor       — constructor
+      cpp-dtor       — destructor
+      cpp-operator   — ``operator+`` / ``operator=`` / ``operator()`` overload
+      cpp-pure-virtual — pure-virtual method (``= 0``)
+      cpp-virtual    — non-pure virtual
+      cpp-static     — static member function
+      cpp-const      — const-qualified non-static method
+      cpp-template   — function template
+
+    A method can carry multiple labels (e.g. ``virtual void foo() const``
+    → ``cpp-virtual`` + ``cpp-const``); the badge renderer picks the
+    highest-precedence one but the full list is preserved so future
+    UI can compose more nuanced indicators."""
+    labels: list[str] = []
+    kind = c.kind
+    if kind == CursorKind.CONSTRUCTOR:
+        labels.append("cpp-ctor")
+    elif kind == CursorKind.DESTRUCTOR:
+        labels.append("cpp-dtor")
+    elif c.spelling and c.spelling.startswith("operator") and not c.spelling[8:9].isalnum():
+        # ``operator+`` / ``operator()`` / ``operator[]`` / ``operator=`` —
+        # NOT ``operator_overload_helper`` (alphanumeric continuation).
+        labels.append("cpp-operator")
+    if kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE):
+        try:
+            if c.is_pure_virtual_method():
+                labels.append("cpp-pure-virtual")
+            elif c.is_virtual_method():
+                labels.append("cpp-virtual")
+        except Exception:                                            # noqa: BLE001
+            pass
+        try:
+            if c.is_static_method():
+                labels.append("cpp-static")
+        except Exception:                                            # noqa: BLE001
+            pass
+        try:
+            if c.is_const_method():
+                labels.append("cpp-const")
+        except Exception:                                            # noqa: BLE001
+            pass
+    if kind == CursorKind.FUNCTION_TEMPLATE:
+        labels.append("cpp-template")
+    return labels
+
+
 def _serialise_function(
     c: Cursor,
     sha: str,
@@ -431,7 +487,7 @@ def _serialise_function(
         "name":      c.spelling,
         "path":      _qualified_name(c),
         "kind":      "function",
-        "labels":    [],
+        "labels":    _cpp_labels(c),
         "signature": _build_signature(c),
         "source":    _source_link(c, sha),
         "subcategory": subcategory,
@@ -447,6 +503,14 @@ def _serialise_class(
 ) -> dict[str, Any]:
     doc = _split_sections(_comment_for(c, source_lines))
     methods: list[dict[str, Any]] = []
+    # Dedup C++ overloads by bare method name.  Overloaded constructors
+    # (``Foo()``, ``Foo(int)``, ``Foo(const Foo&)``) share the spelling
+    # ``Foo`` — without dedup the renderer would emit multiple ``<h3
+    # id="Foo">`` siblings, producing duplicate-key React warnings AND
+    # ambiguous ``#Foo`` URL anchors.  Keeps the first encounter so the
+    # signature ``_build_signature`` captures matches what the header
+    # declares first, which by convention is the canonical form.
+    seen_method_names: set[str] = set()
     for child in c.get_children():
         if not _is_public(child):
             continue
@@ -456,6 +520,9 @@ def _serialise_class(
             CursorKind.DESTRUCTOR,
             CursorKind.FUNCTION_TEMPLATE,
         ):
+            if child.spelling in seen_method_names:
+                continue
+            seen_method_names.add(child.spelling)
             methods.append(_serialise_function(child, sha, source_lines))
     return {
         "name":       c.spelling,

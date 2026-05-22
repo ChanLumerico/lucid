@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   Boxes,
@@ -15,6 +16,21 @@ import { Badge } from "@/components/ui/badge";
 import { MathText } from "./MathText";
 import type { ApiMember, ApiModule } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const ENGINE_SLUG = "lucid._C.engine";
+
+/** First member whose ``subcategory`` matches the supplied surface
+ *  slug.  Used to point a surface card at a concrete detail page — the
+ *  user lands on a real symbol from which they can branch out via the
+ *  sidebar tree.  Returns ``null`` when the surface contains no public
+ *  members (treated as a non-clickable card). */
+function firstMemberFor(members: ApiMember[], surfaceSlug: string): string | null {
+  for (const m of members) {
+    const sub = m.subcategory ?? "";
+    if (sub === surfaceSlug || sub.startsWith(`${surfaceSlug}/`)) return m.name;
+  }
+  return null;
+}
 
 interface CategoryDef {
   /** First segment of the member's ``subcategory`` ("ops/ufunc" → "ops"). */
@@ -39,65 +55,6 @@ const CATEGORIES: CategoryDef[] = [
 
 const ACCENT = "var(--color-lucid-primary)";
 
-interface SubBucket {
-  slug: string;
-  label: string;
-  count: number;
-}
-
-/** Second-segment sub-bucket map for nested categories.  Only categories
- *  with a meaningful sub-tree get pills — everything else just shows a
- *  count badge. */
-const SUB_LABELS: Record<string, Record<string, string>> = {
-  backend: {
-    cpu: "CPU (Accelerate)",
-    gpu: "GPU (MLX)",
-    "gpu/mps": "MPS",
-  },
-  ops: {
-    ufunc: "Unary",
-    bfunc: "Binary",
-    gfunc: "Generic",
-    composite: "Composite",
-    linalg: "Linear Algebra",
-    fft: "FFT",
-    einops: "Einops",
-    complex: "Complex",
-    utils: "Utils",
-  },
-  kernel: {
-    primitives: "Primitives",
-  },
-};
-
-function countSubBuckets(
-  members: ApiMember[],
-  catSlug: string,
-): SubBucket[] {
-  const sublabels = SUB_LABELS[catSlug];
-  if (!sublabels) return [];
-  const counts = new Map<string, number>();
-  for (const m of members) {
-    const sub = m.subcategory ?? "";
-    if (!sub.startsWith(`${catSlug}/`)) continue;
-    const rest = sub.slice(catSlug.length + 1);
-    // Match the longest declared sub-label prefix.
-    let matched: string | null = null;
-    for (const key of Object.keys(sublabels)) {
-      if (rest === key || rest.startsWith(`${key}/`)) {
-        if (matched === null || key.length > matched.length) {
-          matched = key;
-        }
-      }
-    }
-    if (matched === null) continue;
-    counts.set(matched, (counts.get(matched) ?? 0) + 1);
-  }
-  return Object.entries(sublabels)
-    .map(([slug, label]) => ({ slug, label, count: counts.get(slug) ?? 0 }))
-    .filter((b) => b.count > 0);
-}
-
 interface CppEngineOverviewProps {
   data: ApiModule;
 }
@@ -115,7 +72,7 @@ export function CppEngineOverview({ data }: CppEngineOverviewProps) {
     .map((c) => ({
       def: c,
       count: catCounts.get(c.slug) ?? 0,
-      subs: countSubBuckets(data.members, c.slug),
+      firstMember: firstMemberFor(data.members, c.slug),
     }))
     .filter((c) => c.count > 0);
 
@@ -139,7 +96,7 @@ export function CppEngineOverview({ data }: CppEngineOverviewProps) {
               key={c.def.slug}
               def={c.def}
               count={c.count}
-              subs={c.subs}
+              firstMember={c.firstMember}
             />
           ))}
         </div>
@@ -171,7 +128,7 @@ function Hero({ name, path, summary, extended, memberCount }: HeroProps) {
     <header className="mb-10">
       <div className="flex flex-wrap items-center gap-3 mb-2">
         <span className="text-xs font-semibold tracking-widest uppercase text-lucid-text-disabled">
-          module
+          engine
         </span>
         <h1 className="font-mono text-3xl font-bold text-lucid-text-high">
           C++ Engine
@@ -206,66 +163,58 @@ function Hero({ name, path, summary, extended, memberCount }: HeroProps) {
 interface CategoryCardProps {
   def: CategoryDef;
   count: number;
-  subs: SubBucket[];
+  /** Destination for the card's click — the first member that lives
+   *  under this surface.  Cards without a target render as a
+   *  non-interactive ``<div>`` (rare — would mean an empty surface). */
+  firstMember: string | null;
 }
 
-function CategoryCard({ def, count, subs }: CategoryCardProps) {
+/** Single-row surface card.  Mirrors ``/api/page.tsx::ModuleCardLink``
+ *  so the C++ engine landing and the top-level API Reference share one
+ *  visual contract — icon halo + identifier + count badge + one-line
+ *  description, full card clickable.  Sub-bucket pills (CPU/GPU/MPS,
+ *  Unary/Binary/...) intentionally removed: the same drill-down is
+ *  available via the left-hand sidebar tree, and keeping the cards
+ *  uniform across surfaces reads cleanly on the grid. */
+function CategoryCard({ def, count, firstMember }: CategoryCardProps) {
   const Icon = def.icon;
   const bg = `color-mix(in srgb, ${ACCENT} 14%, transparent)`;
   const ring = `color-mix(in srgb, ${ACCENT} 38%, transparent)`;
-  return (
-    <div
-      className={cn(
-        "group block rounded-xl border border-lucid-border bg-lucid-surface/40",
-        "transition-colors hover:bg-lucid-surface hover:border-lucid-primary/40",
-      )}
-    >
-      <div
-        className={cn(
-          "px-5 pt-4 flex items-start gap-3",
-          subs.length > 0 ? "pb-3" : "pb-4",
-        )}
+
+  const cardClass = cn(
+    "group block rounded-xl border border-lucid-border bg-lucid-surface/40",
+    "transition-colors hover:bg-lucid-surface hover:border-lucid-primary/40",
+  );
+  const inner = (
+    <div className="px-5 pt-4 pb-4 flex items-start gap-3">
+      <span
+        className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border"
+        style={{ backgroundColor: bg, borderColor: ring, color: ACCENT }}
+        aria-hidden
       >
-        <span
-          className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border"
-          style={{ backgroundColor: bg, borderColor: ring, color: ACCENT }}
-          aria-hidden
-        >
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <code
-              className="font-mono text-sm font-semibold"
-              style={{ color: ACCENT }}
-            >
-              {def.title}
-            </code>
-            <Badge variant="secondary" className="font-mono text-[10px]">
-              {count}
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs text-lucid-text-low leading-relaxed">
-            {def.description}
-          </p>
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <code className="font-mono text-sm font-semibold" style={{ color: ACCENT }}>
+            {def.title}
+          </code>
+          <Badge variant="secondary" className="font-mono text-[10px]">
+            {count}
+          </Badge>
         </div>
+        <p className="mt-1 text-xs text-lucid-text-low leading-relaxed">
+          {def.description}
+        </p>
       </div>
-      {subs.length > 0 && (
-        <div className="pl-[4.25rem] pr-5 pb-4 flex flex-wrap gap-1.5">
-          {subs.map((s) => (
-            <span
-              key={s.slug}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5",
-                "text-[10px] font-mono text-lucid-text-mid border-lucid-border bg-lucid-elevated/50",
-              )}
-            >
-              {s.label}
-              <span className="text-lucid-text-disabled">{s.count}</span>
-            </span>
-          ))}
-        </div>
-      )}
     </div>
+  );
+
+  return firstMember ? (
+    <Link href={`/api/${ENGINE_SLUG}/${firstMember}`} className={cardClass}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={cardClass}>{inner}</div>
   );
 }

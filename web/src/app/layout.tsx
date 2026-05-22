@@ -1,13 +1,31 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "katex/dist/katex.min.css";
+import { SkipLink } from "@/components/layout/SkipLink";
+import { ScrollProgress } from "@/components/layout/ScrollProgress";
+import { BackToTop } from "@/components/layout/BackToTop";
+import { ReducedMotionProvider } from "@/components/motion/ReducedMotionProvider";
+import { ThemeBoot, ThemeProvider } from "@/components/layout/ThemeProvider";
 
 export const viewport: Viewport = {
-  themeColor: "#0d0c15",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)",  color: "#0d0c15" },
+    { media: "(prefers-color-scheme: light)", color: "#fdfcfb" },
+  ],
+  colorScheme: "dark light",
 };
 
+const DOCS_ORIGIN =
+  process.env.LUCID_DOCS_ORIGIN ??
+  process.env.NEXT_PUBLIC_LUCID_DOCS_ORIGIN ??
+  "https://lucid.docs.local";
+
 export const metadata: Metadata = {
+  // metadataBase is used by Next to absolutise any relative URL — most
+  // importantly the auto-generated ``opengraph-image`` / ``twitter-image``
+  // routes — when emitting social-preview tags.  Without it, crawlers
+  // see relative ``/og.png`` paths and skip them.
+  metadataBase: new URL(DOCS_ORIGIN),
   title: {
     default: "Lucid — Apple Silicon ML Framework",
     template: "%s | Lucid",
@@ -32,6 +50,7 @@ export const metadata: Metadata = {
     description:
       "Production-grade ML framework for Apple Silicon. MLX + Accelerate native backend.",
     siteName: "Lucid Docs",
+    url: DOCS_ORIGIN,
   },
   twitter: {
     card: "summary_large_image",
@@ -43,6 +62,9 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  alternates: {
+    canonical: "/",
+  },
 };
 
 export default function RootLayout({
@@ -52,7 +74,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <head>
+        {/* ThemeBoot runs SYNCHRONOUSLY before React hydrates so the
+            user's persisted theme is applied without a dark/light flash. */}
+        <ThemeBoot />
+      </head>
+      <body>
+        <SkipLink />
+        <ScrollProgress />
+        <ThemeProvider>
+          <ReducedMotionProvider>{children}</ReducedMotionProvider>
+        </ThemeProvider>
+        <BackToTop />
+      </body>
     </html>
   );
 }

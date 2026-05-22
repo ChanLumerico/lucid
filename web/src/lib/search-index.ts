@@ -2,12 +2,18 @@ import fs from "fs";
 import path from "path";
 import type { ApiModule, ApiClass, ApiFunction, ApiMethod, ApiData, ApiClassModule } from "./types";
 import { getAllDocMeta } from "./mdx-compile";
+import { getAllModuleSlugs } from "./api-loader";
 
 export interface SearchEntry {
   id: string;
   title: string;
   summary: string;
   href: string;
+  /** Categorical hint that drives the icon + colour in the search
+   *  dialog.  Engine symbols share the ``api-class`` / ``api-function``
+   *  kinds so users see a consistent treatment — the ``badge`` field
+   *  carries the slug context so ``lucid._C.engine`` results are still
+   *  visually distinguishable. */
   kind: "api-module" | "api-class" | "api-function" | "doc";
   badge?: string;
 }
@@ -23,67 +29,49 @@ function loadApiData(slug: string): ApiData | null {
   return JSON.parse(fs.readFileSync(file, "utf-8")) as ApiData;
 }
 
-const MODULE_SLUGS = [
-  "lucid",
-  "lucid.tensor",
-  "lucid.nn",
-  "lucid.nn.functional",
-  "lucid.nn.init",
-  "lucid.nn.utils",
-  "lucid.optim",
-  "lucid.autograd",
-  "lucid.func",
-  "lucid.linalg",
-  "lucid.fft",
-  "lucid.signal",
-  "lucid.special",
-  "lucid.distributions",
-  "lucid.utils.data",
-  "lucid.amp",
-  "lucid.profiler",
-  "lucid.einops",
-  "lucid.serialization",
-];
-
 function collectMethods(
+  slug: string,
   cls: ApiClass | ApiClassModule,
   entries: SearchEntry[],
 ) {
   for (const method of cls.methods ?? []) {
     const m = method as ApiMethod;
     entries.push({
-      id: `${cls.path}.${m.name}`,
+      id: `${slug}/${cls.name}.${m.name}`,
       title: `${cls.name}.${m.name}`,
       summary: m.summary ?? "",
-      href: `/api/${cls.path}#${m.name}`,
+      // Anchor on the parent class's detail page so the URL works both
+      // for Python (path-style) and C++ (engine slug + class name).
+      href: `/api/${slug}/${cls.name}#${m.name}`,
       kind: "api-function",
       badge: cls.name,
     });
   }
 }
 
-function collectMembers(mod: ApiModule, entries: SearchEntry[]) {
+function collectMembers(slug: string, mod: ApiModule, entries: SearchEntry[]) {
   for (const member of mod.members ?? []) {
     if (member.kind === "class") {
       const cls = member as ApiClass;
       entries.push({
-        id: cls.path,
+        id: `${slug}/${cls.name}`,
         title: cls.name,
         summary: cls.summary ?? "",
-        href: `/api/${cls.path}`,
+        href: `/api/${slug}/${cls.name}`,
         kind: "api-class",
-        badge: cls.path.split(".").slice(0, -1).join("."),
+        badge: slug,
       });
-      collectMethods(cls, entries);
+      collectMethods(slug, cls, entries);
     } else if (member.kind === "function") {
       const fn = member as ApiFunction;
       entries.push({
-        id: fn.path,
+        id: `${slug}/${fn.name}`,
         title: fn.name,
         summary: fn.summary ?? "",
-        href: `/api/${fn.path.split(".").slice(0, -1).join(".")}#${fn.name}`,
+        // Free functions live on the module page; anchor on their name.
+        href: `/api/${slug}/${fn.name}`,
         kind: "api-function",
-        badge: fn.path.split(".").slice(0, -1).join("."),
+        badge: slug,
       });
     }
   }
@@ -92,8 +80,11 @@ function collectMembers(mod: ApiModule, entries: SearchEntry[]) {
 export function buildSearchIndex(): SearchEntry[] {
   const entries: SearchEntry[] = [];
 
-  // API entries from Griffe JSON
-  for (const slug of MODULE_SLUGS) {
+  // API entries from every JSON in public/api-data/.  Drives from
+  // ``getAllModuleSlugs()`` (which already skips ``_*.json`` caches and
+  // C++ per-class details) so adding a new module — Python or engine —
+  // does not require touching this file.
+  for (const slug of getAllModuleSlugs()) {
     const data = loadApiData(slug);
     if (!data) continue;
 
@@ -106,9 +97,9 @@ export function buildSearchIndex(): SearchEntry[] {
     });
 
     if (data.kind === "module") {
-      collectMembers(data as ApiModule, entries);
+      collectMembers(slug, data as ApiModule, entries);
     } else if (data.kind === "class-module") {
-      collectMethods(data as ApiClassModule, entries);
+      collectMethods(slug, data as ApiClassModule, entries);
     }
   }
 

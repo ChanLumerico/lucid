@@ -4,20 +4,28 @@ import { highlight } from "@/lib/shiki";
 import { TypeAnnotation } from "./TypeAnnotation";
 import { ParameterTable, AttributeTable, RaisesTable } from "./ParameterTable";
 import { ExampleBlock } from "./ExampleBlock";
+import { SeeAlsoBlock } from "./SeeAlsoBlock";
 import { FunctionSignature } from "./FunctionSignature";
 import { ClassBadge, AutoKindBadge } from "./ApiKindBadge";
 import { getClassNameColor, getClassHoverBorder } from "@/lib/api-kind-utils";
 import { MathText } from "./MathText";
-import type { ApiClass, ApiMethod, ApiClassKind } from "@/lib/types";
+import { CrossLinkPanel } from "./CrossLinkPanel";
+import { groupMethods } from "@/lib/method-groups";
+import type { ApiClass, ApiClassKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface ClassDocProps {
   cls: ApiClass;
+  /** Module slug this class lives in.  Required at top level so the
+   *  cross-link panel can resolve the right py↔cpp mapping; omitted on
+   *  nested renders (e.g. methods inside another class) to suppress the
+   *  panel where it isn't meaningful. */
+  moduleSlug?: string;
   /** If provided, only render this method. Otherwise render the full class. */
   methodName?: string;
 }
 
-export async function ClassDoc({ cls, methodName }: ClassDocProps) {
+export async function ClassDoc({ cls, moduleSlug, methodName }: ClassDocProps) {
   if (methodName) {
     const method = cls.methods.find((m) => m.name === methodName);
     if (!method) return (
@@ -30,15 +38,12 @@ export async function ClassDoc({ cls, methodName }: ClassDocProps) {
   const clsKind: ApiClassKind = cls.class_kind ?? "regular";
   const nameColor = getClassNameColor(clsKind);
 
-  // Group methods: init/call first, then public, then dunder
-  const FIRST   = ["__init__", "__call__"];
-  const DUNDERS = cls.methods.filter((m) => m.name.startsWith("__") && !FIRST.includes(m.name));
-  const PUBLIC  = cls.methods.filter((m) => !m.name.startsWith("_"));
-  const ordered: ApiMethod[] = [
-    ...FIRST.map((n) => cls.methods.find((m) => m.name === n)).filter(Boolean) as ApiMethod[],
-    ...PUBLIC,
-    ...DUNDERS,
-  ];
+  // Bucketed method groups — handed to the renderer below.  Empty
+  // groups are dropped by ``groupMethods``; the platform (Python vs
+  // C++) is auto-detected from the labels.  Each group becomes its own
+  // ``<h2>`` so the right-rail ToC surfaces them as scroll targets.
+  const groups = groupMethods(cls.methods);
+  const totalMethods = groups.reduce((sum, g) => sum + g.methods.length, 0);
 
   return (
     <article>
@@ -94,6 +99,9 @@ export async function ClassDoc({ cls, methodName }: ClassDocProps) {
         </div>
 
         <div className="px-5 py-5 space-y-6">
+          {moduleSlug && (
+            <CrossLinkPanel moduleSlug={moduleSlug} memberName={cls.name} />
+          )}
           {cls.summary && (
             <MathText text={cls.summary} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
@@ -116,25 +124,45 @@ export async function ClassDoc({ cls, methodName }: ClassDocProps) {
             </section>
           )}
           {cls.examples.length > 0 && <ExampleBlock examples={cls.examples} />}
+          {cls.see_also && cls.see_also.length > 0 && (
+            <SeeAlsoBlock items={cls.see_also} />
+          )}
         </div>
       </div>
 
-      {/* Methods — blue accent (functions within a class) */}
-      {ordered.length > 0 && (
-        <section>
-          <h2 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase mb-4">
-            Methods ({ordered.length})
-          </h2>
-          <div className="space-y-4">
-            {ordered.map((method) => (
-              <FunctionSignature
-                key={method.name}
-                fn={method}
-                headingLevel="h3"
-              />
-            ))}
-          </div>
-        </section>
+      {/* Methods — split into ``Constructors`` / ``Properties`` /
+          ``Class methods`` / ``Instance methods`` / ``In-place ops`` /
+          ``Dunder methods`` (Python) or ``Constructors`` / ``Static`` /
+          ``Operators`` / ``Virtual`` / ``Methods`` (C++).
+          Each group gets its own ``<h2 id>`` so the right-rail ToC
+          surfaces them as scroll targets. */}
+      {totalMethods > 0 && (
+        <div className="space-y-10">
+          {groups.map((group) => (
+            <section key={group.id}>
+              <div className="flex items-baseline gap-2 mb-4">
+                <h2
+                  id={group.id}
+                  className="scroll-mt-24 text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase"
+                >
+                  {group.label}
+                </h2>
+                <span className="font-mono text-[10px] text-lucid-text-disabled">
+                  {group.methods.length}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {group.methods.map((method) => (
+                  <FunctionSignature
+                    key={method.name}
+                    fn={method}
+                    headingLevel="h3"
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
     </article>
   );

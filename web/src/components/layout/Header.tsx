@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Menu, X } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { useMobileSidebarItems } from "@/components/layout/MobileSidebarContext";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { springs } from "@/components/motion/springs";
@@ -95,6 +98,12 @@ function MobileMenu({
   onClose: () => void;
   pathname: string;
 }) {
+  // When the current route's layout provides a sidebar tree (docs / api),
+  // surface it inside the same drawer so the desktop and mobile UX
+  // converge.  Marketing / landing pages get the top-nav-only layout.
+  const sidebarItems = useMobileSidebarItems();
+  const hasSidebar = sidebarItems !== null && sidebarItems.length > 0;
+
   React.useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
@@ -121,14 +130,19 @@ function MobileMenu({
           />
           <motion.nav
             key="menu"
-            className="fixed inset-x-0 top-14 z-50 border-b border-lucid-border bg-lucid-surface px-6 py-4 md:hidden"
+            className={cn(
+              "fixed inset-x-0 top-14 z-50 border-b border-lucid-border bg-lucid-surface md:hidden",
+              hasSidebar
+                ? "bottom-0 flex flex-col px-4 pt-3 pb-0"
+                : "px-6 py-4",
+            )}
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={springs.snappy}
             aria-label="Mobile navigation"
           >
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1 shrink-0">
               {NAV_LINKS.map(({ href, label }) => {
                 const active = pathname === href || pathname.startsWith(`${href}/`);
                 return (
@@ -150,6 +164,27 @@ function MobileMenu({
                 );
               })}
             </ul>
+
+            {hasSidebar && (
+              <>
+                <div
+                  role="separator"
+                  className="my-3 border-t border-lucid-border"
+                />
+                <div
+                  className="min-h-0 flex-1 overflow-hidden"
+                  onClick={(e) => {
+                    // Close on real navigation only — Sidebar uses Link
+                    // (<a>) for leaves and <button> for chevron toggles,
+                    // so we filter by anchor ancestor to avoid closing
+                    // when the user expands a group.
+                    if ((e.target as HTMLElement).closest("a")) onClose();
+                  }}
+                >
+                  <Sidebar items={sidebarItems!} variant="mobile" />
+                </div>
+              </>
+            )}
           </motion.nav>
         </>
       )}
@@ -196,7 +231,7 @@ export function Header() {
             : "border-b border-lucid-border/40 bg-lucid-bg/70 backdrop-blur-md",
         )}
       >
-        <div className="mx-auto flex h-full max-w-screen-xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-full max-w-screen-2xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-8">
             <LucidLogo />
             <DesktopNav pathname={pathname} />
@@ -225,6 +260,8 @@ export function Header() {
             >
               <Search className="h-4 w-4" />
             </Button>
+
+            <ThemeToggle />
 
             <a
               href="https://github.com/ChanLumerico/lucid"

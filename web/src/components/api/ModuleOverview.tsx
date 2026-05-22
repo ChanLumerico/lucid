@@ -52,12 +52,17 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
     ? data.canonical_name
     : data.name;
 
+  // ``<article>`` is the heading-scope ``PageTableOfContents`` scans —
+  // wrapping the overview in one is what lets the right rail pick up
+  // the per-subcategory ``<h2 id>`` anchors below.
   return (
-    <div>
+    <article>
       <ModuleHeader
         name={displayName}
         path={data.path}
         summary={data.summary}
+        extended={data.extended}
+        notes={data.notes}
         kind="module"
         count={data.members.length}
       />
@@ -105,7 +110,7 @@ export async function ModuleOverview({ data }: ModuleOverviewProps) {
           ))}
         </MemberSection>
       )}
-    </div>
+    </article>
   );
 }
 
@@ -344,11 +349,28 @@ interface ModuleHeaderProps {
   name: string;
   path: string;
   summary: string | null;
+  /** Long-form prose from the module's top-of-file docstring.  Surfaced
+   *  underneath the summary so architectural context (layering rules,
+   *  op categories, gotchas) the author put in the module docstring
+   *  reaches the docs reader rather than only the source reader. */
+  extended?: string | null;
+  /** ``Notes`` blocks parsed from the module docstring — rendered in
+   *  the same blue-bordered callout style as class / function-level
+   *  notes for visual consistency. */
+  notes?: string[];
   kind: "module" | "class";
   count: number;
 }
 
-function ModuleHeader({ name, path, summary, kind, count }: ModuleHeaderProps) {
+function ModuleHeader({
+  name,
+  path,
+  summary,
+  extended,
+  notes,
+  kind,
+  count,
+}: ModuleHeaderProps) {
   const kindColor = kind === "class" ? "text-api-class/60" : "text-lucid-text-disabled";
   const nameColor = kind === "class" ? "text-api-class" : "text-lucid-text-high";
   return (
@@ -368,6 +390,32 @@ function ModuleHeader({ name, path, summary, kind, count }: ModuleHeaderProps) {
           {summary}
         </p>
       )}
+      {extended && (
+        <div className="mt-4 max-w-3xl">
+          <MathText
+            text={extended}
+            block
+            className="text-sm text-lucid-text-mid leading-relaxed"
+          />
+        </div>
+      )}
+      {notes && notes.length > 0 && (
+        <section className="mt-5 max-w-3xl space-y-2">
+          <h2 className="text-[11px] font-semibold tracking-widest text-lucid-text-disabled uppercase">
+            Notes
+          </h2>
+          <div className="rounded-xl border-l-2 border-lucid-blue bg-lucid-blue/5 px-4 py-3 space-y-2">
+            {notes.map((note, i) => (
+              <MathText
+                key={i}
+                text={note}
+                block
+                className="text-sm text-lucid-text-mid leading-relaxed"
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </header>
   );
 }
@@ -379,10 +427,25 @@ interface MemberSectionProps {
   accent?: "primary" | "blue";
 }
 
-function MemberSection({ title, children }: MemberSectionProps) {
+/** Convert a section title to a URL-safe ToC anchor id. */
+function _sectionId(title: string): string {
   return (
-    <section className="mb-10">
-      <h2 className="text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled">
+    "section-" +
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+  );
+}
+
+function MemberSection({ title, children }: MemberSectionProps) {
+  const id = _sectionId(title);
+  return (
+    <section id={id} className="mb-10 scroll-mt-24">
+      <h2
+        id={id}
+        className="text-xs font-semibold tracking-widest uppercase mb-3 text-lucid-text-disabled"
+      >
         {title}
       </h2>
       <div className="space-y-2">{children}</div>

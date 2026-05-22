@@ -59,7 +59,7 @@ export default async function ChangelogPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <Header />
-      <main className="flex-1 pt-14">
+      <main id="main-content" tabIndex={-1} className="flex-1 pt-14 focus:outline-none">
         <div className="mx-auto max-w-2xl px-4 sm:px-6 py-12">
           <FadeIn>
             <h1 className="text-3xl font-bold text-lucid-text-high mb-1">

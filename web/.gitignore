@@ -45,3 +45,9 @@ next-env.d.ts
 
 # Pagefind static search index (rebuilt on deploy)
 /public/pagefind
+
+# Build metadata (rewritten by scripts/build-meta.py on every prebuild)
+/public/build-meta.json
+
+# Generated BibTeX (rewritten from data/citations.json by build-bibtex.py)
+/public/citations.bib

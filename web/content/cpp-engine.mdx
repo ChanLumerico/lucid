@@ -1,0 +1,116 @@
+---
+title: C++ Engine
+description: How Lucid dispatches Python calls into MLX / Accelerate, and why every backward node is a C++ class.
+category: Concepts
+order: 6
+---
+
+The compute core of Lucid is a C++ static library exposed to Python via
+pybind11 as [`lucid._C.engine`](/api/lucid._C.engine).  Every tensor op
+— forward, backward, scheduler step, hook — bottoms out here.
+
+## Layered architecture
+
+```
+bindings  ─►  ops  ─►  kernel  ─►  autograd  ─►  backend  ─►  tensor  ─►  core
+```
+
+Reading top-down: a Python call enters via a pybind11 binding, hits a
+C++ op shim, which dispatches into one of the kernel CRTP templates
+(`UnaryKernel`, `BinaryKernel`, `ReduceKernel`).  The kernel wires the
+autograd graph node, then delegates the actual numerical work to the
+backend — `CpuBackend` (Accelerate) or `GpuBackend` (MLX).  `tensor`
+and `core` are the data types every layer above shares.
+
+This direction is **strict** — no layer may include from a layer below
+or sideways.  The dependency rule is enforced by the CMake build.
+
+## Why a C++ engine at all
+
+- **Latency** — MLX's launch overhead per op is ~µs; Python's per-op
+  cost adds up fast.  Keeping the autograd graph + dispatcher in C++
+  means a `forward()` returns before Python's GIL even notices.
+- **AMP** — every op declares its precision policy
+  (`AmpPolicy::Promote`/`Preserve`/`ForceFP32`) via its
+  [`OpSchema`](/api/lucid._C.engine/OpSchema).  Mixed-precision routing
+  is a C++ table lookup, not a Python branch.
+- **Determinism** — fusion + execution order live behind one
+  [`Engine`](/api/lucid._C.engine/Engine) instance, so reproducibility
+  controls (`lucid.set_deterministic`) flip a single C++ flag.
+
+## Backward nodes
+
+Every differentiable op has a paired `XBackward` class.  Looking at
+[`LinearBackward`](/api/lucid._C.engine/LinearBackward) as a canonical
+example:
+
+```cpp
+class LUCID_API LinearBackward : public FuncOp<LinearBackward, 3> {
+public:
+    static const OpSchema schema_v1;
+
+    // Saves x, W, b; attaches itself as grad_fn of the output.
+    static TensorImplPtr forward(
+        const TensorImplPtr& x,
+        const TensorImplPtr& W,
+        const TensorImplPtr& b);
+
+    // dx = grad_out @ W; dW = grad_out^T @ x; db = sum(grad_out, 0).
+    std::vector<Storage> apply(Storage grad_out) override;
+};
+```
+
+The `FuncOp<Derived, N_SAVED>` template wires three saved-input slots
+into the autograd graph automatically.  `apply()` runs once during
+backward, returns one gradient per saved input, and the engine handles
+the rest of the chain rule.
+
+## Backend dispatch
+
+Within each backward's `apply()`, the actual numerical work routes
+through a [`Dispatcher`](/api/lucid._C.engine/Dispatcher) lookup that
+picks `CpuBackend` or `GpuBackend` based on the tensor's device:
+
+```cpp
+auto* be = Dispatcher::for_device(grad_out.device());
+auto dW = be->matmul(grad_out_T, x, /*trans_a=*/false, /*trans_b=*/false);
+```
+
+The same code path works on CPU (Accelerate BLAS) and GPU (MLX
+matmul) because both `IBackend` subclasses share one virtual interface.
+
+## The two carve-outs
+
+The strict CPU=Accelerate / GPU=MLX rule has two named exceptions
+([CLAUDE.md H3](https://github.com/ChanLumerico/lucid/blob/main/CLAUDE.md#h3)):
+
+1. **linalg ops** dispatch MLX on the CPU stream because MLX's linalg
+   primitives are themselves CPU-backed.  The result is wrapped back
+   as a GPU tensor.
+2. **Data-dependent output shapes** (`unique`, `nonzero`,
+   `masked_select`) round-trip the GPU input to CPU, compute the
+   variable-size result, and copy back.
+
+Everything else stays on its native stream.
+
+## When to drop down to C++
+
+Almost never.  Python-side composite ops should compose existing
+primitives in `lucid._ops/composite/`.  Real reasons to add a new C++
+op:
+
+1. **No existing primitive expresses the math** (e.g. a fused kernel
+   that needs a single backend roundtrip).
+2. **The composition costs > 30% overhead** in a profiler trace.
+3. **A backward formula has a closed form** that's faster than chained
+   primitive backwards.
+
+If you do need to, follow the recipe in
+`obsidian/architecture/arch-models-add-family.md` H12 — the engine has
+a strict 5-slot contract per op that the docs site renders from.
+
+## See also
+
+- [`/api/lucid._C.engine`](/api/lucid._C.engine) — the full engine surface
+- [Autograd](/docs/autograd) — the Python-side graph traversal
+- [Metal Device](/docs/metal-device) — CPU vs GPU stream details

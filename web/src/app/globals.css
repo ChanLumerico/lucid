@@ -81,43 +81,103 @@
   --color-api-class-dataclass: #22d3ee;                    /* @dataclass       */
   --color-api-class-protocol: #a3e635;                     /* typing.Protocol  */
 
+  /* ── C++-specific method kinds ────────────────────────────────────────
+   * Distinct from the Python kinds above because the rendering logic
+   * picks a single colour per member; using the same tokens would mean
+   * a C++ ``virtual void foo()`` and Python ``@classmethod foo`` would
+   * look identical.  Hue-band intent:
+   *   ctor     — cyan (creation, hopeful)
+   *   dtor     — rose (destruction, terminal)
+   *   operator — amber (transform / overload)
+   *   virtual  — violet (polymorphism; overlaps with class colour but
+   *              uses the lighter pale tone to disambiguate)
+   *   pure-virtual — same family as virtual, magenta-tinted
+   *   template — lime (generic, "compile-time substitution")
+   *   const    — soft teal (immutable / read-only)
+   * The ``static`` C++ qualifier reuses ``--color-api-static`` so its
+   * pill matches Python's ``@staticmethod`` visual contract. */
+  --color-api-cpp-ctor:         #22d3ee;   /* cyan-400          */
+  --color-api-cpp-dtor:         #fb7185;   /* rose-400          */
+  --color-api-cpp-operator:     #f59e0b;   /* amber-500         */
+  --color-api-cpp-virtual:      var(--color-lucid-primary-light); /* light violet */
+  --color-api-cpp-pure-virtual: #e879f9;   /* magenta — dashed pill */
+  --color-api-cpp-template:     #a3e635;   /* lime-400          */
+  --color-api-cpp-const:        #2dd4bf;   /* teal-400          */
+
 }
 
-/* --- Task-tag palette ----------------------------------------------------
- * Defined on :root (NOT @theme) so the variables are unconditionally
- * emitted as runtime CSS custom properties — they're consumed via
- * inline ``style={{ color: var(--color-task-...) }}`` in TaskTag, not as
- * Tailwind utility classes, so Tailwind's lazy-emission heuristic would
- * otherwise drop them.
+/* ── Task-tag palette ───────────────────────────────────────────────────
+ * Defined OUTSIDE Tailwind v4's ``@theme`` block.  Inside @theme, Tailwind
+ * strips ``--color-*`` custom properties that aren't referenced by any
+ * compiled utility — and our TaskTag consumes them only via inline
+ * ``style={{ color: var(--color-task-...) }}``, so Tailwind never sees
+ * the reference and drops the entire palette.  Declaring them in a
+ * sibling ``@layer base { :root { ... } }`` block bypasses Tailwind's
+ * theme-prune pass while still letting later utilities override.
  *
  * Hue bands are reserved per category so the eye still groups visually:
- *   vision      — cool spectrum  (sky / blue / cyan / teal / indigo)
- *   text        — warm spectrum  (amber / orange / yellow / red / rose)
- *   generative  — pink / magenta
- *   meta        — neutral slate
- * The task→swatch mapping lives in TS (ModuleOverview.tsx); retheme an
- * entire category by editing only the swatches here. */
-:root {
-  --color-task-vision-1: #38bdf8;   /* sky-400          */
-  --color-task-vision-2: #3b82f6;   /* blue-500         */
-  --color-task-vision-3: #22d3ee;   /* cyan-400         */
-  --color-task-vision-4: #2dd4bf;   /* teal-400         */
-  --color-task-vision-5: #818cf8;   /* indigo-400       */
-  --color-task-vision-6: #06b6d4;   /* cyan-500 (deep)  */
-  --color-task-vision-7: #0ea5e9;   /* sky-500 (deep)   */
+ * vision = cool, text = warm, generative = pink, meta = neutral.  The
+ * task→swatch mapping lives in ``ModuleOverview.tsx``.
+ * ───────────────────────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --color-task-vision-1: #38bdf8;   /* sky-400          */
+    --color-task-vision-2: #3b82f6;   /* blue-500         */
+    --color-task-vision-3: #22d3ee;   /* cyan-400         */
+    --color-task-vision-4: #2dd4bf;   /* teal-400         */
+    --color-task-vision-5: #818cf8;   /* indigo-400       */
+    --color-task-vision-6: #06b6d4;   /* cyan-500 (deep)  */
+    --color-task-vision-7: #0ea5e9;   /* sky-500 (deep)   */
 
-  --color-task-text-1:   #f59e0b;   /* amber-500        */
-  --color-task-text-2:   #f97316;   /* orange-500       */
-  --color-task-text-3:   #fb923c;   /* orange-400       */
-  --color-task-text-4:   #eab308;   /* yellow-500       */
-  --color-task-text-5:   #fbbf24;   /* amber-400        */
-  --color-task-text-6:   #ef4444;   /* red-500          */
-  --color-task-text-7:   #facc15;   /* yellow-400       */
-  --color-task-text-8:   #fb7185;   /* rose-400         */
+    --color-task-text-1:   #f59e0b;   /* amber-500        */
+    --color-task-text-2:   #f97316;   /* orange-500       */
+    --color-task-text-3:   #fb923c;   /* orange-400       */
+    --color-task-text-4:   #eab308;   /* yellow-500       */
+    --color-task-text-5:   #fbbf24;   /* amber-400        */
+    --color-task-text-6:   #ef4444;   /* red-500          */
+    --color-task-text-7:   #facc15;   /* yellow-400       */
+    --color-task-text-8:   #fb7185;   /* rose-400         */
 
-  --color-task-generative-1: #ec4899; /* pink-500       */
+    --color-task-generative-1: #ec4899; /* pink-500       */
 
-  --color-task-meta-1:   #64748b;   /* slate-500        */
+    --color-task-meta-1:   #64748b;   /* slate-500        */
+  }
+}
+
+/* ── Light-mode overrides ───────────────────────────────────────────────
+ * Activated by ``<html data-theme="light">`` (set by ThemeProvider
+ * client-side based on localStorage + ``prefers-color-scheme``).
+ *
+ * Same token names as the @theme defaults so every Tailwind utility
+ * (text-lucid-text-high, border-lucid-border, …) automatically flips
+ * — no component-side conditional needed.  Hues are kept on the
+ * violet+indigo axis so the brand reads the same across modes; only
+ * the lightness flips. */
+:root[data-theme="light"] {
+  --color-lucid-bg:           #fdfcfb;
+  --color-lucid-surface:      #f6f5f9;
+  --color-lucid-elevated:     #ffffff;
+  --color-lucid-border:       #dad7e6;
+  --color-lucid-border-subtle: #ececf3;
+
+  --color-lucid-primary:        #6750e8;
+  --color-lucid-primary-dark:   #4f3bc8;
+  --color-lucid-primary-light:  #8674f0;
+  --color-lucid-primary-pale:   #c8bfff;
+
+  --color-lucid-blue:        #3a55cc;
+  --color-lucid-blue-dark:   #233aa8;
+  --color-lucid-blue-light:  #6a7fdf;
+
+  --color-lucid-text-high:     #14121f;
+  --color-lucid-text-mid:      #3d3a55;
+  --color-lucid-text-low:      #6e6a8a;
+  --color-lucid-text-disabled: #afabc6;
+
+  --color-lucid-success: #1f9a55;
+  --color-lucid-warning: #c2750f;
+  --color-lucid-error:   #c63249;
+  --color-lucid-info:    #3a55cc;
 }
 
 /* --- Base (inside @layer base so utilities can override) ----------------- */
@@ -137,10 +197,13 @@
     scroll-behavior: smooth;
     text-size-adjust: 100%;
   }
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
 
   body {
-    background-color: #0d0c15;
-    color: #f0eeff;
+    background-color: var(--color-lucid-bg);
+    color: var(--color-lucid-text-high);
     font-family: "Pretendard", system-ui, -apple-system, sans-serif;
     min-height: 100dvh;
     overflow-x: hidden;

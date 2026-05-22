@@ -34,6 +34,19 @@ export interface DocstringParsed {
   notes: string[];
   attributes: DocstringAttribute[];
   warns: DocstringRaise[];
+  /** ``See Also`` entries parsed out of the docstring's admonition so
+   *  the renderer can linkify each name to its docs page rather than
+   *  surface raw ``name : description`` prose.  Optional — older
+   *  cached JSONs may omit the field. */
+  see_also?: SeeAlsoItem[];
+}
+
+export interface SeeAlsoItem {
+  /** Symbol name as written in the docstring (``"lucid.nn.Linear"`` or
+   *  ``"fused_linear_relu"``).  The renderer resolves this to a docs
+   *  URL by suffix-matching against the emitted slug set. */
+  name: string;
+  description: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +58,19 @@ export type ApiLabel =
   | "staticmethod"
   | "classmethod"
   | "abstractmethod"
-  | "writable";
+  | "writable"
+  // C++-specific method kinds (build-cpp-data.py::_cpp_labels).  These
+  // co-exist with the Python kinds because the same ``labels: ApiLabel[]``
+  // field is shared across both pipelines; downstream renderers pick the
+  // first they recognise.
+  | "cpp-ctor"
+  | "cpp-dtor"
+  | "cpp-operator"
+  | "cpp-virtual"
+  | "cpp-pure-virtual"
+  | "cpp-static"
+  | "cpp-const"
+  | "cpp-template";
 
 // ---------------------------------------------------------------------------
 // API members

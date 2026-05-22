@@ -1,0 +1,116 @@
+---
+title: Model Zoo
+description: Load, fine-tune, and inspect Lucid's 49 paper-cited model families.
+category: Guides
+order: 5
+---
+
+Lucid ships 49 architectures under [`lucid.models`](/api/lucid.models) —
+every entry is paper-cited, has a frozen config dataclass, a direct
+backbone class, task wrappers, and at least one pretrained factory.
+
+## Anatomy of a family
+
+Each family follows a **5-slot contract**:
+
+1. **Config** — `*Config` dataclass with `@model_family_meta` (carries
+   the citation + canonical name surfaced on the docs page).
+2. **Direct model** — the `<Family>` class (e.g. `ResNet`, `BERT`,
+   `ViT`) consuming the config.
+3. **Task wrappers** — `<Family>For<Task>` classes (e.g.
+   `ResNetForImageClassification`, `BertForMaskedLM`).
+4. **Output dataclasses** — `<Family>Output` frozen dataclasses
+   describing what each forward returns.
+5. **Pretrained factories** — `resnet_50()`, `bert_base()`, … each
+   `@register_model`-decorated so the registry knows about them.
+
+You won't touch most of these directly — the factory is your entry
+point.
+
+## Loading a pretrained model
+
+```python
+from lucid.models import resnet_50
+
+model = resnet_50(pretrained=True)
+model.eval()
+```
+
+The factory:
+
+1. Constructs the canonical config (matches the paper's Table-1 numbers).
+2. Builds the `ResNet` backbone.
+3. Wraps in `ResNetForImageClassification` (the default task).
+4. Optionally loads pretrained weights via `lucid.serialization`.
+
+## Switching the task
+
+Every family advertises the tasks it supports.  Pass `task=` to the
+factory:
+
+```python
+from lucid.models import vit_base_16
+
+backbone = vit_base_16(task="image-classification")     # default
+features = vit_base_16(task="feature-extraction")      # no head
+```
+
+Available task names show as coloured pill badges on the family page
+(e.g. `image-classification` blue, `text-generation` orange).
+
+## Custom config
+
+Use `create_model` when you need a non-paper variant — your config is
+validated against the family contract:
+
+```python
+from lucid.models import create_model, ResNetConfig
+
+cfg = ResNetConfig(layers=[2, 2, 2, 2], num_classes=10)   # ResNet-18 width on CIFAR
+model = create_model("resnet_50", config=cfg)             # registers as resnet_50-flavoured
+```
+
+## Listing what's available
+
+```python
+from lucid.models import list_models, list_pretrained
+
+print(list_models())                 # ['alexnet', 'bert_base', ...]
+print(list_pretrained("vision"))     # only vision families with weights
+```
+
+## Inspecting a family
+
+The docs site renders an auto-computed **layer summary tree** on every
+factory page — same data as:
+
+```python
+from lucid.models import model_summary
+
+print(model_summary("resnet_50"))    # nested module tree with param counts
+```
+
+## Adding a new family
+
+See the project's [`obsidian/architecture/arch-models-add-family.md`]
+note — the canonical 16-step recipe lives there.  Briefly:
+
+1. Create `lucid/models/<domain>/<family>/` with the 4 standard files
+   (`_config.py`, `_model.py`, `_pretrained.py`, `__init__.py`).
+2. Decorate the Config with `@model_family_meta(canonical_name=,
+   citation=, theory=r"...")`.
+3. Register each factory with `@register_model(task=, family=, ...)`.
+4. Run the validators:
+
+```bash
+python -m tools.validate_model_zoo --family <family> --runtime
+pytest lucid/test/unit/models/test_family_contract.py -k <family>
+```
+
+The docs site auto-discovers the new family on the next build — no
+manual config needed.
+
+## See also
+
+- [`/api/lucid.models`](/api/lucid.models) — the full family roster
+- [Training Loop](/docs/training-loop) — fine-tuning a pretrained model

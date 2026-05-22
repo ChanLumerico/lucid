@@ -26,6 +26,8 @@ import {
 import { FadeIn, FadeInStagger } from "@/components/motion/FadeIn";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { loadApiData } from "@/lib/api-loader";
+import { isApiModule, isApiClassModule } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "API Reference",
@@ -45,73 +47,144 @@ interface ModuleGroup {
   modules: ModuleCard[];
 }
 
-const MODULE_GROUPS: ModuleGroup[] = [
-  {
-    category: "Core",
-    modules: [
-      { name: "lucid.Tensor", slug: "lucid.tensor", description: "Primary tensor class — 309 methods and properties.", icon: Boxes, badge: "309 methods" },
-    ],
-  },
-  {
-    category: "Neural Networks",
-    modules: [
-      { name: "lucid.nn",            slug: "lucid.nn",            description: "Module, Parameter, and 151 layer classes.",        icon: Network,        badge: "151 modules" },
-      { name: "lucid.nn.functional", slug: "lucid.nn.functional", description: "Stateless functional operations (70 functions).",  icon: FunctionSquare },
-      { name: "lucid.nn.init",       slug: "lucid.nn.init",       description: "Weight initialization strategies (13 functions).", icon: Sparkles       },
-      { name: "lucid.nn.utils",      slug: "lucid.nn.utils",      description: "Gradient clipping, weight norm, RNN packing.",     icon: Wrench         },
-    ],
-  },
-  {
-    category: "Model Zoo",
-    modules: [
-      { name: "lucid.models", slug: "lucid.models", description: "49 paper-cited vision / text / generative families with pretrained factories.", icon: BrainCircuit, badge: "49 families" },
-    ],
-  },
-  {
-    category: "Optimization",
-    modules: [
-      { name: "lucid.optim", slug: "lucid.optim", description: "13 optimizers + 16 learning rate schedulers.", icon: TrendingDown },
-    ],
-  },
-  {
-    category: "Differentiation",
-    modules: [
-      { name: "lucid.autograd", slug: "lucid.autograd", description: "Function, grad, gradcheck, functional transforms.", icon: GitBranch },
-      { name: "lucid.func",     slug: "lucid.func",     description: "vmap, grad, vjp, jvp, jacrev, jacfwd, hessian.",    icon: Workflow  },
-    ],
-  },
-  {
-    category: "Math",
-    modules: [
-      { name: "lucid.linalg",  slug: "lucid.linalg",  description: "31 decomposition, norm, and solve operations.",     icon: Sigma    },
-      { name: "lucid.fft",     slug: "lucid.fft",     description: "22 DFT / Hermitian / shift / frequency functions.", icon: Waves    },
-      { name: "lucid.special", slug: "lucid.special", description: "12 special-math functions (erf, sinc, gamma, …).",  icon: Star     },
-      { name: "lucid.signal",  slug: "lucid.signal",  description: "12 spectral window functions.",                     icon: Activity },
-    ],
-  },
-  {
-    category: "Probabilistic",
-    modules: [
-      { name: "lucid.distributions", slug: "lucid.distributions", description: "17 distributions + base class + KL registry.", icon: Dices },
-    ],
-  },
-  {
-    category: "Utilities",
-    modules: [
-      { name: "lucid.utils.data",    slug: "lucid.utils.data",    description: "Dataset, Sampler, DataLoader.",     icon: Database },
-      { name: "lucid.einops",        slug: "lucid.einops",        description: "Einops-style tensor manipulation.", icon: Shuffle  },
-      { name: "lucid.amp",           slug: "lucid.amp",           description: "Automatic mixed precision.",        icon: Gauge    },
-      { name: "lucid.profiler",      slug: "lucid.profiler",      description: "Performance profiling utilities.",  icon: Timer    },
-      { name: "lucid.serialization", slug: "lucid.serialization", description: "State dict save / load.",           icon: Save     },
-    ],
-  },
-  {
-    category: "Engine",
-    modules: [
-      { name: "lucid._C.engine", slug: "lucid._C.engine", description: "C++ compute core — storage, ops, autograd graph, backend dispatch.", icon: Cpu, badge: "813 members" },
-    ],
-  },
-];
+// Build-time count of a module's emitted members.  Single source of
+// truth — every blurb / badge below interpolates from this so the page
+// stays in sync as the API surface grows.  Skipped (returns 0) when the
+// JSON is missing.
+function _memberCount(slug: string): number {
+  try {
+    const d = loadApiData(slug);
+    if (isApiClassModule(d)) return d.methods.length;
+    if (isApiModule(d))       return d.members.length;
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+// `lucid.models` doesn't expose families as direct members — they live as
+// ``family_groups`` entries inside each task-category JSON.
+function _modelFamilyCount(): number {
+  let total = 0;
+  for (const cat of ["vision", "text", "generative"]) {
+    try {
+      const d = loadApiData(`lucid.models.${cat}`);
+      if (isApiModule(d) && d.family_groups) {
+        total += d.family_groups.length;
+      }
+    } catch {
+      // category missing — skip
+    }
+  }
+  return total;
+}
+
+// `lucid.optim` houses both optimisers and LR schedulers — partition by
+// subcategory the build attaches to each class.
+function _optimCounts(): { optimizers: number; lrSchedulers: number } {
+  let optimizers = 0;
+  let lrSchedulers = 0;
+  try {
+    const d = loadApiData("lucid.optim");
+    if (isApiModule(d)) {
+      for (const m of d.members) {
+        if (m.kind !== "class") continue;
+        const sub = (m.subcategory || "").toLowerCase();
+        if (sub.includes("lr_scheduler") || sub.includes("scheduler")) {
+          lrSchedulers += 1;
+        } else {
+          optimizers += 1;
+        }
+      }
+    }
+  } catch {
+    // optim file missing — leave at 0
+  }
+  return { optimizers, lrSchedulers };
+}
+
+function buildModuleGroups(): ModuleGroup[] {
+  const tensorMethods = _memberCount("lucid.tensor");
+  const nnClasses     = _memberCount("lucid.nn");
+  const nnFn          = _memberCount("lucid.nn.functional");
+  const nnInit        = _memberCount("lucid.nn.init");
+  const families      = _modelFamilyCount();
+  const { optimizers, lrSchedulers } = _optimCounts();
+  const linalg        = _memberCount("lucid.linalg");
+  const fft           = _memberCount("lucid.fft");
+  const special       = _memberCount("lucid.special");
+  const signal        = _memberCount("lucid.signal");
+  const distributions = _memberCount("lucid.distributions");
+  const engineMembers = _memberCount("lucid._C.engine");
+
+  return [
+    {
+      category: "Core",
+      modules: [
+        { name: "lucid.Tensor", slug: "lucid.tensor", description: `Primary tensor class — ${tensorMethods} methods and properties.`, icon: Boxes, badge: `${tensorMethods} methods` },
+      ],
+    },
+    {
+      category: "Neural Networks",
+      modules: [
+        { name: "lucid.nn",            slug: "lucid.nn",            description: `Module, Parameter, and ${nnClasses} layer classes.`,        icon: Network,        badge: `${nnClasses} modules` },
+        { name: "lucid.nn.functional", slug: "lucid.nn.functional", description: `Stateless functional operations (${nnFn} functions).`,    icon: FunctionSquare },
+        { name: "lucid.nn.init",       slug: "lucid.nn.init",       description: `Weight initialization strategies (${nnInit} functions).`, icon: Sparkles       },
+        { name: "lucid.nn.utils",      slug: "lucid.nn.utils",      description: "Gradient clipping, weight norm, RNN packing.",            icon: Wrench         },
+      ],
+    },
+    {
+      category: "Model Zoo",
+      modules: [
+        { name: "lucid.models", slug: "lucid.models", description: `${families} paper-cited vision / text / generative families with pretrained factories.`, icon: BrainCircuit, badge: `${families} families` },
+      ],
+    },
+    {
+      category: "Optimization",
+      modules: [
+        { name: "lucid.optim", slug: "lucid.optim", description: `${optimizers} optimizers + ${lrSchedulers} learning rate schedulers.`, icon: TrendingDown },
+      ],
+    },
+    {
+      category: "Differentiation",
+      modules: [
+        { name: "lucid.autograd", slug: "lucid.autograd", description: "Function, grad, gradcheck, functional transforms.", icon: GitBranch },
+        { name: "lucid.func",     slug: "lucid.func",     description: "vmap, grad, vjp, jvp, jacrev, jacfwd, hessian.",    icon: Workflow  },
+      ],
+    },
+    {
+      category: "Math",
+      modules: [
+        { name: "lucid.linalg",        slug: "lucid.linalg",        description: `${linalg} decomposition, norm, and solve operations.`,     icon: Sigma    },
+        { name: "lucid.fft",           slug: "lucid.fft",           description: `${fft} DFT / Hermitian / shift / frequency functions.`,    icon: Waves    },
+        { name: "lucid.special",       slug: "lucid.special",       description: `${special} special-math functions (erf, sinc, gamma, …).`, icon: Star     },
+        { name: "lucid.signal",        slug: "lucid.signal",        description: `${signal} spectral window functions.`,                     icon: Activity },
+        { name: "lucid.einops",        slug: "lucid.einops",        description: "Einops-style tensor manipulation.",                         icon: Shuffle  },
+        { name: "lucid.distributions", slug: "lucid.distributions", description: `${distributions} distributions + base class + KL registry.`, icon: Dices  },
+      ],
+    },
+    {
+      category: "Utilities",
+      modules: [
+        { name: "lucid.utils.data", slug: "lucid.utils.data", description: "Dataset, Sampler, DataLoader.", icon: Database },
+      ],
+    },
+    {
+      category: "Others",
+      modules: [
+        { name: "lucid.amp",           slug: "lucid.amp",           description: "Automatic mixed precision.",       icon: Gauge },
+        { name: "lucid.profiler",      slug: "lucid.profiler",      description: "Performance profiling utilities.", icon: Timer },
+        { name: "lucid.serialization", slug: "lucid.serialization", description: "State dict save / load.",          icon: Save  },
+      ],
+    },
+    {
+      category: "Engine",
+      modules: [
+        { name: "lucid._C.engine", slug: "lucid._C.engine", description: "C++ compute core — storage, ops, autograd graph, backend dispatch.", icon: Cpu, badge: `${engineMembers} members` },
+      ],
+    },
+  ];
+}
 
 const ACCENT = "var(--color-lucid-primary)";
 
@@ -159,16 +232,17 @@ function ModuleCardLink({ mod }: { mod: ModuleCard }) {
 }
 
 export default function ApiPage() {
+  const moduleGroups = buildModuleGroups();
   return (
     <FadeIn>
       <div className="max-w-4xl">
         <header className="mb-12">
           <div className="flex flex-wrap items-center gap-3 mb-3">
             <span className="text-xs font-semibold tracking-widest uppercase text-lucid-text-disabled">
-              reference
+              API Reference
             </span>
             <h1 className="font-mono text-3xl font-bold text-lucid-text-high">
-              API Reference
+              Lucid
             </h1>
           </div>
           <p className="max-w-3xl text-base text-lucid-text-mid leading-relaxed">
@@ -186,7 +260,7 @@ export default function ApiPage() {
         </header>
 
         <div className="space-y-10">
-          {MODULE_GROUPS.map(({ category, modules }) => (
+          {moduleGroups.map(({ category, modules }) => (
             <section key={category}>
               <FadeIn>
                 <h2 className="text-xs font-semibold tracking-widest text-lucid-text-disabled uppercase mb-3">

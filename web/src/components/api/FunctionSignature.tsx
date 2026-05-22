@@ -4,9 +4,11 @@ import { highlight } from "@/lib/shiki";
 import { TypeAnnotation } from "./TypeAnnotation";
 import { ParameterTable, RaisesTable } from "./ParameterTable";
 import { ExampleBlock } from "./ExampleBlock";
-import { AutoKindBadge } from "./ApiKindBadge";
+import { SeeAlsoBlock } from "./SeeAlsoBlock";
+import { AutoKindBadge, AutoKindBadgeRow } from "./ApiKindBadge";
 import { getMemberNameColor } from "@/lib/api-kind-utils";
 import { MathText } from "./MathText";
+import { CrossLinkPanel } from "./CrossLinkPanel";
 import type { ApiFunction, ApiMethod } from "@/lib/types";
 import { cn, formatCompactCount } from "@/lib/utils";
 import { ModelSizeCard } from "./ModelSizeCard";
@@ -36,6 +38,11 @@ interface FunctionSignatureProps {
   className?: string;
   /** If true, show the full doc (params, examples). Otherwise show compact card. */
   expanded?: boolean;
+  /** Module slug this function lives in.  Supplied at top-level detail
+   *  pages so the cross-link panel can resolve the py↔cpp mapping;
+   *  omitted for nested method renderings (where the panel isn't
+   *  meaningful — methods don't have backward nodes of their own). */
+  moduleSlug?: string;
 }
 
 export async function FunctionSignature({
@@ -43,6 +50,7 @@ export async function FunctionSignature({
   headingLevel: Tag = "h3",
   className,
   expanded = true,
+  moduleSlug,
 }: FunctionSignatureProps) {
   const sigHtml = fn.signature ? await highlight(fn.signature, "python") : null;
   const labels = fn.labels ?? [];
@@ -50,9 +58,8 @@ export async function FunctionSignature({
 
   return (
     <article
-      id={fn.name}
       className={cn(
-        "scroll-mt-20 rounded-2xl border border-lucid-border bg-lucid-surface",
+        "rounded-2xl border border-lucid-border bg-lucid-surface",
         "overflow-hidden",
         className,
       )}
@@ -61,8 +68,17 @@ export async function FunctionSignature({
       <div className="flex items-start justify-between gap-4 border-b border-lucid-border px-5 py-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <AutoKindBadge labels={labels} name={fn.name} fallback="fn" />
-            <Tag className={cn("font-mono text-base font-semibold", nameColor)}>
+            <AutoKindBadgeRow labels={labels} name={fn.name} fallback="fn" />
+            {/* Heading owns the anchor + scroll offset so #{name} links
+                land below the sticky header AND the ToC scroll-spy can
+                pick it up via the standard ``[id]`` query. */}
+            <Tag
+              id={fn.name}
+              className={cn(
+                "scroll-mt-24 font-mono text-base font-semibold",
+                nameColor,
+              )}
+            >
               {fn.name}
             </Tag>
             {fn.returns?.annotation && (
@@ -106,6 +122,9 @@ export async function FunctionSignature({
       {/* Body */}
       {expanded && (
         <div className="px-5 py-5 space-y-6">
+          {moduleSlug && (
+            <CrossLinkPanel moduleSlug={moduleSlug} memberName={fn.name} />
+          )}
           {fn.summary && (
             <MathText text={fn.summary} block className="text-sm text-lucid-text-mid leading-relaxed" />
           )}
@@ -150,6 +169,10 @@ export async function FunctionSignature({
           )}
 
           {fn.examples.length > 0 && <ExampleBlock examples={fn.examples} />}
+
+          {fn.see_also && fn.see_also.length > 0 && (
+            <SeeAlsoBlock items={fn.see_also} />
+          )}
         </div>
       )}
     </article>

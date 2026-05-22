@@ -6,6 +6,7 @@ import { ModuleOverview } from "@/components/api/ModuleOverview";
 import { CppEngineOverview } from "@/components/api/CppEngineOverview";
 import { ClassDoc } from "@/components/api/ClassDoc";
 import { FunctionSignature } from "@/components/api/FunctionSignature";
+import { PageTableOfContents } from "@/components/layout/TableOfContents";
 import { FadeIn } from "@/components/motion/FadeIn";
 
 // ---------------------------------------------------------------------------
@@ -90,19 +91,30 @@ export default async function ApiSlugPage({
     notFound();
   }
 
+  // Memoise once per request — both detail branches need the same set
+  // to build their breadcrumbs.
+  const validSlugs = new Set(getAllModuleSlugs());
+
   // ── Member detail page ────────────────────────────────────────────────────
   if (memberName) {
+    const breadcrumbParts = buildBreadcrumb(moduleSlug, memberName, validSlugs);
+
     // Class-module (Tensor) method
     if (isApiClassModule(data)) {
       const method = data.methods.find((m) => m.name === memberName);
       if (!method) notFound();
       return (
-        <FadeIn className="max-w-4xl">
-          <Breadcrumb parts={[
-            { label: data.name, href: `/api/${moduleSlug}` },
-            { label: memberName },
-          ]} />
-          <FunctionSignature fn={method} headingLevel="h2" className="mt-6" />
+        <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 max-w-4xl">
+            <Breadcrumb parts={breadcrumbParts} />
+            <FunctionSignature
+              fn={method}
+              headingLevel="h2"
+              className="mt-6"
+              moduleSlug={moduleSlug}
+            />
+          </div>
+          <PageTableOfContents />
         </FadeIn>
       );
     }
@@ -113,18 +125,18 @@ export default async function ApiSlugPage({
       if (!member) notFound();
 
       return (
-        <FadeIn className="max-w-4xl">
-          <Breadcrumb parts={[
-            { label: data.name, href: `/api/${moduleSlug}` },
-            { label: memberName },
-          ]} />
-          <div className="mt-6">
-            {isApiClass(member) ? (
-              <ClassDoc cls={member} />
-            ) : isApiFunction(member) ? (
-              <FunctionSignature fn={member} headingLevel="h2" />
-            ) : null}
+        <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 max-w-4xl">
+            <Breadcrumb parts={breadcrumbParts} />
+            <div className="mt-6">
+              {isApiClass(member) ? (
+                <ClassDoc cls={member} moduleSlug={moduleSlug} />
+              ) : isApiFunction(member) ? (
+                <FunctionSignature fn={member} headingLevel="h2" moduleSlug={moduleSlug} />
+              ) : null}
+            </div>
           </div>
+          <PageTableOfContents />
         </FadeIn>
       );
     }
@@ -145,8 +157,11 @@ export default async function ApiSlugPage({
     );
   }
   return (
-    <FadeIn className="max-w-4xl">
-      <ModuleOverview data={data} />
+    <FadeIn className="flex flex-col gap-10 xl:flex-row xl:items-start xl:justify-between">
+      <div className="min-w-0 max-w-4xl">
+        <ModuleOverview data={data} />
+      </div>
+      <PageTableOfContents minEntries={2} />
     </FadeIn>
   );
 }
@@ -155,19 +170,62 @@ export default async function ApiSlugPage({
 // Breadcrumb
 // ---------------------------------------------------------------------------
 
+interface BreadcrumbPart {
+  label: string;
+  href?: string;
+}
+
+/** Friendly label overrides for slugs whose raw last-segment doesn't
+ *  read well on its own (e.g. ``engine`` → ``C++ Engine``).  Only the
+ *  step matching the FULL slug gets renamed; intermediate segments
+ *  stay as-is.  Layered on top of the default ``segs[i]`` label in
+ *  ``buildBreadcrumb``. */
+const BREADCRUMB_LABEL_OVERRIDES: Record<string, string> = {
+  "lucid._C.engine": "C++ Engine",
+};
+
+/** Build a multi-step breadcrumb from a slug like ``lucid.nn.functional``.
+ *
+ *  Each dot-separated prefix that has its own docs page becomes a
+ *  clickable step ( ``lucid`` → ``lucid.nn`` → ``lucid.nn.functional`` );
+ *  prefixes that aren't documented (e.g. the synthetic ``lucid._C``
+ *  intermediate above ``lucid._C.engine``) are skipped to avoid dead
+ *  links.  When the page renders a specific member (class / function),
+ *  the member name is appended as the final non-link step. */
+function buildBreadcrumb(
+  moduleSlug: string,
+  memberName: string | undefined,
+  validSlugs: Set<string>,
+): BreadcrumbPart[] {
+  const segs = moduleSlug.split(".");
+  const parts: BreadcrumbPart[] = [];
+  for (let i = 0; i < segs.length; i++) {
+    const prefix = segs.slice(0, i + 1).join(".");
+    if (!validSlugs.has(prefix)) continue;
+    const isFinalSlugStep = i === segs.length - 1;
+    parts.push({
+      label: BREADCRUMB_LABEL_OVERRIDES[prefix] ?? segs[i],
+      // The terminal slug step links to itself only when there's a
+      // deeper member step after it — otherwise it's the active page
+      // and shouldn't be a link.
+      href: !isFinalSlugStep || memberName ? `/api/${prefix}` : undefined,
+    });
+  }
+  if (memberName) parts.push({ label: memberName });
+  return parts;
+}
+
 interface BreadcrumbProps {
-  parts: Array<{ label: string; href?: string }>;
+  parts: BreadcrumbPart[];
 }
 
 function Breadcrumb({ parts }: BreadcrumbProps) {
   return (
     <nav className="flex items-center gap-1.5 text-sm text-lucid-text-low mb-2" aria-label="Breadcrumb">
-      <a href="/api" className="hover:text-lucid-text-mid transition-colors">
-        API
-      </a>
       {parts.map((part, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          <span className="text-lucid-text-disabled">/</span>
+          {/* Separators sit BETWEEN parts; the first step renders bare. */}
+          {i > 0 && <span className="text-lucid-text-disabled">/</span>}
           {part.href ? (
             <a href={part.href} className="font-mono hover:text-lucid-primary transition-colors">
               {part.label}

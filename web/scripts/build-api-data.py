@@ -72,9 +72,13 @@ _EXCLUDED_SUBTREE: set[str] = {
 # Self excluded — this slug is dropped but descendants still get discovered.
 # Used for umbrella packages whose ``__init__.py`` has no user-facing content
 # of its own but whose children DO get documented separately.
+#
+# Historical note: ``lucid.utils`` used to live here on the assumption it
+# was a pure umbrella, but its ``__all__`` re-exports ``checkpoint`` from
+# ``lucid.utils.checkpoint`` so the slug DOES have a user-facing function
+# and must be documented.
 _EXCLUDED_SELF: set[str] = {
     "lucid.nn.modules",         # umbrella; content re-exposed via lucid.nn path-grouping
-    "lucid.utils",              # umbrella; only lucid.utils.data has docs content
     "lucid.models._utils",      # internal helper subpackage of lucid.models
 }
 
@@ -587,6 +591,35 @@ def _get_ast_docstring(fn_name: str, class_name: str | None = None) -> str | Non
     return None
 
 
+_GOOGLE_HEADER_RE = re.compile(
+    r"^[ \t]*(Args|Arguments|Returns|Yields|Raises|Note|Notes|"
+    r"Warning|Warnings|Example|Examples|Attributes|See Also|References)\s*:\s*$",
+    re.MULTILINE,
+)
+_NUMPY_UNDERLINE_RE = re.compile(r"^[ \t]*-{3,}[ \t]*$", re.MULTILINE)
+
+
+def _detect_docstring_style(raw_text: str) -> str | None:
+    """Return ``"google"`` / ``"numpy"`` / ``None`` based on header markers.
+
+    Lucid's source tree mixes Google-style (``Args:``) and NumPy-style
+    (``Parameters\n----------``) docstrings.  The Griffe parser picked at
+    call sites used to be hard-coded to ``Parser.numpy``, which silently
+    treated Google-style ``Args:`` bodies as prose — every parameter list
+    was dropped on the floor.  We sniff for either family's marker and let
+    :func:`_parse_docstring` dispatch the right parser.
+    """
+    if not raw_text:
+        return None
+    has_numpy = bool(_NUMPY_UNDERLINE_RE.search(raw_text))
+    has_google = bool(_GOOGLE_HEADER_RE.search(raw_text))
+    if has_google and not has_numpy:
+        return "google"
+    if has_numpy and not has_google:
+        return "numpy"
+    return None
+
+
 def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
     """Parse a griffe object's docstring into structured sections."""
     result: dict[str, Any] = {
@@ -599,6 +632,12 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
         "notes": [],
         "attributes": [],
         "warns": [],
+        # ``See Also`` admonitions are parsed out into structured
+        # ``{name, description}`` entries so the frontend can render
+        # each item as a hyperlink to the referenced symbol's docs
+        # page.  Previously they landed in ``notes`` as plain text and
+        # readers had to copy-paste names to navigate.
+        "see_also": [],
     }
 
     # Prefer the Griffe docstring object; fall back to the AST-extracted __doc__
@@ -626,6 +665,18 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
         doc_obj = _GDoc(raw_text)
     else:
         doc_obj = obj.docstring
+
+    # Auto-detect Google vs NumPy from the raw text; pick the matching Griffe
+    # parser instead of blindly using the one the caller passed.  Lucid's
+    # sources are mostly NumPy-style but a sizeable minority (≈36 modules,
+    # incl. ``nn.functional.linear``) use Google-style ``Args:`` headers.
+    style = _detect_docstring_style(getattr(doc_obj, "value", "") or "")
+    if style is not None:
+        try:
+            from griffe import Parser as _GParser
+            parser = _GParser.google if style == "google" else _GParser.numpy
+        except Exception:
+            pass
 
     try:
         sections = doc_obj.parse(parser)
@@ -701,9 +752,42 @@ def _parse_docstring(obj: Any, parser: Any) -> dict[str, Any]:
                 result["examples"].append(block)
 
         elif kind in (K.admonition,):
-            # Notes/warnings expressed as admonitions (reST style)
-            note_text = _rst_to_text(str(val) if isinstance(val, str) else
-                                     getattr(val, "description", str(val)))
+            # Notes / warnings / See-Also blocks all arrive as
+            # admonitions (reST style).  ``See Also`` is the structural
+            # exception — its body is a list of ``name : description``
+            # entries that we want rendered as hyperlinks rather than
+            # plain prose, so we extract it into ``see_also`` and skip
+            # the ``notes`` append for that case.
+            sub_kind = getattr(val, "kind", None)
+            sub_kind_str = str(sub_kind).lower() if sub_kind is not None else ""
+            body = getattr(val, "description", None) or (str(val) if isinstance(val, str) else "")
+            title = getattr(section, "title", "") or ""
+            is_see_also = (
+                "see-also" in sub_kind_str
+                or "see_also" in sub_kind_str
+                or title.strip().lower() == "see also"
+            )
+            if is_see_also and body:
+                # Each line is ``name : description`` or just ``name``.
+                # Comma-separated names on one line — split each.
+                for line in body.split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if ":" in line:
+                        names_part, desc = line.split(":", 1)
+                        desc = desc.strip()
+                    else:
+                        names_part, desc = line, ""
+                    for raw_name in names_part.split(","):
+                        n = raw_name.strip()
+                        if n:
+                            result["see_also"].append({
+                                "name":        n,
+                                "description": _rst_to_text(desc),
+                            })
+                continue
+            note_text = _rst_to_text(body)
             if note_text:
                 result["notes"].append(note_text)
 
@@ -1012,6 +1096,40 @@ def _resolve_member(member: Any) -> Any:
     return member
 
 
+def _resolve_attribute_alias(attr: Any) -> Any:
+    """Resolve an :class:`Attribute` whose value is a bare identifier
+    pointing at another callable in the SAME module (or its parents)
+    to that callable.
+
+    Returns ``None`` when the value isn't a simple identifier or doesn't
+    resolve to a Function/Class.  Built primarily to surface non-inplace
+    aliases like ``kaiming_uniform = kaiming_uniform_`` — both names
+    are part of the public API, but only the underscore-suffixed source
+    is a real ``def``, the bare-name alias is an :class:`Attribute`.
+
+    Without this hop, the assignment would silently disappear from the
+    docs JSON (Attribute isn't one of the kinds the member loop emits)
+    and we'd get a build-time warning from the ``__all__`` blind-spot
+    guard instead of a real entry."""
+    from griffe import Attribute as GriffeAttr, Function as GriffeFn, Class as GriffeCls
+    if not isinstance(attr, GriffeAttr):
+        return None
+    value = attr.value
+    if value is None:
+        return None
+    val_str = str(value).strip()
+    if not val_str.isidentifier():
+        return None
+    parent = attr.parent
+    while parent is not None:
+        candidate = getattr(parent, "members", {}).get(val_str)
+        candidate = _resolve_member(candidate) if candidate is not None else None
+        if isinstance(candidate, (GriffeFn, GriffeCls)):
+            return candidate
+        parent = getattr(parent, "parent", None)
+    return None
+
+
 def _parse_dunder_all(mod: Any) -> set[str] | None:
     """Return the set of names in __all__ if it exists, otherwise None."""
     import ast
@@ -1029,10 +1147,7 @@ def _parse_dunder_all(mod: Any) -> set[str] | None:
 
 
 _RST_INLINE_MATH = re.compile(r":math:`([^`]+)`")
-_RST_BLOCK_MATH = re.compile(
-    r"\.\.\s*math::\s*\n((?:[ \t]+[^\n]*\n?|\s*\n)+)",
-    re.MULTILINE,
-)
+_RST_BLOCK_MATH_HEADER = re.compile(r"^(?P<indent>[ \t]*)\.\.\s*math::\s*\n", re.MULTILINE)
 
 
 def _rst_math_to_markdown(text: str) -> str:
@@ -1042,16 +1157,52 @@ def _rst_math_to_markdown(text: str) -> str:
     ``$x$`` for inline and ``$$...$$`` for block.  Theory bodies on
     family Configs are written in rST style (``:math:`x``` /
     ``.. math::``), so we translate here at build time.
+
+    Block math is delimited by indentation, not an explicit terminator:
+    the block ends at the first non-blank line whose indent is *not*
+    strictly greater than the directive's own indent.  A pure-regex
+    pass can't honour that rule (blank lines and trailing prose share
+    the same indent-equals-zero state), so we walk line-by-line for the
+    block form.
     """
     import textwrap
 
-    def _block_sub(m: "re.Match[str]") -> str:
-        body = textwrap.dedent(m.group(1)).strip()
-        if not body:
-            return ""
-        return f"\n\n$$\n{body}\n$$\n\n"
+    out_parts: list[str] = []
+    cursor = 0
+    for m in _RST_BLOCK_MATH_HEADER.finditer(text):
+        out_parts.append(text[cursor : m.start()])
+        directive_indent = len(m.group("indent").expandtabs(4))
 
-    text = _RST_BLOCK_MATH.sub(_block_sub, text)
+        # Walk forward over lines that either (a) are blank or (b) have
+        # an indent strictly greater than the directive.  Stop at the
+        # first non-blank line whose indent is <= directive_indent.
+        lines: list[str] = []
+        scan = m.end()
+        while scan < len(text):
+            nl = text.find("\n", scan)
+            line = text[scan : nl if nl != -1 else len(text)]
+            stripped = line.strip()
+            line_indent = len(line) - len(line.lstrip(" \t"))
+            line_indent = len(line[:line_indent].expandtabs(4))
+            if not stripped:
+                lines.append(line)
+                scan = nl + 1 if nl != -1 else len(text)
+                continue
+            if line_indent > directive_indent:
+                lines.append(line)
+                scan = nl + 1 if nl != -1 else len(text)
+                continue
+            break
+        # Strip trailing blank lines we may have absorbed.
+        while lines and not lines[-1].strip():
+            lines.pop()
+        body = textwrap.dedent("\n".join(lines)).strip()
+        if body:
+            out_parts.append(f"\n\n$$\n{body}\n$$\n\n")
+        cursor = scan
+
+    out_parts.append(text[cursor:])
+    text = "".join(out_parts)
     text = _RST_INLINE_MATH.sub(r"$\1$", text)
     return text
 
@@ -1199,6 +1350,136 @@ def _extract_family_meta(slug: str) -> dict[str, str]:
     return {}
 
 
+def _inject_lazy_loaded_members(
+    loader: Any, parser: Any, sha: str, lucid_data: dict[str, Any],
+) -> None:
+    """Rescue composite / ops names exposed only through lucid's lazy
+    ``__getattr__`` loader so they show up in the synth-bucket JSONs.
+
+    Blind spot pattern (category 5):
+      * ``lucid/__init__.py`` registers e.g. ``COMPOSITE_NAMES`` with a
+        lazy loader — ``lucid.erfc`` works at runtime, but Griffe's
+        static AST walk sees nothing under ``lucid.erfc`` because the
+        name is never explicitly imported or re-exported from the
+        top-level ``__init__.py``.
+      * The synth pipeline below partitions ``lucid_data["members"]``
+        by ``subcategory`` to emit ``lucid.ops.composite.json`` (et al.).
+        With Griffe's static view, the composite bucket misses ~30 ops
+        (erfc / lgamma / i0 / allclose / amax / corrcoef / std_mean /
+        argwhere / index_copy / nanquantile / …).
+
+    Fix: for every ``name → subcategory`` mapping in
+    :data:`_LUCID_NAME_OVERRIDES` that isn't present in
+    ``lucid_data["members"]``, locate the symbol in its actual home
+    module (composite submodule, ``_ops/_registry`` generated function,
+    etc.) and append a serialised entry with the correct subcategory tag.
+
+    Mutates ``lucid_data["members"]`` in place; safe to call exactly
+    once after :func:`_serialise_module` produces the lucid top-level
+    payload.
+    """
+    from griffe import (
+        Function as GriffeFunction,
+        Class as GriffeClass,
+        Module as GriffeModule,
+    )
+
+    existing = {m.get("name") for m in lucid_data.get("members", [])}
+    missing = [n for n in _LUCID_NAME_OVERRIDES if n not in existing]
+    if not missing:
+        return
+
+    # Home-module lookup table: subcategory → list of (griffe_path,
+    # already_loaded_module).  Loaded once per call.  Names tagged
+    # "composite" live in lucid._ops.composite.<submodule>; "ops"
+    # names come from the runtime _registry (we resolve those via the
+    # generated ``lucid._ops`` module).
+    home_candidates: dict[str, list[str]] = {
+        "composite": [
+            "lucid._ops.composite.elementwise",
+            "lucid._ops.composite.reductions",
+            "lucid._ops.composite.shape",
+            "lucid._ops.composite.blas",
+            "lucid._ops.composite.predicates",
+            "lucid._ops.composite.dtype",
+            "lucid._ops.composite.constants",
+            "lucid._ops.composite.statistics",
+            "lucid._ops.composite.indexing",
+            "lucid._ops.composite.complex",
+        ],
+        "ops":      ["lucid._ops"],
+        "factories": ["lucid._factories"],
+        "autograd":  ["lucid.autograd"],
+    }
+    home_cache: dict[str, Any] = {}
+
+    def _load_home(path: str) -> Any | None:
+        if path in home_cache:
+            return home_cache[path]
+        try:
+            m = loader.load(path)
+            home_cache[path] = m
+            return m
+        except Exception:
+            home_cache[path] = None
+            return None
+
+    appended = 0
+    skipped: list[str] = []
+    for name in missing:
+        subcat = _LUCID_NAME_OVERRIDES[name]
+        candidates = home_candidates.get(subcat, [])
+        target = None
+        target_home: Any = None
+        for home_path in candidates:
+            home_mod = _load_home(home_path)
+            if home_mod is None:
+                continue
+            raw = home_mod.members.get(name)
+            resolved = _resolve_member(raw) if raw is not None else None
+            if resolved is None:
+                continue
+            target = resolved
+            target_home = home_mod
+            break
+        if target is None:
+            skipped.append(name)
+            continue
+
+        try:
+            if isinstance(target, GriffeFunction):
+                serialised = _serialise_function(
+                    target, parser, sha,
+                    module_root=None, is_lucid_toplevel=True,
+                )
+            elif isinstance(target, GriffeClass):
+                serialised = _serialise_class(
+                    target, parser, sha,
+                    module_root=None, is_lucid_toplevel=True,
+                )
+            else:
+                skipped.append(name)
+                continue
+        except Exception as exc:
+            if VERBOSE:
+                print(f"  [warn] lazy-rescue failed for {name}: {exc}")
+            skipped.append(name)
+            continue
+
+        # Relabel under the lucid.* namespace so the subcategory rule
+        # (``is_lucid_toplevel=True`` → name-override hit) attaches the
+        # right bucket tag.
+        serialised["name"] = name
+        serialised["path"] = f"lucid.{name}"
+        serialised["subcategory"] = subcat
+        lucid_data.setdefault("members", []).append(serialised)
+        appended += 1
+
+    if VERBOSE and appended:
+        print(f"  [lazy-rescue] injected {appended} member(s) "
+              f"(skipped {len(skipped)}: {skipped[:5]}{'…' if len(skipped) > 5 else ''})")
+
+
 def _serialise_module(mod: Any, parser: Any, sha: str, *, slug: str) -> dict[str, Any]:
     """Top-level serialiser for a module."""
     from griffe import Function as GriffeFunction, Class as GriffeClass, Module as GriffeModule
@@ -1238,6 +1519,14 @@ def _serialise_module(mod: Any, parser: Any, sha: str, *, slug: str) -> dict[str
         seen_paths.add(member.path)
 
         is_lucid_top = slug == "lucid"
+        # Attribute-alias rescue: ``foo = foo_`` style assignments are
+        # public API but live in Griffe as ``Attribute`` values, which
+        # the kind branches below don't emit.  Resolve here and treat as
+        # the underlying callable (re-labelled with the alias's name).
+        from griffe import Attribute as GriffeAttribute  # local import to keep top imports tight
+        attr_alias_target = None
+        if isinstance(member, GriffeAttribute):
+            attr_alias_target = _resolve_attribute_alias(member)
         try:
             if isinstance(member, GriffeFunction):
                 members.append(_serialise_function(
@@ -1251,11 +1540,80 @@ def _serialise_module(mod: Any, parser: Any, sha: str, *, slug: str) -> dict[str
                     module_root=module_root,
                     is_lucid_toplevel=is_lucid_top,
                 ))
+            elif attr_alias_target is not None:
+                # Re-serialise the alias target under the alias's name
+                # so consumers see the docstring + signature while the
+                # URL anchor matches ``__all__``.
+                if isinstance(attr_alias_target, GriffeFunction):
+                    serialised = _serialise_function(
+                        attr_alias_target, parser, sha,
+                        module_root=module_root,
+                        is_lucid_toplevel=is_lucid_top,
+                    )
+                else:
+                    serialised = _serialise_class(
+                        attr_alias_target, parser, sha,
+                        module_root=module_root,
+                        is_lucid_toplevel=is_lucid_top,
+                    )
+                serialised["name"] = name
+                serialised["path"] = f"{mod.path}.{name}"
+                members.append(serialised)
             elif isinstance(member, GriffeModule):
-                pass
+                # Name-collision rescue: a submodule ``linear`` (file
+                # ``linear.py``) shadows the parent's ``from .linear
+                # import linear`` alias in Griffe's namespace.  When
+                # the submodule itself holds a same-named public
+                # function or class, surface THAT — that's what the
+                # ``__all__`` re-export actually means at the public
+                # API level.
+                nested_raw = member.members.get(name)
+                nested = _resolve_member(nested_raw) if nested_raw is not None else None
+                if nested is None or nested.path in seen_paths:
+                    continue
+                if isinstance(nested, GriffeFunction):
+                    seen_paths.add(nested.path)
+                    members.append(_serialise_function(
+                        nested, parser, sha,
+                        module_root=module_root,
+                        is_lucid_toplevel=is_lucid_top,
+                    ))
+                elif isinstance(nested, GriffeClass):
+                    seen_paths.add(nested.path)
+                    members.append(_serialise_class(
+                        nested, parser, sha,
+                        module_root=module_root,
+                        is_lucid_toplevel=is_lucid_top,
+                    ))
         except Exception as exc:
             if VERBOSE:
                 print(f"  [warn] skipping {name}: {exc}")
+
+    # Blind-spot guard: any name in ``__all__`` that didn't make it
+    # into ``members`` after collection is a regression risk — print a
+    # build-time warning so the next sweep catches it before it ships.
+    # Excludes submodule names (caller documents those via their own
+    # slug) and class members (already deduped via ``seen_paths``).
+    if allowed_names is not None:
+        emitted = {m.get("name") for m in members}
+        missing = []
+        for n in allowed_names:
+            if n in emitted:
+                continue
+            sub = mod.members.get(n)
+            sub = _resolve_member(sub) if sub is not None else None
+            if sub is None:
+                continue
+            from griffe import Module as _GModuleCheck
+            if isinstance(sub, _GModuleCheck):
+                # A bare submodule re-export (e.g. ``data`` in
+                # ``lucid.utils.__all__``) is fine — that submodule gets
+                # its own page.
+                continue
+            missing.append(n)
+        if missing:
+            print(f"  [warn] {slug}: __all__ exposes {missing} but they are missing "
+                  f"from the emitted members list — possible Griffe shadowing.")
 
     return {
         "slug":    slug,
@@ -1597,6 +1955,19 @@ def main() -> None:
                 lucid_mod = loader.load("lucid")
                 if isinstance(lucid_mod, GriffeModule):
                     lucid_data = _serialise_module(lucid_mod, Parser.numpy, sha, slug="lucid")
+                    # Blind-spot rescue (category 5): lazy ``__getattr__``
+                    # imports composite ops on demand, so names like
+                    # ``lucid.erfc`` / ``lucid.allclose`` are runtime-visible
+                    # but absent from ``lucid/__init__.py``'s ``__all__`` /
+                    # explicit imports.  Griffe's static walk therefore misses
+                    # them and the synth-bucket pipeline below has nothing to
+                    # partition.  Walk each lazy-name's home module and inject
+                    # the serialised member directly into ``lucid_data`` so
+                    # the synth slugs (``lucid.ops.composite`` etc.) pick
+                    # them up.
+                    _inject_lazy_loaded_members(
+                        loader, Parser.numpy, sha, lucid_data,
+                    )
         except Exception as exc:
             print(f"  [warn] failed to load lucid for synthesis: {exc}")
 

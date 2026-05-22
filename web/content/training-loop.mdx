@@ -1,0 +1,135 @@
+---
+title: Training Loop
+description: A complete supervised training loop in Lucid — model, optimizer, scheduler, AMP, checkpointing.
+category: Guides
+order: 4
+---
+
+This guide is a self-contained recipe.  Drop the snippets into a `train.py`
+and you have a working pipeline for any classification / regression task.
+
+## Skeleton
+
+```python
+import lucid
+import lucid.nn as nn
+import lucid.nn.functional as F
+from lucid.optim import AdamW
+from lucid.optim.lr_scheduler import CosineAnnealingLR
+from lucid.utils.data import DataLoader
+
+device = lucid.metal_if_available()
+
+model = MyModel().to(device)
+opt = AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
+sched = CosineAnnealingLR(opt, t_max=epochs * len(train_loader))
+
+for epoch in range(epochs):
+    train_one_epoch(model, train_loader, opt, sched, device)
+    val_metric = evaluate(model, val_loader, device)
+```
+
+## Step function
+
+The body of the loop is three lines plus loss bookkeeping.  Everything
+else — gradient scaling, scheduler steps, metric accumulation — wraps
+around it.
+
+```python
+def train_step(model, x, y, opt, scaler=None):
+    model.train()
+    out = model(x)
+    loss = F.cross_entropy(out, y)
+
+    opt.zero_grad()
+    if scaler is None:
+        loss.backward()
+        opt.step()
+    else:
+        scaler.scale(loss).backward()
+        scaler.step(opt)
+        scaler.update()
+    return float(loss.item())
+```
+
+<Callout variant="info">
+`lucid.amp.GradScaler` matches the reference framework's API — wrap the
+backward + optimizer.step pair and the scaler handles `inf`/`NaN`
+detection automatically.
+</Callout>
+
+## Mixed precision
+
+Lucid's autocast picks up the active dtype from a context manager:
+
+```python
+from lucid.amp import autocast, GradScaler
+
+scaler = GradScaler()
+with autocast(dtype=lucid.bfloat16):
+    out  = model(x)
+    loss = F.cross_entropy(out, y)
+scaler.scale(loss).backward()
+scaler.step(opt)
+scaler.update()
+```
+
+On Apple Silicon, `bfloat16` is the right default — full-range exponent
+matches `float32`, half the memory, and MLX's matmul is BF16-aware.
+
+## Scheduler step cadence
+
+Most schedulers step **per iteration**, not per epoch.  Cosine annealing
+with a warm-restart cycle expects step-level granularity.
+
+```python
+for x, y in train_loader:
+    train_step(model, x, y, opt, scaler)
+    sched.step()  # <-- here, not after the epoch loop
+```
+
+`ReduceLROnPlateau` is the exception — it watches a validation metric
+and only steps after `evaluate()`.
+
+## Checkpointing
+
+```python
+state = {
+    "model":     model.state_dict(),
+    "opt":       opt.state_dict(),
+    "sched":     sched.state_dict(),
+    "scaler":    scaler.state_dict() if scaler else None,
+    "epoch":     epoch,
+}
+lucid.serialization.save(state, "checkpoint.lcs")
+
+# Resume
+state = lucid.serialization.load("checkpoint.lcs")
+model.load_state_dict(state["model"])
+opt.load_state_dict(state["opt"])
+sched.load_state_dict(state["sched"])
+```
+
+The `.lcs` (Lucid Checkpoint Stream) format is `pickle`-free and
+tracks dtype + device per tensor.
+
+## Gradient checkpointing
+
+Memory pressure on long sequences?  Wrap blocks with
+`lucid.utils.checkpoint`:
+
+```python
+from lucid.utils import checkpoint
+
+# Recomputes the block during backward instead of caching activations.
+y = checkpoint(model.block_3, x)
+```
+
+A 30-40% memory drop is typical on transformer-style models, traded
+against a ~30% wall-time hit on the affected segments.
+
+## See also
+
+- [Autograd](/docs/autograd) — how `loss.backward()` actually traverses the graph
+- [Optimizers](/docs/optimizers) — comparison of SGD / Adam / AdamW / etc.
+- [Metal Device](/docs/metal-device) — CPU vs GPU dispatch details

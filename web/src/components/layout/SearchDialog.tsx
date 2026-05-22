@@ -86,6 +86,16 @@ function SearchResultItem({ entry, active, onSelect }: SearchResultItemProps) {
   );
 }
 
+type KindFilter = "all" | SearchEntry["kind"];
+
+const KIND_FILTERS: Array<{ value: KindFilter; label: string }> = [
+  { value: "all",          label: "All" },
+  { value: "api-class",    label: "Classes" },
+  { value: "api-function", label: "Functions" },
+  { value: "api-module",   label: "Modules" },
+  { value: "doc",          label: "Guides" },
+];
+
 export function SearchDialog({
   open,
   onClose,
@@ -95,7 +105,11 @@ export function SearchDialog({
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
-  const [results, setResults] = React.useState<SearchEntry[]>([]);
+  // Unfiltered Fuse hits before per-kind narrowing — we keep BOTH so
+  // switching filters never re-runs the (cheap, but cache-warm-only)
+  // Fuse search.
+  const [rawResults, setRawResults] = React.useState<SearchEntry[]>([]);
+  const [kindFilter, setKindFilter] = React.useState<KindFilter>("all");
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [index, setIndex] = React.useState<Fuse<SearchEntry> | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -126,22 +140,49 @@ export function SearchDialog({
   React.useEffect(() => {
     if (open) {
       setQuery("");
+      setKindFilter("all");
       setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
-  // Run search
+  // Run search — fetch a deep set, then narrow per filter at render time.
   React.useEffect(() => {
     if (!index || !query.trim()) {
-      setResults([]);
+      setRawResults([]);
       setActiveIndex(0);
       return;
     }
-    const hits = index.search(query, { limit: 8 });
-    setResults(hits.map((h) => h.item));
+    const hits = index.search(query, { limit: 50 });
+    setRawResults(hits.map((h) => h.item));
     setActiveIndex(0);
   }, [query, index]);
+
+  // Reset highlight whenever the filter changes — the visible list shifts.
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [kindFilter]);
+
+  // Counts per kind across the unfiltered hits — drives chip badges.
+  const counts = React.useMemo(() => {
+    const acc: Record<KindFilter, number> = {
+      "all": rawResults.length,
+      "api-class": 0,
+      "api-function": 0,
+      "api-module": 0,
+      "doc": 0,
+    };
+    for (const r of rawResults) acc[r.kind]++;
+    return acc;
+  }, [rawResults]);
+
+  // Final visible list — cap at 8 to keep the dialog scannable.
+  const results = React.useMemo(() => {
+    const filtered = kindFilter === "all"
+      ? rawResults
+      : rawResults.filter((r) => r.kind === kindFilter);
+    return filtered.slice(0, 8);
+  }, [rawResults, kindFilter]);
 
   const navigate = React.useCallback(
     (entry: SearchEntry) => {
@@ -187,6 +228,40 @@ export function SearchDialog({
           </kbd>
         </div>
 
+        {/* Kind filter chips — appear once there are results to filter. */}
+        {rawResults.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 border-b border-lucid-border px-3 py-2">
+            {KIND_FILTERS.map(({ value, label }) => {
+              const count = counts[value];
+              const active = kindFilter === value;
+              const disabled = value !== "all" && count === 0;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setKindFilter(value)}
+                  disabled={disabled}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    active
+                      ? "bg-lucid-primary/15 border-lucid-primary/40 text-lucid-primary"
+                      : "border-lucid-border text-lucid-text-low hover:text-lucid-text-mid hover:bg-lucid-elevated",
+                    disabled && "opacity-40 cursor-not-allowed hover:bg-transparent hover:text-lucid-text-low",
+                  )}
+                >
+                  {label}
+                  <span className={cn(
+                    "font-mono text-[10px]",
+                    active ? "text-lucid-primary/80" : "text-lucid-text-disabled",
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Results */}
         <div className="max-h-[360px] overflow-y-auto p-2">
           {query.trim() === "" && (
@@ -199,13 +274,27 @@ export function SearchDialog({
           )}
 
           {query.trim() !== "" && results.length === 0 && (
-            <div className="py-10 text-center">
+            <div className="py-10 text-center space-y-2">
               <p className="text-sm text-lucid-text-low">
                 No results for{" "}
                 <span className="font-medium text-lucid-text-mid">
                   &ldquo;{query}&rdquo;
                 </span>
+                {kindFilter !== "all" && (
+                  <>
+                    {" "}in <span className="font-mono text-lucid-text-mid">{kindFilter}</span>
+                  </>
+                )}.
               </p>
+              {kindFilter !== "all" && rawResults.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setKindFilter("all")}
+                  className="text-xs text-lucid-primary hover:text-lucid-primary-light"
+                >
+                  Show {rawResults.length} match{rawResults.length === 1 ? "" : "es"} in all kinds
+                </button>
+              )}
             </div>
           )}
 

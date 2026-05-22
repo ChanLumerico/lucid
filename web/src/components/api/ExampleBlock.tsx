@@ -1,5 +1,6 @@
 import { highlight } from "@/lib/shiki";
 import { cn } from "@/lib/utils";
+import { CopyButton } from "./CopyButton";
 
 interface ExampleBlockProps {
   examples: string[];
@@ -19,16 +20,22 @@ export async function ExampleBlock({ examples, className }: ExampleBlockProps) {
         Examples
       </h4>
       {rendered.map((html, i) => (
+        // ``group relative`` is what lets the copy button reveal on
+        // hover and absolutely-position to the top-right of the
+        // highlighted block.
         <div
           key={i}
           className={cn(
+            "group relative",
             "rounded-xl border border-lucid-border bg-lucid-surface",
             "overflow-hidden text-sm",
             "[&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:!bg-transparent",
             "[&_code]:font-mono [&_code]:text-xs [&_code]:leading-relaxed",
           )}
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
+        >
+          <CopyButton text={examples[i]} />
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
       ))}
     </div>
   );

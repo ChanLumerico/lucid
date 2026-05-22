@@ -180,8 +180,110 @@ export function DunderBadge({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// C++ method kind badges
+// ---------------------------------------------------------------------------
+
+/** C++ constructor (``ClassName(args...)``). */
+export function CppCtorBadge({ className }: { className?: string }) {
+  return (
+    <Pill
+      label="ctor"
+      className={cn(
+        "bg-api-cpp-ctor/10 border-api-cpp-ctor/35 text-api-cpp-ctor",
+        className,
+      )}
+    />
+  );
+}
+
+/** C++ destructor (``~ClassName()``). */
+export function CppDtorBadge({ className }: { className?: string }) {
+  return (
+    <Pill
+      label="dtor"
+      className={cn(
+        "bg-api-cpp-dtor/10 border-api-cpp-dtor/35 text-api-cpp-dtor",
+        className,
+      )}
+    />
+  );
+}
+
+/** C++ operator overload (``operator+`` / ``operator()`` / ``operator[]`` …). */
+export function CppOperatorBadge({ className }: { className?: string }) {
+  return (
+    <Pill
+      label="op"
+      className={cn(
+        "bg-api-cpp-operator/10 border-api-cpp-operator/35 text-api-cpp-operator",
+        className,
+      )}
+    />
+  );
+}
+
+/** C++ ``virtual`` (non-pure) method.  Pure-virtual uses a dashed pill
+ *  to echo Python's ``abstract`` badge convention. */
+export function CppVirtualBadge({
+  pure = false,
+  className,
+}: {
+  pure?: boolean;
+  className?: string;
+}) {
+  return (
+    <Pill
+      label={pure ? "= 0" : "virt"}
+      className={cn(
+        pure
+          ? "border-dashed bg-api-cpp-pure-virtual/10 border-api-cpp-pure-virtual/40 text-api-cpp-pure-virtual"
+          : "bg-api-cpp-virtual/10 border-api-cpp-virtual/35 text-api-cpp-virtual",
+        className,
+      )}
+    />
+  );
+}
+
+/** C++ function template (``template<typename T> ...``). */
+export function CppTemplateBadge({ className }: { className?: string }) {
+  return (
+    <Pill
+      label="tmpl"
+      className={cn(
+        "bg-api-cpp-template/10 border-api-cpp-template/35 text-api-cpp-template",
+        className,
+      )}
+    />
+  );
+}
+
+/** C++ ``const`` method.  Standalone qualifier — rendered alongside the
+ *  primary kind badge when the method is also virtual / template / etc. */
+export function CppConstBadge({ className }: { className?: string }) {
+  return (
+    <Pill
+      label="const"
+      className={cn(
+        "bg-api-cpp-const/10 border-api-cpp-const/35 text-api-cpp-const",
+        className,
+      )}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
 // AutoKindBadge — picks the correct badge automatically
-// Priority: property > classmethod > staticmethod > abstractmethod > dunder > fn
+//
+// Priority:
+//   Python kinds (property > classmethod > staticmethod > abstractmethod)
+//   C++ kinds    (dtor > ctor > operator > pure-virtual > virtual > template > static)
+//   Dunder
+//   Plain fn / class fallback
+//
+// Secondary C++ qualifiers (``const``, plain ``static`` on non-template
+// methods) are surfaced through ``AutoKindBadgeRow`` below which composes
+// the primary badge with subordinate ones — call AutoKindBadgeRow when
+// you want the full set, AutoKindBadge for just the dominant one.
 // ---------------------------------------------------------------------------
 
 interface AutoKindBadgeProps {
@@ -202,10 +304,22 @@ export function AutoKindBadge({
 }: AutoKindBadgeProps) {
   const isWritable = labels.includes("writable");
 
+  // Python kinds (these are mutually exclusive with C++ kinds in practice
+  // because the build pipelines emit one or the other, never both).
   if (labels.includes("property"))       return <PropBadge writable={isWritable} className={className} />;
   if (labels.includes("classmethod"))    return <ClsMethodBadge className={className} />;
   if (labels.includes("staticmethod"))   return <StaticBadge className={className} />;
   if (labels.includes("abstractmethod")) return <AbstractBadge className={className} />;
+
+  // C++ kinds — most-specific first.  Dtor before ctor so ``~Foo`` wins
+  // when libclang emits both labels (it shouldn't, but defensively).
+  if (labels.includes("cpp-dtor"))         return <CppDtorBadge className={className} />;
+  if (labels.includes("cpp-ctor"))         return <CppCtorBadge className={className} />;
+  if (labels.includes("cpp-operator"))     return <CppOperatorBadge className={className} />;
+  if (labels.includes("cpp-pure-virtual")) return <CppVirtualBadge pure className={className} />;
+  if (labels.includes("cpp-virtual"))      return <CppVirtualBadge className={className} />;
+  if (labels.includes("cpp-template"))     return <CppTemplateBadge className={className} />;
+  if (labels.includes("cpp-static"))       return <StaticBadge className={className} />;
 
   if (name && name.startsWith("__") && name.endsWith("__")) {
     return <DunderBadge className={className} />;
@@ -213,4 +327,40 @@ export function AutoKindBadge({
 
   if (fallback === "class") return <ClassBadge kind={classKind} className={className} />;
   return <FnBadge className={className} />;
+}
+
+/** Compose the dominant kind badge with C++ qualifier badges (``const``,
+ *  ``static`` when subordinate) — used by FunctionSignature so a method
+ *  declared as ``virtual void foo() const`` shows both ``virt`` and
+ *  ``const`` pills. */
+export function AutoKindBadgeRow({
+  labels,
+  name,
+  fallback = "fn",
+  classKind = "regular",
+  className,
+}: AutoKindBadgeProps) {
+  // The primary badge already absorbs cpp-static when no template/virtual
+  // outranks it.  Const is always a sibling — emit when present.
+  const isConst = labels.includes("cpp-const");
+  // Static is a sibling only when there's a more specific primary
+  // (template/virtual/const).  Otherwise the primary IS the static pill.
+  const showStaticSibling =
+    labels.includes("cpp-static") &&
+    (labels.includes("cpp-virtual") ||
+     labels.includes("cpp-pure-virtual") ||
+     labels.includes("cpp-template"));
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0">
+      <AutoKindBadge
+        labels={labels}
+        name={name}
+        fallback={fallback}
+        classKind={classKind}
+        className={className}
+      />
+      {showStaticSibling && <StaticBadge />}
+      {isConst && <CppConstBadge />}
+    </span>
+  );
 }

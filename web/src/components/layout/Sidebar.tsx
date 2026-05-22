@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { springs } from "@/components/motion/springs";
@@ -111,6 +111,10 @@ function TitleWithTag({ title, tag }: { title: string; tag?: string }) {
 interface SidebarGroupProps {
   item: SidebarItem;
   depth?: number;
+  /** When true, override the expand state to open regardless of the
+   *  user's previous click history.  Threaded down from the sidebar's
+   *  filter input so every match is visible while a query is active. */
+  forceExpand?: boolean;
 }
 
 function SidebarSeparator() {
@@ -123,19 +127,47 @@ function SidebarSeparator() {
   );
 }
 
-function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
+/** Count leaf entries (items with an ``href`` and no further nesting)
+ *  reachable from the given tree.  Drives the "{N} of {M} match" hint
+ *  shown above the filter input. */
+function countLeaves(items: SidebarItem[]): number {
+  let n = 0;
+  for (const it of items) {
+    if (it.separator) continue;
+    if (it.href && (!it.items || it.items.length === 0)) {
+      n += 1;
+    } else if (it.items) {
+      n += countLeaves(it.items);
+    }
+  }
+  return n;
+}
+
+/** Recursive ancestor-expand probe: is any leaf in this subtree the
+ *  current page?  Used by ``SidebarGroup`` to auto-open EVERY group on
+ *  the path to the active leaf — without recursion, only the
+ *  immediate-parent group expands, which leaves deeply-nested entries
+ *  hidden from the user.  Honours both real hrefs and intermediate
+ *  groups (which have no href of their own). */
+function hasActiveDescendant(item: SidebarItem, pathname: string): boolean {
+  if (item.href && (pathname === item.href || pathname.startsWith(`${item.href}/`))) {
+    return true;
+  }
+  return item.items?.some((child) => hasActiveDescendant(child, pathname)) ?? false;
+}
+
+function SidebarGroup({ item, depth = 0, forceExpand = false }: SidebarGroupProps) {
   const pathname = usePathname();
   const isActive = item.href ? pathname === item.href || pathname.startsWith(`${item.href}/`) : false;
   const hasChildren = Boolean(item.items?.length);
 
   const isChildActive = React.useMemo(() => {
     if (!item.items) return false;
-    return item.items.some(
-      (child) => child.href && (pathname === child.href || pathname.startsWith(`${child.href}/`)),
-    );
+    return item.items.some((child) => hasActiveDescendant(child, pathname));
   }, [item.items, pathname]);
 
-  const [expanded, setExpanded] = React.useState(isActive || isChildActive);
+  const [userExpanded, setExpanded] = React.useState(isActive || isChildActive);
+  const expanded = forceExpand || userExpanded;
 
   React.useEffect(() => {
     if (isChildActive) setExpanded(true);
@@ -244,7 +276,12 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
                 child.separator ? (
                   <SidebarSeparator key={`sep-${idx}`} />
                 ) : (
-                  <SidebarGroup key={child.href ?? child.title} item={child} depth={depth + 1} />
+                  <SidebarGroup
+                    key={child.href ?? child.title}
+                    item={child}
+                    depth={depth + 1}
+                    forceExpand={forceExpand}
+                  />
                 ),
               )}
             </div>
@@ -258,27 +295,114 @@ function SidebarGroup({ item, depth = 0 }: SidebarGroupProps) {
 interface SidebarProps {
   items: SidebarItem[];
   className?: string;
+  /** When true, drop the desktop-only ``hidden lg:flex`` / fixed-width
+   *  rules so the same tree can be embedded in a mobile drawer.  The
+   *  caller is responsible for sizing the parent container. */
+  variant?: "desktop" | "mobile";
 }
 
-export function Sidebar({ items, className }: SidebarProps) {
+/** Recursive substring filter — keep an item if its own title (or its
+ *  ``tag``) matches, OR any descendant matches.  When a descendant
+ *  matches but the parent doesn't, the parent is retained as a
+ *  scaffold (so the tree remains navigable down to the hit).
+ *
+ *  Empty query → identity (return the full tree).  Match is a
+ *  case-insensitive substring on title + tag so users can search by
+ *  the friendly alias ("Tensor Operations") OR the real Python slug
+ *  ("lucid.ops"). */
+function filterSidebarItems(items: SidebarItem[], query: string): SidebarItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return items;
+
+  function visit(item: SidebarItem): SidebarItem | null {
+    if (item.separator) return null;
+    const selfMatch =
+      item.title.toLowerCase().includes(q) ||
+      (item.tag?.toLowerCase().includes(q) ?? false) ||
+      (item.href?.toLowerCase().includes(q) ?? false);
+    const children = item.items?.map(visit).filter((c): c is SidebarItem => c !== null) ?? [];
+    if (selfMatch || children.length > 0) {
+      return { ...item, items: children.length > 0 ? children : item.items };
+    }
+    return null;
+  }
+
+  return items.map(visit).filter((i): i is SidebarItem => i !== null);
+}
+
+export function Sidebar({ items, className, variant = "desktop" }: SidebarProps) {
+  const isMobile = variant === "mobile";
+  const [query, setQuery] = React.useState("");
+  const filtered = React.useMemo(() => filterSidebarItems(items, query), [items, query]);
+  const totalShown = countLeaves(filtered);
+  const totalAll = countLeaves(items);
+
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col w-80 shrink-0",
+        isMobile ? "flex flex-col w-full" : "hidden lg:flex flex-col w-80 shrink-0",
         className,
       )}
       aria-label="Documentation navigation"
     >
-      <ScrollArea className="flex-1 pt-8 pb-6 pr-4">
+      {/* Local filter — narrows the tree without making a remote call;
+          backed by ``filterSidebarItems``.  Hidden on mobile where the
+          drawer is already short and the keyboard would shrink the
+          usable area further. */}
+      <div className={cn(
+        isMobile ? "hidden" : "flex items-center gap-2 pt-6 pr-4 pb-2",
+      )}>
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-lucid-text-disabled" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter sidebar…"
+            aria-label="Filter sidebar items"
+            className={cn(
+              "w-full rounded-md border border-lucid-border bg-lucid-surface/40",
+              "pl-8 pr-7 py-1.5 text-xs text-lucid-text-high placeholder:text-lucid-text-disabled",
+              "focus:outline-none focus:border-lucid-primary/50 focus:bg-lucid-surface",
+              "transition-colors",
+            )}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear filter"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-lucid-text-disabled hover:text-lucid-text-mid"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+      {!isMobile && query && (
+        <div className="px-1 pr-4 pb-2 text-[10px] font-mono text-lucid-text-disabled">
+          {totalShown} of {totalAll} match
+        </div>
+      )}
+
+      <ScrollArea className={cn("flex-1", isMobile ? "pt-2 pb-6 pr-2" : "pb-6 pr-4")}>
         <nav className="space-y-0.5">
-          {items.map((item, idx) =>
+          {filtered.map((item, idx) =>
             item.separator ? (
               <SidebarSeparator key={`sep-${idx}`} />
             ) : (
-              <SidebarGroup key={item.href ?? item.title} item={item} />
+              <SidebarGroup key={item.href ?? item.title} item={item} forceExpand={!!query} />
             ),
           )}
         </nav>
+        {!isMobile && query && filtered.length === 0 && (
+          <p className="px-2 py-6 text-xs text-lucid-text-low">
+            No sidebar entries match{" "}
+            <code className="font-mono text-lucid-text-mid">
+              &ldquo;{query}&rdquo;
+            </code>.
+          </p>
+        )}
       </ScrollArea>
     </aside>
   );

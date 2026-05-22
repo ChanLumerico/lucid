@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
+import { buildMeta } from "@/lib/build-meta";
 
 const FOOTER_LINKS = [
   {
@@ -23,8 +24,9 @@ const FOOTER_LINKS = [
   {
     title: "Resources",
     links: [
-      { label: "GitHub", href: "https://github.com/ChanLumerico/lucid", external: true },
-      { label: "Changelog", href: "/changelog" },
+      { label: "GitHub",         href: "https://github.com/ChanLumerico/lucid", external: true },
+      { label: "Changelog",      href: "/changelog" },
+      { label: "BibTeX",         href: "/citations.bib", external: true },
     ],
   },
 ] as const;
@@ -35,7 +37,7 @@ export function Footer() {
       className="border-t border-lucid-border bg-lucid-bg mt-auto"
       aria-label="Site footer"
     >
-      <div className="mx-auto max-w-screen-xl px-4 sm:px-6 py-12">
+      <div className="mx-auto max-w-screen-2xl px-4 sm:px-6 py-12">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="lg:col-span-1">
@@ -95,7 +97,63 @@ export function Footer() {
             Python 3.14+ · macOS arm64
           </p>
         </div>
+
+        <BuildMetaLine />
       </div>
     </footer>
+  );
+}
+
+/** Single-line provenance: which package version + commit + build date
+ *  these docs were generated from.  Mirrors the same fields surfaced by
+ *  ``lucid.__version__`` so users can correlate the docs they read with
+ *  the package they pip-installed. */
+function BuildMetaLine() {
+  const { lucid_version, git_sha, git_sha_full, git_branch, built_at } = buildMeta;
+  if (!lucid_version && !git_sha && !built_at) return null;
+
+  const builtDate = built_at ? built_at.slice(0, 10) : null;
+  const shaHref = git_sha_full
+    ? `https://github.com/ChanLumerico/lucid/commit/${git_sha_full}`
+    : null;
+
+  return (
+    <p
+      className="mt-3 font-mono text-[10px] text-lucid-text-disabled"
+      aria-label="Build provenance"
+    >
+      {lucid_version && (
+        <>
+          lucid <span className="text-lucid-text-low">{lucid_version}</span>
+        </>
+      )}
+      {git_sha && (
+        <>
+          {lucid_version && <span aria-hidden> · </span>}
+          built from{" "}
+          {shaHref ? (
+            <a
+              href={shaHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-lucid-text-low hover:text-lucid-primary-light transition-colors"
+            >
+              {git_sha}
+            </a>
+          ) : (
+            <span className="text-lucid-text-low">{git_sha}</span>
+          )}
+          {git_branch && git_branch !== "HEAD" && (
+            <span className="text-lucid-text-disabled"> ({git_branch})</span>
+          )}
+        </>
+      )}
+      {builtDate && (
+        <>
+          {(lucid_version || git_sha) && <span aria-hidden> · </span>}
+          on <span className="text-lucid-text-low">{builtDate}</span>
+        </>
+      )}
+    </p>
   );
 }

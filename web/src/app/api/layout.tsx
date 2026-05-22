@@ -1,6 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Sidebar, type SidebarItem } from "@/components/layout/Sidebar";
+import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule, isApiClass } from "@/lib/types";
 import type { ApiMember, ApiModule } from "@/lib/types";
@@ -525,9 +526,9 @@ function buildModuleItem(slug: string): SidebarItem {
         badge = `${data.family_groups.length}`;
       } else if (members.length > 0) {
         // For the `lucid` top-level, skip the Tensor class itself — it has
-        // its own dedicated entry at `lucid.tensor` where all 260 methods
-        // are surfaced.  Listing it twice in the sidebar would just create
-        // a redundant single-item "Tensor" group.
+        // its own dedicated entry at `lucid.tensor` where all of its
+        // methods are surfaced.  Listing it twice in the sidebar would
+        // just create a redundant single-item "Tensor" group.
         const visible =
           slug === "lucid"
             ? members.filter((m) => m.subcategory !== "tensor")
@@ -693,16 +694,24 @@ export default function ApiLayout({
   const sidebar = buildApiSidebar();
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <Header />
-      <div className="mx-auto flex w-full max-w-screen-xl flex-1 gap-0 px-4 sm:px-6 pt-14">
-        <Sidebar
-          items={sidebar}
-          className="sticky top-14 h-[calc(100dvh-3.5rem)]"
-        />
-        <main className="flex-1 min-w-0 pt-10 pb-12 lg:px-8">{children}</main>
+    <MobileSidebarProvider items={sidebar}>
+      <div className="flex min-h-dvh flex-col">
+        <Header />
+        <div className="mx-auto flex w-full max-w-screen-2xl flex-1 gap-0 px-4 sm:px-6 pt-14">
+          <Sidebar
+            items={sidebar}
+            className="sticky top-14 h-[calc(100dvh-3.5rem)]"
+          />
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="flex-1 min-w-0 pt-10 pb-12 lg:px-8 focus:outline-none"
+          >
+            {children}
+          </main>
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </MobileSidebarProvider>
   );
 }

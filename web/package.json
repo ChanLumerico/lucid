@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "python3 scripts/build-api-data-cached.py",
+    "predev": "python3 scripts/build-api-data-cached.py && python3 scripts/build-cross-links.py && python3 scripts/link-citations.py && python3 scripts/build-bibtex.py && python3 scripts/build-meta.py",
     "dev": "next dev",
-    "dev:fast": "SKIP_API_BUILD=1 next dev",
-    "prebuild": "python3 scripts/build-api-data-cached.py",
+    "dev:fast": "SKIP_API_BUILD=1 python3 scripts/build-bibtex.py && python3 scripts/build-meta.py && next dev",
+    "prebuild": "python3 scripts/build-api-data-cached.py && python3 scripts/build-cross-links.py && python3 scripts/link-citations.py && python3 scripts/build-bibtex.py && python3 scripts/build-meta.py",
+    "citations": "python3 scripts/link-citations.py",
+    "cross-links": "python3 scripts/build-cross-links.py",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "build:api": "python3 scripts/build-api-data.py",
-    "build:api:module": "python3 scripts/build-api-data.py --module"
+    "build:api:module": "python3 scripts/build-api-data.py --module",
+    "validate:math": "node scripts/validate-math.mjs"
   },
   "dependencies": {
     "@fontsource/jetbrains-mono": "^5.2.8",
