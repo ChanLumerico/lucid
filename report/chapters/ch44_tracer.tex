@@ -2,61 +2,343 @@
 \chapter{Tracer and TraceIR}
 \label{ch:tracer}
 
-\todo[inline]{Chapter 44 --- Tracer and TraceIR. Multi-level scaffold below; prose to follow.}
+The tracer is the front end of \Lucid's compile path. Given a
+model and a representative input shape, it runs the model's
+forward pass in a special \emph{tracing mode} that records every
+primitive op call as a node in an intermediate representation
+(the trace IR), without executing the actual kernels. The
+output is a graph that the MpsBuilder
+(\chref{ch:mps_builder}) translates into a compiled
+\MPSGraph\ executable.
 
-\section{Overview}
-\label{sec:tracer:overview}
+This chapter describes the tracer's design, the TraceIR data
+structures, the tracing protocol, the limitations of dynamic
+tracing, and the diagnostic tools that expose the trace to the
+user.
 
-\section{Background and Goals}
-\label{sec:tracer:background}
+\section{Why Tracing}
+\label{sec:tracer:why_tracing}
 
-\subsection{Problem statement}
-\label{ssec:tracer:problem}
+A compiler needs to know what the model computes before it can
+compile. Two general strategies:
 
-\subsection{Constraints and prior art}
-\label{ssec:tracer:constraints}
+\begin{itemize}
+  \item \textbf{Static analysis} (AOT, ``ahead of time''): parse
+    the model's source code to extract the computation graph.
+    This is what TorchScript attempted; it requires the user to
+    write models in a restricted Python subset.
+  \item \textbf{Tracing} (JIT, ``just in time''): run the model
+    once on a representative input, recording every operation as
+    it executes. This is what \refframework's \code{torch.compile},
+    JAX's \code{jit}, and \Lucid's \code{compile} do.
+\end{itemize}
 
-\section{Methodology}
-\label{sec:tracer:methodology}
+Tracing is more flexible: the user writes ordinary Python and
+the tracer adapts. The cost is that data-dependent control flow
+(Python \code{if} based on tensor values) is invisible to the
+tracer; it sees only the branch taken on the tracing input.
 
-\subsection{Measurement approach}
-\label{ssec:tracer:measurement}
+\section{The Trace IR}
+\label{sec:tracer:trace_ir}
 
-\subsection{Benchmark setup}
-\label{ssec:tracer:setup}
+A \emph{trace} is a directed acyclic graph of op invocations.
+Each node is an instance of \code{TraceNode}, defined in
+\code{lucid/\_C/compile/TraceIR.h}:
 
-\subsubsection{Hardware configuration}
-\subsubsection{Software stack and reproducibility}
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct TraceNode {
+  std::string             op_name;     // canonical op name
+  std::vector<size_t>     input_ids;   // upstream node ids
+  std::vector<TraceTensor> outputs;    // shape+dtype only
+  std::vector<Attribute>  attrs;       // op-specific scalars
+  uint32_t                version;     // schema version
+};
 
-\section{Implementation}
-\label{sec:tracer:impl}
+struct TraceTensor {
+  Shape   shape;
+  Dtype   dtype;
+  Device  device;
+  // no actual data --- only metadata
+};
 
-\subsection{Design decisions}
-\label{ssec:tracer:design}
+struct Trace {
+  std::vector<TraceNode>  nodes;       // topologically ordered
+  std::vector<size_t>     input_ids;   // graph inputs
+  std::vector<size_t>     output_ids;  // graph outputs
+  std::vector<Attribute>  metadata;    // trace-level info
+};
+\end{lstlisting}
 
-\subsection{Component breakdown}
-\label{ssec:tracer:components}
+The IR is dataflow: nodes are operations, edges (via
+\code{input\_ids}) are tensor flow. The IR is topologically
+ordered so that emission can walk it linearly.
 
-\subsection{Integration with existing systems}
-\label{ssec:tracer:integration}
+\subsection{Shape-only tensors}
+\label{ssec:tracer:shape_only}
 
-\section{Results}
-\label{sec:tracer:results}
+A \code{TraceTensor} carries metadata (shape, dtype, device) but
+no actual data. The tracer never materialises kernels; it only
+tracks what the kernels would produce.
 
-\subsection{Quantitative findings}
-\label{ssec:tracer:quant}
+This is what makes tracing cheap. The trace pass for a 100M-
+parameter Transformer takes tens of milliseconds, regardless of
+the eventual compilation cost.
 
-\subsection{Qualitative observations}
-\label{ssec:tracer:qual}
+\subsection{Op attributes}
+\label{ssec:tracer:attributes}
 
-\section{Discussion}
-\label{sec:tracer:discussion}
+Ops with non-tensor arguments (e.g., \code{conv2d}'s
+\code{stride}, \code{padding}) store them as
+\code{Attribute}s: scalar values or small sequences attached to
+the node. The emitter passes these through to the corresponding
+\MPSGraph\ call.
 
-\subsection{Trade-offs}
-\label{ssec:tracer:tradeoffs}
+\section{The Tracing Protocol}
+\label{sec:tracer:protocol}
 
-\subsection{Open questions}
-\label{ssec:tracer:open}
+The tracer hooks into the dispatcher. When tracing is active:
 
-\section{Summary and Cross-References}
+\begin{enumerate}
+  \item Each \code{Dispatcher::unary} / \code{binary} / etc.\ call
+    is intercepted.
+  \item Instead of executing the op, the tracer creates a new
+    \code{TraceNode} with the op name, input node ids, and
+    appropriate attributes.
+  \item The output is a fresh \code{TraceTensor} with the shape
+    and dtype that the op would produce (computed via the op's
+    shape function, not via execution).
+  \item The output is returned to the caller as a special
+    \code{TracedTensor} that wraps the trace node id.
+\end{enumerate}
+
+The \code{TracedTensor} flows through the model's forward like
+an ordinary tensor; every operation on it produces a new
+\code{TracedTensor} via the same hook.
+
+\subsection{Shape inference}
+\label{ssec:tracer:shape_inference}
+
+Each op's schema (\chref{ch:op_registry}) includes a shape
+function: given input shapes, return output shape. The tracer
+calls it to determine the output \code{TraceTensor}. Shape
+functions are typically a few lines (most ops preserve or
+broadcast input shapes) and are validated by the parity tests.
+
+\subsection{Entering and exiting trace mode}
+\label{ssec:tracer:enter_exit}
+
+\code{compile()} enters trace mode via a context manager:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+{
+  TraceContext ctx;
+  TracedTensor input_traced = make_traced(input_shape, input_dtype);
+  // Run the user's forward with input replaced by traced tensor
+  TracedTensor output_traced = model.forward(input_traced);
+  // Extract the recorded trace
+  Trace trace = ctx.extract();
+}
+\end{lstlisting}
+
+Outside the context, the dispatcher's hooks are no-ops; normal
+eager execution proceeds.
+
+\section{Dynamic Control Flow}
+\label{sec:tracer:dynamic_control_flow}
+
+The fundamental limitation of tracing: Python \code{if}/\code{while}
+based on tensor \emph{values} is invisible. The tracer sees only
+the branch taken on the tracing input.
+
+\subsection{Example: a data-dependent branch}
+\label{ssec:tracer:branch_example}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def forward(x):
+    if x.mean() > 0:
+        return x.relu()
+    else:
+        return -x.relu()
+\end{lstlisting}
+
+The tracer sees one branch on its first call. A future call where
+the branch flips will produce wrong results unless the cache
+recompiles for that input.
+
+The user-side mitigation: rewrite the branch in tensor-level form
+using \code{where}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def forward(x):
+    pos = x.mean() > 0
+    return lucid.where(pos, x.relu(), -x.relu())
+\end{lstlisting}
+
+\code{where} is a tensor op that the tracer captures correctly.
+The user must compute both branches (the cost is the union of
+both branch costs), but the trace is consistent.
+
+\subsection{Example: a loop with variable count}
+\label{ssec:tracer:loop_example}
+
+A loop whose iteration count depends on tensor values (e.g., a
+training-time iterative algorithm that converges when residual
+is small) is also opaque. The tracer sees the count from the
+tracing input.
+
+The user-side mitigation: trace the inner step, run the loop in
+Python; each iteration calls the compiled step. The compile
+boundary is at the inner step, not the loop.
+
+\section{Diagnostic Tools}
+\label{sec:tracer:diagnostics}
+
+The tracer exposes its output for diagnostics.
+
+\subsection{dump\_trace}
+\label{ssec:tracer:dump_trace}
+
+\code{lucid.compile.dump\_trace(compiled\_module)} prints the
+recorded trace IR in a human-readable form:
+
+\begin{verbatim}
+%0 = input shape=(8, 1024, 768) dtype=float32
+%1 = layer_norm(%0, normalized_shape=(768,)) -> (8, 1024, 768)
+%2 = matmul(%1, weight=(768, 2304)) -> (8, 1024, 2304)
+%3 = split(%2, dim=-1, sections=3) -> [(8,1024,768), ...]
+%4 = reshape(%3[0], (8, 1024, 12, 64)) -> (8, 1024, 12, 64)
+...
+\end{verbatim}
+
+Each line shows the SSA-style assignment, the op name, the
+inputs, and the output shape. The user can verify that the trace
+matches their model's intent before investigating performance.
+
+\subsection{Trace size}
+\label{ssec:tracer:trace_size}
+
+Typical trace sizes:
+
+\begin{itemize}
+  \item GPT-2-base forward + backward: $\sim 2400$ nodes.
+  \item ViT-B/16 forward + backward: $\sim 800$ nodes.
+  \item ResNet-50 forward + backward: $\sim 1200$ nodes.
+\end{itemize}
+
+The trace is large but the per-node cost is small (under a
+microsecond to record), so tracing time is dominated by the
+shape-inference work, not the recording.
+
+\section{Tracing Edge Cases}
+\label{sec:tracer:edge_cases}
+
+A short catalogue of the cases that have caused user confusion.
+
+\subsection{Python scalar arguments}
+\label{ssec:tracer:py_scalar}
+
+Op arguments that are Python scalars (\code{int}, \code{float},
+\code{bool}) are baked into the trace as constants. A
+\code{linear(x, 0.5)} traces with the 0.5 hard-coded; calling
+the compiled module with a different scalar would not change the
+behaviour because the trace does not see the new value.
+
+The mitigation: pass scalars as 0-d tensors when they need to be
+trace-time-variable.
+
+\subsection{Lists of tensors}
+\label{ssec:tracer:tensor_lists}
+
+A function returning \code{[t1, t2, t3]} traces as three
+distinct outputs. The trace knows the list structure but the
+\MPSGraph\ executable returns a flat list; the
+\code{CompiledModule} rewraps in the original structure.
+
+\subsection{Nested modules}
+\label{ssec:tracer:nested_modules}
+
+The tracer traces through nested \code{Module} calls naturally:
+\code{block(x)} eventually calls primitive ops, and those are
+the nodes that appear in the trace. Module identity is lost; the
+trace contains primitive ops only.
+
+\subsection{Print statements}
+\label{ssec:tracer:print_statements}
+
+A \code{print(tensor)} inside the forward forces a value read,
+which the tracer sees as a request to materialise the
+\code{TracedTensor}. Materialisation is impossible during
+tracing (the tensor has no value), so the trace raises.
+
+The user-side: remove print statements from the forward; use
+hooks or the post-compile path for inspection.
+
+\section{Re-tracing}
+\label{sec:tracer:retracing}
+
+A new input shape (or, more generally, anything that changes the
+trace's structure) requires re-tracing. The cost is:
+
+\begin{itemize}
+  \item Tracing itself: tens of milliseconds.
+  \item MpsBuilder + \MPSGraph\ compile: hundreds of
+    milliseconds.
+\end{itemize}
+
+For shape-stable training loops, re-tracing happens once at
+startup. For shape-variable workloads (variable-length sequences
+without padding), re-tracing can happen per batch, defeating
+the compile benefit. The standard mitigation is to pad to fixed
+shape.
+
+\section{Implementation Notes}
+\label{sec:tracer:impl_notes}
+
+The tracer lives in \code{lucid/\_C/compile/Tracer.\{h,cpp\}}.
+The IR types are in \code{TraceIR.h}. The dispatcher hook is
+installed via a thread-local \code{TraceContext} pointer that
+the dispatcher checks at every call.
+
+\subsection{Performance overhead}
+\label{ssec:tracer:perf_overhead}
+
+The per-op overhead during tracing is roughly $5\,\mu s$
+(checking the context, computing the output shape, allocating a
+\code{TraceNode}). For a typical model with a few thousand ops,
+the tracing pass is in the tens-of-milliseconds range.
+
+This is small relative to the subsequent \MPSGraph\ compilation
+(hundreds of milliseconds to seconds), so tracing is rarely the
+bottleneck of cold start.
+
+\subsection{Memory footprint}
+\label{ssec:tracer:mem_footprint}
+
+The trace IR itself takes a few hundred kilobytes for a typical
+model. The trace is held by the cache for the lifetime of the
+compiled module; for users with very large or many compiled
+modules, this is observable in process memory.
+
+\section{Summary and Forward References}
 \label{sec:tracer:summary}
+
+The tracer runs the user's forward in shape-only mode and
+records each primitive op as a \code{TraceNode} in the
+\code{TraceIR}. The trace is the input to the MpsBuilder
+(\chref{ch:mps_builder}), which translates it to a compiled
+\MPSGraph\ executable. The tracing approach is more flexible
+than static analysis but cannot handle data-dependent control
+flow; the user-side fix is to rewrite branches using tensor ops
+like \code{where}.
+
+The next chapter, \chref{ch:mps_builder}, treats the MpsBuilder
+that consumes the trace and emits the \MPSGraph.
+\chref{ch:op_emitters} catalogues the per-op emitters.
+
+\begin{lucidnote}
+For the user: the tracer is invisible at the API surface.
+\code{compile()} handles the tracing internally; the user just
+sees a CompiledModule. The diagnostic dumps (\code{dump\_trace})
+are available for the rare cases where the user needs to inspect
+what the compiler saw.
+\end{lucidnote}

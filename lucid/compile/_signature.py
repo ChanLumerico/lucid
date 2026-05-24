@@ -47,6 +47,33 @@ class TensorSig:
     rank, per-axis size, dtype name, device type, and a flag whether
     the tensor required grad at trace time (so a leaf vs non-leaf
     input never collides).
+
+    Attributes
+    ----------
+    shape : tuple of int
+        Per-axis sizes.  When ``dynamic_batch`` was active during
+        construction, ``shape[0]`` is ``-1`` to wildcard the batch
+        dim.
+    dtype : str
+        Stringified dtype (``"float32"``, ``"int64"``, …).
+    device : str
+        Device kind (``"cpu"`` / ``"metal"``).  Index is intentionally
+        dropped — Lucid currently runs a single device per kind.
+    requires_grad : bool
+        Whether the tensor was a graph leaf at trace time.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.compile._signature import TensorSig
+    >>> sig = TensorSig.of(lucid.randn(4, 8))
+    >>> sig.shape, sig.dtype, sig.device
+    ((4, 8), 'float32', 'cpu')
+
+    See Also
+    --------
+    CacheKey : the hashable tuple that embeds many ``TensorSig``\\ s.
+    signature_of : the function that builds a key from a call site.
     """
 
     shape: tuple[int, ...]
@@ -98,6 +125,37 @@ class CacheKey:
     Two calls share an executable iff their CacheKeys compare equal.
     The dataclass is ``@dataclass(frozen=True)`` so it can sit in a :class:`set` /
     :class:`dict`; equality / hash both fall out of the field tuple.
+
+    Attributes
+    ----------
+    args : tuple
+        Per-argument signature (``TensorSig`` for tensors, atom value
+        for primitives, nested tuple for containers).  Position-
+        sensitive.
+    kwargs : tuple of (str, object)
+        Same shape as ``args`` but keyed by argument name and sorted
+        — insertion order can't shift the key.
+    training : bool
+        Snapshot of ``model.training`` at trace time.  Switching
+        ``train()`` / ``eval()`` forces a separate cache entry
+        because BatchNorm / Dropout dispatch differently.
+    dynamic : bool
+        Phase 1.6 symbolic-batch flag.  ``True`` means every tensor
+        sig has its leading dim wildcarded.
+    param_fingerprint : tuple of (str, str)
+        Sorted ``(dtype, device)`` pairs across the model's parameters
+        — flips when the user calls ``.half()`` / ``.to('cpu')``.
+
+    Examples
+    --------
+    >>> from lucid.compile._signature import signature_of
+    >>> key = signature_of(model, (x,), {}, dynamic=False)
+    >>> key in compiled._cache               # is this signature compiled yet?
+
+    See Also
+    --------
+    TensorSig : per-tensor descriptor that fills ``args`` / ``kwargs``.
+    signature_of : the canonical builder for a key.
     """
 
     args: tuple[object, ...]
@@ -211,6 +269,19 @@ def signature_of(
     CacheKey
         Hashable tuple identifying the (model, signature, dynamic)
         triple — used as the dict key in the trace cache.
+
+    Examples
+    --------
+    >>> # ``CompiledModule.__call__`` uses this to pick the cache slot.
+    >>> key = signature_of(model, (x,), {}, dynamic=False)
+    >>> if key not in cache:
+    ...     cache[key] = compile_trace(model, (x,), {})
+
+    See Also
+    --------
+    CacheKey : returned hashable type.
+    TensorSig.of : per-tensor descriptor used to build ``args``.
+    lucid.compile._compiled_module.CompiledModule : the caller.
     """
 
     arg_sigs = tuple(_arg_sig(a, dynamic_batch=dynamic) for a in args)

@@ -145,11 +145,12 @@ graphics and image processing.
 
 The buffer storage modes were treated in detail in
 \chref{ch:unified_memory}~Section~\ref{sec:unified_memory:storage_modes}.
-The summary: \MTLStorageModeShared\ for CPU/GPU shared access,
-\MTLStorageModePrivate\ for GPU-only, with two other modes
-(\emph{Managed}, \emph{Memoryless}) that \Lucid\ never encounters.
-\MLX\ allocates all of its arrays in \MTLStorageModeShared,
-which is what makes \Lucid's zero-copy bridge possible.
+The summary: \code{MTLStorageModeShared} for CPU/GPU shared
+access, \code{MTLStorageModePrivate} for GPU-only, with two
+other modes (\emph{Managed}, \emph{Memoryless}) that \Lucid\
+never encounters. \MLX\ allocates all of its arrays in
+\code{MTLStorageModeShared}, which is what makes \Lucid's
+zero-copy bridge possible.
 
 \subsection{Compute pipeline state}
 \label{ssec:metal_mpsgraph:pso}

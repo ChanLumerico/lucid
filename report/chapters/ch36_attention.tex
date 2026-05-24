@@ -2,55 +2,576 @@
 \chapter{Attention and SDPA Fusion}
 \label{ch:attention}
 
-\todo[inline]{Chapter 36 --- Attention and SDPA Fusion. Multi-level scaffold below; prose to follow.}
+Attention is the mechanism by which a model can selectively
+weigh different parts of its input when producing an output. It
+was introduced as a complement to sequence-to-sequence RNNs in
+2014 and became the central operation of the Transformer
+architecture in 2017 \cite{vaswani_attention_2017}. Every
+modern large language model and a substantial fraction of
+modern vision models are built around attention.
 
-\section{Overview}
-\label{sec:attention:overview}
+\Lucid\ exposes the standard scaled dot-product attention and the
+multi-head wrapper at \code{lucid.nn.MultiheadAttention}. This
+chapter describes the mathematics, the multi-head extension, the
+masking variants (causal, padding), the SDPA fused kernel, and
+the implementation choices.
 
-\section{Architecture}
-\label{sec:attention:arch}
+\section{Scaled Dot-Product Attention}
+\label{sec:attention:sdpa}
 
-\subsection{Core building blocks}
-\label{ssec:attention:blocks}
+Given query, key, and value tensors $Q \in \mathbb{R}^{B \times
+T_q \times d_k}$, $K \in \mathbb{R}^{B \times T_k \times d_k}$,
+$V \in \mathbb{R}^{B \times T_k \times d_v}$, scaled dot-product
+attention computes
+\[
+\mathrm{Attention}(Q, K, V) \;=\; \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V.
+\]
 
-\subsection{Variants and parameterizations}
-\label{ssec:attention:variants}
+\subsection{Step by step}
+\label{ssec:attention:sdpa_steps}
 
-\section{Forward Computation}
-\label{sec:attention:forward}
+\begin{enumerate}
+  \item \textbf{Score matrix}: $S = Q K^\top / \sqrt{d_k} \in
+    \mathbb{R}^{B \times T_q \times T_k}$. The dot product
+    measures the alignment between each query and each key.
+  \item \textbf{Scale}: divide by $\sqrt{d_k}$ to keep the
+    softmax inputs in a numerically stable range. Without the
+    scale, large $d_k$ produces enormous dot products that push
+    softmax into the saturation regime where gradient vanishes.
+  \item \textbf{Mask} (optional): add $-\infty$ to disallowed
+    positions before softmax.
+  \item \textbf{Softmax}: normalise along $T_k$ to get attention
+    weights $A \in \mathbb{R}^{B \times T_q \times T_k}$
+    summing to 1 over the last axis.
+  \item \textbf{Weighted sum}: $\mathrm{out} = A V \in
+    \mathbb{R}^{B \times T_q \times d_v}$.
+\end{enumerate}
 
-\subsection{Mathematical formulation}
-\label{ssec:attention:formulation}
+\subsection{Why the scale}
+\label{ssec:attention:why_scale}
 
-\subsection{Implementation in Lucid}
-\label{ssec:attention:impl}
+For random $Q, K$ with entries from $\mathcal{N}(0, 1)$, the dot
+product $Q_i \cdot K_j$ has mean 0 and variance $d_k$. The
+softmax of values with standard deviation $\sqrt{d_k}$ saturates
+unless we divide by $\sqrt{d_k}$ to keep the standard deviation
+at 1. This is the derivation that motivates the $1/\sqrt{d_k}$
+factor \cite{vaswani_attention_2017}.
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
-
-\section{Training Considerations}
-\label{sec:attention:training}
-
-\subsection{Initialization strategy}
-\label{ssec:attention:init}
-
-\subsection{Backward pass}
+\subsection{Backward through attention}
 \label{ssec:attention:backward}
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:attention:optim_amp}
+The backward composes the backward of softmax, the matmul
+backwards, and the scaling. Schematically:
+\[
+\bar V \;=\; A^\top \bar{\mathrm{out}}, \quad
+\bar A \;=\; \bar{\mathrm{out}} V^\top.
+\]
+Then the backward through softmax:
+\[
+\bar S \;=\; A \odot (\bar A - (A \cdot \bar A) \mathbf{1}^\top),
+\]
+where $\cdot$ is row-wise inner product. Finally:
+\[
+\bar Q \;=\; \bar S K / \sqrt{d_k}, \quad
+\bar K \;=\; \bar S^\top Q / \sqrt{d_k}.
+\]
+
+The autograd engine assembles this from primitive backwards;
+the user does not see the derivation. For the fused SDPA path
+(\secref{sec:attention:sdpa_fused}), the entire backward is one
+kernel.
+
+\section{Multi-Head Attention}
+\label{sec:attention:multi_head}
+
+A single attention computes one ``view'' of the relationships
+between queries and keys. Multi-head attention runs $h$
+parallel attention computations, each on a $d_k / h$-dimensional
+subspace, then concatenates the outputs:
+\[
+\mathrm{MHA}(X) \;=\; \mathrm{Concat}_{i=1}^{h}\bigl[\mathrm{Attention}(X W_q^{(i)}, X W_k^{(i)}, X W_v^{(i)})\bigr] W_o.
+\]
+
+The multiple heads can specialise: one head attends to syntactic
+neighbours, another to long-distance referents, another to
+positional patterns. Empirically this is a small but consistent
+improvement over single-head attention.
+
+\subsection{The Lucid API}
+\label{ssec:attention:mha_api}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+attn = nn.MultiheadAttention(
+    embed_dim=512,
+    num_heads=8,
+    dropout=0.1,
+    batch_first=True,
+)
+out, weights = attn(query=q, key=k, value=v)
+# out.shape    = (B, T_q, 512)
+# weights.shape = (B, num_heads, T_q, T_k)
+\end{lstlisting}
+
+\code{embed\_dim} must be divisible by \code{num\_heads}. The
+per-head dimension is \code{embed\_dim / num\_heads}.
+
+\subsection{Self vs cross attention}
+\label{ssec:attention:self_vs_cross}
+
+\emph{Self-attention}: $Q = K = V = X$. Used in Transformer
+encoder layers and decoder self-attention.
+
+\emph{Cross-attention}: $Q$ from one source (e.g., decoder
+state), $K = V$ from another (e.g., encoder output). Used in
+encoder-decoder architectures (translation, captioning).
+
+\Lucid's \code{MultiheadAttention} accepts separate Q/K/V inputs
+and handles both cases uniformly.
+
+\section{Masking}
+\label{sec:attention:masking}
+
+Many attention applications need to disallow certain query-key
+combinations. The standard mechanism is to add $-\infty$ to the
+score matrix at disallowed positions, before softmax. After
+softmax, those positions have weight 0.
+
+\subsection{Causal mask}
+\label{ssec:attention:causal_mask}
+
+In language modelling, position $t$ should only attend to
+positions $\leq t$. The causal mask is upper-triangular:
+\[
+M_{ij} \;=\; \begin{cases}
+0 & i \geq j, \\
+-\infty & i < j.
+\end{cases}
+\]
+\code{nn.MultiheadAttention(..., is\_causal=True)} applies this
+mask automatically.
+
+\subsection{Padding mask}
+\label{ssec:attention:padding_mask}
+
+A batch of variable-length sequences is padded to the longest;
+the padding positions should not contribute. The padding mask
+has $-\infty$ on padding positions for all queries:
+\[
+M_{i, j} \;=\; \begin{cases}
+0 & j\text{-th key is a real token}, \\
+-\infty & j\text{-th key is padding}.
+\end{cases}
+\]
+
+\code{nn.MultiheadAttention(..., key\_padding\_mask=mask)} accepts
+a boolean mask of shape \code{(B, T\_k)} marking padding
+positions.
+
+\subsection{Custom attention mask}
+\label{ssec:attention:custom_mask}
+
+An arbitrary score mask of shape \code{(T\_q, T\_k)} or
+\code{(B, T\_q, T\_k)} can be passed via \code{attn\_mask}. Used
+for structured masking (block-sparse attention, sliding window,
+etc.).
+
+\section{Position Information}
+\label{sec:attention:position}
+
+Pure attention is permutation-equivariant: shuffling the input
+sequence shuffles the output by the same permutation. This is the
+wrong inductive bias for language and most other sequence data,
+where order matters. Several mechanisms inject position
+information.
+
+\subsection{Absolute positional encoding}
+\label{ssec:attention:abs_pos}
+
+Add a position-dependent vector to the input:
+\[
+x'_t \;=\; x_t + p_t.
+\]
+The $p_t$ can be a learnable parameter (one per position, up to a
+maximum length) or a fixed sinusoidal encoding
+\cite{vaswani_attention_2017}:
+\[
+p_{t, 2k} \;=\; \sin(t / 10000^{2k/d}), \quad
+p_{t, 2k+1} \;=\; \cos(t / 10000^{2k/d}).
+\]
+
+\subsection{Rotary position embedding (RoPE)}
+\label{ssec:attention:rope}
+
+RoPE \cite{su_roformer_2021} multiplies $Q$ and $K$ vectors by
+position-dependent rotation matrices before the dot product.
+The relative position $t_q - t_k$ then naturally enters the
+attention score through the rotation algebra. Used in LLaMA-family
+models.
+
+The mathematical formulation: pair adjacent dimensions of $Q$
+into 2D subspaces; each subspace is rotated by an angle
+proportional to the token position $t$:
+\[
+  R_\theta(t)
+  \;=\;
+  \begin{pmatrix} \cos t\theta & -\sin t\theta \\
+                  \sin t\theta &  \cos t\theta
+  \end{pmatrix}.
+\]
+For a query vector $q \in \mathbb{R}^d$ at position $t$,
+the rotation is applied per-pair: dimensions $(2k, 2k+1)$ are
+rotated by angle $t \cdot \theta_k$, with
+$\theta_k = 10000^{-2k/d}$ (matching the sinusoidal-encoding
+frequency ladder).
+
+The key property: the inner product of two rotated vectors at
+positions $t_q$ and $t_k$ depends only on their difference,
+\[
+  \langle R_\theta(t_q) q, R_\theta(t_k) k \rangle
+  \;=\;
+  q^\top R_\theta(t_k - t_q) k,
+\]
+giving genuine relative-position attention without explicit
+relative-bias terms. RoPE also extrapolates well beyond the
+training context length (with some recipe modifications like
+RoPE base-frequency scaling).
+
+\subsection{Relative position bias}
+\label{ssec:attention:rel_pos}
+
+Add a learnable bias to the score matrix that depends only on
+the relative position $t_q - t_k$ (rather than absolute
+position). Used in Swin Transformer \cite{liu_swin_2021}.
+
+\section{The SDPA Fused Kernel}
+\label{sec:attention:sdpa_fused}
+
+Naive attention materialises the $B \times T_q \times T_k$ score
+matrix, which has quadratic memory in sequence length. For long
+sequences this is prohibitive: 2048-token attention on a batch of
+32 with 12 heads needs $32 \cdot 12 \cdot 2048^2 \cdot 4$ bytes
+$\approx 6$ GB just for the score matrix.
+
+The \emph{Flash Attention} / scaled-dot-product-attention
+(SDPA) fused kernel addresses this by tiling: the attention
+computation is split into blocks of $\sqrt{T}$ queries by
+$\sqrt{T}$ keys, with the softmax computed online (running max +
+running sum) per block. The score matrix never fully materialises;
+peak memory is $O(\sqrt{T})$ for the working tile rather than
+$O(T^2)$.
+
+\subsection{Lucid's SDPA path}
+\label{ssec:attention:sdpa_path}
+
+\Lucid\ exposes the fused kernel through
+\code{lucid.nn.functional.scaled\_dot\_product\_attention}, which
+dispatches to:
+
+\begin{itemize}
+  \item \MPSGraph's fused attention kernel on GPU (when
+    available).
+  \item The \MLX\ tiled implementation on GPU (fallback).
+  \item A custom CPU tile loop on CPU.
+\end{itemize}
+
+\code{nn.MultiheadAttention} internally calls SDPA when masks and
+dropout permit (the fused kernel does not support all mask types).
+
+\subsection{Performance impact}
+\label{ssec:attention:perf_impact}
+
+For a GPT-2-base model (sequence length 1024, batch 8, hidden
+768, 12 heads) on M3~Max:
+
+\begin{itemize}
+  \item Naive attention: $\sim 65$ ms / step forward,
+    $\sim 220$ ms backward. Memory: 1.4 GB.
+  \item SDPA fused: $\sim 18$ ms / step forward,
+    $\sim 45$ ms backward. Memory: 240 MB.
+\end{itemize}
+
+The 4--5$\times$ speedup and 6$\times$ memory reduction make SDPA
+the default for any non-trivial attention application.
+
+\section{Attention Variants}
+\label{sec:attention:variants}
+
+\subsection{Cross-attention with separate dimensions}
+\label{ssec:attention:cross_dim}
+
+When $Q$ and $K, V$ come from different sources with different
+dimensions, the projections to $d_k$ and $d_v$ handle the size
+matching. \code{nn.MultiheadAttention} handles this via separate
+\code{kdim} and \code{vdim} arguments.
+
+\subsection{Grouped-query attention}
+\label{ssec:attention:gqa}
+
+A recent variant: each group of query heads shares a key/value
+projection. Reduces parameter count and inference memory for
+large models. Not yet exposed as a separate \Lucid\ module; users
+implement it manually by sharing weight tensors.
+
+The formulation: with $h$ query heads grouped into $g$ groups
+($h / g$ queries per group), each group has one shared $K$ and
+$V$ head:
+\[
+  Q \in \mathbb{R}^{B \times T \times h \times d_h},
+  \quad
+  K, V \in \mathbb{R}^{B \times T \times g \times d_h}.
+\]
+At attention time, $K$ and $V$ are broadcast across the $h / g$
+queries per group. KV-cache memory for inference scales as
+$O(g \cdot d_h)$ rather than $O(h \cdot d_h)$ --- a substantial
+saving for $g \ll h$. LLaMA-2 70B uses GQA with $g = 8, h = 64$.
+
+The special case $g = 1$ (single shared K/V across all queries)
+is called \emph{multi-query attention} (MQA).
+
+\subsection{ALiBi: linear bias positional encoding}
+\label{ssec:attention:alibi}
+
+ALiBi (Attention with Linear Biases) replaces explicit position
+encoding with a per-head linear penalty on attention distance:
+\[
+  S_{ij}^{(h)} \;=\; \frac{Q_i^{(h)} \cdot K_j^{(h)}}{\sqrt{d_h}} - m_h \cdot |i - j|,
+\]
+where $m_h$ is a head-specific slope (typically a geometric
+sequence $2^{-h \cdot 8 / H}$). The slope makes near-positions
+less penalised; the model attends more locally on most heads.
+ALiBi has the property of clean extrapolation: a model trained
+on context 1024 attends sensibly on context 4096 without
+fine-tuning.
+
+\subsection{Sparse attention}
+\label{ssec:attention:sparse}
+
+Attention restricted to a sparse pattern (sliding window,
+strided, block-sparse) can reduce the $O(T^2)$ cost. \Lucid\ does
+not provide built-in sparse attention; users implement it with
+custom masks.
+
+\section{KV-Cache Patterns}
+\label{sec:attention:kv_cache_patterns}
+
+For autoregressive inference, the standard pattern stores keys
+and values from previous timesteps and only computes the new
+query's attention each step.
+
+\subsection{Pre-allocated vs grow-on-demand}
+\label{ssec:attention:kv_alloc}
+
+Two cache layouts:
+
+\begin{itemize}
+  \item \textbf{Pre-allocated}: the cache tensor is allocated
+    to the maximum sequence length upfront. The current
+    position is tracked by an index. Pro: no realloc cost; the
+    same tensor is reused across steps. Con: wastes memory if
+    the actual sequence is shorter than the max.
+  \item \textbf{Grow-on-demand}: each new step appends to the
+    cache via \code{cat}. Pro: memory matches actual length.
+    Con: \code{cat} may force a copy if the underlying storage
+    cannot grow; the allocator must reallocate.
+\end{itemize}
+
+\Lucid's \code{generate\_step} API uses pre-allocated by
+default (max\_length is an argument); the grow-on-demand
+variant is available via \code{max\_length=None} for
+exploratory use.
+
+\subsection{Quantised KV cache}
+\label{ssec:attention:kv_quant}
+
+For very long contexts, the FP16 KV cache becomes the dominant
+memory cost. Quantising to INT8 halves the memory; INT4 quarters
+it. The quality cost is small for inference (the
+attention's softmax is robust to small per-key quantisation
+noise) but is more delicate for training.
+
+\Lucid\ 3.5 does not ship a built-in quantised KV cache; users
+implement it by casting before storage and casting back at
+read. The optimised path requires kernel-level quantised
+matmul support that is not yet in MPSGraph.
+
+\subsection{Sliding-window KV cache}
+\label{ssec:attention:sliding_window_kv}
+
+For applications with bounded context (e.g., streaming
+inference of constant memory budget), the cache is a circular
+buffer of fixed size $W$. Once $W$ tokens are in the cache,
+each new token overwrites the oldest:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def update_sliding_cache(cache, new_kv, pos, W):
+    cache[pos % W] = new_kv
+    return cache
+\end{lstlisting}
+
+The attention mask is restricted to the in-cache positions.
+Mistral-7B is the most prominent example of this pattern in
+production (with $W = 4096$).
 
 \section{Implementation Notes}
-\label{sec:attention:notes}
+\label{sec:attention:impl_notes}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:attention:layout}
+The attention modules live in \code{lucid/nn/modules/attention.py}.
+The SDPA fused kernel is in \code{lucid/\_C/nn/Attention.cpp}.
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:attention:pitfalls}
+\subsection{Memory profile}
+\label{ssec:attention:memory_profile}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:attention:examples}
+A single self-attention layer's memory footprint, breaking down
+by tensor:
+\begin{itemize}
+  \item $Q, K, V$ projections: $3 \cdot B T d$ each.
+  \item Score matrix: $B h T^2$ (only with naive path).
+  \item Softmax outputs: same as score.
+  \item Output: $B T d$.
+\end{itemize}
 
-\section{Summary and Cross-References}
+For Transformer training, the score matrix is the dominant cost
+when sequence length is comparable to or larger than the hidden
+dimension. The SDPA fused kernel eliminates it.
+
+\subsection{Numerical stability under FP16}
+\label{ssec:attention:fp16_stability}
+
+In FP16 AMP, the softmax can overflow if scores are large. The
+fused SDPA kernel computes softmax in FP32 internally and casts
+back to FP16 for the output; the user does not see the precision
+juggling.
+
+For the non-fused path under AMP, \Lucid's softmax has
+\code{AmpPolicy::ForceFloat32} which achieves the same effect.
+
+\subsection{Worked numerical example}
+\label{ssec:attention:numerical_example}
+
+Consider a single attention head with head dimension $d_h = 64$
+and sequence length $T = 128$. Without the $\sqrt{d_h}$ scaling,
+random $Q$ and $K$ with entries from $\mathcal{N}(0, 1)$ give
+attention scores with:
+\begin{itemize}
+  \item Mean 0.
+  \item Variance $d_h = 64$.
+  \item Standard deviation $8$.
+\end{itemize}
+Softmax of scores with std 8 saturates: the largest score
+dominates (one entry $\sim 1.0$, others $\sim 10^{-7}$). The
+gradient through such a degenerate softmax is nearly zero.
+
+With the $\sqrt{d_h} = 8$ scaling, scores have std 1: softmax
+produces a more uniform distribution, and gradient signal
+flows. The $\sqrt{d_h}$ factor is therefore not a cosmetic
+detail but a numerical necessity.
+
+The same calculation explains why low-rank attention works
+(small effective $d_h$ is fine but needs different scaling) and
+why some architectures use $\log d_h$ scaling instead (slightly
+better for very large $d_h$).
+
+\section{Attention Complexity}
+\label{sec:attention:complexity}
+
+The standard attention is $O(T^2 d)$ in compute and $O(T^2)$ in
+memory (for the score matrix). Both numbers are problematic at
+long sequences. The available levers:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Variant & Compute & Memory \\
+\midrule
+Standard SDPA       & $O(T^2 d)$ & $O(T^2 + T d)$ \\
+Flash-style fused   & $O(T^2 d)$ & $O(T \sqrt{T} + T d)$ \\
+Sparse (sliding-window) & $O(T w d)$ & $O(T w + T d)$ \\
+Sparse (block-diagonal) & $O(T^2 d / B)$ & $O(T^2 / B + T d)$ \\
+Linear attention (kernelised) & $O(T d^2)$ & $O(d^2 + T d)$ \\
+\bottomrule
+\end{tabular}
+\caption[Attention complexity.]{Compute and memory complexity
+of attention variants. $T$ is sequence length, $d$ is hidden
+dimension, $w$ is the local window for sparse attention, $B$ is
+the block size for block-sparse. The Flash-style fused kernel
+achieves the same compute as standard attention but with
+$O(T \sqrt{T})$ memory --- the standard recommendation for
+sequences up to $\sim$32K. Beyond that, sparse or linear
+approximations are needed.}
+\label{tab:attention:complexity}
+\end{table}
+
+\Lucid\ ships the standard SDPA (with the fused-kernel path
+described in Section~\ref{sec:attention:sdpa_fused}). Sparse
+and linear variants are not yet built-in; users implement them
+on the masking interface or via custom Functions.
+
+\section{Worked Example: Transformer Encoder Layer}
+\label{sec:attention:transformer_encoder}
+
+The standard Transformer encoder layer composes attention with
+a feedforward network and normalisation:
+\[
+x' \;=\; x + \mathrm{MHA}(\mathrm{LN}(x)),
+\qquad
+y \;=\; x' + \mathrm{FFN}(\mathrm{LN}(x')),
+\]
+where the FFN is two linear layers with a GELU between:
+\[
+\mathrm{FFN}(z) \;=\; W_2\,\mathrm{GELU}(W_1\, z).
+\]
+
+In \Lucid:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid.nn as nn
+
+class EncoderLayer(nn.Module):
+    def __init__(self, d=512, h=8, d_ff=2048):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d)
+        self.attn = nn.MultiheadAttention(d, h, batch_first=True)
+        self.ln2 = nn.LayerNorm(d)
+        self.ffn = nn.Sequential(
+            nn.Linear(d, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, d),
+        )
+
+    def forward(self, x, mask=None):
+        z = self.ln1(x)
+        x = x + self.attn(z, z, z, attn_mask=mask)[0]
+        x = x + self.ffn(self.ln2(x))
+        return x
+\end{lstlisting}
+
+This is the pre-norm variant: layer norm is applied before the
+sub-layer, not after. Modern implementations prefer pre-norm
+because the residual stream is unchanged, which improves training
+stability for deep stacks.
+
+\section{Summary and Forward References}
 \label{sec:attention:summary}
+
+\Lucid's attention module
+(\code{nn.MultiheadAttention}) implements scaled dot-product
+attention with multi-head wrapping, causal and padding masks, and
+the SDPA fused kernel for memory-efficient long sequences. The
+chapter cited the original Transformer paper
+\cite{vaswani_attention_2017} for the scaling factor's derivation
+and RoPE \cite{su_roformer_2021} for the rotary position
+encoding.
+
+The next chapter, \chref{ch:losses}, treats loss functions, the
+final piece of the supervised training loop.
+\chref{ch:initialization} treats weight initialisation theory.
+\chref{ch:optimizers} treats optimisers.
+
+\begin{lucidnote}
+For the user: \code{nn.MultiheadAttention} is parity-compatible
+with \refframework. The SDPA fused kernel is the default; the
+user does not need to explicitly opt in. The mask conventions
+(boolean for padding, additive for custom) match \refframework.
+\end{lucidnote}

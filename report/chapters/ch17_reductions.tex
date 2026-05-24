@@ -56,11 +56,11 @@ semantics for the three common cases.
 \begin{tikzpicture}[
   cell/.style={draw, minimum width=0.6cm, minimum height=0.6cm,
                font=\footnotesize, fill=lucid.info.bg, inner sep=0pt},
-  out/.style={draw, minimum width=0.6cm, minimum height=0.6cm,
+  outcell/.style={draw, minimum width=0.6cm, minimum height=0.6cm,
               font=\footnotesize, fill=lucid.ok.bg, very thick,
               inner sep=0pt},
   hdr/.style={font=\small\sffamily\bfseries, align=center},
-  cap/.style={font=\footnotesize\itshape, color=lucid.muted,
+  caplbl/.style={font=\footnotesize\itshape, color=lucid.muted,
               align=center},
 ]
   % Input: 3x4 matrix (top-left)
@@ -74,24 +74,24 @@ semantics for the three common cases.
   % Output 1: sum over dim=0 (row of 4 cells, top-right)
   \node[hdr] at (6, 3) {\code{sum(dim=0)} $\to$ $(4,)$};
   \foreach \j in {0, 1, 2, 3} {
-    \node[out] at (5.1+\j*0.6, 2) {};
+    \node[outcell] at (5.1+\j*0.6, 2) {};
   }
-  \node[cap] at (6, 1.0)
+  \node[caplbl] at (6, 1.0)
     {dim 0 collapsed:\\rank drops to 1};
 
   % Output 2: sum over dim=1 keepdims (column of 3 cells, bottom-left)
   \node[hdr, align=center] at (0.9, -1.0)
     {\code{sum(dim=1, keepdims=True)} $\to$ $(3, 1)$};
   \foreach \i in {0, 1, 2} {
-    \node[out] at (0.9, -2-\i*0.6) {};
+    \node[outcell] at (0.9, -2-\i*0.6) {};
   }
-  \node[cap] at (0.9, -4.5)
+  \node[caplbl] at (0.9, -4.5)
     {dim 1 collapsed but\\preserved (size-1)};
 
   % Output 3: global sum -> scalar
   \node[hdr] at (6, -1.0) {\code{sum()} $\to$ scalar};
-  \node[out] at (6, -2) {};
-  \node[cap] at (6, -2.9)
+  \node[outcell] at (6, -2) {};
+  \node[caplbl] at (6, -2.9)
     {all dims collapsed};
 \end{tikzpicture}
 \end{adjustbox}
