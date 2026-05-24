@@ -51,7 +51,18 @@ def set_num_interop_threads(n: int) -> None:
 
 
 def get_num_interop_threads() -> int:
-    """Return the last value passed to :func:`set_num_interop_threads`."""
+    """Return the recorded inter-op thread count, or ``0`` if unset.
+
+    Returns the value most recently passed to
+    :func:`set_num_interop_threads` — purely informational, since
+    Lucid does not maintain a separate inter-op thread pool (the
+    setter is API parity, not a switch).
+
+    Returns
+    -------
+    int
+        Last recorded count, or ``0`` when none has been set.
+    """
     return _inter_op_threads
 
 

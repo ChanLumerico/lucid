@@ -32,7 +32,23 @@ from lucid._types import StateDict
 class IncompatibleKeys(
     namedtuple("IncompatibleKeys", ["missing_keys", "unexpected_keys"])
 ):
-    """Return value of ``Module.load_state_dict``."""
+    """Result tuple returned by ``Module.load_state_dict``.
+
+    Lightweight named tuple summarising the diff between the
+    checkpoint's ``state_dict`` keys and the module's actual parameter
+    / buffer names.  Each field is a list of strings; the loader is
+    advisory — keys reported here are merely *not loaded*, not raised.
+
+    Attributes
+    ----------
+    missing_keys : list[str]
+        Module parameter / buffer names not present in the checkpoint.
+        These end up using the module's existing (init-time) values.
+    unexpected_keys : list[str]
+        Checkpoint entries with no corresponding parameter / buffer in
+        the module — typically a sign of a stale checkpoint or a
+        rename.
+    """
 
     __slots__ = ()
 
@@ -304,12 +320,37 @@ def load_state_dict(
     """Driver for ``Module.load_state_dict``.
 
     Pre-order recursion: at each module, run pre-hooks, then
-    ``_load_from_state_dict``, then post-hooks, then recurse into children.
+    ``_load_from_state_dict``, then post-hooks, then recurse into
+    children.  ``state_dict`` may carry an ``_metadata`` attribute (set
+    by ``Module.state_dict()``) mapping module paths to per-module
+    metadata such as ``{"version": N}``; each module's hook receives
+    the relevant slice as ``local_metadata``.
 
-    ``state_dict`` may carry an ``_metadata`` attribute (set by
-    ``Module.state_dict()``) that maps module paths to per-module metadata
-    such as ``{"version": N}``.  Each module's hook receives the relevant
-    slice as ``local_metadata``.
+    Parameters
+    ----------
+    module : Module
+        Destination module tree.  Its parameter / buffer values are
+        overwritten in place by matching keys from ``state_dict``.
+    state_dict : StateDict
+        Source mapping ``str → Tensor``.  Typically the output of a
+        prior :meth:`Module.state_dict` call or a deserialised
+        checkpoint.
+    strict : bool, optional
+        When ``True`` (default), raise if ``state_dict`` contains keys
+        not present on the module or vice versa.  When ``False``, both
+        kinds of mismatch are reported via the returned
+        :class:`IncompatibleKeys`.
+    assign : bool, optional
+        When ``True``, replace the module's parameter / buffer tensors
+        wholesale (preserving the checkpoint's dtype / device).  When
+        ``False`` (default), copy values into the existing tensors so
+        downstream optimiser / grad state stays attached.
+
+    Returns
+    -------
+    IncompatibleKeys
+        Named tuple ``(missing_keys, unexpected_keys)`` summarising the
+        load.  Empty fields indicate a clean match.
     """
     metadata: dict[str, dict[str, object]] = (
         getattr(state_dict, "_metadata", None) or {}

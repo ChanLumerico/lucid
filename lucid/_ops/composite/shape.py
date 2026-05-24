@@ -851,9 +851,28 @@ def tril_indices(
 ) -> Tensor:
     """Indices of the lower-triangular part of an ``(row, col)`` matrix.
 
-    Returns a 2-row tensor where row 0 holds row indices and row 1 holds
-    column indices, in row-major order.  ``offset`` shifts the diagonal
-    (positive = above, negative = below the main).
+    Parameters
+    ----------
+    row : int
+        Number of rows in the matrix being indexed.
+    col : int, optional
+        Number of columns.  ``None`` (default) → ``col = row``
+        (square matrix).
+    offset : int, optional
+        Diagonal offset.  ``0`` (default) = main diagonal,
+        positive = include diagonals above it, negative = exclude
+        diagonals below it.  Indexing keeps positions where
+        ``j - i <= offset``.
+    dtype : DTypeLike, optional
+        Output dtype (default: int64).
+    device : DeviceLike, optional
+        Placement of the result.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(2, N)``.  Row ``0`` holds row indices, row ``1`` holds
+        column indices, in row-major order.
     """
     if col is None:
         col = row
@@ -878,8 +897,29 @@ def triu_indices(
 ) -> Tensor:
     """Indices of the upper-triangular part of an ``(row, col)`` matrix.
 
-    Mirrors :func:`tril_indices` with the inequality flipped: keeps
+    Mirrors :func:`tril_indices` with the inequality flipped — keeps
     entries where ``j - i >= offset``.
+
+    Parameters
+    ----------
+    row : int
+        Number of rows in the matrix being indexed.
+    col : int, optional
+        Number of columns.  ``None`` (default) → ``col = row``.
+    offset : int, optional
+        Diagonal offset.  ``0`` (default) = main diagonal,
+        positive = exclude diagonals close to the main one,
+        negative = include diagonals below it.
+    dtype : DTypeLike, optional
+        Output dtype (default: int64).
+    device : DeviceLike, optional
+        Placement of the result.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(2, N)``.  Row ``0`` holds row indices, row ``1`` holds
+        column indices, in row-major order.
     """
     if col is None:
         col = row
@@ -901,8 +941,27 @@ def combinations(
 ) -> Tensor:
     """All ``r``-length combinations of the elements of a 1-D ``input``.
 
-    Returns shape ``(C, r)`` where ``C = C(n, r)`` (or ``C(n+r-1, r)``
-    when ``with_replacement=True``).  Output dtype follows ``input``.
+    Composite over Python ``itertools`` — non-differentiable (treats
+    the values as opaque scalars).  Use only for low-rate utility code;
+    don't put on a hot path.
+
+    Parameters
+    ----------
+    input : Tensor
+        1-D source tensor of length :math:`n`.  Raises on higher rank.
+    r : int, optional
+        Combination length.  Default ``2``.
+    with_replacement : bool, optional
+        When ``True`` the output enumerates multisets (an element can
+        appear multiple times in a single row), giving
+        :math:`\\binom{n + r - 1}{r}` rows.  Default ``False`` (strict
+        combinations, :math:`\\binom{n}{r}` rows).
+
+    Returns
+    -------
+    Tensor
+        Shape ``(C, r)`` where :math:`C` is the combination count.
+        Dtype and device follow ``input``.
     """
     import itertools as _it
 

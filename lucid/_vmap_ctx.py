@@ -13,12 +13,37 @@ _local: threading.local = threading.local()
 
 
 def get_randomness() -> str:
-    """Return the active vmap randomness mode, defaulting to ``'different'``."""
+    """Return the active ``vmap`` randomness mode for this thread.
+
+    Read by random ops inside a vectorised function to decide whether
+    to draw independent samples, share a single sample across the
+    batch, or raise.
+
+    Returns
+    -------
+    str
+        One of ``"different"`` / ``"same"`` / ``"error"``.  Defaults
+        to ``"different"`` when no enclosing :func:`vmap` is active —
+        random ops outside vmap behave as they always have.
+    """
     return str(getattr(_local, "randomness", "different"))
 
 
 def set_randomness(mode: str) -> None:
-    """Set the active vmap randomness mode on the current thread."""
+    """Set the ``vmap`` randomness mode on the current thread.
+
+    Normally driven by the :class:`_RandomnessGuard` inside
+    :func:`vmap` — direct user calls are uncommon but allowed for
+    advanced control (e.g. integrating Lucid with an external batched
+    sampler that already enforces its own randomness contract).
+
+    Parameters
+    ----------
+    mode : str
+        One of ``"different"`` (per-batch-element independent draws),
+        ``"same"`` (single sample broadcast across the batch), or
+        ``"error"`` (random ops inside the vmap raise).
+    """
     _local.randomness = mode
 
 

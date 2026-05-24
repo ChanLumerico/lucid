@@ -62,6 +62,7 @@ public:
     static const OpSchema schema_v1;
     Shape input_shape_;
     Shape output_shape_;
+    // Backward — sums ``grad_out`` across broadcast axes back to the input shape.
     std::vector<Storage> apply(Storage grad_out) override;
 };
 

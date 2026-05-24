@@ -19,7 +19,16 @@ export function BackToTop({ threshold = 400 }: { threshold?: number }) {
   }, [threshold]);
 
   const onClick = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Honour the OS-level reduced-motion setting — ``smooth`` would
+    // otherwise animate the scroll even for users who've opted out.
+    // ``matchMedia`` is safe in a client-only effect handler.
+    const prefersReducedMotion =
+      typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
   };
 
   return (

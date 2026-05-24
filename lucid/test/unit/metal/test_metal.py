@@ -76,3 +76,33 @@ class TestMetalLazyTransposeBridge:
         w = lucid.randn(4, 1, 3, 3, device="metal", requires_grad=True)
         F.conv2d(x, w, groups=4).sum().backward()
         np.testing.assert_allclose(x.grad.numpy(), x.grad.contiguous().numpy())
+
+    def test_mpsgraph_kernel_on_lazy_transpose(self) -> None:
+        # Regression: MpsBridge.array_to_buffer used to hand MPSGraph the
+        # raw MTLBuffer of a non-contiguous MLX array (e.g. the lazy NHWC
+        # transpose view left behind by conv_nd_forward).  MPSGraph reads
+        # the buffer linearly in the declared logical shape order, so the
+        # NHWC-laid-out bytes appeared in the wrong slots — F.gelu(conv(x))
+        # came out element-shuffled and silently wrong (diff ≈ 1.9 vs
+        # correct).  array_to_buffer now forces row-contiguous on entry.
+        import math
+
+        import lucid.nn as nn
+        import lucid.nn.functional as F
+
+        lucid.manual_seed(0)
+        c = nn.Conv2d(3, 4, 3, padding=1).to("metal")
+        x = lucid.randn(1, 3, 4, 4, device="metal")
+        y = c(x)
+        y_gelu = F.gelu(y)
+
+        # Compare element-wise against host-side gelu_exact computed from
+        # the same conv output.
+        for i in range(y.numpy().size):
+            v_in = float(y.numpy().flat[i])
+            v_out = float(y_gelu.numpy().flat[i])
+            expected = 0.5 * v_in * (1.0 + math.erf(v_in / math.sqrt(2.0)))
+            assert abs(v_out - expected) < 1e-5, (
+                f"gelu_exact mismatch at idx {i}: "
+                f"input={v_in} got={v_out} expected={expected}"
+            )

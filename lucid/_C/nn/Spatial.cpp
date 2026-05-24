@@ -24,6 +24,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -50,6 +51,9 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(H),
                     static_cast<std::int64_t>(W), 2};
     OpScopeFull scope{schema_v1.name, theta->device(), theta->dtype(), out_shape};
+    scope.set_attr("H", static_cast<std::int64_t>(H));
+    scope.set_attr("W", static_cast<std::int64_t>(W));
+    scope.set_attr("align_corners", align_corners);
 
     auto& be = backend::Dispatcher::for_device(theta->device());
     Storage out_storage =
@@ -57,6 +61,12 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, theta->dtype(),
                                             theta->device(), false);
+    // wire_autograd records on_op_io internally, but the early-return
+    // below skips it when grad is off — record explicitly so the trace
+    // captures inputs in both code paths.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({theta}, out);
+    }
 
     if (!GradMode::is_enabled() || !theta->requires_grad())
         return out;

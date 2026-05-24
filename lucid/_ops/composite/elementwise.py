@@ -1089,17 +1089,71 @@ def fmin(a: Tensor, b: Tensor) -> Tensor:
 
 
 def erfc(x: Tensor) -> Tensor:
-    """Complementary error function: ``erfc(x) = 1 - erf(x)``."""
+    r"""Complementary error function :math:`\text{erfc}(x) = 1 - \text{erf}(x)`.
+
+    Preserves more precision than ``1 - erf(x)`` would for very large
+    positive ``x`` only if the engine offers a native ``erfc`` kernel;
+    in Lucid this is a composite that *does* subtract ``erf(x)`` from
+    one, so accuracy is bounded by ``erf`` near the tails.
+
+    Parameters
+    ----------
+    x : Tensor
+        Real-valued input.
+
+    Returns
+    -------
+    Tensor
+        Same shape as ``x``, values in :math:`[0, 2]`.
+    """
     return lucid.full_like(x, 1.0) - lucid.erf(x)
 
 
 def copysign(x: Tensor, y: Tensor) -> Tensor:
-    """Return a tensor with magnitudes from ``x`` and signs from ``y``."""
+    """Element-wise sign transplant: magnitudes from ``x``, signs from ``y``.
+
+    Useful for sign-preserving operations that need to preserve a sign
+    bit independent of an arbitrary magnitude computation.
+
+    Parameters
+    ----------
+    x : Tensor
+        Magnitude source; result has ``|x|`` element-wise.
+    y : Tensor
+        Sign source; result is positive where ``y >= 0``, negative
+        where ``y < 0`` (broadcastable to the shape of ``x``).
+
+    Returns
+    -------
+    Tensor
+        Broadcast shape of ``x`` and ``y``.
+    """
     return lucid.where(y < 0.0, -lucid.abs(x), lucid.abs(x))
 
 
 def ldexp(input: Tensor, exponent: Tensor | Scalar) -> Tensor:
-    """``input * 2 ** exponent`` element-wise (differentiable w.r.t. both)."""
+    r"""Element-wise :math:`\text{input} \cdot 2^{\text{exponent}}`.
+
+    Differentiable through both arguments (uses ``exp * log(2)``
+    internally rather than integer bit twiddling), so safe to chain
+    inside autograd graphs.
+
+    Parameters
+    ----------
+    input : Tensor
+        Mantissa.
+    exponent : Tensor or Scalar
+        Power-of-two exponent; broadcastable to the shape of ``input``.
+
+    Returns
+    -------
+    Tensor
+        Broadcast shape of ``input`` and ``exponent``.
+
+    See Also
+    --------
+    frexp : inverse decomposition into mantissa / exponent.
+    """
     exp_t: Tensor = (
         exponent
         if _is_tensor(exponent)
@@ -1141,7 +1195,23 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
 
 
 def gcd(x: Tensor, y: Tensor) -> Tensor:
-    """Element-wise greatest common divisor (integer tensors)."""
+    """Element-wise greatest common divisor for integer tensors.
+
+    Falls through to Python's ``math.gcd`` per element — the engine
+    has no native GCD kernel and this path is for low-rate utility use
+    (e.g. shape arithmetic), not hot-loop computation.  Non-differentiable.
+
+    Parameters
+    ----------
+    x, y : Tensor
+        Same-shape integer tensors.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``x``.  Each element is
+        ``math.gcd(x_i, y_i)``.
+    """
     flat_x = x.reshape(-1)
     flat_y = y.reshape(-1)
     n = int(flat_x.shape[0])
@@ -1150,7 +1220,23 @@ def gcd(x: Tensor, y: Tensor) -> Tensor:
 
 
 def lcm(x: Tensor, y: Tensor) -> Tensor:
-    """Element-wise least common multiple (integer tensors)."""
+    """Element-wise least common multiple for integer tensors.
+
+    Same implementation strategy as :func:`gcd` — pure-Python per
+    element via ``math.lcm``, intended for utility use only.
+    Non-differentiable.
+
+    Parameters
+    ----------
+    x, y : Tensor
+        Same-shape integer tensors.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``x``.  Each element is
+        ``math.lcm(x_i, y_i)``.
+    """
     flat_x = x.reshape(-1)
     flat_y = y.reshape(-1)
     n = int(flat_x.shape[0])
@@ -1185,7 +1271,29 @@ _LANCZOS_P: list[float] = [
 
 
 def lgamma(x: Tensor) -> Tensor:
-    """Natural log of the gamma function via the Lanczos approximation."""
+    r"""Natural log of the gamma function :math:`\ln \Gamma(x)`.
+
+    Implemented as a pure composite over engine primitives — uses the
+    Lanczos approximation (Numerical Recipes, :math:`g = 7`, 9 series
+    coefficients).  Relative error stays below ``1.5e-15`` for real
+    ``x > 0`` in float64.  Autograd flows through automatically because
+    every step is an engine op.
+
+    Parameters
+    ----------
+    x : Tensor
+        Real input.  Defined for ``x > 0``; behaviour on non-positive
+        reals is implementation-defined (the series diverges).
+
+    Returns
+    -------
+    Tensor
+        Same shape as ``x``.
+
+    See Also
+    --------
+    digamma : derivative :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
+    """
     z = x - 1.0
     t = z + (_LANCZOS_G + 0.5)
     series = lucid.full_like(x, _LANCZOS_P[0])
@@ -1197,7 +1305,29 @@ def lgamma(x: Tensor) -> Tensor:
 
 
 def digamma(x: Tensor) -> Tensor:
-    """Digamma function ψ(x) = d/dx ln Γ(x) via recurrence + asymptotic series."""
+    r"""Digamma function :math:`\psi(x) = \frac{d}{dx} \ln \Gamma(x)`.
+
+    Implemented as a composite of engine primitives so autograd flows
+    through naturally.  Uses the standard recurrence-plus-asymptotic
+    strategy: shift the argument by 8 via
+    :math:`\psi(x) = \psi(x + 8) - \sum_{k=0}^{7} 1/(x + k)`, then
+    evaluate the asymptotic Bernoulli series on the shifted argument
+    where the series converges quickly.
+
+    Parameters
+    ----------
+    x : Tensor
+        Real input.  Defined for ``x > 0``.
+
+    Returns
+    -------
+    Tensor
+        Same shape as ``x``.
+
+    See Also
+    --------
+    lgamma : :math:`\ln \Gamma(x)` itself.
+    """
     # Shift to xr = x + 8 accumulating the correction sum.
     # ψ(x) = ψ(x+8) − 1/x − 1/(x+1) − … − 1/(x+7)
     correction = lucid.zeros_like(x)
@@ -1241,7 +1371,27 @@ _I0_LARGE_COEFFS: list[float] = [
 
 
 def i0(x: Tensor) -> Tensor:
-    """Modified Bessel function of the first kind, order 0."""
+    r"""Modified Bessel function of the first kind, order 0: :math:`I_0(x)`.
+
+    Composite implementation via the Abramowitz & Stegun polynomial
+    approximation (Table 9.8.1):
+
+    * ``|x| <= 3.75`` — polynomial series in :math:`(x / 3.75)^2`.
+    * ``|x| >  3.75`` — polynomial series in :math:`3.75 / |x|`, multiplied
+      by :math:`e^{|x|} / \sqrt{|x|}` to recover the exponential growth.
+
+    Differentiable through both branches (engine primitives only).
+
+    Parameters
+    ----------
+    x : Tensor
+        Real input.
+
+    Returns
+    -------
+    Tensor
+        :math:`I_0(x)` element-wise; always positive.
+    """
     ax = lucid.abs(x)
     # Guard: avoid division by zero in large-argument branch (ax == 0 → use small branch)
     ax_safe = lucid.where(ax == lucid.zeros_like(ax), lucid.full_like(ax, 1.0), ax)
@@ -1267,20 +1417,85 @@ def i0(x: Tensor) -> Tensor:
 
 
 def softmax(x: Tensor, dim: int | None = None) -> Tensor:
-    """Softmax along ``dim`` (default: last axis)."""
+    r"""Softmax along ``dim`` — :math:`\sigma(x)_i = e^{x_i} / \sum_j e^{x_j}`.
+
+    Dispatches to the engine's numerically stable softmax kernel
+    (max-subtraction baked in), so no caller-side stabilisation
+    is needed.  Equivalent to ``lucid.nn.functional.softmax`` but
+    lives in the top-level ``lucid`` namespace for parity with
+    NumPy / SciPy-style usage.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input logits of any shape.
+    dim : int, optional
+        Axis along which the softmax is normalised.  Default ``-1``
+        (last axis).
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``x``.  Each slice along ``dim`` sums to 1.
+
+    See Also
+    --------
+    log_softmax : numerically safer when the result feeds an
+        ``NLLLoss`` / cross-entropy downstream.
+    """
     axis = dim if dim is not None else -1
     return _wrap(_C_engine.softmax(_unwrap(x), axis))
 
 
 def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
-    """Log-softmax along ``dim`` (default: last axis)."""
+    r"""Logarithm of softmax along ``dim``: :math:`\log \sigma(x)`.
+
+    Computed as ``log(softmax(x))`` — Lucid's softmax kernel is
+    max-stabilised, so this composite avoids most underflow you'd hit
+    from naive ``log(exp(x) / sum(exp(x)))``.  Pair with
+    ``F.nll_loss`` for a numerically stable cross-entropy.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input logits of any shape.
+    dim : int, optional
+        Axis along which the softmax is normalised.  Default ``-1``.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``x``.
+
+    See Also
+    --------
+    softmax : the un-logged form.
+    """
     axis = dim if dim is not None else -1
     sm = _C_engine.softmax(_unwrap(x), axis)
     return _wrap(_C_engine.log(sm))
 
 
 def floor_divide(a: Tensor, b: Tensor | Scalar) -> Tensor:
-    """Element-wise floor division: ``floor(a / b)``."""
+    r"""Element-wise floor division — :math:`\lfloor a / b \rfloor`.
+
+    Equivalent to Python's ``//`` operator but follows the framework's
+    broadcasting rules and supports ``b`` as either a tensor or a
+    scalar.  Implemented as composite ``(a / b).floor()`` — gradients
+    are zero almost everywhere (the floor is piecewise constant).
+
+    Parameters
+    ----------
+    a : Tensor
+        Numerator.
+    b : Tensor or Scalar
+        Denominator, broadcastable to the shape of ``a``.
+
+    Returns
+    -------
+    Tensor
+        Broadcast shape of ``a`` and ``b``.
+    """
     return (a / b).floor()
 
 
@@ -1292,9 +1507,31 @@ def diag_embed(
 ) -> Tensor:
     """Embed the last dimension of ``x`` as the diagonal of a new matrix.
 
-    For a 1-D input of length ``n`` returns shape ``(n+|offset|, n+|offset|)``.
-    For batch inputs the last dimension is embedded; ``dim1``/``dim2`` select
-    which two axes of the *output* carry the matrix (default: last two).
+    Inverse of :func:`lucid.diagonal`.  For a 1-D input of length ``n``
+    the result is shape ``(n+|offset|, n+|offset|)``.  For batch
+    inputs the last axis is treated as the diagonal vector and
+    ``dim1`` / ``dim2`` pick which two axes of the *output* carry the
+    matrix.
+
+    Parameters
+    ----------
+    x : Tensor
+        Diagonal values.  Any shape; the last axis becomes the
+        diagonal of each output matrix.
+    offset : int, optional
+        Diagonal offset.  ``0`` (default) = main diagonal,
+        positive = above main, negative = below main.  Output size
+        grows by ``|offset|`` along each matrix dimension.
+    dim1 : int, optional
+        First axis of the output matrix dimensions.  Default ``-2``.
+    dim2 : int, optional
+        Second axis of the output matrix dimensions.  Default ``-1``.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(*x.shape[:-1], n+|offset|, n+|offset|)`` (modulo the
+        ``dim1`` / ``dim2`` rotation).  Non-diagonal positions are zero.
     """
     n = int(x.shape[-1])
     size = n + abs(offset)

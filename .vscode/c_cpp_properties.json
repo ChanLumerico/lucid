@@ -10,7 +10,11 @@
                 "/Library/Frameworks/Python.framework/Versions/3.14/include/python3.14",
                 "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/pybind11/include",
                 "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/mlx/include"
-            ]
+            ],
+            "macFrameworkPath": [
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
+            ],
+            "compileCommands": "${workspaceFolder}/build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine/compile_commands.json"
         }
     ],
     "version": 4

@@ -19,47 +19,143 @@ if TYPE_CHECKING:
 
 
 def is_available() -> bool:
-    """Return True; Apple Silicon always has Metal GPU."""
+    """Return ``True`` — Apple Silicon always has a Metal GPU.
+
+    Kept as a function (rather than a constant) for API parity with
+    multi-device frameworks where availability is an actual runtime
+    check.  On Lucid this is always true: the framework refuses to
+    install on non-Apple-Silicon platforms, so by the time this call
+    runs the Metal stack is guaranteed present.
+
+    Returns
+    -------
+    bool
+        Always ``True``.
+    """
     return True
 
 
 def synchronize() -> None:
-    """Wait for all pending Metal GPU operations to complete."""
+    """Block until every pending Metal GPU operation has completed.
+
+    MLX kernels dispatch asynchronously — calling ``synchronize`` makes
+    the calling thread wait until the GPU command queue drains.  Use
+    sparingly: it stalls the pipeline.  Typical places to call it are
+    *before* timing measurements and *before* device→host transfers
+    that read the result of recent kernels.
+
+    See Also
+    --------
+    MetalStream.synchronize : sync a specific stream rather than the
+        default device-wide stream.
+    """
     _mx.synchronize()
 
 
 def empty_cache() -> None:
-    """Release unused cached Metal memory back to the system."""
+    """Release unused cached Metal memory back to the OS.
+
+    MLX caches recently-freed device buffers for reuse — this avoids
+    repeated allocator round-trips in steady-state training but holds
+    memory the system might want elsewhere (other processes, the
+    desktop compositor).  Call this after a memory-hungry phase ends
+    to give the OS back what you no longer need.
+
+    Notes
+    -----
+    Cached buffers are otherwise freed automatically under memory
+    pressure; manual eviction is a hint, not a requirement.
+    """
     _mx.clear_cache()
 
 
 def manual_seed(seed: int) -> None:
-    """Set the Metal GPU random number generator seed."""
+    """Set the Metal GPU random-number generator seed.
+
+    Re-seeds the engine's default ``Generator`` so subsequent random
+    ops (``rand``, ``randn``, dropout, weight init) produce a
+    reproducible sequence.  Combine with :func:`lucid.manual_seed`
+    when you need both CPU and GPU streams pinned.
+
+    Parameters
+    ----------
+    seed : int
+        Non-negative seed value.  Identical seeds produce identical
+        sequences across runs on the same GPU.
+    """
     _C_engine.default_generator().set_seed(seed)
 
 
 def memory_allocated() -> int:
-    """Return bytes currently allocated on Metal GPU."""
+    """Return bytes currently allocated on the Metal GPU.
+
+    Reflects live ``MTLBuffer`` storage owned by the engine — cached /
+    pooled buffers held by MLX are *not* counted (see
+    :func:`get_cache_memory`).
+
+    Returns
+    -------
+    int
+        Bytes currently allocated, excluding the MLX cache pool.
+    """
     return int(_C_engine.memory_stats(_C_engine.Device.GPU).current_bytes)
 
 
 def max_memory_allocated() -> int:
-    """Return peak bytes allocated on Metal GPU since last reset."""
+    """Return peak Metal GPU allocation observed since the last reset.
+
+    The peak counter is updated on every allocation and is reset by
+    :func:`reset_peak_memory_stats`.  Useful for sizing training jobs
+    around the largest forward+backward footprint.
+
+    Returns
+    -------
+    int
+        Peak live-byte count since the last reset.
+    """
     return int(_C_engine.memory_stats(_C_engine.Device.GPU).peak_bytes)
 
 
 def reset_peak_memory_stats() -> None:
-    """Reset the peak memory counter for Metal GPU."""
+    """Reset the Metal-GPU peak-allocation counter to the current value.
+
+    Call this at the start of a benchmark / profiling window so that
+    :func:`max_memory_allocated` reports the peak observed during the
+    window of interest rather than since process start.
+    """
     _C_engine.reset_peak_memory_stats(_C_engine.Device.GPU)
 
 
 def get_cache_memory() -> int:
-    """Return bytes held in the Metal memory cache (not yet freed to OS)."""
+    """Return bytes held in MLX's Metal allocator cache.
+
+    These pages are reserved by the framework but not currently
+    backing any live tensor — they sit in the allocator pool for fast
+    reuse and are released back to the OS only on
+    :func:`empty_cache` or under system memory pressure.
+
+    Returns
+    -------
+    int
+        Bytes in the MLX cache pool (not counted by
+        :func:`memory_allocated`).
+    """
     return int(_mx.metal.get_cache_memory())
 
 
 def get_device_name() -> str:
-    """Return the name of the Metal GPU device."""
+    """Return the human-readable Metal GPU device name.
+
+    Pulled from ``MTLDevice.name`` via MLX.  Examples: ``"Apple M1
+    Max"``, ``"Apple M2 Ultra"``, ``"Apple M4 Pro"``.  Falls back to
+    ``"Apple Silicon Metal GPU"`` if the platform layer refuses to
+    answer.
+
+    Returns
+    -------
+    str
+        Marketing name of the GPU.
+    """
     info = _mx.metal.device_info()
     return str(info.get("device_name", "Apple Silicon Metal GPU"))
 
@@ -68,11 +164,24 @@ class MetalStream:
     """Metal command stream context manager.
 
     On entry, all subsequent MLX operations are submitted to this stream.
-    On exit, the stream is synchronized before control returns.
+    On exit, the stream is synchronized before control returns — every
+    GPU command issued inside the ``with`` block is guaranteed complete
+    when the block exits.
 
-    Args:
-        priority: Ignored (MLX uses a single default stream per device).
-                  Kept for API compatibility with multi-stream frameworks.
+    Parameters
+    ----------
+    priority : int, optional
+        Accepted for API parity with multi-stream frameworks but
+        currently ignored — MLX exposes a single default stream per
+        device on Apple Silicon and does not honor per-stream priority
+        hints.  Default ``0``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> with lucid.metal.MetalStream():
+    ...     y = model(x)             # all kernels submitted to this stream
+    ...                              # stream sync happens on block exit
     """
 
     def __init__(self, priority: int = 0) -> None:

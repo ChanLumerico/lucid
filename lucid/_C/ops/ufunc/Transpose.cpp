@@ -97,6 +97,13 @@ TensorImplPtr PermuteBackward::forward(const TensorImplPtr& a, const std::vector
     }
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), out_shape};
+    // 3.5 Phase 1.2 step 4: report the permutation to the trace so the
+    // compile-path Permute emitter can rebuild the same axis ordering
+    // inside MPSGraph.  No-op outside any _tracing() scope.
+    {
+        std::vector<std::int64_t> perm64(perm.begin(), perm.end());
+        scope.set_attr("permutation", std::move(perm64));
+    }
 
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .permute(a->storage(), a->shape(), perm, a->dtype());

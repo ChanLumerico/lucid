@@ -25,7 +25,7 @@ git config --unset core.hooksPath
 
 | Hook          | Stage                | Behavior |
 |---------------|----------------------|----------|
-| `pre-commit`  | before commit drafted | Updates the Lines-of-Code badge in `README.md` via `cloc`, re-stages it.  Skip with `LUCID_SKIP_LOC_BADGE=1`. |
+| `pre-commit`  | before commit drafted | (1) Hard-fail H4 numpy guard (`tools/check_numpy_h4.py`).  (2) Hard-fail docstring-coverage gate (`tools/check_docstring_coverage.py`) — runs when the commit touches `lucid/**/*.py`; blocks thin / unstructured docstrings on public symbols.  (3) Refreshes the Lines-of-Code badge in `README.md` via `cloc`, re-stages it.  Skip individual checks with `LUCID_SKIP_H4_GUARD=1` / `LUCID_SKIP_DOCSTRING=1` / `LUCID_SKIP_LOC_BADGE=1`. |
 | `commit-msg`  | before commit lands   | Defensive warning if the staged diff doesn't include `CHANGELOG.md` and the commit subject uses a user-facing conventional-commit prefix (`feat:` / `fix:` / `perf:` / `refactor:` / `revert:` / `remove:` / `deprec:` / `sec:`). |
 | `post-commit` | after commit lands    | **Auto-injects + amends `CHANGELOG.md`** for every user-facing conventional commit.  Calls `tools/changelog.py propose --auto --message-file .git/COMMIT_EDITMSG`, then `git commit --amend --no-edit --no-verify` to fold the entry into the same commit (preserving subject / body / author / date). A guard env var prevents the resulting amend from recursing. |
 

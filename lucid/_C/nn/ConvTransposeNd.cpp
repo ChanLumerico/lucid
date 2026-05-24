@@ -13,6 +13,8 @@
 
 #include "ConvTransposeNd.h"
 
+#include "../compile/Tracer.h"
+
 #include <vector>
 
 #include "../autograd/Helpers.h"
@@ -96,6 +98,14 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
     OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device(), x->dtype(),
                       out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin * K_total);
+    {
+        std::vector<std::int64_t> Sv(stride, stride + N);
+        std::vector<std::int64_t> Pv(pad, pad + N);
+        std::vector<std::int64_t> OPv(opad, opad + N);
+        scope.set_attr("stride", std::move(Sv));
+        scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("output_padding", std::move(OPv));
+    }
 
     Storage out_storage =
         backend::Dispatcher::for_device(x->device())
@@ -104,6 +114,7 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
+    // wire_autograd (below) records on_op_io internally — no explicit call.
 
     auto bwd = std::make_shared<ConvTransposeNdBackward<N>>();
     for (int i = 0; i < N; ++i) {

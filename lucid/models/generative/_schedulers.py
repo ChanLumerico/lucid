@@ -40,8 +40,18 @@ class DiffusionScheduler(ABC):
         """Populate :attr:`timesteps` for the requested inference schedule.
 
         Most schedulers sub-sample the training schedule uniformly when
-        ``num_inference_steps < num_train_timesteps`` (DDPM canonical) or
-        construct a different grid entirely (Karras / Heun).
+        ``num_inference_steps < num_train_timesteps`` (DDPM canonical)
+        or construct a different grid entirely (Karras / Heun).
+
+        Parameters
+        ----------
+        num_inference_steps : int
+            How many denoising steps the sampler will perform.  Must be
+            positive and (for sub-sampling schedulers) ``<=
+            num_train_timesteps``.
+        device : str, optional
+            Placement of the materialised :attr:`timesteps` tensor.
+            Default ``"cpu"``.
         """
 
     @abstractmethod

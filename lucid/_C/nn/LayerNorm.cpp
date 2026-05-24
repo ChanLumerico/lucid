@@ -112,6 +112,8 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     const auto [outer, N] = resolve_shapes(x_eff->shape(), gamma_eff->shape());
 
     OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
+    // 3.5 Phase 1.2: report eps for the compile-path LayerNorm emitter.
+    scope.set_attr("eps", eps);
 
     // layer_norm_forward returns {y, mean, rstd}.
     auto forward = backend::Dispatcher::for_device(x_eff->device())

@@ -25,6 +25,7 @@
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -57,6 +58,12 @@ using utils_detail::numel;
 TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     Validator::input(a, "flatten.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
+    // 0-D scalar input flattens to a 1-D length-1 tensor — matches the
+    // reference framework's ``torch.tensor(5.0).flatten() == tensor([5.])``
+    // contract.  Without this short-circuit the default ``end_axis=-1``
+    // would resolve to ``-1`` and trip the ``s > e`` guard below.
+    if (ndim == 0)
+        return reshape_op(a, std::vector<std::int64_t>{1});
     int s = start_axis < 0 ? start_axis + ndim : start_axis;
     int e = end_axis < 0 ? end_axis + ndim : end_axis;
     if (s < 0 || e >= ndim || s > e)
@@ -129,6 +136,9 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
         bwd->input_shape_ = a->shape();
         bwd->output_shape_ = shape;
         kernel::NaryKernel<BroadcastBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            trc->on_op_io({a}, out);
+        }
         return out;
     };
 

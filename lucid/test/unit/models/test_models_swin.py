@@ -126,8 +126,11 @@ class TestSwinRegistry(unittest.TestCase):
         self.assertEqual(len(models.list_models(family="swin")), 8)
 
     def test_all_sizes_present(self) -> None:
+        # H10: variant suffixes are full-name (tiny / small / base / large),
+        # never single-letter abbreviations.  Pre-H10 ``swin_t`` etc.
+        # were renamed to match the paper's naming.
         names = models.list_models(family="swin")
-        for size in ["t", "s", "b", "l"]:
+        for size in ["tiny", "small", "base", "large"]:
             self.assertIn(f"swin_{size}", names)
             self.assertIn(f"swin_{size}_cls", names)
 

@@ -26,6 +26,7 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../compile/Tracer.h"
 #include "../backend/Dispatcher.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
@@ -47,12 +48,18 @@ TensorImplPtr one_hot_op(const TensorImplPtr& input, int num_classes, Dtype out_
     Shape out_shape = input->shape();
     out_shape.push_back(num_classes);
     OpScopeFull scope{"one_hot", input->device(), out_dtype, out_shape};
+    scope.set_attr("num_classes", static_cast<std::int64_t>(num_classes));
+    scope.set_attr("out_dtype", static_cast<std::int64_t>(out_dtype));
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage =
         be.one_hot_forward(input->storage(), input->shape(), num_classes, out_dtype);
-    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, out_dtype,
-                                        input->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, out_dtype,
+                                            input->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({input}, out);
+    }
+    return out;
 }
 
 TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy, double cx) {
@@ -60,13 +67,20 @@ TensorImplPtr rotate_op(const TensorImplPtr& input, double angle_deg, double cy,
     if (input->shape().size() != 4)
         throw ShapeMismatch(input->shape(), Shape{}, "rotate: input must be 4-D (N, C, H, W)");
     OpScopeFull scope{"rotate", input->device(), input->dtype(), input->shape()};
+    scope.set_attr("angle_deg", angle_deg);
+    scope.set_attr("cy", cy);
+    scope.set_attr("cx", cx);
     const double angle_rad_neg = -angle_deg * (M_PI / 180.0);
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage =
         be.rotate_forward(input->storage(), input->shape(), angle_rad_neg, cx, cy, input->dtype());
-    return std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
-                                        input->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
+                                            input->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({input}, out);
+    }
+    return out;
 }
 
 const OpSchema BilinearLayerBackward::schema_v1{"bilinear_layer", 1, AmpPolicy::Promote, true};
@@ -141,6 +155,11 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, x1->dtype(),
                                             x1->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        std::vector<TensorImplPtr> ins{x1, x2, weight};
+        if (bias) ins.push_back(bias);
+        trc->on_op_io(ins, out);
+    }
     const bool any_grad = x1->requires_grad() || x2->requires_grad() || weight->requires_grad() ||
                           (bias && bias->requires_grad());
     if (!GradMode::is_enabled() || !any_grad)

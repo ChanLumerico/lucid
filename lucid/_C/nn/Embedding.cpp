@@ -25,6 +25,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -58,6 +59,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     Shape out_shape = indices->shape();
     out_shape.push_back(D);
     OpScopeFull scope{schema_v1.name, weight->device(), weight->dtype(), out_shape};
+    scope.set_attr("padding_idx", static_cast<std::int64_t>(padding_idx));
 
     auto& be = backend::Dispatcher::for_device(weight->device());
     Storage out_storage =
@@ -66,6 +68,9 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
                                             weight->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        (void)trc;  // wire_autograd below records on_op_io internally
+    }
 
     auto bwd = std::make_shared<EmbeddingBackward>();
     bwd->saved_indices_ = indices->storage();
@@ -126,6 +131,8 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
         ErrorBuilder("rotary_pos_embedding").fail("embed_dim must be even");
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), input->shape()};
+    scope.set_attr("interleaved", interleaved);
+    scope.set_attr("has_pos_ids", position_ids_or_null != nullptr);
 
     const Storage* pos_storage = position_ids_or_null ? &position_ids_or_null->storage() : nullptr;
     const Dtype pos_dt = position_ids_or_null ? position_ids_or_null->dtype() : Dtype::I64;
@@ -137,6 +144,7 @@ TensorImplPtr RotaryPosEmbeddingBackward::forward(const TensorImplPtr& input,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), input->shape(), input->dtype(),
                                             input->device(), false);
+    // wire_autograd records on_op_io internally — no explicit call.
 
     {
         auto bwd = std::make_shared<RotaryPosEmbeddingBackward>();

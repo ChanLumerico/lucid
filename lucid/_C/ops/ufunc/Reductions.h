@@ -77,6 +77,7 @@ class LUCID_API SumBackward : public ReduceOp<SumBackward> {
 public:
     static constexpr bool kSavesInput = false;
     static const OpSchema schema_v1;
+    // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_sum``.
     static Storage dispatch(backend::IBackend& be,
                             const Storage& a,
                             const Shape& in_shape,
@@ -86,8 +87,10 @@ public:
         return be.reduce_sum(a, in_shape, {axes, keepdims}, dt);
     }
 
+    // Backward — broadcasts ``grad_out`` back to the input shape (ones gradient).
     Storage grad_formula(const Storage& grad_out);
-    // sum backward has no scaling: gradient broadcasts unchanged.
+    // Graph-mode scaling helper — ``sum`` requires no scaling, so the
+    // broadcast-expanded gradient is returned unchanged.
     TensorImplPtr scale_graph_grad(const TensorImplPtr& g) { return g; }
 };
 
@@ -121,6 +124,7 @@ class LUCID_API MeanBackward : public ReduceOp<MeanBackward> {
 public:
     static constexpr bool kSavesInput = false;
     static const OpSchema schema_v1;
+    // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_mean``.
     static Storage dispatch(backend::IBackend& be,
                             const Storage& a,
                             const Shape& in_shape,
@@ -130,6 +134,7 @@ public:
         return be.reduce_mean(a, in_shape, {axes, keepdims}, dt);
     }
 
+    // Backward — broadcasts $\mathrm{grad\_out} / N$ back to input shape.
     Storage grad_formula(const Storage& grad_out);
     // Graph-mode mean backward: divides the broadcast-expanded gradient
     // by the number of reduced elements so second-order graphs flow
@@ -195,6 +200,8 @@ public:
                                  const std::vector<int>& axes,
                                  bool keepdims,
                                  Dtype dt);
+    // Backward — $\partial L/\partial x_i = (y / x_i) \cdot \mathrm{grad\_out}$
+    // (product of all other elements), formed from the saved input and output.
     Storage grad_formula(const Storage& grad_out);
 };
 
@@ -235,6 +242,7 @@ class LUCID_API MaxBackward : public ReduceOp<MaxBackward> {
 public:
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_max``.
     static Storage dispatch(backend::IBackend& be,
                             const Storage& a,
                             const Shape& in_shape,
@@ -244,6 +252,8 @@ public:
         return be.reduce_max(a, in_shape, {axes, keepdims}, dt);
     }
 
+    // Backward — argmax-indicator gradient: routes ``grad_out`` only to
+    // positions where $x_i$ equals the reduced max (ties share equally).
     Storage grad_formula(const Storage& grad_out);
 };
 
@@ -274,6 +284,7 @@ class LUCID_API MinBackward : public ReduceOp<MinBackward> {
 public:
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — reduces ``a`` along ``axes`` via ``IBackend::reduce_min``.
     static Storage dispatch(backend::IBackend& be,
                             const Storage& a,
                             const Shape& in_shape,
@@ -283,6 +294,8 @@ public:
         return be.reduce_min(a, in_shape, {axes, keepdims}, dt);
     }
 
+    // Backward — argmin-indicator gradient: routes ``grad_out`` only to
+    // positions where $x_i$ equals the reduced min (ties share equally).
     Storage grad_formula(const Storage& grad_out);
 };
 

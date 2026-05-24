@@ -17,6 +17,7 @@
 #include <variant>
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -38,11 +39,16 @@ TensorImplPtr matrix_power_op(const TensorImplPtr& a, int p) {
     require_float(a->dtype(), "matrix_power");
     require_square_2d(a->shape(), "matrix_power");
     OpScopeFull scope{"matrix_power", a->device(), a->dtype(), a->shape()};
+    scope.set_attr("p", static_cast<std::int64_t>(p));
 
     Storage out = backend::Dispatcher::for_device(a->device())
                       .linalg_matrix_power(a->storage(), a->shape(), p, a->dtype());
     // Output shape equals input shape: A^p is always the same size as A.
-    return fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    auto result = fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

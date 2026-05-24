@@ -62,8 +62,25 @@ def index_fill(
 ) -> Tensor:
     """Return a copy of ``input`` with positions ``index`` along ``dim`` set to ``value``.
 
-    Autograd flows through the *unmasked* positions; filled positions receive
-    zero gradient (they are overwritten by a constant).
+    Autograd flows through the *unmasked* positions; filled positions
+    receive zero gradient (they're overwritten by a constant).
+
+    Parameters
+    ----------
+    input : Tensor
+        Source tensor; not mutated.
+    dim : int
+        Axis along which ``index`` addresses slices.
+    index : Tensor
+        1-D integer tensor of positions along ``dim``.
+    value : float
+        Scalar to write into every indexed position.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``input``; indexed slices replaced by
+        ``value``, others unchanged.
     """
     ndim = input.ndim
     if dim < 0:
@@ -94,8 +111,31 @@ def index_add(
 ) -> Tensor:
     """Return ``input`` with ``alpha * source`` accumulated at ``index`` positions along ``dim``.
 
-    ``index`` is a 1-D integer tensor of length *m*;
-    ``source`` has the same shape as ``input`` except ``source.shape[dim] == m``.
+    Differentiable through both ``input`` and ``source``.  ``alpha`` is
+    accumulated as a Python constant — gradients pass through cleanly
+    as if the multiplication were inlined.
+
+    Parameters
+    ----------
+    input : Tensor
+        Source tensor; not mutated.
+    dim : int
+        Axis along which ``index`` addresses slices.
+    index : Tensor
+        1-D integer tensor of length :math:`m` listing positions along
+        ``dim`` to accumulate into.
+    source : Tensor
+        Per-slice update tensor; same shape as ``input`` except
+        ``source.shape[dim] == m`` (matching ``index`` length).
+    alpha : float, optional
+        Scalar multiplier applied to ``source`` before accumulation.
+        Default ``1.0``.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``input``; positions listed in
+        ``index`` carry ``input[..., index[i], ...] + alpha * source[..., i, ...]``.
     """
     ndim = input.ndim
     if dim < 0:
@@ -120,7 +160,31 @@ def index_copy(
     index: Tensor,
     source: Tensor,
 ) -> Tensor:
-    """Return a copy of ``input`` with slices at ``index`` replaced by ``source``."""
+    """Return a copy of ``input`` with slices at ``index`` replaced by ``source``.
+
+    Composite implementation: first zeroes the indexed slices via
+    :func:`index_fill`, then adds ``source`` via :func:`index_add`.
+    Differentiable through both ``input`` and ``source``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Destination tensor; not mutated (a fresh copy is returned).
+    dim : int
+        Axis along which slices are addressed.
+    index : Tensor
+        1-D ``int32`` / ``int64`` tensor of positions along ``dim``.
+        Length must equal ``source.shape[dim]``.
+    source : Tensor
+        Replacement slices.  All non-``dim`` dimensions must match
+        ``input``; ``source.shape[dim]`` must equal ``index.shape[0]``.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``input``; values at the indexed
+        positions are taken from ``source``, others from ``input``.
+    """
     zeroed = index_fill(input, dim, index, 0.0)
     return index_add(zeroed, dim, index, source)
 
@@ -135,7 +199,36 @@ def scatter_reduce(
 ) -> Tensor:
     """Reduce ``src`` into ``input`` along ``dim`` at positions given by ``index``.
 
-    Supported ``reduce`` modes: ``'sum'``, ``'mean'``, ``'prod'``, ``'amax'``, ``'amin'``.
+    Multi-reduction sibling of :func:`scatter_add`.  When several entries
+    of ``src`` target the same position the chosen ``reduce`` op decides
+    how they combine.  ``include_self`` controls whether the existing
+    value in ``input`` participates in the reduction or is replaced.
+
+    Parameters
+    ----------
+    input : Tensor
+        Destination tensor; not mutated (a fresh copy is returned).
+    dim : int
+        Axis along which ``index`` / ``src`` are scattered.
+    index : Tensor
+        Integer tensor broadcasting against ``src``; each entry names
+        the position along ``dim`` of ``input`` to update.
+    src : Tensor
+        Values to scatter into ``input`` at the positions named by
+        ``index``.
+    reduce : str, optional
+        Reduction op applied when multiple ``src`` values collide on
+        the same target.  One of ``'sum'`` (default), ``'mean'``,
+        ``'prod'``, ``'amax'``, ``'amin'``.
+    include_self : bool, optional
+        When ``True`` (default) the existing value in ``input`` is part
+        of the reduction set; when ``False`` it is overwritten and only
+        the scattered values count.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``input``.
     """
     if reduce == "sum":
         base = input if include_self else lucid.zeros_like(input)
@@ -347,6 +440,25 @@ def index_put_(
     ops (``add_``, ``mul_``).  Storage-level mutation is not currently
     available for composite indexing — autograd consumers should treat
     the returned tensor as a new node.
+
+    Parameters
+    ----------
+    input : Tensor
+        Destination; mutated in place via ``_impl`` rebind.
+    indices : list of Tensor or tuple of Tensor
+        Per-axis index tensors (one per dimension of ``input``); same
+        contract as :func:`index_put`.
+    values : Tensor
+        Values to write at the addressed positions.
+    accumulate : bool, optional
+        When ``True`` add to existing values (duplicate indices sum);
+        when ``False`` (default) overwrite (duplicate indices resolve
+        to the last write).
+
+    Returns
+    -------
+    Tensor
+        The same ``input`` tensor, now holding the updated values.
     """
     new_t: Tensor = index_put(input, indices, values, accumulate=accumulate)
     input._impl = new_t._impl
@@ -354,7 +466,31 @@ def index_put_(
 
 
 def argwhere(x: Tensor) -> Tensor:
-    """Return indices of non-zero elements as an (N, ndim) int64 tensor."""
+    """Return the coordinates of every non-zero element in ``x``.
+
+    Thin alias for :func:`lucid.nonzero` named to match the NumPy /
+    reference-framework convention.  The output is a synchronisation
+    point on GPU streams — the kernel can't know how many non-zeros
+    there are without a device→host count.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor of any shape and dtype; zero is determined by the
+        usual truthiness rules (``0`` for numeric dtypes, ``False`` for
+        bool).
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, x.ndim)`` ``int64`` tensor; row ``i`` lists the
+        multi-dimensional index of the ``i``-th non-zero element in
+        row-major order.
+
+    See Also
+    --------
+    lucid.nonzero : the underlying engine call.
+    """
     return lucid.nonzero(x)
 
 

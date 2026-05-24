@@ -100,8 +100,10 @@ class TestResNeStClassifier(unittest.TestCase):
 
 class TestResNeStRegistry(unittest.TestCase):
 
-    def test_4_variants_registered(self) -> None:
-        self.assertEqual(len(models.list_models(family="resnest")), 4)
+    def test_variants_registered(self) -> None:
+        # 6 paper-cited variants (14 / 26 / 50 / 101 / 200 / 269 — He 2020
+        # Table 1) × 2 (raw + ``_cls`` task wrapper) = 12 registered names.
+        self.assertEqual(len(models.list_models(family="resnest")), 12)
 
     def test_all_variants_present(self) -> None:
         names = models.list_models(family="resnest")

@@ -555,7 +555,42 @@ def allclose(
     atol: float = 1e-8,
     equal_nan: bool = False,
 ) -> bool:
-    """Return True if all ``|a - b| <= atol + rtol * |b|`` element-wise."""
+    r"""Return ``True`` iff every element pair is close within tolerance.
+
+    Closeness predicate:
+
+    .. math::
+
+        |a_i - b_i| \le \text{atol} + \text{rtol} \cdot |b_i|.
+
+    Note the asymmetry — the relative term uses ``|b|``, so swapping
+    arguments can change the answer for marginal cases.  This matches
+    the NumPy / reference-framework convention.
+
+    Parameters
+    ----------
+    a, b : Tensor
+        Inputs to compare.  Must be broadcastable.
+    rtol : float, optional
+        Relative tolerance.  Default ``1e-5``.
+    atol : float, optional
+        Absolute tolerance — dominates the bound when ``|b|`` is small
+        (think of comparisons near zero).  Default ``1e-8``.
+    equal_nan : bool, optional
+        When ``True``, ``NaN`` positions are treated as equal to other
+        ``NaN`` positions.  Default ``False`` (any ``NaN`` makes the
+        predicate ``False``).
+
+    Returns
+    -------
+    bool
+        Reduces to a single Python ``bool`` — synchronises any pending
+        GPU work to evaluate the final reduction.
+
+    See Also
+    --------
+    isclose : element-wise variant that returns a Tensor of bools.
+    """
     diff = lucid.abs(a - b)
     tol = atol + rtol * lucid.abs(b)
     close = diff <= tol

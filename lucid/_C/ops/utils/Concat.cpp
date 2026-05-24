@@ -342,6 +342,8 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     OpScopeFull scope{"concatenate", device, dt, Shape{}};
     const auto ndim = xs[0]->shape().size();
     int ax = wrap_axis(axis, static_cast<int>(ndim));
+    // 3.5 Phase 1.2: report axis for the compile-path Concat emitter.
+    scope.set_attr("dim", static_cast<std::int64_t>(ax));
 
     Shape out_shape = xs[0]->shape();
     std::int64_t cat_dim = 0;
@@ -366,6 +368,12 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     auto out_storage =
         backend::Dispatcher::for_device(device).concatenate(storages, shapes, ax, dt);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    // 3.5 Phase 1.2: explicit trace I/O wiring — ``attach_concat_grad`` does
+    // not flow through ``VariadicKernel::wire_autograd`` (it early-returns
+    // when grad is off), so the trace hook would otherwise miss the inputs.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io(xs, result);
+    }
     return attach_concat_grad(xs, std::move(result), ax);
 }
 
@@ -382,6 +390,7 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     if (ax < 0 || ax > static_cast<int>(ndim)) {
         ErrorBuilder("stack").index_error("axis out of range");
     }
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
     for (const auto& t : xs) {
         if (t->shape() != xs[0]->shape()) {
             throw ShapeMismatch(xs[0]->shape(), t->shape(), "stack");
@@ -397,6 +406,9 @@ TensorImplPtr stack_op(const std::vector<TensorImplPtr>& xs, int axis) {
     auto out_storage =
         backend::Dispatcher::for_device(device).stack(storages, xs[0]->shape(), ax, dt);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io(xs, result);
+    }
     return attach_stack_grad(xs, std::move(result), ax);
 }
 
@@ -437,6 +449,11 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     const std::int64_t piece = a->shape()[ax] / num_splits;
     Shape piece_shape = a->shape();
     piece_shape[ax] = piece;
+    // Carry axis + per-piece size into the trace (same payload the
+    // compile-path SplitEmitter uses to rebuild N MPSGraph slices).
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
+    scope.set_attr("piece", piece);
+    scope.set_attr("num_splits", num_splits);
     auto pieces = backend::Dispatcher::for_device(device).split_equal(a->storage(), a->shape(), ax,
                                                                       num_splits, dt);
     std::vector<TensorImplPtr> out;
@@ -462,6 +479,10 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
     const Device device = a->device();
     OpScopeFull scope{"split_at", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    // Carry axis + cut-point indices into the trace so the compile-path
+    // emitter can rebuild the N piece slices via MPSGraph sliceTensor.
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
+    scope.set_attr("indices", indices);
     auto pieces =
         backend::Dispatcher::for_device(device).split_at(a->storage(), a->shape(), ax, indices, dt);
     std::vector<TensorImplPtr> out;
@@ -497,6 +518,12 @@ std::vector<TensorImplPtr> chunk_op(const TensorImplPtr& a, std::int64_t chunks,
 std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "unbind.a").non_null();
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    // OpScopeFull anchors the trace so the compile-path UnbindEmitter
+    // can see this as a single multi-output op (was previously missing,
+    // making pieces appear as external feeds — wasted MPSGraph slicing
+    // opportunity).
+    OpScopeFull scope{"unbind", a->device(), a->dtype(), a->shape()};
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
     std::vector<TensorImplPtr> out;
     out.reserve(static_cast<std::size_t>(a->shape()[ax]));
     Shape slice_shape = a->shape();

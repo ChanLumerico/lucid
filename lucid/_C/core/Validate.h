@@ -378,6 +378,13 @@ public:
     static Pair pair(const TensorImplPtr& a, const TensorImplPtr& b, std::string op_name);
 
 private:
+    // Construct a ``Validator`` bound to ``t`` with the given ``label``.
+    //
+    // Private because callers must go through the :cpp:func:`input`
+    // factory.  Stores ``t`` by reference (not copy), so the resulting
+    // validator must live no longer than the caller's ``TensorImplPtr``.
+    // ``label`` is woven into every error message the chain emits, so
+    // callers should pass the parameter's public name (e.g. ``"weight"``).
     Validator(const TensorImplPtr& t, std::string label) : t_(t), label_(std::move(label)) {}
     const TensorImplPtr& t_;
     std::string label_;

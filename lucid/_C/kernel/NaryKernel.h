@@ -26,6 +26,7 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/AutogradNode.h"
 #include "../autograd/Node.h"
+#include "../compile/Tracer.h"  // 3.5 Phase 1.1: trace I/O wiring at wire_autograd
 #include "../core/GradMode.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
@@ -108,6 +109,15 @@ public:
                               const std::array<TensorImplPtr, N>& inputs,
                               const TensorImplPtr& out,
                               bool save_ins = true) {
+        // 3.5 Phase 1.1: trace wiring fires *before* the GradMode short-circuit
+        // so inference passes (no_grad / eval) still produce a complete
+        // TraceGraph.  Outside any _tracing() scope this is one TLS load + null
+        // check — no heap traffic, no input-array walk.
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            std::vector<TensorImplPtr> in_vec(inputs.begin(), inputs.end());
+            trc->on_op_io(in_vec, out);
+        }
+
         if (!GradMode::is_enabled())
             return false;
 

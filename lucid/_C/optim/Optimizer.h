@@ -193,6 +193,12 @@ public:
     // post-construction in the rare param-group reconfiguration case.
     explicit Optimizer(std::vector<std::shared_ptr<TensorImpl>> params)
         : params_(std::move(params)) {}
+
+    // Virtual destructor — ensures derived ``Adam`` / ``SGD`` / ``RMSProp``
+    // destructors run when held by a base-class pointer.  Defaulted; the
+    // per-parameter state buffers are released by their own ``std::vector``
+    // members in the derived classes, and ``params_`` releases its
+    // ``shared_ptr`` refs automatically.
     virtual ~Optimizer() = default;
 
     Optimizer(const Optimizer&) = delete;

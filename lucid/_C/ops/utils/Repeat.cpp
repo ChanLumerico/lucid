@@ -18,6 +18,7 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -124,11 +125,16 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
     const Device device = a->device();
     OpScopeFull scope{"repeat", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
+    scope.set_attr("repeats", static_cast<std::int64_t>(repeats));
     Shape out_shape = a->shape();
     out_shape[ax] *= repeats;
     Storage out_storage =
         backend::Dispatcher::for_device(device).repeat(a->storage(), a->shape(), dt, repeats, ax);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
     return attach_repeat_grad(a, std::move(result), ax, repeats);
 }
 
@@ -142,6 +148,7 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"tile", device, dt, a->shape()};
+    scope.set_attr("reps", reps);
     const std::size_t nout = reps.size();
     if (nout < a->shape().size())
         ErrorBuilder("tile").fail("reps must be at least as long as ndim");
@@ -159,6 +166,9 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     Storage out_storage =
         backend::Dispatcher::for_device(device).tile(a->storage(), a->shape(), dt, reps);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
     return attach_tile_grad(a, std::move(result), std::move(padded), std::move(reps));
 }
 

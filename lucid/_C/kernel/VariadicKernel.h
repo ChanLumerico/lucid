@@ -36,6 +36,7 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../compile/Tracer.h"  // 3.5 Phase 1.1: trace I/O wiring at wire_autograd
 #include "../core/Device.h"
 #include "../core/Dtype.h"
 #include "../core/GradMode.h"
@@ -167,6 +168,13 @@ public:
                               const std::vector<TensorImplPtr>& inputs,
                               const TensorImplPtr& out,
                               bool save_ins = true) {
+        // 3.5 Phase 1.1: trace wiring fires *before* GradMode short-circuit so
+        // inference passes still record a complete TraceGraph (see
+        // NaryKernel::wire_autograd for the same pattern).
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            trc->on_op_io(inputs, out);
+        }
+
         if (!GradMode::is_enabled())
             return false;
 

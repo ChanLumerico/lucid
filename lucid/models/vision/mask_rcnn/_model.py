@@ -953,8 +953,21 @@ class MaskRCNNForObjectDetection(PretrainedModel):
     ) -> list[dict[str, Tensor]]:
         """Per-class NMS + mask binarisation.
 
-        Returns list of per-image result dicts with
-        "boxes", "scores", "labels", and "masks".
+        Parameters
+        ----------
+        output : InstanceSegmentationOutput
+            Raw head outputs — box logits / deltas + per-RoI mask
+            logits — from :meth:`forward`.
+        proposals : list of Tensor
+            Per-image ``(N_i, 4)`` xyxy proposal boxes that the
+            RoI-aligned features in ``output`` were sampled from.
+
+        Returns
+        -------
+        list of dict
+            One entry per image with keys ``"boxes"`` (``(K, 4)`` xyxy),
+            ``"scores"`` (``(K,)``), ``"labels"`` (``(K,)`` int64), and
+            ``"masks"`` (``(K, H, W)`` bool — binarised per RoI).
         """
         logits = output.logits
         pred_boxes = output.pred_boxes

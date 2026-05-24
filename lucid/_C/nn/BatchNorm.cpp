@@ -111,6 +111,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
 
     OpScopeFull scope{BatchNormNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt,
                       x_eff->shape()};
+    // 3.5 Phase 1.2: report eps for the compile-path BN-train emitter.
+    scope.set_attr("eps", eps);
 
     // batch_norm_forward returns [y, mean, rstd].
     auto forward = backend::Dispatcher::for_device(x_eff->device())

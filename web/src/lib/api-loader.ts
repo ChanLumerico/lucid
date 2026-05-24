@@ -15,14 +15,64 @@ const API_DATA_DIR = join(process.cwd(), "public", "api-data");
 // Core loaders (build-time only — called from generateStaticParams / page)
 // ---------------------------------------------------------------------------
 
+/** Lightweight runtime shape check.  We can't pull in zod for a docs
+ *  site, but a raw ``as ApiData`` cast over arbitrary JSON would let
+ *  malformed payloads (mid-broken cache, partial fetch, corrupted
+ *  file) flow into every renderer and crash deep in the tree with
+ *  cryptic errors.  Asserting the top-level invariants right here at
+ *  the I/O boundary turns those into a single legible error message
+ *  that the per-route ``error.tsx`` surfaces.
+ *
+ *  Returned shape:
+ *    * ``kind`` must be one of the known string literals.
+ *    * Either ``members`` (modules) or ``methods`` (class-modules)
+ *      must be an array — the renderer relies on that. */
+function _validateApiData(data: unknown, slug: string): asserts data is ApiData {
+  if (typeof data !== "object" || data === null) {
+    throw new Error(
+      `API data for "${slug}" is not an object — got ${typeof data}`,
+    );
+  }
+  const obj = data as Record<string, unknown>;
+  if (typeof obj.kind !== "string") {
+    throw new Error(
+      `API data for "${slug}" is missing the "kind" field (or it's not a string).`,
+    );
+  }
+  if (obj.kind !== "module" && obj.kind !== "class-module") {
+    throw new Error(
+      `API data for "${slug}" has unrecognised kind "${obj.kind}" — expected "module" or "class-module".`,
+    );
+  }
+  if (obj.kind === "module" && !Array.isArray(obj.members)) {
+    throw new Error(
+      `API data for "${slug}" is a module but "members" is not an array (got ${typeof obj.members}).`,
+    );
+  }
+  if (obj.kind === "class-module" && !Array.isArray(obj.methods)) {
+    throw new Error(
+      `API data for "${slug}" is a class-module but "methods" is not an array (got ${typeof obj.methods}).`,
+    );
+  }
+}
+
 export function loadApiData(slug: string): ApiData {
   const filePath = join(API_DATA_DIR, `${slug}.json`);
+  let raw: string;
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as ApiData;
+    raw = readFileSync(filePath, "utf-8");
   } catch {
     throw new Error(`API data not found for slug: "${slug}". Run pnpm build:api first.`);
   }
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(`API data for "${slug}" is not valid JSON: ${message}`);
+  }
+  _validateApiData(data, slug);
+  return data;
 }
 
 export function loadApiModule(slug: string): ApiModule {

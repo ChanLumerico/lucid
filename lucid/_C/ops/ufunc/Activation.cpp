@@ -152,6 +152,7 @@ TensorImplPtr LeakyReluBackward::forward(const TensorImplPtr& a, double slope) {
     Validator::input(a, "leaky_relu.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("slope", slope);
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .leaky_relu(a->storage(), a->shape(), a->dtype(), slope);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
@@ -200,6 +201,7 @@ TensorImplPtr EluBackward::forward(const TensorImplPtr& a, double alpha) {
     Validator::input(a, "elu.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("alpha", alpha);
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .elu(a->storage(), a->shape(), a->dtype(), alpha);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),

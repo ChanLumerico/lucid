@@ -204,13 +204,29 @@ def count_nonzero(
 ) -> Tensor:
     """Count non-zero elements along ``dim`` (or whole tensor when ``None``).
 
-    Output dtype is int64 — the count semantics match the reference
-    framework's ``count_nonzero``.
+    Parameters
+    ----------
+    x : Tensor
+        Input.  Non-zero is determined by element-wise comparison to
+        zero (NaN counts as non-zero).
+    dim : int, sequence of int, or None, optional
+        Axis or axes to reduce.  ``None`` (default) reduces the entire
+        tensor to a 0-D scalar.
 
-    The current CpuBackend lacks ``where(bool, i64, i64)`` and
-    ``astype(bool → i64)``; we work in F32 (a 1.0/0.0 mask), reduce, then
-    cast the resulting scalar / tensor to int64 via ``astype(F32 → I64)``,
-    which the backend does support.
+    Returns
+    -------
+    Tensor
+        ``int64`` count(s).  Shape mirrors :func:`lucid.sum` over the
+        same ``dim`` argument.
+
+    Notes
+    -----
+    Composite implementation: the CPU backend lacks
+    ``where(bool, i64, i64)`` and ``astype(bool → i64)``, so the op
+    builds a float32 ``1.0/0.0`` mask, reduces, and ``astype``-casts
+    the float scalar back to int64 (a path the backend does support).
+    Slightly more allocations than a native int reduction but
+    semantically identical.
     """
     one_f = lucid.ones_like(x, dtype=lucid.float32)
     zero_f = lucid.zeros_like(x, dtype=lucid.float32)
@@ -225,7 +241,34 @@ def amax(
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
-    """Maximum values along ``dim``, without returning indices."""
+    """Reduce ``x`` to per-slice maxima along ``dim`` — values only.
+
+    Multi-axis sibling of :func:`lucid.max` that returns *only* the
+    reduced values (never the indices) and accepts a tuple of axes
+    for a single fused reduction.  Use when you don't need the
+    ``(values, indices)`` tuple :func:`lucid.max` returns.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    dim : int, sequence of int, or None, optional
+        Axis or axes to reduce.  ``None`` (default) reduces over every
+        axis and returns a 0-D scalar tensor.
+    keepdim : bool, optional
+        Retain the reduced axes as size-1 dimensions.  Default
+        ``False``.
+
+    Returns
+    -------
+    Tensor
+        Maxima along ``dim``; shape depends on ``dim`` and ``keepdim``.
+
+    See Also
+    --------
+    amin : analogous minimum reduction.
+    lucid.max : returns ``(values, indices)`` for a single axis.
+    """
     if dim is None:
         return lucid.max(x)
     _dim = list(dim) if not isinstance(dim, int) else dim
@@ -237,7 +280,33 @@ def amin(
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
 ) -> Tensor:
-    """Minimum values along ``dim``, without returning indices."""
+    """Reduce ``x`` to per-slice minima along ``dim`` — values only.
+
+    Mirror image of :func:`amax`.  Accepts a tuple of axes for a fused
+    multi-axis reduction; returns just the minimum values (never the
+    indices).
+
+    Parameters
+    ----------
+    x : Tensor
+        Input tensor.
+    dim : int, sequence of int, or None, optional
+        Axis or axes to reduce.  ``None`` (default) reduces over every
+        axis to a 0-D scalar.
+    keepdim : bool, optional
+        Retain the reduced axes as size-1 dimensions.  Default
+        ``False``.
+
+    Returns
+    -------
+    Tensor
+        Minima along ``dim``.
+
+    See Also
+    --------
+    amax : analogous maximum reduction.
+    lucid.min : returns ``(values, indices)`` for a single axis.
+    """
     if dim is None:
         return lucid.min(x)
     _dim = list(dim) if not isinstance(dim, int) else dim

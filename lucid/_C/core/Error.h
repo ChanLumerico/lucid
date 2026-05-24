@@ -128,6 +128,11 @@ protected:
 // ```
 class OutOfMemory : public LucidError {
 public:
+    // Construct an ``OutOfMemory`` error from the failed allocation size, the
+    // tracker's current/peak usage at the moment of failure, and the offending
+    // device label.  All four arguments are formatted into the human-readable
+    // ``what()`` message so end-users can distinguish absolute-size OOM from
+    // fragmentation-induced OOM.
     OutOfMemory(std::size_t requested_bytes,
                 std::size_t current_bytes,
                 std::size_t peak_bytes,
@@ -212,6 +217,9 @@ private:
 //     exception via :class:`ErrorBuilder`.
 class ShapeMismatch : public LucidError {
 public:
+    // Construct a ``ShapeMismatch`` with the expected vs actual shape and the
+    // op-level context annotation the call site captured.  All three become
+    // part of the formatted ``what()`` message.
     ShapeMismatch(std::vector<std::int64_t> expected,
                   std::vector<std::int64_t> got,
                   std::string context);
@@ -269,6 +277,9 @@ private:
 // ```
 class DtypeMismatch : public LucidError {
 public:
+    // Construct a ``DtypeMismatch`` with the expected vs actual dtype name and
+    // the op-level context annotation the call site captured.  Stored verbatim
+    // in ``what()`` so callers see ``expected float32, got int8`` style text.
     DtypeMismatch(std::string expected, std::string got, std::string context);
 
     // Returns the dtype name that the operation required.
@@ -322,6 +333,9 @@ private:
 // ```
 class DeviceMismatch : public LucidError {
 public:
+    // Construct a ``DeviceMismatch`` with the expected vs actual device label
+    // and the op-level context annotation the call site captured.  All three
+    // are formatted into the ``what()`` message.
     DeviceMismatch(std::string expected, std::string got, std::string context);
 
     // Returns the device name the operation required.
@@ -381,6 +395,10 @@ private:
 // strongly discouraged — the gradient is no longer well-defined.
 class VersionMismatch : public LucidError {
 public:
+    // Construct a ``VersionMismatch`` with the version captured at forward
+    // time vs the version observed at backward time, plus the op-level context
+    // annotation the call site captured.  Raised when a saved tensor was
+    // mutated in-place between forward and backward.
     VersionMismatch(std::int64_t expected, std::int64_t got, std::string context);
 
     // Returns the version observed when the tensor was saved.
@@ -426,6 +444,10 @@ private:
 // ```
 class GpuNotAvailable : public LucidError {
 public:
+    // Construct a ``GpuNotAvailable`` error from a short human-readable reason
+    // the call site captured (e.g. ``"MLX failed to acquire default Metal
+    // device"``).  Prefixed with ``"GpuNotAvailable: "`` when formatted into
+    // ``what()``.
     explicit GpuNotAvailable(std::string reason);
 };
 
@@ -444,6 +466,9 @@ public:
 //     :class:`LucidError` base.
 class IndexError : public LucidError {
 public:
+    // Construct an ``IndexError`` from the pre-formatted message the call
+    // site built describing the offending index vs the valid range.  Passed
+    // through unchanged to the :class:`LucidError` base.
     explicit IndexError(std::string msg) : LucidError(std::move(msg)) {}
 };
 
@@ -469,6 +494,9 @@ public:
 // ```
 class NotImplementedError : public LucidError {
 public:
+    // Construct a ``NotImplementedError`` from the pre-formatted message the
+    // call site built describing the unsupported dtype / device / config
+    // combination.  Passed through unchanged to the :class:`LucidError` base.
     explicit NotImplementedError(std::string msg) : LucidError(std::move(msg)) {}
 };
 

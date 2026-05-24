@@ -271,6 +271,78 @@ lucid_object_library(
     optim/Ada.cpp
     optim/LRScheduler.cpp)
 
+# 3.5 Phase 1.1+1.2: lucid.compile() graph-capture path.
+# Phase 1.1 = Tracer + TraceIR + I/O wiring.
+# Phase 1.2 step 1 = MpsBuilder + ExecutableCache + first OpEmitter (Linear).
+# Emitters are organised into six sub-packages: core/ linalg/ shape/
+# reduce/ nn/ misc/.  Each subdir owns one bucket of MPSGraph emitters
+# plus its own ``Registrar`` static initialiser that pushes them into
+# the process-global registry on load.
+set(LUCID_OP_EMITTERS
+    # framework
+    compile/OpEmitters/OpEmitter.cpp
+    # elementwise/ — one-output ops where each output element only
+    # depends on the same-position input element(s)
+    compile/OpEmitters/elementwise/Activation.mm
+    compile/OpEmitters/elementwise/Arith.mm
+    compile/OpEmitters/elementwise/Compare.mm
+    compile/OpEmitters/elementwise/DtypeCast.mm
+    compile/OpEmitters/elementwise/Math.mm
+    compile/OpEmitters/elementwise/Softmax.mm
+    compile/OpEmitters/elementwise/Trig.mm
+    # reduce/ — collapse one or more axes
+    compile/OpEmitters/reduce/Reduction.mm
+    compile/OpEmitters/reduce/Cumulative.mm
+    compile/OpEmitters/reduce/ArgReduce.mm
+    # linalg/ — matrix algebra primitives
+    compile/OpEmitters/linalg/Linear.mm
+    compile/OpEmitters/linalg/Matmul.mm
+    compile/OpEmitters/linalg/MatrixOps.mm
+    # shape/ — pure view + layout rearrangement (no data-dep indexing)
+    compile/OpEmitters/shape/Concat.mm
+    compile/OpEmitters/shape/Layout.mm
+    compile/OpEmitters/shape/Permute.mm
+    compile/OpEmitters/shape/Reshape.mm
+    compile/OpEmitters/shape/Split.mm
+    # index/ — data-dependent reads / writes
+    compile/OpEmitters/index/Gather.mm
+    compile/OpEmitters/index/Indexing.mm
+    compile/OpEmitters/index/Scatter.mm
+    # nn/ — neural network op families
+    compile/OpEmitters/nn/Conv.mm
+    compile/OpEmitters/nn/Dropout.mm
+    compile/OpEmitters/nn/Pool.mm
+    compile/OpEmitters/nn/Norm.mm
+    compile/OpEmitters/nn/Loss.mm
+    compile/OpEmitters/nn/Attention.mm
+    compile/OpEmitters/nn/Embedding.mm
+    compile/OpEmitters/nn/Spatial.mm
+    compile/OpEmitters/nn/Rnn.mm
+    # special/ — compile-pipeline plumbing (factories, complex split,
+    # nan_to_num, eager-fallback stubs)
+    compile/OpEmitters/special/Complex.mm
+    compile/OpEmitters/special/NanToNum.mm
+    compile/OpEmitters/special/Factory.mm
+    compile/OpEmitters/special/Random.mm
+    compile/OpEmitters/special/Stubs.mm)
+lucid_object_library(
+    lucid_compile
+    compile/Tracer.cpp
+    compile/ExecutableCache.cpp
+    compile/CompiledExecutable.mm
+    compile/MpsBuilder.mm
+    ${LUCID_OP_EMITTERS})
+# ObjC++ sources in the compile path need ARC, same as the other GPU
+# bridge ``.mm`` files.  Strip the framework ``.cpp`` from the ARC
+# list (it's pure C++) and apply to every emitter ``.mm``.
+set(LUCID_OP_EMITTER_MM ${LUCID_OP_EMITTERS})
+list(REMOVE_ITEM LUCID_OP_EMITTER_MM compile/OpEmitters/OpEmitter.cpp)
+set_source_files_properties(
+    compile/CompiledExecutable.mm
+    compile/MpsBuilder.mm
+    ${LUCID_OP_EMITTER_MM}
+    PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+
 lucid_object_library(
     lucid_bindings
     bindings/bind_errors.cpp
@@ -291,6 +363,7 @@ lucid_object_library(
     bindings/bind_einops.cpp
     bindings/bind_fft.cpp
     bindings/bind_complex.cpp
+    bindings/bind_compile.cpp        # 3.5 Phase 1.1: lucid.compile() bindings
     bindings/bind.cpp)
 
 add_library(
@@ -303,6 +376,7 @@ add_library(
     $<TARGET_OBJECTS:lucid_ops>
     $<TARGET_OBJECTS:lucid_random>
     $<TARGET_OBJECTS:lucid_optim>
+    $<TARGET_OBJECTS:lucid_compile>     # 3.5 Phase 1.1: graph-capture tracer
     $<TARGET_OBJECTS:lucid_bindings>)
 
 target_link_libraries(

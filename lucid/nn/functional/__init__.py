@@ -169,6 +169,16 @@ __all__ = [
     "threshold",
     "rrelu",
     "gumbel_softmax",
+    # in-place activation variants (already imported above; previously
+    # absent from __all__ caused them to fall through Griffe's static
+    # AST walk → docs site missed the public surface).
+    "relu_",
+    "elu_",
+    "selu_",
+    "leaky_relu_",
+    "hardtanh_",
+    "threshold_",
+    "rrelu_",
     # linear
     "linear",
     "bilinear",

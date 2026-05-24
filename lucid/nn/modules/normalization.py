@@ -645,9 +645,19 @@ class _BatchNormBase(Module):
         fuse_running_update: bool = (
             self.training and self.track_running_stats and self.momentum is not None
         )
+        # Skip Python-level stateful updates when a :class:`Tracer` is
+        # installed (``lucid.compile()`` / ``make_step`` paths): the
+        # ``num_batches_tracked + 1`` 0-D add and the cumulative-MA
+        # composition both leak side-effectful ops into the trace whose
+        # MPSGraph lowering hits an 8-byte buffer-size mismatch.  The
+        # compile path needs *pure* forward graphs; running-stats
+        # bookkeeping is a no-op there (the next eager call advances
+        # the counter normally).
+        _tracing_active = _C_engine.compile.current_tracer() is not None
         if self.training and self.track_running_stats and not fuse_running_update:
-            self._update_running_stats(x)
-        elif fuse_running_update:
+            if not _tracing_active:
+                self._update_running_stats(x)
+        elif fuse_running_update and not _tracing_active:
             self._buffers["num_batches_tracked"] = (
                 self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
             )
@@ -1249,7 +1259,11 @@ class _InstanceNormBase(Module):
         )
         # Update running stats during training (tracks per-channel stats
         # averaged across the batch — matches the reference framework).
-        if self.training and self.track_running_stats:
+        # Skip when a tracer is installed — see _BatchNormBase.forward for
+        # the full rationale (Python-side stateful update leaks ops into
+        # the trace whose MPSGraph lowering breaks).
+        _tracing_active = _C_engine.compile.current_tracer() is not None
+        if self.training and self.track_running_stats and not _tracing_active:
             self._update_running_stats(x)
         return instance_norm(
             x,

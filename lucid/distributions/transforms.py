@@ -117,10 +117,26 @@ class Transform:
         raise NotImplementedError(f"{type(self).__name__}._inverse")
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r"""Log-absolute-determinant of the Jacobian ``∂T/∂x``.
+        r"""Log-absolute-determinant of the Jacobian :math:`\partial T / \partial x`.
 
-        Subclasses must override and return :math:`\log|\det \partial y/\partial x|`
-        broadcast over the input batch dimensions.
+        Subclasses must override and return
+        :math:`\log|\det \partial y / \partial x|` broadcast over the
+        input batch dimensions.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input.
+        y : Tensor
+            Post-transform output (typically ``y = self(x)``).  Some
+            transforms can compute the log-Jacobian in terms of
+            ``y`` more cheaply than ``x``, hence both are required.
+
+        Returns
+        -------
+        Tensor
+            Element-wise log-absolute-Jacobian-determinant, broadcastable
+            to ``x.shape``.
         """
         raise NotImplementedError(f"{type(self).__name__}.log_abs_det_jacobian")
 
@@ -154,7 +170,26 @@ class _InverseTransform(Transform):
         return self._base._call(y)
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        """Jacobian of the inverse view: negate the base Jacobian with roles swapped."""
+        r"""Jacobian of the inverse view — negate the base with roles swapped.
+
+        For an inverse view of a bijection ``T``,
+        :math:`\log|\det \partial T^{-1}/\partial y|
+        = -\log|\det \partial T/\partial x|`,
+        so we delegate to the base transform with ``x`` and ``y`` swapped
+        and flip sign.
+
+        Parameters
+        ----------
+        x : Tensor
+            Inverse-view input (= base-view output).
+        y : Tensor
+            Inverse-view output (= base-view input).
+
+        Returns
+        -------
+        Tensor
+            Negated log-Jacobian of the base transform.
+        """
         return -self._base.log_abs_det_jacobian(y, x)
 
 
@@ -199,7 +234,21 @@ class ExpTransform(Transform):
         return y.log()
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r""":math:`\log|\partial y/\partial x| = x` since :math:`|dy/dx| = e^x`."""
+        r""":math:`\log|\partial y/\partial x| = x` since :math:`|dy/dx| = e^x`.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input.
+        y : Tensor
+            Post-transform output (``e^x``); ignored — the Jacobian is
+            cheaper to express via ``x``.
+
+        Returns
+        -------
+        Tensor
+            ``x`` itself.
+        """
         return x  # |dy/dx| = exp(x), so log|dy/dx| = x.
 
 
@@ -248,7 +297,21 @@ class SigmoidTransform(Transform):
         return y.log() - (1.0 - y).log()
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r"""Log-Jacobian :math:`\log\bigl(y\,(1-y)\bigr)` of the sigmoid map."""
+        r"""Log-Jacobian :math:`\log\bigl(y\,(1-y)\bigr)` of the sigmoid map.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input (sigmoid logit); ignored — the
+            log-Jacobian is cheaper to express via ``y``.
+        y : Tensor
+            Post-transform output in :math:`(0, 1)`.
+
+        Returns
+        -------
+        Tensor
+            :math:`\log y + \log (1 - y)`.
+        """
         # log|y · (1 − y)|.
         return y.log() + (1.0 - y).log()
 
@@ -299,7 +362,26 @@ class TanhTransform(Transform):
         return 0.5 * ((1.0 + y) / (1.0 - y)).log()
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r"""Numerically-stable :math:`\log(1 - \tanh^2(x)) = 2\bigl(\log 2 - x - \operatorname{softplus}(-2x)\bigr)`."""
+        r"""Numerically-stable :math:`\log(1 - \tanh^2(x))`.
+
+        Computed as :math:`2\bigl(\log 2 - x - \operatorname{softplus}(-2x)\bigr)`
+        — the stable form used by the reference framework that avoids
+        the catastrophic ``log(1 - 1)`` cancellation when ``|x|`` is
+        large.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input.
+        y : Tensor
+            Post-transform output (``tanh(x)``); ignored — the
+            log-Jacobian is expressed in ``x``.
+
+        Returns
+        -------
+        Tensor
+            Same shape as ``x``.
+        """
         # log(1 − tanh²(x)) = 2·(log 2 − x − softplus(−2x)) — the stable
         # form used by the reference framework.
         return 2.0 * (math.log(2.0) - x - (-2.0 * x).exp().log1p())
@@ -368,7 +450,25 @@ class AffineTransform(Transform):
         return (y - self.loc) / self.scale
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r"""Constant log-Jacobian :math:`\log|\text{scale}|`, broadcast to ``x``'s shape."""
+        r"""Constant log-Jacobian :math:`\log|\text{scale}|`.
+
+        The Jacobian of :math:`y = \text{scale} \cdot x + \text{loc}`
+        is just ``scale``, so the log-determinant is constant in ``x``.
+        We add ``zeros_like(x)`` so the result broadcasts to ``x``'s
+        full shape (callers expect element-wise log-Jacobians).
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input; used only for shape.
+        y : Tensor
+            Post-transform output; ignored.
+
+        Returns
+        -------
+        Tensor
+            ``log|scale|`` broadcast to ``x.shape``.
+        """
         return self.scale.abs().log() + lucid.zeros(
             tuple(x.shape), dtype=x.dtype, device=x.device
         )
@@ -431,7 +531,23 @@ class PowerTransform(Transform):
         return y ** (1.0 / self.exponent)
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r""":math:`\log|\partial y/\partial x| = \log|\text{exponent}| + (\text{exponent} - 1)\log x`."""
+        r""":math:`\log|\partial y/\partial x| = \log|\text{exponent}| + (\text{exponent} - 1)\log x`.
+
+        Derivative of :math:`y = x^{\text{exponent}}`.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input.  Must be strictly positive for the
+            ``log x`` term to be real.
+        y : Tensor
+            Post-transform output (``x^exponent``); ignored.
+
+        Returns
+        -------
+        Tensor
+            Element-wise log-Jacobian, same shape as ``x``.
+        """
         # |dy/dx| = exponent · x^(exponent − 1) ⇒ log|dy/dx| =
         #   log|exponent| + (exponent − 1)·log(x).
         return self.exponent.abs().log() + (self.exponent - 1.0) * x.log()
@@ -505,7 +621,21 @@ class SoftmaxTransform(Transform):
         return y.log()
 
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        r"""Pseudo-Jacobian :math:`\sum_k \log y_k` for the over-parameterised softmax."""
+        r"""Pseudo-Jacobian :math:`\sum_k \log y_k` for the over-parameterised softmax.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-softmax logits.  Used only for shape; the formula
+            collapses through ``y``.
+        y : Tensor
+            Post-softmax probabilities in the simplex.
+
+        Returns
+        -------
+        Tensor
+            :math:`\sum_k \log y_k`, reduced over the last axis.
+        """
         # log |det J| = sum_k log y_k — pseudo-Jacobian for the
         # over-parameterised softmax, matching the reference framework.
         return y.log().sum(dim=-1)
@@ -630,6 +760,19 @@ class StickBreakingTransform(Transform):
         r"""Standard simplex-to-:math:`\mathbb{R}^{K-1}` log-Jacobian.
 
         :math:`\log|\det J| = \sum_k \bigl[\log y_k + \log\!\bigl(1 - \sum_{j<k} y_j\bigr)\bigr]`.
+
+        Parameters
+        ----------
+        x : Tensor
+            Unconstrained :math:`(K-1)`-vectors.
+        y : Tensor
+            Corresponding :math:`K`-simplex points (output of the
+            forward map).
+
+        Returns
+        -------
+        Tensor
+            Per-sample log-Jacobian.
         """
         # log|det J| = Σ_k log(y_k) + log(remaining stick before y_k) —
         # the standard simplex-to-ℝ^(K-1) Jacobian.
@@ -753,6 +896,19 @@ class LowerCholeskyTransform(Transform):
         applied to the diagonal contributes the non-trivial factor
         :math:`\sigma'(x) = \sigma(x)`, computed via the stable identity
         :math:`\log \sigma(x) = -\operatorname{softplus}(-x)`.
+
+        Parameters
+        ----------
+        x : Tensor
+            Pre-transform input matrix (last two dims square).
+        y : Tensor
+            Post-transform output; ignored — the log-Jacobian uses
+            ``x``'s diagonal only.
+
+        Returns
+        -------
+        Tensor
+            Per-sample log-Jacobian (reduces the last two matrix axes).
         """
         D: int = int(x.shape[-1])
         diag_mask: Tensor = _eye_mask(D, x.dtype, x.device)
@@ -1248,9 +1404,23 @@ class CorrCholeskyTransform(Transform):
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Log-Jacobian of the unconstrained-to-Cholesky correlation map.
 
-        Combines the tanh contribution :math:`\sum_{i>j} \log(1 - \tanh^2(x_{ij}))`
-        with the closed-form Lewandowski normalisation terms expressed
-        directly from the output diagonal entries of ``y``.
+        Combines the tanh contribution
+        :math:`\sum_{i>j} \log(1 - \tanh^2(x_{ij}))` with the
+        closed-form Lewandowski normalisation terms expressed directly
+        from the output diagonal entries of ``y``.
+
+        Parameters
+        ----------
+        x : Tensor
+            Unconstrained parameters (strictly-lower-triangular real
+            entries).
+        y : Tensor
+            Output Cholesky correlation matrix.
+
+        Returns
+        -------
+        Tensor
+            Per-sample log-Jacobian.
         """
         # log |det J| = Σ_{row>0} Σ_{j<row} log|∂L_{row,j}/∂x_{row,j}|
         # ∂tanh(x)/∂x = 1 - tanh²(x)  and  ∂(z·scale)/∂z = scale
@@ -1678,8 +1848,23 @@ class ComposeTransform(Transform):
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Cumulative log-Jacobian across the composition.
 
-        Re-evaluates the chain of forward maps to obtain the intermediate
-        states needed by each sub-Jacobian, then sums the contributions.
+        Re-evaluates the chain of forward maps to obtain the
+        intermediate states needed by each sub-Jacobian, then sums the
+        contributions.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input to the first transform in the chain.
+        y : Tensor
+            Output of the last transform; ignored — the chain is
+            re-evaluated from ``x``.
+
+        Returns
+        -------
+        Tensor
+            Element-wise sum of every sub-transform's log-Jacobian,
+            broadcastable to ``x.shape``.
         """
         # Need intermediate values to evaluate each Jacobian.
         total = lucid.zeros(tuple(x.shape), dtype=x.dtype, device=x.device)

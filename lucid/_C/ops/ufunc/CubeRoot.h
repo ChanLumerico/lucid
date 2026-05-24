@@ -60,6 +60,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::cube_root`` to compute $y = \sqrt[3]{x}$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.cube_root(a, s, dt);
     }

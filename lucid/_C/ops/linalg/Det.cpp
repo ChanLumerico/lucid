@@ -23,6 +23,7 @@
 #include <variant>
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
 #include "../../core/Helpers.h"
@@ -105,6 +106,9 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
     Storage out_storage =
         backend::Dispatcher::for_device(a->device()).linalg_det(a->storage(), sh, a->dtype());
     auto out = fresh(std::move(out_storage), out_shape, a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+    }
     auto bwd = std::make_shared<DetBackward>();
     // Save det(A) so the backward can use it as the multiplicative factor.
     bwd->saved_output_ = out->storage();

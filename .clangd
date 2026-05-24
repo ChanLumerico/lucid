@@ -1,0 +1,98 @@
+# clangd configuration for the Lucid project.
+#
+# Without this file clangd can't locate compile_commands.json (it lives
+# in the build tree, not the repo root) and falls back to ad-hoc include
+# guessing — which misfires on:
+#   - Metal / MetalPerformanceShadersGraph framework headers (.mm files)
+#   - MLX includes (pip-installed under site-packages)
+#   - pybind11 headers (same)
+# producing the red-squiggle errors that aren't actual compile errors.
+#
+# Pointing CompilationDatabase at the build dir gives clangd the exact
+# flags ninja used (framework search paths, ARC flags, isystem
+# directives, the works), so per-file indexing matches the build.
+
+CompileFlags:
+  CompilationDatabase: build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine
+  # Explicitly drop the warnings that emitters trip by design (unused
+  # `ctx`/`node` in one-input emitters, shadowed `graph` locals named
+  # after the BuilderContext getter, etc.) — the build already passes
+  # -Wno-unused-parameter, but if clangd reaches a TU before reading
+  # compile_commands.json it falls back to default warning levels.
+  Add:
+    - -Wno-unused-parameter
+    - -Wno-unused-function
+    - -Wno-unused-variable
+    - -Wno-shadow
+    - -Wno-sign-compare
+    - -Wno-deprecated-declarations
+    - -Wno-deprecated-anon-enum-enum-conversion
+    - -Wno-missing-field-initializers
+    - -Wno-c++20-extensions
+
+# clangd-side diagnostic suppression (these are the warnings that
+# survive even after CompileFlags.Add — typically clang-tidy-style
+# checks that clangd injects independently of the build flags).
+Diagnostics:
+  # clangd's own include-cleaner diagnostics ("unused include",
+  # "missing include").  We rely on transitive header chains
+  # extensively (Scope.h → Tracer.h → TraceIR.h → fwd.h), so the
+  # cleaner produces a stream of false positives.  Off entirely.
+  UnusedIncludes: None
+  MissingIncludes: None
+
+  Suppress:
+    # Compile-time warnings that the build already silences via
+    # ``-Wno-...``; listed here because clangd sometimes injects them
+    # independently of the build command.
+    - unused-parameter
+    - unused-function
+    - unused-variable
+    - shadow
+    - sign-compare
+    - deprecated-declarations
+    - missing-field-initializers
+    - c++20-extensions
+    # clangd include-cleaner diagnostic IDs (covers what UnusedIncludes /
+    # MissingIncludes above don't catch on older clangd builds).
+    - unused-includes
+    - missing-includes
+    - clangd-unused-includes
+    - clangd-missing-includes
+    # `[[maybe_unused]] static const FooRegistrar ... = ...;` in every
+    # emitter — clangd's modernize-* checks sometimes flag the static
+    # init pattern as cppcoreguidelines-avoid-non-const-global-variables.
+    - cppcoreguidelines-avoid-non-const-global-variables
+    # Anonymous-namespace helpers (emit_unary / emit_binary / emit_reduce
+    # /emit_unary_math) named identically across different .mm files —
+    # each has internal linkage so it's not a real ODR violation, but
+    # clangd cross-file index may flag them.
+    - readability-identifier-naming
+    # clangd flags `[[maybe_unused]]` on a static-init variable as
+    # "attribute on declaration without effect" in some configurations.
+    - misc-misleading-identifier
+    # Pedantic ObjC++ noise on `__bridge` casts that the compile path
+    # uses ubiquitously to thread MPSGraphTensor* through void* APIs.
+    - objc-arc-bridge-casts-disallowed-in-nonarc-mode
+
+  # clang-tidy checks: drop the families that produce the most noise
+  # on our codebase but don't catch real bugs.  Builds run their own
+  # clang-tidy via tools/check_format.sh for the curated check set —
+  # the IDE doesn't need to replicate that here.
+  ClangTidy:
+    Remove:
+      - "misc-include-cleaner"           # ← the "unused include" diagnostic
+      - "modernize-use-trailing-return-type"
+      - "modernize-avoid-c-arrays"
+      - "modernize-use-nodiscard"
+      - "readability-*"
+      - "cppcoreguidelines-*"
+      - "fuchsia-*"
+      - "google-*"
+      - "hicpp-*"
+      - "altera-*"
+      - "llvmlibc-*"
+      - "abseil-*"
+      - "bugprone-easily-swappable-parameters"
+      - "bugprone-narrowing-conversions"
+      - "misc-non-private-member-variables-in-classes"

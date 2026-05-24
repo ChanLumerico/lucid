@@ -42,6 +42,9 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         ErrorBuilder("softmax").index_error("axis out of range");
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // 3.5 Phase 1.2: report axis so the compile-path Softmax emitter
+    // can rebuild the same reduction inside MPSGraph.
+    scope.set_attr("dim", static_cast<std::int64_t>(wrapped));
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .softmax(a->storage(), a->shape(), wrapped, a->dtype());
 
@@ -49,14 +52,13 @@ TensorImplPtr SoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
                                                a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()) * 5);
 
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return result;
-
+    // wire_autograd is called unconditionally so the 3.5 compile-path
+    // trace hook fires regardless of GradMode (matches NaryKernel /
+    // UnaryKernel / BinaryKernel).  GradMode-disabled and no-requires-grad
+    // paths are short-circuited *inside* wire_autograd after the hook.
     auto bwd = std::make_shared<SoftmaxBackward>();
     bwd->saved_output_ = result->storage();  // p = softmax(x)
     bwd->axis_ = wrapped;
-    // wire_autograd called with save_output=false because we already set
-    // saved_output_ manually above.
     kernel::NaryKernel<SoftmaxBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
     return result;
 }
@@ -86,14 +88,16 @@ TensorImplPtr LogSoftmaxBackward::forward(const TensorImplPtr& a, int axis) {
         ErrorBuilder("log_softmax").index_error("axis out of range");
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // 3.5 Phase 1.2: report axis for the compile-path LogSoftmax emitter.
+    scope.set_attr("dim", static_cast<std::int64_t>(wrapped));
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .log_softmax(a->storage(), a->shape(), wrapped, a->dtype());
 
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
                                                a->device(), false);
-    if (!GradMode::is_enabled() || !a->requires_grad())
-        return result;
 
+    // Unconditional wire_autograd — see SoftmaxBackward::forward for the
+    // rationale (trace-hook visibility under no-grad / no-requires-grad).
     auto bwd = std::make_shared<LogSoftmaxBackward>();
     bwd->saved_output_ = result->storage();  // y = log_softmax(x)
     bwd->axis_ = wrapped;

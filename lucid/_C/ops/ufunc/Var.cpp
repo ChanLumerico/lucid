@@ -23,6 +23,7 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -92,11 +93,20 @@ TensorImplPtr var_op(const TensorImplPtr& a, const std::vector<int>& axes_user, 
     const auto axes = normalize_axes(axes_user, static_cast<int>(a->shape().size()));
     const Shape out_shape = reduce_output_shape(a->shape(), axes, keepdims);
     OpScopeFull scope{"var", device, dt, out_shape};
+    {
+        std::vector<std::int64_t> dims_attr(axes.begin(), axes.end());
+        scope.set_attr("dims", dims_attr);
+        scope.set_attr("keepdim", keepdims);
+        scope.set_attr("unbiased", false);  // var_op default is biased
+    }
     backend::ReduceOpts reduce_opts{axes, keepdims};
     auto& be = backend::Dispatcher::for_device(device);
 
     Storage out_storage = be.variance(a->storage(), a->shape(), reduce_opts, dt);
     TensorImplPtr out = fresh(std::move(out_storage), out_shape, dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+    }
 
     // Count the number of elements collapsed; clamp to 1 to avoid division by
     // zero for empty-axis edge cases.

@@ -21,13 +21,31 @@ def make_divisible(
     SE-ResNet, SK-ResNet, ResNeSt and any other family that needs channel
     counts aligned to a power-of-two-friendly grid.
 
-    Args:
-        v:         Raw (possibly non-integer) channel count.
-        divisor:   Alignment granularity.  Defaults to 8.
-        min_value: Hard lower bound on the result.  ``None`` → ``divisor``.
+    Parameters
+    ----------
+    v : float
+        Raw (possibly non-integer) channel count to round.
+    divisor : int, optional
+        Alignment granularity.  Default ``8``.
+    min_value : int, optional
+        Hard lower bound on the result.  When ``None`` (default), falls
+        back to ``divisor``.
 
-    Returns:
-        Rounded integer channel count.
+    Returns
+    -------
+    int
+        Channel count rounded to a multiple of ``divisor``, never below
+        ``min_value`` / ``divisor``.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._common import make_divisible
+    >>> make_divisible(33, divisor=8)
+    32
+    >>> make_divisible(35, divisor=8)
+    32
+    >>> make_divisible(3, divisor=8, min_value=8)
+    8
     """
     min_val: int = min_value if min_value is not None else divisor
     new_v = max(min_val, int(v + divisor / 2) // divisor * divisor)

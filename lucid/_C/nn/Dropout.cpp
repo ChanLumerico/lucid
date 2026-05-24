@@ -54,6 +54,10 @@ DropoutBackward::forward(const TensorImplPtr& a, double p, bool training, Genera
         check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    // Expose training + p so the compile-path emitter can detect the
+    // inference / p==0 passthrough case and emit an identity bind.
+    scope.set_attr("training", training);
+    scope.set_attr("p", p);
     const std::size_t numel = a->numel();
 
     // Pass-through path: no mask is applied; backward copies grad unchanged.
@@ -155,6 +159,8 @@ DropoutNdBackward::forward(const TensorImplPtr& a, double p, bool training, Gene
         check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("training", training);
+    scope.set_attr("p", p);
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {
@@ -240,6 +246,8 @@ AlphaDropoutBackward::forward(const TensorImplPtr& a, double p, bool training, G
         check_schema_determinism(schema_v1);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("training", training);
+    scope.set_attr("p", p);
     const std::size_t numel = a->numel();
 
     if (!training || p == 0.0) {

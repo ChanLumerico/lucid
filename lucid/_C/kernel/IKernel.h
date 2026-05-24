@@ -101,6 +101,9 @@ struct KernelPolicy {
 // concrete kernels expose to the CRTP layer.
 class IKernel {
 public:
+    // Virtual destructor — ensures derived ``UnaryKernel`` /
+    // ``BinaryKernel`` / ``ReduceKernel`` destructors run when held by a
+    // base-class pointer.  Defaulted; nothing to clean up at this layer.
     virtual ~IKernel() = default;
 
     // Return the canonical short name of this op (e.g. ``"add"``, ``"relu"``).

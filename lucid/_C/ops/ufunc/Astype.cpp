@@ -5,8 +5,10 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/GradMode.h"
 #include "../../core/OpRegistry.h"
+#include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../kernel/BinaryKernel.h"  // for lucid::detail::ensure_grad_fn
@@ -47,10 +49,21 @@ TensorImplPtr astype_op(const TensorImplPtr& a, Dtype dst_dtype) {
         return a;
     }
     const auto& shape = a->shape();
+    OpScopeFull scope{"astype", a->device(), dst_dtype, shape};
     auto& be = backend::Dispatcher::for_device(a->device());
     Storage out = be.astype(a->storage(), shape, a->dtype(), dst_dtype);
     auto out_impl =
         std::make_shared<TensorImpl>(std::move(out), shape, dst_dtype, a->device(), false);
+    // 3.5 Phase 1.3: trace hook — push the destination dtype as an
+    // attribute (raw int8 of the Dtype enum) so the MPSGraph emitter
+    // can route to the right ``castTensor:toType:`` call.  Pushed
+    // unconditionally; eager autograd wiring below still depends on
+    // ``GradMode``.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out_impl);
+        trc->on_op_attr("dst_dtype",
+                        static_cast<std::int64_t>(static_cast<int>(dst_dtype)));
+    }
 
     // Autograd: wire AstypeBackward when the input takes a gradient.  This
     // is the critical hook that makes AMP-driven dtype casts inside

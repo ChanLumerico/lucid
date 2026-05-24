@@ -99,6 +99,12 @@ enum class FusionPattern {
 //     ``Engine::backward()``.
 class LUCID_API FusionPass {
 public:
+    // Construct a fresh ``FusionPass`` with zeroed counters.
+    //
+    // Defaulted; the only state is the :attr:`stats_` ``Stats`` member,
+    // whose POD counters are zero-initialised by their in-class default
+    // initialisers.  Each :func:`run` call re-zeroes ``stats_`` at entry,
+    // so re-using a single instance across backward calls is safe.
     FusionPass() = default;
 
     // Scan ``graph`` for fusible patterns and apply matches in place.

@@ -1,0 +1,292 @@
+// lucid/_C/compile/OpEmitters/Reshape.mm
+//
+// Shape-only emitters: view + contiguous.
+//
+// Op names match the engine schemas in:
+//   - lucid/_C/ops/utils/View.cpp        ("view")
+//   - lucid/_C/ops/utils/Contiguous.cpp  ("contiguous")
+//
+// Both ops carry their full target metadata in :class:`OpNode::outputs[0]`
+// (the new shape and dtype), so no extra attribute payload is required.
+// Permute / transpose are deferred until the trace IR grows an
+// attribute map, since their axis permutation can't be recovered from
+// shapes alone.
+
+#import <Metal/Metal.h>
+#import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
+
+#include <memory>
+#include <string_view>
+#include <variant>
+#include <vector>
+
+#include "../OpEmitter.h"
+
+namespace lucid::compile {
+
+namespace {
+
+// Build an NSArray<NSNumber*> from a Lucid Shape (int64_t vector).
+inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
+    NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:shape.size()];
+    for (std::int64_t d : shape)
+        [out addObject:[NSNumber numberWithLongLong:d]];
+    return out;
+}
+
+// All view-family ops (view / reshape / squeeze / unsqueeze / flatten)
+// share the same forward — reshape the input to ``node.outputs[0].shape``.
+// We register one instance per op_name so the engine's OpScopeFull
+// strings (which carry the call-site name like ``"reshape"`` rather
+// than the schema's ``"view"``) all resolve via the registry.
+class ReshapeFamilyEmitter final : public OpEmitter {
+public:
+    explicit ReshapeFamilyEmitter(std::string_view name) : name_(name) {}
+
+    std::string_view op_name() const override { return name_; }
+
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (x_t == nil || graph == nil)
+            return nullptr;
+        NSArray<NSNumber*>* new_shape = shape_to_nsarray(node.outputs[0].shape);
+        MPSGraphTensor* y = [graph reshapeTensor:x_t withShape:new_shape name:nil];
+        return (__bridge void*)y;
+    }
+
+private:
+    std::string name_;
+};
+
+class ContiguousEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "contiguous"; }
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        // MPSGraph tensors have no observable stride layout — every
+        // intermediate is already "contiguous" from the graph's
+        // perspective.  Emit a reshape-to-same-shape so the output
+        // tensor gets its own MPSGraphTensor identity (matches eager
+        // semantics where `contiguous()` returns a new TensorImpl).
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (x_t == nil || graph == nil)
+            return nullptr;
+        NSArray<NSNumber*>* same_shape = shape_to_nsarray(node.outputs[0].shape);
+        MPSGraphTensor* y =
+            [graph reshapeTensor:x_t withShape:same_shape name:@"contiguous"];
+        return (__bridge void*)y;
+    }
+};
+
+// R1 — broadcast_to / pad / tile / repeat.
+//
+// ``broadcast_to`` and ``pad`` carry shape / pad info attribute-side;
+// ``repeat`` and ``tile`` carry the repetition pattern.  All four are
+// 1-input → 1-output and trace through the explicit ``on_op_io`` call
+// in the engine forward.
+
+class BroadcastToEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "broadcast_to"; }
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (graph == nil || x_t == nil)
+            return nullptr;
+        // Target shape is the recorded output shape on the OpNode.
+        const auto& out_shape = node.outputs[0].shape;
+        NSMutableArray<NSNumber*>* target =
+            [NSMutableArray arrayWithCapacity:out_shape.size()];
+        for (std::int64_t d : out_shape)
+            [target addObject:[NSNumber numberWithLongLong:d]];
+        return (__bridge void*)[graph broadcastTensor:x_t
+                                              toShape:target
+                                                 name:@"broadcast_to"];
+    }
+};
+
+class PadEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "pad"; }
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        auto pads_it = node.attrs.find("pads");
+        if (pads_it == node.attrs.end())
+            return nullptr;
+        const auto* pads =
+            std::get_if<std::vector<std::int64_t>>(&pads_it->second);
+        if (pads == nullptr || pads->size() % 2 != 0)
+            return nullptr;
+        double constant_value = 0.0;
+        if (auto c_it = node.attrs.find("constant"); c_it != node.attrs.end()) {
+            if (const auto* p = std::get_if<double>(&c_it->second)) constant_value = *p;
+        }
+
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (graph == nil || x_t == nil)
+            return nullptr;
+
+        const std::size_t ndim = pads->size() / 2;
+        NSMutableArray<NSNumber*>* leading =
+            [NSMutableArray arrayWithCapacity:ndim];
+        NSMutableArray<NSNumber*>* trailing =
+            [NSMutableArray arrayWithCapacity:ndim];
+        for (std::size_t d = 0; d < ndim; ++d) {
+            [leading addObject:[NSNumber numberWithLongLong:(*pads)[2 * d]]];
+            [trailing addObject:[NSNumber numberWithLongLong:(*pads)[2 * d + 1]]];
+        }
+        return (__bridge void*)[graph padTensor:x_t
+                            withPaddingMode:MPSGraphPaddingModeConstant
+                                leftPadding:leading
+                               rightPadding:trailing
+                              constantValue:constant_value
+                                       name:@"pad"];
+    }
+};
+
+class TileEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "tile"; }
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        auto it = node.attrs.find("reps");
+        if (it == node.attrs.end())
+            return nullptr;
+        const auto* reps = std::get_if<std::vector<std::int64_t>>(&it->second);
+        if (reps == nullptr)
+            return nullptr;
+
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (graph == nil || x_t == nil)
+            return nullptr;
+
+        NSMutableArray<NSNumber*>* mul =
+            [NSMutableArray arrayWithCapacity:reps->size()];
+        for (std::int64_t r : *reps)
+            [mul addObject:[NSNumber numberWithLongLong:r]];
+        return (__bridge void*)[graph tileTensor:x_t
+                                 withMultiplier:mul
+                                           name:@"tile"];
+    }
+};
+
+// ``repeat`` — element-wise repetition (numpy semantics: [a,b,c] →
+// [a,a,b,b,c,c] with n=2 along axis 0).  Realised by inserting a
+// size-1 axis after the chosen one, broadcasting to size n, and
+// reshaping so the new axis collapses into the original.
+class RepeatEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "repeat"; }
+    void* emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty())
+            return nullptr;
+        TensorId x_id = node.inputs[0];
+        if (x_id < 0)
+            return nullptr;
+        auto ax_it = node.attrs.find("axis");
+        auto r_it = node.attrs.find("repeats");
+        if (ax_it == node.attrs.end() || r_it == node.attrs.end())
+            return nullptr;
+        const auto* axp = std::get_if<std::int64_t>(&ax_it->second);
+        const auto* rp = std::get_if<std::int64_t>(&r_it->second);
+        if (axp == nullptr || rp == nullptr)
+            return nullptr;
+
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
+        if (graph == nil || x_t == nil)
+            return nullptr;
+
+        NSArray<NSNumber*>* in_shape = x_t.shape;
+        NSUInteger ndim = in_shape.count;
+        std::int64_t ax = *axp;
+        if (ax < 0) ax += (std::int64_t)ndim;
+        if (ax < 0 || ax >= (std::int64_t)ndim)
+            return nullptr;
+        std::int64_t reps = *rp;
+
+        // 1) insert a size-1 axis after ``ax``: shape (..., D, 1, ...).
+        NSMutableArray<NSNumber*>* expanded =
+            [NSMutableArray arrayWithCapacity:ndim + 1];
+        for (NSUInteger d = 0; d < ndim; ++d) {
+            [expanded addObject:in_shape[d]];
+            if ((std::int64_t)d == ax)
+                [expanded addObject:[NSNumber numberWithLongLong:1]];
+        }
+        MPSGraphTensor* shaped =
+            [graph reshapeTensor:x_t withShape:expanded name:nil];
+
+        // 2) broadcast the inserted size-1 axis to ``reps``.
+        NSMutableArray<NSNumber*>* broadcast = [expanded mutableCopy];
+        broadcast[ax + 1] = [NSNumber numberWithLongLong:reps];
+        MPSGraphTensor* tiled =
+            [graph broadcastTensor:shaped toShape:broadcast name:nil];
+
+        // 3) collapse the two axes back: (..., D*reps, ...).
+        NSMutableArray<NSNumber*>* final_shape =
+            [NSMutableArray arrayWithCapacity:ndim];
+        for (NSUInteger d = 0; d < ndim; ++d) {
+            if ((std::int64_t)d == ax)
+                [final_shape addObject:
+                    [NSNumber numberWithLongLong:in_shape[d].longLongValue * reps]];
+            else
+                [final_shape addObject:in_shape[d]];
+        }
+        return (__bridge void*)[graph reshapeTensor:tiled
+                                          withShape:final_shape
+                                               name:@"repeat"];
+    }
+};
+
+struct ReshapeEmitterRegistrar {
+    ReshapeEmitterRegistrar() {
+        // The engine attaches OpScopeFull with the call-site op_name,
+        // not the schema name — so we register one instance per
+        // observed call name (lucid/_C/ops/utils/View.cpp's
+        // ``build_view_output`` passes "view" / "reshape" / "squeeze" /
+        // "unsqueeze" / "flatten" depending on the caller).
+        register_emitter(std::make_unique<ReshapeFamilyEmitter>("view"));
+        register_emitter(std::make_unique<ReshapeFamilyEmitter>("reshape"));
+        register_emitter(std::make_unique<ReshapeFamilyEmitter>("squeeze"));
+        register_emitter(std::make_unique<ReshapeFamilyEmitter>("unsqueeze"));
+        register_emitter(std::make_unique<ReshapeFamilyEmitter>("flatten"));
+        register_emitter(std::make_unique<ContiguousEmitter>());
+        // R1 additions.
+        register_emitter(std::make_unique<BroadcastToEmitter>());
+        register_emitter(std::make_unique<PadEmitter>());
+        register_emitter(std::make_unique<TileEmitter>());
+        register_emitter(std::make_unique<RepeatEmitter>());
+    }
+};
+
+[[maybe_unused]] static const ReshapeEmitterRegistrar g_reshape_registrar;
+
+}  // namespace
+
+}  // namespace lucid::compile

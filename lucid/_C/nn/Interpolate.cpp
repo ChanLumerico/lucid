@@ -21,6 +21,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -53,6 +54,9 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
     (void)W_in;
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(), out_shape};
+    scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
+    scope.set_attr("W_out", static_cast<std::int64_t>(W_out));
+    scope.set_attr("align_corners", align_corners);
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_bilinear_forward(input->storage(), input->shape(), H_out,
@@ -60,6 +64,7 @@ TensorImplPtr InterpolateBilinearBackward::forward(const TensorImplPtr& input,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
                                             input->device(), false);
+    // wire_autograd records on_op_io internally — no explicit call.
     {
         auto bwd = std::make_shared<InterpolateBilinearBackward>();
         bwd->H_in_ = static_cast<int>(input->shape()[2]);
@@ -141,12 +146,18 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
     const int C = static_cast<int>(input->shape()[1]);
     Shape out_shape{N, C, H_out, W_out};
     OpScopeFull scope{"interpolate_nearest_2d", input->device(), input->dtype(), out_shape};
+    scope.set_attr("H_out", static_cast<std::int64_t>(H_out));
+    scope.set_attr("W_out", static_cast<std::int64_t>(W_out));
 
     auto& be = backend::Dispatcher::for_device(input->device());
     Storage out_storage = be.interpolate_nearest_2d_forward(input->storage(), input->shape(), H_out,
                                                             W_out, input->dtype());
-    return std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
-                                        input->device(), false);
+    auto result = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
+                                                input->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({input}, result);
+    }
+    return result;
 }
 
 TensorImplPtr

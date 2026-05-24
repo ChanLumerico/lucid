@@ -14,6 +14,7 @@
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -107,6 +108,13 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
+    {
+        std::vector<std::int64_t> ax_a, ax_b;
+        for (int v : axes_a) ax_a.push_back(static_cast<std::int64_t>(v));
+        for (int v : axes_b) ax_b.push_back(static_cast<std::int64_t>(v));
+        scope.set_attr("axes_a", std::move(ax_a));
+        scope.set_attr("axes_b", std::move(ax_b));
+    }
 
     // GPU inference path: delegate to the backend tensordot primitive.
     if (device == Device::GPU) {
@@ -118,7 +126,11 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         Shape out_shape;
         for (auto d : gs.arr->shape())
             out_shape.push_back(static_cast<std::int64_t>(d));
-        return fresh(std::move(out_storage), std::move(out_shape), dt, device);
+        auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            trc->on_op_io({a, b}, result);
+        }
+        return result;
     }
 
     // CPU inference path: manually permute and reshape both tensors into 2-D

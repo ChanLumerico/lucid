@@ -162,7 +162,33 @@ _COMPOUND_PARAMS: dict[int, tuple[int, int, int, tuple[int, int, int]]] = {
 
 
 def efficientdet_config(phi: int = 0, num_classes: int = 80) -> EfficientDetConfig:
-    """Build the standard EfficientDet-D{phi} config from the compound table."""
+    """Build the canonical EfficientDet-D{phi} config from the compound table.
+
+    EfficientDet's compound scaling (Tan et al., 2020) maps a single
+    scalar :math:`\\phi \\in \\{0, \\ldots, 7\\}` to the BiFPN channel
+    count, BiFPN repeat count, head repeat count, and backbone output
+    channel counts in lock-step.  This helper looks the row up and
+    materialises an :class:`EfficientDetConfig`.
+
+    Parameters
+    ----------
+    phi : int, optional
+        Compound-scaling coefficient.  Values ``0`` through ``7``
+        select EfficientDet-D0 (smallest, default) through
+        EfficientDet-D7 (largest) per the paper's Table 1.
+    num_classes : int, optional
+        Foreground class count.  Default ``80`` (COCO).
+
+    Returns
+    -------
+    EfficientDetConfig
+        Frozen config ready to feed into the model factory.
+
+    References
+    ----------
+    .. [1] Tan, Pang & Le, *EfficientDet: Scalable and Efficient Object
+       Detection*, CVPR 2020.
+    """
     fpn_ch, fpn_rep, head_rep, bb_ch = _COMPOUND_PARAMS[phi]
     return EfficientDetConfig(
         num_classes=num_classes,

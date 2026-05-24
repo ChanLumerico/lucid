@@ -757,9 +757,26 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     ) -> list[dict[str, Tensor]]:
         """Per-class NMS on raw detector output.
 
-        Reads per-image proposals from ``output.proposals`` (populated by
-        ``forward()``) when not given explicitly.  Returns list of per-image
-        result dicts with "boxes", "scores", "labels".
+        Reads per-image proposals from ``output.proposals`` (populated
+        by :meth:`forward`) when not given explicitly.
+
+        Parameters
+        ----------
+        output : ObjectDetectionOutput
+            Raw RoI-head outputs from :meth:`forward` — class logits,
+            box deltas, and (optionally) the proposals they were
+            evaluated on.
+        proposals : list of Tensor, optional
+            Per-image ``(N_i, 4)`` xyxy proposal boxes.  Required when
+            ``output.proposals`` is ``None``; otherwise this falls back
+            to the latter for the typical call-after-forward pattern.
+
+        Returns
+        -------
+        list of dict
+            One entry per image, each a dict with keys
+            ``"boxes"`` (``(K, 4)`` xyxy), ``"scores"`` (``(K,)``), and
+            ``"labels"`` (``(K,)`` int64).
         """
         if proposals is None:
             if output.proposals is None:

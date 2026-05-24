@@ -409,13 +409,28 @@ class Module:
         recurse: bool = True,
         remove_duplicate: bool = True,
     ) -> Iterator[tuple[str, Parameter]]:
-        """Yield (name, Parameter) pairs.
+        """Yield ``(qualified_name, Parameter)`` pairs from this module's tree.
 
         Parameters
         ----------
-        remove_duplicate:
-            If True (default), each unique Parameter object is yielded only
-            once, even if referenced by multiple attributes. Mirrors reference framework.
+        prefix : str, optional
+            String prepended to every yielded name — used internally by
+            the recursive walk to namespace child modules.  Default
+            ``""``.
+        recurse : bool, optional
+            When ``True`` (default), descend into submodules.  When
+            ``False``, yield only this module's directly-attached
+            parameters.
+        remove_duplicate : bool, optional
+            When ``True`` (default), each unique :class:`Parameter`
+            object is yielded only once even if referenced by multiple
+            attributes — matches the reference framework's contract.
+
+        Yields
+        ------
+        tuple[str, Parameter]
+            ``(qualified_dotted_name, Parameter)`` for every parameter in
+            scope.
         """
         seen: set[int] = set()
         for name, p in self._parameters.items():
@@ -796,10 +811,25 @@ class Module:
     ) -> Self:
         """Move parameters and buffers to ``device`` without copying data.
 
-        The reference framework uses ``to_empty`` to materialise a model
-        constructed on the meta device.  Lucid has no meta device, but
-        falls back to the standard :meth:`to` when called for parity with
-        external code.  ``recurse`` is honoured by :meth:`to` already.
+        The reference framework uses ``to_empty`` to materialise a
+        model originally constructed on the meta device.  Lucid has no
+        meta device, so this method exists for API parity and
+        delegates to the standard :meth:`to` when a device is supplied.
+
+        Parameters
+        ----------
+        device : object, optional
+            Target placement (string, :class:`device`, or engine enum).
+            When ``None`` (default) the call is a no-op returning
+            ``self``.
+        recurse : bool, optional
+            Honoured by the underlying :meth:`to` call.  Default
+            ``True`` — every child module is moved as well.
+
+        Returns
+        -------
+        Self
+            The same module, parameters / buffers now on ``device``.
         """
         if device is None:
             return self
@@ -829,12 +859,38 @@ class Module:
         prefix: str = "",
         keep_vars: bool = False,
     ) -> dict[str, Tensor]:
-        """Return a dict mapping parameter/buffer names to tensors.
+        """Return an ordered dict mapping parameter / buffer names to tensors.
 
-        The returned OrderedDict carries a `_metadata` attribute:
-        ``{module_path: {"version": <int>}}`` for every module that defines
-        a `_version` class attribute.  `lucid.save` preserves this attribute
-        across disk round-trips.
+        Includes every learnable parameter, every persistent buffer
+        (``persistent=True`` at register time), and every nested
+        submodule's contribution under a dotted-path prefix.
+
+        The returned :class:`OrderedDict` carries a ``_metadata``
+        attribute mapping ``module_path → {"version": int}`` for every
+        module that defines a ``_version`` class attribute.
+        :func:`lucid.save` preserves this attribute across disk
+        round-trips so version-aware ``_load_from_state_dict`` hooks
+        can migrate older checkpoints.
+
+        Parameters
+        ----------
+        destination : dict, optional
+            When supplied, results are written into this dict instead
+            of a fresh one.  Useful when composing state dicts from
+            multiple modules.  Default ``None``.
+        prefix : str, optional
+            String prepended to every key — used internally by the
+            recursive walk to namespace child modules.  Default ``""``.
+        keep_vars : bool, optional
+            When ``True`` keep tensors attached to autograd (return
+            them as-is); when ``False`` (default) detach them so the
+            state dict is safe to serialise / cross threads.
+
+        Returns
+        -------
+        dict
+            OrderedDict mapping qualified parameter / buffer paths to
+            their tensor values.
         """
         from lucid.nn._state_dict import _save_to_state_dict, _build_metadata
 

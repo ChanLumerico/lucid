@@ -19,7 +19,68 @@ _ALPHA_PRIME = -_SELU_ALPHA * _SELU_SCALE  # ≈ -1.7580993408473766
 def dropout(
     x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
 ) -> Tensor:
-    """Randomly zero elements with probability p during training."""
+    r"""Element-wise Bernoulli dropout — the canonical Srivastava 2014 form.
+
+    During training, each scalar in ``x`` is independently zeroed with
+    probability ``p`` and survivors are scaled by :math:`1 / (1 - p)`
+    so the expected activation magnitude stays unchanged.  At inference
+    (``training=False``) the call is a no-op identity.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input activations of any shape.
+    p : float, optional
+        Drop probability in :math:`[0, 1)`.  ``p = 0`` short-circuits
+        to identity.  Default ``0.5``.
+    training : bool, optional
+        When ``False``, returns ``x`` unchanged — identity at
+        inference time.  Modules built on top (``nn.Dropout``) pass
+        ``self.training`` here.  Default ``True``.
+    inplace : bool, optional
+        Accepted for API parity but currently ignored — the engine's
+        ``nn.dropout`` always returns a fresh tensor.  Default ``False``.
+
+    Returns
+    -------
+    Tensor
+        Same shape and dtype as ``x``.
+
+    Notes
+    -----
+    For each element :math:`x_i`, draw an independent
+    :math:`m_i \sim \mathrm{Bernoulli}(1 - p)` and apply
+
+    .. math::
+
+        y_i = \frac{m_i}{1 - p}\, x_i.
+
+    Backward uses the *same* saved mask, so gradients also propagate
+    only through surviving positions.  For correlated activations
+    (sequence / image channels) prefer :func:`dropout1d` /
+    :func:`dropout2d` / :func:`dropout3d`, which drop whole feature
+    maps and give stronger regularisation.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional import dropout
+    >>> x = lucid.ones(2, 4)
+    >>> y = dropout(x, p=0.5, training=True)
+    >>> # ~50 % of entries are 0; survivors are 2.0 (= 1 / (1 - 0.5))
+
+    See Also
+    --------
+    lucid.nn.Dropout : ``nn.Module`` wrapper that owns the ``training`` flag.
+    dropout1d, dropout2d, dropout3d : whole-channel variants.
+    alpha_dropout : SELU-compatible dropout that preserves the
+        self-normalising statistics.
+
+    References
+    ----------
+    .. [1] Srivastava et al., *Dropout: A Simple Way to Prevent Neural
+       Networks from Overfitting*, JMLR 2014.
+    """
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 

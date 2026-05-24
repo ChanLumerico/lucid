@@ -26,6 +26,7 @@
 
 #include "../../autograd/FuncOp.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -126,6 +127,7 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     const Device device = a->device();
     OpScopeFull scope{"sort", device, dt, a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
     Shape out_shape = a->shape();
     // sort_select(topk=false) returns all elements in sorted order.
     auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
@@ -142,9 +144,14 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
     const Device device = a->device();
     OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
     Storage out =
         backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax, a->dtype());
-    return fresh(std::move(out), a->shape(), Dtype::I32, device);
+    auto result = fresh(std::move(out), a->shape(), Dtype::I32, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 namespace {
@@ -157,6 +164,8 @@ argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, co
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
+    scope.set_attr("keepdim", keepdims);
     Shape out_shape = a->shape();
     if (keepdims)
         out_shape[ax] = 1;
@@ -164,7 +173,11 @@ argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, co
         out_shape.erase(out_shape.begin() + ax);
     Storage out = backend::Dispatcher::for_device(device).arg_reduce_index(
         a->storage(), a->shape(), ax, keepdims, a->dtype(), is_min);
-    return fresh(std::move(out), std::move(out_shape), Dtype::I64, device);
+    auto result = fresh(std::move(out), std::move(out_shape), Dtype::I64, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 }  // namespace
 
@@ -261,6 +274,9 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     if (k <= 0 || k > a->shape()[static_cast<std::size_t>(ax)])
         ErrorBuilder("topk").fail("k must be in (0, axis_size]");
+    // Carry axis + k into the trace for the compile-path TopKEmitter.
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
+    scope.set_attr("k", k);
     Shape out_shape = a->shape();
     out_shape[static_cast<std::size_t>(ax)] = k;
     auto [values, indices] = backend::Dispatcher::for_device(device).sort_select(
@@ -270,6 +286,16 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
     auto indices_out = fresh(std::move(indices), out_shape, Dtype::I32, device);
     auto values_out = fresh(std::move(values), out_shape, dt, device);
     values_out = attach_index_scatter_grad(a, std::move(values_out), indices_out->storage(), ax);
+    // Trace-side: register the indices_out as a second output of this
+    // op.  ``attach_index_scatter_grad`` already wired ``values_out``
+    // through ``wire_autograd``; ``indices_out`` is non-differentiable
+    // (I32) so we hand-roll the trace hook so the compile-path
+    // TopKEmitter sees a 2-output op.  The Tracer's first-vs-
+    // subsequent-call detection (added 2026-05-23, see
+    // [[engine-compile-multi-output-2026-05]]) handles the append.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, indices_out);
+    }
     return {std::move(values_out), std::move(indices_out)};
 }
 

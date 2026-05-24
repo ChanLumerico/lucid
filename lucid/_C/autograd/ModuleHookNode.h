@@ -209,6 +209,8 @@ public:
     //     empty :class:`CpuStorage` placeholders.
     std::vector<Storage> apply_barrier() override;
 
+    // Graph label — ``"ModuleOutputHook"`` — for debug printing and profiler
+    // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleOutputHook"; }
 
 private:
@@ -284,6 +286,8 @@ public:
     //     slots become empty :class:`CpuStorage` placeholders.
     std::vector<Storage> apply_barrier() override;
 
+    // Graph label — ``"ModuleInputHook"`` — for debug printing and
+    // profiler traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "ModuleInputHook"; }
 
 private:

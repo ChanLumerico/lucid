@@ -23,13 +23,18 @@ from lucid._tensor.tensor import Tensor
 
 
 def box_area(boxes: Tensor) -> Tensor:
-    """Area of boxes in xyxy format.
+    """Area of axis-aligned boxes given in xyxy format.
 
-    Args:
-        boxes: (N, 4) — each row is [x1, y1, x2, y2].
+    Parameters
+    ----------
+    boxes : Tensor
+        Shape ``(N, 4)``; each row is ``[x1, y1, x2, y2]``.
 
-    Returns:
-        (N,) area tensor.
+    Returns
+    -------
+    Tensor
+        Shape ``(N,)``.  Element ``i`` is
+        ``(x2_i - x1_i) * (y2_i - y1_i)``.
     """
     return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
 
@@ -37,12 +42,18 @@ def box_area(boxes: Tensor) -> Tensor:
 def box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     """Pairwise IoU matrix between two sets of boxes (xyxy format).
 
-    Args:
-        boxes1: (N, 4)
-        boxes2: (M, 4)
+    Parameters
+    ----------
+    boxes1 : Tensor
+        Shape ``(N, 4)`` xyxy.
+    boxes2 : Tensor
+        Shape ``(M, 4)`` xyxy.
 
-    Returns:
-        (N, M) IoU matrix.
+    Returns
+    -------
+    Tensor
+        Shape ``(N, M)``.  Entry ``(i, j)`` is the intersection-over-union
+        of ``boxes1[i]`` and ``boxes2[j]``, in ``[0, 1]``.
     """
     area1 = box_area(boxes1)  # (N,)
     area2 = box_area(boxes2)  # (M,)
@@ -66,16 +77,33 @@ def box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
 
 
 def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
-    """Pairwise Generalised IoU (GIoU) — same shape convention as ``box_iou``.
+    r"""Pairwise Generalised IoU (GIoU) — same shape convention as ``box_iou``.
 
-    GIoU = IoU - |C \\ (A ∪ B)| / |C|  where C is the smallest enclosing box.
+    .. math::
 
-    Args:
-        boxes1: (N, 4) xyxy
-        boxes2: (M, 4) xyxy
+        \text{GIoU}(A, B) = \text{IoU}(A, B)
+            - \frac{|C \setminus (A \cup B)|}{|C|},
 
-    Returns:
-        (N, M) GIoU matrix in [-1, 1].
+    where :math:`C` is the smallest axis-aligned box enclosing both
+    :math:`A` and :math:`B`.  Unlike IoU, GIoU is informative even when
+    the two boxes do not overlap.
+
+    Parameters
+    ----------
+    boxes1 : Tensor
+        Shape ``(N, 4)`` xyxy.
+    boxes2 : Tensor
+        Shape ``(M, 4)`` xyxy.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, M)`` GIoU matrix in :math:`[-1, 1]`.
+
+    References
+    ----------
+    .. [1] Rezatofighi et al., *Generalized Intersection over Union: A
+       Metric and A Loss for Bounding Box Regression*, CVPR 2019.
     """
     area1 = box_area(boxes1)  # (N,)
     area2 = box_area(boxes2)  # (M,)
@@ -108,13 +136,17 @@ def generalized_box_iou(boxes1: Tensor, boxes2: Tensor) -> Tensor:
 
 
 def box_xyxy_to_cxcywh(boxes: Tensor) -> Tensor:
-    """Convert (x1, y1, x2, y2) → (cx, cy, w, h).
+    """Convert ``(x1, y1, x2, y2)`` → ``(cx, cy, w, h)``.
 
-    Args:
-        boxes: (..., 4) in xyxy format.
+    Parameters
+    ----------
+    boxes : Tensor
+        Shape ``(..., 4)`` in xyxy format.
 
-    Returns:
-        (..., 4) in cxcywh format.
+    Returns
+    -------
+    Tensor
+        Shape ``(..., 4)`` in cxcywh format (centre / width / height).
     """
     x1 = boxes[..., 0:1]
     y1 = boxes[..., 1:2]
@@ -124,13 +156,17 @@ def box_xyxy_to_cxcywh(boxes: Tensor) -> Tensor:
 
 
 def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
-    """Convert (cx, cy, w, h) → (x1, y1, x2, y2).
+    """Convert ``(cx, cy, w, h)`` → ``(x1, y1, x2, y2)``.
 
-    Args:
-        boxes: (..., 4) in cxcywh format.
+    Parameters
+    ----------
+    boxes : Tensor
+        Shape ``(..., 4)`` in cxcywh format.
 
-    Returns:
-        (..., 4) in xyxy format.
+    Returns
+    -------
+    Tensor
+        Shape ``(..., 4)`` in xyxy format.
     """
     cx = boxes[..., 0:1]
     cy = boxes[..., 1:2]
@@ -142,12 +178,18 @@ def box_cxcywh_to_xyxy(boxes: Tensor) -> Tensor:
 def clip_boxes_to_image(boxes: Tensor, size: tuple[int, int]) -> Tensor:
     """Clip boxes to image boundaries.
 
-    Args:
-        boxes: (N, 4) xyxy in pixel coordinates.
-        size:  (height, width) of the image.
+    Parameters
+    ----------
+    boxes : Tensor
+        Shape ``(N, 4)`` xyxy in pixel coordinates.
+    size : tuple[int, int]
+        ``(height, width)`` of the image.
 
-    Returns:
-        (N, 4) clipped boxes.
+    Returns
+    -------
+    Tensor
+        Shape ``(N, 4)`` with every coordinate clamped into the image
+        rectangle ``[0, width] × [0, height]``.
     """
     h, w = size
     x1 = boxes[:, 0:1].clamp(0.0, float(w))
@@ -158,14 +200,20 @@ def clip_boxes_to_image(boxes: Tensor, size: tuple[int, int]) -> Tensor:
 
 
 def remove_small_boxes(boxes: Tensor, min_size: float) -> Tensor:
-    """Return indices of boxes whose width AND height are ≥ min_size.
+    """Return indices of boxes whose width AND height are ``>= min_size``.
 
-    Args:
-        boxes:    (N, 4) xyxy.
-        min_size: Minimum side length in pixels.
+    Parameters
+    ----------
+    boxes : Tensor
+        Shape ``(N, 4)`` xyxy.
+    min_size : float
+        Minimum side length in pixels.
 
-    Returns:
-        1-D index Tensor of surviving boxes.
+    Returns
+    -------
+    Tensor
+        1-D ``int64`` index tensor of surviving box positions; empty when
+        every box is below threshold.
     """
     ws = boxes[:, 2] - boxes[:, 0]
     hs = boxes[:, 3] - boxes[:, 1]
@@ -184,15 +232,28 @@ def encode_boxes(
     proposals: Tensor,
     weights: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
 ) -> Tensor:
-    """Encode box regression targets (dx, dy, dw, dh).
+    """Encode box regression targets ``(dx, dy, dw, dh)``.
 
-    Args:
-        reference_boxes: (N, 4) xyxy ground-truth boxes.
-        proposals:       (N, 4) xyxy anchor / proposal boxes.
-        weights:         Per-component scaling (wx, wy, ww, wh).
+    Inverse of :func:`decode_boxes`.  Used to turn ground-truth boxes
+    into the per-anchor regression targets consumed by the RPN /
+    detection head loss.
 
-    Returns:
-        (N, 4) regression targets.
+    Parameters
+    ----------
+    reference_boxes : Tensor
+        Shape ``(N, 4)`` xyxy ground-truth boxes.
+    proposals : Tensor
+        Shape ``(N, 4)`` xyxy anchor / proposal boxes paired one-to-one
+        with ``reference_boxes``.
+    weights : tuple[float, float, float, float], optional
+        Per-component scaling ``(wx, wy, ww, wh)``.  Default
+        ``(1.0, 1.0, 1.0, 1.0)``; Faster R-CNN canonically uses
+        ``(10, 10, 5, 5)`` to reweight centre vs size terms.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, 4)`` regression targets.
     """
     wx, wy, ww, wh = weights
 
@@ -215,14 +276,26 @@ def decode_boxes(
 ) -> Tensor:
     """Decode box regression deltas back to xyxy format.
 
-    Args:
-        deltas:           (N, 4) regression outputs.
-        anchors:          (N, 4) xyxy reference boxes.
-        weights:          Must match ``encode_boxes``.
-        bbox_xform_clip:  Clamps dw/dh to prevent exp overflow.
+    Inverse of :func:`encode_boxes`.
 
-    Returns:
-        (N, 4) decoded boxes in xyxy format.
+    Parameters
+    ----------
+    deltas : Tensor
+        Shape ``(N, 4)`` regression outputs.
+    anchors : Tensor
+        Shape ``(N, 4)`` xyxy reference boxes.
+    weights : tuple[float, float, float, float], optional
+        Per-component scaling; must match the value used in
+        :func:`encode_boxes`.  Default ``(1.0, 1.0, 1.0, 1.0)``.
+    bbox_xform_clip : float, optional
+        Clamps ``dw`` / ``dh`` to prevent ``exp`` overflow on extreme
+        deltas.  Default ``log(1000 / 16)`` (Faster R-CNN canonical
+        value).
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, 4)`` decoded boxes in xyxy format.
     """
     wx, wy, ww, wh = weights
 

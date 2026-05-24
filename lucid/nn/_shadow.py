@@ -301,7 +301,19 @@ _ORIGINAL: dict[str, Any] = {}
 
 
 def is_active() -> bool:
-    """Return ``True`` while inside a ``shadow_alloc`` block."""
+    """Return whether a :func:`shadow_alloc` block is currently in scope.
+
+    Used by Lucid's introspection paths (param-count helpers, layer
+    summary generators, the docs build's ``shadow_alloc=True`` factory
+    invocations) to decide whether tensor storage is real or
+    metadata-only.
+
+    Returns
+    -------
+    bool
+        ``True`` inside a :func:`shadow_alloc` block, ``False``
+        otherwise.
+    """
     return _SHADOW_ENABLED
 
 

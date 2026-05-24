@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { buildIssueUrl } from "@/lib/error-report";
 
 /** Docs-section error boundary.  Same role as ``app/api/error.tsx`` —
  *  keeps Header / Sidebar / Footer mounted and only re-renders the
@@ -21,6 +22,12 @@ export default function DocsError({
       console.error("[lucid-docs] /docs page error", error);
     }
   }, [error]);
+
+  const issueUrl = buildIssueUrl({
+    title: `[docs] /docs error: ${error.message}`,
+    error,
+    section: "/docs",
+  });
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 text-center">
@@ -43,6 +50,11 @@ export default function DocsError({
         <Button onClick={reset}>Try again</Button>
         <Button variant="secondary" asChild>
           <a href="/docs">Docs home</a>
+        </Button>
+        <Button variant="ghost" asChild>
+          <a href={issueUrl} target="_blank" rel="noopener noreferrer">
+            Report this
+          </a>
         </Button>
       </div>
     </div>

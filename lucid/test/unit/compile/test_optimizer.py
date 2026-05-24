@@ -1,0 +1,234 @@
+"""Parity tests for :func:`lucid.compile.compile_optimizer` and :func:`fused_step`.
+
+Two surfaces under test:
+
+  * ``compile_optimizer`` — wraps an optimizer's ``step()`` into a
+    cached MPSGraph executable.  The model + loss + backward still run
+    eager; only the parameter-update arithmetic is compiled.
+
+  * ``fused_step`` — single executable covering forward + loss +
+    backward (via MPSGraph autodiff) + optimizer update.  The
+    ghost-grad mechanism (Phase 1.8) plumbs derived gradients into
+    placeholders that the trace recorded as zeros.
+
+Both must produce parameter values matching the eager step to fp32
+tolerance.  Drift is exclusively from MPSGraph's reordered reduction
+tree — algorithmic bugs (wrong grad slot / off-by-one in state
+buffers) would produce O(1) divergence.
+"""
+
+import pytest
+
+import lucid
+import lucid.nn as nn
+import lucid.nn.functional as F
+import lucid.optim as optim
+from lucid.compile import compile_optimizer, fused_step
+
+from lucid.test.unit.compile._helpers import COMPILE_DEVICE, metal_tensor
+
+
+def _tiny_model() -> nn.Module:
+    """Two-layer MLP — fast to compile, exercises Linear + activation + Linear."""
+
+    class _MLP(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc1 = nn.Linear(8, 16)
+            self.fc2 = nn.Linear(16, 4)
+
+        def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+            return self.fc2(self.fc1(x).relu())
+
+    return _MLP().to(COMPILE_DEVICE)
+
+
+# Every optimizer compile_optimizer accepts.  If the ghost-grad
+# mechanism breaks for one of these, the corresponding ``_trace_update``
+# in ``_optim.py`` is the suspect.
+#
+# Notes:
+#   * ``SGD(nesterov=True)`` is intentionally excluded — the eager
+#     engine ``_C_engine.SGD`` doesn't take a ``nesterov`` flag and
+#     silently drops it, while the compile path implements Nesterov
+#     faithfully.  Comparing the two would flag a real eager-side bug
+#     that's outside the compile-parity scope.  Covered separately in
+#     ``test_compile_optimizer_nesterov_correctness`` below.
+#   * Compile-supported set is 8 optimizers (see ``compile_optimizer``
+#     in ``lucid/compile/_optim.py``): SGD, Adam, AdamW, RMSprop,
+#     Adagrad, Adadelta, Adamax, NAdam.  LBFGS / SparseAdam / Rprop /
+#     RAdam / ASGD raise NotImplementedError with reason at construct
+#     time — covered by ``test_compile_optimizer_rejects_unsupported``.
+OPTIMIZER_FACTORIES = [
+    pytest.param(lambda p: optim.SGD(p, lr=0.05), id="SGD"),
+    pytest.param(lambda p: optim.SGD(p, lr=0.05, momentum=0.9), id="SGD_momentum"),
+    pytest.param(lambda p: optim.Adam(p, lr=0.05), id="Adam"),
+    pytest.param(lambda p: optim.AdamW(p, lr=0.05), id="AdamW"),
+    pytest.param(lambda p: optim.RMSprop(p, lr=0.05), id="RMSprop"),
+    pytest.param(lambda p: optim.Adagrad(p, lr=0.05), id="Adagrad"),
+    pytest.param(lambda p: optim.Adadelta(p, lr=0.05), id="Adadelta"),
+    pytest.param(lambda p: optim.Adamax(p, lr=0.05), id="Adamax"),
+    pytest.param(lambda p: optim.NAdam(p, lr=0.05), id="NAdam"),
+]
+
+
+UNSUPPORTED_OPTIMIZERS = [
+    pytest.param(lambda p: optim.LBFGS(p, lr=0.05), id="LBFGS"),
+    pytest.param(lambda p: optim.SparseAdam(p, lr=0.05), id="SparseAdam"),
+    pytest.param(lambda p: optim.Rprop(p, lr=0.05), id="Rprop"),
+    pytest.param(lambda p: optim.RAdam(p, lr=0.05), id="RAdam"),
+    pytest.param(lambda p: optim.ASGD(p, lr=0.05), id="ASGD"),
+]
+
+
+def _clone_state(model: nn.Module) -> dict[str, lucid.Tensor]:
+    """Snapshot every parameter buffer for cross-run comparison."""
+    return {n: p.detach().clone() for n, p in model.named_parameters()}
+
+
+def _run_eager_step(model: nn.Module, mk_opt: object, x: lucid.Tensor, t: lucid.Tensor) -> dict[str, lucid.Tensor]:
+    opt = mk_opt(list(model.parameters()))
+    opt.zero_grad()
+    loss = F.mse_loss(model(x), t)
+    loss.backward()
+    opt.step()
+    return _clone_state(model)
+
+
+def _max_diff(a: dict[str, lucid.Tensor], b: dict[str, lucid.Tensor]) -> float:
+    """Worst absolute parameter-value drift across the dict."""
+    worst = 0.0
+    for k in a:
+        d = float((a[k] - b[k]).abs().max().item())
+        if d > worst:
+            worst = d
+    return worst
+
+
+@pytest.mark.parametrize("mk_opt", OPTIMIZER_FACTORIES)
+def test_compile_optimizer_step_parity(mk_opt: object) -> None:
+    """``compile_optimizer.step()`` matches eager step within fp32 tolerance."""
+    # Seed both runs from the same initial parameters by serialising
+    # the model state and reloading into the second model.
+    lucid.manual_seed(0)
+    model_eager = _tiny_model()
+    state = _clone_state(model_eager)
+    model_comp = _tiny_model()
+    for (n, p), (_, q) in zip(model_eager.named_parameters(), model_comp.named_parameters()):
+        p.copy_(state[n])
+        q.copy_(state[n])
+
+    x = metal_tensor(4, 8)
+    t = metal_tensor(4, 4)
+
+    # Eager step
+    eager_state = _run_eager_step(model_eager, mk_opt, x, t)
+
+    # Compile-optimizer step (still eager forward/backward, compiled update)
+    opt_comp = mk_opt(list(model_comp.parameters()))
+    copt = compile_optimizer(opt_comp)
+    copt.zero_grad()
+    loss = F.mse_loss(model_comp(x), t)
+    loss.backward()
+    copt.step()
+    comp_state = _clone_state(model_comp)
+
+    worst = _max_diff(eager_state, comp_state)
+    assert worst < 1e-4, f"compile_optimizer drift = {worst:.3e}"
+
+
+@pytest.mark.parametrize("mk_opt", OPTIMIZER_FACTORIES)
+def test_fused_step_parity(mk_opt: object) -> None:
+    """``fused_step()`` matches eager step within fp32 tolerance.
+
+    fused_step runs forward + loss + backward + update in a *single*
+    MPSGraph executable using the ghost-grad placeholder mechanism.
+    """
+    lucid.manual_seed(0)
+    model_eager = _tiny_model()
+    state = _clone_state(model_eager)
+    model_comp = _tiny_model()
+    for (n, p), (_, q) in zip(model_eager.named_parameters(), model_comp.named_parameters()):
+        p.copy_(state[n])
+        q.copy_(state[n])
+
+    x = metal_tensor(4, 8)
+    t = metal_tensor(4, 4)
+
+    # Eager step
+    eager_state = _run_eager_step(model_eager, mk_opt, x, t)
+
+    # Fused step (single executable)
+    opt_comp = mk_opt(list(model_comp.parameters()))
+    step = fused_step(model_comp, F.mse_loss, opt_comp)
+    step(x, t)
+    comp_state = _clone_state(model_comp)
+
+    worst = _max_diff(eager_state, comp_state)
+    assert worst < 1e-4, f"fused_step drift = {worst:.3e}"
+
+
+@pytest.mark.parametrize("mk_opt", UNSUPPORTED_OPTIMIZERS)
+def test_compile_optimizer_rejects_unsupported(mk_opt: object) -> None:
+    """Unsupported optimizers must raise NotImplementedError with reason.
+
+    Silent fallback to eager would mask user expectations of compile
+    speedup.  An informative error is the production-safe contract.
+    """
+    model = _tiny_model()
+    opt = mk_opt(list(model.parameters()))
+    with pytest.raises(NotImplementedError, match="not supported"):
+        compile_optimizer(opt)
+
+
+def test_compile_optimizer_nesterov_correctness() -> None:
+    """Compile path implements Nesterov; verify against hand-rolled formula.
+
+    Eager SGD silently ignores ``nesterov=True`` (engine SGD doesn't
+    take the flag), so we can't compare to it.  Instead we verify the
+    compile-path output matches the textbook formula:
+        m_t = mu * m_{t-1} + g
+        eff = g + mu * m_t
+        p   = p - lr * eff
+    """
+    lucid.manual_seed(0)
+    model = _tiny_model()
+    state = _clone_state(model)
+    p0 = state["fc1.weight"]
+
+    opt = optim.SGD(list(model.parameters()), lr=0.05, momentum=0.9, nesterov=True)
+    copt = compile_optimizer(opt)
+    x = metal_tensor(4, 8)
+    t = metal_tensor(4, 4)
+    copt.zero_grad()
+    loss = F.mse_loss(model(x), t)
+    loss.backward()
+    grad_w = model.fc1.weight.grad.detach().clone()
+    copt.step()
+    p1 = model.fc1.weight.detach().clone()
+
+    # Hand-rolled: m_0 = 0, m_1 = g, eff = g + mu * m_1 = g * (1 + mu)
+    mu = 0.9
+    lr = 0.05
+    expected = p0 - lr * (grad_w + mu * grad_w)  # = p0 - lr * (1 + mu) * g
+    diff = float((p1 - expected).abs().max().item())
+    assert diff < 1e-5, f"nesterov formula drift = {diff:.3e}"
+
+
+def test_fused_step_repeated_calls_reuse_executable() -> None:
+    """Calling fused_step multiple times shouldn't recompile every time."""
+    lucid.manual_seed(0)
+    model = _tiny_model()
+    opt = optim.Adam(list(model.parameters()), lr=0.05)
+    step = fused_step(model, F.mse_loss, opt)
+
+    x = metal_tensor(4, 8)
+    t = metal_tensor(4, 4)
+
+    # First call triggers compile; subsequent calls should reuse.
+    losses = [float(step(x, t).item()) for _ in range(5)]
+    # Loss must change between steps (parameters are updating).
+    assert losses[0] != losses[-1], "params did not update between fused_step calls"
+    # All finite — no NaN explosions from the autodiff path.
+    for L in losses:
+        assert L == L, f"NaN loss in step: {losses}"  # NaN != NaN

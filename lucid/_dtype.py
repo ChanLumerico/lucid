@@ -123,7 +123,35 @@ _NAME_TO_DTYPE: dict[str, dtype] = {
 def to_engine_dtype(
     d: dtype | type[dtype] | _C_engine.Dtype | str | None,
 ) -> _C_engine.Dtype:
-    """Convert lucid dtype, engine Dtype, string name, or None → engine Dtype."""
+    """Coerce any accepted dtype-spec to the C++ engine's ``Dtype`` enum.
+
+    Front door for every Python → engine call site that needs to pass
+    a dtype.  Accepts the union of forms users / internal code throws
+    at the framework: a :class:`lucid.dtype` instance, a raw engine
+    enum value, a string name (``"float32"``), or ``None`` for the
+    framework default.  Rejects bare ``dtype`` classes with a clear
+    error to catch ``lucid.dtype`` (the type) being passed instead of
+    ``lucid.float32`` (an instance).
+
+    Parameters
+    ----------
+    d : dtype, dtype-class, engine.Dtype, str, or None
+        Requested dtype.
+
+    Returns
+    -------
+    engine.Dtype
+        The corresponding C++ enum value, consumable by every engine
+        factory and kernel call.
+
+    Raises
+    ------
+    TypeError
+        If ``d`` is a dtype *class* (e.g. ``lucid.dtype``) rather than
+        an instance.
+    ValueError
+        If ``d`` is a string that doesn't name a known dtype.
+    """
     if d is None:
         return _C_engine.Dtype.F32
     if isinstance(d, _C_engine.Dtype):

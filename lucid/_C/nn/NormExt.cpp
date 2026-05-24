@@ -23,6 +23,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -82,6 +83,8 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
     const TensorImplPtr beta_eff = astype_op(beta, eff_dt);
 
     OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
+    // 3.5 Phase 1.2: report eps for the compile-path BatchNormEval emitter.
+    scope.set_attr("eps", eps);
 
     auto& be = backend::Dispatcher::for_device(x_eff->device());
     // batch_norm_eval_forward returns [y, rstd].
@@ -141,6 +144,9 @@ LpNormalizeBackward::forward(const TensorImplPtr& x, double ord, int axis, doubl
         ErrorBuilder("lp_normalize").fail("axis out of range");
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
+    scope.set_attr("ord", ord);
+    scope.set_attr("axis", static_cast<std::int64_t>(axis));
+    scope.set_attr("eps", eps);
 
     auto& be = backend::Dispatcher::for_device(x->device());
     // lp_normalize_forward returns [y, norm].
@@ -150,6 +156,7 @@ LpNormalizeBackward::forward(const TensorImplPtr& x, double ord, int axis, doubl
 
     auto out = std::make_shared<TensorImpl>(std::move(y_storage), x->shape(), x->dtype(),
                                             x->device(), false);
+    // wire_autograd records on_op_io internally — no explicit call.
     {
         auto bwd = std::make_shared<LpNormalizeBackward>();
         bwd->ord_ = ord;
@@ -191,6 +198,7 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
                             "global_response_norm: gamma/beta must have C elements");
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), x->shape()};
+    scope.set_attr("eps", eps);
 
     auto& be = backend::Dispatcher::for_device(x->device());
     // global_response_norm_forward returns [y, Nx] where Nx is the
@@ -202,6 +210,7 @@ TensorImplPtr GlobalResponseNormBackward::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), x->shape(), x->dtype(),
                                             x->device(), false);
+    // wire_autograd records on_op_io internally — no explicit call.
     auto bwd = std::make_shared<GlobalResponseNormBackward>();
     bwd->eps_ = eps;
     bwd->saved_Nx_ = std::move(nx_storage);

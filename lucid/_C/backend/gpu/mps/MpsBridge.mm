@@ -10,6 +10,7 @@
 
 #include <mlx/array.h>
 #include <mlx/dtype.h>
+#include <mlx/ops.h>
 
 #include "MpsBridge.h"
 
@@ -61,6 +62,25 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
     auto& mutable_arr = const_cast<::mlx::core::array&>(arr);
     mutable_arr.eval();
     mutable_arr.wait();
+
+    // Critical: MPSGraph reads the MTLBuffer linearly assuming row-major
+    // storage matching the declared `nsShape`, but MLX upstream ops
+    // (notably Conv2d) return *lazy transpose views* — the underlying
+    // buffer is in a permuted layout (e.g. NHWC physical for an NCHW
+    // logical shape).  Feeding such a buffer to MPSGraph as-is shuffles
+    // elements silently and gives wrong results.  Force a contiguous
+    // materialisation here so every kernel in MpsKernels.mm gets a
+    // buffer whose physical layout matches its logical shape.
+    //
+    // This is a no-op (single MLX flag check) when arr is already
+    // row-contiguous — `mlx::core::contiguous` returns the input view
+    // unchanged in that case.  Only the truly non-contig case pays a
+    // memcpy.
+    if (!mutable_arr.flags().row_contiguous) {
+        mutable_arr = ::mlx::core::contiguous(mutable_arr);
+        mutable_arr.eval();
+        mutable_arr.wait();
+    }
 
     const auto& buf = arr.buffer();
     // Buffer::ptr() on a const Buffer returns const void*; cast away const

@@ -37,6 +37,7 @@
 #include <utility>
 
 #include "../api.h"
+#include "../compile/Tracer.h"
 #include "Device.h"
 #include "Dtype.h"
 #include "ErrorBuilder.h"
@@ -113,7 +114,15 @@ public:
     // scope.  The profiler-side teardown happens first; the
     // error-context teardown second.
     OpScopeFull(std::string_view name, Device device, Dtype dtype, Shape shape)
-        : ctx_(std::string(name)), op_(name, device, dtype, std::move(shape)) {}
+        : ctx_(std::string(name)), op_(name, device, dtype, shape) {
+        // 3.5 Phase 1.1: lucid.compile() tracer hook.  Outside any _tracing()
+        // scope this is a single TLS load + null check (zero allocations,
+        // no shape copy beyond the one OpScope already needs).  Inside one,
+        // the op's entry feeds the active TraceGraph.  See compile/Tracer.h.
+        if (auto* t = lucid::compile::current_tracer()) {
+            t->on_op_enter(name, device, dtype, std::move(shape));
+        }
+    }
 
     OpScopeFull(const OpScopeFull&) = delete;
     OpScopeFull& operator=(const OpScopeFull&) = delete;
@@ -131,6 +140,32 @@ public:
     // --------
     // :func:`OpScope::set_flops` — receiver of the forwarded value.
     void set_flops(std::int64_t f) { op_.set_flops(f); }
+
+    // Attach a single attribute to the trace's most recently recorded
+    // :class:`OpNode` when a Tracer is installed; a no-op otherwise.
+    //
+    // Used by op forwards to thread emitter context (permutation,
+    // axis, stride, padding, eps, …) that the MPSGraph builder would
+    // be unable to recover from input + output shapes alone.
+    //
+    // Parameters
+    // ----------
+    // key : std::string_view
+    //     Attribute name.  Convention: snake_case, matches the
+    //     reference-framework keyword argument when one exists.
+    // value : compile::AttributeValue
+    //     Payload (variant over int64/vector<int64>/double/bool/string).
+    //     Moved into the attribute map.
+    //
+    // Notes
+    // -----
+    // Outside any ``_tracing()`` scope this is a single TLS load +
+    // null check; no allocations.  Cheap enough to put unconditionally
+    // at every op forward that has shape-invisible parameters.
+    void set_attr(std::string_view key, compile::AttributeValue value) {
+        if (auto* t = compile::current_tracer())
+            t->on_op_attr(key, std::move(value));
+    }
 
 private:
     // Declared before ``op_`` so it is constructed first and destroyed
