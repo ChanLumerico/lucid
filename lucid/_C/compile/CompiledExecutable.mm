@@ -290,13 +290,31 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
         // pipelines the same way.
         MPSGraphExecutableExecutionDescriptor* desc =
             [[MPSGraphExecutableExecutionDescriptor alloc] init];
-        desc.waitUntilCompleted = NO;
-        MPSCommandBuffer* mps_cb = [MPSCommandBuffer commandBufferFromCommandQueue:queue];
-        (void)[exe->executable encodeToCommandBuffer:mps_cb
-                                         inputsArray:feeds
-                                        resultsArray:results
-                                 executionDescriptor:desc];
-        [mps_cb commit];
+        // EXPERIMENTAL ``LUCID_COMPILE_SYNC=1``: force the synchronous
+        // ``runWithMTLCommandQueue:`` path.  Used to diagnose hangs in
+        // the async commit path (notably for variable-bearing
+        // executables where assignVariable/readVariable scheduling
+        // behaves differently than placeholder outputs).
+        static const bool force_sync = []() {
+            const char* s = std::getenv("LUCID_COMPILE_SYNC");
+            return s && std::string(s) == "1";
+        }();
+        if (force_sync) {
+            desc.waitUntilCompleted = YES;
+            (void)[exe->executable runWithMTLCommandQueue:queue
+                                              inputsArray:feeds
+                                             resultsArray:results
+                                      executionDescriptor:desc];
+        } else {
+            desc.waitUntilCompleted = NO;
+            MPSCommandBuffer* mps_cb =
+                [MPSCommandBuffer commandBufferFromCommandQueue:queue];
+            (void)[exe->executable encodeToCommandBuffer:mps_cb
+                                             inputsArray:feeds
+                                            resultsArray:results
+                                     executionDescriptor:desc];
+            [mps_cb commit];
+        }
 
         // Wrap each output MTLBuffer back into a GpuStorage-backed
         // TensorImpl.  ``__bridge_retained`` transfers the strong ref
@@ -427,24 +445,51 @@ LUCID_API void run_executable_inplace(
             [feeds addObject:td];
         }
 
-        // Allocate a FRESH MTLBuffer per output target — never alias
-        // the target's existing buffer.  See the function-header note
-        // on the read-write hazard.
+        // ``LUCID_COMPILE_ALIAS_INPLACE=1``: diagnostic — bind the
+        // target's existing MTLBuffer directly as the output result.
+        // Re-validated 2026-05-25 on macOS 26 SDK: **read-write hazard
+        // confirmed** — Adam-step trace produces zero loss / divergence
+        // when input and output share a buffer.  Path is retained as
+        // an opt-in diagnostic for future SDK versions but MUST stay
+        // off by default.  The production fix for the per-step
+        // ``newBufferWithLength`` cost is MPSGraph stateful variables
+        // (``assignVariable``), not aliasing — variables move state
+        // inside the executable and remove the param/state I/O
+        // entirely.  See ``obsidian/engine/engine-compile-stateful-variables.md``.
+        static const bool alias_mode = []() {
+            const char* s = std::getenv("LUCID_COMPILE_ALIAS_INPLACE");
+            return s && std::string(s) == "1";
+        }();
+
         NSMutableArray<MPSGraphTensorData*>* results =
             [NSMutableArray arrayWithCapacity:total_outs];
         for (std::size_t j = 0; j < total_outs; ++j) {
-            const std::size_t nbytes =
-                detail::shape_nbytes(exe->output_shapes[j], exe->output_dtypes[j]);
-            id<MTLBuffer> out_buf =
-                [device newBufferWithLength:nbytes
-                                    options:MTLResourceStorageModeShared];
-            if (!out_buf)
-                throw std::runtime_error(
-                    "run_executable_inplace: MTLBuffer allocation failed");
-            fresh_out_bufs.push_back(out_buf);
             NSArray<NSNumber*>* ns_shape =
                 detail::shape_to_nsarray(exe->output_shapes[j]);
             MPSDataType ns_dt = detail::to_mps_dtype(exe->output_dtypes[j]);
+
+            id<MTLBuffer> out_buf;
+            if (alias_mode) {
+                // Reuse the target's existing MTLBuffer as the result
+                // slot.  No allocation, no swap.
+                const auto& target = output_targets[j];
+                const auto& gs = std::get<GpuStorage>(target->storage());
+                lucid::gpu::mps::BufferView v =
+                    lucid::gpu::mps::array_to_buffer(*gs.arr);
+                out_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
+                fresh_out_bufs.push_back(nil);  // sentinel: no swap needed
+            } else {
+                const std::size_t nbytes = detail::shape_nbytes(
+                    exe->output_shapes[j], exe->output_dtypes[j]);
+                out_buf =
+                    [device newBufferWithLength:nbytes
+                                        options:MTLResourceStorageModeShared];
+                if (!out_buf)
+                    throw std::runtime_error(
+                        "run_executable_inplace: MTLBuffer allocation failed");
+                fresh_out_bufs.push_back(out_buf);
+            }
+
             MPSGraphTensorData* td =
                 [[MPSGraphTensorData alloc] initWithMTLBuffer:out_buf
                                                         shape:ns_shape
@@ -452,34 +497,43 @@ LUCID_API void run_executable_inplace(
             [results addObject:td];
         }
 
-        // ``encodeToCommandBuffer:`` + async commit (matching the
-        // ``run_executable`` inference path).  See its commentary for
-        // the perf rationale.
+        // Synchronous ``runWithMTLCommandQueue:`` — the freshly-
+        // allocated output MTLBuffer (esp. the 0-D loss scalar) is
+        // wrapped as an MLX leaf array right after this call, and
+        // ``loss.item()`` in user code reads its contents directly.
+        // The async ``encodeToCommandBuffer:`` path (used in
+        // ``run_executable`` for inference) breaks training because
+        // MLX has no way to track the pending MPSGraph write on a
+        // brand-new buffer; reads come back as zeros.  Forcing
+        // ``waitUntilCompleted = YES`` here keeps the swap-buffer
+        // dance correct.  Cost: ~30-100μs/step for the host sync;
+        // still cheap relative to the executable's GPU work for
+        // anything bigger than a toy MLP.
         MPSGraphExecutableExecutionDescriptor* desc =
             [[MPSGraphExecutableExecutionDescriptor alloc] init];
-        desc.waitUntilCompleted = NO;
-        MPSCommandBuffer* mps_cb =
-            [MPSCommandBuffer commandBufferFromCommandQueue:queue];
-        (void)[exe->executable encodeToCommandBuffer:mps_cb
-                                         inputsArray:feeds
-                                        resultsArray:results
-                                 executionDescriptor:desc];
-        [mps_cb commit];
+        desc.waitUntilCompleted = YES;
+        (void)[exe->executable runWithMTLCommandQueue:queue
+                                          inputsArray:feeds
+                                         resultsArray:results
+                                  executionDescriptor:desc];
 
-        // Swap: wrap each fresh MTLBuffer as a leaf MLX array and
-        // overwrite the target's ``GpuStorage::arr`` pointer.  No
-        // ``mlx::copy`` runs — the old buffer is released when the
-        // last shared_ptr to the previous array drops.
+        // Swap (or skip in alias mode): wrap each fresh MTLBuffer as
+        // a leaf MLX array and overwrite the target's ``GpuStorage::arr``
+        // pointer.  In alias mode the buffer is already the target's
+        // own — bump_version is still needed so downstream readers
+        // observe the update.
         for (std::size_t j = 0; j < total_outs; ++j) {
             auto& target = const_cast<TensorImplPtr&>(output_targets[j]);
-            auto& gs = std::get<GpuStorage>(target->mutable_storage());
             id<MTLBuffer> buf = fresh_out_bufs[j];
-            void* raw = (__bridge_retained void*)buf;
-            std::vector<int> mlx_shape(target->shape().begin(),
-                                       target->shape().end());
-            ::mlx::core::array fresh = lucid::gpu::mps::buffer_to_array(
-                raw, std::move(mlx_shape), target->dtype());
-            gs.arr = std::make_shared<::mlx::core::array>(std::move(fresh));
+            if (buf != nil) {
+                auto& gs = std::get<GpuStorage>(target->mutable_storage());
+                void* raw = (__bridge_retained void*)buf;
+                std::vector<int> mlx_shape(target->shape().begin(),
+                                           target->shape().end());
+                ::mlx::core::array fresh = lucid::gpu::mps::buffer_to_array(
+                    raw, std::move(mlx_shape), target->dtype());
+                gs.arr = std::make_shared<::mlx::core::array>(std::move(fresh));
+            }
             target->bump_version();
         }
     }

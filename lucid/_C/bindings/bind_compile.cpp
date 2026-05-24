@@ -480,6 +480,56 @@ void register_compile(py::module_& m) {
         "remaining (optimizer) ops.  ``output_target_ids`` is the flat "
         "ordered list of new_param / new_state ids that become the "
         "executable's targets (loss is always target 0).");
+
+    // Phase 1.9: stateful-variables variant.  Designated feeds become
+    // ``variableWithData:`` (initialized from the Lucid Tensor's
+    // current MTLBuffer contents at compile time); the matching
+    // output_target_ids become ``assignVariable:`` operations + a
+    // ``readVariable:`` tensor that flushes the post-assign value
+    // into the Lucid Tensor's existing MTLBuffer on each call.
+    m.def(
+        "compile_generic_fused_step_with_vars",
+        [](const lucid::compile::TraceGraph& graph,
+           const py::dict& external_feeds_py,
+           lucid::compile::TensorId loss_id,
+           const std::vector<lucid::compile::TensorId>& param_ids,
+           const std::vector<lucid::compile::TensorId>& ghost_grad_ids,
+           const std::vector<lucid::compile::TensorId>& output_target_ids,
+           const std::vector<std::pair<lucid::compile::TensorId,
+                                       lucid::compile::TensorId>>& variable_pairs)
+            -> py::object {
+            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr>
+                feeds;
+            feeds.reserve(external_feeds_py.size());
+            for (auto item : external_feeds_py) {
+                auto tid = py::cast<lucid::compile::TensorId>(item.first);
+                auto impl = py::cast<lucid::TensorImplPtr>(item.second);
+                feeds.emplace(tid, std::move(impl));
+            }
+            std::string err;
+            lucid::compile::CompiledExecutable* exe =
+                lucid::compile::compile_generic_fused_step_with_vars(
+                    graph, feeds, loss_id, param_ids, ghost_grad_ids,
+                    output_target_ids, variable_pairs, &err);
+            if (exe == nullptr) {
+                if (!err.empty()) throw std::runtime_error(err);
+                return py::none();
+            }
+            return py::cast(
+                std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+        },
+        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"),
+        py::arg("param_ids"), py::arg("ghost_grad_ids"),
+        py::arg("output_target_ids"), py::arg("variable_pairs"),
+        "Stateful-variables variant of compile_generic_fused_step.  "
+        "``variable_pairs`` is a list of ``(feed_id, write_id)`` tuples: "
+        "the feed becomes a persistent MPSGraph variable initialised "
+        "from the Lucid Tensor's current buffer contents, and the "
+        "matching write_id is bound to an ``assignVariable:`` + "
+        "``readVariable:`` pair so subsequent calls update the variable "
+        "internally and flush the new value back into the Lucid Tensor's "
+        "existing MTLBuffer (no per-call newBufferWithLength).  Empty "
+        "variable_pairs is equivalent to compile_generic_fused_step.");
 }
 
 namespace {

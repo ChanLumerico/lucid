@@ -1503,4 +1503,400 @@ CompiledExecutable* compile_generic_fused_step(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Stateful-variables variant of compile_generic_fused_step.
+//
+// See the header doc for the full design rationale.  Implementation
+// mirrors ``compile_generic_fused_step`` line-by-line but with three
+// surgical insertions:
+//
+//   1. For every feed in ``variable_pairs``, the feed becomes
+//      ``variableWithData:`` (initialized from the Lucid Tensor's
+//      current MTLBuffer contents) rather than ``placeholderWithShape:``.
+//      The feed slot is removed from the executable's ``input_ids``.
+//   2. After the trace emits the new value for each variable, the
+//      builder issues ``assignVariable:`` and adds the operation to
+//      the ``targetOperations`` array so it executes on every call.
+//      A ``readVariable:`` op is also created and added to
+//      ``targetTensors`` in place of the original write_id — so
+//      ``run_executable_inplace`` can bind the Lucid Tensor's
+//      existing MTLBuffer and receive the post-assign value with
+//      no buffer alloc.
+//   3. The original write_id entry in ``output_target_ids`` is
+//      replaced by the readVariable's trace id in
+//      ``grad_output_ids`` (same slot index — caller is unaffected).
+// ─────────────────────────────────────────────────────────────────────
+CompiledExecutable* compile_generic_fused_step_with_vars(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& ghost_grad_ids,
+        const std::vector<TensorId>& output_target_ids,
+        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
+        std::string* error_msg) {
+    auto fail = [&](std::string msg) -> CompiledExecutable* {
+        if (error_msg) *error_msg = std::move(msg);
+        return nullptr;
+    };
+
+    if (graph.ops.empty())
+        return fail("compile_generic_fused_step_with_vars: empty TraceGraph");
+    if (param_ids.empty())
+        return fail("compile_generic_fused_step_with_vars: param_ids must be non-empty");
+    if (ghost_grad_ids.size() != param_ids.size())
+        return fail(
+            "compile_generic_fused_step_with_vars: ghost_grad_ids size != param_ids size");
+
+    // If no variables requested, defer to the original path.
+    if (variable_pairs.empty()) {
+        return compile_generic_fused_step(
+            graph, external_feeds, loss_id, param_ids, ghost_grad_ids,
+            output_target_ids, error_msg);
+    }
+
+    const std::unordered_set<TensorId> ghost_set(
+        ghost_grad_ids.begin(), ghost_grad_ids.end());
+
+    // Set of feed ids that are promoted to variables, and a map from
+    // each var-feed-id to its corresponding write_id (the new value
+    // produced by the trace that gets assigned back into the variable).
+    std::unordered_set<TensorId> var_feed_set;
+    std::unordered_map<TensorId, TensorId> feed_to_write;
+    std::unordered_set<TensorId> var_write_set;
+    for (const auto& [f, w] : variable_pairs) {
+        if (external_feeds.find(f) == external_feeds.end())
+            return fail(
+                "compile_generic_fused_step_with_vars: variable feed id " +
+                std::to_string(f) + " not in external_feeds");
+        var_feed_set.insert(f);
+        feed_to_write[f] = w;
+        var_write_set.insert(w);
+    }
+
+    Device device = Device::CPU;
+    for (const auto& op : graph.ops)
+        if (!op.outputs.empty()) {
+            device = op.outputs[0].device;
+            break;
+        }
+    if (device != Device::GPU)
+        return fail("compile_generic_fused_step_with_vars: only GPU supported");
+    for (const auto& op : graph.ops) {
+        if (op.outputs.empty() || op.outputs[0].device != device)
+            return fail("compile_generic_fused_step_with_vars: mixed-device trace");
+        for (TensorId iid : op.inputs)
+            if (iid < 0)
+                return fail("compile_generic_fused_step_with_vars: op '" +
+                            op.name + "' has unresolved input slot");
+        if (find_emitter(op.name) == nullptr && !op.inputs.empty())
+            return fail("compile_generic_fused_step_with_vars: no emitter for op '" +
+                        op.name + "'");
+    }
+
+    @autoreleasepool {
+        MPSGraph* graph_obj = [[MPSGraph alloc] init];
+        BuilderContext ctx{(__bridge void*)graph_obj, device};
+
+        // Variables init reads raw MTLBuffer contents at compile time
+        // — flush pending MLX async work first so the snapshot reflects
+        // the current parameter values rather than half-evaluated lazy
+        // state.  Without this the variableWithData: source can be
+        // mid-stream and the resulting variable holds garbage (or the
+        // contents read blocks indefinitely).
+        lucid::gpu::mps::wait_all();
+
+        // Step 1: build placeholders for non-var, non-ghost feeds AND
+        // variables for var_feed_set.  ``ordered_feed_ids`` records only
+        // the placeholder feeds so ``input_ids`` excludes variables.
+        std::vector<TensorId> ordered_feed_ids;
+        ordered_feed_ids.reserve(external_feeds.size());
+        std::vector<TensorId> sorted_all_feeds;
+        sorted_all_feeds.reserve(external_feeds.size());
+        for (const auto& [tid, _] : external_feeds)
+            if (ghost_set.find(tid) == ghost_set.end())
+                sorted_all_feeds.push_back(tid);
+        std::sort(sorted_all_feeds.begin(), sorted_all_feeds.end());
+
+        std::vector<MPSGraphTensor*> feed_tensors;
+        std::vector<Shape> input_shapes;
+        std::vector<Dtype> input_dtypes;
+
+        for (TensorId tid : sorted_all_feeds) {
+            const auto& impl = external_feeds.at(tid);
+            if (!impl)
+                return fail("compile_generic_fused_step_with_vars: null feed " +
+                            std::to_string(tid));
+            const Shape& feed_shape = impl->shape();
+            const Dtype feed_dtype = impl->dtype();
+            NSArray<NSNumber*>* ns_shape = shape_to_nsarray(feed_shape);
+            MPSDataType ns_dt;
+            try {
+                ns_dt = to_mps_dtype(feed_dtype);
+            } catch (const std::exception& e) {
+                return fail(std::string("compile_generic_fused_step_with_vars: ") +
+                            e.what());
+            }
+
+            if (var_feed_set.find(tid) != var_feed_set.end()) {
+                // Variable: snapshot the current MTLBuffer contents
+                // into NSData for ``variableWithData:``.  The data is
+                // copied into MPSGraph's own internal storage; we can
+                // safely free the NSData after.
+                if (impl->device() != Device::GPU)
+                    return fail(
+                        "compile_generic_fused_step_with_vars: variable feed not on GPU");
+                const auto& gs = std::get<GpuStorage>(impl->storage());
+                if (!gs.arr)
+                    return fail(
+                        "compile_generic_fused_step_with_vars: variable feed has no MLX array");
+                lucid::gpu::mps::BufferView v =
+                    lucid::gpu::mps::array_to_buffer(*gs.arr);
+                id<MTLBuffer> src_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
+                // Inline shape_nbytes — same formula as
+                // CompiledExecutable.mm's detail::shape_nbytes (anon
+                // namespace there is unreachable from this TU).
+                std::size_t nelem = 1;
+                for (std::int64_t d : feed_shape)
+                    nelem *= static_cast<std::size_t>(d);
+                const std::size_t itemsize = (feed_dtype == Dtype::F16) ? 2 : 4;
+                const std::size_t nbytes = nelem * itemsize;
+                NSData* init_data =
+                    [NSData dataWithBytes:[src_buf contents] length:nbytes];
+                MPSGraphTensor* var =
+                    [graph_obj variableWithData:init_data
+                                          shape:ns_shape
+                                       dataType:ns_dt
+                                           name:[NSString stringWithFormat:
+                                                              @"var_%lld",
+                                                              (long long)tid]];
+                ctx.bind(tid, (__bridge void*)var);
+                // NOTE: var feeds NOT added to feed_tensors / input_shapes.
+            } else {
+                MPSGraphTensor* ph =
+                    [graph_obj placeholderWithShape:ns_shape
+                                           dataType:ns_dt
+                                               name:[NSString stringWithFormat:
+                                                                    @"feed_%lld",
+                                                                    (long long)tid]];
+                ctx.bind(tid, (__bridge void*)ph);
+                feed_tensors.push_back(ph);
+                input_shapes.push_back(feed_shape);
+                input_dtypes.push_back(feed_dtype);
+                ordered_feed_ids.push_back(tid);
+            }
+        }
+
+        // Step 2: param array for gradient derivation.  Param feeds
+        // are now variables — ctx.resolve returns the variable tensor.
+        NSMutableArray<MPSGraphTensor*>* param_arr =
+            [NSMutableArray arrayWithCapacity:param_ids.size()];
+        for (TensorId pid : param_ids) {
+            void* p_void = ctx.resolve(pid);
+            if (p_void == nullptr)
+                return fail("compile_generic_fused_step_with_vars: param id " +
+                            std::to_string(pid) + " has no binding");
+            [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
+        }
+
+        // Step 3: emit trace ops with ghost-grad derivation, same as
+        // the non-variables path.
+        bool grads_derived = false;
+        auto derive_grads_now = [&]() -> bool {
+            if (grads_derived) return true;
+            void* loss_void = ctx.resolve(loss_id);
+            if (loss_void == nullptr) {
+                if (error_msg)
+                    *error_msg =
+                        "compile_generic_fused_step_with_vars: loss id has no binding";
+                return false;
+            }
+            MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
+            NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
+                [graph_obj gradientForPrimaryTensor:loss_t
+                                        withTensors:param_arr
+                                               name:@"lucid_var_grads"];
+            if (grad_map == nil) {
+                if (error_msg)
+                    *error_msg =
+                        "compile_generic_fused_step_with_vars: gradientForPrimaryTensor nil";
+                return false;
+            }
+            for (std::size_t i = 0; i < param_ids.size(); ++i) {
+                MPSGraphTensor* g_t = grad_map[param_arr[i]];
+                if (g_t == nil) {
+                    if (error_msg)
+                        *error_msg =
+                            "compile_generic_fused_step_with_vars: no gradient for param " +
+                            std::to_string(param_ids[i]);
+                    return false;
+                }
+                ctx.bind(ghost_grad_ids[i], (__bridge void*)g_t);
+            }
+            grads_derived = true;
+            return true;
+        };
+
+        for (const auto& node : graph.ops) {
+            bool uses_ghost = false;
+            for (TensorId iid : node.inputs)
+                if (ghost_set.find(iid) != ghost_set.end()) {
+                    uses_ghost = true;
+                    break;
+                }
+            if (uses_ghost && !grads_derived)
+                if (!derive_grads_now()) return nullptr;
+
+            OpEmitter* emitter = find_emitter(node.name);
+            if (emitter == nullptr) {
+                if (node.inputs.empty()) continue;
+                return fail("compile_generic_fused_step_with_vars: emitter vanished for op '" +
+                            node.name + "'");
+            }
+            void* result = emitter->emit(ctx, node);
+            if (result == nullptr)
+                return fail("compile_generic_fused_step_with_vars: emitter '" +
+                            node.name + "' returned nullptr");
+            if (!node.outputs.empty() && node.outputs.size() == 1)
+                ctx.bind(node.outputs[0].id, result);
+        }
+        if (!grads_derived && !ghost_grad_ids.empty()) {
+            if (!derive_grads_now()) return nullptr;
+        }
+
+        // Step 4: emit assignVariable for each (feed, write) pair +
+        // readVariable into a target tensor we'll expose as an output
+        // (so per-call the new value flushes into the Lucid Tensor's
+        // existing MTLBuffer with no fresh allocation).
+        NSMutableArray<MPSGraphOperation*>* target_ops_arr = [NSMutableArray array];
+
+        // Loss target.
+        void* loss_void = ctx.resolve(loss_id);
+        if (loss_void == nullptr)
+            return fail("compile_generic_fused_step_with_vars: loss has no binding");
+        MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
+        NSMutableArray<MPSGraphTensor*>* target_arr = [NSMutableArray array];
+        [target_arr addObject:loss_t];
+
+        // Loss meta.
+        std::vector<Shape> output_shapes;
+        std::vector<Dtype> output_dtypes;
+        Shape loss_shape;
+        Dtype loss_dtype = Dtype::F32;
+        bool loss_found = false;
+        for (const auto& node : graph.ops)
+            if (!node.outputs.empty() && node.outputs[0].id == loss_id) {
+                loss_shape = node.outputs[0].shape;
+                loss_dtype = node.outputs[0].dtype;
+                loss_found = true;
+                break;
+            }
+        if (!loss_found)
+            return fail("compile_generic_fused_step_with_vars: loss meta missing");
+        output_shapes.push_back(loss_shape);
+        output_dtypes.push_back(loss_dtype);
+
+        // Build id_to_meta map once for output_target_ids lookups.
+        std::unordered_map<TensorId, std::pair<Shape, Dtype>> id_to_meta;
+        for (const auto& node : graph.ops)
+            for (const auto& meta : node.outputs)
+                id_to_meta[meta.id] = {meta.shape, meta.dtype};
+
+        // Process each output_target_id.  If it's a var write, emit
+        // assignVariable + readVariable; otherwise add directly as a
+        // target tensor.
+        std::vector<TensorId> aux_output_ids;
+        aux_output_ids.reserve(output_target_ids.size());
+        for (TensorId tid : output_target_ids) {
+            void* new_value_void = ctx.resolve(tid);
+            if (new_value_void == nullptr)
+                return fail(
+                    "compile_generic_fused_step_with_vars: output target id " +
+                    std::to_string(tid) + " has no binding");
+            MPSGraphTensor* new_value_t = (__bridge MPSGraphTensor*)new_value_void;
+
+            // Is this id a "write" for any variable?
+            TensorId var_feed_for_write = -1;
+            for (const auto& [f, w] : feed_to_write)
+                if (w == tid) {
+                    var_feed_for_write = f;
+                    break;
+                }
+
+            if (var_feed_for_write >= 0) {
+                // Variable write: emit assignVariable + readVariable
+                void* var_void = ctx.resolve(var_feed_for_write);
+                MPSGraphTensor* var_t = (__bridge MPSGraphTensor*)var_void;
+                MPSGraphOperation* assign_op =
+                    [graph_obj assignVariable:var_t
+                            withValueOfTensor:new_value_t
+                                         name:[NSString stringWithFormat:
+                                                            @"assign_%lld",
+                                                            (long long)tid]];
+                [target_ops_arr addObject:assign_op];
+                MPSGraphTensor* readback =
+                    [graph_obj readVariable:var_t
+                                       name:[NSString stringWithFormat:
+                                                          @"readVar_%lld",
+                                                          (long long)tid]];
+                [target_arr addObject:readback];
+            } else {
+                // Plain output target: add to targetTensors directly.
+                [target_arr addObject:new_value_t];
+            }
+
+            auto it = id_to_meta.find(tid);
+            if (it == id_to_meta.end()) {
+                auto fit = external_feeds.find(tid);
+                if (fit == external_feeds.end() || !fit->second)
+                    return fail("compile_generic_fused_step_with_vars: output target id " +
+                                std::to_string(tid) + " not in trace");
+                output_shapes.push_back(fit->second->shape());
+                output_dtypes.push_back(fit->second->dtype());
+            } else {
+                output_shapes.push_back(it->second.first);
+                output_dtypes.push_back(it->second.second);
+            }
+            aux_output_ids.push_back(tid);
+        }
+
+        // Feed dict only includes non-variable feeds.
+        NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
+            [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
+        for (std::size_t i = 0; i < feed_tensors.size(); ++i) {
+            MPSDataType ns_dt = to_mps_dtype(input_dtypes[i]);
+            NSArray<NSNumber*>* ns_shape = shape_to_nsarray(input_shapes[i]);
+            feed_dict[feed_tensors[i]] =
+                [[MPSGraphShapedType alloc] initWithShape:ns_shape
+                                                  dataType:ns_dt];
+        }
+
+        id<MTLDevice> mtl_device =
+            (__bridge id<MTLDevice>)lucid::gpu::mps::shared_mtl_device();
+        MPSGraphDevice* mps_device =
+            [MPSGraphDevice deviceWithMTLDevice:mtl_device];
+        MPSGraphExecutable* compiled = [graph_obj
+            compileWithDevice:mps_device
+                        feeds:feed_dict
+                targetTensors:target_arr
+             targetOperations:[target_ops_arr count] > 0 ? target_ops_arr : nil
+        compilationDescriptor:make_compile_descriptor()];
+        if (compiled == nil)
+            return fail(
+                "compile_generic_fused_step_with_vars: MPSGraph compile returned nil");
+
+        auto* exe = new CompiledExecutable();
+        exe->executable = compiled;
+        exe->input_ids = std::move(ordered_feed_ids);
+        exe->output_ids = std::vector<TensorId>{loss_id};
+        exe->grad_output_ids = std::move(aux_output_ids);
+        exe->input_shapes = std::move(input_shapes);
+        exe->input_dtypes = std::move(input_dtypes);
+        exe->output_shapes = std::move(output_shapes);
+        exe->output_dtypes = std::move(output_dtypes);
+        exe->device = device;
+        return exe;
+    }
+}
+
 }  // namespace lucid::compile

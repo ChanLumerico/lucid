@@ -458,6 +458,19 @@ class CompiledModule:
     def cache_info(self) -> dict[str, object]:
         """Snapshot the cache state for tests + telemetry.
 
+        Examples
+        --------
+        >>> compiled = lucid.compile(model)
+        >>> compiled(x1); compiled(x2)
+        >>> info = compiled.cache_info()
+        >>> info["entries"]                 # one slot per unique signature
+        2
+
+        See Also
+        --------
+        timing : per-signature wall-time breakdown.
+        clear_cache : drop every cached entry.
+
         Returns
         -------
         dict
@@ -600,6 +613,25 @@ class CompiledModule:
         Useful for offline debugging — pipe the result through
         :file:`tools/inspect_trace.py` (Phase 1.6 deliverable) or
         diff two consecutive compiles to see what changed.
+
+        Parameters
+        ----------
+        key : CacheKey, optional
+            When supplied, dump only the trace for that signature.
+            When ``None`` (default), dump every cached signature in
+            one combined JSON array.
+
+        Returns
+        -------
+        str
+            JSON-encoded trace dump.  Empty string when ``key`` was
+            provided but no entry matches.
+
+        See Also
+        --------
+        cache_info : structural snapshot of every cached signature.
+        lucid.compile._trace_dump.trace_to_json : the underlying
+            serialiser called per cache entry.
         """
 
         if key is not None:
@@ -662,7 +694,7 @@ class CompiledModule:
                 dynamic=self._dynamic,
                 param_fingerprint=fp,
             )
-        except TypeError, AttributeError:
+        except (TypeError, AttributeError):
             return run_eager(self._model, args, kwargs)
 
         self._call_counter[key] = self._call_counter.get(key, 0) + 1

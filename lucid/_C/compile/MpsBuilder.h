@@ -246,4 +246,74 @@ LUCID_API CompiledExecutable* compile_generic_fused_step(
     const std::vector<TensorId>& output_target_ids,
     std::string* error_msg = nullptr);
 
+// ── Stateful-variables variant of compile_generic_fused_step ────────
+//
+// Same lifecycle and contract as :func:`compile_generic_fused_step` —
+// the trace covers forward + loss + (ghost-grad → opt update) — but a
+// designated subset of the *external feeds* is promoted to MPSGraph
+// **stateful variables** instead of placeholders, and the matching
+// subset of the trace's *output targets* is bound to ``assignVariable``
+// operations instead of executable graph outputs.
+//
+// Per-step semantics (when paired with ``run_executable_inplace``):
+//
+//   * The transient feeds (model input ``x``, loss target, per-step
+//     scalars) remain regular placeholders — same I/O as before.
+//   * Each variable feed initialises its variable from the current
+//     :class:`MTLBuffer` contents of the matching Lucid Tensor at
+//     *compile* time.  Later steps reuse the variable's persistent
+//     internal storage; the executable's input list excludes them
+//     entirely.
+//   * Each variable write target is emitted as an ``assignVariable``
+//     op (added to ``targetOperations``).  Immediately after the
+//     assignment, a ``readVariable`` op is included as a regular
+//     ``targetTensor`` so the new value can be flushed back to the
+//     Lucid Tensor's MTLBuffer on each call — keeping
+//     ``model.fc1.weight``-style reads up to date between steps.
+//
+// Why this wins
+// -------------
+// The original ``run_executable_inplace`` path allocates one fresh
+// ``MTLBuffer`` per output target (``newBufferWithLength:``,
+// ~5-30μs × N), wraps it as ``MPSGraphTensorData``, runs the
+// executable, then swaps the Lucid Tensor's MLX array onto the
+// fresh buffer.  Variables eliminate the per-step buffer
+// allocation: the readback writes directly into the existing Lucid
+// Tensor buffer, and the assignment writes happen *inside* the
+// variable's persistent storage with no host-visible buffer at all.
+//
+// Parameters
+// ----------
+// graph, external_feeds, loss_id, param_ids, ghost_grad_ids, output_target_ids
+//     Same semantics as :func:`compile_generic_fused_step`.
+// variable_pairs : vector<pair<TensorId, TensorId>>
+//     Each pair is ``(feed_id, write_id)``.  ``feed_id`` must be in
+//     ``external_feeds``; ``write_id`` must appear in
+//     ``output_target_ids`` (or be the trace output bound to a
+//     compile-time-known write slot for this variable).  The feed's
+//     initial values are snapshot from the Lucid Tensor's current
+//     MTLBuffer at compile time.  Empty vector → equivalent to
+//     :func:`compile_generic_fused_step`.
+// error_msg : optional
+//     Abort reason on failure.
+//
+// Returns
+// -------
+// CompiledExecutable*
+//     Owns the compiled executable.  ``input_ids`` excludes every
+//     ``feed_id`` in ``variable_pairs``; ``grad_output_ids`` excludes
+//     every ``write_id`` and replaces them with the corresponding
+//     ``readVariable`` outputs (so :func:`run_executable_inplace`
+//     can still bind the Lucid Tensor buffers as targets).
+//     ``nullptr`` on abort.
+LUCID_API CompiledExecutable* compile_generic_fused_step_with_vars(
+    const TraceGraph& graph,
+    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+    TensorId loss_id,
+    const std::vector<TensorId>& param_ids,
+    const std::vector<TensorId>& ghost_grad_ids,
+    const std::vector<TensorId>& output_target_ids,
+    const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
+    std::string* error_msg = nullptr);
+
 }  // namespace lucid::compile

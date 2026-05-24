@@ -110,6 +110,14 @@ def make_step(
     ...     loss = step(batch.x, batch.target)
     ...     loss.backward()
     ...     opt.step()
+
+    See Also
+    --------
+    lucid.compile.compile : module-level compile entrypoint.
+    lucid.compile.compile_optimizer : even tighter form that fuses
+        the optimizer update into the same MPSGraph executable.
+    lucid.compile._compiled_module.CompiledModule.step : per-instance
+        cached version of the same dispatch.
     """
     from lucid._dispatch import _unwrap, _wrap
     from lucid._tensor.tensor import Tensor
@@ -329,7 +337,7 @@ def make_step(
         # accidentally end up with a "compiled" wrapper around it.
         try:
             key = signature_of(model, x_args, {}, dynamic=dynamic)
-        except TypeError, AttributeError:
+        except (TypeError, AttributeError):
             key = None  # un-hashable → fresh per-call compile only
 
         if key is not None and key in eager_only:

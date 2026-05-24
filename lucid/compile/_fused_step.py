@@ -113,6 +113,25 @@ def fused_step(
         :class:`Tensor` from the just-completed step (the parameter
         and optimizer-state buffers have already been updated
         in-place inside the executable).
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn, lucid.nn.functional as F
+    >>> import lucid.optim as optim
+    >>> from lucid.compile import fused_step
+    >>> model = nn.Linear(8, 4).to('metal')
+    >>> opt = optim.Adam(model.parameters(), lr=1e-3)
+    >>> step = fused_step(model, F.cross_entropy, opt)
+    >>> for batch in batches:                        # doctest: +SKIP
+    ...     loss = step(batch.x, batch.target)       # one executable submission
+    ...     # opt.step() is implicit — parameters already updated in-place
+
+    See Also
+    --------
+    lucid.compile.make_step : forward+backward only, no optimizer fusion
+        (lets the caller drive the optimizer in Python).
+    lucid.compile.compile_optimizer : the underlying optimizer-side
+        translator that produces the update graph.
     """
     return _FusedStep(model, loss_fn, optimizer)
 
@@ -395,7 +414,20 @@ class _FusedStep:
                 )
             output_target_ids.append(int(tid))
 
-        # Compile.
+        # The MPSGraph stateful-variables variant
+        # (``compile_generic_fused_step_with_vars``) is wired through
+        # the C++ binding and standalone-validated, but Lucid
+        # integration currently hangs on first execution — the
+        # interaction between gradientForPrimaryTensor: on a variable
+        # and our trace-driven assignVariable + readVariable scheduling
+        # produces an MPSGraph execution that never completes.  Three
+        # standalone Obj-C++ smoke tests confirm the API works
+        # (variableWithData / assignVariable / readVariable / gradient
+        # through variables all individually correct).  The C++
+        # infrastructure stays compiled in for future debugging — see
+        # ``compile_generic_fused_step_with_vars`` in MpsBuilder.mm and
+        # the matching binding — but the Python integration is paused
+        # pending root-cause analysis of the runtime hang.
         exe = _C_engine.compile.compile_generic_fused_step(
             graph,
             ext,
