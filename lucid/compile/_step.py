@@ -144,6 +144,22 @@ def make_step(
     def _compile_for(
         x_args: tuple[Tensor, ...],
     ) -> _StepEntry | None:
+        """Trace ``model`` + ``loss_fn`` once for this signature and compile.
+
+        Parameters
+        ----------
+        x_args : tuple of Tensor
+            ``(model_input, *loss_extra_inputs)`` — the same positional
+            tuple the returned ``step`` callable expects.
+
+        Returns
+        -------
+        _StepEntry or None
+            Compiled executable + feed plan, or ``None`` on any
+            failure condition (empty trace, unresolved parameter
+            id, builder rejection) — caller marks the signature
+            eager-only.
+        """
         t0 = time.perf_counter()
         with no_grad():
             with _tracing() as tracer:
@@ -211,6 +227,13 @@ def make_step(
     def _run(
         entry: _StepEntry, x_args: tuple[Tensor, ...]
     ) -> tuple[object, list[object]]:
+        """Execute one cached step entry; return ``(loss_impl, [grad_impls])``.
+
+        The executable returns ``len(params) + 1`` storages — the loss
+        scalar followed by the per-parameter gradients in the same
+        order ``params`` was captured.  The caller wraps these into
+        Lucid Tensors and feeds them into the autograd graph.
+        """
         feed_impls: list[object] = []
         for tid, src in zip(entry.exe.input_ids, entry.input_source):
             if src is None:
@@ -237,6 +260,15 @@ def make_step(
 
         @staticmethod
         def forward(ctx, entry_holder, *step_args):
+            """Run the cached executable; save grads for backward.
+
+            ``entry_holder[0]`` is the :class:`_StepEntry` selected
+            by the outer ``step()`` cache lookup.  ``step_args`` is
+            laid out as ``(*x_args, *params)`` so the autograd graph
+            sees both the user inputs and the model parameters in
+            its next-edge slot list (the parameter gradients are
+            wired in :meth:`backward`).
+            """
             # ``entry_holder`` is a 1-element list owning the
             # ``_StepEntry``.  Wrapping it in a list keeps it out of
             # the *Tensor*-only positional contract of Function.apply
@@ -256,6 +288,13 @@ def make_step(
 
         @staticmethod
         def backward(ctx, grad_loss):
+            """Chain ``grad_loss`` into each saved per-parameter gradient.
+
+            Returns one slot per autograd next-edge: ``None`` for
+            every user-input position (so backprop doesn't propagate
+            into data / targets) followed by the scaled gradients
+            for each parameter.
+            """
             # Chain rule: ``grad_param_i = grad_loss * dL/dparam_i``.
             # Returning ``None`` for the user-supplied inputs declines
             # to back-propagate further into them (data / targets the
@@ -266,6 +305,25 @@ def make_step(
             return tuple([None] * ctx.n_user + scaled)
 
     def step(*x_args: Tensor) -> Tensor:
+        """Run one fwd+bwd compiled training step (or eager fallback).
+
+        Parameters
+        ----------
+        *x_args : Tensor
+            ``(model_input, *loss_extra_inputs)`` — the same shape
+            ``model(input)`` + ``loss_fn(out, *extras)`` accept
+            together.
+
+        Returns
+        -------
+        Tensor
+            The scalar loss carrying a ``grad_fn`` that, when
+            ``.backward()`` is called, runs the captured gradients
+            into each model parameter's ``.grad``.  On compile
+            failure the loss tensor instead comes from the eager
+            forward + ``loss_fn`` and uses the regular autograd
+            graph for backward.
+        """
         # Cache lookup / compile / eager-fallback decision happens
         # OUTSIDE the autograd Function so the eager path doesn't
         # accidentally end up with a "compiled" wrapper around it.
@@ -298,10 +356,16 @@ def make_step(
     step.eager_only = eager_only  # type: ignore[attr-defined]
 
     def clear_cache() -> None:
+        """Drop every cached executable + eager-fallback blacklist for this step callable."""
         cache.clear()
         eager_only.clear()
 
     def graph_dump() -> str:
+        """Return a JSON view of every cached signature's :class:`TraceGraph`.
+
+        Used by `tools/inspect_trace.py` and the test harness to diff
+        consecutive compiles and pinpoint divergent ops.
+        """
         import json as _json
 
         items = [

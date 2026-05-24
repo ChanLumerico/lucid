@@ -86,7 +86,9 @@ def _clone_state(model: nn.Module) -> dict[str, lucid.Tensor]:
     return {n: p.detach().clone() for n, p in model.named_parameters()}
 
 
-def _run_eager_step(model: nn.Module, mk_opt: object, x: lucid.Tensor, t: lucid.Tensor) -> dict[str, lucid.Tensor]:
+def _run_eager_step(
+    model: nn.Module, mk_opt: object, x: lucid.Tensor, t: lucid.Tensor
+) -> dict[str, lucid.Tensor]:
     opt = mk_opt(list(model.parameters()))
     opt.zero_grad()
     loss = F.mse_loss(model(x), t)
@@ -114,7 +116,9 @@ def test_compile_optimizer_step_parity(mk_opt: object) -> None:
     model_eager = _tiny_model()
     state = _clone_state(model_eager)
     model_comp = _tiny_model()
-    for (n, p), (_, q) in zip(model_eager.named_parameters(), model_comp.named_parameters()):
+    for (n, p), (_, q) in zip(
+        model_eager.named_parameters(), model_comp.named_parameters()
+    ):
         p.copy_(state[n])
         q.copy_(state[n])
 
@@ -148,7 +152,9 @@ def test_fused_step_parity(mk_opt: object) -> None:
     model_eager = _tiny_model()
     state = _clone_state(model_eager)
     model_comp = _tiny_model()
-    for (n, p), (_, q) in zip(model_eager.named_parameters(), model_comp.named_parameters()):
+    for (n, p), (_, q) in zip(
+        model_eager.named_parameters(), model_comp.named_parameters()
+    ):
         p.copy_(state[n])
         q.copy_(state[n])
 

@@ -93,8 +93,7 @@ def assert_compile_parity(
 
     if atol == 0.0 and rtol == 0.0:
         assert diff == 0.0, (
-            f"bit-exact parity broken: abs diff = {diff:.3e}, "
-            f"rel = {rel:.3e}"
+            f"bit-exact parity broken: abs diff = {diff:.3e}, " f"rel = {rel:.3e}"
         )
     else:
         threshold = atol + rtol * max_eager

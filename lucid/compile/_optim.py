@@ -4,7 +4,7 @@ lucid.compile._optim — compiled optimizer wrappers (in-place output path).
 Wraps an eager :class:`lucid.optim.Optimizer` so ``step()`` becomes a
 single MPSGraph executable that fuses the per-parameter update math AND
 writes its outputs directly back into the parameter / state buffers via
-:func:`run_executable_inplace`.
+``run_executable_inplace``.
 
 Why in-place
 ------------
@@ -21,9 +21,9 @@ The current implementation skips the ``copy_`` round-trip entirely:
 1. **One-time trace + compile** — runs the update function under a
    :class:`Tracer`, records params / state / grads / bias-corrections
    as inputs and the new params / state as outputs, then calls
-   :func:`compile_or_cached` to mint a :class:`MPSGraphExecutable`.
+   ``compile_or_cached`` to mint a :class:`MPSGraphExecutable`.
 2. **Per-step run** — collects fresh grads + bias-correction scalars,
-   calls :func:`run_executable_inplace` with the parameter and state
+   calls ``run_executable_inplace`` with the parameter and state
    tensors as the output targets.  MPSGraph writes directly into
    their existing MTLBuffers; no fresh allocation, no per-output
    ``copy_``.
@@ -46,23 +46,111 @@ __all__ = ["compile_optimizer"]
 
 
 def compile_optimizer(opt: Optimizer) -> object:
-    """Wrap ``opt`` so ``opt.step()`` runs as a single MPSGraph executable.
+    r"""Wrap ``opt`` so ``opt.step()`` runs as a single MPSGraph executable.
+
+    Dispatches on the concrete optimizer subclass and returns the
+    matching :class:`_CompiledStepBase` subclass instance.  The
+    returned object exposes the same eager-optimizer API surface
+    (``step`` / ``zero_grad`` / ``param_groups`` / ``state_dict`` /
+    ``load_state_dict``) so existing training loops slot it in
+    without code changes — the only difference is that ``step()``
+    runs as one compiled GPU kernel instead of N sequential per-
+    parameter element-wise updates.
+
+    Supported optimizers (8):
+        * :class:`~lucid.optim.SGD` — classical, with optional
+          momentum / Nesterov / weight-decay branches.
+        * :class:`~lucid.optim.Adam`, :class:`~lucid.optim.AdamW` —
+          bias-corrected first + second moments; coupled vs
+          decoupled weight decay respectively.  AMSGrad variant of
+          Adam is rejected at construct time (a planned follow-up).
+        * :class:`~lucid.optim.RMSprop` — exponentially-smoothed
+          squared gradient.  ``centered=True`` is rejected loudly
+          here even though the eager backend silently drops it.
+        * :class:`~lucid.optim.Adagrad` — per-parameter cumulative
+          squared gradient; ``lr_decay`` is fed as a per-step
+          scalar so the trace stays signature-stable.
+        * :class:`~lucid.optim.Adadelta` — running RMS-ratio
+          adaptive step (no manual LR).
+        * :class:`~lucid.optim.Adamax` — Adam variant with L∞-norm
+          second-moment estimate.
+        * :class:`~lucid.optim.NAdam` — Adam with Nesterov lookahead
+          + momentum-decay schedule (closed-form ``μ_t`` series).
+
+    Structurally unsupported (raise :class:`NotImplementedError`
+    with the reason at construct time):
+        * :class:`~lucid.optim.LBFGS` — line search depends on
+          data-dependent iteration count (no static-shape MPSGraph
+          equivalent).
+        * :class:`~lucid.optim.SparseAdam` — index-driven update
+          requires runtime ``nonzero`` / ``scatter``.
+        * :class:`~lucid.optim.Rprop` — sign-based per-element
+          conditional branching.
+        * :class:`~lucid.optim.RAdam` — ``ρ_t > 4`` branch can't be a
+          static MPSGraph op.
+        * :class:`~lucid.optim.ASGD` — averaging coefficient
+          depends on iteration count past a warmup threshold.
+
+    Multi-param-group optimizers are not yet supported (a future
+    pass will emit one update kernel per group); single-group
+    optimizers cover essentially every practical training recipe.
 
     Parameters
     ----------
-    opt : lucid.optim.Optimizer
-        Concrete optimizer instance (SGD / Adam / AdamW).
+    opt : Optimizer
+        Concrete optimizer instance whose ``step()`` is being
+        lifted.  Held by reference; LR-scheduler callbacks and
+        other state mutations on ``opt`` continue to take effect
+        because the compiled subclass reads them at scalar-refresh
+        time, not at construct time.
 
     Returns
     -------
-    object
-        Drop-in replacement exposing ``step()``, ``zero_grad()``,
-        ``param_groups``, ``state_dict()`` / ``load_state_dict()``.
+    _CompiledStepBase
+        Drop-in optimizer replacement.  The underlying class is one
+        of the ``_Compiled<Name>`` subclasses listed above.
 
     Raises
     ------
+    NotImplementedError
+        With a structural reason when ``opt`` is one of the
+        unsupported families above (or AMSGrad / multi-group / etc.).
     TypeError
-        When ``opt``'s class isn't one of the supported families.
+        When ``opt`` is not a Lucid :class:`Optimizer` subclass at
+        all — the message lists the supported set.
+
+    Examples
+    --------
+    Drop-in replacement::
+
+        opt = lucid.optim.Adam(model.parameters(), lr=1e-3)
+        copt = compile_optimizer(opt)
+
+        for batch, target in loader:
+            copt.zero_grad()
+            loss = F.cross_entropy(model(batch), target)
+            loss.backward()
+            copt.step()             # one MPSGraph executable
+
+    Inspecting the rejection reason::
+
+        try:
+            copt = compile_optimizer(lucid.optim.LBFGS(params))
+        except NotImplementedError as e:
+            print(e)
+            # "compile_optimizer: LBFGS is not supported.  LBFGS performs
+            #  a line search inside step() whose iteration count depends
+            #  on tensor values; ..."
+
+    See Also
+    --------
+    :func:`fused_step` : single-executable forward + loss + backward
+        + update via the ghost-grad mechanism.  Use this when the
+        whole step is the unit of work and the model's forward
+        compiles cleanly.
+    :func:`make_step` : autograd-graph-aware fwd+bwd compile that
+        still lets ``loss.backward()`` run a regular eager
+        optimizer step.
     """
     from lucid.optim.sgd import SGD
     from lucid.optim.adam import Adam, AdamW
@@ -159,7 +247,21 @@ def _zeros_like(t: Tensor) -> Tensor:
 
 
 def _flatten_params(opt: Optimizer) -> list[Tensor]:
-    """Return every Parameter across every param_group, in order."""
+    """Flatten every Parameter across every ``param_group`` into one list.
+
+    The compile path treats parameters as a flat sequence — the
+    ``_trace_update`` / ``_outputs_to_targets`` hooks index into
+    ``self._params`` by integer slot.  Multi-group optimizers are
+    rejected upstream in :meth:`_CompiledStepBase.__init__`; this
+    helper is therefore single-group in practice and just flattens
+    one ``group["params"]`` list.
+
+    Returns
+    -------
+    list[Tensor]
+        Parameters in the same order they appear in
+        ``opt.param_groups[0]["params"]``.
+    """
     out: list[Tensor] = []
     for group in opt.param_groups:
         for p in group["params"]:
@@ -180,19 +282,126 @@ def _zero_scalar(dt: object, dev: object) -> Tensor:
 
 
 class _CompiledStepBase:
-    """Shared compile + run plumbing for the optim wrappers.
+    r"""Abstract base for the compiled-optimizer wrappers.
 
-    Concrete subclasses (SGD / Adam / AdamW) supply two things:
+    Each concrete subclass (one per supported optimizer family)
+    plugs into a fixed five-hook lifecycle and inherits the build /
+    cache / run loop from this class.  The hooks together describe
+    *what state buffers the optimizer maintains*, *which extra
+    scalars it needs per step*, and *how the update math composes*
+    inside a tracer-recorded :class:`TraceGraph`.
 
-    * ``_collect_inputs()`` — returns the ordered list of tensors that
-      the update function reads (params, state buffers, grads, bias
-      corrections — in whichever order the trace recorded them).
-    * ``_outputs_targets()`` — returns the ordered list of target
-      tensors the executable's outputs should be written into.  The
-      ordering must match the trace's return order.
+    Lifecycle
+    ---------
+    The first :meth:`step` call triggers :meth:`_build_executable`,
+    which assembles the input/output plan, runs the trace, calls
+    ``compile_or_cached``, and stores the executable.  Every
+    subsequent :meth:`step` reuses that executable via
+    ``run_executable_inplace`` — the param + state buffers are
+    written *in place* by the GPU so no per-output ``copy_`` syncs
+    fire between MPSGraph and Python.
+
+    Subclass hooks (override these)
+    -------------------------------
+    :meth:`_register_state_in_inputs(register)`
+        Append every optimizer-owned state buffer (velocity buffers
+        for SGD, ``m``/``v`` for Adam, ``square_avg`` for RMSprop,
+        ...) into the input plan via the supplied ``register(kind,
+        index, tensor)`` callback.  The ``(kind, index)`` pair must
+        match an entry in ``_buffer_table`` so
+        :meth:`_resolve_input` can find the live tensor at run time.
+    :meth:`_register_scalars(register)` *(optional)*
+        Materialise stable 0-D placeholders for per-step scalars
+        whose *value* varies across steps but whose *identity*
+        must stay constant for the cache to hit (e.g. Adam's bias-
+        correction factors, NAdam's three coefficient scalars).
+        Returns a ``dict[name, Tensor]`` consumed by
+        :meth:`_trace_update`.  Default: no scalars.
+    :meth:`_refresh_scalars()` *(optional)*
+        Copy fresh values into the placeholders allocated by
+        :meth:`_register_scalars` before each :meth:`step`.  Default:
+        no-op for optimizers without per-step scalars.
+    :meth:`_trace_update(all_inputs, grads, scalars)`
+        Emit the actual update math under the active :class:`Tracer`.
+        Returns the ordered list of result tensors
+        ``[new_params..., new_state...]``.  This ordering pins the
+        executable's output order, so :meth:`_outputs_to_targets`
+        must mirror it exactly.
+    :meth:`_outputs_to_targets(outputs)`
+        Map each executable-output slot to the parameter / state-
+        buffer Tensor whose storage receives the in-place write.
+        Same ordering as :meth:`_trace_update`'s return.
+
+    Attributes
+    ----------
+    _opt : Optimizer
+        The wrapped eager optimizer.  Held by reference; LR
+        schedulers / state mutations flow through naturally.
+    _params : list[Tensor]
+        Flat ordered list of every parameter across every
+        ``param_group`` (rejected at construct time when more than
+        one group is present).
+    _exe : object or None
+        The cached ``PyCompiledExecutable``, lazily allocated
+        on the first :meth:`step`.  Set to ``None`` by
+        :meth:`load_state_dict` to force a retrace.
+    _input_plan : list[tuple]
+        Ordered ``(kind, index)`` pairs naming each placeholder the
+        executable reads in ``exe.input_ids`` order.  Resolved
+        to live tensors via :meth:`_resolve_input`.
+    _output_targets : list[Tensor]
+        Tensors that receive the executable's in-place writes; same
+        order as :meth:`_trace_update`'s return.
+    _buffer_table : dict[(str, int), Callable[[], Tensor]]
+        Subclass-extensible registry mapping every state-buffer
+        ``(kind, index)`` to a zero-arg getter that returns the
+        *live* tensor.  Using a callable (rather than storing the
+        tensor directly) lets :meth:`load_state_dict` swap the
+        underlying list without touching the table.
+    _scalar_slots : dict[str, Tensor]
+        Name → stable 0-D placeholder for per-step scalars.  Refresh
+        via :meth:`_refresh_scalars`.
+
+    Notes
+    -----
+    *In-place output writes.*  A first revision routed the update
+    through ``lucid.compile(update_fn)`` and explicit
+    ``param.copy_(new_param)`` per parameter.  That ran ~50 %
+    *slower* than eager because every ``copy_`` forced an
+    ``mlx::copy`` sync — for a 22-parameter Adam this added ~2.3 ms
+    on top of the ~2.3 ms MPSGraph dispatch.  The current path uses
+    ``run_executable_inplace`` so MPSGraph writes directly into
+    the parameter MTLBuffers; per-step cost drops to the dispatch
+    time alone.
+
+    See Also
+    --------
+    :func:`compile_optimizer` : the user-facing entry that
+        dispatches on optimizer type and returns the right
+        subclass instance.
     """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Set up the shared compile-step plumbing on top of ``opt``.
+
+        Parameters
+        ----------
+        opt : Optimizer
+            The eager optimizer instance whose math is being lifted
+            into a compiled executable.  Held by reference so
+            scheduler callbacks (LR updates, etc.) still flow
+            through naturally.
+
+        Raises
+        ------
+        ValueError
+            If ``opt`` has no parameters.
+        NotImplementedError
+            If ``opt`` has more than one ``param_group`` — multi-
+            group support is deferred (the trace would need to emit
+            one update kernel per group, which the current generic
+            entry point doesn't model).
+        """
         self._opt = opt
         self._params = _flatten_params(opt)
         if not self._params:
@@ -206,7 +415,7 @@ class _CompiledStepBase:
         self._exe: object | None = None
         # Per-input-slot category descriptor, populated at compile time.
         # Each entry is a tuple ``(kind, index)`` matched against
-        # :attr:`_buffer_table`.  Built-in kinds: "param", "grad",
+        # ``_buffer_table``.  Built-in kinds: "param", "grad",
         # "scalar".  Concrete subclasses extend the table with their
         # own state-buffer kinds (e.g. "m"/"v" for Adam,
         # "square_avg"/"acc_delta" for Adadelta).
@@ -227,23 +436,35 @@ class _CompiledStepBase:
 
     @property
     def param_groups(self) -> list[dict[str, object]]:
+        """Delegate to the wrapped optimizer's parameter groups."""
         return self._opt.param_groups
 
     @property
     def state(self) -> dict[int, dict[str, object]]:
+        """Delegate to the wrapped optimizer's per-parameter state dict."""
         return self._opt.state
 
     @property
     def defaults(self) -> dict[str, object]:
+        """Delegate to the wrapped optimizer's hyperparameter defaults."""
         return self._opt.defaults
 
     def zero_grad(self, set_to_none: bool = True) -> None:
+        """Forward to the wrapped optimizer's ``zero_grad`` — drop-in API."""
         self._opt.zero_grad(set_to_none=set_to_none)
 
     def state_dict(self) -> dict[str, object]:
+        """Forward to the wrapped optimizer's ``state_dict`` for checkpointing."""
         return self._opt.state_dict()
 
     def load_state_dict(self, sd: dict[str, object]) -> None:
+        """Restore optimizer state and **drop the compiled executable**.
+
+        Loading a checkpoint may replace state buffer tensors with
+        fresh objects, changing their TensorImpl identity.  The
+        cached executable's input plan keys feeds by identity, so
+        the safe default is to retrace on the next step.
+        """
         self._opt.load_state_dict(sd)
         # Recompile next step — state buffer identity may have moved.
         self._exe = None
@@ -251,6 +472,15 @@ class _CompiledStepBase:
     # ── Internals ────────────────────────────────────────────────
 
     def _resolve_input(self, plan_entry: tuple) -> Tensor:
+        """Map one ``(kind, index)`` plan slot to its live tensor.
+
+        Built-in ``kind`` values: ``"param"`` (parameter slot),
+        ``"grad"`` (per-step gradient, re-bound each ``step()``),
+        ``"scalar"`` (the bias-correction holders).  Anything else is
+        an optimizer-subclass-defined state buffer registered through
+        ``_buffer_table`` (e.g. ``"m"``/``"v"`` for Adam,
+        ``"square_avg"`` for RMSprop).
+        """
         kind = plan_entry[0]
         if kind == "param":
             return self._params[plan_entry[1]]
@@ -446,6 +676,24 @@ class _CompiledStepBase:
     # ── Public step() ────────────────────────────────────────────
 
     def step(self, closure: Callable[..., Tensor] | None = None) -> Tensor | None:
+        """Run one compiled update step; returns the (optional) closure loss.
+
+        Parameters
+        ----------
+        closure : callable, optional
+            Match the eager-optim signature — invoked once before the
+            update and its return value is bubbled back to the
+            caller.  ``None`` (the common path) means there's no
+            closure and the return is ``None``.
+
+        Returns
+        -------
+        Tensor or None
+            Whatever ``closure()`` returned, or ``None`` when no
+            closure was supplied.  Parameter and optimizer-state
+            buffers are mutated in-place by the cached executable
+            before this returns.
+        """
         loss: Tensor | None = closure() if closure is not None else None
         if self._exe is None:
             self._build_executable()
@@ -466,9 +714,59 @@ class _CompiledStepBase:
 
 
 class _CompiledSGD(_CompiledStepBase):
-    """SGD wrapper (with optional momentum / nesterov / weight_decay)."""
+    r"""Compiled :class:`~lucid.optim.SGD` (with optional momentum / nesterov / weight_decay).
+
+    Implements the classical Polyak heavy-ball + Nesterov-lookahead
+    update lifted into a single MPSGraph executable.  When ``momentum
+    == 0`` the velocity buffer is never allocated, so plain SGD costs
+    no extra memory over the parameters themselves.
+
+    Update rule
+    -----------
+    Per parameter :math:`\theta` with gradient :math:`g_t`, momentum
+    coefficient :math:`\mu`, dampening :math:`\tau`, weight decay
+    :math:`\lambda`, learning rate :math:`\eta`:
+
+    .. math::
+
+        g_t       &\leftarrow g_t + \lambda \theta_t \\
+        v_{t+1}   &= \mu v_t + (1 - \tau) g_t \\
+        \tilde g  &= \begin{cases}
+                        g_t + \mu v_{t+1} & \text{Nesterov}\\
+                        v_{t+1}           & \text{otherwise}
+                     \end{cases} \\
+        \theta_{t+1} &= \theta_t - \eta \tilde g
+
+    With ``momentum == 0`` the velocity branch is skipped entirely
+    and the update reduces to :math:`\theta_{t+1} = \theta_t - \eta g_t`.
+
+    Notes
+    -----
+    Nesterov is implemented faithfully here, unlike the eager SGD
+    which historically silently dropped the flag.  See
+    ``test_compile_optimizer_nesterov_correctness`` for the
+    hand-rolled formula verification.
+
+    See Also
+    --------
+    :class:`lucid.optim.SGD` : eager counterpart.
+    """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture SGD hyperparameters + allocate the velocity buffers.
+
+        The velocity buffer (one tensor per parameter) is allocated
+        only when ``momentum != 0`` — plain SGD therefore costs zero
+        extra memory.  Nesterov is implemented faithfully (the eager
+        SGD silently drops it; see ``test_optimizer.py``'s
+        nesterov-correctness test for the formula verification).
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not an :class:`~lucid.optim.sgd.SGD`
+            instance.
+        """
         from lucid.optim.sgd import SGD
 
         if not isinstance(opt, SGD):
@@ -488,10 +786,18 @@ class _CompiledSGD(_CompiledStepBase):
             self._buffer_table[("mom", i)] = lambda _i=i: self._momenta[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the velocity buffers (``"mom"`` kind) as trace inputs."""
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the SGD update math under the active tracer.
+
+        Implements the classical Polyak-momentum / Nesterov-lookahead
+        form (see :class:`lucid.optim.SGD` docstring for the closed
+        form).  Returns ``new_params + new_momenta`` in that order;
+        :meth:`_outputs_to_targets` must mirror this order.
+        """
         params = self._params
         momenta = self._momenta
         lr = self._lr
@@ -516,6 +822,7 @@ class _CompiledSGD(_CompiledStepBase):
         return new_params + new_momenta
 
     def _outputs_to_targets(self, outputs):
+        """Map executable outputs to ``params`` (first N) then ``momenta`` (next N)."""
         # First N outputs → self._params, next N → self._momenta.
         n = len(self._params)
         return list(self._params) + list(self._momenta)
@@ -525,9 +832,69 @@ class _CompiledSGD(_CompiledStepBase):
 
 
 class _CompiledAdam(_CompiledStepBase):
-    """Adam wrapper (no AMSGrad)."""
+    r"""Compiled :class:`~lucid.optim.Adam` (no AMSGrad).
+
+    Lifts the bias-corrected adaptive-moment update into one
+    MPSGraph executable.  Maintains the standard ``m`` (first-moment)
+    and ``v`` (second-moment / squared-gradient) running averages
+    plus two stable 0-D scalar holders for the bias-correction
+    factors :math:`1-\beta_1^t` and :math:`1-\beta_2^t`.  The factor
+    *values* are refreshed via :meth:`_refresh_scalars` each step
+    (advancing ``t`` is the only per-step CPU work); their *Tensor
+    identities* stay constant so the cached executable continues to
+    bind them as the same placeholders.
+
+    Update rule
+    -----------
+    With first-moment decay :math:`\beta_1`, second-moment decay
+    :math:`\beta_2`, learning rate :math:`\eta`, weight decay
+    :math:`\lambda`, and step index :math:`t`:
+
+    .. math::
+
+        g_t      &\leftarrow g_t + \lambda \theta_t \\
+        m_t      &= \beta_1 m_{t-1} + (1-\beta_1) g_t \\
+        v_t      &= \beta_2 v_{t-1} + (1-\beta_2) g_t^{2} \\
+        \hat m_t &= m_t / (1 - \beta_1^t) \\
+        \hat v_t &= v_t / (1 - \beta_2^t) \\
+        \theta_t &= \theta_{t-1}
+                   - \eta \, \hat m_t / (\sqrt{\hat v_t} + \varepsilon)
+
+    Weight decay is folded into the gradient *before* the moment
+    update (coupled L₂), matching the eager :class:`~lucid.optim.Adam`.
+    Use :class:`_CompiledAdamW` for the decoupled variant.
+
+    Raises (at construct time)
+    --------------------------
+    NotImplementedError
+        When ``amsgrad=True`` is set.  The maximum-history variant
+        keeps an extra running max of the second moment — a
+        straightforward extension once the test surface for it
+        lands.
+
+    See Also
+    --------
+    :class:`lucid.optim.Adam` : eager counterpart.
+    :class:`_CompiledAdamW` : decoupled-weight-decay variant.
+    """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture Adam hyperparameters + allocate ``m`` / ``v`` buffers.
+
+        Pre-allocates the first-moment (``m``) and second-moment
+        (``v``) running averages and the two bias-correction scalar
+        holders.  Bias-correction values are refreshed via
+        :meth:`_refresh_scalars` each step.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not an :class:`~lucid.optim.adam.Adam`
+            instance.
+        NotImplementedError
+            If ``amsgrad=True`` is set — the maximum-history variant
+            isn't supported on the compile path.
+        """
         from lucid.optim.adam import Adam
 
         if not isinstance(opt, Adam):
@@ -551,12 +918,20 @@ class _CompiledAdam(_CompiledStepBase):
             self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the ``m`` and ``v`` running-moment buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
     def _register_scalars(self, register):
+        """Register stable 0-D placeholders for the bias-correction factors.
+
+        Returns a ``{"bias1", "bias2"}`` dict that the trace body
+        reads — :meth:`_refresh_scalars` copies fresh values into
+        the same placeholders each step so executable cache identity
+        is preserved.
+        """
         # Stable 0-D tensors for the bias-correction factors; values
         # refreshed via ``copy_`` each step.
         dt = self._params[0].dtype
@@ -570,6 +945,11 @@ class _CompiledAdam(_CompiledStepBase):
         return scalars
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the Adam update math (coupled weight decay; bias-corrected moments).
+
+        Returns ``new_params + new_m + new_v`` in that order;
+        :meth:`_outputs_to_targets` must mirror it.
+        """
         bias1 = scalars["bias1"]
         bias2 = scalars["bias2"]
         params = self._params
@@ -598,9 +978,16 @@ class _CompiledAdam(_CompiledStepBase):
         return new_params + new_m + new_v
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` in order."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
 
     def _refresh_scalars(self) -> None:
+        """Advance ``t`` and recompute ``bias1 = 1-β₁^t`` / ``bias2 = 1-β₂^t``.
+
+        Writes the fresh values into the existing scalar holders via
+        ``copy_`` so their TensorImpl identity stays stable and the
+        cached executable continues to find them.
+        """
         import lucid as _lucid
 
         self._t += 1
@@ -618,15 +1005,53 @@ class _CompiledAdam(_CompiledStepBase):
 
 
 class _CompiledAdamW(_CompiledAdam):
-    """AdamW wrapper — Adam with decoupled weight decay.
+    r"""Compiled :class:`~lucid.optim.AdamW` — Adam with decoupled weight decay.
 
-    Differs from Adam only in the trace body: weight decay is applied
-    directly to the parameter outside the gradient (decoupled), not
-    folded into ``g`` before the moment updates.  All state-buffer +
-    scalar plumbing is identical to :class:`_CompiledAdam`.
+    Identical state-buffer + scalar plumbing as :class:`_CompiledAdam`;
+    differs only inside the trace body where weight decay is applied
+    *directly to the parameter* rather than folded into the gradient.
+    This decoupling is what makes AdamW the recommended optimizer
+    for transformer-style training where weight decay needs to act
+    as true regularisation rather than as an adaptive-LR-scaled
+    perturbation.
+
+    Update rule
+    -----------
+    .. math::
+
+        m_t      &= \beta_1 m_{t-1} + (1-\beta_1) g_t \\
+        v_t      &= \beta_2 v_{t-1} + (1-\beta_2) g_t^{2} \\
+        \hat m_t &= m_t / (1 - \beta_1^t) \\
+        \hat v_t &= v_t / (1 - \beta_2^t) \\
+        \theta_t &= \theta_{t-1}
+                   - \eta \, \big( \hat m_t / (\sqrt{\hat v_t} + \varepsilon)
+                                   + \lambda \theta_{t-1} \big)
+
+    The final ``λ·θ`` term is the decoupled decay; it never enters
+    ``m_t`` / ``v_t`` so the adaptive scaling stays unbiased by the
+    regularisation strength.
+
+    Notes
+    -----
+    Construction bypasses :meth:`_CompiledAdam.__init__` (which
+    would reject AdamW's runtime type) and reaches
+    :meth:`_CompiledStepBase.__init__` directly.  The
+    ``_register_scalars`` / ``_refresh_scalars`` / state-buffer
+    inputs hooks are inherited verbatim from :class:`_CompiledAdam`.
+
+    See Also
+    --------
+    :class:`lucid.optim.AdamW` : eager counterpart.
+    :class:`_CompiledAdam` : coupled-weight-decay variant.
     """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture AdamW hyperparameters + allocate ``m`` / ``v`` buffers.
+
+        Bypasses :meth:`_CompiledAdam.__init__` (which rejects
+        AdamW's class type) and goes straight to the base
+        :meth:`_CompiledStepBase.__init__`.
+        """
         from lucid.optim.adam import AdamW
 
         if not isinstance(opt, AdamW):
@@ -648,6 +1073,13 @@ class _CompiledAdamW(_CompiledAdam):
             self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the AdamW update — decoupled weight decay variant.
+
+        Same moment + bias-correction math as Adam, but weight decay
+        is applied directly to the parameter (``p - lr * wd * p``)
+        rather than folded into the gradient.  This avoids skewing
+        the second-moment estimate by the decay term.
+        """
         bias1 = scalars["bias1"]
         bias2 = scalars["bias2"]
         params = self._params
@@ -679,10 +1111,51 @@ class _CompiledAdamW(_CompiledAdam):
 
 
 class _CompiledRMSprop(_CompiledStepBase):
-    """RMSprop wrapper.  Centered variant rejected (eager backend
-    silently ignores the flag — better to fail loudly here)."""
+    r"""Compiled :class:`~lucid.optim.RMSprop`.
+
+    Lifts Hinton's RMSProp update — an exponentially-smoothed
+    running second moment normalises the step magnitude — into one
+    MPSGraph executable.  An optional Polyak momentum buffer is
+    layered on top when ``momentum != 0``; otherwise the
+    parameter step is the raw scaled gradient.
+
+    Update rule
+    -----------
+    With smoothing rate :math:`\alpha`, momentum :math:`\mu`,
+    weight decay :math:`\lambda`, learning rate :math:`\eta`:
+
+    .. math::
+
+        g_t       &\leftarrow g_t + \lambda \theta_t \\
+        s_t       &= \alpha s_{t-1} + (1-\alpha) g_t^{2} \\
+        \tilde g  &= g_t / (\sqrt{s_t} + \varepsilon) \\
+        b_t       &= \mu b_{t-1} + \tilde g
+                       \quad\text{(only when } \mu \ne 0 \text{)} \\
+        \theta_t  &= \theta_{t-1} - \eta \,
+                       (b_t \text{ or } \tilde g)
+
+    The ``centered=True`` variant (which subtracts a running gradient
+    mean to compute a *centered* second moment) is rejected at
+    construct time — the eager backend silently drops the flag, so
+    surfacing it loudly here keeps compile + eager in agreement.
+
+    Raises (at construct time)
+    --------------------------
+    NotImplementedError
+        When ``centered=True`` is set.
+
+    See Also
+    --------
+    :class:`lucid.optim.RMSprop` : eager counterpart.
+    """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture RMSprop hyperparameters + allocate ``square_avg`` (+ momentum) buffers.
+
+        Raises :class:`NotImplementedError` for ``centered=True`` —
+        the eager backend silently drops that flag, so surfacing it
+        loudly here keeps the compile + eager paths in agreement.
+        """
         from lucid.optim.others import RMSprop
 
         if not isinstance(opt, RMSprop):
@@ -715,12 +1188,19 @@ class _CompiledRMSprop(_CompiledStepBase):
             self._buffer_table[("mom", i)] = lambda _i=i: self._momenta[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the ``square_avg`` (and optional ``mom``) buffers as trace inputs."""
         for i, sa in enumerate(self._square_avg):
             register("square_avg", i, sa)
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the RMSprop update — exponentially smoothed squared gradient.
+
+        When ``momentum != 0`` a Polyak-momentum buffer is also
+        updated and used in the parameter step.  Returns
+        ``new_params + new_sq + new_mom`` in that order.
+        """
         params = self._params
         sq = self._square_avg
         mom = self._momenta
@@ -748,6 +1228,7 @@ class _CompiledRMSprop(_CompiledStepBase):
         return new_params + new_sq + new_mom
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``square_avg`` then (optional) ``momenta``."""
         return list(self._params) + list(self._square_avg) + list(self._momenta)
 
 
@@ -755,10 +1236,47 @@ class _CompiledRMSprop(_CompiledStepBase):
 
 
 class _CompiledAdagrad(_CompiledStepBase):
-    """Adagrad wrapper.  lr_decay applied via a per-step scalar feed
-    so the executable stays signature-stable across steps."""
+    r"""Compiled :class:`~lucid.optim.Adagrad`.
+
+    Duchi's per-parameter adaptive LR: each parameter scales its
+    step by the inverse square root of its own historical squared-
+    gradient sum.  Effective LR decays monotonically across steps,
+    which makes Adagrad well-suited to sparse-gradient regimes
+    (NLP feature embeddings, RecSys-style models) but typically
+    too aggressive for dense vision training.
+
+    Update rule
+    -----------
+    With base LR :math:`\eta_0`, LR-decay rate :math:`\gamma`,
+    weight decay :math:`\lambda`, step :math:`t`:
+
+    .. math::
+
+        g_t       &\leftarrow g_t + \lambda \theta_t \\
+        s_t       &= s_{t-1} + g_t^{2}                 \\
+        \eta_t    &= \eta_0 / (1 + (t-1)\gamma)        \\
+        \theta_t  &= \theta_{t-1}
+                       - \eta_t \, g_t / (\sqrt{s_t} + \varepsilon)
+
+    ``lr_decay`` is folded into a per-step scalar feed
+    (``eff_lr = η_0 / (1 + (t-1)γ)``) rather than the trace body,
+    so the executable signature stays constant across steps even as
+    ``t`` advances.  :meth:`_refresh_scalars` writes the fresh value
+    via ``copy_`` so the placeholder identity is preserved.
+
+    See Also
+    --------
+    :class:`lucid.optim.Adagrad` : eager counterpart.
+    """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture Adagrad hyperparameters + allocate ``state_sum`` accumulators.
+
+        ``lr_decay`` is not folded into the trace — instead the
+        effective LR (``lr / (1 + (t-1)*lr_decay)``) is fed as a 0-D
+        scalar refreshed in :meth:`_refresh_scalars` each step.  This
+        keeps the executable signature constant across steps.
+        """
         from lucid.optim.others import Adagrad
 
         if not isinstance(opt, Adagrad):
@@ -777,10 +1295,12 @@ class _CompiledAdagrad(_CompiledStepBase):
             self._buffer_table[("state_sum", i)] = lambda _i=i: self._state_sum[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the ``state_sum`` accumulators as trace inputs."""
         for i, s in enumerate(self._state_sum):
             register("state_sum", i, s)
 
     def _register_scalars(self, register):
+        """Register the effective-LR scalar placeholder (refreshed each step)."""
         # Effective LR: ``lr / (1 + (t-1)*lr_decay)`` — t-dependent, so
         # passed as a 0-D feed and refreshed each step.
         dt = self._params[0].dtype
@@ -792,6 +1312,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         return scalars
 
     def _refresh_scalars(self) -> None:
+        """Advance ``t`` and copy fresh ``eff_lr`` value into the scalar holder."""
         import lucid as _lucid
 
         self._t += 1
@@ -801,6 +1322,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the Adagrad update — running sum of squared gradients normalises LR."""
         eff_lr = scalars["eff_lr"]
         params = self._params
         state_sum = self._state_sum
@@ -819,6 +1341,7 @@ class _CompiledAdagrad(_CompiledStepBase):
         return new_params + new_state
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``state_sum``."""
         return list(self._params) + list(self._state_sum)
 
 
@@ -826,10 +1349,48 @@ class _CompiledAdagrad(_CompiledStepBase):
 
 
 class _CompiledAdadelta(_CompiledStepBase):
-    """Adadelta wrapper — auto-adaptive LR via running ratio of
-    delta-RMS over gradient-RMS."""
+    r"""Compiled :class:`~lucid.optim.Adadelta` — auto-adaptive LR.
+
+    Zeiler's Adadelta maintains *two* running averages — one of
+    squared gradients and one of squared parameter deltas — and
+    uses the ratio of their RMS values as the adaptive step size.
+    The ``lr`` parameter acts only as a multiplicative scaling on
+    the resulting delta (default ``1.0``), so the optimizer is
+    effectively learning-rate-free.
+
+    Update rule
+    -----------
+    With smoothing rate :math:`\rho`, weight decay :math:`\lambda`,
+    final scaling :math:`\eta`:
+
+    .. math::
+
+        g_t       &\leftarrow g_t + \lambda \theta_t \\
+        v_t       &= \rho v_{t-1} + (1-\rho) g_t^{2}                 \\
+        \Delta_t  &= \frac{\sqrt{u_{t-1} + \varepsilon}}
+                          {\sqrt{v_t + \varepsilon}} \, g_t          \\
+        u_t       &= \rho u_{t-1} + (1-\rho) \Delta_t^{2}            \\
+        \theta_t  &= \theta_{t-1} - \eta \, \Delta_t
+
+    where :math:`v_t` accumulates squared gradients and :math:`u_t`
+    accumulates squared deltas.  Both buffers are initialised to
+    zero, so the first few steps take small conservative updates
+    until ``u`` warms up.
+
+    See Also
+    --------
+    :class:`lucid.optim.Adadelta` : eager counterpart.
+    """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture Adadelta hyperparameters + allocate ``square_avg`` / ``acc_delta`` buffers.
+
+        Adadelta uses *two* running averages — squared gradients and
+        squared parameter deltas — so the ratio of their RMS values
+        serves as an adaptive step size that needs no manual LR
+        tuning.  The ``lr`` argument acts as a multiplicative scaling
+        on the final delta only.
+        """
         from lucid.optim.others import Adadelta
 
         if not isinstance(opt, Adadelta):
@@ -849,12 +1410,14 @@ class _CompiledAdadelta(_CompiledStepBase):
             self._buffer_table[("acc_delta", i)] = lambda _i=i: self._acc_delta[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the ``square_avg`` and ``acc_delta`` running buffers as trace inputs."""
         for i, sa in enumerate(self._square_avg):
             register("square_avg", i, sa)
         for i, ad in enumerate(self._acc_delta):
             register("acc_delta", i, ad)
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the Adadelta update — RMS(delta) / RMS(grad) as adaptive step size."""
         params = self._params
         sq = self._square_avg
         ad = self._acc_delta
@@ -878,6 +1441,7 @@ class _CompiledAdadelta(_CompiledStepBase):
         return new_params + new_sq + new_ad
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``square_avg`` then ``acc_delta``."""
         return list(self._params) + list(self._square_avg) + list(self._acc_delta)
 
 
@@ -885,15 +1449,52 @@ class _CompiledAdadelta(_CompiledStepBase):
 
 
 class _CompiledAdamax(_CompiledStepBase):
-    """Adamax wrapper — Adam with L∞ second-moment estimate.
+    r"""Compiled :class:`~lucid.optim.Adamax` — Adam with L∞-norm second moment.
 
-    Uses :func:`lucid.maximum` for the element-wise max between
-    ``β2 * u_{t-1}`` and ``|g|`` — that op must have a real-emit
-    emitter on the compile side (it does — see
-    ``OpEmitters/core/Elementwise.mm``).
+    Variant of Adam that replaces the L² second-moment estimate
+    :math:`v_t = \beta_2 v_{t-1} + (1-\beta_2) g_t^2` with an
+    L∞-norm running max
+    :math:`u_t = \max(\beta_2 u_{t-1}, |g_t|)`.  More robust to
+    occasional gradient outliers than vanilla Adam — useful when
+    training signals can spike (sparse rewards in RL, rare-class
+    losses in long-tailed classification).
+
+    Update rule
+    -----------
+    .. math::
+
+        g_t       &\leftarrow g_t + \lambda \theta_t \\
+        m_t       &= \beta_1 m_{t-1} + (1-\beta_1) g_t                 \\
+        u_t       &= \max\bigl(\beta_2 u_{t-1},\, |g_t|\bigr)          \\
+        \eta_t    &= \eta / (1 - \beta_1^{t})                          \\
+        \theta_t  &= \theta_{t-1} - \eta_t \, m_t / (u_t + \varepsilon)
+
+    The bias-corrected effective LR :math:`\eta_t` is fed as a 0-D
+    scalar refreshed by :meth:`_refresh_scalars` each step so the
+    trace stays signature-stable.
+
+    Notes
+    -----
+    The element-wise ``maximum(β₂ u_{t-1}, |g|)`` step requires the
+    ``maximum`` op's compile emitter (real-emit, see
+    ``OpEmitters/elementwise/Arith.mm``).  Without it the trace
+    would abort during compile and the optimizer would silently
+    bail to eager — :func:`compile_optimizer` instead surfaces a
+    construct-time error if the emitter were ever removed.
+
+    See Also
+    --------
+    :class:`lucid.optim.Adamax` : eager counterpart.
     """
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture Adamax hyperparameters + allocate ``m`` (first-moment) / ``u`` (L∞) buffers.
+
+        Replaces Adam's L² second-moment estimate with an L∞-norm
+        running max, which is more robust to gradient outliers.  The
+        bias-corrected effective LR is fed as a scalar refreshed by
+        :meth:`_refresh_scalars`.
+        """
         from lucid.optim.others import Adamax
 
         if not isinstance(opt, Adamax):
@@ -915,12 +1516,14 @@ class _CompiledAdamax(_CompiledStepBase):
             self._buffer_table[("u", i)] = lambda _i=i: self._u_buf[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the ``m`` (first-moment) and ``u`` (L∞-norm) buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, u in enumerate(self._u_buf):
             register("u", i, u)
 
     def _register_scalars(self, register):
+        """Register the bias-corrected effective-LR scalar placeholder."""
         # ``eff_lr = lr / (1 - beta1^t)`` — refreshed each step.
         dt = self._params[0].dtype
         dev = self._params[0].device
@@ -931,6 +1534,7 @@ class _CompiledAdamax(_CompiledStepBase):
         return scalars
 
     def _refresh_scalars(self) -> None:
+        """Advance ``t`` and copy fresh ``lr / (1 - β₁^t)`` into the scalar holder."""
         import lucid as _lucid
 
         self._t += 1
@@ -940,6 +1544,7 @@ class _CompiledAdamax(_CompiledStepBase):
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the Adamax update — L∞-norm running max replaces Adam's L² moment."""
         import lucid as _lucid
 
         eff_lr = scalars["eff_lr"]
@@ -965,6 +1570,7 @@ class _CompiledAdamax(_CompiledStepBase):
         return new_params + new_m + new_u
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``m_buf`` then ``u_buf`` (Adamax)."""
         return list(self._params) + list(self._m_buf) + list(self._u_buf)
 
 
@@ -972,18 +1578,54 @@ class _CompiledAdamax(_CompiledStepBase):
 
 
 class _CompiledNAdam(_CompiledStepBase):
-    """NAdam wrapper — Nesterov-Adam with the momentum decay schedule
-    used by Lucid's eager backend.
+    r"""Compiled :class:`~lucid.optim.NAdam` — Adam with Nesterov lookahead.
 
-    Per-step scalar feeds, all CPU-computed:
+    Combines Adam's adaptive moments with Nesterov's anticipatory
+    gradient correction, using the closed-form momentum-decay
+    schedule introduced by Dozat (2016).  In practice converges
+    slightly faster than Adam on well-conditioned objectives while
+    keeping the same robustness to gradient scale.
 
-    * ``c1``      = ``lr * (1 - μ_t)         / (1 - Π_{k≤t} μ_k)``
-    * ``c2``      = ``lr * μ_{t+1}          / (1 - Π_{k≤t} μ_k · μ_{t+1})``
-    * ``inv_bc2`` = ``1 / (1 - β2^t)``
+    Update rule
+    -----------
+    With momentum-decay rate :math:`d` (constant ``0.004`` in
+    Lucid, matching the eager C++ default), step :math:`t`, base
+    LR :math:`\eta`, decays :math:`(\beta_1, \beta_2)`, weight
+    decay :math:`\lambda`:
 
-    where ``μ_t = β1 · (1 - 0.5 · 0.96^(t · momentum_decay))``.  The
-    momentum_decay default is ``0.004`` — the public Python ``NAdam``
-    constructor doesn't expose it; we mirror the C++ default verbatim.
+    .. math::
+
+        \mu_t       &= \beta_1 \bigl( 1 - 0.5 \cdot 0.96^{td} \bigr) \\
+        \mu_{t+1}   &= \beta_1 \bigl( 1 - 0.5 \cdot 0.96^{(t+1)d} \bigr) \\
+        \Pi_t       &= \prod_{k \le t} \mu_k \\
+        g_t         &\leftarrow g_t + \lambda \theta_t \\
+        m_t         &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\
+        v_t         &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^{2} \\
+        \mathrm{denom} &= \sqrt{v_t / (1 - \beta_2^{t})} + \varepsilon \\
+        \theta_t    &= \theta_{t-1}
+                       - c_1 \, g_t / \mathrm{denom}
+                       - c_2 \, m_t / \mathrm{denom}
+
+    where the per-step coefficients fed in as 0-D scalars are:
+
+    * ``c1``      = :math:`\eta (1 - \mu_t) / (1 - \Pi_t)`
+    * ``c2``      = :math:`\eta \mu_{t+1}   / (1 - \Pi_t \mu_{t+1})`
+    * ``inv_bc2`` = :math:`1 / (1 - \beta_2^{t})`
+
+    All three are recomputed CPU-side every step in
+    :meth:`_refresh_scalars` and copied into the stable placeholders
+    via ``copy_``.
+
+    Notes
+    -----
+    Lucid's NAdam holds ``momentum_decay`` at the C++ default
+    ``0.004`` and doesn't expose it on the Python constructor; this
+    wrapper mirrors that constant verbatim.  Exposing the knob would
+    be a small follow-up if anyone ever needs a different schedule.
+
+    See Also
+    --------
+    :class:`lucid.optim.NAdam` : eager counterpart.
     """
 
     # Lucid's eager NAdam fixes momentum_decay at the C++ default; the
@@ -991,6 +1633,15 @@ class _CompiledNAdam(_CompiledStepBase):
     _MOMENTUM_DECAY: float = 0.004
 
     def __init__(self, opt: Optimizer) -> None:
+        """Capture NAdam hyperparameters + allocate ``m`` / ``v`` buffers and ``μ_product``.
+
+        The ``μ_product`` is a single CPU-side accumulator (not a
+        per-parameter tensor) because every parameter multiplies by
+        the same ``μ(t)`` schedule each step — Lucid's NAdam holds
+        ``momentum_decay`` at the C++ default (``0.004``) and doesn't
+        expose it via the Python constructor; we mirror that
+        verbatim.
+        """
         from lucid.optim.others import NAdam
 
         if not isinstance(opt, NAdam):
@@ -1014,12 +1665,14 @@ class _CompiledNAdam(_CompiledStepBase):
             self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
 
     def _register_state_in_inputs(self, register):
+        """Register the NAdam ``m`` and ``v`` running-moment buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
     def _register_scalars(self, register):
+        """Register the three NAdam coefficient scalars (``c1``, ``c2``, ``inv_bc2``)."""
         dt = self._params[0].dtype
         dev = self._params[0].device
         c1 = _zero_scalar(dt, dev)
@@ -1033,6 +1686,10 @@ class _CompiledNAdam(_CompiledStepBase):
         return scalars
 
     def _refresh_scalars(self) -> None:
+        """Advance ``t``, recompute ``μ_t`` / ``μ_{t+1}`` / ``μ_product``, refresh c1 / c2 / inv_bc2.
+
+        See the class docstring for the closed-form expressions.
+        """
         import lucid as _lucid
 
         self._t += 1
@@ -1056,6 +1713,13 @@ class _CompiledNAdam(_CompiledStepBase):
         )
 
     def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the NAdam update — Nesterov lookahead applied to Adam's bias-corrected step.
+
+        Uses the three pre-computed scalar coefficients (``c1`` /
+        ``c2`` / ``inv_bc2``) so the trace stays signature-stable
+        across steps even as ``t`` advances inside the closed-form
+        ``μ_t`` schedule.
+        """
         c1 = scalars["c1"]
         c2 = scalars["c2"]
         inv_bc2 = scalars["inv_bc2"]
@@ -1082,4 +1746,5 @@ class _CompiledNAdam(_CompiledStepBase):
         return new_params + new_m + new_v
 
     def _outputs_to_targets(self, outputs):
+        """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` (NAdam)."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)

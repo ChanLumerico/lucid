@@ -5,7 +5,7 @@ lucid.compile._fused_step — Phase 1.8 generic fused training step.
 the entire training step (forward + loss + auto-derived gradients +
 optimizer.step) inside a single MPSGraph executable.  One ``run`` call
 per training iteration, all writes to parameters / optimizer state
-happen in-place via :func:`run_executable_inplace`.
+happen in-place via ``run_executable_inplace``.
 
 Architecture
 ------------
@@ -21,13 +21,13 @@ The optimizer update math lives in the corresponding
    ``_trace_update`` with **ghost grad placeholders** (zero tensors
    that take the slot of "param_i.grad" in the trace).  The trace
    now contains forward+loss+opt-update ops.
-3. Call :func:`compile_generic_fused_step` with the ghost grad ids.
+3. Call ``compile_generic_fused_step`` with the ghost grad ids.
    C++ side derives gradients via MPSGraph autograd after emitting
    the forward, binds each ghost grad id to its derived gradient
    tensor, then continues emitting the opt-update ops (which now
    resolve their grad reads correctly).
 4. Each ``step(x, t)`` call: refresh scalars (if any), then
-   :func:`run_executable_inplace` writes new params / new state
+   ``run_executable_inplace`` writes new params / new state
    directly into the corresponding tensors.
 
 Supported optimizers
@@ -118,17 +118,104 @@ def fused_step(
 
 
 def _zeros_like(t: Tensor) -> Tensor:
+    """Allocate a same-shape, same-dtype, same-device zero-filled Tensor.
+
+    Used to materialise the *ghost-grad placeholders* fed into the
+    trace: the executable will overwrite each placeholder with the
+    actual gradient computed by MPSGraph's
+    ``gradientForPrimaryTensor:`` at compile time, so the runtime
+    value doesn't matter — only the shape + dtype + device that
+    pin the trace placeholder's identity.
+    """
     import lucid as _lucid
 
     return _lucid.zeros(*t.shape, dtype=t.dtype, device=t.device)
 
 
 class _FusedStep:
-    """Unified fused-step driver.
+    r"""Driver behind :func:`fused_step` — one executable, whole training step.
 
-    Reuses :mod:`lucid.compile._optim` for the optimizer math, state
-    buffers, and scalar refresh; layered on top with forward+loss
-    tracing and the generic-fused-step C++ entry point.
+    Composes :mod:`lucid.compile._optim` (which already knows how to
+    trace each optimizer's update arithmetic and identify the in-
+    place output targets) with a trace of the model's forward pass +
+    loss function.  The result is one :class:`MPSGraphExecutable`
+    whose op DAG covers:
+
+    .. code-block:: text
+
+        x ─▶ model(x) ─▶ loss_fn(out, *targets) ─▶ loss
+                              │
+                              ▼
+                ∂loss/∂param  (auto-derived inside C++ via
+                              gradientForPrimaryTensor:withTensors:)
+                              │
+                              ▼
+                opt_update(param, grad, state, scalars) ─▶ new_param, new_state
+                              │
+                              ▼
+                          (in-place write back)
+
+    Ghost-grad mechanism
+    --------------------
+    The challenge is that the optimizer update reads
+    ``param.grad``, but the trace runs under :func:`no_grad` so no
+    eager gradient exists yet.  We sidestep this by:
+
+    1. Allocating one **ghost-grad placeholder** Tensor per
+       parameter (a same-shape, same-dtype zero tensor).
+    2. Feeding the placeholders into ``copt._trace_update(...)`` so
+       the optimizer math captures them as graph inputs and writes
+       the update math that reads them.
+    3. Calling ``compile_generic_fused_step`` with the
+       ``ghost_grad_ids``.  The C++ builder, before emitting the
+       optimizer ops, asks MPSGraph to derive
+       ``gradientForPrimaryTensor: loss withTensors: params`` and
+       binds each ``ghost_grad_id`` to the corresponding derived
+       gradient.  When the opt-update ops are then emitted, their
+       ghost-grad reads resolve to the actual auto-derived
+       gradients.
+
+    The executable's I/O therefore looks like:
+
+    * Inputs: positional model args (per call), pinned parameters,
+      state buffers, per-step scalars, and the **ghost-grad
+      placeholders** (their values don't matter because the C++
+      side rebinds them).
+    * Outputs (all in-place writes): loss scalar, new parameters,
+      new state buffers.
+
+    Attributes
+    ----------
+    _model : nn.Module
+        The compute unit being traced.
+    _loss_fn : Callable
+        Scalar-returning callable invoked as
+        ``loss_fn(model_output, *targets)``.
+    _copt : _CompiledStepBase
+        The optimizer subclass driving the update math and
+        state-buffer plan.
+    _params : list[Tensor]
+        Flat parameter list (shared with ``_copt._params``).
+    _exe : object or None
+        Cached executable, lazily compiled on the first call.
+    _input_resolvers : list[Callable]
+        One zero-arg getter per input slot in
+        ``exe.input_ids`` order — each returns the live Tensor to
+        bind for that slot at the current step.
+    _output_targets : list[Tensor]
+        Tensors that receive the executable's in-place writes
+        (params + state buffers, in trace return order).
+    _loss_shape / _loss_dtype / _loss_device
+        Captured at compile time so each step allocates a fresh
+        scalar loss tensor with matching meta.
+
+    See Also
+    --------
+    :func:`fused_step` : user-facing constructor.
+    :func:`compile_optimizer` : the underlying optimizer compile
+        path whose ``_trace_update`` hook is reused here.
+    :class:`CompiledModule` : forward-only compile (no
+        backward+update fusion).
     """
 
     def __init__(
@@ -137,6 +224,19 @@ class _FusedStep:
         loss_fn: Callable[..., Tensor],
         optimizer: Optimizer,
     ) -> None:
+        """Initialise the driver; the executable itself is lazy.
+
+        Parameters
+        ----------
+        model, loss_fn, optimizer
+            See :func:`fused_step` for semantics.
+
+        Raises
+        ------
+        ValueError
+            If ``optimizer`` exposes no trainable parameters (every
+            param_group is empty).
+        """
         from lucid.compile._optim import compile_optimizer
 
         self._model = model
@@ -165,6 +265,21 @@ class _FusedStep:
     # ── Public API ──────────────────────────────────────────────
 
     def __call__(self, *args: Tensor) -> Tensor:
+        """Run one fused training step; lazy-compile on first call.
+
+        Parameters
+        ----------
+        *args : Tensor
+            ``(model_input, *loss_targets)`` — same positional tuple
+            that ``loss_fn(model(input), *targets)`` would consume.
+
+        Returns
+        -------
+        Tensor
+            Scalar loss tensor freshly allocated for this step.  All
+            parameter and optimizer-state buffers have already been
+            updated **in-place** before this returns.
+        """
         if self._exe is None:
             self._build_executable(args)
         # Refresh per-step scalars (e.g. Adam bias correction).  The
@@ -173,12 +288,36 @@ class _FusedStep:
         return self._run(args)
 
     def recompile(self) -> None:
-        """Drop the cached executable so the next call retraces."""
+        """Drop the cached executable so the next call retraces from scratch.
+
+        Useful after manual surgery on the model or optimizer state
+        (e.g. resizing a parameter buffer) where the captured tensor
+        identities no longer match the live ones.  Normal training
+        loops never need to call this — the executable amortises
+        compile cost across every subsequent step.
+        """
         self._exe = None
 
     # ── Internals ───────────────────────────────────────────────
 
     def _build_executable(self, args: tuple[Tensor, ...]) -> None:
+        """First-call trace + compile sequence.
+
+        Walks the optimizer subclass to (a) prime its state and
+        scalar buffers, (b) materialise ghost-grad placeholders to
+        plumb into the trace, (c) record forward + loss +
+        optimizer-update as a single :class:`TraceGraph`, then (d)
+        call into ``compile_generic_fused_step`` which threads the
+        ghost-grad ids through MPSGraph's autodiff and returns one
+        executable producing loss + parameter updates in one shot.
+
+        Mutates ``self._exe``, ``self._input_resolvers``,
+        ``self._output_targets``, and ``self._loss_*`` on success.
+        Raises :class:`RuntimeError` with a structural reason on any
+        failure (empty trace, missing parameter id, builder
+        rejection) — fused_step intentionally has no eager fallback
+        path because every step would silently lose the speedup.
+        """
         from lucid._dispatch import _unwrap
         from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
@@ -315,6 +454,25 @@ class _FusedStep:
         self._exe = exe
 
     def _run(self, args: tuple[Tensor, ...]) -> Tensor:
+        """Bind feeds + targets and invoke the cached executable in-place.
+
+        Uses ``run_executable_inplace`` so the optimizer's
+        parameter and state buffers are mutated directly inside the
+        executable (no allocation churn between steps).  Allocates a
+        fresh scalar loss tensor each call — the caller usually
+        reads it once and drops it, and the cost is a single 0-D
+        allocation per step.
+
+        Parameters
+        ----------
+        args : tuple of Tensor
+            Same per-step arguments forwarded from :meth:`__call__`.
+
+        Returns
+        -------
+        Tensor
+            Scalar loss for this step.
+        """
         from lucid._dispatch import _unwrap
         import lucid as _lucid
 

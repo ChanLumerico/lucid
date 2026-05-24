@@ -56,6 +56,25 @@ class TensorSig:
 
     @classmethod
     def of(cls, t: Tensor, *, dynamic_batch: bool = False) -> TensorSig:
+        """Build a :class:`TensorSig` summary of ``t`` for cache keying.
+
+        Parameters
+        ----------
+        t : Tensor
+            Input whose shape / dtype / device / ``requires_grad``
+            are read.  The values themselves are never captured.
+        dynamic_batch : bool, optional
+            When ``True`` wildcard the leading axis to ``-1`` so two
+            calls that differ only in batch size share a cache
+            entry.  Phase 1.6 opt-in; currently always called with
+            the default ``False``.
+
+        Returns
+        -------
+        TensorSig
+            Hashable description ready to embed in a
+            :class:`CacheKey`.
+        """
         # ``device.type`` (e.g. ``'metal'`` / ``'cpu'``) is hashable;
         # full device repr would include an index slot we don't need.
         # When ``dynamic_batch`` is set we coerce the leading dim of
@@ -77,7 +96,7 @@ class CacheKey:
     """Hashable identity of a CompiledModule signature.
 
     Two calls share an executable iff their CacheKeys compare equal.
-    The dataclass is :func:`frozen` so it can sit in a :class:`set` /
+    The dataclass is ``@dataclass(frozen=True)`` so it can sit in a :class:`set` /
     :class:`dict`; equality / hash both fall out of the field tuple.
     """
 
@@ -93,6 +112,14 @@ class CacheKey:
 
 
 def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:
+    """Normalise one call argument into a hashable signature leaf.
+
+    Tensors become :class:`TensorSig`; lists / tuples / dicts are
+    recursively normalised; primitives (int / float / bool / str /
+    None) pass through.  Anything still unhashable at the end forces
+    the caller to fall back to eager (the cache lookup raises and
+    :class:`CompiledModule.__call__` catches it).
+    """
     # Lucid Tensor → TensorSig; everything else passes through if
     # hashable.  Iterables (list / tuple) are normalised to a tuple of
     # element sigs so a user-side ``forward(self, [x, y])`` is captured
@@ -119,6 +146,20 @@ def _arg_sig(value: object, *, dynamic_batch: bool = False) -> object:
 
 
 def _param_fingerprint(model: Module) -> tuple[tuple[str, str], ...]:
+    """Summarise a model's parameter set as a sorted ``(dtype, device)`` tuple.
+
+    Used inside :class:`CacheKey` to invalidate the cache when a user
+    flips precision (``.half()`` / ``.float()``) or moves the model
+    across devices.  The fingerprint is intentionally coarse — we
+    don't track per-parameter shapes (those are already pinned by
+    the trace itself) — so it stays cheap to compute and compare.
+
+    Returns
+    -------
+    tuple of (dtype_str, device_str)
+        Sorted, deduplicated pairs across every ``model.parameters()``
+        slot.  Empty tuple when the model has no parameters.
+    """
     seen: dict[tuple[str, str], int] = {}
     for p in model.parameters():
         key = (str(p.dtype), str(p.device.type))

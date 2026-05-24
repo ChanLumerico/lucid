@@ -1,16 +1,40 @@
 """
-lucid.compile — graph-capture compile path (3.5 Phase 1.1 Week 1 scaffold).
+lucid.compile — graph-capture compile path for Apple Silicon.
 
-Phase 1.1 Week 1 only exposes :func:`_tracing` — a context manager that
-installs a thread-local :class:`Tracer` so every op dispatched inside
-the ``with`` block enters its :class:`OpScopeFull` and forwards a
-header (name + single output meta) into the active recorder.
+Lowers a Lucid model's forward pass (and optionally its backward +
+optimizer-update graph) into a single :class:`MPSGraphExecutable`
+that is cached per input signature.  Subsequent calls with the same
+signature reuse the cached executable, skipping Python dispatch
+entirely for every op inside the captured region.
 
-The user-facing decorator / module wrapper (:func:`compile`) is left as
-a :class:`NotImplementedError` stub until Phase 1.4 lands the
-:class:`CompiledModule` runtime; the MPSGraph builder + executable
-cache land in Phase 1.2.  See ``~/.claude/plans/recursive-scribbling-moore.md``
-for the full 6-phase plan.
+Surface
+-------
+
+* :func:`compile` — the top-level entry.  Wraps either an
+  :class:`nn.Module` or a plain callable; returns a
+  :class:`CompiledModule`.  Also usable as a decorator
+  (``@lucid.compile`` or ``@lucid.compile(dynamic=False)``).
+* :class:`CompiledModule` — module-shaped wrapper exposing
+  ``cache_info()`` / ``timing()`` / ``clear_cache()`` plus
+  ``model``-delegated APIs (``parameters`` / ``state_dict`` / ``to``
+  / ``train`` / ``eval``).
+* :func:`compile_optimizer` — wraps the *update* step of an optimizer
+  into a single cached executable (8 optimizers supported; see
+  :mod:`lucid.compile._optim`).  Forward + backward stay eager.
+* :func:`fused_step` — single executable covering forward + loss +
+  backward (via MPSGraph autodiff) + optimizer update via the
+  ghost-grad placeholder mechanism.
+* :func:`compiled_step` — convenience wrapper combining
+  :func:`compile` + :func:`make_step` for one-line training loops.
+* :func:`_tracing` — low-level context manager that installs a
+  thread-local :class:`Tracer`; used internally by every entry above.
+  Public-but-underscored so external callers know they're touching
+  an unstable surface.
+
+The MPSGraph builder + executable cache + per-op emitters live in
+:file:`lucid/_C/compile/`.  See :file:`lucid/compile/USER_GUIDE.md`
+for the production-facing user guide (op coverage, perf numbers,
+fallback policy).
 """
 
 import sys
@@ -41,6 +65,30 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
+    """Lazy attribute loader for the public surface listed in ``__all__``.
+
+    The user-facing names (``compiled_step``, ``CompiledModule``,
+    ``make_step``, ``compile_optimizer``, ``fused_step``) live in
+    submodules that pull :mod:`lucid.nn` / :mod:`lucid.autograd` at
+    import time.  Importing them eagerly here would cycle through
+    every op family during ``lucid.compile`` package init — slow and
+    fragile.  The lazy path defers each import until first access.
+
+    Parameters
+    ----------
+    name : str
+        Attribute name requested via ``lucid.compile.<name>``.
+
+    Returns
+    -------
+    object
+        The resolved attribute (typically a callable or class).
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not in the lazy table above.
+    """
     # Lazy-load attributes that pull ``lucid.nn`` / ``lucid.autograd``
     # to avoid forcing those imports during ``lucid.compile`` package
     # init (the tracer scaffold above must stay importable before
@@ -216,6 +264,22 @@ class _CallableModule:
     """
 
     def __init__(self, fn: object) -> None:
+        """Wrap ``fn`` so it duck-types as an :class:`nn.Module`.
+
+        Parameters
+        ----------
+        fn : callable
+            The plain callable the user passed to :func:`compile`.
+            Stored unwrapped; invoked verbatim on every
+            :meth:`__call__`.
+
+        Notes
+        -----
+        Does *not* go through :meth:`nn.Module.__setattr__` (we are
+        not subclassing :class:`nn.Module`).  ``_fn`` and
+        ``_training`` are stored as plain instance attributes; no
+        submodule / buffer / parameter registration happens.
+        """
         # Avoid Module.__setattr__ side-effects — we are *not* an
         # nn.Module subclass, just duck-typed.
         self._fn = fn
@@ -224,48 +288,65 @@ class _CallableModule:
     # ── Module-shaped surface ────────────────────────────────────
     @property
     def training(self) -> bool:
+        """Current training-mode flag (defaults to ``False`` on construct)."""
         return self._training
 
     def train(self, mode: bool = True) -> "_CallableModule":
+        """Set training mode; returns ``self`` for chaining."""
         self._training = bool(mode)
         return self
 
     def eval(self) -> "_CallableModule":
+        """Shorthand for ``self.train(False)``."""
         return self.train(False)
 
     def parameters(self, recurse: bool = True) -> "Iterator[object]":
+        """Plain callables carry no parameters — always returns an empty iterator."""
         return iter(())
 
     def named_parameters(self, recurse: bool = True) -> "Iterator[tuple[str, object]]":
+        """Plain callables carry no named parameters — always returns an empty iterator."""
         return iter(())
 
     def buffers(self, recurse: bool = True) -> "Iterator[object]":
+        """Plain callables carry no buffers — always returns an empty iterator."""
         return iter(())
 
     def state_dict(self, *args: object, **kwargs: object) -> dict:
+        """Always empty — plain callables have no learnable state."""
         return {}
 
     def load_state_dict(self, *args: object, **kwargs: object) -> None:
+        """No-op — there is no state to load into a plain callable."""
         return None
 
     def to(self, *args: object, **kwargs: object) -> "_CallableModule":
+        """No-op device / dtype move; returns ``self``.
+
+        A plain callable carries no buffers to move; the inputs the
+        caller passes already determine where the call executes.
+        """
         # No-op — plain callable carries no buffers to move.
         return self
 
     def modules(self) -> "Iterator[object]":
+        """Single-element iterator over ``(self,)`` — there are no children."""
         return iter((self,))
 
     def named_modules(
         self, *args: object, **kwargs: object
     ) -> "Iterator[tuple[str, object]]":
+        """Single-element iterator over ``(("", self),)`` — root entry only."""
         return iter((("", self),))
 
     def __call__(self, *args: object, **kwargs: object) -> object:
+        """Invoke the wrapped callable with the given positional + keyword arguments."""
         return self._fn(*args, **kwargs)
 
     # Allow CompiledModule's signature_of (``model.training`` /
     # ``model.parameters``) to work without surprises.
     def __repr__(self) -> str:
+        """Diagnostic repr including the wrapped callable's qualname."""
         name = getattr(self._fn, "__qualname__", repr(self._fn))
         return f"<_CallableModule wrapping {name}>"
 
@@ -279,6 +360,7 @@ def _compile_decorator_factory(*, dynamic: bool = False) -> "object":
     """
 
     def _decorator(target: object) -> object:
+        """Apply :func:`compile` to ``target`` with the captured ``dynamic`` flag."""
         return compile(target, dynamic=dynamic)
 
     return _decorator
@@ -296,6 +378,19 @@ class _CallableCompileModule(types.ModuleType):
     """
 
     def __call__(self, *args: object, **kwargs: object) -> object:
+        """Dispatch to :func:`compile` or the decorator factory.
+
+        Three call shapes are accepted (see class docstring).  ``args``
+        is either empty (factory form) or a single positional target
+        (module / callable); ``kwargs`` carries the optional
+        ``dynamic`` flag.
+
+        Raises
+        ------
+        TypeError
+            If more than one positional argument is supplied — the
+            entry point is strictly unary in target.
+        """
         if not args:
             # Factory form: ``@lucid.compile(dynamic=...)``.
             return _compile_decorator_factory(**kwargs)

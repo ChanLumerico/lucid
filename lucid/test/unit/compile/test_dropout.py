@@ -87,8 +87,7 @@ def test_dropout_training_falls_back_to_eager() -> None:
     # successful executable) or the signature was blacklisted as
     # eager-only.  Both indicate correct fallback behaviour.
     assert info["entries"] == 0 or len(info["eager_only"]) > 0, (
-        f"expected eager fallback for training-mode dropout; "
-        f"cache_info={info}"
+        f"expected eager fallback for training-mode dropout; " f"cache_info={info}"
     )
 
 

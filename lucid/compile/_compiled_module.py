@@ -77,6 +77,13 @@ def _extract_return_impls(value: object, tracer: object) -> tuple[object, list[i
     flat_ids: list[int] = []
 
     def visit(v: object) -> object:
+        """Recursive walk producing the spec tree + side-effecting ``flat_ids``.
+
+        Tensors become ``("tensor", slot)`` leaves whose ``slot`` is
+        an index into ``flat_ids`` (the per-output trace id); every
+        other container type (tuple / list / dict / dataclass) becomes
+        a tagged node carrying its children; scalars passthrough.
+        """
         if isinstance(v, Tensor):
             impl = _unwrap(v)
             tid = tracer.lookup_id(impl)
@@ -184,14 +191,136 @@ class _CacheEntry:
 
 
 class CompiledModule:
-    """User-facing wrapper returned by :func:`lucid.compile`.
+    r"""User-facing wrapper returned by :func:`lucid.compile`.
 
-    Behaves like ``model`` for parameter walks, ``state_dict``,
-    ``train()`` / ``eval()`` etc., but routes ``__call__`` through a
-    per-signature MPSGraph executable cache.
+    Wraps an :class:`nn.Module` (or any callable, via the internal
+    :class:`_CallableModule` adapter) so the model's ``__call__`` is
+    routed through a per-signature cache of compiled
+    :class:`MPSGraphExecutable` objects.  Behaves like the underlying
+    model for every non-call attribute (``parameters`` / ``state_dict``
+    / ``train`` / ``eval`` / ``to`` / submodule attribute access), so
+    optimizers, schedulers and checkpointing pipelines see the
+    compiled module as a drop-in replacement.
+
+    Lifecycle
+    ---------
+    On the first call with a given input signature
+    ``(shape × dtype × device × training × param_fingerprint)`` the
+    wrapper:
+
+    1. Traces ``model(*args)`` under :func:`no_grad` while the
+       :class:`Tracer` records every op into a :class:`TraceGraph`.
+    2. Lowers the graph to a single :class:`MPSGraphExecutable` via
+       ``compile_or_cached``.
+    3. Builds an *input plan* mapping each placeholder in
+       ``exe.input_ids`` to either a positional :class:`Tensor` slot
+       from the call site or a pinned external feed (parameter /
+       constant).
+    4. Records a ``return_spec`` so the executable's flat output list
+       can be re-packed into the user's original return structure
+       (tuple, dataclass, dict, ...).
+
+    On subsequent calls with the same signature step (1)–(3) are
+    skipped and the cached executable runs directly.  Cache lookup
+    cost is one ``__hash__`` + ``__eq__`` on the :class:`CacheKey`
+    plus an integer-slot resolution per feed — typically O(μs).
+
+    Two cache layers cooperate here:
+
+    * **Python-side ``self._cache``** — unbounded ``dict`` keyed by
+      :class:`CacheKey`, holds the :class:`_CacheEntry` + return spec
+      + timing.  Dropped on :meth:`train` / :meth:`eval` / :meth:`to`
+      / :meth:`load_state_dict` / :meth:`clear_cache`.
+    * **C++ ``ExecutableCache::session()``** — process-global LRU
+      bounded by ``LUCID_COMPILE_MAX_CACHE`` (default 32).  Holds
+      one ``CompiledExecutable`` per *trace structure* so two
+      :class:`CompiledModule` instances tracing the same op DAG
+      share the underlying Metal kernels.  Cache key includes per-op
+      attributes (since 2026-05-24), so ``dropout(p=0)`` and
+      ``dropout(p=0.5)`` no longer collide.
+
+    Attributes
+    ----------
+    model : nn.Module
+        The wrapped model (read via the ``.model`` property).
+    dynamic : bool
+        ``True`` if the wrapper was constructed with the symbolic
+        batch axis opt-in (Phase 1.6).  Forced to ``False`` until
+        the MPSGraph SDK stabilises dynamic-shape lowering.
+    training : bool
+        Mirrors ``self._model.training``; flipping invalidates the
+        cache (BN / Dropout codepaths diverge between modes).
+
+    Notes
+    -----
+    * **Metal-only.**  Compile is meaningful only when both the model
+      and its inputs live on the ``metal`` device.  On CPU every call
+      silently routes through eager — the cache stays empty and
+      ``eager_only`` grows.
+    * **kwargs force eager.**  The current MPSGraph builder is
+      positional-only; any call with non-empty ``kwargs`` falls back
+      to :func:`run_eager` and the signature is blacklisted as
+      ``eager_only`` so subsequent identical-shaped calls skip the
+      recompile attempt.
+    * **Dropout in training mode falls back per signature.**  See
+      :file:`OpEmitters/nn/Dropout.mm` — the emitter returns nullptr
+      when ``training=True and p>0`` to preserve dropout's
+      step-to-step randomness (the stateless RNG path would apply
+      the same mask every call).
+
+    Examples
+    --------
+    Inference path::
+
+        cm = lucid.compile(model.to('metal').eval())
+        for batch in loader:
+            y = cm(batch.to('metal'))
+
+    Training step compile (forward only — backward stays eager)::
+
+        cm = lucid.compile(model.to('metal'))
+        opt = lucid.optim.Adam(cm.parameters(), lr=1e-3)
+        for batch, target in loader:
+            opt.zero_grad()
+            loss = F.cross_entropy(cm(batch), target)
+            loss.backward()
+            opt.step()
+
+    Fully fused (forward + backward + update in one executable)::
+
+        cm = lucid.compile(model.to('metal'))
+        opt = lucid.optim.Adam(cm.parameters(), lr=1e-3)
+        for batch, target in loader:
+            loss = cm.step(batch, target, loss_fn=F.cross_entropy)
+            loss.backward()
+            opt.step()
+
+    See Also
+    --------
+    :func:`lucid.compile` : the user-facing constructor.
+    :func:`fused_step` : single-executable fwd+bwd+update.
+    :func:`compile_optimizer` : compile only the update step.
     """
 
     def __init__(self, model: object, *, dynamic: bool = False) -> None:
+        """Wrap ``model`` for cached graph-capture execution.
+
+        Parameters
+        ----------
+        model : nn.Module or _CallableModule
+            The compute unit to compile.  Stored unwrapped so
+            attribute access falls through to it.
+        dynamic : bool, optional
+            Opt-in to symbolic-batch-axis (Phase 1.6).  Currently
+            forbidden — raises :class:`NotImplementedError` because
+            the MPSGraph SDK rejects dynamic-shape lowering for
+            conv-heavy graphs.  Default ``False``.
+
+        Raises
+        ------
+        NotImplementedError
+            When ``dynamic=True`` is passed.
+        """
         # Phase 1.6 (symbolic batch axis) is deferred to 3.5.1.  The
         # underlying MPSGraph SDK rejects dynamic-shape lowering for
         # conv-heavy graphs (MLIR pass manager abort) and emits
@@ -235,7 +364,7 @@ class CompiledModule:
 
     @property
     def model(self) -> Module:
-        """The wrapped :class:`nn.Module`."""
+        """The wrapped :class:`nn.Module` (or duck-typed callable wrapper)."""
 
         return self._model
 
@@ -247,21 +376,34 @@ class CompiledModule:
 
     @property
     def training(self) -> bool:
+        """Mirrors the inner model's ``training`` flag (cache-invalidating)."""
         return self._model.training
 
     def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
+        """Delegate to ``model.parameters`` so optimizers see the live tensors."""
         return self._model.parameters(recurse=recurse)
 
     def named_parameters(self, recurse: bool = True) -> Iterator[tuple[str, Parameter]]:
+        """Delegate to ``model.named_parameters`` (no recompile, read-only)."""
         return self._model.named_parameters(recurse=recurse)
 
     def buffers(self, recurse: bool = True) -> Iterator[Tensor]:
+        """Delegate to ``model.buffers``; buffers are pinned trace constants."""
         return self._model.buffers(recurse=recurse)
 
     def state_dict(self, *args: object, **kwargs: object) -> Mapping[str, object]:
+        """Delegate to ``model.state_dict`` — the cache holds no separate state."""
         return self._model.state_dict(*args, **kwargs)
 
     def load_state_dict(self, *args: object, **kwargs: object) -> object:
+        """Forward to ``model.load_state_dict`` and **drop the cache**.
+
+        Loading new weights doesn't change the graph topology, but
+        captured tensor *identities* may shift (e.g. when the loader
+        replaces parameter storage in-place); clearing the cache is
+        the safe default so the next call traces against the new
+        state.
+        """
         # Loading new weights doesn't invalidate the graph itself —
         # only its captured constants would — but the safe default is
         # to drop the cache so the user never sees stale graph state.
@@ -270,6 +412,7 @@ class CompiledModule:
         return result
 
     def train(self, mode: bool = True) -> CompiledModule:
+        """Flip training mode; **clears the cache** since BN / Dropout diverge."""
         # train ↔ eval flips force different BN / Dropout codepaths
         # → recompile.  Clearing on every flip is the safe default.
         self._model.train(mode)
@@ -277,9 +420,16 @@ class CompiledModule:
         return self
 
     def eval(self) -> CompiledModule:
+        """Shorthand for ``self.train(False)``; also clears the cache."""
         return self.train(False)
 
     def to(self, *args: object, **kwargs: object) -> CompiledModule:
+        """Forward to ``model.to`` and **drop the cache**.
+
+        Placeholders inside the cached MPSGraph executables are
+        device-locked, so any device or dtype move invalidates every
+        entry.
+        """
         # Device / dtype move ⇒ every cached executable is invalid
         # (placeholders are device-locked).  Drop the cache.
         self._model.to(*args, **kwargs)
@@ -287,6 +437,13 @@ class CompiledModule:
         return self
 
     def __getattr__(self, name: str) -> object:
+        """Forward unknown attribute lookups to the wrapped model.
+
+        Lets ``compiled.fc1`` reach a regular submodule and
+        ``compiled.named_modules()`` return the inner model's tree.
+        The construction-time guard on ``_model`` prevents infinite
+        recursion before ``__init__`` finishes.
+        """
         # Any attribute we don't override is forwarded to the inner
         # model (so e.g. ``compiled.fc1`` reaches a regular submodule).
         # Guard against recursion during construction (``_model`` not
@@ -299,7 +456,22 @@ class CompiledModule:
     # ── Cache introspection ──────────────────────────────────────
 
     def cache_info(self) -> dict[str, object]:
-        """Return a snapshot of cache state (for tests + telemetry)."""
+        """Snapshot the cache state for tests + telemetry.
+
+        Returns
+        -------
+        dict
+            Four fields:
+
+            * ``entries`` (int) — number of cached executables.
+            * ``keys`` (tuple[CacheKey]) — every signature that
+              currently has a compiled executable.
+            * ``eager_only`` (tuple[CacheKey]) — signatures that
+              failed to compile and were blacklisted; future calls
+              with these signatures route straight to eager.
+            * ``n_calls`` (dict[CacheKey, int]) — per-signature call
+              counter, useful for spotting hot signatures.
+        """
 
         return {
             "entries": len(self._cache),
@@ -309,7 +481,18 @@ class CompiledModule:
         }
 
     def timing(self) -> list[dict[str, object]]:
-        """Per-signature timing breakdown."""
+        """Per-signature compile + run cost breakdown.
+
+        Returns
+        -------
+        list[dict]
+            One entry per cached signature with fields ``key``
+            (CacheKey), ``compile_ms`` (float — first-call compile
+            cost), ``last_run_ms`` (float — most recent execution
+            time), and ``n_hits`` (int — total runs of this entry).
+            Useful to verify the cache amortises compile cost over
+            subsequent calls.
+        """
 
         return [
             {
@@ -322,7 +505,15 @@ class CompiledModule:
         ]
 
     def clear_cache(self) -> None:
-        """Drop every cached executable + retry-blacklist."""
+        """Drop every cached executable + retry blacklist + call counter.
+
+        Invalidates the param-fingerprint cache and the lazy training
+        step callables too, so the next call re-fingerprints the
+        model.  Called automatically by :meth:`train` / :meth:`eval`
+        / :meth:`to` / :meth:`load_state_dict` — direct user calls
+        are useful only when forcing a recompile after manual
+        parameter buffer surgery.
+        """
 
         self._cache.clear()
         self._eager_only.clear()
@@ -426,6 +617,30 @@ class CompiledModule:
     # ── Call surface ─────────────────────────────────────────────
 
     def __call__(self, *args: object, **kwargs: object) -> object:
+        """Route the call through the per-signature executable cache.
+
+        On cache hit: bind the input tensors to the cached
+        executable's feed slots, run, and re-pack the flat output
+        list into the user's return structure (Tensor / tuple / dict
+        / dataclass).  On miss: trace, compile, store, run — and on
+        compile failure mark the signature ``eager_only`` so future
+        calls skip the recompile attempt.
+
+        Parameters
+        ----------
+        *args, **kwargs
+            Whatever the wrapped model's ``forward`` accepts.  Only
+            positional :class:`Tensor` arguments become executable
+            feeds; non-tensor positionals (and any keyword arguments)
+            force the call to eager (today's compile pipeline doesn't
+            bind kwargs by name).
+
+        Returns
+        -------
+        object
+            Same structure the underlying ``model(*args, **kwargs)``
+            produces — Tensor, tuple, dataclass, etc.
+        """
         # Hashable signature.  If the signature itself is un-hashable
         # (e.g. an exotic input that we can't fingerprint), fall back
         # to eager without poisoning the cache.
@@ -474,6 +689,24 @@ class CompiledModule:
         args: tuple[object, ...],
         kwargs: dict[str, object],
     ) -> _CacheEntry | None:
+        """Trace + compile + wrap one signature into a :class:`_CacheEntry`.
+
+        Parameters
+        ----------
+        key : CacheKey
+            The signature key for this call (used only for the
+            return-spec record; not consulted internally).
+        args, kwargs : tuple, dict
+            The user's call arguments to feed through the trace.
+
+        Returns
+        -------
+        _CacheEntry or None
+            ``None`` on compile failure or any abort condition
+            (kwarg-bound tensors, empty trace, unresolvable feed,
+            backend rejection); the caller marks the signature as
+            ``eager_only`` and routes to eager.
+        """
         # Local imports keep ``lucid.compile`` import-cheap.
         from lucid._dispatch import _unwrap
         from lucid._tensor.tensor import Tensor
@@ -571,6 +804,26 @@ class CompiledModule:
         args: tuple[object, ...],
         kwargs: dict[str, object],
     ) -> object:
+        """Execute a cached entry and re-pack the output into the user's structure.
+
+        Parameters
+        ----------
+        entry : _CacheEntry
+            The cached executable + feed plan returned by
+            :meth:`_compile_for`.
+        args, kwargs : tuple, dict
+            The user's call arguments; positional :class:`Tensor`
+            slots become the per-call feeds, pinned external feeds
+            are bound from ``entry.external_feeds``.
+
+        Returns
+        -------
+        object
+            The user's return structure, with each Tensor leaf
+            substituted by the matching output of the executable.
+            Falls back to :func:`run_eager` if any positional slot
+            isn't a Tensor at this call site.
+        """
         from lucid._dispatch import _unwrap, _wrap
         from lucid._tensor.tensor import Tensor
 

@@ -69,21 +69,32 @@ class EagerFallbackSet:
     """
 
     def __init__(self) -> None:
+        """Construct an empty blacklist; one instance per :class:`CompiledModule`."""
         self._sigs: set[CacheKey] = set()
 
     def add(self, key: CacheKey) -> None:
+        """Mark ``key`` as eager-only — future calls skip the compile attempt."""
         self._sigs.add(key)
 
     def __contains__(self, key: CacheKey) -> bool:
+        """Membership test — ``key in blacklist`` returns ``True`` iff added."""
         return key in self._sigs
 
     def __len__(self) -> int:
+        """Number of blacklisted signatures (for telemetry / tests)."""
         return len(self._sigs)
 
     def clear(self) -> None:
+        """Drop every blacklisted signature; call after deliberate model edits."""
         self._sigs.clear()
 
     def snapshot(self) -> tuple[CacheKey, ...]:
+        """Return blacklisted signatures in deterministic ``hash``-sorted order.
+
+        Used by :meth:`CompiledModule.cache_info` so test assertions
+        and telemetry get stable orderings across calls within a
+        session.
+        """
         # Deterministic ordering for cache_info / debugging.  ``hash``
         # is content-based on the frozen dataclass so the sort is
         # stable across calls within a session.
@@ -100,6 +111,7 @@ def make_eager_runner(model: Module) -> Callable[..., object]:
     """
 
     def _runner(*args: object, **kwargs: object) -> object:
+        """Forward ``args`` / ``kwargs`` to the captured ``model`` via :func:`run_eager`."""
         return run_eager(model, args, kwargs)
 
     return _runner

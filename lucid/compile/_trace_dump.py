@@ -111,7 +111,19 @@ def trace_to_json(graph: TraceGraph, *, indent: int = 2) -> str:
 
 
 def _next_dump_path() -> Path:
-    """Pick a fresh, unique temp-dir path for the next debug dump."""
+    """Pick a fresh, unique temp-dir path for the next debug dump.
+
+    Uses ``(pid, monotonic counter)`` so concurrent processes don't
+    collide and consecutive dumps within one process stay
+    chronologically orderable in the temp directory.
+
+    Returns
+    -------
+    Path
+        Absolute path of the form
+        ``$TMPDIR/lucid_trace_<pid>_<NNNN>.json``.  Not created on
+        disk — caller is responsible for ``json.dump`` writing.
+    """
     global _DUMP_SEQ
     _DUMP_SEQ += 1
     tmp = Path(tempfile.gettempdir())
