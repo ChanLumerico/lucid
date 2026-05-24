@@ -279,18 +279,15 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
             [results addObject:td];
         }
 
-        // ``encodeToCommandBuffer:`` + async commit — submit and return
-        // immediately.  Equivalent semantics to
-        // ``runWithMTLCommandQueue:`` (with waitUntilCompleted=YES) but
-        // typically ~100-200μs cheaper per call on M-series because the
-        // buffer lifecycle is explicit and we skip MPSGraph's internal
-        // queue-management dance.  Output dependency is enforced
-        // downstream: every output MTLBuffer is wrapped as an MLX array
-        // (line ~290 below); any user-side read (``.item()`` /
-        // ``.numpy()`` / ``metal.synchronize()``) waits for the
-        // submitted command buffer to complete via MLX's own dependency
-        // tracker.  This is the same async model MLX eager uses, so
-        // compile-mode pipelining now mirrors it.
+        // ``encodeToCommandBuffer:`` + async ``commit`` (no wait) —
+        // ~100-200μs cheaper per call on M-series than the
+        // synchronous ``runWithMTLCommandQueue:`` path.  Output
+        // dependency is enforced by MLX's tracker on the wrapped
+        // output arrays (line ~290 below) — every user-side read
+        // (``.item()`` / ``.numpy()`` / ``metal.synchronize()``)
+        // blocks via MLX's eval path until the GPU finishes.  Matches
+        // the async model MLX eager uses, so compile-mode now
+        // pipelines the same way.
         MPSGraphExecutableExecutionDescriptor* desc =
             [[MPSGraphExecutableExecutionDescriptor alloc] init];
         desc.waitUntilCompleted = NO;
@@ -455,22 +452,19 @@ LUCID_API void run_executable_inplace(
             [results addObject:td];
         }
 
+        // ``encodeToCommandBuffer:`` + async commit (matching the
+        // ``run_executable`` inference path).  See its commentary for
+        // the perf rationale.
         MPSGraphExecutableExecutionDescriptor* desc =
             [[MPSGraphExecutableExecutionDescriptor alloc] init];
-        // PERF: do NOT wait until completed here.  The executable's
-        // outputs are bound to fresh MTLBuffers that we hand to MLX
-        // arrays below; MLX coordinates with our MTLCommandQueue at
-        // its next access of these buffers (same MTLDevice ⇒ Metal
-        // inserts the implicit barrier).  ``waitUntilCompleted = YES``
-        // would force a 2-3 ms host sync that dominates the wrapper's
-        // cost for small graphs.  The optimizer step's outputs are
-        // only read at the next forward pass, which is plenty of time
-        // for the GPU to finish.
         desc.waitUntilCompleted = NO;
-        (void)[exe->executable runWithMTLCommandQueue:queue
-                                          inputsArray:feeds
-                                         resultsArray:results
-                                  executionDescriptor:desc];
+        MPSCommandBuffer* mps_cb =
+            [MPSCommandBuffer commandBufferFromCommandQueue:queue];
+        (void)[exe->executable encodeToCommandBuffer:mps_cb
+                                         inputsArray:feeds
+                                        resultsArray:results
+                                 executionDescriptor:desc];
+        [mps_cb commit];
 
         // Swap: wrap each fresh MTLBuffer as a leaf MLX array and
         // overwrite the target's ``GpuStorage::arr`` pointer.  No
