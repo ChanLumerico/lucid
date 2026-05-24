@@ -330,7 +330,7 @@ through it with \code{lucid.add(a, b)} as the example.
 \centering
 \begin{adjustbox}{max width=\textwidth, center}
 \begin{tikzpicture}[
-  step/.style={draw, rounded corners=2pt, font=\small\sffamily,
+  stepbox/.style={draw, rounded corners=2pt, font=\small\sffamily,
                fill=lucid.info.bg, minimum width=8cm,
                minimum height=0.7cm, align=left,
                inner sep=4pt, inner xsep=8pt},
@@ -341,21 +341,21 @@ through it with \code{lucid.add(a, b)} as the example.
   lbl/.style={font=\footnotesize\itshape, color=lucid.muted,
               align=left},
 ]
-  \node[step, fill=lucid.note.bg] (decl) at (0, 6)
+  \node[stepbox, fill=lucid.note.bg] (decl) at (0, 6)
     {\textbf{Declare:} write OpSchema in C++};
-  \node[step, fill=lucid.note.bg] (build) at (0, 5)
+  \node[stepbox, fill=lucid.note.bg] (build) at (0, 5)
     {\textbf{Build:} static initialiser fires at process start};
-  \node[step] (call) at (0, 4)
+  \node[stepbox] (call) at (0, 4)
     {\textbf{Call:} user invokes \code{lucid.add(a, b)}};
-  \node[step] (lookup) at (0, 3)
+  \node[stepbox] (lookup) at (0, 3)
     {\textbf{Lookup:} dispatcher reads schema from registry};
-  \node[step] (validate) at (0, 2)
+  \node[stepbox] (validate) at (0, 2)
     {\textbf{Validate:} check dtypes / shapes / device};
-  \node[step] (dispatch) at (0, 1)
+  \node[stepbox] (dispatch) at (0, 1)
     {\textbf{Dispatch:} route to backend per device};
-  \node[step] (backward) at (0, 0)
+  \node[stepbox] (backward) at (0, 0)
     {\textbf{Record backward:} BackwardSpec builds grad\_fn};
-  \node[step, fill=lucid.ok.bg] (result) at (0, -1)
+  \node[stepbox, fill=lucid.ok.bg] (result) at (0, -1)
     {\textbf{Return:} TensorImpl with autograd metadata};
 
   \draw[arrow] (decl) -- (build);

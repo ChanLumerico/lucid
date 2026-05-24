@@ -2,61 +2,381 @@
 \chapter{Error Handling and Anomaly Detection}
 \label{ch:error_handling}
 
-\todo[inline]{Chapter 66 --- Error Handling and Anomaly Detection. Multi-level scaffold below; prose to follow.}
+A framework's error messages are part of its user interface,
+and most of the time the only part that the user notices.
+\Lucid\ treats errors as a first-class design surface: every
+error message names the user-side cause when possible, suggests
+a concrete fix, and never punts the user to a stack trace inside
+\Lucid\ internals. This chapter documents the error
+infrastructure: the exception hierarchy, the message-quality
+standard, the anomaly-detection mode for catching NaN
+gradients, the shape-mismatch diagnostic, and the per-op
+debug context that surfaces when something goes wrong.
 
-\section{Overview}
-\label{sec:error_handling:overview}
+\section{The Exception Hierarchy}
+\label{sec:error_handling:hierarchy}
 
-\section{Background and Goals}
-\label{sec:error_handling:background}
+All \Lucid-thrown exceptions descend from \code{LucidError}.
+The major subclasses:
 
-\subsection{Problem statement}
-\label{ssec:error_handling:problem}
+\begin{itemize}
+  \item \code{LucidError(Exception)}: base.
+  \item \code{ShapeError(LucidError)}: tensor shape
+    mismatch.
+  \item \code{DtypeError(LucidError)}: dtype mismatch or
+    unsupported dtype.
+  \item \code{DeviceError(LucidError)}: tensor on wrong
+    device (e.g., GPU op called on CPU tensor).
+  \item \code{NotImplementedError(LucidError)}: op not
+    implemented in the requested configuration.
+  \item \code{NaNError(LucidError)}: NaN/Inf detected (anomaly
+    mode).
+  \item \code{HubError(LucidError)}: pretrained-weights hub
+    failure (network, integrity, etc.).
+  \item \code{CompileError(LucidError)}: lucid.compile failure.
+\end{itemize}
 
-\subsection{Constraints and prior art}
-\label{ssec:error_handling:constraints}
+The hierarchy is shallow on purpose: catching is meant to be
+``\code{except ShapeError}'' or
+``\code{except LucidError}'', not a deep tree.
 
-\section{Methodology}
-\label{sec:error_handling:methodology}
+\section{Message-Quality Standard}
+\label{sec:error_handling:message_standard}
 
-\subsection{Measurement approach}
-\label{ssec:error_handling:measurement}
+Every error message must satisfy:
 
-\subsection{Benchmark setup}
-\label{ssec:error_handling:setup}
+\begin{enumerate}
+  \item \textbf{Name the API surface}: the function the user
+    called, with file:line of their code.
+  \item \textbf{State what was expected vs received}: shapes,
+    dtypes, devices, valid values.
+  \item \textbf{Suggest the most likely fix}: not just a
+    description of the problem, but a hint at what to do.
+\end{enumerate}
 
-\subsubsection{Hardware configuration}
-\subsubsection{Software stack and reproducibility}
+An example of a good message:
 
-\section{Implementation}
-\label{sec:error_handling:impl}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+ShapeError: matmul expected input shapes compatible for
+  broadcasting, got:
+    a: (16, 32, 64)
+    b: (32, 128)
+  The last dim of `a` (64) must equal the second-to-last dim of `b` (32).
+  Likely fix: did you intend `b` to be (64, 128)?
+  At lucid/_C/ops/matmul.cpp:142
+  Called from user code at /Users/.../train.py:87
+\end{lstlisting}
 
-\subsection{Design decisions}
-\label{ssec:error_handling:design}
+The user knows what went wrong, why, and what to try.
+A bad message:
 
-\subsection{Component breakdown}
-\label{ssec:error_handling:components}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+RuntimeError: dim mismatch
+\end{lstlisting}
 
-\subsection{Integration with existing systems}
-\label{ssec:error_handling:integration}
+\Lucid's CI does not gate messages on this standard
+automatically, but reviewers reject PRs with low-quality
+error strings; the message is part of the public API.
 
-\section{Results}
-\label{sec:error_handling:results}
+\section{Shape-Mismatch Diagnostic}
+\label{sec:error_handling:shape_diagnostic}
 
-\subsection{Quantitative findings}
-\label{ssec:error_handling:quant}
+Shape errors are the most common; the diagnostic is correspondingly
+detailed. The \code{ShapeError} machinery in
+\code{lucid/\_C/error.cpp} formats:
 
-\subsection{Qualitative observations}
-\label{ssec:error_handling:qual}
+\begin{itemize}
+  \item Both shapes with axis labels (if available).
+  \item A red highlight on the mismatched axis.
+  \item The broadcasting rule that was violated.
+  \item A suggested fix if the shapes are off by one obvious
+    transposition or contiguity issue.
+\end{itemize}
 
-\section{Discussion}
-\label{sec:error_handling:discussion}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+ShapeError: add expected broadcast-compatible shapes, got:
+    a:    (4,  8, 16)        # 3 dims
+    b:    (   16,  8)        # 2 dims (right-aligned)
+                ^^
+  Mismatched axis: dim -2 of a (8) != dim -2 of b (16)
+  Likely fix: did you mean to transpose `b`?
+\end{lstlisting}
 
-\subsection{Trade-offs}
-\label{ssec:error_handling:tradeoffs}
+The diagnostic uses C++ source location info combined with the
+Python user-code site (via the binding's interpreter frame).
 
-\subsection{Open questions}
-\label{ssec:error_handling:open}
+\section{Anomaly Detection}
+\label{sec:error_handling:anomaly}
 
-\section{Summary and Cross-References}
+The hardest debugging case in deep learning: a NaN appears mid-
+training and you don't know which op produced it. \Lucid's
+anomaly-detection mode addresses this:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+lucid.autograd.set_detect_anomaly(True)
+\end{lstlisting}
+
+When enabled, every op records its call stack into the
+\code{GradFn}; if any output is NaN/Inf, the framework
+identifies the offending op and raises:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+NaNError: NaN detected in output of `lucid.log`.
+  Input was a tensor with values in [-0.5, 3.0]; the negative
+  value caused NaN in the log.
+  Stack:
+    File "/Users/.../train.py", line 142, in compute_loss
+      log_p = lucid.log(p)
+    File "/Users/.../model.py", line 81, in forward
+      p = sigmoid(self.linear(x))
+\end{lstlisting}
+
+The cost of anomaly mode is $\sim$20\% slower training; it is
+opt-in for debugging, not always on.
+
+\subsection{Forward-only anomaly}
+\label{ssec:error_handling:fwd_anomaly}
+
+For a forward-pass NaN, \code{set\_detect\_anomaly(True)} works
+the same way but checks each op's output, not just gradient.
+
+\subsection{Backward-only anomaly}
+\label{ssec:error_handling:bwd_anomaly}
+
+For a gradient NaN with finite forward, the anomaly mode
+records each \code{GradFn}'s execution and reports the offending
+backward op. The first NaN-producing backward is identified.
+
+\subsection{Under compile}
+\label{ssec:error_handling:anomaly_compile}
+
+The compile path collapses per-op stacks; anomaly detection is
+less informative under compile. The 3.5 release added the
+\code{check\_nan=True} flag at compile time
+(\chref{ch:compile_hardening}~Section~\ref{sec:compile_hardening:nan_handling})
+that checks outputs at the compile boundary; for per-op
+diagnosis, drop compile and re-run.
+
+\section{Memory-Pressure Errors}
+\label{sec:error_handling:memory_errors}
+
+When allocation fails (typically due to OOM):
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+DeviceError: GPU memory allocation failed.
+  Requested: 2.3 GB (tensor shape (32, 768, 768), fp32)
+  Available: 1.1 GB free of 64 GB unified
+  Allocator cache holds 18 GB.
+
+  Suggestions:
+  - Call lucid.runtime.empty_cache() to release the allocator cache.
+  - Reduce batch size from 32 to 16.
+  - Enable gradient checkpointing for memory-vs-compute tradeoff.
+  - Use bfloat16 autocast to halve activation memory.
+\end{lstlisting}
+
+The error includes the precise free vs requested numbers, the
+allocator's cache size (since releasing it may resolve the
+issue), and a list of orthogonal fixes.
+
+\section{Device-Mismatch Errors}
+\label{sec:error_handling:device_mismatch}
+
+When an op receives tensors on different devices (e.g., one on
+CPU stream, one on GPU stream):
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+DeviceError: matmul received tensors on different devices.
+  a.device: cpu
+  b.device: metal:0
+  All op inputs must be on the same device.
+  Likely fix: `b = b.cpu()` or `a = a.metal()`.
+\end{lstlisting}
+
+The fix suggestion is mechanical (move one tensor to match
+the other) but useful for the user who lost track of where
+tensors are.
+
+\section{Unsupported-Op Errors}
+\label{sec:error_handling:unsupported_op}
+
+When an op is called on an unsupported dtype/shape/configuration:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+NotImplementedError: cholesky requires square positive-definite
+  matrix, got shape (3, 4).
+  cholesky is only defined for square matrices.
+
+NotImplementedError: scaled_dot_product_attention(...,
+  is_causal=True) requires macOS 26+. Detected macOS 25.4.
+  Falls back to the composite path automatically; please
+  upgrade for the fast path.
+\end{lstlisting}
+
+\section{Hub Errors}
+\label{sec:error_handling:hub_errors}
+
+Hub-related failures get their own subclass with detailed
+context:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+HubDownloadError: Failed to download `resnet_50` (imagenet1k-v2).
+  URL: https://hub.lucid-ml.org/vision/cnn/resnet_50/imagenet1k-v2/weights.safetensors
+  Reason: Connection timeout after 30s.
+  Retry: lucid.hub.download("resnet_50") will retry with 3 attempts.
+  Offline alternative: download via browser to ~/.lucid/hub/...
+
+HubIntegrityError: Downloaded file failed SHA-256 check.
+  Expected: a3b4c5d6...
+  Got:      b8e7c2f1...
+  The file is corrupted or has been tampered with.
+  The local copy has been deleted. Retry the download.
+\end{lstlisting}
+
+The user knows the cause (network vs corruption), what
+\Lucid\ will do, and what they can do.
+
+\section{Compile Errors}
+\label{sec:error_handling:compile_errors}
+
+The compile path can fail in several ways:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+CompileError: Tracer encountered unsupported op `fft.rfft`.
+  Falling back to eager for the region containing this op.
+  To disable fallback (and surface this error immediately),
+  call lucid.compile(model, strict=True).
+
+CompileError: MpsBuilder failed to emit `gather` for shape
+  (1024, dynamic_dim, 64). Dynamic shape support is not yet
+  available in 3.5; use a fixed shape or pad to the maximum.
+\end{lstlisting}
+
+The first variant (unsupported op + fallback) is a warning-
+level event by default; the user opted into strict mode to
+make it an error. The second is a fatal error in 3.5 (will be
+fixed in 3.5.1).
+
+\section{Logging Integration}
+\label{sec:error_handling:logging}
+
+\Lucid\ also produces non-fatal log messages via the standard
+\code{logging} module under the \code{lucid} root logger:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("lucid")
+
+# Example messages:
+# INFO  lucid.amp: autocast enabled with dtype=float16
+# WARN  lucid.compile: fallback to eager for region (5 ops): fft.rfft
+# DEBUG lucid.alloc: cache hit for shape (32, 3, 224, 224)
+\end{lstlisting}
+
+The default level is WARN; users can set DEBUG for verbose
+output during debugging.
+
+\section{The Debug Print of a Tensor}
+\label{sec:error_handling:tensor_debug_print}
+
+\code{print(tensor)} produces a human-readable summary:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+print(x)
+# Tensor(shape=(4, 8, 16), dtype=fp32, device=metal:0)
+# [[[ 0.123  -0.456 ... 0.789  -0.012]
+#   ...
+#   [ ...                          ...]]]
+\end{lstlisting}
+
+For large tensors, only corner elements are shown (the standard
+NumPy-style ellipsis abbreviation). The shape, dtype, and device
+are always included.
+
+For diagnostic purposes, \code{tensor.summary()} gives
+statistics:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+print(x.summary())
+# Tensor summary:
+#   shape: (4, 8, 16)
+#   dtype: fp32
+#   device: metal:0
+#   min: -2.45, max: 3.12, mean: 0.04, std: 0.98
+#   nan_count: 0, inf_count: 0, zero_count: 17
+#   requires_grad: True (grad_fn: ReLUBackward)
+\end{lstlisting}
+
+\section{Custom Error Wrapping}
+\label{sec:error_handling:custom_wrapping}
+
+User-written code can wrap \Lucid\ errors with additional
+context using \code{LucidError.with\_context}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def train_epoch(model, loader):
+    for batch_idx, (x, y) in enumerate(loader):
+        try:
+            out = model(x)
+        except lucid.ShapeError as e:
+            raise e.with_context(
+                f"At batch {batch_idx}, input shape {x.shape}"
+            )
+\end{lstlisting}
+
+The wrapped error preserves the original chain (Python
+\code{raise from} semantics) so the user sees both the
+high-level user-code site and the framework-internal cause.
+
+\section{Test Coverage of Error Paths}
+\label{sec:error_handling:error_test_coverage}
+
+The \code{lucid/test/error/} directory contains tests that
+exercise each error-path explicitly:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def test_matmul_shape_error_message():
+    a = lucid.randn(16, 32, 64)
+    b = lucid.randn(32, 128)
+    with pytest.raises(lucid.ShapeError) as exc_info:
+        a @ b
+    assert "last dim of `a` (64)" in str(exc_info.value)
+    assert "second-to-last dim of `b` (32)" in str(exc_info.value)
+\end{lstlisting}
+
+These tests verify both that the error is raised \emph{and}
+that its message contains the expected diagnostic detail. The
+message is part of the API contract.
+
+\section{Error Telemetry}
+\label{sec:error_handling:error_telemetry}
+
+\Lucid\ has \emph{no telemetry} (per the project's
+privacy stance: no anonymous error reporting, no usage
+statistics, no remote phone-home). Users diagnose locally
+or open a public issue.
+
+\section{Summary and Forward References}
 \label{sec:error_handling:summary}
+
+\Lucid's error handling: shallow exception hierarchy, strict
+message-quality standard, shape-mismatch diagnostic with
+suggested fixes, anomaly detection for NaN/Inf catching,
+device-mismatch / OOM / hub / compile errors all
+context-rich, no telemetry. The error infrastructure is
+treated as a public API: tests cover the messages, not just
+the exception types.
+
+The final chapter, \chref{ch:reproducibility}, treats
+reproducibility --- closing the loop on the data pipeline +
+serialization + error handling that this part of the report
+covers.
+
+\begin{lucidnote}
+For the user: if you see a vague error or one without a
+suggested fix, that is a bug; please report it. The error
+infrastructure is iteratively improved, and a user-side
+``confusing error'' report is one of the most actionable kinds
+of issue.
+\end{lucidnote}

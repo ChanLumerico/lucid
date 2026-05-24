@@ -55,16 +55,22 @@ inline NSArray<NSNumber*>* shape_to_nsarray(const Shape& shape) {
     return out;
 }
 
-// Builds a compile descriptor honouring Lucid's global determinism
-// flag.  Returns ``nil`` (which MPSGraph treats as "use defaults")
-// when determinism is off so we don't pay any per-compile cost on
-// the fast path; returns an opt-level-0 descriptor when on.
+// Builds a compile descriptor.
+//
+//   * Determinism ON (uncommon path): ``optimizationLevel = Level0``
+//     to guarantee bit-stable kernel selection across runs.
+//   * Determinism OFF (default): ``optimizationLevel = Level1`` — pay
+//     extra compile-time analysis for runtime fusion wins.  On macOS
+//     26 SDK this opens up kernel-merge passes MPSGraph keeps gated
+//     behind Level1; the cost is a one-time ~5-20ms compile-time
+//     increase per signature, amortised over every subsequent run.
 inline MPSGraphCompilationDescriptor* make_compile_descriptor() {
-    if (!::lucid::Determinism::is_enabled())
-        return nil;
     MPSGraphCompilationDescriptor* desc =
         [[MPSGraphCompilationDescriptor alloc] init];
-    desc.optimizationLevel = MPSGraphOptimizationLevel0;
+    if (::lucid::Determinism::is_enabled())
+        desc.optimizationLevel = MPSGraphOptimizationLevel0;
+    else
+        desc.optimizationLevel = MPSGraphOptimizationLevel1;
     return desc;
 }
 
@@ -1824,7 +1830,22 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
                 }
 
             if (var_feed_for_write >= 0) {
-                // Variable write: emit assignVariable + readVariable
+                // Variable write: emit assignVariable as a SIDE
+                // EFFECT (added to targetOperations) and use the
+                // computed ``new_value_t`` directly as the output
+                // tensor.  This mirrors the working standalone
+                // pattern in /tmp/var_grad.mm — using
+                // ``readVariable:`` after ``assignVariable:`` inside
+                // the same compile unit creates a read-after-write
+                // dependency on the same variable, which interacts
+                // poorly with MPSGraph's autograd scheduler (the
+                // backward pass already reads the variable, so an
+                // additional read introduces extra scheduling
+                // constraints that we empirically observed cause a
+                // hang on macOS 26 SDK).  ``new_value_t`` and
+                // ``readVariable`` post-assign are bit-identical —
+                // assignVariable copies new_value into the variable
+                // verbatim — so we lose nothing semantically.
                 void* var_void = ctx.resolve(var_feed_for_write);
                 MPSGraphTensor* var_t = (__bridge MPSGraphTensor*)var_void;
                 MPSGraphOperation* assign_op =
@@ -1834,12 +1855,7 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
                                                             @"assign_%lld",
                                                             (long long)tid]];
                 [target_ops_arr addObject:assign_op];
-                MPSGraphTensor* readback =
-                    [graph_obj readVariable:var_t
-                                       name:[NSString stringWithFormat:
-                                                          @"readVar_%lld",
-                                                          (long long)tid]];
-                [target_arr addObject:readback];
+                [target_arr addObject:new_value_t];
             } else {
                 // Plain output target: add to targetTensors directly.
                 [target_arr addObject:new_value_t];

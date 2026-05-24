@@ -2,55 +2,515 @@
 \chapter{Weight Initialization}
 \label{ch:initialization}
 
-\todo[inline]{Chapter 38 --- Weight Initialization. Multi-level scaffold below; prose to follow.}
+The initial values of a network's parameters strongly affect
+whether training converges. Initialising too small causes the
+forward signal to vanish layer by layer (activations $\to 0$);
+too large causes the signal to explode (activations $\to
+\infty$); the gradient through the network suffers the same fate
+in reverse. The standard initialisation schemes
+(Xavier/Glorot, Kaiming/He, orthogonal) target an explicit
+variance-preserving property that keeps signals and gradients in
+a useful range across depth.
 
-\section{Overview}
-\label{sec:initialization:overview}
+\Lucid\ exposes the standard initialisation surface at
+\code{lucid.nn.init}, mirroring \refframework's
+\code{torch.nn.init}. This chapter describes each scheme, the
+mathematical motivation, and the user-side patterns for applying
+them.
 
-\section{Architecture}
-\label{sec:initialization:arch}
+\section{Why Initialisation Matters}
+\label{sec:initialization:why}
 
-\subsection{Core building blocks}
-\label{ssec:initialization:blocks}
+Consider a deep linear network $y = W_L W_{L-1} \cdots W_1 x$.
+If each $W_\ell$ has spectral norm $\rho$, then $\|y\| \sim
+\rho^L \|x\|$. For $L = 100$ and $\rho = 0.9$, $\|y\| \sim
+2.6 \times 10^{-5} \|x\|$ --- vanishing. For $\rho = 1.1$,
+$\|y\| \sim 1.4 \times 10^4 \|x\|$ --- exploding. Only $\rho
+\approx 1$ keeps the signal in a useful range.
 
-\subsection{Variants and parameterizations}
-\label{ssec:initialization:variants}
+The same analysis applies to the backward pass: gradients scale
+by the transposed matrix norms.
 
-\section{Forward Computation}
-\label{sec:initialization:forward}
+\subsection{The variance-preserving condition}
+\label{ssec:initialization:var_preserving}
 
-\subsection{Mathematical formulation}
-\label{ssec:initialization:formulation}
+For random $W$ with i.i.d.\ entries from $\mathcal{N}(0,
+\sigma^2)$ and random $x$ with $\mathrm{Var}(x_i) = 1$, the
+forward signal at the next layer satisfies
+\[
+\mathrm{Var}(y_j) \;=\; n \sigma^2,
+\]
+where $n$ is the input dimension (the fan-in). To preserve
+unit variance, we want $\sigma^2 = 1/n$, i.e.\ $\sigma =
+1/\sqrt{n}$.
 
-\subsection{Implementation in Lucid}
-\label{ssec:initialization:impl}
+This is the original Xavier / Glorot insight: scale the
+initialisation by the inverse square root of the fan-in.
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+\subsection{Derivation in detail}
+\label{ssec:initialization:variance_derivation}
 
-\section{Training Considerations}
-\label{sec:initialization:training}
+For a linear layer $y_j = \sum_i W_{ji} x_i$ with independent
+$W_{ji}$ (mean 0, variance $\sigma^2$) and independent $x_i$
+(mean 0, variance 1):
+\begin{align*}
+  \mathbb{E}[y_j] &= \sum_i \mathbb{E}[W_{ji}] \mathbb{E}[x_i] = 0, \\
+  \mathrm{Var}(y_j) &= \sum_i \mathrm{Var}(W_{ji} x_i) \\
+  &= \sum_i \mathbb{E}[W_{ji}^2] \mathbb{E}[x_i^2] - 0 \\
+  &= n \sigma^2.
+\end{align*}
+Recursing across $L$ layers, $\mathrm{Var}(y^{(L)}) = (n \sigma^2)^L$.
+For the signal to neither vanish nor explode, $n \sigma^2 = 1$,
+giving $\sigma = 1/\sqrt{n}$.
 
-\subsection{Initialization strategy}
-\label{ssec:initialization:init}
+The backward pass is symmetric: the gradient $\bar{x}_i = \sum_j W_{ji} \bar{y}_j$
+has $\mathrm{Var}(\bar{x}_i) = n_{\text{out}} \sigma^2$, so for
+backward variance preservation we want $\sigma = 1/\sqrt{n_{\text{out}}}$.
+Forward and backward give different recommendations; Xavier
+compromises by using the harmonic mean.
 
-\subsection{Backward pass}
-\label{ssec:initialization:backward}
+\section{Xavier (Glorot) Initialisation}
+\label{sec:initialization:xavier}
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:initialization:optim_amp}
+For a linear layer with fan-in $n_{\text{in}}$ and fan-out
+$n_{\text{out}}$, Xavier initialisation uses
+\[
+W_{ij} \;\sim\; \mathcal{N}\!\left(0,\, \frac{2}{n_{\text{in}} + n_{\text{out}}}\right)
+\quad \text{or} \quad
+W_{ij} \;\sim\; \mathcal{U}\!\left(-\sqrt{\frac{6}{n_{\text{in}} + n_{\text{out}}}},\, \sqrt{\frac{6}{n_{\text{in}} + n_{\text{out}}}}\right).
+\]
+
+The use of the average $(n_{\text{in}} + n_{\text{out}}) / 2$
+rather than just $n_{\text{in}}$ balances forward and backward
+variance: forward wants $1/n_{\text{in}}$, backward wants
+$1/n_{\text{out}}$, the average is the compromise.
+
+\subsection{The API}
+\label{ssec:initialization:xavier_api}
+
+\code{lucid.nn.init.xavier\_normal\_(tensor, gain=1.0)} and
+\code{lucid.nn.init.xavier\_uniform\_(tensor, gain=1.0)}. The
+\code{gain} multiplies the variance; defaults to 1 (linear or
+identity), should be set higher for non-linear activations.
+
+\subsection{Gain conventions}
+\label{ssec:initialization:gain}
+
+\code{nn.init.calculate\_gain(nonlinearity)} returns the
+appropriate gain:
+\begin{itemize}
+  \item \code{linear}, \code{identity}: 1.
+  \item \code{relu}: $\sqrt{2}$.
+  \item \code{leaky\_relu(a)}: $\sqrt{2 / (1 + a^2)}$.
+  \item \code{sigmoid}: 1.
+  \item \code{tanh}: $5/3$.
+  \item \code{selu}: $3/4$.
+\end{itemize}
+
+The gain compensates for the variance change introduced by the
+non-linearity.
+
+\section{Kaiming (He) Initialisation}
+\label{sec:initialization:kaiming}
+
+Xavier assumes a symmetric non-linearity that preserves
+zero-centred Gaussian variance. ReLU is asymmetric: it zeros out
+half the input, halving the variance. Kaiming initialisation
+accounts for this:
+\[
+W_{ij} \;\sim\; \mathcal{N}\!\left(0,\, \frac{2}{n_{\text{in}}}\right).
+\]
+The factor of 2 (compared to $1/n_{\text{in}}$ for the
+no-non-linearity case) compensates for ReLU's variance halving.
+
+\subsection{The API}
+\label{ssec:initialization:kaiming_api}
+
+\code{nn.init.kaiming\_normal\_(tensor, a=0, mode='fan\_in', nonlinearity='leaky\_relu')}
+and \code{kaiming\_uniform\_} of the same signature. The \code{mode}
+chooses between fan-in (forward variance preservation) and
+fan-out (backward variance preservation).
+
+\subsection{The standard default}
+\label{ssec:initialization:kaiming_default}
+
+\Lucid's standard layer modules (Linear, Conv2d) use
+\code{kaiming\_uniform\_(weight, a=sqrt(5))} as the default. This
+matches \refframework's default and is empirically the choice
+that works for most architectures.
+
+\section{Orthogonal Initialisation}
+\label{sec:initialization:orthogonal}
+
+\code{nn.init.orthogonal\_(tensor, gain=1.0)} initialises a 2-D
+tensor (or the first two axes of higher-rank) as an orthogonal
+matrix scaled by \code{gain}. For square matrices, this means
+$W^\top W = \mathrm{gain}^2 I$.
+
+Orthogonal initialisation is especially useful for RNNs, where
+the recurrent matrix $W_{hh}$ benefits from spectral radius
+exactly 1 (orthogonal matrices have all singular values equal to
+\code{gain}).
+
+\subsection{Construction}
+\label{ssec:initialization:orthogonal_construction}
+
+The standard construction: sample a random Gaussian matrix, take
+its QR decomposition, return $Q$. For non-square inputs, pad or
+truncate appropriately.
+
+\subsection{Why orthogonal for RNN}
+\label{ssec:initialization:why_orth_rnn}
+
+The vanilla RNN recurrence $h_t = \tanh(W_{hh} h_{t-1} + \ldots)$
+involves $T$ products of $W_{hh}$. The norm of the gradient
+through time is bounded by $\sigma(W_{hh})^T$ where
+$\sigma$ is the largest singular value. For orthogonal $W_{hh}$,
+all singular values equal 1, so the long-term gradient is
+preserved (modulo the tanh saturation).
+
+This is the original argument for using orthogonal
+initialisation in RNNs, dating from the LSTM era. In practice,
+LSTM and GRU also benefit, though to a lesser degree because
+their gating mitigates the gradient issue independently.
+
+\subsection{Sparse initialisation}
+\label{ssec:initialization:sparse_init}
+
+For wide layers, fully dense initialisation can over-couple all
+neurons. \code{nn.init.sparse\_(tensor, sparsity, std=0.01)}
+zeros out a fraction \code{sparsity} of each column and
+initialises the rest from $\mathcal{N}(0, \mathrm{std}^2)$.
+Less commonly used in modern architectures but historically
+relevant for some early CNN papers.
+
+\section{Simple Initialisations}
+\label{sec:initialization:simple}
+
+\Lucid\ provides the standard simple schemes:
+
+\begin{itemize}
+  \item \code{zeros\_(tensor)}: fill with 0.
+  \item \code{ones\_(tensor)}: fill with 1. (Used for LayerNorm
+    weight, BatchNorm weight.)
+  \item \code{constant\_(tensor, val)}: fill with a constant.
+  \item \code{eye\_(tensor)}: identity matrix (for 2-D tensors).
+  \item \code{normal\_(tensor, mean=0, std=1)}: per-element
+    Gaussian.
+  \item \code{uniform\_(tensor, a=0, b=1)}: per-element uniform.
+  \item \code{trunc\_normal\_(tensor, mean, std, a, b)}: truncated
+    normal, redrawing samples outside $[a, b]$.
+\end{itemize}
+
+\subsection{trunc\_normal in transformers}
+\label{ssec:initialization:trunc_normal}
+
+The Transformer original paper \cite{vaswani_attention_2017}
+and subsequent models initialise weights as
+$\mathcal{N}(0, 0.02^2)$, truncated to $[-2 \sigma, 2 \sigma]$.
+The truncation removes the heavy-tailed extreme samples that can
+destabilise the start of training.
+
+\code{nn.init.trunc\_normal\_(tensor, mean=0, std=0.02, a=-0.04, b=0.04)}
+is the standard call.
+
+\section{Bias Initialisation}
+\label{sec:initialization:bias}
+
+Biases are usually initialised to zero, except in three cases:
+
+\begin{itemize}
+  \item \textbf{LSTM forget gate bias = 1}: encourages the model
+    to remember at the start of training, mitigating the cold-
+    start vanishing-gradient problem.
+  \item \textbf{Sigmoid output bias = \code{logit}(prior class
+    probability)}: matches the dataset's class prior at
+    initialisation.
+  \item \textbf{Convolution bias = small constant (e.g., 0.01)}:
+    occasionally used to avoid dead ReLUs.
+\end{itemize}
+
+The default \code{nn.Linear} / \code{nn.Conv2d} bias initialisation
+is uniform in $[-1/\sqrt{n_{\text{in}}}, 1/\sqrt{n_{\text{in}}}]$,
+which is small enough to be near-zero but provides some
+asymmetry.
+
+\section{Worked Example: VGG-Style Init}
+\label{sec:initialization:vgg_example}
+
+A typical CNN initialisation pattern:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid.nn as nn
+import lucid.nn.init as init
+
+def init_weights(m):
+    if isinstance(m, nn.Conv2d):
+        init.kaiming_normal_(m.weight, nonlinearity='relu')
+        if m.bias is not None:
+            init.zeros_(m.bias)
+    elif isinstance(m, nn.BatchNorm2d):
+        init.ones_(m.weight)
+        init.zeros_(m.bias)
+    elif isinstance(m, nn.Linear):
+        init.kaiming_normal_(m.weight, nonlinearity='relu')
+        init.zeros_(m.bias)
+
+model.apply(init_weights)
+\end{lstlisting}
+
+The pattern: Kaiming for the conv/linear weights (Re LU-aware),
+ones/zeros for BatchNorm's affine parameters.
+
+\section{Initialisation Recipes by Architecture}
+\label{sec:initialization:recipes_by_arch}
+
+\subsection{Standard CNN (ResNet, VGG, ConvNeXt)}
+\label{ssec:initialization:cnn_recipe}
+
+Standard recipe:
+\begin{itemize}
+  \item Convolutional weights: Kaiming normal, fan-out mode,
+    nonlinearity=relu.
+  \item Linear weights (classifier head): Kaiming normal or
+    truncated normal.
+  \item BatchNorm weight: 1; BatchNorm bias: 0.
+  \item Convolutional / linear biases: 0.
+\end{itemize}
+
+ResNet \cite{he_resnet_2016} additionally initialises the last
+BatchNorm in each residual block's weight to 0, so the block's
+output is initially zero and the residual stream is unchanged.
+This is the ``zero-init residual'' trick that lets very deep
+ResNets train stably from scratch.
+
+\subsection{Transformers (BERT, GPT-2, ViT)}
+\label{ssec:initialization:transformer_recipe}
+
+Standard recipe:
+\begin{itemize}
+  \item Linear weights: truncated normal $\sigma = 0.02$,
+    bias 0.
+  \item Embedding weights: same as linear.
+  \item LayerNorm weight 1, bias 0.
+\end{itemize}
+
+GPT-2 \cite{radford_gpt2_2019} additionally scales the
+initialisation of the residual projections (the second
+linear in each FFN and the output of attention) by
+$1/\sqrt{2 L}$ where $L$ is the depth. The motivation: with $L$
+residual additions, the variance accumulates as $L$; the
+$1/\sqrt{2L}$ scaling keeps the residual-stream variance
+bounded across depth.
+
+\subsection{LLaMA-family (RMSNorm, SwiGLU)}
+\label{ssec:initialization:llama_recipe}
+
+LLaMA-style \cite{touvron_llama_2023} initialisation:
+\begin{itemize}
+  \item Linear weights: truncated normal $\sigma = 0.02$,
+    no bias (LLaMA omits biases).
+  \item RMSNorm weight: 1.
+  \item RoPE: no parameters (fixed sin/cos lookup).
+\end{itemize}
+
+The depth-scaling correction of GPT-2 is not applied directly;
+LLaMA uses a slightly different residual scaling via the FFN
+hidden dimension choice.
+
+\subsection{Diffusion U-Net}
+\label{ssec:initialization:diffusion_recipe}
+
+Diffusion model U-Net \cite{ho_ddpm_2020}:
+\begin{itemize}
+  \item Standard CNN init for the conv layers.
+  \item The final output convolution is initialised to zero
+    weights and zero bias. The denoiser then starts as the
+    identity (predicts zero noise), which is a sensible
+    starting point.
+  \item Time-embedding linear: standard init.
+\end{itemize}
+
+\section{Worked Example: Transformer Init}
+\label{sec:initialization:transformer_example}
+
+A typical Transformer initialisation:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def init_transformer(module):
+    if isinstance(module, nn.Linear):
+        init.trunc_normal_(module.weight, mean=0, std=0.02,
+                           a=-0.04, b=0.04)
+        if module.bias is not None:
+            init.zeros_(module.bias)
+    elif isinstance(module, nn.Embedding):
+        init.trunc_normal_(module.weight, mean=0, std=0.02,
+                           a=-0.04, b=0.04)
+    elif isinstance(module, nn.LayerNorm):
+        init.ones_(module.weight)
+        init.zeros_(module.bias)
+
+transformer.apply(init_transformer)
+\end{lstlisting}
+
+Truncated normal at the GPT-2 standard ($\sigma = 0.02$) for
+both Linear and Embedding; LayerNorm to identity.
+
+\section{Embedding Initialisation}
+\label{sec:initialization:embedding}
+
+Word and token embeddings have their own conventions:
+
+\begin{itemize}
+  \item Default: $\mathcal{N}(0, 1)$ or $\mathcal{U}(-0.1, 0.1)$,
+    depending on the architecture.
+  \item Transformer-style: truncated normal $\sigma = 0.02$.
+  \item Tied to output projection: initialise once (Section
+    \ref{ssec:module_system:shared_params}); both consumers
+    use the shared tensor.
+\end{itemize}
+
+For positional embeddings, the convention is similar to weight
+embeddings: small random initialisation, with the gradient
+flowing through during training. Some recent recipes start
+positional embeddings at exactly zero (no positional bias at
+init) and let the model learn the appropriate values.
+
+\section{Initialisation for AMP}
+\label{sec:initialization:amp_init}
+
+Mixed-precision training changes the initialisation
+considerations slightly:
+
+\begin{itemize}
+  \item Default Xavier / Kaiming initialisation can produce
+    weights at the very low end of FP16's representable range.
+    Truncated normal $\sigma = 0.02$ is FP16-safe.
+  \item LayerNorm weight = 1 is exactly representable.
+  \item Initialising parameters in FP32 (then casting via
+    autocast at forward) is the standard pattern; the master
+    copy stays FP32 for optimiser precision.
+\end{itemize}
+
+In practice, the initialisations above all play nicely with
+AMP without modification. The exception is the
+\code{nn.init.constant\_(weight, very\_small)} pattern (e.g.,
+$10^{-5}$); under FP16, this may round to a denormal or zero.
+Use $\geq 10^{-4}$ as the smallest meaningful constant.
+
+\section{Initialisation Theory: A Deeper Look}
+\label{sec:initialization:theory}
+
+The variance-preservation arguments above assume:
+\begin{itemize}
+  \item Inputs to each layer are zero-mean and unit-variance.
+  \item Weights are i.i.d.
+  \item The activation function is well-behaved.
+\end{itemize}
+
+In practice these assumptions are approximate. BatchNorm /
+LayerNorm explicitly enforce the input assumption; residual
+connections preserve the input distribution through depth (which
+is why they let very deep networks train at all). The mathematics
+of why deep ResNets can be trained at depth 100+ without careful
+initialisation is the subject of dynamical-isometry analyses; we
+do not pursue it here.
+
+\subsection{Dynamical isometry}
+\label{ssec:initialization:dynamical_isometry}
+
+A network is said to have \emph{dynamical isometry} if its
+forward and backward Jacobians have all singular values
+approximately 1. This is the strongest variance-preservation
+condition and the one that orthogonal initialisation explicitly
+targets. For practical depths (10--100 layers), the standard
+Kaiming + BatchNorm/LayerNorm combination achieves enough
+approximate isometry to train; for very deep networks (1000+),
+explicit orthogonality matters more.
+
+\subsection{The signal/gradient covariance}
+\label{ssec:initialization:signal_grad_cov}
+
+A more refined analysis tracks both signal and gradient variance
+through the layers. The forward variance at layer $\ell$ is
+\[
+\mathrm{Var}(x^{(\ell)}) \;\propto\; \prod_{k=1}^{\ell} (n_k \sigma_k^2 \cdot g_k),
+\]
+where $g_k$ is the activation's gain. The backward gradient
+variance has the analogous form with $n_k$ replaced by
+$n_{k+1}$. Xavier balances both; Kaiming targets just the
+forward (and is fine because the backward inherits).
+
+\section{Initialisation in lucid.nn}
+\label{sec:initialization:nn_defaults}
+
+The default initialisations in \Lucid's standard layers:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Module & Weight init & Bias init \\
+\midrule
+\code{Linear}      & \code{kaiming\_uniform\_(a=sqrt(5))} & \code{uniform\_(-1/sqrt(n),...)} \\
+\code{Conv1d/2d/3d} & \code{kaiming\_uniform\_(a=sqrt(5))} & same as Linear \\
+\code{LayerNorm}   & \code{ones\_}                         & \code{zeros\_} \\
+\code{BatchNorm}   & \code{ones\_}                         & \code{zeros\_} \\
+\code{Embedding}   & \code{normal\_(0, 1)}                 & --- \\
+\code{LSTM, GRU}   & \code{uniform\_(-1/sqrt(H), 1/sqrt(H))} & same \\
+\code{MultiheadAttention} & \code{kaiming\_uniform\_(a=sqrt(5))} & \code{zeros\_} \\
+\bottomrule
+\end{tabular}
+\caption[Default initialisations.]{Standard-layer default
+weight and bias initialisations in \Lucid, matching
+\refframework. Most architectures override at least the weight
+init (e.g., truncated-normal for Transformers); the defaults are
+sensible starting points but rarely optimal.}
+\label{tab:initialization:defaults}
+\end{table}
 
 \section{Implementation Notes}
-\label{sec:initialization:notes}
+\label{sec:initialization:impl_notes}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:initialization:layout}
+The \code{lucid.nn.init} module lives in \code{lucid/nn/init.py}.
+Each initialisation is an in-place operation on the tensor
+(the trailing underscore in the name marks in-place by
+convention). The operations are differentiable (an initialisation
+that produces a tensor with \code{requires\_grad=True} retains
+that flag), though gradient through initialisation is rarely
+meaningful.
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:initialization:pitfalls}
+\subsection{Composability with autograd}
+\label{ssec:initialization:autograd}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:initialization:examples}
+Initialisations are typically called once at model construction,
+before training begins, and do not interact with autograd. If
+called during training (e.g., to reset a layer), the in-place
+operation increments the version counter
+(\chref{ch:tensor_model}~Section~\ref{ssec:tensor_model:version_counter})
+and may invalidate saved tensors for backward.
 
-\section{Summary and Cross-References}
+\section{Summary and Forward References}
 \label{sec:initialization:summary}
+
+Weight initialisation is the choice that lets gradient descent
+converge from random starting points. The standard schemes
+(Xavier, Kaiming, orthogonal, truncated normal) target variance
+preservation across the forward and backward passes. \Lucid\
+exposes them at \code{lucid.nn.init} with the same API as
+\refframework. The standard layer modules in \code{lucid.nn} have
+sensible default initialisations but can be overridden for
+architecture-specific patterns (Transformer's truncated normal,
+LSTM's forget-gate bias).
+
+The next chapter, \chref{ch:optimizers}, treats the optimiser
+family. \chref{ch:lr_schedulers} treats learning-rate schedules.
+\chref{ch:amp} treats mixed precision.
+
+\begin{lucidnote}
+For the user: the standard layers have working defaults. For
+production training, override with the architecture-appropriate
+pattern (Kaiming for CNNs, truncated normal for Transformers,
+orthogonal for RNNs). Apply via \code{model.apply(init\_fn)}.
+\end{lucidnote}

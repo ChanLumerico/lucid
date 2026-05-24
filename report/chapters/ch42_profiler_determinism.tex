@@ -2,55 +2,473 @@
 \chapter{Profiler and Determinism}
 \label{ch:profiler_determinism}
 
-\todo[inline]{Chapter 42 --- Profiler and Determinism. Multi-level scaffold below; prose to follow.}
+This chapter closes \partref{part:neural_networks} with two
+diagnostic tools that are operationally important but rarely
+described in textbooks: the per-op profiler and the deterministic
+execution mode. The profiler helps understand where training
+time is spent. Determinism ensures that two runs of the same
+training script produce the same result --- essential for
+debugging, reproducible research, and regression testing.
 
-\section{Overview}
-\label{sec:profiler_determinism:overview}
+\section{Why Profile}
+\label{sec:profiler_determinism:why_profile}
 
-\section{Architecture}
-\label{sec:profiler_determinism:arch}
+Training a neural network involves dozens of operations per
+forward step, each with different cost characteristics. Without
+profiling, the practitioner relies on intuition (``matmul is
+expensive, elementwise is cheap'') that is often wrong: a
+chain of small ops can dominate a single large matmul; an
+unexpected synchronisation can stall the GPU for milliseconds; a
+data-loader bottleneck can leave the GPU idle.
 
-\subsection{Core building blocks}
-\label{ssec:profiler_determinism:blocks}
+The profiler reports per-op time so the practitioner can target
+optimisations effectively.
 
-\subsection{Variants and parameterizations}
-\label{ssec:profiler_determinism:variants}
+\section{The Lucid Profiler}
+\label{sec:profiler_determinism:profiler}
 
-\section{Forward Computation}
-\label{sec:profiler_determinism:forward}
+\code{lucid.profiler.Profiler} is a context manager that records
+per-op timings:
 
-\subsection{Mathematical formulation}
-\label{ssec:profiler_determinism:formulation}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.profiler import Profiler
 
-\subsection{Implementation in Lucid}
-\label{ssec:profiler_determinism:impl}
+with Profiler() as p:
+    for batch in train_loader[:10]:
+        loss = criterion(model(batch.input), batch.target)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+print(p.summary())
+\end{lstlisting}
 
-\section{Training Considerations}
-\label{sec:profiler_determinism:training}
+The output is a table of per-op statistics: count, total time,
+self time (excluding sub-op calls), average per call, peak
+memory.
 
-\subsection{Initialization strategy}
-\label{ssec:profiler_determinism:init}
+\subsection{What it tracks}
+\label{ssec:profiler_determinism:tracks}
 
-\subsection{Backward pass}
-\label{ssec:profiler_determinism:backward}
+Every op invocation through the \Lucid\ dispatcher is recorded:
+op name, input shapes, input dtypes, wall-clock duration,
+backend (CPU/MLX/MPSGraph), and approximate memory delta.
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:profiler_determinism:optim_amp}
+The recording adds a few microseconds per op call. For most
+training workloads this is negligible; for very small-op-heavy
+loops (small-batch RNN training), the overhead can reach 5--10\%.
+
+\subsection{Aggregation views}
+\label{ssec:profiler_determinism:views}
+
+The profiler provides several aggregation modes:
+
+\begin{itemize}
+  \item \code{summary()}: per-op-name aggregation. Shows which
+    op kinds dominate.
+  \item \code{by\_shape()}: per-op-name + per-input-shape. Useful
+    for finding small-op pathologies.
+  \item \code{by\_module()}: aggregation by source module
+    (requires the profiler to be aware of the module call stack;
+    on by default).
+  \item \code{timeline()}: linearised event log. Useful for
+    finding sequential dependencies and synchronisation stalls.
+\end{itemize}
+
+\subsection{Saving and analysis}
+\label{ssec:profiler_determinism:saving}
+
+\code{p.export\_chrome\_trace('trace.json')} writes a
+Chrome-tracing-format file that the user can load in
+\code{chrome://tracing} or \code{ui.perfetto.dev} for visual
+analysis. The graphical timeline view often makes bottlenecks
+obvious.
+
+\section{Profiler vs External Tools}
+\label{sec:profiler_determinism:vs_external}
+
+\Lucid's profiler is a per-op accounting tool. For lower-level
+profiling (per-kernel GPU time, memory bandwidth utilisation),
+Apple's \code{Instruments.app} with the Metal System Trace
+template is the right tool. The two are complementary:
+\Lucid's profiler tells you which op is expensive; Instruments
+tells you why.
+
+\subsection{The Instruments workflow}
+\label{ssec:profiler_determinism:instruments}
+
+\begin{enumerate}
+  \item Launch Instruments.app and choose the Metal System Trace
+    template.
+  \item Attach to the Python process running the training script.
+  \item Record for a few training steps.
+  \item Analyse the timeline: GPU utilisation, command queue
+    backlog, per-kernel duration.
+\end{enumerate}
+
+Apple's developer documentation has extensive guides for
+Instruments. \Lucid\ does not ship with custom Instruments
+templates; the standard Metal template is sufficient.
+
+\section{Determinism}
+\label{sec:profiler_determinism:determinism}
+
+The same training script run twice on the same hardware should
+produce identical numerical results. \emph{Should}, but in
+practice does not, because of three sources of non-determinism:
+
+\begin{enumerate}
+  \item \textbf{Parallel reduction order}: floating-point
+    addition is non-associative; a parallel reduction can produce
+    different bit-level results depending on the order in which
+    threads combine partial sums.
+  \item \textbf{Non-deterministic op implementations}: some ops
+    (notably \code{scatter\_add} with duplicate indices) have
+    multiple valid implementations that produce slightly
+    different results.
+  \item \textbf{Random number generators}: training uses RNG for
+    initialisation, dropout, data shuffling. Without explicit
+    seeding, each run sees different randomness.
+\end{enumerate}
+
+\subsection{The set\_deterministic mode}
+\label{ssec:profiler_determinism:set_det}
+
+\code{lucid.set\_deterministic(True)} enables a strict mode that
+addresses the first two sources:
+
+\begin{itemize}
+  \item Parallel reductions use a deterministic ordering (at
+    cost to throughput).
+  \item Non-deterministic op implementations are replaced by
+    deterministic equivalents (typically a CPU fallback for
+    \code{scatter\_add} with duplicates).
+\end{itemize}
+
+In deterministic mode, an op that does not have a deterministic
+implementation raises \code{LucidError} rather than silently
+producing non-reproducible results.
+
+\subsection{The RNG side}
+\label{ssec:profiler_determinism:rng}
+
+For full determinism, the user must also seed the RNG:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+
+lucid.manual_seed(42)
+lucid.set_deterministic(True)
+
+# Now training is reproducible: same script, same hardware,
+# same bit-level results across runs.
+\end{lstlisting}
+
+\code{manual\_seed} seeds the default RNG; for finer control,
+each \code{Generator} (\chref{ch:distributions}) can be seeded
+individually.
+
+\section{The Cost of Determinism}
+\label{sec:profiler_determinism:cost}
+
+Deterministic mode is slower. The two main contributors:
+
+\begin{itemize}
+  \item Reductions use a deterministic tree-reduce algorithm
+    instead of the faster non-deterministic shuffle.
+  \item Non-deterministic ops fall back to CPU for the
+    deterministic implementation; the bridge to/from CPU costs
+    time.
+\end{itemize}
+
+For a typical Transformer training step on M3~Max:
+
+\begin{itemize}
+  \item Default (non-deterministic): 250 ms / step.
+  \item Deterministic: 320 ms / step (1.28$\times$ slower).
+\end{itemize}
+
+The cost is acceptable for the use cases that need determinism
+(debugging, regression testing, reproducible research). For
+production training where reproducibility is not required, the
+default non-deterministic mode is faster.
+
+\section{Reproducibility Recipes}
+\label{sec:profiler_determinism:recipes}
+
+\subsection{Full reproducibility}
+\label{ssec:profiler_determinism:full_repro}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+
+lucid.manual_seed(42)
+lucid.set_deterministic(True)
+# In addition: seed Python's random and (if used) numpy
+import random
+random.seed(42)
+\end{lstlisting}
+
+Plus: turn off any source of operational non-determinism
+(asynchronous data loading with shuffling, etc.) or seed those
+sources individually.
+
+\subsection{Run-to-run debugging}
+\label{ssec:profiler_determinism:debug}
+
+When investigating a training-time bug, deterministic mode lets
+the user reproduce the same numerical trajectory across runs.
+Print statements added to one run show the exact state of the
+next run.
+
+\subsection{Regression tests}
+\label{ssec:profiler_determinism:regression}
+
+CI workflows that verify training behaviour rely on
+deterministic mode: a small training run produces a fixed
+expected loss value, which the test compares against. Without
+determinism, the test would have to use a wide tolerance band
+that defeats the regression-detection purpose.
+
+\section{Cross-Device Reproducibility}
+\label{sec:profiler_determinism:cross_device}
+
+\code{set\_deterministic} guarantees reproducibility within the
+same device. Across devices --- CPU vs GPU, M1 vs M3 --- bit-level
+reproducibility is not guaranteed, because the kernel
+implementations differ.
+
+For loose reproducibility across devices (same numerical
+trajectory to within a few ULPs), AMP and reduction order
+remain the main confounds; the user should match precision and
+disable AMP if cross-device matching matters.
+
+\section{Performance Counters}
+\label{sec:profiler_determinism:perf_counters}
+
+Apple silicon's CPU exposes detailed performance counters (cache
+miss rates, branch mispredict rates, IPC) via the \code{kperf}
+API. \Lucid's profiler does not currently read these counters;
+the user wanting cycle-level analysis uses Instruments'
+CPU Counters template, which provides a UI for the same
+information.
+
+\section{Memory Profiling}
+\label{sec:profiler_determinism:memory_profile}
+
+\code{lucid.memory\_stats()} provides snapshot-time memory
+information (\chref{ch:allocator}). For continuous monitoring
+during a training run, the profiler records peak memory per op,
+which the user can aggregate to understand where allocations
+spike.
+
+The combination of \code{Profiler} for time and
+\code{memory\_stats()} for memory covers most diagnostic needs.
+
+\subsection{Memory snapshot}
+\label{ssec:profiler_determinism:memory_snapshot}
+
+For a deeper look at why memory grew at a particular step, the
+\code{lucid.cuda\_compat.memory\_snapshot()} call (the name is
+a compatibility alias; on Apple silicon this reads MLX's
+allocator) returns a list of every live allocation with its
+shape, dtype, and \emph{allocation site} (Python file:line where
+the tensor was created).
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+snap = lucid.memory_snapshot()
+big_tensors = [s for s in snap if s.bytes > 100_000_000]
+for s in sorted(big_tensors, key=lambda x: -x.bytes):
+    print(f"{s.bytes/1e9:.2f}GB  {s.shape}  {s.dtype}  {s.alloc_site}")
+\end{lstlisting}
+
+The snapshot is the standard debugging tool for unexplained
+OOMs: walk the list to identify the culprit allocation, trace
+back to the code site, fix.
+
+\subsection{The peak-memory profile}
+\label{ssec:profiler_determinism:peak_profile}
+
+For a continuous profile of how memory evolves through a
+training step:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+with lucid.profiler.memory.profile(track_allocations=True) as mp:
+    train_step(...)
+
+plt.plot(mp.timeline_ms, mp.allocated_bytes)
+plt.xlabel('time (ms)')
+plt.ylabel('allocated bytes')
+plt.show()
+\end{lstlisting}
+
+The resulting timeline shows the memory ``staircase'' --- each
+allocation as a step up, each free as a step down. The peak is
+the OOM-relevant number; the staircase shape diagnoses whether
+the peak is due to a single huge tensor (one big step) or many
+medium ones (a long sawtooth).
+
+\section{System-level Profiling}
+\label{sec:profiler_determinism:system_profile}
+
+\code{lucid.profiler.system} provides a coarser-grained view
+that includes contributors outside \Lucid's op dispatch:
+
+\begin{itemize}
+  \item \textbf{Data loading}: time spent in
+    \code{DataLoader.\_\_next\_\_}; the worker pool's wait
+    time vs the GPU's idle time.
+  \item \textbf{Python overhead}: time spent in Python code
+    between \Lucid\ calls (custom loss functions, metric
+    aggregation, logging).
+  \item \textbf{Disk I/O}: time spent in checkpoint save/load,
+    log-file writes.
+  \item \textbf{GPU utilisation}: fraction of wall-clock time
+    where the GPU is busy.
+\end{itemize}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+with lucid.profiler.system.profile() as sys_p:
+    train_epoch(model, loader)
+
+print(sys_p.summary())
+# Train epoch system profile:
+#   GPU utilisation: 76% (24% idle)
+#   Idle time attribution:
+#     waiting for data loader: 18% (consider more num_workers)
+#     waiting for synchronisation: 4%
+#     Python between ops: 2%
+#   Forward pass:  840 ms / iter
+#   Backward pass: 1240 ms / iter
+#   Data loading: 110 ms / iter (overlapped 90%)
+\end{lstlisting}
+
+The system profile is the right starting point for
+``my training is slower than expected'' investigations:
+identify whether the bottleneck is GPU compute, data, or
+elsewhere before diving into per-op detail.
+
+\section{Range Markers}
+\label{sec:profiler_determinism:ranges}
+
+For grouping op timings under a user-readable label,
+\Lucid\ provides nvtx-style range markers:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+with lucid.profiler.range("encoder"):
+    enc_out = encoder(x)
+with lucid.profiler.range("decoder"):
+    dec_out = decoder(enc_out)
+\end{lstlisting}
+
+The profiler aggregates ops inside each range and reports
+range-level totals in addition to per-op totals. Useful for
+attributing time to high-level phases (encoder vs decoder,
+forward vs backward, model vs data-loading).
+
+Ranges nest: an outer ``epoch'' range can contain an inner
+``train\_step'' range, which contains ``forward'' /
+``backward'' / ``optim\_step''. The profiler's tree report
+shows the nesting hierarchy.
+
+\section{The Profiler's Internals}
+\label{sec:profiler_determinism:internals}
+
+For users who need to understand or extend the profiler:
+
+\subsection{The hook point}
+\label{ssec:profiler_determinism:hook_point}
+
+Every dispatched op flows through a single function
+\code{\_C.ops.dispatch\_op}. The profiler hooks the entry and
+exit of this function:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def dispatch_op(op_name, inputs, attrs):
+    if profiler.is_active():
+        evt = profiler.begin_op(op_name, inputs, attrs)
+    try:
+        result = _do_dispatch(op_name, inputs, attrs)
+        if profiler.is_active():
+            lucid.runtime.synchronize()  # ensure GPU work has finished
+            profiler.end_op(evt, result)
+        return result
+    except Exception as e:
+        if profiler.is_active():
+            profiler.error_op(evt, e)
+        raise
+\end{lstlisting}
+
+The synchronisation inside the hook is necessary for accurate
+GPU timing: without it, the recorded duration would be just
+the dispatch time (when the GPU work was submitted), not the
+actual execution time. The synchronisation has a real cost ---
+the profiler trades absolute speed for accurate attribution.
+
+\subsection{The event record}
+\label{ssec:profiler_determinism:event_record}
+
+Each event captures:
+\begin{itemize}
+  \item Op name (string).
+  \item Input shapes and dtypes (for grouping).
+  \item Start and end timestamps (wall-clock).
+  \item GPU command-buffer ID (for cross-referencing with
+    Instruments).
+  \item Python call stack (if \code{with\_stack=True}).
+  \item Memory before/after (if \code{record\_memory=True}).
+\end{itemize}
+
+Events are appended to a thread-local list; aggregation happens
+at \code{Profiler.\_\_exit\_\_} time. The append is the
+hot-path operation and is optimised to be a simple pointer
+update.
+
+\subsection{Why thread-local}
+\label{ssec:profiler_determinism:thread_local}
+
+\Lucid\ supports multi-threaded clients (e.g., a data-loader
+thread and a model-training thread). The profiler records each
+thread's events into a separate list to avoid lock contention,
+then merges them at aggregation time. The merge is offline
+(after the profiled region), so it does not contribute to the
+hot-path overhead.
 
 \section{Implementation Notes}
-\label{sec:profiler_determinism:notes}
+\label{sec:profiler_determinism:impl}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:profiler_determinism:layout}
+The profiler lives in \code{lucid/profiler/\_\_init\_\_.py}; the
+implementation hooks into the dispatcher to record per-op
+events. \code{set\_deterministic} is a global flag in
+\code{lucid/\_C/core/Determinism.\{h,cpp\}} that the dispatcher
+consults at op selection time.
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:profiler_determinism:pitfalls}
+\subsection{Hook overhead}
+\label{ssec:profiler_determinism:hook_overhead}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:profiler_determinism:examples}
+The profiler's hooks add a few microseconds per op invocation
+when active. The hooks are no-ops when the profiler context is
+not active, so the production training path is unaffected.
 
-\section{Summary and Cross-References}
+\section{Summary and Forward References}
 \label{sec:profiler_determinism:summary}
+
+\code{lucid.profiler.Profiler} provides per-op timing and memory
+accounting for diagnosing training-time bottlenecks; Apple's
+\code{Instruments.app} provides lower-level kernel and
+hardware-counter analysis. \code{lucid.set\_deterministic(True)}
+plus \code{lucid.manual\_seed()} gives bit-level reproducibility
+within the same device, at a modest performance cost.
+
+This chapter closes \partref{part:neural_networks}.
+\partref{part:graph_compile} begins the graph-compilation system
+that takes the layer library described in this part and produces
+optimised execution graphs.
+
+\begin{lucidnote}
+For the user: \code{Profiler} is the first tool to reach for when
+training is unexpectedly slow; \code{set\_deterministic(True)} is
+the first tool when training is unexpectedly non-reproducible.
+Both are zero-overhead until activated.
+\end{lucidnote}

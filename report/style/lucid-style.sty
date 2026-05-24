@@ -90,7 +90,12 @@
 \makeindex[intoc,title={Index}]
 
 % --- Todo notes ---
-\RequirePackage[colorinlistoftodos,prependcaption,textsize=small]{todonotes}
+% Disabled by default --- the 35 unwritten chapter stubs all carry
+% \todo[inline]{...} markers that would otherwise show as yellow
+% boxes in the PDF and as warning squiggles in IDEs.
+% To re-enable during drafting, replace `disable` with the prior
+% option set: colorinlistoftodos,prependcaption,textsize=small.
+\RequirePackage[disable]{todonotes}
 
 % =====================================================================
 % Page layout (memoir)
@@ -173,7 +178,19 @@
 \newcommand{\MPSGraph}{\textsf{MPSGraph}}
 \newcommand{\BNNS}{\textsf{BNNS}}
 \newcommand{\vDSP}{\textsf{vDSP}}
+\newcommand{\vForce}{\textsf{vForce}}
 \newcommand{\refframework}{\textsf{reference framework}}
+
+% --- Units shim ---
+% Lightweight \SI{value}{unit} since we don't pull in siunitx.
+% Provides only the milli- and micro-second / Hertz / byte / FLOP units
+% used in this report; expand as needed.
+\providecommand{\SI}[2]{#1\,#2}
+\providecommand{\milli}{m}
+\providecommand{\micro}{\textmu}
+\providecommand{\second}{s}
+\providecommand{\hertz}{Hz}
+\providecommand{\byte}{B}
 
 % --- Inline code ---
 % Note: inside `\code{...}` the `_`, `&`, `#`, `$`, `%`, `~` characters

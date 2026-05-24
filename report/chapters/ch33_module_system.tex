@@ -2,55 +2,937 @@
 \chapter{The Module System}
 \label{ch:module_system}
 
-\todo[inline]{Chapter 33 --- The Module System. Multi-level scaffold below; prose to follow.}
+A neural network is, structurally, a tree of stateful computation
+units. Each unit carries parameters (the trainable tensors), holds
+buffers (non-trainable state such as running statistics), composes
+with other units (a model is built from layers, layers from
+sub-layers), and produces outputs by applying a forward function to
+inputs. \Lucid's \emph{module system} (\code{lucid.nn}) is the
+machinery that organises this tree, names its parts, traverses it
+for serialisation and parameter collection, dispatches the forward
+function, and hooks into the autograd system for the backward.
+
+The design follows \refframework's \code{torch.nn} closely: a
+\code{Module} base class with \code{forward}, named parameters and
+buffers, recursive child management, training-vs-eval mode, and
+the standard hook surface. The interoperability matters because
+the model zoo (\partref{part:model_zoo}) and a large fraction of
+user code is structured around this idiom.
+
+This chapter describes the \code{Module} class, the \code{Parameter}
+type, the container modules (\code{ModuleList}, \code{ModuleDict},
+\code{Sequential}, \code{ParameterList}, \code{ParameterDict}),
+the state-dict serialisation contract, the training-mode flag, and
+the hook system.
 
 \section{Overview}
 \label{sec:module_system:overview}
 
-\section{Architecture}
-\label{sec:module_system:arch}
+\code{lucid.nn.Module} is the base class for every neural-network
+component in \Lucid. Subclassing requires only two things:
 
-\subsection{Core building blocks}
-\label{ssec:module_system:blocks}
+\begin{enumerate}
+  \item Define \code{\_\_init\_\_(self, ...)} to construct sub-modules
+    and parameters.
+  \item Define \code{forward(self, ...)} that applies the layer's
+    computation.
+\end{enumerate}
 
-\subsection{Variants and parameterizations}
-\label{ssec:module_system:variants}
+Everything else --- parameter collection, recursive traversal,
+state-dict, training mode, hooks --- the base class provides.
 
-\section{Forward Computation}
-\label{sec:module_system:forward}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+import lucid.nn as nn
 
-\subsection{Mathematical formulation}
-\label{ssec:module_system:formulation}
+class TwoLayerMLP(nn.Module):
+    def __init__(self, in_dim, hidden, out_dim):
+        super().__init__()
+        self.fc1 = nn.Linear(in_dim, hidden)
+        self.fc2 = nn.Linear(hidden, out_dim)
 
-\subsection{Implementation in Lucid}
-\label{ssec:module_system:impl}
+    def forward(self, x):
+        h = self.fc1(x).relu()
+        return self.fc2(h)
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+model = TwoLayerMLP(784, 256, 10)
+y = model(lucid.randn(32, 784))
+\end{lstlisting}
 
-\section{Training Considerations}
-\label{sec:module_system:training}
+The \code{model(x)} call dispatches to \code{model.forward(x)} via
+the base class's \code{\_\_call\_\_}, which also fires registered
+pre- and post-forward hooks (\secref{sec:module_system:hooks}).
 
-\subsection{Initialization strategy}
-\label{ssec:module_system:init}
+\section{The Module Class}
+\label{sec:module_system:module_class}
 
-\subsection{Backward pass}
-\label{ssec:module_system:backward}
+\code{Module} is implemented in \code{lucid/nn/module.py}. The
+relevant state on each instance:
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:module_system:optim_amp}
+\begin{itemize}
+  \item \code{\_parameters}: ordered dict of \code{Parameter} objects
+    declared as direct attributes.
+  \item \code{\_buffers}: ordered dict of non-parameter
+    \code{Tensor} objects (e.g., running statistics).
+  \item \code{\_modules}: ordered dict of child \code{Module}
+    instances declared as direct attributes.
+  \item \code{\_non\_persistent\_buffers\_set}: set of buffer names
+    that should \emph{not} appear in \code{state\_dict()} (e.g.,
+    transient scratch arrays).
+  \item \code{training}: bool flag, default \code{True}, toggles
+    behaviour of layers like dropout and batch norm.
+  \item \code{\_forward\_hooks}, \code{\_backward\_hooks},
+    \code{\_forward\_pre\_hooks},
+    \code{\_state\_dict\_hooks},
+    \code{\_load\_state\_dict\_pre\_hooks}: hook registries.
+  \item \code{\_lucid\_signature}: cached \code{inspect.Signature}
+    of the subclass's \code{forward} method, used by the tracer
+    (\chref{ch:tracer}) to map positional arguments to graph
+    inputs.
+\end{itemize}
+
+\subsection{The three dictionaries}
+\label{ssec:module_system:three_dicts}
+
+The separation into three distinct ordered dictionaries
+(parameters, buffers, modules) is deliberate. The optimiser
+sees only parameters; the device-move operation touches both
+parameters and buffers; the recursive traversal walks modules.
+A single bag of attributes would conflate these concerns. The
+shape of the data also informs the API:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Dict & Trainable & In state\_dict & In .parameters() & In .children() \\
+\midrule
+\code{\_parameters} & Yes & Yes & Yes & No \\
+\code{\_buffers}    & No  & Yes (unless non-persistent) & No & No \\
+\code{\_modules}    & ---  & Recurses & Recurses & Yes \\
+\bottomrule
+\end{tabular}
+\caption[The three module dictionaries.]{Each dictionary serves
+a distinct role. Recursive traversal of parameters and buffers
+walks through \code{\_modules} children depth-first, deterministic
+by declaration order. Non-persistent buffers (registered with
+\code{persistent=False}) are visible at runtime but skipped by
+serialisation.}
+\label{tab:module_system:three_dicts}
+\end{table}
+
+The implementation: each public iterator (\code{parameters},
+\code{buffers}, \code{children}, \code{modules}) is a thin
+wrapper over \code{\_named\_members}, which recurses through
+\code{\_modules} and yields from each sub-module's
+corresponding dict. The walk is depth-first, in declaration
+order, with cycle detection (a module can only be visited once
+in case of accidental cyclic references via Python's reference
+graph).
+
+\subsection{Attribute interception}
+\label{ssec:module_system:attribute_intercept}
+
+Assigning a \code{Parameter}, a \code{Tensor} flagged as buffer, or
+a \code{Module} as an attribute triggers \code{\_\_setattr\_\_} to
+route the assignment to the appropriate dict:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class Layer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.weight = nn.Parameter(lucid.randn(10, 10))  # -> _parameters
+        self.bias = nn.Parameter(lucid.zeros(10))         # -> _parameters
+        self.activation = nn.ReLU()                      # -> _modules
+        self.register_buffer('running_mean', lucid.zeros(10))  # -> _buffers
+\end{lstlisting}
+
+The interception is what makes the recursive traversal possible:
+the base class can walk \code{\_modules} to find every sub-module,
+walk \code{\_parameters} to find every parameter, and so on, all
+without the user explicitly registering anything.
+
+\subsection{Recursive parameter collection}
+\label{ssec:module_system:recursive_params}
+
+\code{module.parameters()} returns a generator over every
+\code{Parameter} in the module tree (including those in sub-modules,
+recursively). This is the standard input to optimisers:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+optimizer = lucid.optim.Adam(model.parameters(), lr=1e-3)
+\end{lstlisting}
+
+The traversal uses depth-first order, deterministic by attribute
+declaration order. \code{named\_parameters()} returns
+\code{(name, parameter)} pairs with dotted names
+(\code{fc1.weight}, \code{fc1.bias}, \code{fc2.weight}, etc.).
+
+\subsection{Tree statistics}
+\label{ssec:module_system:tree_stats}
+
+\code{module.num\_parameters()} returns the total number of
+trainable parameters across the tree. For a 100M-parameter model:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+n = sum(p.numel() for p in model.parameters() if p.requires_grad)
+\end{lstlisting}
+
+The pattern is so common that the convenience function
+\code{lucid.nn.count\_parameters(model)} is provided.
+
+A richer statistics function, \code{lucid.nn.summary(model)},
+walks the tree once and produces a structured report:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+print(lucid.nn.summary(model))
+# TwoLayerMLP                                    267,786 params
+#   fc1: Linear(in=784, out=256)                 200,960
+#     weight                  (256, 784)         200,704
+#     bias                    (256,)                 256
+#   fc2: Linear(in=256, out=10)                    2,570
+#     weight                  (10, 256)            2,560
+#     bias                    (10,)                   10
+# Total trainable: 203,530   non-trainable: 0   buffers: 0
+\end{lstlisting}
+
+The summary respects the declaration order, prints buffer
+counts separately from parameters, and flags any
+\code{requires\_grad=False} entries (under the
+``non-trainable'' tally). It is the standard model-inspection
+tool used by the H12-compliant model-zoo doc-site introspector
+(\chref{ch:zoo_architecture}).
+
+\subsection{Walking the tree manually}
+\label{ssec:module_system:walking_tree}
+
+Three iterators expose the tree at different granularities:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# Direct children only (one level deep):
+for name, child in model.named_children():
+    print(name, type(child).__name__)
+# fc1 Linear
+# fc2 Linear
+
+# Every descendant module (including self):
+for name, mod in model.named_modules():
+    print(name, type(mod).__name__)
+# '' TwoLayerMLP
+# 'fc1' Linear
+# 'fc2' Linear
+
+# Every parameter (recursive, named):
+for name, p in model.named_parameters():
+    print(name, p.shape)
+# fc1.weight (256, 784)
+# fc1.bias (256,)
+# fc2.weight (10, 256)
+# fc2.bias (10,)
+\end{lstlisting}
+
+The choice of iterator matters for performance: a model with
+thousands of parameters re-iterated every step incurs a
+non-trivial Python overhead. The convention is to materialise
+\code{list(model.parameters())} once at optimiser setup; the
+optimiser caches references and revisits them every step
+without re-walking the tree.
+
+\subsection{Memory cost of a module tree}
+\label{ssec:module_system:memory_cost}
+
+A module instance is a small Python object: a few hundred bytes
+for the empty \code{Module}, plus the three dicts (a few KB).
+The tensor storage is separate. For a 100M-parameter ResNet,
+the tree itself is $\sim$\,80\,KB of Python objects; the tensor
+storage is 400\,MB FP32 (the actual memory). The tree-walking
+overhead is therefore negligible relative to the tensors.
+
+\section{The Parameter Class}
+\label{sec:module_system:parameter_class}
+
+\code{lucid.nn.Parameter} is a subclass of \code{lucid.Tensor} with
+two distinguishing properties:
+
+\begin{itemize}
+  \item \code{requires\_grad = True} by default.
+  \item Assigned to a \code{Module} attribute, the base class
+    automatically routes it into \code{\_parameters}.
+\end{itemize}
+
+Functionally, a \code{Parameter} is just a tensor; the type marker
+exists only to signal ``this tensor is trainable and should be
+tracked by the module system.''
+
+\subsection{Initialisation}
+\label{ssec:module_system:param_init}
+
+A freshly constructed \code{Parameter} has random or zero values.
+The standard pattern is to initialise via one of the schemes from
+\chref{ch:initialization}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class Linear(nn.Module):
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        self.weight = nn.Parameter(lucid.empty(out_features, in_features))
+        self.bias = nn.Parameter(lucid.empty(out_features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.kaiming_uniform_(self.weight, a=lucid.math.sqrt(5))
+        bound = 1 / lucid.math.sqrt(self.weight.shape[1])
+        nn.init.uniform_(self.bias, -bound, bound)
+\end{lstlisting}
+
+The \code{reset\_parameters} method is a convention: every standard
+layer in \code{lucid.nn} defines it, and the user can call it to
+re-initialise without constructing a new instance.
+
+\subsection{Parameter vs buffer}
+\label{ssec:module_system:param_vs_buffer}
+
+A \emph{parameter} is trainable: it has \code{requires\_grad=True},
+participates in autograd, and is updated by the optimiser. A
+\emph{buffer} is non-trainable persistent state: it has
+\code{requires\_grad=False}, does not participate in autograd, and
+is saved/loaded alongside parameters in \code{state\_dict}.
+
+The canonical buffer use case is BatchNorm's running statistics:
+the running mean and variance are not gradient-updated but are
+updated by the layer's forward pass and must persist across
+training/eval and across checkpoint save/load.
+
+\section{Container Modules}
+\label{sec:module_system:containers}
+
+\code{lucid.nn} provides several container modules for organising
+sub-module collections.
+
+\subsection{Sequential}
+\label{ssec:module_system:sequential}
+
+\code{Sequential} chains its sub-modules in order, passing each's
+output to the next:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = nn.Sequential(
+    nn.Linear(784, 256),
+    nn.ReLU(),
+    nn.Linear(256, 10),
+)
+y = model(x)  # = model[2](model[1](model[0](x)))
+\end{lstlisting}
+
+The sub-modules are accessed by integer index or by name (if
+constructed from an \code{OrderedDict}).
+
+\subsection{ModuleList}
+\label{ssec:module_system:modulelist}
+
+\code{ModuleList} stores a list of sub-modules that the user
+applies manually:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class StackedLayers(nn.Module):
+    def __init__(self, n_layers, dim):
+        super().__init__()
+        self.layers = nn.ModuleList([
+            nn.Linear(dim, dim) for _ in range(n_layers)
+        ])
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x).relu()
+        return x
+\end{lstlisting}
+
+Unlike a plain Python list, \code{ModuleList} registers its
+contents with the parent module's \code{\_modules} dict, so
+\code{model.parameters()} sees every sub-module's parameters.
+
+\subsection{ModuleDict}
+\label{ssec:module_system:moduledict}
+
+The dict analogue: \code{ModuleDict} stores named sub-modules. Used
+for conditional dispatch, multi-head outputs, mixture-of-experts.
+
+\subsection{ParameterList and ParameterDict}
+\label{ssec:module_system:paramlist}
+
+The parameter-level analogues. Useful when a module owns a list of
+parameters that are not themselves wrapped in a sub-module.
+
+\section{State Dict and Serialisation}
+\label{sec:module_system:state_dict}
+
+\code{module.state\_dict()} returns an ordered dict of every
+parameter and buffer in the module tree, with dotted names:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+sd = model.state_dict()
+# {'fc1.weight': tensor(...),
+#  'fc1.bias':   tensor(...),
+#  'fc2.weight': tensor(...),
+#  'fc2.bias':   tensor(...)}
+
+lucid.save(sd, 'checkpoint.pt')
+
+# Later:
+sd = lucid.load('checkpoint.pt')
+model.load_state_dict(sd)
+\end{lstlisting}
+
+\subsection{The strict-loading contract}
+\label{ssec:module_system:strict_loading}
+
+\code{load\_state\_dict(sd, strict=True)} checks that every key in
+\code{sd} corresponds to a parameter/buffer in the module and that
+every parameter/buffer has a key in \code{sd}. A mismatch raises
+\code{LucidError}.
+
+\code{strict=False} relaxes the check: missing keys leave their
+parameters unchanged, extra keys are silently ignored. Useful for
+loading a checkpoint into a partially refactored model.
+
+\subsection{The Bridge boundary}
+\label{ssec:module_system:bridge}
+
+\code{state\_dict} touches the numpy bridge boundary
+(\chref{ch:bridge_boundaries}) because the persistence format
+serialises tensors as numpy arrays. The implementation is in
+\code{lucid/serialization/} and \code{lucid/nn/\_state\_dict.py}.
+
+\section{Training and Eval Modes}
+\label{sec:module_system:train_eval}
+
+The \code{training} flag toggles behaviour of layers whose forward
+differs between training and inference:
+
+\begin{itemize}
+  \item \code{Dropout}: zeros out a fraction of activations in
+    training, identity in eval.
+  \item \code{BatchNorm}: uses batch statistics in training, running
+    statistics in eval.
+  \item \code{LayerNorm}: unchanged (uses per-sample statistics
+    always).
+\end{itemize}
+
+The flag is propagated through the module tree by
+\code{model.train()} (sets the flag to True) and \code{model.eval()}
+(sets to False), recursively.
+
+\subsection{The typical training loop}
+\label{ssec:module_system:training_loop}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+for epoch in range(n_epochs):
+    model.train()
+    for x, y in train_loader:
+        optimizer.zero_grad()
+        loss = criterion(model(x), y)
+        loss.backward()
+        optimizer.step()
+
+    model.eval()
+    with lucid.no_grad():
+        for x, y in val_loader:
+            ...
+\end{lstlisting}
+
+The training/eval distinction is the user's responsibility; the
+module system provides the toggle but does not enforce its use.
+
+\section{Hooks}
+\label{sec:module_system:hooks}
+
+\code{Module} exposes three hook types that the user can attach to
+intercept the forward/backward flow:
+
+\begin{itemize}
+  \item \textbf{Forward pre-hook}: fires before
+    \code{module.forward()}, with the inputs. Can modify the
+    inputs.
+  \item \textbf{Forward hook}: fires after \code{module.forward()},
+    with the inputs and the output. Cannot modify the output (use
+    pre-hook plus computed output to modify).
+  \item \textbf{Backward hook}: fires during backward, with the
+    gradient inputs and outputs.
+\end{itemize}
+
+\subsection{Use cases}
+\label{ssec:module_system:hook_uses}
+
+\begin{itemize}
+  \item Logging activations or gradients during training (for
+    debugging vanishing/exploding gradients).
+  \item Visualising attention maps (intercept the attention's
+    output).
+  \item Implementing gradient reversal (multiply by $-1$ in the
+    backward hook).
+  \item Spectral normalisation (intercept the weight in a forward
+    pre-hook, normalise, replace).
+\end{itemize}
+
+\subsection{Hook registration}
+\label{ssec:module_system:hook_registration}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def log_hook(module, inputs, output):
+    print(f"{module.__class__.__name__}: out shape {output.shape}")
+
+handle = model.fc1.register_forward_hook(log_hook)
+
+# Run model -- hook fires
+y = model(x)
+
+# Remove hook when done
+handle.remove()
+\end{lstlisting}
+
+The \code{handle.remove()} call is essential: hooks that are not
+removed accumulate and slow down every forward pass.
+
+\subsection{Hook firing order}
+\label{ssec:module_system:hook_order}
+
+For a single module, the order is:
+
+\begin{enumerate}
+  \item Forward pre-hooks fire in registration order;
+    each may return a modified \code{inputs} tuple, which is
+    threaded to the next pre-hook and finally to
+    \code{forward}.
+  \item \code{module.forward(*inputs)} runs.
+  \item Forward hooks fire in registration order;
+    each may inspect (but not modify) the output.
+  \item During \code{loss.backward()}, the backward hooks fire
+    in reverse order of forward, with the gradient flowing
+    backward through the autograd graph.
+\end{enumerate}
+
+For a tree of modules, the parent's pre-hook fires before any
+child's; the child's full forward (with its own hooks)
+completes; then the parent's forward hook fires. The order
+mirrors the depth-first walk that the
+\code{Module.\_\_call\_\_} performs implicitly.
+
+\subsection{Hook performance cost}
+\label{ssec:module_system:hook_perf}
+
+Each hook is a Python function call: $\sim$\,1\,\textmu s
+of overhead per call. For modules invoked thousands of times
+per iteration (e.g., a deep transformer), the cumulative cost
+can become visible.
+
+The typical pattern: attach hooks only during debugging or
+data-collection phases, then remove. The
+\code{lucid.nn.utils.hook\_scope} context manager makes this
+explicit:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+with lucid.nn.utils.hook_scope() as scope:
+    scope.register_forward_hook(model.fc1, log_hook)
+    out = model(x)
+    # Hooks auto-removed when leaving the with-block
+\end{lstlisting}
+
+\subsection{The gradient-reversal hook}
+\label{ssec:module_system:grad_reversal}
+
+A well-known use of backward hooks: gradient reversal for
+adversarial domain adaptation. The forward is the identity;
+the backward multiplies the gradient by $-\lambda$:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class GradientReversal(nn.Module):
+    def __init__(self, lambda_=1.0):
+        super().__init__()
+        self.lambda_ = lambda_
+
+    def forward(self, x):
+        return x.clone()  # identity
+
+    def __init_subclass__(cls):
+        cls.register_backward_hook(
+            lambda mod, grad_in, grad_out: (-mod.lambda_ * grad_out[0],)
+        )
+\end{lstlisting}
+
+A cleaner alternative uses a custom Function
+(\chref{ch:custom_functions}); the hook approach is shown for
+illustration.
+
+\subsection{State-dict hooks}
+\label{ssec:module_system:state_dict_hooks}
+
+Two additional hook families control serialisation:
+
+\begin{itemize}
+  \item \code{\_register\_state\_dict\_hook(fn)}: fires after
+    \code{state\_dict()} is built, with the resulting dict.
+    Can rename keys, add metadata, or strip auxiliary
+    tensors before save.
+  \item \code{\_register\_load\_state\_dict\_pre\_hook(fn)}:
+    fires before \code{load\_state\_dict()} consumes the
+    incoming dict. Used by the model-zoo's renaming-table
+    machinery (\chref{ch:serialization}~Section~\ref{ssec:serialization:renaming_policy}).
+\end{itemize}
+
+\section{Parametrize: Constrained Parameters}
+\label{sec:module_system:parametrize}
+
+A frequent advanced pattern: the user wants the model to expose
+a logical parameter (say, a weight matrix) that is computed from
+an unconstrained underlying parameter (the
+\emph{reparameterisation}). The classic example is weight
+normalisation \cite{miyato_specnorm_2018}:
+\[
+  W = g \cdot \frac{V}{\|V\|},
+\]
+where $V$ is the underlying parameter and $g$ is a learnable
+scalar. The optimiser updates $V$ and $g$; the layer sees the
+derived $W$.
+
+\Lucid\ provides \code{lucid.nn.utils.parametrize} to register
+these reparameterisations cleanly:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid.nn.utils.parametrize as P
+
+class WeightNorm(nn.Module):
+    def forward(self, weight):
+        # weight here is W; returns the reparameterised version
+        # Standard weight_norm splits into magnitude g and direction V/||V||
+        return weight  # (placeholder; see weight_norm below)
+
+linear = nn.Linear(64, 128)
+P.register_parametrization(linear, 'weight', WeightNorm())
+# After this, linear.weight goes through WeightNorm.forward on every access.
+# The optimiser sees the underlying tensor; linear.weight is a property.
+\end{lstlisting}
+
+The mechanism is implemented by replacing the original
+parameter with a property that, on read, invokes the
+reparameterisation; on write, stores into the underlying
+tensor. \code{P.remove\_parametrizations} undoes the
+registration, restoring the original parameter (with its
+current reparameterised value baked in).
+
+\subsection{Weight normalisation}
+\label{ssec:module_system:weight_norm}
+
+The standard wrapper:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class _WeightNorm(nn.Module):
+    def __init__(self, dim=0):
+        super().__init__()
+        self.dim = dim
+        # After registration the parametrization sees the
+        # current weight as `weight`; we split it into magnitude
+        # and direction.
+        self.g = None   # set on first call
+        self.v = None
+
+    def forward(self, weight):
+        if self.g is None:
+            with lucid.no_grad():
+                self.v = nn.Parameter(weight.clone())
+                norm = self.v.norm(dim=self.dim, keepdim=True)
+                self.g = nn.Parameter(norm)
+        return self.g * self.v / self.v.norm(dim=self.dim, keepdim=True)
+
+nn.utils.weight_norm(linear, name='weight', dim=0)  # convenience wrapper
+\end{lstlisting}
+
+The split into magnitude $g$ and direction $V / \|V\|$
+decouples gradient updates of weight scale from weight
+direction; in practice this can improve optimisation on
+recurrent and adversarial models.
+
+\subsection{Spectral normalisation}
+\label{ssec:module_system:spectral_norm}
+
+Spectral normalisation \cite{miyato_specnorm_2018} bounds the
+Lipschitz constant of a layer by dividing the weight matrix by
+its largest singular value $\sigma(W)$ (estimated by power
+iteration):
+\[
+  W_{\text{SN}} = W / \sigma(W).
+\]
+The wrapper maintains two auxiliary vectors $u, v$ as buffers
+and updates them in the forward pass via one power iteration:
+\[
+  v \gets \frac{W^\top u}{\|W^\top u\|}, \qquad
+  u \gets \frac{W v}{\|W v\|}, \qquad
+  \sigma \approx u^\top W v.
+\]
+The buffers are updated only in training mode; eval reuses the
+last estimate. This stabilises GAN training significantly.
+
+\code{nn.utils.spectral\_norm(layer, name='weight', n\_power\_iterations=1)}
+is the standard entry point.
+
+\subsection{Why parametrize, not subclass}
+\label{ssec:module_system:why_parametrize}
+
+The same effect could be obtained by subclassing
+\code{nn.Linear} and overriding \code{forward}. The advantages
+of the parametrize approach:
+
+\begin{itemize}
+  \item \textbf{Composability}: multiple reparameterisations
+    can be chained on the same parameter
+    (\code{register\_parametrization} is idempotent across
+    different reparameterisation classes).
+  \item \textbf{Transparency}: the original layer's
+    \code{forward} is unchanged; the
+    reparameterisation is a property modifier.
+  \item \textbf{Toggleability}: \code{P.cached()} context
+    caches the reparameterised tensor for the duration of a
+    forward pass, avoiding re-computation.
+\end{itemize}
+
+\section{Apply and Functional Iteration}
+\label{sec:module_system:apply}
+
+\code{module.apply(fn)} recursively applies \code{fn} to every
+sub-module. Used for initialisation, freezing, and other
+tree-wide operations:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight)
+        if m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+model.apply(init_weights)
+\end{lstlisting}
+
+\subsection{Freezing parameters}
+\label{ssec:module_system:freezing}
+
+The standard fine-tuning pattern: freeze the backbone, train only
+the head. Implemented by setting \code{requires\_grad = False} on
+backbone parameters:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+for p in model.backbone.parameters():
+    p.requires_grad = False
+
+# Optimiser then only sees head parameters
+optimizer = lucid.optim.Adam(
+    filter(lambda p: p.requires_grad, model.parameters()),
+    lr=1e-4,
+)
+\end{lstlisting}
+
+\section{Moving Modules Across Devices}
+\label{sec:module_system:device_move}
+
+\code{module.to(device)} moves every parameter and buffer to the
+named device. \code{module.cuda()}, \code{module.cpu()} are
+device-specific aliases (\Lucid\ exposes \code{module.metal()} for
+the Apple GPU and \code{module.cpu()} for CPU; there is no
+\code{cuda()} on Apple silicon).
+
+The move is in-place: existing parameter \code{Tensor} objects are
+replaced in the underlying dict. After the move, the optimiser
+must be re-bound because it holds references to the old tensors.
+
+\subsection{Casting dtypes}
+\label{ssec:module_system:dtype_cast}
+
+\code{module.float()}, \code{module.half()}, \code{module.bfloat16()}
+cast every parameter and buffer to the named dtype. The cast
+applies recursively.
+
+\section{Cloning, Sharing, and Resetting Modules}
+\label{sec:module_system:cloning}
+
+Three operations on an instantiated module are worth treating
+carefully because they expose subtleties of the parameter graph.
+
+\subsection{Deep copy}
+\label{ssec:module_system:deep_copy}
+
+\code{copy.deepcopy(model)} produces a new module tree with
+fresh \code{Parameter} objects (allocated tensors, independent
+storage). The autograd graph is not copied; the new parameters
+start with no \code{grad\_fn} attached.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import copy
+model2 = copy.deepcopy(model)
+assert model2.fc1.weight is not model.fc1.weight   # different objects
+assert (model2.fc1.weight == model.fc1.weight).all()  # same values
+\end{lstlisting}
+
+Useful for: snapshot-then-modify experiments, ensemble training
+(N copies with different inits), exponential-moving-average
+parameter tracking (EMA model is a deepcopy of the live model,
+updated each step toward the live parameters).
+
+\subsection{Shared parameters}
+\label{ssec:module_system:shared_params}
+
+Assigning the same \code{Parameter} to two different positions
+in a tree shares the storage:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class TiedEmbedding(nn.Module):
+    def __init__(self, vocab_size, dim):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, dim)
+        self.head = nn.Linear(dim, vocab_size, bias=False)
+        # Tie the weights: head shares storage with embed
+        self.head.weight = self.embed.weight
+\end{lstlisting}
+
+The optimiser sees both references but updates the underlying
+storage once per step. \code{model.parameters()} dedups by
+default (de-dupping is via Python's \code{id()} on the underlying
+tensor); without dedup, the optimiser would apply the gradient
+twice, doubling the effective learning rate for the shared
+weights.
+
+Weight tying is the standard idiom in language models
+\cite{radford_gpt2_2019}: the input-embedding matrix and the
+output-projection matrix are the same tensor, halving the
+embedding-parameter count and improving generalisation.
+
+\subsection{Resetting}
+\label{ssec:module_system:resetting}
+
+Every layer in \code{lucid.nn} defines \code{reset\_parameters()}
+that re-initialises in place. A model-wide reset:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def reset_all(module):
+    if hasattr(module, 'reset_parameters'):
+        module.reset_parameters()
+
+model.apply(reset_all)
+\end{lstlisting}
+
+Useful for: starting a new run with the same architecture and
+seed, ablation studies, neural-architecture search with shared
+weights.
 
 \section{Implementation Notes}
-\label{sec:module_system:notes}
+\label{sec:module_system:impl_notes}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:module_system:layout}
+The module system is pure Python (no C++ dependency). The base
+class is in \code{lucid/nn/module.py}; the parameter class in
+\code{lucid/nn/parameter.py}; the containers in
+\code{lucid/nn/modules/container.py}.
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:module_system:pitfalls}
+\subsection{Performance}
+\label{ssec:module_system:perf}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:module_system:examples}
+The per-call overhead of \code{module(\_)} (the
+\code{\_\_call\_\_} dispatch plus hook firing) is a few
+microseconds. For modules whose forward kernel takes microseconds
+(elementwise small-tensor layers), this can matter; for any
+non-trivial forward, it is dominated.
 
-\section{Summary and Cross-References}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+Module call & Forward kernel ($\mu$s) & \code{\_\_call\_\_} overhead ($\mu$s) & \% overhead \\
+\midrule
+\code{nn.Linear(16, 16)}    & 12  & 6  & 33\% \\
+\code{nn.Linear(256, 256)}  & 35  & 6  & 15\% \\
+\code{nn.Linear(4096, 4096)} & 420 & 6 & 1.4\% \\
+\code{nn.Conv2d 3x3 (32 ch)} & 95  & 7 & 7\% \\
+\code{nn.LayerNorm(768)}     & 18  & 6 & 25\% \\
+\code{nn.MultiheadAttention}  & 230 & 8 & 3.4\% \\
+\bottomrule
+\end{tabular}
+\caption[Module call overhead.]{Per-call overhead of
+\code{Module.\_\_call\_\_} measured on M3~Max, batch 32.
+The overhead is constant (6--8 $\mu$s) regardless of
+the underlying kernel; it dominates for tiny layers and
+disappears for substantial ones.}
+\label{tab:module_system:perf}
+\end{table}
+
+The compile path (\chref{ch:compile_design}) eliminates the
+per-call overhead inside compiled regions by replacing module
+dispatch with direct kernel emission. After
+\code{lucid.compile(model)}, even the smallest modules pay zero
+Python dispatch cost --- the compiled graph executes as one
+MPSGraph submission.
+
+\subsection{The \_\_setattr\_\_ chain}
+\label{ssec:module_system:setattr_chain}
+
+The attribute-interception logic at the heart of the module
+system:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def __setattr__(self, name: str, value):
+    if isinstance(value, Parameter):
+        self._parameters[name] = value
+        # Remove from other dicts if previously assigned
+        self._modules.pop(name, None)
+        self._buffers.pop(name, None)
+    elif isinstance(value, Module):
+        self._modules[name] = value
+        self._parameters.pop(name, None)
+        self._buffers.pop(name, None)
+    elif isinstance(value, Tensor) and name in self._buffers:
+        # Replacing an existing buffer in-place
+        self._buffers[name] = value
+    else:
+        # Regular Python attribute (numbers, strings, dicts of non-tensors)
+        object.__setattr__(self, name, value)
+\end{lstlisting}
+
+A subtle case: assigning \code{None} to a previously-registered
+parameter slot removes it from \code{\_parameters} but does not
+clean up the underlying optimiser state (which was set up at
+optimiser construction). The user must re-bind the optimiser
+after structural changes to the parameter list.
+
+\subsection{Why a Python base class}
+\label{ssec:module_system:why_python}
+
+The module system is in Python rather than C++ for the same reason
+the composite layer is in Python
+(\chref{ch:composite_ops}~Section~\ref{sec:composite_ops:why}):
+the user is most likely to extend modules, and Python is the more
+accessible extension language. The cost is the per-call overhead,
+which is acceptable for the typical workload.
+
+\section{Summary and Forward References}
 \label{sec:module_system:summary}
+
+\code{lucid.nn.Module} is the base class for neural-network
+components in \Lucid. Subclasses define \code{\_\_init\_\_} (to
+construct sub-modules) and \code{forward} (to apply the
+computation); the base class provides parameter collection,
+state-dict serialisation, training/eval toggles, device/dtype
+movement, and the hook interface. Containers (\code{Sequential},
+\code{ModuleList}, \code{ModuleDict}) compose sub-modules.
+
+The next chapter, \chref{ch:linear_conv_norm}, treats the
+standard layer library (Linear, Conv, Pool, Norm).
+\chref{ch:rnn_family} treats recurrent networks.
+\chref{ch:attention} treats attention. \chref{ch:losses} treats
+loss functions. \chref{ch:initialization} treats weight
+initialisation.
+
+\begin{lucidnote}
+For the user: the module system is the API every \refframework\
+user already knows. \code{nn.Module}, \code{Parameter},
+\code{Sequential}, \code{state\_dict}, \code{train()} /
+\code{eval()} --- all work identically. The migration from
+\refframework\ to \Lucid\ at the module level is mostly
+search-and-replace on the import line.
+\end{lucidnote}

@@ -414,20 +414,17 @@ class _FusedStep:
                 )
             output_target_ids.append(int(tid))
 
-        # The MPSGraph stateful-variables variant
-        # (``compile_generic_fused_step_with_vars``) is wired through
-        # the C++ binding and standalone-validated, but Lucid
-        # integration currently hangs on first execution — the
-        # interaction between gradientForPrimaryTensor: on a variable
-        # and our trace-driven assignVariable + readVariable scheduling
-        # produces an MPSGraph execution that never completes.  Three
-        # standalone Obj-C++ smoke tests confirm the API works
-        # (variableWithData / assignVariable / readVariable / gradient
-        # through variables all individually correct).  The C++
-        # infrastructure stays compiled in for future debugging — see
-        # ``compile_generic_fused_step_with_vars`` in MpsBuilder.mm and
-        # the matching binding — but the Python integration is paused
-        # pending root-cause analysis of the runtime hang.
+        # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
+        # variables variant) is wired through the C++ binding and
+        # standalone-validated, but full Lucid integration hangs on
+        # first execution.  Both the ``readVariable`` post-assign
+        # output and the ``new_value_t`` direct-output variants
+        # exhibit the same hang.  Root cause is in MPSGraph's
+        # scheduling of (gradientForPrimaryTensor: ⨯ variable ⨯ Lucid
+        # trace ops ⨯ assignVariable) — needs further investigation
+        # or Apple SDK support.  Integration paused; infrastructure
+        # preserved (compile_generic_fused_step_with_vars in
+        # MpsBuilder.mm).
         exe = _C_engine.compile.compile_generic_fused_step(
             graph,
             ext,

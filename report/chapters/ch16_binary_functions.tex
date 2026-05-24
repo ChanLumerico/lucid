@@ -135,13 +135,13 @@ The arithmetic ops:
   \item \code{pow(a, b)} returns $a^b$; backward: $\partial_a = b
     \cdot a^{b-1} \cdot \text{grad\_out}$, $\partial_b = a^b \cdot
     \ln(a) \cdot \text{grad\_out}$.
-  \item \code{floordiv(a, b) = \lfloor a / b \rfloor}; integer
-    division. Non-differentiable.
-  \item \code{mod(a, b) = a - b * floordiv(a, b)}; remainder.
-    Non-differentiable.
-  \item \code{atan2(y, x) = \arctan(y/x)} with quadrant; backward:
-    \code{grad\_y = x / (x\textasciicircum{}2 + y\textasciicircum{}2) * grad\_out}, \code{grad\_x =
-    -y / (x\textasciicircum{}2 + y\textasciicircum{}2) * grad\_out}.
+  \item \code{floordiv(a, b)} computes $\lfloor a / b \rfloor$;
+    integer division. Non-differentiable.
+  \item \code{mod(a, b)} computes $a - b \cdot \lfloor a/b \rfloor$;
+    remainder. Non-differentiable.
+  \item \code{atan2(y, x)} computes $\arctan(y/x)$ with quadrant;
+    backward: $\partial_y = x/(x^2 + y^2) \cdot \text{grad\_out}$,
+    $\partial_x = -y/(x^2 + y^2) \cdot \text{grad\_out}$.
   \item \code{hypot(a, b)} returns $\sqrt{a^2 + b^2}$; backward derived
     accordingly.
   \item \code{logaddexp(a, b)} returns $\ln(e^a + e^b)$;

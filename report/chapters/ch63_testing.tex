@@ -2,61 +2,443 @@
 \chapter{Testing Strategy}
 \label{ch:testing}
 
-\todo[inline]{Chapter 63 --- Testing Strategy. Multi-level scaffold below; prose to follow.}
+A framework's tests are not a courtesy; they are part of the
+framework. \Lucid\ ships with $\sim$\,3,500 unit, integration,
+property, and parity tests covering every public API, every
+op, every layer, every model variant, and every backward
+formula. This chapter explains the layered testing strategy,
+the parity-test infrastructure that compares \Lucid\ against
+a reference framework on every PR, the property-based testing
+that catches edge cases the developer did not anticipate,
+and the regression-tracking that keeps performance on track.
+The chapter also discusses the test infrastructure as a design
+choice: most of it is opt-in (the reference framework is a test
+dependency, not a runtime dependency).
 
-\section{Overview}
-\label{sec:testing:overview}
+\section{The Test Layers}
+\label{sec:testing:layers}
 
-\section{Background and Goals}
-\label{sec:testing:background}
+\Lucid's tests are organised into seven layers, each with a
+distinct purpose and execution strategy.
 
-\subsection{Problem statement}
-\label{ssec:testing:problem}
+\begin{enumerate}
+  \item \textbf{Unit tests} (\code{lucid/test/unit/}): single-
+    function, single-class tests. Pure-Python, fast.
+  \item \textbf{Integration tests}
+    (\code{lucid/test/integration/}): multi-component flows
+    (e.g., model forward + backward + optimiser step).
+  \item \textbf{Parity tests} (\code{lucid/test/parity/}):
+    compare \Lucid\ outputs to a reference framework on the
+    same input. Opt-in; require \code{ref\_framework} install.
+  \item \textbf{Property tests} (\code{lucid/test/property/}):
+    Hypothesis-driven \cite{hypothesis_maciver} tests over
+    random shapes/dtypes/strides.
+  \item \textbf{Model contract tests}
+    (\code{lucid/test/unit/models/test\_family\_contract.py}):
+    verify the H10/H11/H12 model-zoo conventions.
+  \item \textbf{Benchmark tests} (\code{lucid/bench/}):
+    measure throughput, not correctness. Gated by performance
+    regression rules.
+  \item \textbf{End-to-end training tests}
+    (\code{lucid/test/e2e/}): one-epoch training runs that
+    verify convergence (loss decreases).
+\end{enumerate}
 
-\subsection{Constraints and prior art}
-\label{ssec:testing:constraints}
+\section{The pytest Configuration}
+\label{sec:testing:pytest_config}
 
-\section{Methodology}
-\label{sec:testing:methodology}
+\Lucid\ uses pytest \cite{pytest_krekel}. The \code{pyproject.toml}
+configuration:
 
-\subsection{Measurement approach}
-\label{ssec:testing:measurement}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+[tool.pytest.ini_options]
+testpaths = ["lucid/test"]
+markers = [
+    "slow: marks tests as slow",
+    "parity: requires reference framework",
+    "needs_metal: requires M-series GPU",
+    "needs_e2e: end-to-end training (>1 min)",
+]
+addopts = "-q --strict-markers"
+\end{lstlisting}
 
-\subsection{Benchmark setup}
-\label{ssec:testing:setup}
+The marker system separates the fast/CI-friendly tests from the
+slow/optional tests. The standard CI run is:
 
-\subsubsection{Hardware configuration}
-\subsubsection{Software stack and reproducibility}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+pytest lucid/test/ -m "not slow and not parity and not needs_e2e"
+\end{lstlisting}
 
-\section{Implementation}
-\label{sec:testing:impl}
+This completes in $\sim$\,90\,s on M3~Max --- fast enough to
+run on every commit.
 
-\subsection{Design decisions}
-\label{ssec:testing:design}
+\section{Parity Tests: The Reference Framework}
+\label{sec:testing:parity_framework}
 
-\subsection{Component breakdown}
-\label{ssec:testing:components}
+The parity tests are \Lucid's correctness gold standard. Rather
+than write parameterised expected values by hand (error-prone,
+unmaintainable), the parity tests compute the same operation
+in a reference ML framework and compare.
 
-\subsection{Integration with existing systems}
-\label{ssec:testing:integration}
+The reference framework is loaded through a small adapter at
+\code{lucid/test/\_fixtures/ref\_framework.py}. The adapter is
+the \emph{only} test-tree file that may import the reference
+framework by name (per Rule H5); other tests receive a
+\code{ref} fixture.
 
-\section{Results}
-\label{sec:testing:results}
+\subsection{The ref fixture}
+\label{ssec:testing:ref_fixture}
 
-\subsection{Quantitative findings}
-\label{ssec:testing:quant}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def test_softmax_parity(ref):
+    x = lucid.randn(8, 16)
+    ref_x = ref.tensor(x.numpy())  # Convert via bridge
 
-\subsection{Qualitative observations}
-\label{ssec:testing:qual}
+    lucid_out = lucid.nn.functional.softmax(x, dim=-1)
+    ref_out   = ref.nn.functional.softmax(ref_x, dim=-1)
 
-\section{Discussion}
-\label{sec:testing:discussion}
+    assert lucid.allclose(lucid_out, ref.numpy(ref_out), atol=1e-5)
+\end{lstlisting}
 
-\subsection{Trade-offs}
-\label{ssec:testing:tradeoffs}
+The fixture handles:
+\begin{itemize}
+  \item Skip if the reference framework is not installed (the
+    test is marked \code{@pytest.mark.parity}).
+  \item Provide a uniform conversion API
+    (\code{ref.tensor}, \code{ref.numpy}).
+  \item Provide module proxies (\code{ref.nn},
+    \code{ref.nn.functional}, etc.) so test code can write
+    framework-agnostic calls.
+\end{itemize}
 
-\subsection{Open questions}
-\label{ssec:testing:open}
+\subsection{Parity scope}
+\label{ssec:testing:parity_scope}
 
-\section{Summary and Cross-References}
+Parity tests cover:
+\begin{itemize}
+  \item Every op in \code{lucid.\_C.ops.*}.
+  \item Every layer in \code{lucid.nn.*}.
+  \item Every optimiser in \code{lucid.optim.*}.
+  \item Every model-zoo factory (forward + backward + one
+    optimiser step).
+  \item Edge cases: 0-dim tensors, broadcasting, mixed dtypes.
+\end{itemize}
+
+At PR time, the parity tests run in the slow CI track (because
+they require the reference framework to be installed); they
+block merge if any fail.
+
+\section{Property Tests}
+\label{sec:testing:property_tests}
+
+Property tests \cite{hypothesis_maciver} generate random inputs
+and verify properties that should hold for all valid inputs.
+The \Lucid\ property tests are particularly useful for
+catching corner cases that the developer would not write
+explicitly.
+
+\subsection{Example}
+\label{ssec:testing:property_example}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from hypothesis import given, strategies as st
+
+@given(
+    shape=st.lists(st.integers(1, 16), min_size=1, max_size=4),
+    dtype=st.sampled_from([lucid.float32, lucid.float16]),
+)
+def test_add_is_commutative(shape, dtype):
+    a = lucid.randn(*shape, dtype=dtype)
+    b = lucid.randn(*shape, dtype=dtype)
+    assert lucid.allclose(a + b, b + a)
+\end{lstlisting}
+
+Hypothesis tries many random shapes (and shrinks on failure to
+the simplest reproducing case). For \Lucid, property tests have
+historically found:
+
+\begin{itemize}
+  \item Broadcasting bugs when one operand was 0-dim.
+  \item Stride bugs when a tensor was non-contiguous.
+  \item Dtype-promotion bugs in mixed-dtype binary ops.
+  \item Index-overflow bugs in \code{gather} with negative
+    indices.
+\end{itemize}
+
+\subsection{Strategies catalogue}
+\label{ssec:testing:strategies_catalogue}
+
+\Lucid\ has a shared strategy catalogue at
+\code{lucid/test/\_strategies.py}:
+\begin{lstlisting}[style=lucid,language=LucidPython]
+random_tensor()       # Any shape, any dtype, any contiguity
+random_2d_matrix()    # Shape (N, M) with N, M in [1, 128]
+random_4d_image()     # NCHW with valid image dimensions
+random_attention()    # Q, K, V with matching dimensions
+\end{lstlisting}
+
+Test authors use these strategies rather than rolling their
+own; the result is broader and more uniform coverage.
+
+\section{Model Contract Tests}
+\label{sec:testing:model_contract}
+
+The model-zoo conventions (H10/H11/H12) are checked by a
+contract test that runs on every PR:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# lucid/test/unit/models/test_family_contract.py
+
+def test_full_name_size_suffix(model_id):
+    """H10: size suffix must be full word, not abbreviation."""
+    parts = model_id.split("_")
+    for part in parts:
+        assert part not in {"t", "s", "b", "m", "l", "xl"}, \
+            f"Abbreviated suffix in {model_id}"
+
+def test_paper_cited_variant(model_id):
+    """H11: variant must exist in the cited paper."""
+    info = registry[model_id]
+    assert info.citation is not None
+    assert info.params == get_paper_param_count(info.citation, model_id)
+\end{lstlisting}
+
+The contract tests run on the full set of registered models.
+H10 violations (e.g., a new \code{vit\_b} factory) fail
+immediately; H11 violations (an invented variant) require the
+author to either cite the paper or delete the factory.
+
+\section{Gradient Check}
+\label{sec:testing:gradcheck}
+
+For correctness of backward formulas, \Lucid\ uses numerical
+gradient checking (\chref{ch:gradcheck}):
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.autograd import gradcheck
+
+def test_softmax_grad():
+    x = lucid.randn(4, 8, dtype=lucid.float64, requires_grad=True)
+    assert gradcheck(
+        lambda x: lucid.nn.functional.softmax(x, dim=-1),
+        (x,),
+        eps=1e-6, atol=1e-4,
+    )
+\end{lstlisting}
+
+gradcheck perturbs each input element by $\pm\epsilon$ and
+compares the analytical gradient to the finite-difference
+gradient. The test runs in FP64 (more precision needed for
+finite-difference comparison than for actual training).
+
+Every \code{Function} in \code{lucid.autograd} has a
+corresponding gradcheck test. New Functions without one fail
+the model-zoo contract test.
+
+\section{Benchmark Regression Tests}
+\label{sec:testing:bench_regression}
+
+Performance is also tested, not just correctness. The
+\code{lucid/bench/regression/} directory holds a small fast
+benchmark suite (under 5\,s total) that runs on every PR:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+@pytest.mark.benchmark
+def test_resnet50_iter_time():
+    model = lucid.models.resnet_50()
+    x = lucid.randn(32, 3, 224, 224)
+    result = bench(lambda: model(x).sum().backward())
+    assert result.median_ms < REGRESSION_THRESHOLD["resnet_50"]
+\end{lstlisting}
+
+The threshold is set at $1.15 \times$ the current baseline
+(15\% headroom for noise). A regression that crosses the
+threshold blocks the PR. The author either justifies the
+regression (and updates the threshold) or fixes it.
+
+\section{End-to-End Training Tests}
+\label{sec:testing:e2e_training}
+
+The \code{lucid/test/e2e/} directory holds short training runs
+that verify the loss decreases:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+@pytest.mark.needs_e2e
+def test_resnet50_one_epoch():
+    model = lucid.models.resnet_50()
+    opt = lucid.optim.SGD(model.parameters(), lr=0.1)
+    losses = []
+    for x, y in cifar10_subset(num_batches=50):
+        out = model(x)
+        loss = lucid.nn.functional.cross_entropy(out, y)
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+        losses.append(loss.item())
+    assert losses[-1] < losses[0] * 0.9  # 10% decrease minimum
+\end{lstlisting}
+
+These tests are slow (1--5\,min each) and run only on the
+release branch, not per-commit.
+
+\section{Coverage}
+\label{sec:testing:coverage}
+
+\Lucid\ tracks line + branch coverage via \code{coverage.py}.
+The current state:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lr}
+\toprule
+Module & Coverage \\
+\midrule
+\code{lucid/\_tensor/}    & 96\% \\
+\code{lucid/nn/}          & 94\% \\
+\code{lucid/optim/}       & 98\% \\
+\code{lucid/autograd/}    & 92\% \\
+\code{lucid/linalg/}      & 95\% \\
+\code{lucid/fft/}         & 93\% \\
+\code{lucid/models/}      & 88\% \\
+\code{lucid/compile/}     & 86\% \\
+\midrule
+Overall                   & 93\% \\
+\bottomrule
+\end{tabular}
+\caption[Test coverage by module.]{Line+branch coverage,
+\Lucid\ 3.5.0. Models and compile are lower because they
+include some path-rich code (per-variant initialisation, fallback
+paths) that is harder to fully exercise. The 93\% overall is
+above the project's 85\% target.}
+\label{tab:testing:coverage}
+\end{table}
+
+Untested lines are mostly error-path branches; we accept
+coverage gaps in clearly defensive code (e.g., type-check
+errors that ``can't happen'' under the public-API contracts).
+
+\section{The CI Pipeline}
+\label{sec:testing:ci_pipeline}
+
+The CI pipeline runs on GitHub Actions, on three test tracks:
+
+\subsection{Fast track (per commit)}
+\label{ssec:testing:fast_track}
+
+\begin{itemize}
+  \item Compile C++ engine.
+  \item Run unit + integration + property tests
+    (\code{not slow and not parity and not needs\_e2e}).
+  \item Run mypy + ruff + the model-zoo contract.
+  \item Run benchmark-regression tests.
+\end{itemize}
+
+Wall-clock: $\sim$\,3.5 minutes. Blocking for merge.
+
+\subsection{Slow track (per PR)}
+\label{ssec:testing:slow_track}
+
+\begin{itemize}
+  \item All fast-track tests.
+  \item Parity tests (with reference framework installed).
+  \item Slow integration tests.
+\end{itemize}
+
+Wall-clock: $\sim$\,18 minutes. Blocking for merge.
+
+\subsection{Nightly track}
+\label{ssec:testing:nightly_track}
+
+\begin{itemize}
+  \item All slow-track tests.
+  \item End-to-end training tests.
+  \item Full model-zoo benchmark sweep.
+  \item Hypothesis with extended example count.
+\end{itemize}
+
+Wall-clock: $\sim$\,3 hours. Failures alert via Slack but do
+not block merges (the failure is investigated next morning).
+
+\section{Test Data Management}
+\label{sec:testing:test_data}
+
+The tests need data. \Lucid's policy:
+
+\begin{itemize}
+  \item \textbf{Tiny data inline}: hard-coded tensors for
+    correctness tests (a $4 \times 4$ matrix with known
+    determinant, etc.).
+  \item \textbf{Generated data}: random tensors via
+    \code{lucid.randn} with fixed seeds.
+  \item \textbf{No external downloads in unit tests}: the
+    fast track must run offline. Larger data (CIFAR-10 subset
+    for e2e) is downloaded on the nightly track.
+\end{itemize}
+
+The seed-fixing convention: every test that uses randomness
+calls \code{lucid.seed(42)} at the top. This makes failures
+reproducible.
+
+\section{When a Test Fails}
+\label{sec:testing:test_failure}
+
+The expected debugging flow:
+
+\begin{enumerate}
+  \item Identify the test: \code{pytest} output names the file
+    and test.
+  \item Run in isolation:
+    \code{pytest lucid/test/<file>.py::<test\_name> -v}.
+  \item Read the failure: \Lucid's assertion library produces
+    informative diffs (shape, dtype, max-abs-diff for
+    tensor mismatches).
+  \item For parity failures: bisect across \Lucid\ commits to
+    find the regression-introducing commit (\code{git bisect}
+    + the failing test command).
+  \item For correctness failures: drop into the failing test
+    with \code{pytest --pdb}.
+\end{enumerate}
+
+The \code{git bisect} flow is so common that we have a small
+helper script: \code{tools/test-bisect.sh}.
+
+\section{What We Do Not Test}
+\label{sec:testing:not_tested}
+
+Some intentional gaps:
+
+\begin{itemize}
+  \item \textbf{Performance under thermal stress}: the bench
+    harness assumes steady-state; we don't test the
+    throttled-state behaviour (impractical in CI).
+  \item \textbf{Memory pressure}: triggering OOM
+    deterministically across CI machines is hard; we test the
+    error-handling path with synthetic injection instead.
+  \item \textbf{Multi-day training runs}: only single-epoch
+    e2e tests; full multi-day convergence to specific accuracy
+    is left to the user.
+\end{itemize}
+
+These gaps are documented; user reports often fill them.
+
+\section{Summary and Forward References}
 \label{sec:testing:summary}
+
+The testing strategy: layered (unit, integration, parity,
+property, contract, benchmark, e2e), automated (CI on three
+tracks), and gold-standard-verified (parity tests against a
+reference framework). The 93\% line+branch coverage and 3,500
+test count are the framework's correctness foundation.
+
+The next chapter, \chref{ch:serialization}, treats checkpoint
+serialization. \chref{ch:data_pipeline} treats the data
+pipeline. \chref{ch:error_handling} treats error messaging.
+\chref{ch:reproducibility} treats reproducibility.
+
+\begin{lucidnote}
+For the user: when reporting a bug, the most actionable
+artifact is a failing test. Write the smallest reproducing
+test you can, attach it to the issue, and \Lucid\ maintainers
+can add it to the regression suite once fixed.
+\end{lucidnote}

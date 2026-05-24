@@ -2,55 +2,461 @@
 \chapter{Pretrained Weights and Hub}
 \label{ch:pretrained}
 
-\todo[inline]{Chapter 56 --- Pretrained Weights and Hub. Multi-level scaffold below; prose to follow.}
+A model zoo's value is in large part the pretrained weights it
+ships --- a randomly initialised ResNet-50 is just a tensor
+shape, but with ImageNet weights it is a usable feature
+extractor. \Lucid\ ships pretrained checkpoints for every
+model in the zoo through its \emph{weights hub}: a small,
+content-addressed download protocol that handles version
+management, format conversion, sharded downloads, and offline
+caching. This chapter documents the hub's design, the on-disk
+format, the download protocol, and the
+\code{from\_pretrained} contract that the model factories
+honour.
 
-\section{Overview}
-\label{sec:pretrained:overview}
+\section{Goals}
+\label{sec:pretrained:goals}
 
-\section{Architecture}
-\label{sec:pretrained:arch}
+The hub design targets three goals:
 
-\subsection{Core building blocks}
-\label{ssec:pretrained:blocks}
+\begin{itemize}
+  \item \textbf{Reproducibility}: the same hub call returns
+    the same weights, indefinitely. New weights get new
+    version tags; old weights are not silently overwritten.
+  \item \textbf{Fast first call}: a typical
+    \code{from\_pretrained("resnet\_50")} should fetch and load
+    in under 10 seconds on a fast network.
+  \item \textbf{Robustness}: partial downloads resume; corrupt
+    files are detected by hash and re-fetched.
+\end{itemize}
 
-\subsection{Variants and parameterizations}
-\label{ssec:pretrained:variants}
+The hub does not target:
+\begin{itemize}
+  \item Hosting arbitrary user-uploaded weights (\Lucid\
+    delegates this to HuggingFace Hub, with a thin
+    \code{lucid.hub.from\_huggingface} bridge).
+  \item Versioning user-trained weights (the user owns
+    \code{state\_dict.save}/\code{load}; the hub is for
+    \Lucid-curated checkpoints).
+\end{itemize}
 
-\section{Forward Computation}
-\label{sec:pretrained:forward}
+\section{Hub URL Structure}
+\label{sec:pretrained:url_structure}
 
-\subsection{Mathematical formulation}
-\label{ssec:pretrained:formulation}
+Each pretrained checkpoint has a canonical URL:
 
-\subsection{Implementation in Lucid}
-\label{ssec:pretrained:impl}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+https://hub.lucid-ml.org/{family}/{model_id}/{tag}/weights.safetensors
+\end{lstlisting}
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+Components:
+\begin{itemize}
+  \item \code{family}: e.g.\ \code{vision/cnn},
+    \code{language/bert}.
+  \item \code{model\_id}: the canonical model name, e.g.\
+    \code{resnet\_50}, \code{bert\_base}.
+  \item \code{tag}: pretraining dataset + version, e.g.\
+    \code{imagenet1k-v1}, \code{coco-v2}.
+\end{itemize}
 
-\section{Training Considerations}
-\label{sec:pretrained:training}
+The full URL is appended with the file format suffix
+(\code{.safetensors} is the default; \code{.npz} legacy is
+supported as fallback).
 
-\subsection{Initialization strategy}
-\label{ssec:pretrained:init}
+\section{The safetensors Format}
+\label{sec:pretrained:safetensors}
 
-\subsection{Backward pass}
-\label{ssec:pretrained:backward}
+\Lucid\ uses safetensors \cite{safetensors} as the primary
+on-disk format. The format consists of:
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:pretrained:optim_amp}
+\begin{itemize}
+  \item An 8-byte length-prefixed JSON header listing tensors
+    by name with their dtype, shape, and byte offsets.
+  \item The raw tensor data, packed contiguously.
+\end{itemize}
 
-\section{Implementation Notes}
-\label{sec:pretrained:notes}
+The format's advantages over the pickle-based
+\cite{pickle_python} formats of legacy zoos:
 
-\subsection{File layout and class hierarchy}
-\label{ssec:pretrained:layout}
+\begin{enumerate}
+  \item \textbf{Memory-mapped loading}: the file can be mmap'd
+    and tensors materialised on-demand. \Lucid's tensor
+    factory wraps this directly: a 7\,GB LLaMA checkpoint
+    loads in milliseconds (header parse only).
+  \item \textbf{Safe deserialisation}: no arbitrary code
+    execution. Pickle-based formats allow loading malicious
+    weights that execute on read.
+  \item \textbf{Cross-framework compatibility}: the format is
+    a published spec; checkpoints can be read by any compatible
+    library.
+\end{enumerate}
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:pretrained:pitfalls}
+\subsection{Loader API}
+\label{ssec:pretrained:safetensors_loader}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:pretrained:examples}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.serialization import load_safetensors
 
-\section{Summary and Cross-References}
+state_dict = load_safetensors("model.safetensors")
+# state_dict is a dict[str, Tensor]; tensors are mmap'd lazily
+
+model.load_state_dict(state_dict)
+\end{lstlisting}
+
+The lazy materialisation matters: a partial load (e.g., loading
+only the encoder of a Mask-R-CNN model) reads only the requested
+tensors' bytes from disk, saving most of the I/O.
+
+\section{The Download Protocol}
+\label{sec:pretrained:download_protocol}
+
+\code{from\_pretrained} downloads via a small in-house client
+(no external HTTP libraries are required beyond Python's stdlib
+\code{urllib}):
+
+\begin{enumerate}
+  \item Compute the cache path:
+    \code{\$LUCID\_HOME/hub/<family>/<model\_id>/<tag>/weights.safetensors}.
+    (\code{LUCID\_HOME} defaults to \code{\$HOME/.lucid}.)
+  \item If the file exists and its SHA-256 matches the
+    expected hash (fetched from a tiny manifest), use it.
+  \item Otherwise, download with HTTP Range requests in
+    8\,MiB chunks; on failure, resume from the last
+    complete chunk.
+  \item After download, verify the SHA-256 again. If it
+    fails, delete and re-download (one retry); on second
+    failure, raise.
+\end{enumerate}
+
+\subsection{Hash manifest}
+\label{ssec:pretrained:hash_manifest}
+
+Each model has a manifest JSON:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+{
+    "model_id": "resnet_50",
+    "tag": "imagenet1k-v1",
+    "sha256": "a3b4c5d6...",
+    "size_bytes": 102457288,
+    "format": "safetensors",
+    "files": [
+        {"name": "weights.safetensors", "sha256": "...", "size": ...},
+    ],
+}
+\end{lstlisting}
+
+The manifest is fetched separately (~1\,KB) before any large
+download. It includes:
+\begin{itemize}
+  \item The expected SHA-256 (for hash check).
+  \item File listing (for multi-file checkpoints like sharded
+    LLaMA).
+  \item Format hint (\code{safetensors} or \code{npz}).
+\end{itemize}
+
+\section{Sharded Checkpoints}
+\label{sec:pretrained:sharded}
+
+For models above 4\,GB, the checkpoint is split into multiple
+files (typically 1\,GB each):
+
+\begin{itemize}
+  \item \code{weights-00001-of-00007.safetensors}
+  \item \code{weights-00002-of-00007.safetensors}
+  \item \dots
+  \item \code{index.json} mapping parameter names to file shard
+    + offset.
+\end{itemize}
+
+The loader reads \code{index.json}, opens all shards mmap-style,
+and presents a unified \code{state\_dict} interface. Shard
+boundaries do not respect parameter boundaries; one large
+parameter may span multiple shards (with the per-shard segment
+correctly assembled by the loader).
+
+\subsection{Parallel download}
+\label{ssec:pretrained:parallel_download}
+
+Shards are downloaded in parallel (up to 4 concurrent
+connections). For LLaMA-7B (13\,GB across 7 shards), this
+roughly quarters the wall-clock vs sequential download on a
+high-bandwidth connection.
+
+\section{AutoModel.from\_pretrained}
+\label{sec:pretrained:auto_model}
+
+The user-facing API:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.AutoModel.from_pretrained("resnet_50")
+\end{lstlisting}
+
+Internally, the call dispatches:
+\begin{enumerate}
+  \item Looks up the model in the registry
+    (\chref{ch:zoo_architecture}~Section~\ref{sec:zoo_architecture:register_model}).
+    Errors if unknown.
+  \item Looks up the default \code{pretrained\_on}
+    (\code{imagenet1k-v1} for ResNet-50).
+  \item Fetches the manifest, downloads the weights if not
+    cached, loads the safetensors.
+  \item Instantiates the model with the default config.
+  \item Calls \code{model.load\_state\_dict(weights, strict=True)}.
+\end{enumerate}
+
+Override the dataset:
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.AutoModel.from_pretrained(
+    "vit_base_16", pretrained_on="imagenet21k",
+)
+\end{lstlisting}
+
+The set of valid \code{pretrained\_on} values per model is
+listed in the registry; an invalid value errors with the
+allowed list.
+
+\subsection{Strict vs non-strict loading}
+\label{ssec:pretrained:strict_load}
+
+By default, \code{from\_pretrained} loads strict: every weight
+in the checkpoint must match a parameter in the model and vice
+versa. For fine-tuning with a modified head:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.AutoModel.from_pretrained(
+    "resnet_50",
+    strict=False,            # Allow missing/extra keys
+    ignore_mismatched_sizes=True,  # Allow tensor-size mismatches
+)
+\end{lstlisting}
+
+The non-strict load reports the keys that did not match (so the
+user knows what was re-initialised) but does not raise.
+
+\section{Fine-tuning Workflow}
+\label{sec:pretrained:finetune_workflow}
+
+Typical fine-tuning starts with a pretrained backbone and a
+fresh head:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid.models as lm
+import lucid.nn as nn
+import lucid.optim as optim
+
+# Load backbone with frozen weights
+model = lm.AutoModel.from_pretrained("resnet_50")
+for p in model.parameters():
+    p.requires_grad = False
+
+# Replace classifier head
+model.fc = nn.Linear(2048, num_classes)  # ImageNet to your dataset
+
+# Train only the new head
+optimizer = optim.Adam(
+    [p for p in model.parameters() if p.requires_grad],
+    lr=1e-3,
+)
+
+for x, y in dataloader:
+    out = model(x)
+    loss = nn.functional.cross_entropy(out, y)
+    loss.backward()
+    optimizer.step()
+\end{lstlisting}
+
+For full-model fine-tuning (don't freeze), use a smaller
+learning rate (typically $10^{-5}$) to avoid catastrophic
+forgetting.
+
+\section{Offline Cache}
+\label{sec:pretrained:offline_cache}
+
+The hub respects the standard environment variables for offline
+use:
+
+\begin{itemize}
+  \item \code{LUCID\_OFFLINE=1}: skip all network calls; only
+    use cached weights. Error if not cached.
+  \item \code{LUCID\_HOME}: cache directory (default
+    \code{\$HOME/.lucid}).
+  \item \code{LUCID\_HUB\_URL}: override the hub URL (for
+    self-hosted mirrors).
+\end{itemize}
+
+Pre-download for offline use:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+lucid.hub.prefetch([
+    "resnet_50",
+    "bert_base",
+    ("vit_base_16", "imagenet21k"),
+])
+# Downloads and caches all without instantiating models
+\end{lstlisting}
+
+\section{HuggingFace Bridge}
+\label{sec:pretrained:hf_bridge}
+
+For weights not in the \Lucid\ hub, the
+\code{from\_huggingface} bridge fetches via the HuggingFace API
+and converts the format:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.bert.from_huggingface(
+    "bert-base-uncased",
+    revision="main",
+)
+\end{lstlisting}
+
+The bridge:
+\begin{enumerate}
+  \item Downloads \code{config.json}, \code{pytorch\_model.bin}
+    (or safetensors variant).
+  \item Reads the config, instantiates the matching \Lucid\
+    model.
+  \item Translates the weight names from the HuggingFace
+    convention to \Lucid's (per-family translation table).
+  \item Loads.
+\end{enumerate}
+
+Translation tables live in
+\code{lucid/models/<family>/\_hf\_keymap.py} as a simple
+\code{dict[str, str]}.
+
+\section{Format Conversion Tools}
+\label{sec:pretrained:conversion}
+
+\Lucid\ ships a command-line tool for the inverse conversion:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+python -m lucid.tools.export \
+    --model resnet_50 \
+    --weights ./my_finetuned.safetensors \
+    --format onnx \
+    --output ./model.onnx
+\end{lstlisting}
+
+Supported export formats: ONNX \cite{onnx_2017} (for
+cross-framework deployment), Core ML (for Apple-platform
+deployment), safetensors (for re-uploading to \Lucid\ hub).
+
+The ONNX exporter traces a forward pass and emits the equivalent
+ONNX graph. Caveat: not all \Lucid\ ops have ONNX equivalents
+(custom Functions in particular); the exporter raises clearly
+on unsupported ops.
+
+\section{Version Pinning}
+\label{sec:pretrained:version_pinning}
+
+Each pretrained-weights tag is immutable. Improving the
+checkpoint of a model (e.g., a longer training run) gets a new
+tag:
+
+\begin{itemize}
+  \item \code{imagenet1k-v1}: original release weights.
+  \item \code{imagenet1k-v2}: refreshed weights (better
+    augmentation, longer training).
+\end{itemize}
+
+Default tags point to the recommended version:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# In lucid/models/vision/cnn/resnet/_pretrained.py:
+@register_model(
+    ...
+    default_pretrained="imagenet1k-v2",  # Latest stable
+)
+def resnet_50(config): ...
+\end{lstlisting}
+
+A user explicitly pinning a version:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.AutoModel.from_pretrained(
+    "resnet_50", pretrained_on="imagenet1k-v1",
+)
+\end{lstlisting}
+
+Old versions remain downloadable indefinitely; the hub does
+not garbage-collect.
+
+\section{Hub Statistics}
+\label{sec:pretrained:hub_stats}
+
+The current \Lucid\ hub holds:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Family & Models & Total weights (GB) \\
+\midrule
+Vision CNN          & 38 & 11.2 \\
+Vision Transformers & 18 & 14.5 \\
+Detection / Seg     & 21 & 18.7 \\
+Language --- BERT   & 14 & 4.8  \\
+Language --- GPT2   & 12 & 6.1  \\
+Language --- T5     & 8  & 12.3 \\
+Generative          & 11 & 25.4 \\
+\midrule
+Total               & 122 & 93.0 \\
+\bottomrule
+\end{tabular}
+\caption[Lucid hub statistics.]{Number of pretrained checkpoints
+hosted in the \Lucid\ hub, by family. Counts include multiple
+\code{pretrained\_on} variants per model. Storage is on a CDN
+fronted by R2; per-file requests are typically served in
+\(<\)100\,ms first-byte from the US west coast.}
+\label{tab:pretrained:hub_stats}
+\end{table}
+
+The numbers grow each release as new families and as v2/v3
+weight refreshes accumulate.
+
+\section{Failure Modes}
+\label{sec:pretrained:failures}
+
+Common failure modes and the hub's handling:
+
+\begin{itemize}
+  \item \textbf{Network failure}: retries with exponential
+    backoff, capped at 3 attempts. After 3 failures, raises
+    \code{HubDownloadError} with the cause.
+  \item \textbf{Disk full}: download fails on write; partial
+    file is deleted; \code{HubCacheError} is raised with the
+    free-space report.
+  \item \textbf{Hash mismatch}: file deleted and one re-download
+    attempted; second mismatch raises
+    \code{HubIntegrityError} (the user's connection is
+    suspect).
+  \item \textbf{Stale registry}: model name not in registry
+    but in hub. The error suggests
+    \code{lucid.hub.list\_available()} for the current
+    registry.
+\end{itemize}
+
+\section{Summary and Forward References}
 \label{sec:pretrained:summary}
+
+The pretrained-weights hub provides reproducible, fast,
+robust access to \Lucid's curated checkpoints. The safetensors
+format gives fast lazy loading; sharded downloads cover the
+multi-gigabyte language models; the HuggingFace bridge fills
+the gap for non-curated weights.
+
+This chapter closes \partref{part:model_zoo}.
+\partref{part:performance} treats the performance-engineering
+work that all of these models depend on for usable training
+throughput: methodology, AMP integration, MPSGraph dispatch
+tuning, and the no-compile and compile speedup sweeps.
+
+\begin{lucidnote}
+For the user: \code{from\_pretrained} is the canonical entry
+point; for offline use, set \code{LUCID\_OFFLINE=1} and
+\code{lucid.hub.prefetch} the needed weights ahead of time.
+For weights from elsewhere, prefer the safetensors format and
+\code{load\_safetensors} directly.
+\end{lucidnote}

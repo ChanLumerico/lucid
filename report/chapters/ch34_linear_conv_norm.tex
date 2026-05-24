@@ -2,55 +2,617 @@
 \chapter{Linear, Convolution, Pooling, Normalization}
 \label{ch:linear_conv_norm}
 
-\todo[inline]{Chapter 34 --- Linear, Convolution, Pooling, Normalization. Multi-level scaffold below; prose to follow.}
+This chapter treats the four most fundamental layer families in
+deep learning: the linear (fully-connected) layer, the
+convolutional layers, the pooling layers, and the normalisation
+layers. They are the building blocks from which essentially every
+modern architecture is composed: a CNN is convolution + pooling +
+norm + activation; a Transformer is linear + attention + norm; a
+ResNet is convolution + norm + linear + skip connection. \Lucid's
+implementations follow \refframework's API closely.
 
-\section{Overview}
-\label{sec:linear_conv_norm:overview}
+We cover, for each family: the mathematical operation, the
+weight initialisation convention, the forward/backward dispatch
+in \Lucid, and the common variants exposed at \code{lucid.nn}.
 
-\section{Architecture}
-\label{sec:linear_conv_norm:arch}
+\section{Linear (Fully-Connected) Layer}
+\label{sec:linear_conv_norm:linear}
 
-\subsection{Core building blocks}
-\label{ssec:linear_conv_norm:blocks}
+The linear layer applies an affine transformation:
+\[
+y \;=\; x W^\top + b,
+\]
+where $x \in \mathbb{R}^{B \times d_{\text{in}}}$, $W \in
+\mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$, $b \in
+\mathbb{R}^{d_{\text{out}}}$, $y \in \mathbb{R}^{B \times
+d_{\text{out}}}$.
 
-\subsection{Variants and parameterizations}
-\label{ssec:linear_conv_norm:variants}
+\subsection{The Lucid API}
+\label{ssec:linear_conv_norm:linear_api}
 
-\section{Forward Computation}
-\label{sec:linear_conv_norm:forward}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid.nn as nn
 
-\subsection{Mathematical formulation}
-\label{ssec:linear_conv_norm:formulation}
+fc = nn.Linear(in_features=768, out_features=3072, bias=True)
+y = fc(x)   # x shape: (..., 768); y shape: (..., 3072)
+\end{lstlisting}
 
-\subsection{Implementation in Lucid}
-\label{ssec:linear_conv_norm:impl}
+The leading dimensions of \code{x} are preserved; the trailing
+dimension is transformed.
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+\subsection{Initialisation}
+\label{ssec:linear_conv_norm:linear_init}
 
-\section{Training Considerations}
-\label{sec:linear_conv_norm:training}
+The default initialisation is Kaiming uniform with $a = \sqrt{5}$:
+\[
+W_{ij} \;\sim\; \mathcal{U}\!\left(-\sqrt{\frac{6}{d_{\text{in}}}},\, \sqrt{\frac{6}{d_{\text{in}}}}\right).
+\]
+The bias (if present) is initialised from
+$\mathcal{U}(-1/\sqrt{d_{\text{in}}},\, 1/\sqrt{d_{\text{in}}})$.
 
-\subsection{Initialization strategy}
-\label{ssec:linear_conv_norm:init}
+These defaults match \refframework's. \chref{ch:initialization}
+discusses initialisation theory in depth.
 
-\subsection{Backward pass}
-\label{ssec:linear_conv_norm:backward}
+\subsection{Implementation}
+\label{ssec:linear_conv_norm:linear_impl}
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:linear_conv_norm:optim_amp}
+The forward is a matrix multiplication (plus optional bias),
+dispatched through the backend's \code{matmul} (\code{cblas\_sgemm}
+on CPU via the AMX coprocessor; \code{mlx::core::matmul} on GPU).
+The backward propagates:
+\[
+\bar{W} \;=\; \bar{y}^\top x,
+\qquad
+\bar{x} \;=\; \bar{y}\, W,
+\qquad
+\bar{b} \;=\; \sum_{\text{batch}} \bar{y}.
+\]
 
-\section{Implementation Notes}
-\label{sec:linear_conv_norm:notes}
+The bias gradient sums across the batch axes. For a 4-D input
+(batch + sequence + ... + features), the sum is over all but the
+last axis.
 
-\subsection{File layout and class hierarchy}
-\label{ssec:linear_conv_norm:layout}
+\section{Convolution}
+\label{sec:linear_conv_norm:conv}
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:linear_conv_norm:pitfalls}
+The convolutional layer applies a sliding cross-correlation
+(usually called ``convolution'' in ML even though strict
+convolution would flip the kernel):
+\[
+y_{c, h, w} \;=\; b_c \;+\; \sum_{c'=0}^{C_{\text{in}}-1}
+\sum_{i=0}^{K_h-1} \sum_{j=0}^{K_w-1}
+W_{c, c', i, j} \cdot x_{c', h \cdot s + i - p,\, w \cdot s + j - p}
+\]
+for a 2-D convolution with stride $s$ and padding $p$. The
+mathematical derivation of the output shape is in
+\cite{dumoulin_guide_2016}.
 
-\section{Worked Examples and Benchmarks}
-\label{sec:linear_conv_norm:examples}
+\subsection{The API}
+\label{ssec:linear_conv_norm:conv_api}
 
-\section{Summary and Cross-References}
+\begin{lstlisting}[style=lucid,language=LucidPython]
+conv = nn.Conv2d(
+    in_channels=3,
+    out_channels=64,
+    kernel_size=3,
+    stride=1,
+    padding=1,
+    bias=True,
+)
+y = conv(x)  # x shape: (B, 3, H, W); y shape: (B, 64, H, W)
+\end{lstlisting}
+
+The output spatial size for a 2-D convolution is
+\[
+H_{\text{out}} \;=\; \left\lfloor \frac{H_{\text{in}} + 2p - K_h}{s} \right\rfloor + 1.
+\]
+With padding $p = (K-1)/2$ and stride 1, the spatial size is
+preserved (for odd $K$).
+
+\subsection{Variants}
+\label{ssec:linear_conv_norm:conv_variants}
+
+\code{lucid.nn} provides:
+\begin{itemize}
+  \item \code{Conv1d}, \code{Conv2d}, \code{Conv3d}: standard
+    convolution at each rank.
+  \item \code{ConvTranspose1d}, \code{ConvTranspose2d},
+    \code{ConvTranspose3d}: transposed (deconvolution) for
+    upsampling.
+  \item \code{Conv2d(groups=g)}: grouped convolution (input
+    channels split into $g$ groups, each convolved independently).
+    With $g = C_{\text{in}} = C_{\text{out}}$, this becomes depthwise
+    convolution (MobileNet \cite{howard_mobilenet_2017}).
+  \item \code{Conv2d(dilation=d)}: dilated convolution (each kernel
+    cell is spaced by $d$ in the input).
+\end{itemize}
+
+\subsection{Output-shape arithmetic}
+\label{ssec:linear_conv_norm:conv_arithmetic}
+
+The general 2-D convolution output shape with stride $s$,
+padding $p$, dilation $d$ and kernel size $K$:
+\[
+  H_{\text{out}} \;=\;
+  \left\lfloor
+  \frac{H_{\text{in}} + 2p - d(K - 1) - 1}{s}
+  \right\rfloor + 1.
+\]
+Special cases:
+
+\begin{itemize}
+  \item \textbf{Same padding} ($p = (K-1)/2$, $s = 1$, $d = 1$):
+    $H_{\text{out}} = H_{\text{in}}$.
+  \item \textbf{Stride-2 downsample} ($s = 2$): halves the
+    spatial size (with appropriate padding).
+  \item \textbf{Dilated $K = 3$ with $d = 2$}: effective
+    receptive field is $5 \times 5$ but parameter count is
+    that of $3 \times 3$.
+\end{itemize}
+
+For transposed convolution (output upsampling):
+\[
+  H_{\text{out}} \;=\; (H_{\text{in}} - 1) s - 2 p + d(K-1) + p_{\text{out}} + 1,
+\]
+where $p_{\text{out}}$ is the optional output-padding parameter
+that disambiguates between multiple valid output sizes for a
+given stride.
+
+\subsection{Depthwise and pointwise convolution}
+\label{ssec:linear_conv_norm:depthwise_pointwise}
+
+Depthwise convolution: one filter per input channel, no
+cross-channel mixing. Parameter count: $C_{\text{in}} K^2$ (vs
+$C_{\text{in}} C_{\text{out}} K^2$ for standard conv).
+
+Pointwise convolution: $1 \times 1$ kernel, mixes channels.
+Parameter count: $C_{\text{in}} C_{\text{out}}$.
+
+The MobileNet \cite{howard_mobilenet_2017} \emph{depthwise-
+separable convolution} factors a standard conv into depthwise
+then pointwise:
+\[
+  \text{cost ratio} \;=\;
+  \frac{C_{\text{in}} K^2 + C_{\text{in}} C_{\text{out}}}{C_{\text{in}} C_{\text{out}} K^2}
+  \;=\; \frac{1}{C_{\text{out}}} + \frac{1}{K^2}.
+\]
+For $K = 3$ and $C_{\text{out}} \geq 64$, this is roughly
+$1/9 + 1/64 \approx 0.13$, an 8$\times$ reduction in compute
+and parameters for almost-equivalent expressive power.
+
+\subsection{Grouped convolution}
+\label{ssec:linear_conv_norm:grouped_conv}
+
+\code{Conv2d(groups=g)} splits the channel axis into $g$ groups
+and convolves within each:
+\[
+  y_{c, h, w} \;=\;
+  \sum_{c' = c_{\text{group}} \cdot C_{\text{in}}/g}^{(c_{\text{group}}+1) \cdot C_{\text{in}}/g - 1}
+  \sum_{i, j} W_{c, c' \bmod C_{\text{in}}/g, i, j} \cdot x_{c', \ldots},
+\]
+where $c_{\text{group}} = \lfloor c / (C_{\text{out}}/g) \rfloor$.
+With $g > 1$, the parameter count drops by a factor of $g$;
+ResNeXt is the canonical use.
+
+\subsection{Dilated (atrous) convolution}
+\label{ssec:linear_conv_norm:dilated_conv}
+
+Dilation inserts zeros between kernel cells:
+\[
+  y(i) \;=\; \sum_k x(i + d \cdot k) \cdot w(k).
+\]
+The effective receptive field grows as $K_{\text{eff}} = d(K-1) + 1$
+while keeping the parameter count at $K^2$. Used heavily in
+DeepLab \cite{chen_deeplab_2017} for semantic segmentation
+(large receptive field without spatial downsampling).
+
+\subsection{Initialisation}
+\label{ssec:linear_conv_norm:conv_init}
+
+Default is Kaiming uniform, with fan-in computed from
+$C_{\text{in}} \cdot K_h \cdot K_w$ (the receptive-field size
+times the input channels).
+
+\subsection{Dispatch}
+\label{ssec:linear_conv_norm:conv_dispatch}
+
+The forward dispatches through the backend's \code{conv2d}: BNNS
+on CPU (using AMX coprocessor for the GEMM-equivalent step), MLX
+on GPU. For small inputs, BNNS is competitive with MLX; for
+large batches and high channel counts, MLX wins.
+
+The backward decomposes into: gradient with respect to the input
+(another convolution with a flipped kernel), gradient with
+respect to the weight (a convolution with the input as kernel),
+gradient with respect to the bias (a sum over batch/spatial).
+
+\section{Pooling}
+\label{sec:linear_conv_norm:pooling}
+
+Pooling layers reduce spatial resolution by aggregating each local
+patch into a single value.
+
+\subsection{Max pooling}
+\label{ssec:linear_conv_norm:max_pool}
+
+\[
+y_{c, h, w} \;=\; \max_{i, j \in \text{window}}
+x_{c, h \cdot s + i,\, w \cdot s + j}.
+\]
+Backward: gradient routes to the maximum-valued input position.
+Where multiple positions tie, the convention is to route to the
+first (lowest index).
+
+\subsection{Average pooling}
+\label{ssec:linear_conv_norm:avg_pool}
+
+\[
+y_{c, h, w} \;=\; \frac{1}{K_h K_w} \sum_{i, j} x_{c, h s + i, w s + j}.
+\]
+Backward: gradient broadcasts uniformly across the input window.
+
+\subsection{Adaptive pooling}
+\label{ssec:linear_conv_norm:adaptive_pool}
+
+\code{AdaptiveMaxPool2d(output\_size)} and
+\code{AdaptiveAvgPool2d(output\_size)} pool to a fixed output
+spatial shape, computing the appropriate window and stride
+automatically. Used at the end of CNN backbones (ResNet, ConvNeXt)
+to produce a fixed-size feature regardless of input size.
+
+\subsection{Global pooling}
+\label{ssec:linear_conv_norm:global_pool}
+
+\code{AdaptiveAvgPool2d(1)} is the global average pooling
+operation (one value per channel). It is the standard transition
+from a $(B, C, H, W)$ feature map to a $(B, C)$ classifier input.
+
+\section{Normalisation}
+\label{sec:linear_conv_norm:norm}
+
+Normalisation layers standardise their input's distribution to
+stabilise training. The standard family has four members:
+batch norm, layer norm, instance norm, group norm.
+
+\subsection{BatchNorm}
+\label{ssec:linear_conv_norm:batchnorm}
+
+\code{BatchNorm2d(num\_features)} \cite{ioffe_batchnorm_2015}
+standardises each channel across the batch and spatial dimensions:
+\[
+\hat x_{b, c, h, w} \;=\; \frac{x_{b, c, h, w} - \mu_c}{\sqrt{\sigma_c^2 + \epsilon}},
+\quad y \;=\; \gamma_c \hat x + \beta_c,
+\]
+where $\mu_c$ and $\sigma_c^2$ are computed over $(b, h, w)$ in
+training and read from running statistics in evaluation. $\gamma$
+and $\beta$ are learnable per-channel affine parameters.
+
+The running statistics are buffers; they update via exponential
+moving average in training mode:
+\[
+\mu_{\text{run}} \;\leftarrow\; (1 - \alpha)\,\mu_{\text{run}} + \alpha\,\mu_{\text{batch}},
+\]
+with momentum $\alpha = 0.1$ by default.
+
+\subsubsection*{Backward derivation}
+
+Let $N$ be the number of elements pooled into each channel's
+statistics ($B \cdot H \cdot W$ for BatchNorm2d). The
+backward through the standardisation is non-trivial because
+$\mu$ and $\sigma^2$ depend on every input element:
+
+\begin{align}
+  \frac{\partial \mathcal{L}}{\partial x_i}
+  &=\;
+  \frac{\partial \mathcal{L}}{\partial \hat x_i} \cdot
+  \frac{1}{\sqrt{\sigma^2 + \epsilon}} \notag \\
+  &+\; \frac{\partial \mathcal{L}}{\partial \sigma^2}
+  \cdot \frac{2(x_i - \mu)}{N}
+  + \frac{\partial \mathcal{L}}{\partial \mu} \cdot \frac{1}{N},
+\end{align}
+where
+\[
+  \frac{\partial \mathcal{L}}{\partial \sigma^2}
+  = -\tfrac{1}{2} (\sigma^2 + \epsilon)^{-3/2}
+  \sum_i \frac{\partial \mathcal{L}}{\partial \hat x_i}(x_i - \mu),
+\]
+\[
+  \frac{\partial \mathcal{L}}{\partial \mu}
+  = -\frac{1}{\sqrt{\sigma^2 + \epsilon}}
+  \sum_i \frac{\partial \mathcal{L}}{\partial \hat x_i}
+  - \frac{2}{N} \frac{\partial \mathcal{L}}{\partial \sigma^2}
+  \sum_i (x_i - \mu).
+\]
+The same fused-kernel formula applies to LayerNorm,
+InstanceNorm, GroupNorm with different choices of $N$ and the
+axes being summed over.
+
+\subsubsection*{Training-vs-eval semantics}
+
+In training mode, the batch statistics are used for
+normalisation; running statistics are updated with the
+exponential moving average. In eval mode (\code{model.eval()}),
+the running statistics are used directly, and no update
+occurs. This decoupling matters at inference time: the
+running statistics absorb the cumulative training-data
+distribution, giving a deterministic forward pass.
+
+A common pitfall: forgetting \code{model.eval()} during
+validation. The validation batches' statistics replace the
+running ones, perturbing the eval forward and degrading
+reported accuracy. \code{model.eval()} must be called before
+any validation forward pass.
+
+\subsubsection*{Batch-size dependence}
+
+BatchNorm's batch-statistics estimate has variance $O(1/N)$
+where $N$ is the effective batch size. With small batches
+(say $N = 2$, common in detection workloads), the noise
+dominates and training becomes unstable. The fixes:
+
+\begin{itemize}
+  \item GroupNorm ($N$ is the per-sample group size; no batch
+    dependence).
+  \item SyncBatchNorm (gather statistics across distributed
+    workers; effective $N$ multiplies by world size).
+  \item Frozen-BN (freeze running stats; only $\gamma, \beta$
+    trainable).
+\end{itemize}
+
+\subsection{LayerNorm}
+\label{ssec:linear_conv_norm:layernorm}
+
+\code{LayerNorm(normalized\_shape)} \cite{ba_layernorm_2016}
+standardises each sample independently across the named axes:
+\[
+\mu \;=\; \frac{1}{N} \sum_i x_i, \qquad
+\sigma^2 \;=\; \frac{1}{N} \sum_i (x_i - \mu)^2,
+\qquad
+\hat x \;=\; \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}}.
+\]
+
+LayerNorm is the standard for Transformers: no running statistics,
+no batch-size dependence, same behaviour in training and
+evaluation. \Lucid's implementation dispatches through the
+\MPSGraph\ per-op carve-out
+(\chref{ch:mpsgraph_dispatch}) for substantial speedup.
+
+\subsection{InstanceNorm}
+\label{ssec:linear_conv_norm:instancenorm}
+
+\code{InstanceNorm2d(num\_features)} \cite{ulyanov_instancenorm_2016}
+standardises each channel of each sample independently across the
+spatial dimensions. Used in style-transfer networks and some GAN
+architectures.
+
+\subsection{GroupNorm}
+\label{ssec:linear_conv_norm:groupnorm}
+
+\code{GroupNorm(num\_groups, num\_channels)} \cite{wu_groupnorm_2018}
+splits the channel dimension into groups and normalises within each
+group:
+\[
+\hat x_{b, g, c', h, w} \;=\; \frac{x_{b, g, c', h, w} - \mu_{b, g}}{\sqrt{\sigma_{b, g}^2 + \epsilon}}.
+\]
+Bridges between BatchNorm ($G = 1$, all channels in one group) and
+InstanceNorm ($G = C$, each channel its own group). Robust to
+small batch sizes.
+
+\subsection{RMSNorm}
+\label{ssec:linear_conv_norm:rmsnorm}
+
+A simplification of LayerNorm \cite{zhang_rmsnorm_2019} that
+omits the mean-centring:
+\[
+\hat x \;=\; \frac{x}{\sqrt{\frac{1}{N}\sum_i x_i^2 + \epsilon}}.
+\]
+Used in modern LLM architectures (LLaMA-family) for slight speed
+improvement and competitive accuracy.
+
+\subsection{Comparison: which to choose}
+\label{ssec:linear_conv_norm:norm_compare}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llll}
+\toprule
+Layer & Stats over & Buffers & Typical use \\
+\midrule
+BatchNorm  & batch + spatial & $\mu, \sigma^2$ EMA & CNN classification \\
+LayerNorm  & feature dim     & none                & Transformer \\
+InstanceNorm & spatial       & optional EMA        & Style transfer, GAN \\
+GroupNorm  & per-group       & none                & Detection (small batch) \\
+RMSNorm    & feature dim, no centring & none      & LLaMA-style LLMs \\
+\bottomrule
+\end{tabular}
+\caption[Normalisation layer comparison.]{The five
+normalisation layers differ in which axes they pool over and
+whether they maintain running statistics. The choice is driven
+by batch size, task, and tradition; the math is otherwise
+nearly identical.}
+\label{tab:linear_conv_norm:norm_compare}
+\end{table}
+
+\subsection{Numerical stability}
+\label{ssec:linear_conv_norm:norm_stability}
+
+All normalisation layers share two numerical pitfalls:
+
+\begin{itemize}
+  \item \textbf{The $\epsilon$ in the denominator}: prevents
+    division by zero when the variance is exactly zero
+    (uniform input). Default is $10^{-5}$; some training
+    recipes use $10^{-6}$ for tighter normalisation.
+  \item \textbf{Variance computation}: the naive
+    $\sigma^2 = \mathbb{E}[x^2] - \mathbb{E}[x]^2$ formula
+    catastrophically cancels for large means. \Lucid\ uses
+    the two-pass algorithm (compute $\mu$ then
+    $\sigma^2 = \mathbb{E}[(x - \mu)^2]$) for stability.
+\end{itemize}
+
+Under AMP (\chref{ch:amp}), normalisation layers are blacklisted
+(forced to FP32) precisely because of these numerics; the
+cost is negligible because the layer is memory-bandwidth-bound
+rather than compute-bound.
+
+\section{Dropout}
+\label{sec:linear_conv_norm:dropout}
+
+\code{Dropout(p=0.5)} zeros out a fraction $p$ of activations in
+training mode (and scales the rest by $1/(1-p)$ to preserve
+expectations). In evaluation mode, it's the identity.
+
+\subsection{Variants}
+\label{ssec:linear_conv_norm:dropout_variants}
+
+\begin{itemize}
+  \item \code{Dropout}: per-element.
+  \item \code{Dropout2d}: per-channel for 2-D feature maps (a
+    whole feature map is either kept or dropped).
+  \item \code{Dropout3d}: per-channel for 3-D.
+  \item \code{AlphaDropout}: SELU-compatible variant that
+    preserves the input mean and variance.
+\end{itemize}
+
+\subsection{Inverted scaling}
+\label{ssec:linear_conv_norm:inverted_scaling}
+
+The \emph{inverted} dropout convention scales kept values by
+$1/(1-p)$ at training time (rather than scaling outputs by
+$(1-p)$ at eval time). This means the eval-mode forward is the
+identity, which matches \refframework's convention.
+
+\section{Embedding}
+\label{sec:linear_conv_norm:embedding}
+
+\code{Embedding(num\_embeddings, embedding\_dim)} is a lookup
+table: maps integer indices to dense vectors. Used as the first
+layer in NLP and recommendation models.
+
+The forward is a gather operation on the weight matrix:
+\[
+y_{b, t, :} \;=\; W_{\text{idx}_{b, t}, :}.
+\]
+
+\subsection{Backward through embedding}
+\label{ssec:linear_conv_norm:embedding_backward}
+
+The backward is a scatter-add (\chref{ch:indexing}). For the
+common case where the same vocabulary token appears many times in
+a batch, multiple gradient contributions accumulate at the same
+row of \code{grad\_W}.
+
+The 3.4 per-op MPSGraph carve-out
+(\chref{ch:mpsgraph_dispatch}) makes embedding backward an order
+of magnitude faster than the naive scatter-add path.
+
+\section{Padding}
+\label{sec:linear_conv_norm:padding}
+
+\code{lucid.nn} provides explicit padding modules:
+\begin{itemize}
+  \item \code{ZeroPad2d}, \code{ConstantPad2d}: pad with constant.
+  \item \code{ReflectionPad2d}: pad with mirror reflection.
+  \item \code{ReplicationPad2d}: pad with edge replication.
+  \item \code{CircularPad2d}: pad wraparound.
+\end{itemize}
+
+Most users do not need these because the convolution layers
+accept a \code{padding} argument that handles zero-padding
+inline. The explicit modules are useful when the padding mode
+must be non-zero.
+
+\section{Flatten and Reshape Helpers}
+\label{sec:linear_conv_norm:flatten}
+
+\code{Flatten} and \code{Unflatten} are module-equivalents of
+\code{reshape}, useful inside \code{Sequential}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+classifier = nn.Sequential(
+    nn.Conv2d(3, 64, 3, padding=1),
+    nn.BatchNorm2d(64),
+    nn.ReLU(),
+    nn.AdaptiveAvgPool2d(1),
+    nn.Flatten(),
+    nn.Linear(64, 10),
+)
+\end{lstlisting}
+
+\section{Functional vs Module Forms}
+\label{sec:linear_conv_norm:functional_vs_module}
+
+Every standard layer has both a module form (stateful) and a
+functional form (stateless). The functional form lives in
+\code{lucid.nn.functional}:
+
+\begin{itemize}
+  \item \code{nn.Linear(...)} (module) vs \code{F.linear(x, w, b)}
+    (functional).
+  \item \code{nn.Conv2d(...)} (module) vs \code{F.conv2d(x, w, b, ...)}.
+  \item \code{nn.ReLU()} (module) vs \code{F.relu(x)}.
+  \item \code{nn.BatchNorm2d(...)} (module) vs
+    \code{F.batch\_norm(x, running\_mean, running\_var, w, b, ...)}.
+\end{itemize}
+
+The functional form takes weights and statistics as arguments;
+the module form owns them. Both compute the same result; the
+choice is whether the user wants to manage the state explicitly
+(functional) or have a stateful container (module).
+
+\section{Implementation Mapping}
+\label{sec:linear_conv_norm:impl_mapping}
+
+\tabref{tab:linear_conv_norm:impl} maps the public modules to
+their backend dispatch paths.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Module & CPU path & GPU path \\
+\midrule
+\code{Linear}        & \code{cblas\_sgemm} (AMX) & \code{mlx::matmul} \\
+\code{Conv2d}        & BNNS direct conv         & \code{mlx::conv2d} \\
+\code{BatchNorm2d}   & AccelerateBatchNorm.cpp & MLX primitives \\
+\code{LayerNorm}     & AccelerateLayerNorm.cpp & \emph{MPSGraph carve-out} \\
+\code{InstanceNorm}  & AccelerateInstanceNorm.cpp & MLX primitives \\
+\code{GroupNorm}     & AccelerateGroupNorm.cpp & MLX primitives \\
+\code{MaxPool2d}     & vDSP loop                & MLX primitive \\
+\code{AvgPool2d}     & vDSP reduction           & MLX primitive \\
+\code{Dropout}       & Bernoulli mask + scale   & Bernoulli mask + scale \\
+\code{Embedding}     & gather                   & gather \\
+\bottomrule
+\end{tabular}
+\caption[Standard layer backends.]{Backend dispatch path for the
+standard layer family. The \emph{MPSGraph carve-out} entry marks
+the per-op fast path
+(\chref{ch:mpsgraph_dispatch}) that gives an order-of-magnitude
+speedup over the eager MLX path for LayerNorm.}
+\label{tab:linear_conv_norm:impl}
+\end{table}
+
+\section{Summary and Forward References}
 \label{sec:linear_conv_norm:summary}
+
+The standard layer library covers the four fundamental neural-
+network primitives: linear (matrix multiplication + bias),
+convolution (sliding-kernel cross-correlation), pooling (spatial
+aggregation), and normalisation (per-axis standardisation).
+\Lucid's implementations follow \refframework's API and dispatch
+through the backend's optimised paths (BNNS / vDSP / MLX /
+MPSGraph carve-outs where applicable).
+
+The next chapter, \chref{ch:rnn_family}, treats recurrent
+networks. \chref{ch:attention} treats attention.
+\chref{ch:losses} treats loss functions.
+
+\begin{lucidnote}
+For the user: the standard layer modules are drop-in compatible
+with \refframework. Migration is import-line substitution
+(\code{import torch.nn as nn} $\to$ \code{import lucid.nn as nn}).
+The state-dict format is also compatible, so checkpoints can be
+loaded across frameworks with minor key adjustments.
+\end{lucidnote}

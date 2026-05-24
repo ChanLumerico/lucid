@@ -49,8 +49,19 @@ if TYPE_CHECKING:
     # bare attribute reference at runtime works under Python 3.14's lazy
     # annotation evaluation (PEP 649); we only need the import for the
     # static type checker.
+    #
+    # The trailing five imports below mirror the names served by the
+    # runtime ``__getattr__`` lazy loader: they exist purely so static
+    # tools (type checkers, Griffe-based doc generation) see the full
+    # ``__all__`` surface.  Runtime resolution still flows through
+    # ``__getattr__`` to keep the heavy ``lucid.nn`` / ``lucid.autograd``
+    # imports out of package init.
     from lucid._C.engine.compile import Tracer
     from lucid.compile._compiled_module import CompiledModule
+    from lucid.compile._function import compiled_step
+    from lucid.compile._fused_step import fused_step
+    from lucid.compile._optim import compile_optimizer
+    from lucid.compile._step import make_step
     from lucid.nn.module import Module
 
 __all__ = [
@@ -230,6 +241,12 @@ def compile(target: object, *, dynamic: bool = False) -> object:
         @lucid.compile(dynamic=False)
         def attention(q, k, v):
             return F.scaled_dot_product_attention(q, k, v)
+
+    See Also
+    --------
+    CompiledModule : the wrapper class returned by this function.
+    compile_optimizer : fused forward + backward + optimizer step
+        for an even tighter training loop.
     """
 
     # Factory form: ``@lucid.compile(dynamic=...)`` with no positional —
