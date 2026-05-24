@@ -23,9 +23,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include <sys/stat.h>
+
 #include "../compile/CompiledExecutable.h"
 #include "../compile/ExecutableCache.h"
 #include "../compile/MpsBuilder.h"
+#include "../version.h"
 #include "../compile/OpEmitters/OpEmitter.h"
 #include "../compile/Tracer.h"
 #include "../core/TensorImpl.h"
@@ -310,6 +313,56 @@ void register_compile(py::module_& m) {
                 return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
             }
 
+            // ``LUCID_COMPILE_DISK_CACHE=1`` opt-in: before falling
+            // through to a fresh compile, try to load a previously-
+            // serialised executable from
+            // ``$LUCID_COMPILE_DISK_CACHE_DIR`` (default
+            // ``$TMPDIR/lucid_mpsgraph_cache``).  Filename is keyed by
+            // the cache key's hash + the engine ABI so an SDK or
+            // engine version bump invalidates stale caches without
+            // explicit user action.  Misses (file absent, format
+            // version mismatch, parse error) fall through to compile
+            // + save.
+            static const bool disk_cache_enabled = []() {
+                const char* s = std::getenv("LUCID_COMPILE_DISK_CACHE");
+                return s && std::string(s) == "1";
+            }();
+            std::string disk_path;
+            if (disk_cache_enabled) {
+                const char* dir_env = std::getenv("LUCID_COMPILE_DISK_CACHE_DIR");
+                std::string dir;
+                if (dir_env && *dir_env) {
+                    dir = dir_env;
+                } else {
+                    const char* tmp = std::getenv("TMPDIR");
+                    dir = std::string(tmp ? tmp : "/tmp") +
+                          "lucid_mpsgraph_cache";
+                }
+                // Ensure trailing slash + create directory if missing.
+                if (!dir.empty() && dir.back() != '/') dir.push_back('/');
+                // ``mkdir -p`` via POSIX ``mkdir`` (one level is enough
+                // because $TMPDIR / user-provided dir already exists).
+                (void)::mkdir(dir.c_str(), 0755);
+                lucid::compile::CacheKeyHash h;
+                std::size_t hashv = h(key);
+                char buf[128];
+                std::snprintf(buf, sizeof(buf),
+                              "%slucid_abi%d_%016zx",
+                              dir.c_str(),
+                              static_cast<int>(LUCID_ABI_VERSION),
+                              hashv);
+                disk_path = buf;
+
+                std::string load_err;
+                lucid::compile::CompiledExecutable* disk_hit =
+                    lucid::compile::load_executable(disk_path, &load_err);
+                if (disk_hit != nullptr) {
+                    cache.insert(key, disk_hit);
+                    auto* hit = cache.find(key);
+                    return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
+                }
+            }
+
             std::string err;
             lucid::compile::CompiledExecutable* exe =
                 lucid::compile::compile_trace(graph, feeds, &err,
@@ -322,6 +375,8 @@ void register_compile(py::module_& m) {
             }
             cache.insert(key, exe);
             auto* hit = cache.find(key);  // borrowed pointer from the cache
+            if (disk_cache_enabled && !disk_path.empty())
+                (void)lucid::compile::save_executable(hit, disk_path);
             return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
         },
         py::arg("graph"), py::arg("external_feeds"),

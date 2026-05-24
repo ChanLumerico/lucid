@@ -121,4 +121,48 @@ LUCID_API void run_executable_inplace(
     const std::vector<TensorImplPtr>& input_feeds,
     const std::vector<TensorImplPtr>& output_targets);
 
+// ── Disk cache (Tier 1-A) ───────────────────────────────────────────
+//
+// Persist a compiled :class:`CompiledExecutable` to disk so subsequent
+// process invocations can skip the per-signature MPSGraph compile step
+// (typically 30-100ms per executable on M-series).  Two files are
+// written:
+//
+//   * ``<path>.mpsgraphpackage`` — the Apple-native serialised
+//     :class:`MPSGraphExecutable`.
+//   * ``<path>.meta`` — Lucid-side I/O metadata (input_ids, shapes,
+//     dtypes, device, dynamic_batch flag, static_feed_slots,
+//     output_ids, grad_output_ids).  Hand-rolled binary format —
+//     length-prefixed fields, little-endian, no compression.  Format
+//     version byte lives in the first byte of the file so future
+//     Lucid releases can detect + skip incompatible caches.
+//
+// Cache lifecycle is the caller's responsibility — these primitives
+// just write / read.  Higher-level orchestration (filename hashing,
+// invalidation, eviction) lives in the binding layer.
+//
+// Notes
+// -----
+// * ``save_executable`` overwrites any existing files at the same
+//   path without warning.  Atomicity: writes to ``.tmp`` siblings
+//   first, then renames into place.  Failure leaves the previous
+//   cache (if any) untouched.
+// * ``load_executable`` returns ``nullptr`` on any I/O / parse /
+//   ABI-mismatch error, setting ``error_msg`` to a one-line
+//   diagnostic.  Callers should treat this as a cache miss and fall
+//   through to a fresh compile.
+
+// Serialise ``exe`` to ``<path>.mpsgraphpackage`` + ``<path>.meta``.
+// Returns ``true`` on success, ``false`` on any failure (filesystem
+// error, MPSGraph serialise failure, null exe).
+LUCID_API bool save_executable(const CompiledExecutable* exe,
+                               const std::string& path);
+
+// Reload an executable previously saved via :func:`save_executable`.
+// Returns a fresh ``CompiledExecutable*`` (caller owns) on success,
+// or ``nullptr`` on miss / corruption.  Callers MUST treat any
+// failure as a cache miss + compile path fallback.
+LUCID_API CompiledExecutable* load_executable(const std::string& path,
+                                              std::string* error_msg = nullptr);
+
 }  // namespace lucid::compile

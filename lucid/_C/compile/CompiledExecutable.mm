@@ -8,6 +8,9 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
 
+#include <cstdio>
+#include <cstring>
+#include <fstream>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -16,6 +19,7 @@
 
 #include "../backend/gpu/MlxBridge.h"
 #include "../backend/gpu/mps/MpsBridge.h"
+#include "../core/Determinism.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "CompiledExecutable.h"
@@ -536,6 +540,251 @@ LUCID_API void run_executable_inplace(
             }
             target->bump_version();
         }
+    }
+}
+
+// ── Disk cache implementation ───────────────────────────────────────
+//
+// Binary metadata format (.meta sidecar), all little-endian:
+//
+//   byte  0:        magic = 'L', 'M', 'P', 'S' (4 bytes)
+//   byte  4:        format version = 1 (1 byte)
+//   byte  5:        device (1 byte; 0=CPU, 1=GPU)
+//   byte  6:        dynamic_batch (1 byte; 0=false, 1=true)
+//   byte  7:        padding (1 byte, zero)
+//   then, in this order:
+//     vec<int64> input_ids        (u32 count + count × i64)
+//     vec<int64> output_ids
+//     vec<int64> grad_output_ids
+//     vec<vec<int64>> input_shapes   (u32 count + count × (u32 + count × i64))
+//     vec<vec<int64>> output_shapes
+//     vec<u8> input_dtypes           (u32 count + count × u8)
+//     vec<u8> output_dtypes
+//     vec<u64> static_feed_slots     (u32 count + count × u64)
+//
+// Hand-rolled to avoid pulling in protobuf / json deps.  Bumping
+// the version byte lets future Lucid releases reject incompatible
+// caches without crashing.
+
+namespace {
+constexpr uint8_t kMetaFormatVersion = 1;
+constexpr char kMetaMagic[4] = {'L', 'M', 'P', 'S'};
+
+template <typename T>
+inline void write_pod(std::vector<uint8_t>& out, T v) {
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(&v);
+    out.insert(out.end(), p, p + sizeof(T));
+}
+
+template <typename T>
+inline void write_vec(std::vector<uint8_t>& out, const std::vector<T>& v) {
+    write_pod<uint32_t>(out, static_cast<uint32_t>(v.size()));
+    for (const T& x : v) write_pod<T>(out, x);
+}
+
+inline void write_vec_vec_i64(std::vector<uint8_t>& out,
+                              const std::vector<Shape>& vv) {
+    write_pod<uint32_t>(out, static_cast<uint32_t>(vv.size()));
+    for (const auto& v : vv) {
+        write_pod<uint32_t>(out, static_cast<uint32_t>(v.size()));
+        for (std::int64_t x : v) write_pod<std::int64_t>(out, x);
+    }
+}
+
+template <typename T>
+inline bool read_pod(const uint8_t*& p, const uint8_t* end, T& out) {
+    if (end - p < (ptrdiff_t)sizeof(T)) return false;
+    std::memcpy(&out, p, sizeof(T));
+    p += sizeof(T);
+    return true;
+}
+
+template <typename T>
+inline bool read_vec(const uint8_t*& p, const uint8_t* end,
+                     std::vector<T>& v) {
+    uint32_t n;
+    if (!read_pod(p, end, n)) return false;
+    v.resize(n);
+    for (uint32_t i = 0; i < n; ++i)
+        if (!read_pod(p, end, v[i])) return false;
+    return true;
+}
+
+inline bool read_vec_vec_i64(const uint8_t*& p, const uint8_t* end,
+                             std::vector<Shape>& vv) {
+    uint32_t n;
+    if (!read_pod(p, end, n)) return false;
+    vv.resize(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        uint32_t m;
+        if (!read_pod(p, end, m)) return false;
+        vv[i].resize(m);
+        for (uint32_t j = 0; j < m; ++j)
+            if (!read_pod(p, end, vv[i][j])) return false;
+    }
+    return true;
+}
+
+inline bool atomic_write(const std::string& path,
+                         const std::vector<uint8_t>& data) {
+    const std::string tmp = path + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+        if (!f) return false;
+        f.write(reinterpret_cast<const char*>(data.data()),
+                static_cast<std::streamsize>(data.size()));
+        if (!f) return false;
+    }
+    return std::rename(tmp.c_str(), path.c_str()) == 0;
+}
+
+inline bool read_all(const std::string& path, std::vector<uint8_t>& out) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) return false;
+    std::streamsize size = f.tellg();
+    if (size < 0) return false;
+    f.seekg(0, std::ios::beg);
+    out.resize(static_cast<std::size_t>(size));
+    f.read(reinterpret_cast<char*>(out.data()), size);
+    return static_cast<std::streamsize>(out.size()) == size;
+}
+}  // namespace
+
+bool save_executable(const CompiledExecutable* exe, const std::string& path) {
+    if (exe == nullptr || exe->executable == nil) return false;
+
+    @autoreleasepool {
+        const std::string pkg_path = path + ".mpsgraphpackage";
+        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:
+                                                            pkg_path.c_str()]];
+        // Apple's ``serializeToMPSGraphPackageAtURL:descriptor:``
+        // returns ``void`` and offers no error signal (macOS 14+,
+        // SDK header confirms).  Wrap in ``@try`` so a fatal ObjC
+        // exception (e.g. read-only filesystem) doesn't propagate
+        // into C++ unwinding.  If the file fails to materialise,
+        // the meta write below or the subsequent ``load_executable``
+        // will catch it as a cache miss.
+        @try {
+            [exe->executable serializeToMPSGraphPackageAtURL:url
+                                                  descriptor:nil];
+        } @catch (NSException* e) {
+            (void)e;
+            return false;
+        }
+
+        // Pack metadata.
+        std::vector<uint8_t> meta;
+        meta.reserve(1024);
+        meta.insert(meta.end(), kMetaMagic, kMetaMagic + 4);
+        write_pod<uint8_t>(meta, kMetaFormatVersion);
+        write_pod<uint8_t>(meta, static_cast<uint8_t>(exe->device));
+        write_pod<uint8_t>(meta, exe->dynamic_batch ? 1 : 0);
+        write_pod<uint8_t>(meta, 0);  // padding
+        write_vec<std::int64_t>(meta, exe->input_ids);
+        write_vec<std::int64_t>(meta, exe->output_ids);
+        write_vec<std::int64_t>(meta, exe->grad_output_ids);
+        write_vec_vec_i64(meta, exe->input_shapes);
+        write_vec_vec_i64(meta, exe->output_shapes);
+        // Dtypes encoded as uint8 (matches the Dtype enum's
+        // underlying width — all entries fit).
+        std::vector<uint8_t> in_dt(exe->input_dtypes.size());
+        for (std::size_t i = 0; i < in_dt.size(); ++i)
+            in_dt[i] = static_cast<uint8_t>(exe->input_dtypes[i]);
+        write_vec<uint8_t>(meta, in_dt);
+        std::vector<uint8_t> out_dt(exe->output_dtypes.size());
+        for (std::size_t i = 0; i < out_dt.size(); ++i)
+            out_dt[i] = static_cast<uint8_t>(exe->output_dtypes[i]);
+        write_vec<uint8_t>(meta, out_dt);
+        std::vector<uint64_t> static_slots(exe->static_feed_slots.begin(),
+                                            exe->static_feed_slots.end());
+        write_vec<uint64_t>(meta, static_slots);
+
+        const std::string meta_path = path + ".meta";
+        return atomic_write(meta_path, meta);
+    }
+}
+
+CompiledExecutable* load_executable(const std::string& path,
+                                    std::string* error_msg) {
+    auto fail = [&](std::string msg) -> CompiledExecutable* {
+        if (error_msg) *error_msg = std::move(msg);
+        return nullptr;
+    };
+
+    const std::string meta_path = path + ".meta";
+    std::vector<uint8_t> meta;
+    if (!read_all(meta_path, meta))
+        return fail("load_executable: missing or unreadable .meta sidecar");
+
+    const uint8_t* p = meta.data();
+    const uint8_t* end = p + meta.size();
+
+    // Magic + version + flags
+    if ((end - p) < 8) return fail("load_executable: truncated header");
+    if (std::memcmp(p, kMetaMagic, 4) != 0)
+        return fail("load_executable: bad magic — not a Lucid meta file");
+    p += 4;
+    uint8_t version, device_byte, dynamic_byte, pad;
+    if (!read_pod(p, end, version)) return fail("truncated version");
+    if (version != kMetaFormatVersion)
+        return fail("load_executable: meta format version mismatch");
+    if (!read_pod(p, end, device_byte)) return fail("truncated device");
+    if (!read_pod(p, end, dynamic_byte)) return fail("truncated dynamic flag");
+    if (!read_pod(p, end, pad)) return fail("truncated padding");
+
+    std::vector<std::int64_t> input_ids, output_ids, grad_output_ids;
+    std::vector<Shape> input_shapes, output_shapes;
+    std::vector<uint8_t> input_dt_raw, output_dt_raw;
+    std::vector<uint64_t> static_slots;
+
+    if (!read_vec(p, end, input_ids)) return fail("truncated input_ids");
+    if (!read_vec(p, end, output_ids)) return fail("truncated output_ids");
+    if (!read_vec(p, end, grad_output_ids))
+        return fail("truncated grad_output_ids");
+    if (!read_vec_vec_i64(p, end, input_shapes))
+        return fail("truncated input_shapes");
+    if (!read_vec_vec_i64(p, end, output_shapes))
+        return fail("truncated output_shapes");
+    if (!read_vec(p, end, input_dt_raw))
+        return fail("truncated input_dtypes");
+    if (!read_vec(p, end, output_dt_raw))
+        return fail("truncated output_dtypes");
+    if (!read_vec(p, end, static_slots))
+        return fail("truncated static_feed_slots");
+
+    @autoreleasepool {
+        const std::string pkg_path = path + ".mpsgraphpackage";
+        NSURL* url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:
+                                                            pkg_path.c_str()]];
+        MPSGraphCompilationDescriptor* cdesc = nil;
+        if (::lucid::Determinism::is_enabled()) {
+            cdesc = [[MPSGraphCompilationDescriptor alloc] init];
+            cdesc.optimizationLevel = MPSGraphOptimizationLevel0;
+        }
+        MPSGraphExecutable* exec = [[MPSGraphExecutable alloc]
+            initWithMPSGraphPackageAtURL:url
+                   compilationDescriptor:cdesc];
+        if (exec == nil)
+            return fail("load_executable: MPSGraphExecutable load returned nil");
+
+        auto* result = new CompiledExecutable();
+        result->executable = exec;
+        result->device = static_cast<Device>(device_byte);
+        result->dynamic_batch = (dynamic_byte != 0);
+        result->input_ids = std::move(input_ids);
+        result->output_ids = std::move(output_ids);
+        result->grad_output_ids = std::move(grad_output_ids);
+        result->input_shapes = std::move(input_shapes);
+        result->output_shapes = std::move(output_shapes);
+        result->input_dtypes.resize(input_dt_raw.size());
+        for (std::size_t i = 0; i < input_dt_raw.size(); ++i)
+            result->input_dtypes[i] = static_cast<Dtype>(input_dt_raw[i]);
+        result->output_dtypes.resize(output_dt_raw.size());
+        for (std::size_t i = 0; i < output_dt_raw.size(); ++i)
+            result->output_dtypes[i] = static_cast<Dtype>(output_dt_raw[i]);
+        for (uint64_t s : static_slots)
+            result->static_feed_slots.insert(static_cast<std::size_t>(s));
+        return result;
     }
 }
 
