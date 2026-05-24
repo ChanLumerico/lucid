@@ -415,24 +415,51 @@ class _FusedStep:
             output_target_ids.append(int(tid))
 
         # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
-        # variables variant) is wired through the C++ binding and
-        # standalone-validated, but full Lucid integration hangs on
-        # first execution.  Both the ``readVariable`` post-assign
-        # output and the ``new_value_t`` direct-output variants
-        # exhibit the same hang.  Root cause is in MPSGraph's
-        # scheduling of (gradientForPrimaryTensor: ⨯ variable ⨯ Lucid
-        # trace ops ⨯ assignVariable) — needs further investigation
-        # or Apple SDK support.  Integration paused; infrastructure
-        # preserved (compile_generic_fused_step_with_vars in
-        # MpsBuilder.mm).
-        exe = _C_engine.compile.compile_generic_fused_step(
-            graph,
-            ext,
-            loss_id,
-            param_ids,
-            ghost_grad_ids,
-            output_target_ids,
-        )
+        # variables variant) is now functional after the source-graph
+        # retention fix in CompiledExecutable.mm — previously the
+        # source ``MPSGraph`` was released at the end of the compile
+        # autoreleasepool, freeing the variable's MTLBuffer and causing
+        # a SIGSEGV inside ``GPU::VarHandleOpHandler::encodeOp`` on the
+        # first ``runWithMTLCommandQueue:`` (manifested as an
+        # indefinite hang because the GPU command buffer never
+        # completed).  Gated behind ``LUCID_COMPILE_VARS=1`` until a
+        # follow-up PR validates performance + memory characteristics
+        # at model-zoo scale; the default path stays on the in/out-feed
+        # ``compile_generic_fused_step`` so the long-run + training
+        # regression matrix continues to exercise the production code.
+        import os as _os
+        _use_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in ("1", "true", "True")
+        if _use_vars:
+            # Build (feed_id, write_id) pairs: each parameter feed
+            # becomes a variable, paired with the matching opt-output
+            # id (the "new_param" tensor for that parameter).  The
+            # opt-output order matches param_ids order in every
+            # ``_trace_update`` implementation — the first N opt
+            # outputs are the new params, followed by new state
+            # buffers.  Only the param-tier entries get promoted to
+            # variables; momenta / m / v stay as input/output feeds.
+            variable_pairs: list[tuple[int, int]] = []
+            for i, pid in enumerate(param_ids):
+                if i < len(output_target_ids):
+                    variable_pairs.append((pid, output_target_ids[i]))
+            exe = _C_engine.compile.compile_generic_fused_step_with_vars(
+                graph,
+                ext,
+                loss_id,
+                param_ids,
+                ghost_grad_ids,
+                output_target_ids,
+                variable_pairs,
+            )
+        else:
+            exe = _C_engine.compile.compile_generic_fused_step(
+                graph,
+                ext,
+                loss_id,
+                param_ids,
+                ghost_grad_ids,
+                output_target_ids,
+            )
         if exe is None:
             raise RuntimeError(
                 "fused_step: compile_generic_fused_step returned None — "
