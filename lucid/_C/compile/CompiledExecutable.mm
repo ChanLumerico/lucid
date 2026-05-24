@@ -33,6 +33,19 @@ class CompiledExecutable {
 public:
     MPSGraphExecutable* executable = nil;  // ARC strong
 
+    // When the executable was compiled from a graph that contains
+    // ``MPSGraphVariable``-backed tensors (``variableWithData:`` /
+    // ``assignVariable:``), the variable's internal storage belongs to
+    // the source MPSGraph object, not to the executable.  Releasing the
+    // graph (e.g. at the end of the compile autoreleasepool) frees the
+    // variable's buffer; subsequent ``runWithMTLCommandQueue:`` calls
+    // then crash inside ``GPU::VarHandleOpHandler::encodeOp`` when the
+    // executor tries to dereference the dangling variable handle.  We
+    // retain the source graph here for variable-bearing compiles so the
+    // variable storage stays live for the executable's lifetime.  For
+    // pure-forward / placeholder-only compiles this field is nil.
+    void* source_graph = nullptr;  // __bridge_retained MPSGraph*
+
     // Trace ids for inputs (feed order) and outputs (target order).
     std::vector<TensorId> input_ids;
     std::vector<TensorId> output_ids;
@@ -66,6 +79,19 @@ public:
     // declared parameters and therefore keep their static shape even
     // in dynamic-batch mode.
     std::unordered_set<std::size_t> static_feed_slots;
+
+    ~CompiledExecutable() {
+        // Release the variable-storage-owning MPSGraph if we retained
+        // one during compile (``compile_generic_fused_step_with_vars``).
+        // ARC handles ``executable``.
+        if (source_graph != nullptr) {
+            @autoreleasepool {
+                MPSGraph* g = (__bridge_transfer MPSGraph*)source_graph;
+                (void)g;
+            }
+            source_graph = nullptr;
+        }
+    }
 };
 
 std::size_t executable_num_inputs(const CompiledExecutable* exe) {

@@ -90,6 +90,11 @@ namespace lucid::compile {
 class CompiledExecutable {
 public:
     MPSGraphExecutable* executable = nil;  // ARC strong (matches .mm)
+    // Phase 1.9: retained source MPSGraph for variable-bearing
+    // executables — keeps the variable storage live for the executable's
+    // lifetime.  See the matching field in CompiledExecutable.mm for
+    // rationale.  nullptr for non-variable compiles (the common case).
+    void* source_graph = nullptr;  // __bridge_retained MPSGraph*
     std::vector<TensorId> input_ids;
     std::vector<TensorId> output_ids;
     std::vector<Shape> input_shapes;
@@ -100,6 +105,20 @@ public:
     std::vector<TensorId> grad_output_ids;  // Phase 1.3
     bool dynamic_batch = false;             // Phase 1.6
     std::unordered_set<std::size_t> static_feed_slots;  // Phase 1.6
+
+    ~CompiledExecutable() {
+        // Mirror the destructor in CompiledExecutable.mm — release the
+        // retained source MPSGraph (if any).  Defined inline here so the
+        // C++ destructor calls the right release; ARC handles
+        // ``executable``.
+        if (source_graph != nullptr) {
+            @autoreleasepool {
+                MPSGraph* g = (__bridge_transfer MPSGraph*)source_graph;
+                (void)g;
+            }
+            source_graph = nullptr;
+        }
+    }
 };
 
 }  // namespace lucid::compile
@@ -1903,6 +1922,14 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
 
         auto* exe = new CompiledExecutable();
         exe->executable = compiled;
+        // Retain the source MPSGraph so its variable storage outlives
+        // the compile autoreleasepool.  Without this, MPSGraph releases
+        // the variable's backing MTLBuffer along with the graph object;
+        // subsequent ``runWithMTLCommandQueue:`` calls segfault inside
+        // ``GPU::VarHandleOpHandler::encodeOp`` when the executor tries
+        // to dereference the dangling variable handle.  The retain is
+        // released in ``~CompiledExecutable``.
+        exe->source_graph = (__bridge_retained void*)graph_obj;
         exe->input_ids = std::move(ordered_feed_ids);
         exe->output_ids = std::vector<TensorId>{loss_id};
         exe->grad_output_ids = std::move(aux_output_ids);
