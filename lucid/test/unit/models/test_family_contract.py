@@ -115,6 +115,15 @@ def test_family_models_satisfy_protocol(domain: str, family: str) -> None:
         home = getattr(obj, "__module__", "")
         if not home.startswith(f"lucid.models.{domain}.{family}"):
             continue
+        # The protocol governs the 5-slot family-canonical classes that
+        # take a Config object.  Internal backbone building blocks (e.g.
+        # ``DDPMUNet``, ``ViTEmbeddings``) are legitimately exported as
+        # composition primitives and don't carry the protocol surface;
+        # skip anything that lacks ``config_class`` (which the protocol
+        # itself requires).  This avoids the prior false-positive on
+        # ``DDPMUNet`` while still pinning the actual model classes.
+        if not hasattr(obj, "config_class"):
+            continue
         model_classes.append(obj)
 
     if not model_classes:

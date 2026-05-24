@@ -136,6 +136,7 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
     if (ax < 0 || ax >= (int)sh.size())
         ErrorBuilder(name).fail("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
 
     Storage out_storage =
         is_prod ? backend::Dispatcher::for_device(device).cumprod(a->storage(), sh, ax, dt)
@@ -198,6 +199,7 @@ TensorImplPtr scan_ext_dispatch(const TensorImplPtr& a, int axis, bool is_max, c
     if (ax < 0 || ax >= (int)sh.size())
         ErrorBuilder(name).fail("axis out of range");
     OpScopeFull scope{name, device, dt, sh};
+    scope.set_attr("axis", static_cast<std::int64_t>(ax));
 
     Storage out_storage =
         is_max ? backend::Dispatcher::for_device(device).cummax(a->storage(), sh, ax, dt)

@@ -445,7 +445,16 @@ def instance_norm(
         mean = running_mean.reshape(bcast_shape)
         var = running_var.reshape(bcast_shape)
 
-    y: Tensor = (x - mean) / (var + eps).sqrt()
+    # Materialise ``eps`` as a 0-D scalar tensor so MPSGraph's
+    # ``(x - mean) / sqrt(var + eps)`` fusion pattern recognises it
+    # as the canonical normalization epsilon.  Lucid's default
+    # python-scalar promotion creates a broadcast-shaped constant,
+    # which trips a runtime ``epsilon must be a scalar`` assertion in
+    # newer MPSGraph runtimes.  No-op for eager (broadcast equivalent).
+    from lucid._factories.creation import full as _full_factory
+
+    eps_scalar: Tensor = _full_factory((), eps, device=x.device, dtype=var.dtype)
+    y: Tensor = (x - mean) / (var + eps_scalar).sqrt()
 
     if weight is not None:
         y = y * weight.reshape(bcast_shape)

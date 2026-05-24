@@ -56,6 +56,8 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kHasGradient = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::round`` to compute $y = \operatorname{round}(x)$
+    // with banker's rounding.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.round(a, s, dt);
     }
@@ -130,6 +132,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kHasGradient = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::floor`` to compute $y = \lfloor x \rfloor$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.floor(a, s, dt);
     }
@@ -206,6 +209,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kHasGradient = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::ceil`` to compute $y = \lceil x \rceil$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.ceil(a, s, dt);
     }
@@ -278,6 +282,8 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kHasGradient = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::invert`` to compute $y = \mathtt{\sim} x$
+    // (bitwise NOT) on integer dtypes.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.invert(a, s, dt);
     }

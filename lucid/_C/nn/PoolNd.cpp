@@ -24,6 +24,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -102,6 +103,14 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
     OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    // 3.5 Phase 1.2: report pool params so the compile-path emitter can
+    // rebuild the descriptor.
+    {
+        std::vector<std::int64_t> Kv(K, K + N), Sv(stride, stride + N), Pv(pad, pad + N);
+        scope.set_attr("kernel_size", std::move(Kv));
+        scope.set_attr("stride", std::move(Sv));
+        scope.set_attr("padding", std::move(Pv));
+    }
 
     backend::IBackend::PoolOpts opts{};
     opts.N = N;
@@ -118,10 +127,12 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
-    // Skip backward wiring if grad computation is off.
-    if (!GradMode::is_enabled() || !x->requires_grad())
-        return out;
+    // wire_autograd (below) records ``on_op_io`` internally — calling it
+    // again here would double-feed the trace (2 inputs instead of 1) and
+    // abort the compile.
 
+    // wire_autograd is always invoked so the 3.5 compile-path trace
+    // hook fires regardless of GradMode (autograd is gated inside).
     auto bwd = std::make_shared<MaxPoolNdBackward<N>>();
     bwd->saved_argmax_ = std::move(saved_argmax);
     for (int i = 0; i < N; ++i) {
@@ -179,6 +190,13 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
     OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    // 3.5 Phase 1.2: report pool params for the compile-path emitter.
+    {
+        std::vector<std::int64_t> Kv(K, K + N), Sv(stride, stride + N), Pv(pad, pad + N);
+        scope.set_attr("kernel_size", std::move(Kv));
+        scope.set_attr("stride", std::move(Sv));
+        scope.set_attr("padding", std::move(Pv));
+    }
 
     backend::IBackend::PoolOpts avg_opts{};
     avg_opts.N = N;
@@ -193,9 +211,10 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
-    if (!GradMode::is_enabled() || !x->requires_grad())
-        return out;
+    // wire_autograd (below) records ``on_op_io`` internally — calling it
+    // again here would double-feed the trace.
 
+    // wire_autograd always — trace-hook visibility under no-grad.
     auto bwd = std::make_shared<AvgPoolNdBackward<N>>();
     for (int i = 0; i < N; ++i) {
         bwd->K_[i] = K[i];

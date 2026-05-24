@@ -37,6 +37,7 @@
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
 #include "../backend/gpu/MlxBridge.h"
+#include "../compile/Tracer.h"  // 3.5 Phase 1.2 step 2: trace I/O wiring at forward
 #include "../core/Allocator.h"
 #include "../core/AmpPolicy.h"
 #include "../core/Error.h"
@@ -652,6 +653,14 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     auto out =
         std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
+
+    // 3.5 Phase 1.2 step 2: trace I/O wiring at the forward boundary.
+    // BinaryKernel doesn't go through NaryKernel::wire_autograd, so the
+    // hook here keeps elementwise binary ops in the trace IR.  Outside
+    // any _tracing() scope this is one TLS load + null check.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a, b}, out);
+    }
 
     const bool needs_grad = GradMode::is_enabled() && (a->requires_grad() || b->requires_grad());
     if (!needs_grad)

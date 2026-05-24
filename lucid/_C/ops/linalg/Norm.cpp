@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -159,13 +160,24 @@ TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis,
     using namespace linalg_detail;
     Validator::input(a, "norm.a").non_null();
     require_float(a->dtype(), "norm");
-    OpScopeFull scope{"norm", a->device(), a->dtype(), a->shape()};
-
     Shape out_shape = reduced_shape(a->shape(), axis, keepdims);
+    OpScopeFull scope{"norm", a->device(), a->dtype(), out_shape};
+    scope.set_attr("ord", ord);
+    {
+        std::vector<std::int64_t> ax_v;
+        ax_v.reserve(axis.size());
+        for (int v : axis) ax_v.push_back(static_cast<std::int64_t>(v));
+        scope.set_attr("axis_list", std::move(ax_v));
+    }
+    scope.set_attr("keepdims", keepdims);
+
     Storage out_storage =
         backend::Dispatcher::for_device(a->device())
             .linalg_norm(a->storage(), a->shape(), ord, axis, keepdims, a->dtype());
     auto out = fresh(std::move(out_storage), out_shape, a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+    }
     auto bwd = std::make_shared<NormBackward>();
     // Copy the hyperparameters onto the backward node.
     bwd->ord_ = ord;

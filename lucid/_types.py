@@ -83,7 +83,15 @@ type _Size3d = int | tuple[int, int, int]
 
 @runtime_checkable
 class HasShape(Protocol):
-    """Structural protocol: anything with ``.shape`` and ``.ndim``."""
+    """Structural protocol — any object that exposes ``.shape`` / ``.ndim``.
+
+    Used as a duck-typing bound where Lucid only needs shape introspection
+    (e.g. broadcasting helpers, validation code) and doesn't care
+    whether the object is a Lucid :class:`Tensor`, a ``numpy.ndarray``,
+    an :class:`mlx.core.array`, or a user-defined array proxy.
+    ``@runtime_checkable`` means ``isinstance(x, HasShape)`` works at
+    runtime in addition to static type checkers honouring it.
+    """
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -98,7 +106,15 @@ class HasShape(Protocol):
 
 @runtime_checkable
 class SupportsNumpyConversion(Protocol):
-    """Structural protocol: anything convertible to a :class:`numpy.ndarray`."""
+    """Structural protocol — exposes ``.numpy()`` returning ``ndarray``.
+
+    The narrow type Lucid uses at the ``Tensor → ndarray`` boundary
+    (``_factories/converters.py``, ``_tensor/_repr.py``).  Any object
+    that fulfils it can be fed through Lucid's numpy bridge regardless
+    of whether it's a Lucid :class:`Tensor`, an :class:`mlx.core.array`,
+    or a user proxy — ``@runtime_checkable`` makes ``isinstance``
+    dispatch correctly.
+    """
 
     def numpy(self) -> np.ndarray:
         """Return a NumPy view / copy of the underlying buffer."""
@@ -107,7 +123,14 @@ class SupportsNumpyConversion(Protocol):
 
 @runtime_checkable
 class SupportsGrad(Protocol):
-    """Structural protocol: anything that participates in autograd."""
+    """Structural protocol — autograd participants.
+
+    Lucid's autograd machinery is structural, not nominal: anything
+    that exposes ``requires_grad`` / ``backward`` / ``detach`` qualifies
+    for the autograd graph.  This protocol formalises that contract
+    so users can build custom Tensor-like wrappers without subclassing
+    :class:`Tensor` directly.
+    """
 
     @property
     def requires_grad(self) -> bool:

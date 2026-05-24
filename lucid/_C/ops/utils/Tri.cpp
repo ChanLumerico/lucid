@@ -100,6 +100,8 @@ TensorImplPtr tri_dispatch(const TensorImplPtr& a, int k, bool upper, const char
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{name, device, dt, a->shape()};
+    scope.set_attr("k", static_cast<std::int64_t>(k));
+    scope.set_attr("upper", upper);
     Shape sh = a->shape();
     auto out_storage = tri_storage(a->storage(), sh, dt, device, k, upper, name);
     auto out = fresh(std::move(out_storage), std::move(sh), dt, device);

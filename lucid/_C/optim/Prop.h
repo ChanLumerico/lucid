@@ -216,8 +216,8 @@ private:
 // Let $\Delta_t$ be the per-parameter step size and $g_t$ the gradient.
 // $$
 //   \Delta_{t+1} = \begin{cases}
-//     \min(\eta_+\,\Delta_t,\;\Delta_\max)   & g_t\,g_{t-1} > 0 \\
-//     \max(\eta_-\,\Delta_t,\;\Delta_\min)   & g_t\,g_{t-1} < 0 \\
+//     \min(\eta_+\,\Delta_t,\;\Delta_{\max})   & g_t\,g_{t-1} > 0 \\
+//     \max(\eta_-\,\Delta_t,\;\Delta_{\min})   & g_t\,g_{t-1} < 0 \\
 //     \Delta_t                                & g_t\,g_{t-1} = 0
 //   \end{cases}
 // $$
@@ -239,9 +239,9 @@ private:
 // eta_plus : float, default 1.2
 //     Step-grow factor $\eta_+$ applied on consistent signs.
 // step_min : float, default 1e-6
-//     Lower clamp $\Delta_\min$.
+//     Lower clamp $\Delta_{\min}$.
 // step_max : float, default 50.0
-//     Upper clamp $\Delta_\max$.
+//     Upper clamp $\Delta_{\max}$.
 //
 // Attributes
 // ----------

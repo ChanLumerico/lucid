@@ -48,26 +48,57 @@ export function getRecentPages(): RecentPage[] {
   }
 }
 
+/** Detect a quota-exceeded error.  Browser-specific codes diverge —
+ *  Safari throws ``QuotaExceededError`` with name; Chrome / Firefox
+ *  use the DOMException name; old IE used code 22.  Cover all three
+ *  so the retry path triggers on any browser. */
+function _isQuotaExceeded(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const name = e.name;
+  const code = (e as { code?: number }).code;
+  return (
+    name === "QuotaExceededError"
+    || name === "NS_ERROR_DOM_QUOTA_REACHED"
+    || code === 22
+    || code === 1014
+  );
+}
+
 /** Append a page visit to the head of the recents list.  Dedup-by-href
  *  so revisiting a page promotes it instead of duplicating; cap at
  *  ``MAX_RECENTS`` so the list stays scannable in the dialog. */
 export function addRecentPage(page: Omit<RecentPage, "visitedAt">): void {
   if (typeof window === "undefined") return;
   if (!page.href || !page.title) return;
+  const current = getRecentPages();
+  // Drop any prior entry for this href so the new visit takes its
+  // place at the front of the list.  Comparing href is enough —
+  // hash fragments are stripped at the caller so different anchor
+  // links to the same page count as one entry.
+  const deduped = current.filter((p) => p.href !== page.href);
+  const next: RecentPage[] = [
+    { href: page.href, title: page.title, visitedAt: Date.now() },
+    ...deduped,
+  ].slice(0, MAX_RECENTS);
   try {
-    const current = getRecentPages();
-    // Drop any prior entry for this href so the new visit takes its
-    // place at the front of the list.  Comparing href is enough —
-    // hash fragments are stripped at the caller so different anchor
-    // links to the same page count as one entry.
-    const deduped = current.filter((p) => p.href !== page.href);
-    const next: RecentPage[] = [
-      { href: page.href, title: page.title, visitedAt: Date.now() },
-      ...deduped,
-    ].slice(0, MAX_RECENTS);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Storage disabled — accept that recents won't survive the session.
+  } catch (e) {
+    if (_isQuotaExceeded(e)) {
+      // Storage full — drop our key entirely and retry with just
+      // the new entry.  Better to lose old recents than fail to
+      // record the current visit.
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([{ href: page.href, title: page.title, visitedAt: Date.now() }]),
+        );
+      } catch {
+        // Still failing — give up silently; this is best-effort.
+      }
+    }
+    // Storage disabled / other write failure — accept that recents
+    // won't survive the session.
   }
 }
 

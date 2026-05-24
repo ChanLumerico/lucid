@@ -7,6 +7,7 @@
 #include "Predicate.h"
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Helpers.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -51,10 +52,17 @@ TensorImplPtr
 nan_to_num_op(const TensorImplPtr& a, double nan_val, double posinf_val, double neginf_val) {
     Validator::input(a, "nan_to_num.a").non_null();
     OpScopeFull scope{"nan_to_num", a->device(), a->dtype(), a->shape()};
+    scope.set_attr("nan", nan_val);
+    scope.set_attr("posinf", posinf_val);
+    scope.set_attr("neginf", neginf_val);
     Storage out =
         backend::Dispatcher::for_device(a->device())
             .nan_to_num(a->storage(), a->shape(), a->dtype(), nan_val, posinf_val, neginf_val);
-    return fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    auto result = fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 TensorImplPtr any_op(const TensorImplPtr& a) {
@@ -62,7 +70,11 @@ TensorImplPtr any_op(const TensorImplPtr& a) {
     OpScopeFull scope{"any", a->device(), a->dtype(), a->shape()};
     Storage out =
         backend::Dispatcher::for_device(a->device()).any(a->storage(), a->shape(), a->dtype());
-    return fresh(std::move(out), {}, Dtype::Bool, a->device());
+    auto result = fresh(std::move(out), {}, Dtype::Bool, a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 TensorImplPtr all_op(const TensorImplPtr& a) {
@@ -70,7 +82,11 @@ TensorImplPtr all_op(const TensorImplPtr& a) {
     OpScopeFull scope{"all", a->device(), a->dtype(), a->shape()};
     Storage out =
         backend::Dispatcher::for_device(a->device()).all(a->storage(), a->shape(), a->dtype());
-    return fresh(std::move(out), {}, Dtype::Bool, a->device());
+    auto result = fresh(std::move(out), {}, Dtype::Bool, a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

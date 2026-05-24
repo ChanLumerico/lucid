@@ -85,7 +85,14 @@ finalize(Storage&& storage, Shape shape, Dtype dt, Device device, bool requires_
 TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"zeros", device, dt, shape};
     auto s = make_zero_storage(shape, dt, device);
-    return finalize(std::move(s), shape, dt, device, requires_grad);
+    auto out = finalize(std::move(s), shape, dt, device, requires_grad);
+    // Same rationale as full_op below — without this, downstream
+    // consumers see a fresh impl pointer and mint a duplicate trace
+    // id, breaking the MPSGraph DAG.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({}, out);
+    }
+    return out;
 }
 
 // Create a ones-filled tensor on the requested device.
@@ -95,7 +102,11 @@ TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool require
 TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"ones", device, dt, shape};
     auto s = make_ones_storage(shape, dt, device);
-    return finalize(std::move(s), shape, dt, device, requires_grad);
+    auto out = finalize(std::move(s), shape, dt, device, requires_grad);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({}, out);
+    }
+    return out;
 }
 
 // Create a constant-filled tensor by delegating to IBackend::full().
@@ -106,8 +117,20 @@ TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires
 TensorImplPtr
 full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"full", device, dt, shape};
+    // 3.5 Phase 1.3: report fill value for the compile-path Full emitter.
+    scope.set_attr("fill_value", fill_value);
     auto s = backend::Dispatcher::for_device(device).full(shape, dt, fill_value);
-    return finalize(std::move(s), shape, dt, device, requires_grad);
+    auto out = finalize(std::move(s), shape, dt, device, requires_grad);
+    // Factory ops don't go through NaryKernel::wire_autograd, so the
+    // trace's id↔TensorImpl map needs an explicit registration here —
+    // otherwise the next op that consumes ``out`` sees an unrecognised
+    // pointer and mints a *second* id for the same buffer, splitting
+    // the MPSGraph DAG (which then disconnects every other param's
+    // backward path through it).
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({}, out);
+    }
+    return out;
 }
 
 // Create a zero-filled tensor; semantically "uninitialised" but safe.
@@ -371,11 +394,15 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
     // Normalise dim
     const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
         be.scatter_add(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({base, indices, src}, out);
+    }
 
     // Autograd wiring
     const bool needs_grad =
@@ -455,11 +482,15 @@ TensorImplPtr scatter_amax_op(const TensorImplPtr& base,
     const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amax", dv, dt, bs};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
         be.scatter_amax(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({base, indices, src}, out);
+    }
 
     const bool needs_grad =
         GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
@@ -551,11 +582,15 @@ TensorImplPtr scatter_amin_op(const TensorImplPtr& base,
     const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_amin", dv, dt, bs};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
         be.scatter_amin(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({base, indices, src}, out);
+    }
 
     const bool needs_grad =
         GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
@@ -634,11 +669,15 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
     const int ndim = static_cast<int>(bs.size());
     int d = dim < 0 ? dim + ndim : dim;
     OpScopeFull scope{"scatter_prod", dv, dt, bs};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
 
     auto& be = backend::Dispatcher::for_device(dv);
     Storage out_s =
         be.scatter_prod(base->storage(), indices->storage(), src->storage(), bs, is, d, dt);
     auto out = std::make_shared<TensorImpl>(std::move(out_s), bs, dt, dv, false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({base, indices, src}, out);
+    }
 
     const bool needs_grad =
         GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
@@ -726,10 +765,18 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
     out_shape.push_back(static_cast<std::int64_t>(size));
 
     OpScopeFull scope{"unfold_dim", a->device(), a->dtype(), out_shape};
+    scope.set_attr("dim", static_cast<std::int64_t>(d));
+    scope.set_attr("size", static_cast<std::int64_t>(size));
+    scope.set_attr("step", static_cast<std::int64_t>(step));
+
     auto& be = backend::Dispatcher::for_device(a->device());
     Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
-    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
-                                        false);
+    auto result = std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
+                                                false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

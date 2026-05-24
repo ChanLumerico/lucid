@@ -186,6 +186,13 @@ def register_model(
         card and as a "Model Size" section on the detail page.  Omit
         (``None``) when no authoritative count is available — the UI
         then hides the tag rather than guessing.
+    summary : object, default="auto"
+        Layer-tree summary used by the docs site's collapsible
+        "Model Size" section.  ``"auto"`` (the canonical value) tells
+        ``tools/build_model_summaries.py`` to introspect the model via
+        ``shadow_alloc`` and emit a real tree.  Pass an already-built
+        summary dict to override the introspection (rare — used only
+        when shadow-alloc introspection fails for a model family).
 
     Returns
     -------

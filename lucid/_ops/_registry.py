@@ -19,7 +19,42 @@ from lucid._ops import _adapters as A  # accessor for every signature-normaliser
 
 @dataclass
 class OpEntry:
-    """Descriptor for a single operation."""
+    """Descriptor for a single engine operation registered with the dispatcher.
+
+    The op registry is the single source of truth for the
+    Tensor-method / ``lucid.xxx`` / engine-binding triplet — every entry
+    here generates (at import time) a method on :class:`Tensor` and a
+    free function in :mod:`lucid._ops`, both routing through the same
+    underlying ``engine_fn``.
+
+    Attributes
+    ----------
+    name : str
+        Canonical op name (e.g. ``"abs"``).
+    engine_fn : Callable
+        The C++ engine entry point (a pybind11-bound function).
+    n_tensor_args : int
+        How many positional Tensor arguments to unwrap before the call.
+        ``-1`` is the special value for variadic ops where the first
+        argument is a *list* of tensors (e.g. ``stack``, ``cat``).
+    returns_tensor : bool, optional
+        ``True`` (default) when the result is a Tensor and should be
+        wrapped back via ``_wrap``.  ``False`` for ops returning
+        scalars / tuples of metadata.
+    inplace : bool, optional
+        ``True`` for trailing-underscore ops that mutate their first
+        operand.  Default ``False``.
+    method_name : str, optional
+        Name to expose on :class:`Tensor` as a method.  ``None`` means
+        no method is generated.
+    free_fn_name : str, optional
+        Name to expose in :mod:`lucid` as a free function.  ``None``
+        falls back to :attr:`name`.
+    extra_kwargs : list[str], optional
+        Keyword-only names appended after the unwrapped positional
+        tensors.  Useful for ops that take both tensors and shape /
+        dim parameters.
+    """
 
     name: str
     engine_fn: Callable[..., Any]

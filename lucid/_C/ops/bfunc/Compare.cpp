@@ -7,6 +7,7 @@
 #include "Compare.h"
 
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -39,7 +40,15 @@ cmp_dispatch(const TensorImplPtr& a, const TensorImplPtr& b, const char* name, i
     OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
     Storage out = backend::Dispatcher::for_device(a->device())
                       .compare_binary(a->storage(), b->storage(), a->shape(), a->dtype(), op);
-    return fresh(std::move(out), a->shape(), Dtype::Bool, a->device());
+    auto result = fresh(std::move(out), a->shape(), Dtype::Bool, a->device());
+    // 3.5 Phase 1.3: comparisons are non-differentiable so they bypass
+    // ``wire_autograd`` — push the I/O wiring into the tracer manually
+    // so cross_entropy's ``target != ignore_index`` mask shows up in the
+    // captured graph.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a, b}, result);
+    }
+    return result;
 }
 
 }  // namespace

@@ -280,6 +280,27 @@ html[data-theme="light"] .shiki {
   background-color: var(--shiki-light-bg) !important;
 }
 
+/* ── Reduced motion ────────────────────────────────────────────────────
+ * ``ReducedMotionProvider`` already wraps Framer Motion in
+ * ``reducedMotion="user"`` so JS-driven springs respect the OS
+ * preference.  Tailwind / inline CSS transitions are a separate path
+ * the provider can't reach, so we cut them here.  Override is
+ * scoped to motion-related properties — colour transitions inside
+ * hover states stay snappy even with the user setting on, which
+ * matches typical reduced-motion expectations (movement: yes,
+ * micro-interactions: ok). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-property: color, background-color, border-color, outline-color !important;
+    transition-duration: 0.15s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Module-overview compact view ──────────────────────────────────────
  * ``ViewModeToggle`` stamps ``data-view="compact"`` on the outer
  * ``<article data-module-overview>`` to swap every member card into

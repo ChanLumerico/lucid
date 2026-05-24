@@ -128,6 +128,14 @@ export function SearchDialog({
   // Stored separately from ``rawResults`` because the empty state
   // renders them in their own section with different ranking semantics.
   const [recents, setRecents] = React.useState<RecentPage[]>([]);
+  // ``loadError`` tracks Fuse-module / search-data fetch failures.
+  // Without it, the dialog would sit empty with no signal to the
+  // user that something is wrong — and a retry would never fire
+  // because ``index`` stays null but ``open`` doesn't change.
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  // ``loadAttempt`` lets the user click "Retry" without remounting
+  // the dialog — bumping it forces the load effect to re-run.
+  const [loadAttempt, setLoadAttempt] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Load search index once, lazy.  ``fuse.js`` is dynamic-imported
@@ -137,9 +145,13 @@ export function SearchDialog({
     if (!open) return;
     if (index) return;
     let cancelled = false;
+    setLoadError(null);
     Promise.all([
       import("fuse.js"),
-      fetch("/api/search-data").then((r) => r.json()),
+      fetch("/api/search-data").then((r) => {
+        if (!r.ok) throw new Error(`search-data fetch failed: ${r.status}`);
+        return r.json();
+      }),
     ])
       .then(([fuseModule, data]) => {
         if (cancelled) return;
@@ -173,11 +185,19 @@ export function SearchDialog({
           }),
         );
       })
-      .catch(() => {});
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        // Surface the failure to the user — common causes are a
+        // bundle chunk that didn't deploy (CDN propagation lag) or
+        // network drop mid-import.  A retry button lets the user
+        // try again without remounting the whole dialog.
+        const message = e instanceof Error ? e.message : String(e);
+        setLoadError(message || "Failed to load search index");
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, index]);
+  }, [open, index, loadAttempt]);
 
   // Focus input on open + refresh the recents snapshot.  Reading
   // localStorage every open is cheap (one JSON.parse on a max-8-item
@@ -333,7 +353,31 @@ export function SearchDialog({
 
         {/* Results */}
         <div className="max-h-[360px] overflow-y-auto p-2">
-          {query.trim() === "" && recents.length === 0 && (
+          {loadError && (
+            <div className="flex flex-col items-center gap-3 py-10 text-center px-6">
+              <FileText className="h-8 w-8 text-lucid-error/70" />
+              <div>
+                <p className="text-sm text-lucid-text-mid">
+                  Search index didn&rsquo;t load
+                </p>
+                <p className="mt-1 text-[11px] font-mono text-lucid-text-disabled break-all">
+                  {loadError}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadError(null);
+                  setLoadAttempt((n) => n + 1);
+                }}
+                className="rounded-md border border-lucid-border bg-lucid-elevated px-3 py-1 text-xs text-lucid-text-mid hover:text-lucid-text-high transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loadError && query.trim() === "" && recents.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-10">
               <FileText className="h-8 w-8 text-lucid-text-disabled" />
               <p className="text-sm text-lucid-text-low">

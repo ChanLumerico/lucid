@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # .githooks/pre-commit — Lucid pre-commit gate.
 #
-# Two checks, both blocking (the second is hard-fail):
+# Three checks, the first two blocking (hard-fail) and the third
+# a soft-fail badge refresh:
 #
 #   1. H4 numpy guard.  ``tools/check_numpy_h4.py`` walks lucid/ and
 #      flags any ``import numpy`` outside the six sanctioned bridge
@@ -10,27 +11,53 @@
 #      this guard makes the same regression visible at commit time
 #      rather than after a release ships.
 #
-#   2. LOC badge refresh.  Runs ``cloc lucid/`` and rewrites the
+#   2. Docstring coverage.  ``tools/check_docstring_coverage.py``
+#      catches the five blind-spot categories that silently degrade the
+#      docs site: Google-style ``Args:`` blocks the build used to drop,
+#      filename-equals-symbol thin docstrings, stub one-liners on public
+#      symbols, prose-only docstrings on multi-param funcs (no
+#      ``Parameters`` block), and lazy-loaded names invisible to Griffe.
+#      Hard-fail so a new public op can't ship with empty docs cards.
+#
+#   3. LOC badge refresh.  Runs ``cloc lucid/`` and rewrites the
 #      shield badge in README.md so it always matches the committed
 #      source.  Re-stages README.md.  Soft-fails (warning only) when
 #      cloc isn't installed.
 #
 # Skip individual checks:
 #     LUCID_SKIP_H4_GUARD=1     skip the H4 scan
+#     LUCID_SKIP_DOCSTRING=1    skip the docstring coverage gate
 #     LUCID_SKIP_LOC_BADGE=1    skip the LOC badge refresh
 
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
+# ── Python guard ────────────────────────────────────────────────────────────
+# Both the H4 numpy scan and the docstring coverage gate require a
+# Python 3 interpreter on PATH.  Some CI containers (Vercel build,
+# minimal git-on-Windows shells) launch hooks without Python — we
+# detect that here and skip the Python-based gates with a warning so
+# the commit still goes through.  The hooks are advisory at that
+# point; CI's full lint will catch anything the local skip missed.
+if ! command -v python3 &>/dev/null; then
+    echo "  ⚠️  python3 not on PATH — skipping H4 + docstring-coverage gates" >&2
+    LUCID_SKIP_H4_GUARD=1
+    LUCID_SKIP_DOCSTRING=1
+fi
+
 # ── 1. H4 numpy guard ───────────────────────────────────────────────────────
 # Hard-fail.  Run before LOC refresh so a violation aborts the commit
-# without leaving a half-applied badge stage.
-if [[ "${LUCID_SKIP_H4_GUARD:-0}" != "1" ]]; then
-    if ! python3 "${REPO_ROOT}/tools/check_numpy_h4.py" --quiet; then
+# without leaving a half-applied badge stage.  Skipped silently if the
+# script is missing (e.g. checkout from a branch where tools/ didn't
+# exist yet) so a misplaced rebase doesn't leave the user unable to
+# commit.
+H4_SCRIPT="${REPO_ROOT}/tools/check_numpy_h4.py"
+if [[ "${LUCID_SKIP_H4_GUARD:-0}" != "1" && -f "${H4_SCRIPT}" ]]; then
+    if ! python3 "${H4_SCRIPT}" --quiet; then
         echo "" >&2
         # Re-run non-quiet to show the violations for the developer.
-        python3 "${REPO_ROOT}/tools/check_numpy_h4.py" >&2 || true
+        python3 "${H4_SCRIPT}" >&2 || true
         echo "" >&2
         echo "  ❌  Pre-commit blocked.  Fix H4 violation above and re-stage." >&2
         echo "      Override (discouraged):  LUCID_SKIP_H4_GUARD=1 git commit ..." >&2
@@ -38,7 +65,56 @@ if [[ "${LUCID_SKIP_H4_GUARD:-0}" != "1" ]]; then
     fi
 fi
 
-# ── 2. LOC badge refresh ────────────────────────────────────────────────────
+# ── 2. Docstring coverage gate ──────────────────────────────────────────────
+# Hard-fail.  The validator surfaces six distinct blind-spot categories
+# that all manifest as empty / sparse / misleading docs pages on the
+# site.  Run after the H4 guard so violations are reported in the same
+# commit attempt rather than across two retries.
+#
+# Only run when the commit actually touches Python files under lucid/ —
+# README / vault-only commits don't need to pay the AST walk.
+DOCSTRING_SCRIPT="${REPO_ROOT}/tools/check_docstring_coverage.py"
+if [[ "${LUCID_SKIP_DOCSTRING:-0}" != "1" && -f "${DOCSTRING_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^lucid/.*\.py$'; then
+        if ! python3 "${DOCSTRING_SCRIPT}"; then
+            echo "" >&2
+            echo "  ❌  Pre-commit blocked: thin / unstructured docstrings detected." >&2
+            echo "      Re-run with --list to see every offender:" >&2
+            echo "          python3 tools/check_docstring_coverage.py --list" >&2
+            echo "      Override (discouraged):  LUCID_SKIP_DOCSTRING=1 git commit ..." >&2
+            exit 1
+        fi
+    fi
+fi
+
+# ── 2b. Cross-reference resolver ────────────────────────────────────────────
+# Soft-fail.  ``check_docstring_xrefs.py`` scans every Lucid docstring
+# for sphinx-style ``:func:`` / ``:class:`` / ``:meth:`` references and
+# flags targets that don't resolve to a known Lucid or stdlib symbol.
+# Runs only when ``web/public/api-data/`` exists (it depends on the
+# built JSON for path resolution); soft-fail because the checker can
+# legitimately false-positive on dynamically-created symbols the AST
+# scan misses.
+XREF_SCRIPT="${REPO_ROOT}/tools/check_docstring_xrefs.py"
+if [[ "${LUCID_SKIP_XREFS:-0}" != "1" && -f "${XREF_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^lucid/.*\.py$'; then
+        if [[ -d "${REPO_ROOT}/web/public/api-data" ]]; then
+            if ! python3 "${XREF_SCRIPT}" >/dev/null 2>&1; then
+                # Re-run non-quiet for visibility, but don't block — the
+                # signal can still be informative even if not actionable.
+                echo "" >&2
+                echo "  ⚠️  Unresolved docstring cross-references — see:" >&2
+                echo "          python3 tools/check_docstring_xrefs.py --list" >&2
+                echo "      (Not blocking; set LUCID_XREFS_STRICT=1 to enforce.)" >&2
+                if [[ "${LUCID_XREFS_STRICT:-0}" == "1" ]]; then
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+fi
+
+# ── 3. LOC badge refresh ────────────────────────────────────────────────────
 if [[ "${LUCID_SKIP_LOC_BADGE:-0}" == "1" ]]; then
     exit 0
 fi

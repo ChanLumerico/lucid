@@ -55,11 +55,14 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::exp`` to compute $y = e^x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.exp(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = e^x = y$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = out * g  (saved output is exp(x))
+    // Graph-mode backward: $\partial x = \mathrm{out} \cdot g$ using the saved
+    // output $e^x$, kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
@@ -88,11 +91,13 @@ public:
 class LUCID_API LogBackward : public UnaryOp<LogBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::log`` to compute $y = \ln x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.log(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = 1/x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = g / x
+    // Graph-mode backward: $\partial x = g / x$ kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
@@ -121,9 +126,11 @@ public:
 class LUCID_API Log2Backward : public UnaryOp<Log2Backward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::log2`` to compute $y = \log_2 x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.log2(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = 1/(x \ln 2)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 
@@ -160,11 +167,14 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::sqrt`` to compute $y = \sqrt{x}$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.sqrt(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = 1/(2y)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = g / (2*y)  where y = sqrt(x) is the saved output
+    // Graph-mode backward: $\partial x = g / (2y)$ where $y = \sqrt{x}$ is the
+    // saved output; kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };
@@ -201,9 +211,11 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::rsqrt`` to compute $y = 1/\sqrt{x}$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.rsqrt(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = -\tfrac{1}{2}\,y^3$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 
@@ -232,11 +244,14 @@ public:
 class LUCID_API ErfBackward : public UnaryOp<ErfBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::erf`` to compute $y = \mathrm{erf}(x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.erf(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = (2/\sqrt{\pi})\,e^{-x^2}$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = (2/sqrt(pi)) * exp(-x^2) * g
+    // Graph-mode backward: $\partial x = (2/\sqrt{\pi})\,e^{-x^2}\,g$ kept inside
+    // the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
@@ -389,11 +404,14 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::erfinv`` to compute $y = \mathrm{erfinv}(x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.erfinv(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = \tfrac{\sqrt{\pi}}{2}\,e^{y^2}$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = sqrt(pi)/2 * exp(out^2) * g
+    // Graph-mode backward: $\partial x = \tfrac{\sqrt{\pi}}{2}\,e^{\mathrm{out}^2}\,g$
+    // using the saved output, kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };

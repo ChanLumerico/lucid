@@ -77,7 +77,31 @@ def normalize_factory_kwargs(
     dev: device | _C_engine.Device | str | None = None,
     requires_grad: bool = False,
 ) -> tuple[_C_engine.Dtype, _C_engine.Device, bool]:
-    """Resolve dtype/device to engine enums, applying defaults."""
+    """Resolve user-facing ``dtype`` / ``device`` kwargs to engine enums.
+
+    Single dispatch hot path used by every Python factory function
+    (``tensor``, ``zeros``, ``randn``, …) to translate the variety of
+    accepted argument types (string / class / instance / ``None``) into
+    the engine's two enum values plus the ``requires_grad`` flag.
+    ``None`` arguments fall through to the cached defaults set by
+    :func:`set_default_dtype` / :func:`set_default_device`.
+
+    Parameters
+    ----------
+    dt : dtype, dtype-class, engine.Dtype, str, or None, optional
+        Requested dtype.  ``None`` (default) → current default dtype.
+    dev : device, engine.Device, str, or None, optional
+        Requested device.  ``None`` (default) → current default device.
+    requires_grad : bool, optional
+        Pass-through; included in the return tuple unchanged.  Default
+        ``False``.
+
+    Returns
+    -------
+    tuple
+        ``(engine_dtype, engine_device, requires_grad)``.  The first two
+        are C++ enum values consumable by ``_C_engine`` factories.
+    """
     if dt is None:
         _dtype = _default_dtype_enum_cached()
     else:

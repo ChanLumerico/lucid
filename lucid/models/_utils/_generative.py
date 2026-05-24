@@ -142,7 +142,34 @@ def gaussian_kl_divergence(
 
 
 def reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
-    """Sample ``z = μ + σ·ε`` with ``ε ~ N(0, I)`` (VAE reparameterisation)."""
+    r"""VAE reparameterisation trick — sample :math:`z = \mu + \sigma \cdot \epsilon`.
+
+    Standard reparameterisation (Kingma & Welling, 2014) that pushes
+    the stochasticity into an auxiliary noise term :math:`\epsilon`
+    so gradients flow through :math:`\mu` and :math:`\log\sigma^2`
+    deterministically.  ``logvar`` rather than ``sigma`` is taken as
+    input so the network can output an unconstrained real (the
+    ``exp`` enforces positivity).
+
+    Parameters
+    ----------
+    mu : Tensor
+        Posterior mean :math:`\mu`, any shape.
+    logvar : Tensor
+        Per-element log-variance :math:`\log \sigma^2`; same shape as
+        ``mu``.
+
+    Returns
+    -------
+    Tensor
+        A sample :math:`z` with the same shape and dtype as ``mu``.
+        Backward propagates through ``mu`` / ``logvar``; the
+        :math:`\epsilon` noise term is treated as a constant.
+
+    References
+    ----------
+    .. [1] Kingma & Welling, *Auto-Encoding Variational Bayes*, ICLR 2014.
+    """
     std = (0.5 * logvar).exp()
     eps = lucid.randn(mu.shape, device=mu.device.type)
     return mu + std * eps

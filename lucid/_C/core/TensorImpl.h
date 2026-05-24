@@ -748,8 +748,42 @@ private:
     // Private mutable references to the meta fields — used only within
     // TensorImpl's own methods; callers should use the public set_* functions.
     Shape& shape_() noexcept { return meta_.shape; }
+
+    // Mutable stride accessor — returns the underlying ``Stride`` by reference
+    // so engine-side ops can rewrite strides in place without going through
+    // the full ``set_meta`` path.  Pairs with the public const :func:`stride`.
+    //
+    // Notes
+    // -----
+    // Modifying the stride WITHOUT also touching ``storage_`` or ``shape_``
+    // produces an invalid TensorImpl — only call this from internal kernel
+    // code that holds the necessary invariants.  Does NOT bump the version
+    // counter; callers that change tensor geometry through this hook are
+    // responsible for whatever bookkeeping autograd requires.
     Stride& stride_() noexcept { return meta_.stride; }
+
+    // Mutable dtype accessor — returns the underlying ``Dtype`` by reference.
+    // Rarely used outside engine internals; pairs with the public const
+    // :func:`dtype`.
+    //
+    // Notes
+    // -----
+    // Changing the dtype WITHOUT also reinterpreting / reallocating
+    // ``storage_`` is a footgun: the bytes on disk no longer match the
+    // declared element type, so subsequent ops will read garbage.  Only call
+    // from paths that have already updated storage to match the new dtype.
     Dtype& dtype_field() noexcept { return meta_.dtype; }
+
+    // Mutable device accessor — returns the underlying ``Device`` by
+    // reference.  Rarely used outside engine internals; pairs with the
+    // public const :func:`device`.
+    //
+    // Notes
+    // -----
+    // Same footgun as :func:`dtype_field`: changing the device WITHOUT also
+    // migrating ``storage_`` to the new device produces a TensorImpl that
+    // claims to live on one stream while its bytes live on another.  Only
+    // call from paths that have already moved the storage.
     Device& device_field() noexcept { return meta_.device; }
 };
 

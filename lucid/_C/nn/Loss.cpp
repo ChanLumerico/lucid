@@ -22,6 +22,7 @@
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -63,6 +64,7 @@ TensorImplPtr MseLossBackward::forward(const TensorImplPtr& input,
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
 
     Storage out_storage = backend::Dispatcher::for_device(input->device())
                               .mse_loss(input->storage(), target->storage(), input->shape(),
@@ -109,6 +111,8 @@ TensorImplPtr BCELossBackward::forward(const TensorImplPtr& input,
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
+    scope.set_attr("eps", eps);
 
     Storage out_storage =
         backend::Dispatcher::for_device(input->device())
@@ -160,6 +164,7 @@ TensorImplPtr BCEWithLogitsBackward::forward(const TensorImplPtr& input,
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
 
     Storage out_storage =
         backend::Dispatcher::for_device(input->device())
@@ -228,6 +233,8 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
     }
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(per_sample_shape, reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
+    scope.set_attr("ignore_index", static_cast<std::int64_t>(ignore_index));
 
     Shape out_shape = (reduction == Reduction::None) ? per_sample_shape : Shape{};
     const Storage* weight_storage = weight_or_null ? &weight_or_null->storage() : nullptr;
@@ -238,6 +245,12 @@ TensorImplPtr CrossEntropyBackward::forward(const TensorImplPtr& input,
 
     auto out = std::make_shared<TensorImpl>(std::move(result.output), out_shape, input->dtype(),
                                             input->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        if (weight_or_null)
+            trc->on_op_io({input, target, weight_or_null}, out);
+        else
+            trc->on_op_io({input, target}, out);
+    }
 
     {
         auto bwd = std::make_shared<CrossEntropyBackward>();
@@ -305,6 +318,8 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
     }
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(per_sample_shape, reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
+    scope.set_attr("ignore_index", static_cast<std::int64_t>(ignore_index));
 
     Shape out_shape = (reduction == Reduction::None) ? per_sample_shape : Shape{};
     const Storage* weight_storage = weight_or_null ? &weight_or_null->storage() : nullptr;
@@ -315,6 +330,12 @@ TensorImplPtr NLLLossBackward::forward(const TensorImplPtr& input,
 
     auto out = std::make_shared<TensorImpl>(std::move(result.output), out_shape, input->dtype(),
                                             input->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        if (weight_or_null)
+            trc->on_op_io({input, target, weight_or_null}, out);
+        else
+            trc->on_op_io({input, target}, out);
+    }
 
     {
         auto bwd = std::make_shared<NLLLossBackward>();
@@ -365,6 +386,8 @@ TensorImplPtr HuberLossBackward::forward(const TensorImplPtr& input,
 
     OpScopeFull scope{schema_v1.name, input->device(), input->dtype(),
                       reduced_shape(input->shape(), reduction)};
+    scope.set_attr("reduction", static_cast<std::int64_t>(reduction));
+    scope.set_attr("delta", delta);
 
     Storage out_storage = backend::Dispatcher::for_device(input->device())
                               .huber_loss(input->storage(), target->storage(), input->shape(),

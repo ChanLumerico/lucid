@@ -20,12 +20,32 @@ class LayerScale(nn.Module):
     start of training every block behaves approximately as an identity
     mapping.
 
-    For (B, C)-shaped inputs ``gamma`` is broadcast directly.
-    For (B, C, H, W)-shaped inputs ``gamma`` is reshaped to (1, C, 1, 1).
+    For ``(B, C)``-shaped inputs ``gamma`` is broadcast directly.
+    For ``(B, C, H, W)``-shaped inputs ``gamma`` is reshaped to
+    ``(1, C, 1, 1)`` so it scales each channel independently across the
+    spatial dimensions.
 
-    Args:
-        dim:        Number of channels C.
-        init_value: Initial value for all entries of ``gamma``.
+    Parameters
+    ----------
+    dim : int
+        Number of channels :math:`C`.
+    init_value : float, optional
+        Initial value for every entry of ``gamma``.  Default ``1e-6``
+        per the ConvNeXt training recipe — small enough that the block
+        starts near identity and large enough that gradients flow.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._classification import LayerScale
+    >>> ls = LayerScale(dim=96)
+    >>> x = lucid.randn(2, 96, 7, 7)
+    >>> ls(x).shape
+    (2, 96, 7, 7)
+
+    References
+    ----------
+    .. [1] Liu et al., *A ConvNet for the 2020s*, CVPR 2022.
     """
 
     def __init__(self, dim: int, init_value: float = 1e-6) -> None:
@@ -54,10 +74,28 @@ class DropPath(nn.Module):
     "stochastic depth" recipe — ConvNeXt, Swin, EfficientFormer, MaxViT,
     DeiT, and so on.
 
-    Args:
-        drop_prob: Probability of dropping the entire residual branch.  In
-            most architectures this scales linearly with depth (deeper
-            blocks see higher drop rates).
+    Parameters
+    ----------
+    drop_prob : float, optional
+        Probability of dropping the entire residual branch.  In most
+        architectures this scales linearly with depth (deeper blocks
+        see higher drop rates).  Must satisfy ``0 <= drop_prob < 1``.
+        Default ``0.0`` (no dropping).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models._utils._classification import DropPath
+    >>> dp = DropPath(drop_prob=0.1)
+    >>> dp.train()
+    >>> x = lucid.randn(8, 96, 7, 7)
+    >>> y = dp(x)              # ~10 % of samples zeroed; survivors rescaled
+    >>> y.shape
+    (8, 96, 7, 7)
+
+    References
+    ----------
+    .. [1] Huang et al., *Deep Networks with Stochastic Depth*, ECCV 2016.
     """
 
     def __init__(self, drop_prob: float = 0.0) -> None:

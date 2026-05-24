@@ -98,8 +98,11 @@ class TestSKNetClassifier(unittest.TestCase):
 
 class TestSKNetRegistry(unittest.TestCase):
 
-    def test_6_variants_registered(self) -> None:
-        self.assertEqual(len(models.list_models(family="sknet")), 6)
+    def test_variants_registered(self) -> None:
+        # 5 paper-cited variants (sk_resnet_18 / _34 / _50 / _101 /
+        # sk_resnext_50_32x4d — Li 2019) × 2 (raw + ``_cls`` task wrapper)
+        # = 10 registered names.
+        self.assertEqual(len(models.list_models(family="sknet")), 10)
 
     def test_all_variants_present(self) -> None:
         names = models.list_models(family="sknet")

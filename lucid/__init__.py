@@ -70,9 +70,20 @@ from lucid._threads import (
 def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # type: ignore # noqa: F821
     """Globally toggle deterministic kernel selection.
 
-    Lucid does not ship a separate ``warn_only`` mode — callers either get
-    deterministic kernels or they don't.  The kwarg is accepted for API
-    compatibility and ignored.
+    Lucid does not ship a separate ``warn_only`` mode — callers either
+    get deterministic kernels or they don't.  The kwarg is accepted for
+    API compatibility and ignored.
+
+    Parameters
+    ----------
+    mode : bool
+        ``True`` enables deterministic kernels (engine prefers
+        reproducible paths for scatter, atomic reductions, some MLX
+        kernels) at a small throughput cost.  ``False`` re-enables the
+        fastest available path.
+    warn_only : bool, optional
+        Accepted for cross-framework API parity; ignored — Lucid has no
+        "warn but continue" tier.  Default ``False``.
     """
     # ``bool`` here resolves to ``lucid.bool`` (the dtype alias) — use the
     # builtin saved at module top.
@@ -80,7 +91,19 @@ def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None
 
 
 def are_deterministic_algorithms_enabled() -> bool:  # type: ignore # noqa: F821
-    """Return whether deterministic kernel selection is currently active."""
+    """Return whether deterministic kernel selection is currently active.
+
+    Reflects the engine-side flag toggled by
+    :func:`use_deterministic_algorithms`.  When ``True`` the engine
+    prefers reproducible kernels for non-deterministic ops (scatter,
+    atomic reductions, some MLX paths) at a usually-small throughput
+    cost.
+
+    Returns
+    -------
+    bool
+        Current deterministic-mode flag from the C++ engine.
+    """
     return _py_bool(_C_engine.is_deterministic())
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -200,7 +223,7 @@ __all__ = [
     "erf", "erfinv", "max", "min", "pow", "ravel", "round", "sum",
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
-    "utils", "amp", "profiler", "einops",
+    "utils", "amp", "profiler", "einops", "compile",
     "metal", "backends", "test",
     # ── public type aliases ───────────────────────────────────────────────
     "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
@@ -291,7 +314,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     # ── numerical sub-packages ────────────────────────────────────────────
     "linalg", "fft", "signal", "special", "distributions",
     # ── infra / tooling ───────────────────────────────────────────────────
-    "utils", "amp", "profiler", "einops",
+    "utils", "amp", "profiler", "einops", "compile",
     "metal", "backends", "test",
 ])
 

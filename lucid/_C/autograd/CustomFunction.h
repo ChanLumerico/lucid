@@ -66,6 +66,12 @@ namespace lucid {
 // :class:`PythonBackwardNode` — owns one ``FunctionCtx`` per custom op call.
 class LUCID_API FunctionCtx {
 public:
+    // Construct a ``FunctionCtx`` for a custom ``Function::forward`` call.
+    //
+    // The newly created context starts with empty ``saved_tensors_`` and
+    // ``extras_`` containers; the user's ``forward`` body populates them
+    // via :func:`save_for_backward` and :func:`store` before returning.
+    // Defaulted — no resources need acquisition at construction.
     FunctionCtx() = default;
 
     // Save tensors needed for the backward pass.

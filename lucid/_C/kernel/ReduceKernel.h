@@ -32,6 +32,7 @@
 #include "../autograd/AutogradNode.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../compile/Tracer.h"  // 3.5 Phase 1.2 step 5: trace I/O + reduction attrs
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -391,6 +392,17 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
     auto out =
         std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);
     scope.set_flops(static_cast<std::int64_t>(a->numel()));
+
+    // 3.5 Phase 1.2 step 5: trace I/O wiring at the forward boundary
+    // (ReduceKernel doesn't go through NaryKernel::wire_autograd) +
+    // report the reduction axes / keepdim flag so the Reduction
+    // emitter can rebuild the same reduction inside MPSGraph.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+        std::vector<std::int64_t> dims64(axes.begin(), axes.end());
+        trc->on_op_attr("dims", std::move(dims64));
+        trc->on_op_attr("keepdim", static_cast<bool>(keepdims));
+    }
 
     if constexpr (!Derived::kHasGradient) {
         return out;

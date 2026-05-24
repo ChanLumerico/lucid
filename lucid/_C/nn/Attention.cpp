@@ -17,6 +17,7 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -110,6 +111,9 @@ ForwardCore run_forward(const TensorImplPtr& q,
 
     OpScopeFull scope{ScaledDotProductAttentionBackward::schema_v1.name, q->device(), q->dtype(),
                       build_output_shape(q->shape(), v->shape())};
+    scope.set_attr("scale", scale);
+    scope.set_attr("is_causal", is_causal);
+    scope.set_attr("has_mask", attn_mask != nullptr);
 
     Shape out_shape = build_output_shape(q->shape(), v->shape());
     Shape weights_shape;
@@ -136,6 +140,8 @@ ForwardCore run_forward(const TensorImplPtr& q,
     scope.set_flops(static_cast<std::int64_t>(2) * static_cast<std::int64_t>(fq.B) *
                     static_cast<std::int64_t>(fq.L) * static_cast<std::int64_t>(fk.L) *
                     static_cast<std::int64_t>(fq.D + fv.D));
+
+    // Caller wire_autograd records on_op_io internally — no explicit call.
 
     return ForwardCore{std::move(out),       std::move(results[0]),   fq.B, fq.L, fk.L, fq.D, fv.D,
                        std::move(out_shape), std::move(weights_shape)};

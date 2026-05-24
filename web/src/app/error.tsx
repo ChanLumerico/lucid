@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { buildIssueUrl } from "@/lib/error-report";
 
 /** Route-level error boundary.  Next.js mounts this when a server
  *  component (or any descendant) throws during render.  Resets via the
@@ -21,6 +22,12 @@ export default function GlobalError({
       console.error("[lucid-docs] page render error", error);
     }
   }, [error]);
+
+  const issueUrl = buildIssueUrl({
+    title: `[docs] global error: ${error.message}`,
+    error,
+    section: "/",
+  });
 
   return (
     <div className="min-h-dvh flex items-center justify-center px-4">
@@ -45,6 +52,11 @@ export default function GlobalError({
           <Button onClick={reset}>Try again</Button>
           <Button variant="secondary" asChild>
             <a href="/api">Back to API Reference</a>
+          </Button>
+          <Button variant="ghost" asChild>
+            <a href={issueUrl} target="_blank" rel="noopener noreferrer">
+              Report this
+            </a>
           </Button>
         </div>
       </div>

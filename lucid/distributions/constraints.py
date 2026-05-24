@@ -13,7 +13,28 @@ from lucid._tensor.tensor import Tensor
 
 
 class Constraint:
-    """Base class — every concrete constraint defines :meth:`check`."""
+    """Base class for every domain constraint in ``lucid.distributions``.
+
+    A constraint encapsulates the *support* of a distribution — the
+    set of values its log-probability is defined on.  Subclasses override
+    :meth:`check` to return a boolean tensor flagging which entries of
+    the candidate input fall inside the support.
+
+    Subclasses also override the two class attributes below when
+    relevant: ``is_discrete=True`` for lattice supports
+    (Categorical / Bernoulli / …) and ``event_dim>0`` for multivariate
+    supports where the constraint applies to a trailing batch of axes
+    rather than a single scalar.
+
+    Attributes
+    ----------
+    is_discrete : bool
+        ``True`` when the support is a discrete set; ``False`` (default)
+        for continuous reals / non-negative reals / simplex / …
+    event_dim : int
+        Number of trailing dimensions the constraint applies to as a
+        unit.  Default ``0`` (scalar per element).
+    """
 
     is_discrete: bool = False
     event_dim: int = 0

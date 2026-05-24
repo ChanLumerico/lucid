@@ -54,7 +54,7 @@ void register_fft(py::module_& m) {
     m.def(
         "fftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
-            return fftn_op(a, std::move(n), std::move(dim));
+            return fftn_op(a, n, dim);
         },
         py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},
@@ -63,7 +63,7 @@ void register_fft(py::module_& m) {
     m.def(
         "ifftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
-            return ifftn_op(a, std::move(n), std::move(dim));
+            return ifftn_op(a, n, dim);
         },
         py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{}, "N-dimensional inverse discrete Fourier transform.");
@@ -71,7 +71,7 @@ void register_fft(py::module_& m) {
     m.def(
         "rfftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
-            return rfftn_op(a, std::move(n), std::move(dim));
+            return rfftn_op(a, n, dim);
         },
         py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},
@@ -80,7 +80,7 @@ void register_fft(py::module_& m) {
     m.def(
         "irfftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {
-            return irfftn_op(a, std::move(n), std::move(dim));
+            return irfftn_op(a, n, dim);
         },
         py::arg("a"), py::arg("s") = std::vector<std::int64_t>{},
         py::arg("dim") = std::vector<int>{},

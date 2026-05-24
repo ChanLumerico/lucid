@@ -76,6 +76,11 @@ public:
     // ``base_lr_`` is read from ``opt.lr()`` *once* at construction —
     // later external changes to the optimiser's lr are ignored.
     explicit LRScheduler(Optimizer& opt);
+
+    // Virtual destructor — ensures derived ``StepLR`` / ``CosineAnnealingLR``
+    // / etc. destructors run when held by a base-class pointer.  Defaulted;
+    // ``opt_`` is a reference and ``epoch_`` / ``base_lr_`` are PODs, so
+    // nothing to clean up at this layer.
     virtual ~LRScheduler() = default;
 
     LRScheduler(const LRScheduler&) = delete;
@@ -280,8 +285,8 @@ private:
     double gamma_;
 };
 
-// Cosine-annealing schedule from $\eta_\max$ down to $\eta_\min$
-// over $T_\max$ epochs, following half a cosine wave.
+// Cosine-annealing schedule from $\eta_{\max}$ down to $\eta_{\min}$
+// over $T_{\max}$ epochs, following half a cosine wave.
 //
 // Smoothly anneals the lr so training spends the early epochs at high
 // lr (exploration) and the late epochs at low lr (convergence).
@@ -290,10 +295,10 @@ private:
 // Math
 // ----
 // $$
-//   \eta_t = \eta_\min + \tfrac{1}{2}(\eta_0 - \eta_\min)
-//     \left(1 + \cos\!\left(\tfrac{t}{T_\max}\,\pi\right)\right)
+//   \eta_t = \eta_{\min} + \tfrac{1}{2}(\eta_0 - \eta_{\min})
+//     \left(1 + \cos\!\left(\tfrac{t}{T_{\max}}\,\pi\right)\right)
 // $$
-// for $t \in [0, T_\max]$; saturates at $\eta_\min$ for $t > T_\max$.
+// for $t \in [0, T_{\max}]$; saturates at $\eta_{\min}$ for $t > T_{\max}$.
 //
 // Attributes
 // ----------
@@ -563,11 +568,11 @@ private:
 // Let $c = t / T$ be the cycle index, $\phi$ the within-cycle phase,
 // and $A_c$ the cycle amplitude.  Then
 // $$
-//   \eta_t = \eta_\min + A_c \cdot \mathrm{tri}(\phi)
+//   \eta_t = \eta_{\min} + A_c \cdot \mathrm{tri}(\phi)
 // $$
-// where ``Triangular`` uses $A_c = (\eta_\max - \eta_\min)$ for every
-// cycle, ``Triangular2`` halves it as $A_c = (\eta_\max - \eta_\min)/2^c$,
-// and ``ExpRange`` decays it as $(\eta_\max - \eta_\min)\,\gamma^t$.
+// where ``Triangular`` uses $A_c = (\eta_{\max} - \eta_{\min})$ for every
+// cycle, ``Triangular2`` halves it as $A_c = (\eta_{\max} - \eta_{\min})/2^c$,
+// and ``ExpRange`` decays it as $(\eta_{\max} - \eta_{\min})\,\gamma^t$.
 //
 // Parameters
 // ----------

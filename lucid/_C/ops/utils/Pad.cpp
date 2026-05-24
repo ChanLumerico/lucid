@@ -20,6 +20,7 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
@@ -110,10 +111,26 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
     Shape out_shape(ndim);
     for (std::size_t d = 0; d < ndim; ++d)
         out_shape[d] = a->shape()[d] + pad_width[d].first + pad_width[d].second;
+    {
+        // Flatten the per-axis (lo, hi) pairs into a single int64 list:
+        // [lo_0, hi_0, lo_1, hi_1, ...] — matches MPSGraph's padTensor:
+        // expectations (leading/trailing pad arrays).
+        std::vector<std::int64_t> pad_attr;
+        pad_attr.reserve(2 * pad_width.size());
+        for (const auto& p : pad_width) {
+            pad_attr.push_back(p.first);
+            pad_attr.push_back(p.second);
+        }
+        scope.set_attr("pads", pad_attr);
+        scope.set_attr("constant", constant);
+    }
 
     Storage out_storage = backend::Dispatcher::for_device(device).pad(a->storage(), a->shape(), dt,
                                                                       pad_width, constant);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
     return attach_pad_grad(a, std::move(result), std::move(pad_width));
 }
 

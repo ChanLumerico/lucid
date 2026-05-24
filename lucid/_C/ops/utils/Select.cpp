@@ -36,6 +36,7 @@
 #include "../../autograd/Node.h"
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -362,6 +363,9 @@ TensorImplPtr where_op(const TensorImplPtr& cond, const TensorImplPtr& x, const 
         out_shape = x->shape();
     }
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({cond, x, y}, result);
+    }
     return attach_where_grad(cond, x, y, std::move(result));
 }
 
@@ -377,9 +381,13 @@ TensorImplPtr masked_fill_op(const TensorImplPtr& a, const TensorImplPtr& mask, 
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"masked_fill", device, dt, a->shape()};
+    scope.set_attr("fill_value", value);
     auto out_storage = backend::Dispatcher::for_device(device).masked_fill(
         a->storage(), mask->storage(), a->shape(), dt, value);
     auto result = fresh(std::move(out_storage), a->shape(), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a, mask}, result);
+    }
     return attach_masked_fill_grad(a, mask, std::move(result));
 }
 
@@ -399,9 +407,17 @@ roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<in
     const std::size_t ndim = a->shape().size();
     for (std::size_t i = 0; i < axes.size(); ++i)
         axes[i] = wrap_axis(axes[i], static_cast<int>(ndim));
+    {
+        std::vector<std::int64_t> axes_attr(axes.begin(), axes.end());
+        scope.set_attr("shifts", shifts);
+        scope.set_attr("axes", axes_attr);
+    }
     auto out_storage =
         backend::Dispatcher::for_device(device).roll(a->storage(), a->shape(), dt, shifts, axes);
     auto result = fresh(std::move(out_storage), a->shape(), dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
     auto bwd = std::make_shared<RollBackward>();
     bwd->input_shapes_ = {a->shape()};
     bwd->out_shape_ = result->shape();
@@ -432,6 +448,16 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
     auto out_storage = backend::Dispatcher::for_device(device).gather(
         a->storage(), indices->storage(), a->shape(), out_shape, ax, indices->dtype(), dt);
     auto result = fresh(std::move(out_storage), std::move(out_shape), dt, device);
+    // 3.5 Phase 1.3: explicit trace I/O — autograd wiring is gated by
+    // ``a->requires_grad()`` (and skipped when the index tensor is the
+    // grad-bearing one anyway), so the tracer would otherwise see the
+    // op header with empty inputs.  We also push the attribute ``axis``
+    // so the MPSGraph emitter can wire ``gatherWithUpdatesTensor:`` to
+    // the right axis.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a, indices}, result);
+        trc->on_op_attr("axis", static_cast<std::int64_t>(ax));
+    }
     if (GradMode::is_enabled() && a->requires_grad()) {
         auto bwd = std::make_shared<GatherBackward>();
         bwd->indices_ = indices->storage();
@@ -474,6 +500,9 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
         ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
     if (a1 > a2)
         std::swap(a1, a2);
+    scope.set_attr("offset", static_cast<std::int64_t>(offset));
+    scope.set_attr("axis1", static_cast<std::int64_t>(a1));
+    scope.set_attr("axis2", static_cast<std::int64_t>(a2));
 
     const std::int64_t M = a->shape()[a1];
     const std::int64_t N = a->shape()[a2];
@@ -543,10 +572,17 @@ TensorImplPtr flip_op(const TensorImplPtr& a, std::vector<int> dims) {
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"flip", device, dt, sh};
+    {
+        std::vector<std::int64_t> dims_attr(dims.begin(), dims.end());
+        scope.set_attr("dims", dims_attr);
+    }
 
     auto& be = backend::Dispatcher::for_device(device);
     Storage out = be.flip(a->storage(), sh, dims, dt);
     auto result = fresh(std::move(out), sh, dt, device);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, result);
+    }
     auto bwd = std::make_shared<FlipBackward>();
     bwd->input_shapes_ = {a->shape()};
     bwd->out_shape_ = result->shape();

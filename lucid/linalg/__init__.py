@@ -361,7 +361,27 @@ def norm(
     >>> norm(lucid.tensor([3.0, 4.0]))
     Tensor(5.0)
     """
-    return _wrap(_la.norm(_unwrap(x)))
+    # Forward user kwargs into the engine's positional signature:
+    #   norm(a, ord=2.0, dim=[], keepdims=False)
+    eff_ord: float
+    if ord is None:
+        eff_ord = 2.0
+    elif isinstance(ord, str):
+        if ord.lower() == "fro":
+            eff_ord = 2.0
+        else:
+            raise NotImplementedError(
+                f"lucid.linalg.norm: ord={ord!r} not supported via engine path"
+            )
+    else:
+        eff_ord = float(ord)
+    if dim is None:
+        eff_dim: list[int] = []
+    elif isinstance(dim, int):
+        eff_dim = [int(dim)]
+    else:
+        eff_dim = [int(d) for d in dim]
+    return _wrap(_la.norm(_unwrap(x), eff_ord, eff_dim, bool(keepdim)))
 
 
 # ── SVD with backward ─────────────────────────────────────────────────────────

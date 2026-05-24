@@ -24,13 +24,69 @@ def linear(
     weight: Tensor,
     bias: Tensor | None = None,
 ) -> Tensor:
-    """
-    Apply a linear transformation: y = x @ weight.T + bias.
+    r"""Apply an affine linear transformation :math:`y = x W^\top + b`.
 
-    Args:
-        x:      (..., in_features)
-        weight: (out_features, in_features)
-        bias:   (out_features,) or None
+    The canonical fully-connected layer kernel — every dense / MLP /
+    transformer block in Lucid ultimately routes through this call.
+    ``weight`` is stored in row-major ``(out_features, in_features)``
+    orientation (matching the rest of the framework's matmul-of-transpose
+    convention), and the leading batch dims of ``x`` are preserved
+    untouched.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input activations, shape ``(..., in_features)``.  Any number of
+        leading batch dimensions is allowed.
+    weight : Tensor
+        Weight matrix, shape ``(out_features, in_features)``.
+    bias : Tensor, optional
+        Bias vector, shape ``(out_features,)``.  When ``None`` (default)
+        the kernel runs with an implicit zero bias allocated on the same
+        device / dtype as ``weight`` — equivalent to the unbiased form
+        :math:`y = x W^\top`.
+
+    Returns
+    -------
+    Tensor
+        Output activations, shape ``(..., out_features)``.
+
+    Notes
+    -----
+    Implementation dispatches to the engine's :func:`nn.linear` kernel:
+    a single BLAS SGEMM on the CPU stream (Accelerate) or an MLX matmul
+    on the GPU stream, fused with the bias addition.  Backward stores
+    the saved ``x`` / ``weight`` so the chain-rule path
+
+    .. math::
+
+        \frac{\partial y}{\partial x} = W,\quad
+        \frac{\partial y}{\partial W} = x^\top,\quad
+        \frac{\partial y}{\partial b} = \mathbf{1}
+
+    can be evaluated with two more SGEMMs in :class:`LinearBackward`.
+    For inference-only ReLU / GELU follow-up the FusionPass picks
+    :func:`fused_linear_relu` / :func:`fused_linear_gelu` instead and
+    skips the activation's intermediate buffer.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.nn.functional import linear
+    >>> x = lucid.randn(4, 16)            # batch of 4
+    >>> w = lucid.randn(32, 16)
+    >>> b = lucid.zeros(32)
+    >>> linear(x, w, b).shape
+    (4, 32)
+    >>> linear(x, w).shape                # bias=None, unbiased form
+    (4, 32)
+
+    See Also
+    --------
+    lucid.nn.Linear : ``nn.Module`` wrapper that owns the parameters.
+    fused_linear_relu : fused linear + ReLU inference kernel.
+    fused_linear_gelu : fused linear + GELU inference kernel.
+    bilinear : two-input quadratic-interaction variant.
     """
     w_impl = _unwrap(weight)
     out_features = w_impl.shape[0]

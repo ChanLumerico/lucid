@@ -70,6 +70,8 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
         N *= static_cast<std::size_t>(gamma_eff->shape()[i]);
 
     OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
+    // 3.5 Phase 1.2: report eps for the compile-path RMSNorm emitter.
+    scope.set_attr("eps", eps);
 
     // rms_norm_forward returns {y, rstd}.
     auto forward = backend::Dispatcher::for_device(x_eff->device())

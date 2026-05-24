@@ -119,6 +119,7 @@ class SGD(Optimizer):
                 cast(float, group.get("momentum", 0.0)),
                 cast(float, group.get("dampening", 0.0)),
                 cast(float, group.get("weight_decay", 0.0)),
+                cast(bool, group.get("nesterov", False)),
             )
         )
 

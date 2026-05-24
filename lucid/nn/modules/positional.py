@@ -36,18 +36,21 @@ class SinusoidalEmbedding(Module):
     """Fixed 1-D sinusoidal positional encoding (Vaswani et al., 2017).
 
     Carries no learnable parameters — the encoding table is precomputed once
-    in ``__init__`` and stored as a non-persistent buffer.
+    in ``__init__`` and stored as a non-persistent buffer.  ``forward()``
+    returns the full ``(num_positions, embedding_dim)`` table; callers
+    typically slice it with ``pe()[:seq_len]`` and broadcast against their
+    batched hidden states.
 
-    Args:
-        num_positions: Maximum sequence length supported.
-        embedding_dim: Per-position embedding size; must be even.
-        base: Frequency base ``θ_0`` in the sin/cos formula.  10000 per
-            Vaswani 2017; some long-context models use larger.
-
-    Forward:
-        Returns the full ``(num_positions, embedding_dim)`` table.  Callers
-        typically slice it with ``pe()[:seq_len]`` and broadcast against
-        their batched hidden states.
+    Parameters
+    ----------
+    num_positions : int
+        Maximum sequence length supported.
+    embedding_dim : int
+        Per-position embedding size; must be even.
+    base : float, optional
+        Frequency base :math:`\\theta_0` in the sin/cos formula.  ``10000``
+        per Vaswani 2017; some long-context models use larger.  Default
+        ``10000.0``.
 
     Examples
     --------
@@ -106,16 +109,20 @@ class SinusoidalEmbedding2D(Module):
     Encodes spatial ``(row, column)`` coordinates: first half of the
     embedding dim encodes the column index, second half the row index.  Used
     in DETR and reusable for any image transformer that wants to inject
-    absolute spatial position without learnable parameters.
+    absolute spatial position without learnable parameters.  ``forward()``
+    returns the ``(H * W, embedding_dim)`` table in row-major order.
 
-    Args:
-        height: Feature-map height ``H``.
-        width:  Feature-map width  ``W``.
-        embedding_dim: Per-position embedding size; must be divisible by 4.
-        base: Frequency base (DETR uses 10000).
-
-    Forward:
-        Returns the ``(H * W, embedding_dim)`` table in row-major order.
+    Parameters
+    ----------
+    height : int
+        Feature-map height :math:`H`.
+    width : int
+        Feature-map width :math:`W`.
+    embedding_dim : int
+        Per-position embedding size; must be divisible by 4 (half encodes
+        column, half encodes row, each split into sin/cos).
+    base : float, optional
+        Frequency base.  DETR uses ``10000``.  Default ``10000.0``.
 
     Examples
     --------
@@ -174,20 +181,23 @@ class RotaryEmbedding(Module):
 
     Owns no learnable parameters — a thin wrapper around two registered
     buffers so the tables move with ``.to(device=...)`` and serialise with
-    the rest of the model state.
+    the rest of the model state.  ``forward()`` returns the precomputed
+    ``(cos, sin)`` pair; callers pass them into
+    :func:`lucid.nn.functional.apply_rotary_emb` along with the query /
+    key tensors.
 
-    Args:
-        head_dim:    Per-head feature dim ``d_head`` (must be even).
-        max_position_embeddings: Largest sequence length the model will see.
-        base:        Frequency base ``θ_0`` in the formula
-                     ``θ_i = base ** (-2 i / d_head)``.  Defaults to 10000.0
-                     per the RoFormer / LLaMA / GPT-NeoX convention; some
-                     models (e.g. CodeLlama at long context) use 1_000_000.
-
-    Forward:
-        ``forward()`` returns the precomputed ``(cos, sin)`` pair.  Callers
-        pass them into :func:`lucid.nn.functional.apply_rotary_emb`
-        along with the query / key tensors.
+    Parameters
+    ----------
+    head_dim : int
+        Per-head feature dim :math:`d_\\text{head}` (must be even).
+    max_position_embeddings : int
+        Largest sequence length the model will see.
+    base : float, optional
+        Frequency base :math:`\\theta_0` in the formula
+        :math:`\\theta_i = \\text{base}^{-2 i / d_\\text{head}}`.
+        Default ``10000.0`` per the RoFormer / LLaMA / GPT-NeoX
+        convention; some long-context models (e.g. CodeLlama) use
+        ``1_000_000``.
 
     Examples
     --------
@@ -205,9 +215,9 @@ class RotaryEmbedding(Module):
     (RoPE has no learnable state — regenerate at load time).  The module
     form is the right choice for any transformer that reuses the same
     ``max_position_embeddings`` across calls; the functional
-    :func:`lucid.nn.functional.apply_rotary_pos_emb` consumes the cached
-    pair and applies the rotation in place to ``q`` and ``k``.  See that
-    function for the rotation math.
+    :func:`lucid.nn.functional.apply_rotary_emb` consumes the cached
+    pair and applies the rotation in place to ``q`` and ``k``.  See
+    that function for the rotation math.
     """
 
     cos_cached: Tensor
@@ -273,17 +283,16 @@ class TimestepEmbedding(Module):
     looked up by position index.  Every diffusion model reimplements this
     — Lucid centralises it so VAE / DDPM / NCSN share one canonical layer.
 
-    Args:
-        in_dim:  Dimension of the raw sinusoidal embedding.  Must be even.
-        out_dim: Dimension of the projected output (the conditioning vector
-            consumed by U-Net residual blocks).  Often ``4 * in_dim``.
-        base:    Frequency base for the sinusoidal table.  Defaults to
-            ``10_000`` per the original Transformer convention.
-
-    Forward:
-        ``forward(timesteps)`` — ``timesteps`` is an integer tensor of
-        arbitrary shape (typically ``(B,)``); returns the projected
-        embedding of shape ``(*timesteps.shape, out_dim)``.
+    Parameters
+    ----------
+    in_dim : int
+        Dimension of the raw sinusoidal embedding.  Must be even.
+    out_dim : int
+        Dimension of the projected output — the conditioning vector
+        consumed by U-Net residual blocks.  Often ``4 * in_dim``.
+    base : float, optional
+        Frequency base for the sinusoidal table.  Default ``10_000.0``
+        per the original Transformer convention.
 
     Notes
     -----

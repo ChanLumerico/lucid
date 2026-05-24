@@ -1,0 +1,338 @@
+"""
+lucid.compile._fused_step — Phase 1.8 generic fused training step.
+
+``fused_step(model, loss_fn, optimizer)`` returns a callable that runs
+the entire training step (forward + loss + auto-derived gradients +
+optimizer.step) inside a single MPSGraph executable.  One ``run`` call
+per training iteration, all writes to parameters / optimizer state
+happen in-place via :func:`run_executable_inplace`.
+
+Architecture
+------------
+The optimizer update math lives in the corresponding
+:mod:`lucid.compile._optim` subclass's ``_trace_update`` method
+(``_CompiledSGD``, ``_CompiledAdam``, ..., ``_CompiledNAdam``).  At
+``fused_step`` construction time:
+
+1. Reuse the optimizer subclass to allocate state buffers + scalar
+   feeds.  It carries the math AND the in-place-target plan.
+2. Open a single :class:`Tracer`.  Run ``model(x); loss_fn(out, t)``
+   (the forward + loss path).  Then call the optimizer subclass's
+   ``_trace_update`` with **ghost grad placeholders** (zero tensors
+   that take the slot of "param_i.grad" in the trace).  The trace
+   now contains forward+loss+opt-update ops.
+3. Call :func:`compile_generic_fused_step` with the ghost grad ids.
+   C++ side derives gradients via MPSGraph autograd after emitting
+   the forward, binds each ghost grad id to its derived gradient
+   tensor, then continues emitting the opt-update ops (which now
+   resolve their grad reads correctly).
+4. Each ``step(x, t)`` call: refresh scalars (if any), then
+   :func:`run_executable_inplace` writes new params / new state
+   directly into the corresponding tensors.
+
+Supported optimizers
+--------------------
+Every optimizer that :func:`compile_optimizer` accepts: SGD, Adam,
+AdamW, RMSprop, Adagrad, Adadelta, Adamax, NAdam.  The same rejection
+messages apply for LBFGS / SparseAdam / Rprop / RAdam / ASGD.
+
+Usage
+-----
+::
+
+    model = MyModel().to('metal')
+    opt   = optim.Adam(model.parameters(), lr=0.001)
+    step  = lucid.compile.fused_step(model, F.mse_loss, opt)
+
+    for x, t in loader:
+        loss = step(x, t)        # forward + bwd + opt.step in one go
+        # No backward(), no opt.step() — already done.
+        if want_logging:
+            print(float(loss.item()))
+
+Limitations
+-----------
+* Single param_group only (the underlying compile_optimizer constraint).
+* No dynamic batch — shape-locked to the first call's input signature.
+* The loss tensor returned has no ``grad_fn`` (the backward has
+  already run inside the executable).  ``loss.backward()`` is a no-op.
+"""
+
+from typing import TYPE_CHECKING, Callable
+
+from lucid._C import engine as _C_engine
+
+if TYPE_CHECKING:
+    from lucid._tensor.tensor import Tensor
+    from lucid.nn.module import Module
+    from lucid.optim.optimizer import Optimizer
+
+__all__ = ["fused_step"]
+
+
+def fused_step(
+    model: Module,
+    loss_fn: Callable[..., Tensor],
+    optimizer: Optimizer,
+) -> Callable[..., Tensor]:
+    """Return a callable that runs one fused training step.
+
+    The first call traces ``model(*x); loss_fn(out, *targets);
+    optimizer._trace_update(...)`` once under a single :class:`Tracer`,
+    plumbs the ghost-grad placeholders, and compiles the resulting
+    graph into one :class:`MPSGraphExecutable` that runs forward +
+    loss + backward (via MPSGraph autodiff) + optimizer update in a
+    single submission.  Subsequent calls reuse the cached executable.
+
+    Delegates the optimizer math to the matching
+    :func:`compile_optimizer` subclass — so all 8 supported optimizers
+    (SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax, NAdam)
+    work in fused mode automatically.
+
+    Parameters
+    ----------
+    model : Module
+        The trainable :class:`nn.Module`.  Parameters from
+        ``optimizer.param_groups`` must reference these tensors.
+    loss_fn : Callable
+        Scalar-loss-returning callable invoked as
+        ``loss_fn(model_output, *targets)``.  Captured by identity in
+        the trace, so passing a fresh closure each call defeats the
+        cache.
+    optimizer : Optimizer
+        One of the 8 supported optimizers.  Unsupported optimizers
+        raise :class:`NotImplementedError` from
+        :func:`compile_optimizer` with the structural reason
+        (line-search / sign branch / per-step coefficient / …).
+
+    Returns
+    -------
+    Callable[..., Tensor]
+        A callable ``step(*args)`` where ``args`` is
+        ``(model_input, *loss_targets)``.  Returns the scalar loss
+        :class:`Tensor` from the just-completed step (the parameter
+        and optimizer-state buffers have already been updated
+        in-place inside the executable).
+    """
+    return _FusedStep(model, loss_fn, optimizer)
+
+
+def _zeros_like(t: Tensor) -> Tensor:
+    import lucid as _lucid
+
+    return _lucid.zeros(*t.shape, dtype=t.dtype, device=t.device)
+
+
+class _FusedStep:
+    """Unified fused-step driver.
+
+    Reuses :mod:`lucid.compile._optim` for the optimizer math, state
+    buffers, and scalar refresh; layered on top with forward+loss
+    tracing and the generic-fused-step C++ entry point.
+    """
+
+    def __init__(
+        self,
+        model: Module,
+        loss_fn: Callable[..., Tensor],
+        optimizer: Optimizer,
+    ) -> None:
+        from lucid.compile._optim import compile_optimizer
+
+        self._model = model
+        self._loss_fn = loss_fn
+        # The compile_optimizer subclass owns the optimizer math + state
+        # buffers + scalar feeds + output_targets.  Any optimizer it
+        # supports (or rejects) propagates automatically here.
+        self._copt = compile_optimizer(optimizer)
+        self._params = self._copt._params
+        if not self._params:
+            raise ValueError("fused_step: optimizer has no trainable parameters")
+
+        self._exe: object | None = None
+        # Per-call args stash so positional resolvers can pick them up.
+        self._current_args: tuple = ()
+        # Built at compile time, indexed by exe.input_ids.
+        self._input_resolvers: list[Callable[[], Tensor]] = []
+        # output_targets list parallel to exe.grad_output_ids (the opt
+        # outputs in order: new_params + new_state buffers).
+        self._output_targets: list[Tensor] = []
+        # Loss meta for fresh allocation each step.
+        self._loss_shape: tuple = ()
+        self._loss_dtype: object = None
+        self._loss_device: object = None
+
+    # ── Public API ──────────────────────────────────────────────
+
+    def __call__(self, *args: Tensor) -> Tensor:
+        if self._exe is None:
+            self._build_executable(args)
+        # Refresh per-step scalars (e.g. Adam bias correction).  The
+        # optimizer subclass owns this.
+        self._copt._refresh_scalars()
+        return self._run(args)
+
+    def recompile(self) -> None:
+        """Drop the cached executable so the next call retraces."""
+        self._exe = None
+
+    # ── Internals ───────────────────────────────────────────────
+
+    def _build_executable(self, args: tuple[Tensor, ...]) -> None:
+        from lucid._dispatch import _unwrap
+        from lucid._tensor.tensor import Tensor
+        from lucid.autograd._grad_mode import no_grad
+        from lucid.compile import _tracing
+
+        copt = self._copt
+        # The compile_optimizer subclass allocates its state buffers in
+        # __init__.  Force its scalar holders to exist now (they're
+        # registered inside ``_register_scalars``, called from
+        # ``_build_executable`` of the base — but we're not going
+        # through that path; replicate the relevant parts here).
+        scalars = copt._register_scalars(lambda kind, idx, t: None)
+        # Allocate ghost grad placeholders that stand in for the
+        # gradient inputs.  Their TensorImpl identity goes into the
+        # trace as external feeds; the C++ compile binds them to the
+        # MPSGraph-derived gradients before emitting the opt-update
+        # portion of the graph.
+        ghost_grads = [_zeros_like(p) for p in self._params]
+
+        # Trace forward + loss + opt update in one block.
+        with no_grad():
+            with _tracing() as tracer:
+                out = self._model(*args[:1])
+                loss = self._loss_fn(out, *args[1:])
+                # Pass ghost grads as the "grad" inputs to the
+                # optimizer math.  The subclass's _trace_update emits
+                # Lucid tensor ops referencing them; those become
+                # ghost-grad-consuming ops in the trace, which C++ will
+                # handle in the second emit phase.
+                opt_outputs = copt._trace_update(
+                    None,  # all_inputs unused by current _trace_update impls
+                    ghost_grads,
+                    scalars,
+                )
+
+        graph = tracer.graph
+        ext = dict(tracer.external_feeds)
+        if not graph.ops:
+            raise RuntimeError("fused_step: empty trace")
+
+        loss_id = int(tracer.lookup_id(_unwrap(loss)))
+        self._loss_shape = tuple(loss.shape)
+        self._loss_dtype = loss.dtype
+        self._loss_device = loss.device
+
+        # Resolve param ids.
+        param_ids: list[int] = []
+        for p in self._params:
+            tid = tracer.lookup_id(_unwrap(p))
+            if tid is None:
+                raise RuntimeError(
+                    "fused_step: a parameter was not observed in the "
+                    "trace (likely it isn't used in forward)"
+                )
+            param_ids.append(int(tid))
+
+        # Resolve ghost grad ids — must be in same order as param_ids.
+        ghost_grad_ids: list[int] = []
+        for g in ghost_grads:
+            tid = tracer.lookup_id(_unwrap(g))
+            if tid is None:
+                raise RuntimeError(
+                    "fused_step: ghost grad placeholder missing from trace"
+                )
+            ghost_grad_ids.append(int(tid))
+
+        # Resolve opt-output ids (new_params + new_state, in the order
+        # the subclass produced them).
+        output_target_ids: list[int] = []
+        for o in opt_outputs:
+            tid = tracer.lookup_id(_unwrap(o))
+            if tid is None:
+                raise RuntimeError(
+                    "fused_step: optimizer output tensor missing from trace"
+                )
+            output_target_ids.append(int(tid))
+
+        # Compile.
+        exe = _C_engine.compile.compile_generic_fused_step(
+            graph,
+            ext,
+            loss_id,
+            param_ids,
+            ghost_grad_ids,
+            output_target_ids,
+        )
+        if exe is None:
+            raise RuntimeError(
+                "fused_step: compile_generic_fused_step returned None — "
+                "an op in the combined trace has no emitter, or the "
+                "trace is otherwise incompatible with the fused path."
+            )
+
+        # Build per-input resolvers (impl identity → live tensor getter).
+        impl_to_resolver: dict[int, Callable[[], Tensor]] = {}
+        for i, p in enumerate(self._params):
+            impl_to_resolver[id(_unwrap(p))] = lambda _i=i: self._params[_i]
+        # State buffers + scalar holders from the compile_optimizer.
+        for (kind, idx), getter in copt._buffer_table.items():
+            impl_to_resolver[id(_unwrap(getter()))] = getter
+        for name, t in copt._scalar_slots.items():
+            impl_to_resolver[id(_unwrap(t))] = lambda _n=name: copt._scalar_slots[_n]
+        # Positional model inputs (keyed by impl id captured here, but
+        # read from self._current_args at run time).
+        for slot, a in enumerate(args):
+            if isinstance(a, Tensor):
+                impl_to_resolver[id(_unwrap(a))] = lambda _s=slot: self._current_args[
+                    _s
+                ]
+
+        resolvers: list[Callable[[], Tensor]] = []
+        for tid in exe.input_ids:
+            impl = ext.get(tid)
+            if impl is None:
+                raise RuntimeError(f"fused_step: input id {tid} not in external_feeds")
+            r = impl_to_resolver.get(id(impl))
+            if r is None:
+                raise RuntimeError(
+                    f"fused_step: input id {tid} has no resolver — "
+                    "trace captured an unexpected tensor"
+                )
+            resolvers.append(r)
+        self._input_resolvers = resolvers
+
+        # Output targets: the compile_optimizer subclass already knows
+        # which Tensors receive the opt outputs.  Same order as
+        # opt_outputs in _trace_update.
+        self._output_targets = copt._outputs_to_targets(opt_outputs)
+        if len(self._output_targets) != len(output_target_ids):
+            raise RuntimeError(
+                "fused_step: optimizer subclass output_targets count "
+                "doesn't match _trace_update output count"
+            )
+        self._exe = exe
+
+    def _run(self, args: tuple[Tensor, ...]) -> Tensor:
+        from lucid._dispatch import _unwrap
+        import lucid as _lucid
+
+        self._current_args = args
+        feeds = [_unwrap(r()) for r in self._input_resolvers]
+
+        # Fresh loss tensor (single-element output that flows back to
+        # Python; not in-place since callers want a clean handle).
+        loss_tensor = _lucid.zeros(
+            *self._loss_shape if self._loss_shape else (),
+            dtype=self._loss_dtype,
+            device=self._loss_device,
+        )
+
+        # Output target list: [loss_scratch, opt_outputs in order].
+        output_targets = [_unwrap(loss_tensor)]
+        for t in self._output_targets:
+            output_targets.append(_unwrap(t))
+
+        _C_engine.compile.run_executable_inplace(self._exe, feeds, output_targets)
+        return loss_tensor

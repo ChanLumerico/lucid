@@ -11,22 +11,61 @@ _F = TypeVar("_F", bound=Callable[..., object])
 
 
 class autocast:
-    """Enable automatic mixed-precision computation.
+    """Enable automatic mixed-precision computation inside a context.
 
-    Operations that support it will cast inputs to the specified dtype,
-    reducing memory and potentially increasing throughput on Metal GPU.
+    Operations that opt into AMP (matmul, conv, attention, …) cast their
+    inputs to the target lower-precision dtype on entry, reducing memory
+    pressure and — on Metal — improving throughput by activating the
+    M-series GPU's half-precision tensor pipelines.  Cast points are
+    inserted *only* at op boundaries; activations themselves are stored
+    in the lower-precision dtype but accumulator and reduction state stay
+    in float32 to preserve numerical fidelity (the standard "mixed" recipe).
 
-    The C++ AutocastGuard.__exit__ does not restore state, so this class
-    implements proper RAII entirely in Python.
+    The engine's :class:`AutocastGuard` is *enter-only* (its
+    ``__exit__`` is a no-op), so this Python class implements full RAII
+    on top of it: ``__enter__`` snapshots the previously active AMP
+    state, ``__exit__`` reinstalls it (or installs a neutral float32
+    guard if AMP was inactive before the scope).
 
-    Args:
-        device_type: Device context ('metal' or 'cpu'). Default: 'metal'.
-        dtype:       Target dtype for autocast (default: float16).
-        enabled:     If False, this context manager is a no-op.
+    Parameters
+    ----------
+    device_type : str, optional
+        Device the autocast scope applies to.  ``"metal"`` (GPU stream,
+        default) or ``"cpu"`` (Accelerate stream).
+    dtype : lucid.dtype, optional
+        Lower-precision dtype that supported ops cast inputs to inside
+        the scope.  Default :data:`lucid.float16`.
+    enabled : bool, optional
+        When ``False`` the context is a no-op — useful for ablation /
+        A/B comparing AMP on vs off without changing call sites.
+        Default ``True``.
 
-    Example:
-        with lucid.amp.autocast():
-            output = model(input)
+    Examples
+    --------
+    Context-manager form (typical training loop):
+
+    >>> import lucid
+    >>> with lucid.amp.autocast():
+    ...     output = model(input)        # ops cast to float16 inside
+    ...     loss = criterion(output, target)
+
+    Decorator form (every call wraps itself in a fresh scope):
+
+    >>> @lucid.amp.autocast()
+    ... def predict(x):
+    ...     return model(x)
+
+    Nested scopes restore the outer dtype on exit:
+
+    >>> with lucid.amp.autocast(dtype=lucid.float16):
+    ...     ...  # fp16 here
+    ...     with lucid.amp.autocast(dtype=lucid.bfloat16):
+    ...         ...  # bf16 here
+    ...     ...  # back to fp16 — prior guard reinstalled
+
+    See Also
+    --------
+    lucid.amp.GradScaler : loss-scaling counterpart for fp16 training.
     """
 
     def __init__(

@@ -42,9 +42,11 @@ namespace lucid {
 class LUCID_API SinhBackward : public UnaryOp<SinhBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::sinh`` to compute $y = \sinh x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.sinh(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = \cosh x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 
@@ -73,9 +75,11 @@ public:
 class LUCID_API CoshBackward : public UnaryOp<CoshBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::cosh`` to compute $y = \cosh x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.cosh(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = \sinh x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 
@@ -111,11 +115,14 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::tanh`` to compute $y = \tanh x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt) {
         return be.tanh(a, shape, dt);
     }
+    // Backward — $\partial y/\partial x = 1 - y^2$ using the saved output, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = (1 - out^2) * g  where out = tanh(x)
+    // Graph-mode backward: $\partial x = (1 - \mathrm{out}^2) \cdot g$ where
+    // $\mathrm{out} = \tanh x$; kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr& out);
 };

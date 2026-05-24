@@ -52,6 +52,7 @@ namespace lucid {
 class LUCID_API ReluBackward : public UnaryOp<ReluBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::relu`` to compute $y = \max(0, x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.relu(a, s, dt);
     }
@@ -104,6 +105,7 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kSavesOutput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::sigmoid`` to compute $y = 1 / (1 + e^{-x})$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.sigmoid(a, s, dt);
     }
@@ -144,6 +146,7 @@ class LUCID_API SiluBackward : public UnaryOp<SiluBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::silu`` to compute $y = x \cdot \sigma(x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.silu(a, s, dt);
     }
@@ -181,6 +184,8 @@ class LUCID_API GeluBackward : public UnaryOp<GeluBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::gelu`` to compute the tanh-approximation
+    // GeLU $y = 0.5\,x\,(1 + \tanh(\sqrt{2/\pi}\,(x + 0.044715\,x^3)))$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.gelu(a, s, dt);
     }
@@ -214,6 +219,8 @@ class LUCID_API GeluExactBackward : public UnaryOp<GeluExactBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::gelu_exact`` to compute the erf-based exact
+    // GeLU $y = 0.5\,x\,(1 + \mathrm{erf}(x/\sqrt{2}))$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.gelu_exact(a, s, dt);
     }
@@ -297,6 +304,7 @@ class LUCID_API SoftplusBackward : public UnaryOp<SoftplusBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::softplus`` to compute $y = \log(1 + e^x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.softplus(a, s, dt);
     }
@@ -388,6 +396,8 @@ class LUCID_API SeluBackward : public UnaryOp<SeluBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::selu`` to compute the Scaled ELU
+    // $y = \lambda\,x$ for $x \ge 0$ else $\lambda\,\alpha\,(e^x - 1)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.selu(a, s, dt);
     }
@@ -423,6 +433,8 @@ class LUCID_API MishBackward : public UnaryOp<MishBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::mish`` to compute
+    // $y = x \cdot \tanh(\mathrm{softplus}(x))$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.mish(a, s, dt);
     }
@@ -452,6 +464,8 @@ class LUCID_API HardSigmoidBackward : public UnaryOp<HardSigmoidBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::hard_sigmoid`` to compute
+    // $y = \mathrm{clamp}((x + 3)/6, 0, 1)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.hard_sigmoid(a, s, dt);
     }
@@ -483,6 +497,8 @@ class LUCID_API HardSwishBackward : public UnaryOp<HardSwishBackward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::hard_swish`` to compute
+    // $y = x \cdot \mathrm{hard\_sigmoid}(x)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.hard_swish(a, s, dt);
     }
@@ -512,6 +528,7 @@ class LUCID_API Relu6Backward : public UnaryOp<Relu6Backward> {
 public:
     static constexpr bool kSavesInput = true;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::relu6`` to compute $y = \mathrm{clamp}(x, 0, 6)$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.relu6(a, s, dt);
     }

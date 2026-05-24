@@ -87,7 +87,34 @@ def quantile(
 ) -> Tensor:
     """Compute the *q*-th quantile of ``input``.
 
-    Supports ``interpolation`` in ``{'linear','lower','higher','midpoint','nearest'}``.
+    Parameters
+    ----------
+    input : Tensor
+        Real-valued input.
+    q : float, sequence of float, or Tensor
+        Quantile(s) in :math:`[0, 1]`.  A single ``q`` returns a tensor
+        without the leading quantile axis; a sequence/tensor adds a
+        leading axis of length ``len(q)``.
+    dim : int, optional
+        Axis along which to reduce.  ``None`` (default) reduces over
+        the flattened input.
+    keepdim : bool, optional
+        Retain the reduced axis as a size-1 dimension.  Default
+        ``False``.
+    interpolation : str, optional
+        Rule for interpolating between the two samples bracketing the
+        quantile.  One of ``'linear'`` (default), ``'lower'``,
+        ``'higher'``, ``'midpoint'``, ``'nearest'``.
+
+    Returns
+    -------
+    Tensor
+        Same dtype as ``input``.  Shape depends on ``q`` / ``dim`` /
+        ``keepdim``.
+
+    See Also
+    --------
+    nanquantile : NaN-aware sibling.
     """
     q_list, scalar_q = _parse_q(q)
 
@@ -113,7 +140,40 @@ def nanquantile(
     keepdim: bool = False,
     interpolation: str = "linear",
 ) -> Tensor:
-    """Like :func:`quantile` but ignores NaN values."""
+    """NaN-aware quantile — same interface as :func:`quantile`, but
+    every ``NaN`` is excluded from the sort and the per-axis quantile
+    is computed over the remaining values.
+
+    Parameters
+    ----------
+    input : Tensor
+        Real-valued input.  ``NaN`` entries are masked out before
+        sorting.
+    q : float, sequence of float, or Tensor
+        Quantile(s) in :math:`[0, 1]`.  A single ``q`` returns a tensor
+        without the leading quantile axis; a sequence/tensor adds a
+        leading axis of length ``len(q)``.
+    dim : int, optional
+        Axis along which to reduce.  ``None`` (default) reduces over
+        the flattened input.
+    keepdim : bool, optional
+        Retain the reduced axis as a size-1 dimension.  Default
+        ``False``.
+    interpolation : str, optional
+        Interpolation rule between two surrounding samples.  Currently
+        ``"linear"`` is supported (default).
+
+    Returns
+    -------
+    Tensor
+        Same dtype as ``input``; shape depends on ``q`` / ``dim`` /
+        ``keepdim``.  Returns ``NaN`` for slices that contain only
+        ``NaN`` values.
+
+    See Also
+    --------
+    quantile : NaN-unaware version (a single ``NaN`` poisons the slice).
+    """
     # Replace NaN with +inf so they sort to the end, then count valid entries.
     nan_mask = lucid.isnan(input)
     safe = lucid.where(nan_mask, lucid.full_like(input, math.inf), input)
@@ -161,10 +221,27 @@ def nanquantile(
 
 
 def cov(input: Tensor, correction: int = 1) -> Tensor:
-    """Covariance matrix of ``input``.
+    r"""Covariance matrix of ``input``.
 
-    ``input`` has shape ``(N,)`` or ``(N, M)`` where *N* = variables,
-    *M* = observations.  Returns an ``(N, N)`` matrix.
+    Parameters
+    ----------
+    input : Tensor
+        Shape ``(N,)`` (single-variable degenerate case) or ``(N, M)``
+        — *N* variables observed at *M* time points.
+    correction : int, optional
+        Bessel correction; the divisor is ``max(1, M - correction)``.
+        Default ``1`` (unbiased sample covariance); pass ``0`` for the
+        biased population covariance.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, N)``.  Entry :math:`(i, j)` =
+        :math:`\frac{1}{M - \text{correction}}\sum_k (x_{i,k} - \bar x_i)(x_{j,k} - \bar x_j)`.
+
+    See Also
+    --------
+    corrcoef : normalised counterpart (Pearson correlation).
     """
     if input.ndim == 1:
         x = input.unsqueeze(0)  # (1, M)
@@ -179,7 +256,33 @@ def cov(input: Tensor, correction: int = 1) -> Tensor:
 
 
 def corrcoef(input: Tensor) -> Tensor:
-    """Pearson correlation matrix of ``input`` (shape ``(N,)`` or ``(N, M)``)."""
+    r"""Pearson correlation-coefficient matrix.
+
+    Composite of :func:`cov` divided by the outer product of the
+    per-variable standard deviations:
+
+    .. math::
+
+        R_{ij} = \frac{C_{ij}}{\sqrt{C_{ii}} \sqrt{C_{jj}}}.
+
+    Diagonal entries are ``1.0`` (up to floating-point); off-diagonal
+    entries fall in :math:`[-1, 1]`.
+
+    Parameters
+    ----------
+    input : Tensor
+        Shape ``(N,)`` for a single-variable degenerate case, or
+        ``(N, M)`` for ``N`` variables observed at ``M`` time points.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(N, N)`` Pearson correlation matrix.
+
+    See Also
+    --------
+    cov : raw covariance matrix without the std-normalisation.
+    """
     c = cov(input, correction=1)  # (N, N)
     d = lucid.sqrt(lucid.diagonal(c))  # (N,) — std deviations
     # Outer product: d_col * d_row gives the normalisation matrix
@@ -192,10 +295,32 @@ def corrcoef(input: Tensor) -> Tensor:
 
 
 def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
-    """Pairwise distance matrix between rows of ``x1`` and ``x2``.
+    r"""Pairwise :math:`L_p` distance matrix between rows of ``x1`` and ``x2``.
 
-    ``x1`` shape ``(..., P, M)``, ``x2`` shape ``(..., R, M)``.
-    Returns shape ``(..., P, R)``.
+    Specialised paths exist for ``p`` in :math:`\{1, 2, \infty, 0\}`;
+    other ``p`` values fall back to the general
+    :math:`(\sum_k |a_k - b_k|^p)^{1/p}` formula.  For ``p=2`` the
+    numerically stable expansion
+    :math:`\|a-b\|^2 = \|a\|^2 + \|b\|^2 - 2 a \cdot b^\top` is used
+    so large coordinates don't lose precision.
+
+    Parameters
+    ----------
+    x1 : Tensor
+        Shape ``(..., P, M)``.
+    x2 : Tensor
+        Shape ``(..., R, M)``.  Leading batch dimensions are
+        broadcast-compatible with ``x1``.
+    p : float, optional
+        :math:`L_p` exponent.  Default ``2.0`` (Euclidean).  Use
+        ``float("inf")`` for Chebyshev, ``0.0`` for the Hamming-style
+        non-zero count.
+
+    Returns
+    -------
+    Tensor
+        Shape ``(..., P, R)``.  Entry :math:`(\ldots, i, j)` =
+        :math:`\|x_1[\ldots, i, :] - x_2[\ldots, j, :]\|_p`.
     """
     if p == 2.0:
         # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ  (numerically stable)
@@ -238,8 +363,28 @@ def bincount(
 ) -> Tensor:
     """Count occurrences of each integer value in ``input``.
 
-    ``input`` must be a 1-D non-negative integer tensor.
-    Returns a 1-D tensor of length ``max(input.max() + 1, minlength)``.
+    Parameters
+    ----------
+    input : Tensor
+        1-D non-negative integer tensor.  Negative values raise.
+    weights : Tensor, optional
+        Same length as ``input``.  When supplied, ``output[i]`` is the
+        *sum of weights* for entries with value ``i`` (rather than the
+        plain count).  Default ``None``.
+    minlength : int, optional
+        Floor for the output length.  The output has length
+        ``max(input.max() + 1, minlength)``.  Default ``0``.
+
+    Returns
+    -------
+    Tensor
+        1-D tensor; dtype is float when ``weights`` is given, otherwise
+        int64.
+
+    Raises
+    ------
+    ValueError
+        If ``input`` contains negative values.
     """
     flat = input.reshape(-1)
     n = int(flat.shape[0])
@@ -269,11 +414,33 @@ def multinomial(
 ) -> Tensor:
     """Draw ``num_samples`` indices from the categorical distribution defined by ``input``.
 
-    ``input`` can be 1-D (single distribution) or 2-D (batch of distributions).
-    Returns an integer tensor of shape ``(num_samples,)`` or
-    ``(batch_size, num_samples)`` respectively.
+    Non-differentiable — gradients of ``input`` are not propagated
+    through the sampling step.  Pass an explicit ``generator`` for an
+    isolated PRNG stream; without one, draws come from Lucid's
+    :func:`manual_seed`-controlled default Philox generator.
 
-    This op is not differentiable.
+    Parameters
+    ----------
+    input : Tensor
+        Probability weights.  1-D ``(K,)`` for a single categorical
+        distribution, or 2-D ``(B, K)`` for a batch of ``B``
+        distributions.  Weights are renormalised internally; they need
+        not sum to 1.
+    num_samples : int
+        Number of draws per distribution.
+    replacement : bool, optional
+        When ``True`` each draw is independent.  When ``False``
+        (default) each chosen index is removed before the next draw
+        within the same row.
+    generator : engine.Generator, optional
+        Override Lucid's default Philox generator with an isolated
+        stream.
+
+    Returns
+    -------
+    Tensor
+        Integer tensor.  Shape ``(num_samples,)`` for 1-D input,
+        ``(B, num_samples)`` for 2-D input.
     """
 
     def _sample_row(probs_list: list[float], k: int, replace: bool) -> list[int]:
@@ -323,20 +490,39 @@ def poisson(
     *,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
-    """Sample element-wise from ``Poisson(rate=input[i])``.
+    r"""Sample element-wise from :math:`\mathrm{Poisson}(\text{rate} = \text{input}[i])`.
 
-    Returns an int64 tensor of the same shape as ``input``.  Negative
-    rates raise ``ValueError``; zero rates always return zero.
+    Parameters
+    ----------
+    input : Tensor
+        Non-negative rates :math:`\lambda_i` per output position.  Any
+        shape.
+    generator : engine.Generator, optional
+        Override Lucid's default Philox generator with an isolated
+        stream.  When ``None`` (default), draws are controlled by
+        :func:`manual_seed`.
 
-    Algorithm:
-      * Knuth's multiplication method for ``rate < 30`` (exact, but
-        runtime grows with the rate).
-      * Normal approximation ``Pois(λ) ≈ ⌊N(λ, √λ) + 0.5⌋`` for
-        ``rate ≥ 30`` — bias < 0.05 standard deviations and orders of
-        magnitude faster than Knuth in the tail.
+    Returns
+    -------
+    Tensor
+        ``int64`` tensor with the same shape as ``input``.  Zero rates
+        always return zero.
 
-    Uses Lucid's Philox PRNG so :func:`manual_seed` controls the stream;
-    pass an explicit ``generator`` for an isolated sequence.
+    Raises
+    ------
+    ValueError
+        If any element of ``input`` is negative.
+
+    Notes
+    -----
+    Two-branch implementation:
+
+    * **Knuth's multiplication method** for ``rate < 30`` — exact but
+      runtime grows with the rate.
+    * **Normal approximation** :math:`\mathrm{Pois}(\lambda) \approx
+      \lfloor \mathcal{N}(\lambda, \sqrt{\lambda}) + 0.5 \rfloor`
+      for ``rate >= 30`` — bias < 0.05 standard deviations, orders of
+      magnitude faster than Knuth in the tail.
     """
     from lucid._factories.random import _active_default_gen
 
@@ -399,12 +585,29 @@ def histogram2d(
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Joint 2-D histogram of paired observations ``(x[i], y[i])``.
 
-    Returns ``(counts, x_edges, y_edges)``: a ``(bins_x, bins_y)`` count
-    matrix plus per-axis edge tensors of length ``bins_x + 1`` and
-    ``bins_y + 1``.
+    Parameters
+    ----------
+    x : Tensor
+        1-D x-coordinates.
+    y : Tensor
+        1-D y-coordinates; must have the same length as ``x``.
+    bins : int or tuple[int, int], optional
+        Bin count.  A single int applies to both axes; a 2-tuple sets
+        each axis independently.  Default ``10`` (i.e. 10×10).
+    range : tuple of (float, float), optional
+        ``((x_lo, x_hi), (y_lo, y_hi))``.  When ``None`` (default)
+        each axis uses its own ``(min, max)``.
+    density : bool, optional
+        When ``True`` divide by total count × bin area to yield a
+        probability density (sums × bin-area = 1).  Default ``False``.
 
-    Mirrors the reference framework's contract: ``range`` is a pair of
-    ``(lo, hi)`` tuples.  Unset ranges default to per-axis min/max.
+    Returns
+    -------
+    tuple of Tensor
+        ``(counts, x_edges, y_edges)``.  ``counts`` shape
+        ``(bins_x, bins_y)`` int64 (or float64 when ``density``).
+        ``x_edges`` length ``bins_x + 1``, ``y_edges`` length
+        ``bins_y + 1``.
     """
     from lucid._C import engine as _C_engine
     from lucid._dispatch import _unwrap, _wrap
@@ -451,12 +654,30 @@ def histogramdd(
     range: Sequence[tuple[float, float]] | None = None,
     density: bool = False,
 ) -> tuple[Tensor, list[Tensor]]:
-    """N-dimensional histogram.
+    """N-dimensional histogram for arbitrary sample dimension.
 
-    ``input`` must have shape ``(N, D)`` — N samples in D dimensions.
-    Returns ``(counts, edges)`` where ``counts`` has shape
-    ``(bins_0, bins_1, …, bins_{D-1})`` and ``edges`` is a list of D
-    1-D tensors holding the per-axis bin boundaries.
+    Parameters
+    ----------
+    input : Tensor
+        Shape ``(N, D)`` — :math:`N` samples in :math:`D`
+        dimensions.  Other ranks raise.
+    bins : int or sequence of int, optional
+        Bin count per axis.  A single int applies to every axis; a
+        sequence of length :math:`D` sets each axis independently.
+        Default ``10``.
+    range : sequence of (float, float), optional
+        Per-axis ``(lo, hi)`` ranges.  When ``None`` (default) each
+        axis uses its own ``(min, max)`` of the samples.
+    density : bool, optional
+        When ``True`` divide by total count × bin volume to yield a
+        density that integrates to 1.  Default ``False``.
+
+    Returns
+    -------
+    tuple
+        ``(counts, edges)``.  ``counts`` shape
+        ``(bins_0, …, bins_{D-1})``; ``edges`` is a length-:math:`D`
+        list of 1-D tensors of size ``bins_i + 1``.
     """
     from lucid._C import engine as _C_engine
     from lucid._dispatch import _unwrap, _wrap
@@ -521,10 +742,31 @@ def histogram(
     density: bool = False,
     weight: Tensor | None = None,
 ) -> tuple[Tensor, Tensor]:
-    """Compute a histogram of ``input`` values.
+    """Compute a 1-D histogram of ``input`` values.
 
-    Returns ``(hist, bin_edges)`` — a 1-D count/density tensor and a
-    1-D tensor of ``bins + 1`` edges.
+    Parameters
+    ----------
+    input : Tensor
+        Values to bin.  Flattened internally — shape doesn't matter.
+    bins : int or sequence of float, optional
+        When an int, the number of equal-width bins (default ``10``).
+        When a sequence, the explicit bin edges (length ``bins_n + 1``).
+    range : tuple[float, float], optional
+        ``(lo, hi)``.  Values outside the range are dropped.  Ignored
+        when ``bins`` is a sequence of explicit edges.  ``None``
+        (default) → ``(input.min(), input.max())``.
+    density : bool, optional
+        When ``True`` divide by total count × bin width to yield a
+        probability density that integrates to 1.  Default ``False``.
+    weight : Tensor, optional
+        Same length as ``input``.  When supplied, sums weights per bin
+        rather than counting.  Default ``None``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(hist, bin_edges)``.  ``hist`` is a 1-D count/density tensor;
+        ``bin_edges`` is 1-D of length ``bins + 1``.
     """
     # ``range`` is a function parameter that shadows the Python
     # builtin — capture the builtin once for use below.
@@ -589,7 +831,39 @@ def std_mean(
     correction: int = 1,
     keepdim: bool = False,
 ) -> tuple[Tensor, Tensor]:
-    """Return ``(std, mean)`` along ``dim``."""
+    """Return ``(std, mean)`` along ``dim`` in a single call.
+
+    Fused convenience over :func:`lucid.std` + :func:`lucid.mean` — the
+    engine reduction still scans ``x`` twice, but the call site is
+    shorter and the two outputs share an explicit ``correction`` /
+    ``keepdim`` contract.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input.
+    dim : int, sequence of int, or None, optional
+        Axis or axes to reduce.  ``None`` (default) reduces over every
+        axis to a scalar pair.
+    correction : int, optional
+        Bessel correction passed to :func:`lucid.std`.  ``1`` is the
+        unbiased sample std (default); ``0`` gives the biased
+        population std.
+    keepdim : bool, optional
+        Retain the reduced axes as size-1 dimensions.  Default
+        ``False``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(std, mean)`` — same shape relationship as
+        :func:`lucid.std` / :func:`lucid.mean` would produce
+        individually.
+
+    See Also
+    --------
+    var_mean : variance + mean variant.
+    """
     if dim is not None:
         _dim = list(dim) if not isinstance(dim, int) else dim
         m = lucid.mean(x, _dim, keepdim)
@@ -606,7 +880,36 @@ def var_mean(
     correction: int = 1,
     keepdim: bool = False,
 ) -> tuple[Tensor, Tensor]:
-    """Return ``(var, mean)`` along ``dim``."""
+    """Return ``(var, mean)`` along ``dim`` in a single call.
+
+    Variance counterpart to :func:`std_mean`.  Useful inside
+    normalisation layers where the squared deviation is the quantity
+    actually wanted (e.g. BatchNorm / LayerNorm forward computes
+    ``(x - mean) / sqrt(var + eps)``).
+
+    Parameters
+    ----------
+    x : Tensor
+        Input.
+    dim : int, sequence of int, or None, optional
+        Axis or axes to reduce.  ``None`` (default) → full-tensor
+        reduction.
+    correction : int, optional
+        Bessel correction passed to :func:`lucid.var`.  Default ``1``
+        (unbiased sample variance).
+    keepdim : bool, optional
+        Retain the reduced axes as size-1 dimensions.  Default
+        ``False``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(var, mean)``.
+
+    See Also
+    --------
+    std_mean : standard-deviation + mean variant.
+    """
     if dim is not None:
         _dim = list(dim) if not isinstance(dim, int) else dim
         m = lucid.mean(x, _dim, keepdim)

@@ -21,6 +21,7 @@
 
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -157,6 +158,16 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     OpScopeFull scope{ConvNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt, out_shape};
     // 2 ops (mul+add) per element of the output per input-channel-kernel position.
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout * O_total * Cin_g * K_total);
+    // 3.5 Phase 1.2: report conv params for the compile-path emitter.
+    {
+        std::vector<std::int64_t> Sv(stride, stride + N);
+        std::vector<std::int64_t> Pv(pad, pad + N);
+        std::vector<std::int64_t> Dv(dilation, dilation + N);
+        scope.set_attr("stride", std::move(Sv));
+        scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("dilation", std::move(Dv));
+        scope.set_attr("groups", static_cast<std::int64_t>(groups));
+    }
 
     backend::IBackend::ConvNdOpts opts{};
     opts.N = N;
@@ -173,6 +184,10 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
                                             x_eff->device(), false);
+    // wire_autograd (below) calls ``on_op_io`` internally — recording it
+    // here too would double-feed the trace (6 inputs instead of 3) and
+    // abort the compile.  Conv1d/3d still rely on the wire_autograd
+    // path; the explicit hook is intentionally omitted.
 
     auto bwd = std::make_shared<ConvNdBackward<N>>();
     for (int i = 0; i < N; ++i) {
@@ -311,6 +326,16 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
                     static_cast<std::int64_t>(O_total)};
 
     OpScopeFull scope{schema_v1.name, x->device(), x->dtype(), out_shape};
+    {
+        std::vector<std::int64_t> Kv(kernel.begin(), kernel.end());
+        std::vector<std::int64_t> Sv(stride.begin(), stride.end());
+        std::vector<std::int64_t> Pv(pad.begin(), pad.end());
+        std::vector<std::int64_t> Dv(dilation.begin(), dilation.end());
+        scope.set_attr("kernel_size", std::move(Kv));
+        scope.set_attr("stride", std::move(Sv));
+        scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("dilation", std::move(Dv));
+    }
 
     auto& be = backend::Dispatcher::for_device(x->device());
     Storage out_storage = be.unfold_forward(x->storage(), B, C, S, K, O, stride, pad, dilation,
@@ -318,6 +343,9 @@ TensorImplPtr UnfoldBackward::forward(const TensorImplPtr& x,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
                                             x->dtype(), x->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({x}, out);
+    }
 
     {
         auto bwd = std::make_shared<UnfoldBackward>();
@@ -375,11 +403,27 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
     Shape out_shape = {static_cast<std::int64_t>(N), static_cast<std::int64_t>(C),
                        static_cast<std::int64_t>(outH), static_cast<std::int64_t>(outW)};
     OpScopeFull scope{"fold", x->device(), x->dtype(), out_shape};
+    {
+        std::vector<std::int64_t> Sv(output_size.begin(), output_size.end());
+        std::vector<std::int64_t> Kv(kernel_size.begin(), kernel_size.end());
+        std::vector<std::int64_t> Tv(stride.begin(), stride.end());
+        std::vector<std::int64_t> Pv(padding.begin(), padding.end());
+        std::vector<std::int64_t> Dv(dilation.begin(), dilation.end());
+        scope.set_attr("output_size", std::move(Sv));
+        scope.set_attr("kernel_size", std::move(Kv));
+        scope.set_attr("stride", std::move(Tv));
+        scope.set_attr("padding", std::move(Pv));
+        scope.set_attr("dilation", std::move(Dv));
+    }
 
     auto& be = backend::Dispatcher::for_device(x->device());
     Storage out = be.nn_fold(x->storage(), x->shape(), out_shape, kernel_size, stride, padding,
                              dilation, x->dtype());
-    return std::make_shared<TensorImpl>(std::move(out), out_shape, x->dtype(), x->device(), false);
+    auto result = std::make_shared<TensorImpl>(std::move(out), out_shape, x->dtype(), x->device(), false);
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({x}, result);
+    }
+    return result;
 }
 
 }  // namespace lucid

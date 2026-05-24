@@ -28,9 +28,11 @@
 
 #include "../autograd/AccumulateGrad.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Allocator.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 
 namespace lucid {
@@ -90,6 +92,47 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     Shape cn_shape{static_cast<std::int64_t>(opts.num_layers), static_cast<std::int64_t>(B),
                    static_cast<std::int64_t>(H)};
 
+    // Open an OpScope so the trace sees ``lstm`` as a single 3-output
+    // op.  Attrs carry the shape parameters the compile-path emitter
+    // needs to set up the MPSGraph LSTMDescriptor.  Without this the
+    // C++ fused call would run invisible to the trace and downstream
+    // ops would treat its outputs as fresh external feeds.
+    OpScopeFull scope{"lstm", dev, dt, out_shape};
+    scope.set_attr("hidden_size", static_cast<std::int64_t>(H));
+    scope.set_attr("num_layers", static_cast<std::int64_t>(opts.num_layers));
+    scope.set_attr("batch_first", opts.batch_first);
+    scope.set_attr("bidirectional", opts.bidirectional);
+    scope.set_attr("proj_size", static_cast<std::int64_t>(opts.proj_size));
+    scope.set_attr("has_bias", weights.size() >= 4);
+
+    auto register_trace_outputs = [&](const TensorImplPtr& out_t,
+                                       const TensorImplPtr& hn_t,
+                                       const TensorImplPtr& cn_t) {
+        auto* trc = ::lucid::compile::current_tracer();
+        if (trc == nullptr) return;
+        // Pass all inputs on the first on_op_io call; the subsequent
+        // calls pass empty input lists so the trace's input record
+        // doesn't duplicate (see Tracer's first-vs-subsequent
+        // detection logic).
+        std::vector<TensorImplPtr> all_inputs{input, h0, c0};
+        for (const auto& w : weights) all_inputs.push_back(w);
+        trc->on_op_io(all_inputs, out_t);
+        trc->on_op_io({}, hn_t);
+        trc->on_op_io({}, cn_t);
+    };
+
+    // Backend storage convention: ``lstm_forward`` / ``lstm_forward_train``
+    // emit hn / cn as 2-D ``(B, Hrec/H)`` arrays, while Lucid's Python
+    // API contract is 3-D ``(num_layers, B, Hrec/H)``.  Without an
+    // explicit reshape the TensorImpl claims the 3-D shape but the
+    // underlying MLX storage still reports 2 dims — any downstream op
+    // that walks the storage rank (``sum`` / ``flatten`` / …) then
+    // fails with ``Invalid axis 2 for array with 2 dimensions``.  Add
+    // the unsqueeze here so the storage rank matches what callers see.
+    const Shape hn_storage_2d{static_cast<std::int64_t>(B),
+                              static_cast<std::int64_t>(Hout)};
+    const Shape cn_storage_2d{static_cast<std::int64_t>(B), static_cast<std::int64_t>(H)};
+
     if (!needs_grad) {
         // Backends that don't implement projection in lstm_forward route
         // through the training kernel for proj_size > 0 and discard the
@@ -99,15 +142,23 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
                                                w_storages, opts, dt);
             if (res_p.size() < 3)
                 ErrorBuilder("lstm").fail("lstm_forward_train returned < 3 outputs");
-            return {std::make_shared<TensorImpl>(std::move(res_p[0]), out_shape, dt, dev, false),
-                    std::make_shared<TensorImpl>(std::move(res_p[1]), hn_shape, dt, dev, false),
-                    std::make_shared<TensorImpl>(std::move(res_p[2]), cn_shape, dt, dev, false)};
+            auto hn_3d = be.reshape(res_p[1], hn_storage_2d, hn_shape, dt);
+            auto cn_3d = be.reshape(res_p[2], cn_storage_2d, cn_shape, dt);
+            auto out_t = std::make_shared<TensorImpl>(std::move(res_p[0]), out_shape, dt, dev, false);
+            auto hn_t = std::make_shared<TensorImpl>(std::move(hn_3d), hn_shape, dt, dev, false);
+            auto cn_t = std::make_shared<TensorImpl>(std::move(cn_3d), cn_shape, dt, dev, false);
+            register_trace_outputs(out_t, hn_t, cn_t);
+            return {out_t, hn_t, cn_t};
         }
         auto res = be.lstm_forward(input->storage(), h0->storage(), c0->storage(), w_storages, opts,
                                    out_shape, dt);
-        return {std::make_shared<TensorImpl>(std::move(res[0]), out_shape, dt, dev, false),
-                std::make_shared<TensorImpl>(std::move(res[1]), hn_shape, dt, dev, false),
-                std::make_shared<TensorImpl>(std::move(res[2]), cn_shape, dt, dev, false)};
+        auto hn_3d = be.reshape(res[1], hn_storage_2d, hn_shape, dt);
+        auto cn_3d = be.reshape(res[2], cn_storage_2d, cn_shape, dt);
+        auto out_t = std::make_shared<TensorImpl>(std::move(res[0]), out_shape, dt, dev, false);
+        auto hn_t = std::make_shared<TensorImpl>(std::move(hn_3d), hn_shape, dt, dev, false);
+        auto cn_t = std::make_shared<TensorImpl>(std::move(cn_3d), cn_shape, dt, dev, false);
+        register_trace_outputs(out_t, hn_t, cn_t);
+        return {out_t, hn_t, cn_t};
     }
 
     auto res =
@@ -115,9 +166,11 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     if (res.size() < 5)
         ErrorBuilder("lstm").fail("lstm_forward_train returned < 5 outputs");
 
+    auto hn_3d = be.reshape(res[1], hn_storage_2d, hn_shape, dt);
+    auto cn_3d = be.reshape(res[2], cn_storage_2d, cn_shape, dt);
     auto out_t = std::make_shared<TensorImpl>(std::move(res[0]), out_shape, dt, dev, true);
-    auto hn_t = std::make_shared<TensorImpl>(std::move(res[1]), hn_shape, dt, dev, false);
-    auto cn_t = std::make_shared<TensorImpl>(std::move(res[2]), cn_shape, dt, dev, false);
+    auto hn_t = std::make_shared<TensorImpl>(std::move(hn_3d), hn_shape, dt, dev, false);
+    auto cn_t = std::make_shared<TensorImpl>(std::move(cn_3d), cn_shape, dt, dev, false);
 
     auto bwd = std::make_shared<LstmBackward>();
     bwd->saved_input = input->storage();

@@ -40,6 +40,7 @@ TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
     Validator::input(a, "pow_scalar.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("exp", exp);
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .pow_scalar(a->storage(), a->shape(), a->dtype(), exp);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
@@ -76,6 +77,7 @@ TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
     Validator::input(a, "rpow_scalar.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("base", base);
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .rpow_scalar(a->storage(), a->shape(), a->dtype(), base);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),
@@ -109,6 +111,8 @@ TensorImplPtr ClipBackward::forward(const TensorImplPtr& a, double min_v, double
     Validator::input(a, "clip.a").non_null();
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
+    scope.set_attr("min", min_v);
+    scope.set_attr("max", max_v);
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .clip(a->storage(), a->shape(), a->dtype(), min_v, max_v);
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a->shape(), a->dtype(),

@@ -44,10 +44,22 @@ MODULE_CACHE = CACHE_DIR / "modules.json"
 
 
 def _compute_key() -> str:
-    """Hash (path, mtime_ns) for every .py under lucid/ plus the build script."""
+    """Hash (path, mtime_ns) for every .py under lucid/ plus every
+    build / post-build script the prebuild chain invokes.
+
+    Tracking the *full* set of scripts (not just ``build-api-data.py``)
+    means that editing ``build-usedby.py`` or ``link-citations.py``
+    invalidates the cache even when the Lucid sources are untouched —
+    otherwise the user would see stale output from a refactored
+    post-build pass and have to ``FORCE_API_BUILD=1`` to recover.
+    """
     h = hashlib.sha256()
     sources: list[Path] = sorted(LUCID_SRC.rglob("*.py"))
-    sources.append(BUILD_SCRIPT)
+    # Every script the prebuild / build-meta chain runs.  Sorted for
+    # determinism — relative order of script edits shouldn't change
+    # the cache key, only the set of mtimes.
+    for script_name in sorted(HERE.glob("*.py")):
+        sources.append(script_name)
     for p in sources:
         try:
             st = p.stat()
@@ -186,8 +198,54 @@ def main() -> int:
             d = _slug_to_source_dir(slug)
             if d is None:
                 continue
-            files = list(d.rglob("*.py")) if d.is_dir() else [d]
+            # ``_slug_to_source_dir`` returns the canonical source dir
+            # but doesn't itself check existence — the recursive
+            # ``rglob`` would silently emit zero files when the dir
+            # was renamed / deleted, which then collides with the
+            # previous cache entry's hash and forces unnecessary
+            # rebuilds.  Skip the slug here so the orphan-cleanup
+            # branch below handles it instead.
+            if d.is_dir():
+                files = list(d.rglob("*.py"))
+            elif d.is_file():
+                files = [d]
+            else:
+                continue
+            if not files:
+                continue
             current_per_module[slug] = _hash_paths(files)
+
+    # ── Orphan cleanup — slugs that used to be in the cache but no
+    # longer have a source directory.  Could happen on file deletes /
+    # renames / branch switches.  We delete the stale JSON + drop the
+    # slug from the cache so subsequent builds don't try to rebuild
+    # ghosts.  Synth-slug names are exempt because their source dirs
+    # don't map 1:1 to file system locations.
+    SYNTH_NAMES = {"lucid.ops", "lucid.creation", "lucid.ops.composite", "lucid._C.engine"}
+    orphans: list[str] = []
+    for slug in list(prev_fingerprints.keys()):
+        if slug in SYNTH_NAMES:
+            continue
+        if _slug_to_source_dir(slug) is None:
+            orphans.append(slug)
+            continue
+        d = _slug_to_source_dir(slug)
+        if d is not None and not (d.is_dir() or d.is_file()):
+            orphans.append(slug)
+    for slug in orphans:
+        jp = OUT_DIR / f"{slug}.json"
+        if jp.exists():
+            try:
+                jp.unlink()
+            except OSError:
+                pass
+        prev_fingerprints.pop(slug, None)
+    if orphans:
+        print(
+            f"[api-data] pruned {len(orphans)} orphan slug(s): "
+            + ", ".join(orphans[:3])
+            + (f" + {len(orphans) - 3} more" if len(orphans) > 3 else ""),
+        )
 
     # Decide rebuild strategy.  If we have NO prior cache or the per-
     # module cache is empty, fall back to a full rebuild — it's faster

@@ -36,6 +36,7 @@
 #include "../autograd/AutogradNode.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
+#include "../compile/Tracer.h"  // 3.5 Phase 1.2 step 2: trace I/O wiring at forward
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -327,6 +328,14 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), eff_dt,
                                             a_ptr->device(), false);
     scope.set_flops(static_cast<std::int64_t>(out->numel()));
+
+    // 3.5 Phase 1.2 step 2: trace I/O wiring at the forward boundary.
+    // UnaryKernel doesn't go through NaryKernel::wire_autograd, so the
+    // hook here keeps element-wise + activation ops in the trace IR.
+    // Outside any _tracing() scope this is one TLS load + null check.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+    }
 
     if constexpr (!Derived::kHasGradient) {
         return out;

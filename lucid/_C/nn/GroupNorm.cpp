@@ -79,6 +79,9 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
         spatial_total *= S[i];
     }
     OpScopeFull scope{schema_v1.name, x_eff->device(), eff_dt, x_eff->shape()};
+    // 3.5 Phase 1.2: report eps + num_groups for the compile-path GN emitter.
+    scope.set_attr("eps", eps);
+    scope.set_attr("num_groups", static_cast<std::int64_t>(G));
 
     // group_norm_forward returns [y, mean, rstd].
     auto forward = backend::Dispatcher::for_device(x_eff->device())

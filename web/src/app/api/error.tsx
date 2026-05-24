@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { buildIssueUrl } from "@/lib/error-report";
 
 /** API-section error boundary.  Catches any render-time throw inside
  *  ``/api/*`` (broken JSON payload, missing slug, type-cast failure
@@ -26,6 +27,12 @@ export default function ApiError({
     }
   }, [error]);
 
+  const issueUrl = buildIssueUrl({
+    title: `[docs] /api error: ${error.message}`,
+    error,
+    section: "/api",
+  });
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-16 text-center">
       <p className="mb-3 font-mono text-[11px] font-semibold tracking-widest uppercase text-lucid-error">
@@ -49,6 +56,11 @@ export default function ApiError({
         <Button onClick={reset}>Try again</Button>
         <Button variant="secondary" asChild>
           <a href="/api">API home</a>
+        </Button>
+        <Button variant="ghost" asChild>
+          <a href={issueUrl} target="_blank" rel="noopener noreferrer">
+            Report this
+          </a>
         </Button>
       </div>
     </div>

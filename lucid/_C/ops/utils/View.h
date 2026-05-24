@@ -75,6 +75,8 @@ public:
     std::vector<Storage> apply(Storage grad_out) override;
     // Graph-mode: reshape via reshape_op so the result is tracked.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    // Graph label — ``"reshape"`` — for debug printing and profiler
+    // traces.  Overrides :func:`Node::node_name`.
     std::string node_name() const override { return "reshape"; }
 };
 

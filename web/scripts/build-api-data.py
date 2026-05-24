@@ -2088,6 +2088,12 @@ def main() -> None:
         n_workers = min(8, max(1, (_os.cpu_count() or 4)))
 
     completed: list[str] = []
+    # ``failed`` tracks every slug whose worker threw — we surface
+    # them at the end with a hard exit code so CI / pre-commit never
+    # accepts a partially-emitted JSON dir.  Earlier behaviour was to
+    # print the failure and move on, which left stale builds passing
+    # silently.
+    failed: list[tuple[str, str]] = []
 
     def _on_complete(slug: str) -> None:
         completed.append(slug)
@@ -2095,35 +2101,98 @@ def main() -> None:
 
     if n_workers > 1 and len(manifest_items) > 1:
         from concurrent.futures import ProcessPoolExecutor, as_completed
+        import signal as _signal
         _emit(f"  [pool] {n_workers} workers building {len(manifest_items)} manifest module(s)…")
-        with ProcessPoolExecutor(
+        # SIGINT cleanup: a bare ``with ProcessPoolExecutor`` leaves
+        # worker processes running for a few seconds after Ctrl-C
+        # while the executor drains in-flight tasks.  Installing an
+        # explicit handler that calls ``pool.shutdown(wait=False,
+        # cancel_futures=True)`` makes the cancel snappy.  We restore
+        # the prior handler on the normal-exit path so subsequent
+        # phases of the build pipeline don't inherit it.
+        prev_sigint = _signal.getsignal(_signal.SIGINT)
+        pool: Any = ProcessPoolExecutor(
             max_workers=n_workers,
             initializer=_worker_init,
-        ) as pool:
-            futures = {
-                pool.submit(_worker_build_one, slug, griffe_path, sha): slug
-                for slug, griffe_path in manifest_items
-            }
-            for fut in as_completed(futures):
-                slug = futures[fut]
-                try:
-                    fut.result()
-                except Exception as exc:
-                    print(f"  [error] {slug}: {exc}")
-                else:
-                    _on_complete(slug)
+        )
+
+        def _on_sigint(_signum: int, _frame: Any) -> None:
+            print("\n  [pool] SIGINT received — shutting down workers…", file=sys.stderr)
+            try:
+                pool.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            # Re-raise as KeyboardInterrupt so the outer ``with``
+            # cleanup runs and the script exits with the canonical
+            # 130 exit code.
+            raise KeyboardInterrupt
+
+        _signal.signal(_signal.SIGINT, _on_sigint)
+        try:
+            with pool:
+                futures = {
+                    pool.submit(_worker_build_one, slug, griffe_path, sha): slug
+                    for slug, griffe_path in manifest_items
+                }
+                for fut in as_completed(futures):
+                    slug = futures[fut]
+                    try:
+                        fut.result()
+                    except Exception as exc:
+                        print(f"  [error] {slug}: {exc}", file=sys.stderr)
+                        failed.append((slug, str(exc)))
+                    else:
+                        _on_complete(slug)
+        finally:
+            _signal.signal(_signal.SIGINT, prev_sigint)
     else:
         for slug, griffe_path in manifest_items:
-            build_one(slug, griffe_path, loader, Parser.numpy, sha)
-            _on_complete(slug)
+            try:
+                build_one(slug, griffe_path, loader, Parser.numpy, sha)
+                _on_complete(slug)
+            except Exception as exc:
+                print(f"  [error] {slug}: {exc}", file=sys.stderr)
+                failed.append((slug, str(exc)))
 
     # Synth slugs stay on the main process — ``lucid_data`` is large
     # (whole-package serialised tree) and pickling it into each worker
     # would dominate the wall-clock gain.
     for slug, filter_subcat in synth_items:
         assert lucid_data is not None
-        build_synth(slug, filter_subcat, lucid_data)
-        _on_complete(slug)
+        try:
+            build_synth(slug, filter_subcat, lucid_data)
+            _on_complete(slug)
+        except Exception as exc:
+            print(f"  [error] {slug}: {exc}", file=sys.stderr)
+            failed.append((slug, str(exc)))
+
+    # ── Post-build sanity check ─────────────────────────────────────────
+    # Verify every expected slug emitted a JSON.  Catches the failure
+    # mode where a worker raised silently or wrote nothing.  Without
+    # this, ``pnpm dev`` could ship a docs site missing whole modules
+    # and the only signal would be 404s on user click.
+    expected_slugs = {slug for slug, _ in manifest_items} | {
+        slug for slug, _ in synth_items
+    }
+    missing_files = sorted(
+        slug for slug in expected_slugs if not (OUT_DIR / f"{slug}.json").exists()
+    )
+    if missing_files:
+        print("", file=sys.stderr)
+        print(
+            f"  ❌  {len(missing_files)} expected JSON(s) missing from output:",
+            file=sys.stderr,
+        )
+        for slug in missing_files:
+            print(f"      - {slug}", file=sys.stderr)
+
+    if failed or missing_files:
+        print(
+            f"\n  Build incomplete — {len(failed)} worker error(s), "
+            f"{len(missing_files)} missing output(s).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print(f"\nDone. Files in {OUT_DIR}")
 

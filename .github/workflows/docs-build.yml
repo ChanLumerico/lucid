@@ -1,0 +1,103 @@
+name: Docs build smoke test
+
+# End-to-end docs build verification.  ``docstring-coverage.yml``
+# catches Python-side regressions cheaply; this workflow goes further
+# and runs the whole ``pnpm build`` pipeline so a PR can never deploy
+# a docs site that doesn't actually build.  The post-build assertions
+# verify the produced ``out/`` static export contains the expected
+# top-level files — a successful ``next build`` exit code alone is
+# necessary but not sufficient (a partial JSON tree leaves the build
+# green while leaving entire module pages 404).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'lucid/**/*.py'
+      - '.github/workflows/docs-build.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'lucid/**/*.py'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install Python build deps
+        run: pip install griffe
+
+      - name: Install web deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build docs (full pipeline)
+        # ``pnpm build`` triggers ``prebuild`` which runs the Python
+        # api-data / cross-link / used-by / citations / meta chain
+        # before ``next build``.  Setting ``FORCE_API_BUILD=1`` skips
+        # the per-module cache so CI always exercises the full path.
+        env:
+          FORCE_API_BUILD: '1'
+        run: pnpm build
+
+      - name: Verify static export contents
+        # Hard-fail if ``next build`` somehow exited 0 but didn't
+        # actually emit the headline pages.  These are the same
+        # routes a deploy needs to serve.
+        run: |
+          set -euo pipefail
+          required=(
+            "out/index.html"
+            "out/api/index.html"
+            "out/api/lucid.nn/index.html"
+            "out/api/lucid.nn.functional/index.html"
+            "out/api/lucid.tensor/index.html"
+            "out/api/lucid.models/index.html"
+            "out/changelog/index.html"
+          )
+          missing=0
+          for f in "${required[@]}"; do
+            if [[ ! -s "$f" ]]; then
+              echo "  ❌  missing or empty: $f"
+              missing=$((missing + 1))
+            fi
+          done
+          if [[ "$missing" -gt 0 ]]; then
+            echo "  $missing required artifact(s) absent — failing the build."
+            exit 1
+          fi
+
+      - name: Verify api-data JSONs are non-empty
+        # ``build-api-data.py`` failing per-module would have already
+        # crashed the build above (post-build sanity check), but the
+        # static export uses a separate path — so we double-check
+        # here that the JSON dir didn't get cleared between phases.
+        run: |
+          set -euo pipefail
+          count=$(find public/api-data -name "lucid.*.json" -size +0 | wc -l)
+          if [[ "$count" -lt 50 ]]; then
+            echo "  ❌  only $count api-data JSON(s) — expected ≥ 50 (76 in a healthy build)."
+            exit 1
+          fi
+          echo "  ✓ $count api-data JSON(s) emitted"

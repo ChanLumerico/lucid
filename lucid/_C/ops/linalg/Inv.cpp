@@ -23,6 +23,7 @@
 
 #include "../../autograd/FuncOp.h"
 #include "../../backend/Dispatcher.h"
+#include "../../compile/Tracer.h"
 #include "../../core/GradMode.h"
 #include "../../core/Helpers.h"
 #include "../../core/OpRegistry.h"
@@ -90,6 +91,9 @@ TensorImplPtr inv_op(const TensorImplPtr& a) {
     Storage out_storage = backend::Dispatcher::for_device(a->device())
                               .linalg_inv(a->storage(), a->shape(), a->dtype());
     auto out = linalg_detail::fresh(std::move(out_storage), a->shape(), a->dtype(), a->device());
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out);
+    }
     auto bwd = std::make_shared<InvBackward>();
     // Save the forward result A⁻¹; the backward uses it in place of recomputing.
     bwd->saved_output_ = out->storage();

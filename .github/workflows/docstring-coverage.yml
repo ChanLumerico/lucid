@@ -1,0 +1,36 @@
+name: Docstring coverage
+
+# Hard-fail PRs that introduce docs-site blind spots — thin / unstructured
+# / parameter-drifted docstrings on public symbols, lazy-loaded names
+# missing from ``lucid.__all__``, etc.  The same script runs locally
+# via ``.githooks/pre-commit``; this CI job catches commits that
+# bypass it (``--no-verify`` / GitHub web edits / pushed forks).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lucid/**/*.py'
+      - 'tools/check_docstring_coverage.py'
+      - '.github/workflows/docstring-coverage.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'lucid/**/*.py'
+      - 'tools/check_docstring_coverage.py'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      # The coverage check is pure AST — no Lucid runtime, no MLX, no
+      # Accelerate.  Skips the costly pip install / C++ build that the
+      # full test matrix needs.
+      - name: Run docstring coverage validator
+        run: python3 tools/check_docstring_coverage.py --list

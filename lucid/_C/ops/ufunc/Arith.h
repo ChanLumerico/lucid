@@ -49,10 +49,14 @@ class LUCID_API NegBackward : public UnaryOp<NegBackward> {
 public:
     static constexpr bool kSavesInput = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::neg`` to compute $y = -x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.neg(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = -1$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
+    // Graph-mode backward (default-impl helper): returns ``-g`` so the chain
+    // stays differentiable for higher-order gradients.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr&, const TensorImplPtr&);
 };
@@ -82,9 +86,11 @@ public:
 class LUCID_API AbsBackward : public UnaryOp<AbsBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::abs`` to compute $y = |x|$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.abs(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = \mathrm{sign}(x)$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 
@@ -121,9 +127,12 @@ public:
     static constexpr bool kSavesInput = false;
     static constexpr bool kHasGradient = false;
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::sign`` to compute $y = \mathrm{sign}(x) \in \{-1, 0, +1\}$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.sign(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = 0$ almost everywhere; returns an
+    // empty zero-sentinel since no autograd edge is wired.
     Storage grad_formula(const Storage& g);
 };
 
@@ -153,11 +162,13 @@ public:
 class LUCID_API ReciprocalBackward : public UnaryOp<ReciprocalBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::reciprocal`` to compute $y = 1/x$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.reciprocal(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = -1/x^2$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = -g / x^2
+    // Graph-mode backward: $\partial x = -g / x^2$ kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
@@ -185,11 +196,13 @@ public:
 class LUCID_API SquareBackward : public UnaryOp<SquareBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::square`` to compute $y = x^2$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.square(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = 2x$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
-    // dx = 2*x * g
+    // Graph-mode backward: $\partial x = 2x \cdot g$ kept inside the autograd graph.
     TensorImplPtr
     grad_formula_impl(const TensorImplPtr& g, const TensorImplPtr& x, const TensorImplPtr&);
 };
@@ -217,9 +230,11 @@ public:
 class LUCID_API CubeBackward : public UnaryOp<CubeBackward> {
 public:
     static const OpSchema schema_v1;
+    // Forward — calls ``IBackend::cube`` to compute $y = x^3$.
     static Storage dispatch(backend::IBackend& be, const Storage& a, const Shape& s, Dtype dt) {
         return be.cube(a, s, dt);
     }
+    // Backward — $\partial y/\partial x = 3x^2$, scaled by ``grad_out``.
     Storage grad_formula(const Storage& g);
 };
 

@@ -1624,24 +1624,97 @@ def rrelu(
 
 
 def relu_(x: Tensor, inplace: bool = True) -> Tensor:
-    """In-place ReLU via the engine's native inplace kernel."""
+    """In-place ReLU — ``x`` is overwritten with ``max(0, x)``.
+
+    Backed by the engine's native in-place ReLU kernel (no temporary
+    buffer).  ``inplace`` is accepted for API parity but ignored:
+    this entry point is always in-place.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place and also returned.
+    inplace : bool, optional
+        Ignored; retained for signature symmetry with the out-of-place
+        :func:`relu`.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now holding ``max(0, x)``.
+    """
     return _wrap(_C_engine.relu_(_unwrap(x)))
 
 
 def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
-    """In-place ELU: applies ``elu(x, alpha)`` and writes back into ``x``."""
+    r"""In-place ELU — overwrites ``x`` with :math:`\text{ELU}(x, \alpha)`.
+
+    Computes the out-of-place result via :func:`elu` then copies it
+    back into ``x`` (the engine has no native fused in-place kernel).
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    alpha : float, optional
+        Negative-side scale parameter :math:`\alpha`.  Default ``1.0``.
+    inplace : bool, optional
+        Ignored; this entry point is always in-place.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now holding ``elu(x, alpha)``.
+    """
     return x.copy_(elu(x, alpha))
 
 
 def selu_(x: Tensor, inplace: bool = True) -> Tensor:
-    """In-place SELU."""
+    """In-place SELU — overwrites ``x`` with ``selu(x)``.
+
+    Uses the canonical SELU coefficients (Klambauer 2017); intended
+    for use only inside Self-Normalising Networks where the input was
+    initialised with LeCun-normal and downstream blocks expect the
+    SELU fixed-point statistics.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    inplace : bool, optional
+        Ignored.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now holding ``selu(x)``.
+    """
     return x.copy_(selu(x))
 
 
 def leaky_relu_(
     x: Tensor, negative_slope: float = 0.01, inplace: bool = True
 ) -> Tensor:
-    """In-place leaky ReLU."""
+    r"""In-place Leaky ReLU — overwrites ``x`` with the leaky-rectified result.
+
+    .. math::
+
+        y_i = \begin{cases} x_i & x_i \ge 0 \\ \text{negative\_slope} \cdot x_i & x_i < 0 \end{cases}
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    negative_slope : float, optional
+        Slope applied to the negative side.  Default ``0.01``.
+    inplace : bool, optional
+        Ignored.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now holding ``leaky_relu(x, negative_slope)``.
+    """
     return x.copy_(leaky_relu(x, negative_slope))
 
 
@@ -1651,7 +1724,27 @@ def hardtanh_(
     max_val: float = 1.0,
     inplace: bool = True,
 ) -> Tensor:
-    """In-place hardtanh."""
+    """In-place hardtanh — clamps ``x`` to ``[min_val, max_val]`` in place.
+
+    Equivalent to ``x.clamp_(min_val, max_val)`` but kept under the
+    ``nn.functional`` name for activation-API symmetry.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    min_val : float, optional
+        Lower clamp bound.  Default ``-1.0``.
+    max_val : float, optional
+        Upper clamp bound.  Default ``1.0``.
+    inplace : bool, optional
+        Ignored.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now clamped.
+    """
     return x.copy_(hardtanh(x, min_val, max_val))
 
 
@@ -1661,7 +1754,25 @@ def threshold_(
     value: float,
     inplace: bool = True,
 ) -> Tensor:
-    """In-place threshold."""
+    """In-place threshold — replace entries ``<= threshold_val`` with ``value``.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    threshold_val : float
+        Cutoff; positions where ``x <= threshold_val`` are reset.
+    value : float
+        Replacement value for clipped positions.
+    inplace : bool, optional
+        Ignored.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, with sub-threshold positions set to
+        ``value`` and the rest unchanged.
+    """
     return x.copy_(threshold(x, threshold_val, value))
 
 
@@ -1672,5 +1783,29 @@ def rrelu_(
     training: bool = False,
     inplace: bool = True,
 ) -> Tensor:
-    """In-place RReLU."""
+    """In-place RReLU — randomised leaky ReLU written back into ``x``.
+
+    During training the negative-slope is sampled per-element from a
+    uniform :math:`U(\\text{lower}, \\text{upper})`; at inference the
+    midpoint :math:`(\\text{lower} + \\text{upper}) / 2` is used.
+
+    Parameters
+    ----------
+    x : Tensor
+        Input; modified in place.
+    lower : float, optional
+        Lower bound of the uniform slope sampler.  Default ``1/8``.
+    upper : float, optional
+        Upper bound of the uniform slope sampler.  Default ``1/3``.
+    training : bool, optional
+        When ``False`` (default) uses the deterministic midpoint slope;
+        when ``True`` samples a fresh slope per element.
+    inplace : bool, optional
+        Ignored.  Default ``True``.
+
+    Returns
+    -------
+    Tensor
+        The same ``x`` tensor, now holding ``rrelu(x, lower, upper, training)``.
+    """
     return x.copy_(rrelu(x, lower, upper, training))
