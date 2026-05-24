@@ -1,0 +1,625 @@
+% !TEX root = ../main.tex
+\chapter{Tensor Storage Model}
+\label{ch:tensor_model}
+
+A tensor framework's storage model is the type definition of its
+central data structure --- in \Lucid's case, what fields the
+\code{TensorImpl} class carries, how those fields relate to backing
+memory, and what invariants the engine guarantees between them. The
+storage model is invisible to the user, who manipulates a Python
+\code{Tensor} that hides everything below, but it determines the
+performance and correctness envelope of every operation. A storage
+model that does not support views forces every reshape to copy. A
+storage model that does not separate stride from shape forces every
+permutation to materialise. A storage model whose backing buffer is
+owned by the wrong layer cannot be shared zero-copy with the GPU.
+
+This chapter formalises \Lucid's storage model. The model is
+deliberately conventional --- it is the same model that any
+NumPy-derived framework uses, with one important difference: the
+backing storage may belong to \MLX\ rather than to \Lucid's own
+allocator, which makes the bridge of \chref{ch:unified_memory}
+possible without breaking the abstraction. The conventional pieces
+are still worth describing in their own right, because the rest of
+the book assumes them.
+
+\secref{sec:tensor_model:tensorimpl} describes the \code{TensorImpl}
+class and its fields. \secref{sec:tensor_model:storage} describes
+the \code{Storage} class and its ownership semantics.
+\secref{sec:tensor_model:views} describes view operations and what
+makes them cheap. \secref{sec:tensor_model:autograd_meta} describes
+the autograd metadata that hangs off each tensor.
+\secref{sec:tensor_model:refcounts} describes the reference
+counting that ties the pieces together.
+\secref{sec:tensor_model:bridge} describes how \MLX\ arrays enter
+the storage model. \secref{sec:tensor_model:invariants} states the
+invariants the rest of the engine relies on.
+
+\section{The TensorImpl Class}
+\label{sec:tensor_model:tensorimpl}
+
+\code{TensorImpl} is defined in
+\code{lucid/\_C/tensor/TensorMeta.h}. It is a C++ struct, not an
+abstract base class --- there is exactly one concrete
+\code{TensorImpl} type, and the differences between CPU tensors and
+GPU tensors live in the \code{Storage} that \code{TensorImpl}
+points to, not in subclassing.
+\figref{fig:tensor_model:layout} sketches the object graph: a
+Python \code{Tensor} holds a \code{TensorImpl}, which holds shape /
+stride / dtype / device / offset metadata plus shared pointers to a
+\code{Storage} (the backing buffer) and an \code{AutogradMeta} (the
+optional differentiation state).
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  pyobj/.style={draw, rounded corners=4pt, font=\small\sffamily,
+                fill=lucid.note.bg, minimum width=2.8cm,
+                minimum height=1.2cm, align=center},
+  impl/.style={draw, rounded corners=2pt, font=\small\sffamily,
+               fill=lucid.info.bg, minimum width=4.5cm,
+               minimum height=2.6cm, align=left, inner sep=4pt},
+  storage/.style={draw, rounded corners=2pt, font=\small\sffamily,
+                  fill=lucid.ok.bg, minimum width=5.2cm,
+                  minimum height=2.4cm, align=left, inner sep=4pt},
+  meta/.style={draw, rounded corners=2pt, font=\small\sffamily,
+               fill=lucid.code.bg, minimum width=4.0cm,
+               minimum height=2.0cm, align=left, inner sep=4pt},
+  ptr/.style={->, >=stealth, thick, color=lucid.accent.dark,
+              shorten >=2pt, shorten <=2pt},
+  shared/.style={->, >=stealth, dashed, color=lucid.muted,
+                 shorten >=2pt, shorten <=2pt},
+  ptrlbl/.style={font=\footnotesize\ttfamily, fill=white,
+                 inner sep=2pt},
+]
+  \node[pyobj] (pytensor) at (-6.5, 2) {\textbf{Tensor}\\(Python)};
+  \node[impl] (impl) at (0, 2) {
+    \textbf{TensorImpl}\\[2pt]
+    \texttt{shape}, \texttt{strides}\\
+    \texttt{dtype}, \texttt{device}\\
+    \texttt{storage\_offset}\\
+    \texttt{version\_counter}
+  };
+  \node[storage] (storage) at (8, 4) {
+    \textbf{Storage}\\[2pt]
+    \texttt{data}: \texttt{void*}\\
+    \texttt{nbytes}\\
+    \texttt{provider}: \\
+    \quad Lucid/Mlx/External\\
+    \texttt{deleter}: callback
+  };
+  \node[meta] (autograd) at (8, 0) {
+    \textbf{AutogradMeta}\\[2pt]
+    \texttt{requires\_grad}\\
+    \texttt{grad\_fn}\\
+    \texttt{grad}, \texttt{is\_leaf}\\
+    (null if unused)
+  };
+
+  \draw[ptr] (pytensor) -- node[ptrlbl, above]
+    {shared\_ptr} (impl);
+  \draw[ptr] (impl.north east) -- node[ptrlbl, above, sloped]
+    {shared\_ptr} (storage.south west);
+  \draw[ptr] (impl.south east) -- node[ptrlbl, below, sloped]
+    {unique\_ptr} (autograd.north west);
+
+  % Shared storage: another tensor pointing at same Storage (view)
+  \node[impl, dashed, opacity=0.85, minimum height=2cm]
+       (impl2) at (0, -2.5) {
+    \textbf{TensorImpl (view)}\\[2pt]
+    different \texttt{shape},\\
+    different \texttt{strides},\\
+    same \texttt{storage} ptr
+  };
+  \draw[shared] (impl2.east) to[out=0, in=-90]
+    node[ptrlbl, midway, below right] {share storage}
+    (storage.south);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Tensor object graph.]{The \code{TensorImpl} object graph.
+The Python \code{Tensor} wraps a \code{shared\_ptr<TensorImpl>}.
+The \code{TensorImpl} holds metadata inline and points (via
+\code{shared\_ptr}) to a heap-allocated \code{Storage} that owns
+the backing buffer; multiple \code{TensorImpl}s may share the same
+\code{Storage} (view aliasing, shown dashed). The
+\code{AutogradMeta} pointer is null for non-differentiable tensors,
+which keeps the per-tensor overhead low for the majority of
+intermediates.}
+\label{fig:tensor_model:layout}
+\end{figure}
+
+The conceptual layout is:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct TensorImpl {
+  Shape                          shape;
+  Strides                        strides;
+  Dtype                          dtype;
+  Device                         device;
+  size_t                         storage_offset;
+  std::shared_ptr<Storage>       storage;
+  std::unique_ptr<AutogradMeta>  autograd_meta;  // null if !requires_grad
+  uint64_t                       version_counter;
+};
+\end{lstlisting}
+
+Each field is small and explicit. Together they fully describe a
+tensor.
+
+\subsection{Shape}
+\label{ssec:tensor_model:shape}
+
+\code{shape} is a small-vector of dimension sizes. The element type
+is a 64-bit signed integer to permit individual dimensions larger
+than \(2^{31}\) (rare but possible for streaming workloads), and
+the vector itself uses small-buffer optimisation: ranks up to 6 are
+stored inline without heap allocation, ranks 7 and above promote to
+a heap allocation. Most practical tensors have rank at most 5
+(batch, channels, height, width, sometimes a depth), so the inline
+storage is hit by the overwhelming majority of allocations.
+
+A zero-rank tensor (a scalar) has empty shape and a single element.
+A zero-size tensor has at least one dimension equal to zero and no
+elements at all; the storage may still be non-null but is unused.
+
+\subsection{Strides}
+\label{ssec:tensor_model:strides}
+
+\code{strides} is a small-vector of the same length as \code{shape}.
+Each entry is the number of elements (not bytes) to step in the
+backing storage to advance by one along that dimension. The element
+type is signed because negative strides are permitted (they encode
+reversed views).
+
+For a contiguous tensor of shape \((d_0, d_1, \ldots, d_{n-1})\) in
+C-order (the default), the strides are
+\((d_1 d_2 \cdots d_{n-1}, d_2 \cdots d_{n-1}, \ldots, d_{n-1}, 1)\).
+For a Fortran-ordered tensor, the strides are reversed. \Lucid\
+uses C-order by default; the dispatcher does not assume contiguity
+but does prefer it.
+
+\subsection{Dtype and device}
+\label{ssec:tensor_model:dtype_device}
+
+\code{dtype} is an enum identifying the element type. The enum is
+defined in \code{core/Dtype.h} and includes the entries discussed
+in \chref{ch:mlx_runtime}~Section~\ref{ssec:mlx_runtime:array_dtype}:
+\code{float16}, \code{float32}, \code{float64}, \code{bfloat16},
+\code{int8} through \code{int64} (signed only), \code{bool}, and
+\code{complex64}.
+
+\code{device} is similarly an enum from \code{core/Device.h} with
+exactly two values: \code{cpu} and \code{metal}. The values are
+exhaustive on Apple silicon: \Lucid\ does not expose
+\code{cuda}, \code{xla}, or any other device label.
+
+\subsection{Storage offset}
+\label{ssec:tensor_model:storage_offset}
+
+\code{storage\_offset} is the number of elements from the start of
+the backing \code{Storage} to the first element of this tensor. For
+a freshly allocated tensor, \code{storage\_offset} is zero. For a
+sliced view, \code{storage\_offset} encodes the position of the
+slice's first element.
+
+The offset is in elements, not bytes, to keep dtype-aware indexing
+simple. The byte offset is \code{storage\_offset * sizeof(dtype)}.
+
+\subsection{The Storage handle}
+\label{ssec:tensor_model:storage_handle}
+
+\code{storage} is a \code{shared\_ptr} to a reference-counted
+\code{Storage} object. Multiple \code{TensorImpl} instances may
+share the same \code{Storage} (this is exactly what makes views
+zero-copy), and the \code{Storage}'s underlying buffer is freed
+only when the last referring \code{TensorImpl} is destroyed.
+
+\subsection{The autograd metadata pointer}
+\label{ssec:tensor_model:autograd_ptr}
+
+\code{autograd\_meta} is a \code{unique\_ptr} to an
+\code{AutogradMeta} object, allocated only when the tensor is
+created with \code{requires\_grad=True}. The pointer is null for
+the great majority of tensors (intermediate activations, optimiser
+internals, sliced views), which saves both memory and the cost of
+walking the autograd graph for tensors that do not participate in
+backpropagation. \secref{sec:tensor_model:autograd_meta} treats
+\code{AutogradMeta} in detail.
+
+\subsection{The version counter}
+\label{ssec:tensor_model:version_counter}
+
+\code{version\_counter} is a 64-bit counter that increments on
+every in-place modification of the tensor. It is the mechanism by
+which autograd detects ``a saved tensor for backward has been
+modified in place'' --- a class of bug that would silently corrupt
+gradients --- and raises an exception instead.
+
+The counter starts at zero on creation. \code{add\_}, \code{mul\_},
+and other in-place ops increment it. When the autograd engine saves
+a tensor for backward, it captures the current counter value;
+during backward, it checks that the counter is unchanged. A mismatch
+raises an error with a message that names the in-place operation
+responsible.
+
+\section{The Storage Class}
+\label{sec:tensor_model:storage}
+
+\code{Storage} is the heap-allocated, reference-counted buffer that
+multiple \code{TensorImpl}s may share. Its definition is in
+\code{lucid/\_C/tensor/Storage.h}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct Storage {
+  void*               data;     // raw pointer to backing buffer
+  size_t              nbytes;   // total bytes
+  Dtype               dtype;    // (redundant cache for fast checks)
+  Device              device;   // ditto
+  StorageProvider     provider; // who allocated this buffer
+  std::function<void(void*)> deleter;
+};
+\end{lstlisting}
+
+\subsection{Provider tag}
+\label{ssec:tensor_model:provider}
+
+The \code{provider} tag distinguishes between buffers allocated
+through different paths:
+
+\begin{itemize}
+  \item \code{LucidPool}: the buffer came from \Lucid's own
+    size-class pool (\chref{ch:allocator}).
+  \item \code{Mlx}: the buffer is owned by an \code{mlx::core::array}.
+    The \code{Storage} holds a \code{shared\_ptr<array>} in a
+    type-erased slot so that the array stays alive as long as the
+    \code{Storage} does.
+  \item \code{Accelerate}: the buffer was allocated through
+    \Accelerate's \code{vDSP\_create\_*} helpers. Rare; used by a
+    small set of CPU kernels that prefer aligned scratch space.
+  \item \code{External}: the buffer was provided by an external
+    library (numpy, DLPack producer) and \Lucid\ does not own it.
+    The deleter is the foreign release function.
+\end{itemize}
+
+The provider tag has no effect on operations --- a kernel that
+reads the buffer does not care who allocated it --- but it
+determines how the buffer is freed. The \code{deleter} closure is
+constructed at \code{Storage} creation time and called when the
+\code{Storage}'s reference count drops to zero.
+
+\subsection{Reference counting}
+\label{ssec:tensor_model:refcount}
+
+\code{Storage} is heap-allocated and managed through
+\code{shared\_ptr}. The reference count is the standard
+\code{shared\_ptr} count: every \code{TensorImpl} pointing at the
+\code{Storage} contributes one. When the last \code{TensorImpl} is
+destroyed, the \code{Storage}'s \code{shared\_ptr} count reaches
+zero, the deleter is invoked, and the underlying memory is freed.
+
+The pattern is the C++ idiom for shared ownership and requires no
+special discipline from the engine. The only subtlety is that
+\code{TensorImpl}'s autograd graph (the chain of \code{grad\_fn}
+nodes) may hold references to intermediate \code{Storage}s that the
+user no longer has handles to; this is why memory usage grows during
+a forward pass and shrinks after a backward, rather than tracking
+the Python live set directly.
+
+\section{Views}
+\label{sec:tensor_model:views}
+
+A \emph{view} is a \code{TensorImpl} whose \code{storage} pointer
+is shared with another \code{TensorImpl} (its source) and whose
+shape, strides, or \code{storage\_offset} differ. Views are the
+mechanism by which \Lucid\ supports reshape, transpose, slice, and
+expand without copying data.
+
+\subsection{What operations produce views}
+\label{ssec:tensor_model:view_ops}
+
+The following operations return views of their input, without
+copying:
+
+\begin{itemize}
+  \item \code{reshape(shape)}: if the new shape is compatible with
+    the source's strides (i.e., the source is contiguous in the
+    relevant axes), returns a view. Otherwise materialises.
+  \item \code{transpose(dim0, dim1)}: always a view. Strides are
+    permuted; shape is permuted.
+  \item \code{permute(dims)}: always a view. Generalised transpose.
+  \item \code{slice(dim, start, end, step)}: always a view. Shape
+    is adjusted; \code{storage\_offset} advances; stride may scale
+    by \code{step}.
+  \item \code{select(dim, index)}: always a view. Rank decreases
+    by one.
+  \item \code{narrow(dim, start, length)}: always a view.
+    Equivalent to \code{slice} with step 1.
+  \item \code{expand(shape)}: always a view. New dimensions of
+    size larger than 1 are represented by stride 0; the underlying
+    data is not duplicated.
+  \item \code{squeeze}, \code{unsqueeze}: always views.
+  \item \code{flip(dim)}: always a view. Strides become negative
+    along the flipped dimension; \code{storage\_offset} advances
+    to the end.
+\end{itemize}
+
+The contract: any of these operations runs in constant time (no
+data motion). The \code{Storage} pointer is shared with the source
+and the new \code{TensorImpl} has independent shape/strides/offset
+fields.
+
+\subsection{When a view is not contiguous}
+\label{ssec:tensor_model:noncontig}
+
+A view's strides may or may not match the canonical contiguous
+strides for its shape. If they do, the view is contiguous. If they
+do not, the view is non-contiguous, and many kernels that assume
+unit-stride along the innermost dimension cannot operate on it
+directly.
+
+The dispatcher handles this in one of two ways depending on the
+kernel:
+
+\begin{itemize}
+  \item Kernels that natively support strided input (most
+    \Accelerate\ vDSP primitives, most \MLX\ primitives) pass the
+    strides through. No copy.
+  \item Kernels that do not (some convolution paths, the
+    SharedStorage bridge to CPU) materialise the view via a
+    \code{contiguous()} call. One copy.
+\end{itemize}
+
+The cost of the contiguous-materialisation is the cost of one
+read-write pass over the tensor's elements. It is amortised by the
+fact that most operations downstream of a transpose or slice will
+re-materialise once and then reuse; the policy is to delay
+materialisation as long as it is permitted.
+
+\subsection{The \texttt{is\_contiguous} predicate}
+\label{ssec:tensor_model:is_contig}
+
+Whether a tensor is contiguous is a derived property, computed from
+\code{shape} and \code{strides} on demand. The check is the
+standard one: walk shape and strides in reverse, verifying that
+each stride equals the product of the trailing shape entries. A
+zero-size tensor is trivially contiguous. A scalar is trivially
+contiguous.
+
+\code{TensorImpl::is\_contiguous()} caches the result on first
+call; subsequent in-place operations that change strides invalidate
+the cache. The caching matters because the predicate is checked on
+many fast paths.
+
+\section{The AutogradMeta Class}
+\label{sec:tensor_model:autograd_meta}
+
+\code{AutogradMeta} carries the per-tensor differentiation state.
+It is allocated only when needed --- specifically, when a tensor is
+created with \code{requires\_grad=True} or when a \code{grad\_fn}
+is attached during the forward pass of a differentiable operation.
+
+The structure:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct AutogradMeta {
+  bool                          requires_grad;
+  std::shared_ptr<Node>         grad_fn;
+  uint32_t                      output_nr;     // which output of grad_fn
+  std::shared_ptr<TensorImpl>   grad;          // accumulated gradient
+  std::vector<Hook>             pre_hooks;
+  std::vector<Hook>             post_hooks;
+  bool                          is_leaf;
+};
+\end{lstlisting}
+
+\code{requires\_grad} is the user-facing flag. \code{grad\_fn} is
+the backward node (\chref{ch:autograd_engine}) that this tensor's
+gradient flows through. \code{grad} is the accumulated gradient
+that lives on leaf tensors (parameters). \code{is\_leaf}
+distinguishes parameters (created by the user) from intermediates
+(produced by ops); leaves accumulate gradient on backward, while
+intermediates only propagate.
+
+\subsection{Why AutogradMeta is allocated lazily}
+\label{ssec:tensor_model:lazy_alloc}
+
+A typical training step produces tens of thousands of intermediate
+\code{TensorImpl} objects, of which only a small fraction are
+leaves and only the leaves need the gradient accumulator. Allocating
+an \code{AutogradMeta} per tensor unconditionally would waste tens
+of bytes per tensor times tens of thousands per step, which is
+megabytes of garbage on a hot path.
+
+The lazy-allocation pattern allocates the metadata only when
+either (a) the user sets \code{requires\_grad=True}, or (b) the
+autograd engine attaches a \code{grad\_fn} during a differentiable
+operation. The null-pointer test for ``does this tensor participate
+in autograd at all'' is the fast-path predicate that most code
+checks.
+
+\section{Reference Counting and Lifetime}
+\label{sec:tensor_model:refcounts}
+
+The lifetime of a tensor's storage is determined by the union of
+several reference counts. Understanding the union is necessary for
+predicting when memory is reclaimed.
+
+\subsection{The user-visible Tensor count}
+\label{ssec:tensor_model:user_count}
+
+The Python \code{Tensor} object holds a \code{shared\_ptr<TensorImpl>}.
+The Python reference count of the \code{Tensor} object determines
+when the \code{shared\_ptr} is dropped; when it is dropped, the
+\code{TensorImpl}'s reference count is decremented; if that count
+reaches zero, the \code{TensorImpl}'s \code{Storage shared\_ptr} is
+dropped; and so on.
+
+The simple case is: a Python variable goes out of scope, the
+\code{Tensor} is collected, the \code{TensorImpl} is freed, and the
+\code{Storage} (if no other view shares it) is freed too. The
+backing buffer returns to its provider's pool.
+
+\subsection{The autograd graph count}
+\label{ssec:tensor_model:autograd_count}
+
+The complication arises when the tensor participates in autograd.
+The forward pass attaches \code{grad\_fn} nodes to each output
+tensor, and those nodes hold \code{shared\_ptr<TensorImpl>}
+references to any tensor saved for backward. So a tensor that the
+user has dropped may still be alive, retained by the autograd graph,
+until \code{backward()} is called and the graph is freed.
+
+This is why memory usage during a forward pass grows: each
+operation saves the inputs (or outputs) it needs for its backward,
+and those saved tensors are pinned until backward releases them.
+After backward, the autograd graph is freed and all transitive
+references are dropped, returning the memory to the pool.
+
+\subsection{The view chain}
+\label{ssec:tensor_model:view_chain}
+
+Views share \code{Storage} with their source. If the user creates a
+view of a large tensor, then drops the source, the source's
+\code{Storage} stays alive as long as the view does. The view is a
+small object (one \code{TensorImpl} with shape and strides) but it
+holds a reference to the full source's backing buffer.
+
+This can be surprising: a small slice of a large tensor keeps the
+full tensor's memory alive. The user-visible escape is
+\code{view.clone()}, which forces a fresh \code{Storage} with only
+the view's bytes.
+
+\section{Bridge to MLX Arrays}
+\label{sec:tensor_model:bridge}
+
+The previous sections described the conventional storage model. The
+unconventional piece is the bridge to \MLX: an \code{mlx::core::array}
+is the canonical storage for any GPU tensor in \Lucid, and the
+\code{Storage} wraps the \MLX\ array rather than owning its own
+buffer.
+
+\subsection{How a GPU tensor's storage is constructed}
+\label{ssec:tensor_model:gpu_storage}
+
+When \Lucid\ allocates a GPU tensor, the path is:
+
+\begin{enumerate}
+  \item The dispatcher determines the device is \code{metal}.
+  \item It calls \code{MlxBackend::allocate(shape, dtype)}, which
+    calls \code{mlx::core::zeros(shape, dtype, mx.gpu)} (or the
+    appropriate fill primitive) and returns the resulting
+    \code{mlx::core::array}.
+  \item It constructs a \code{Storage} with \code{provider = Mlx},
+    \code{data} pointing to the array's \code{data<T>()}, and the
+    deleter set to a closure that holds the \code{shared\_ptr<array>}
+    alive for the storage's lifetime.
+  \item It constructs a \code{TensorImpl} wrapping the
+    \code{Storage} with the requested shape, strides, dtype, and
+    device.
+\end{enumerate}
+
+The result: a \Lucid\ tensor whose backing storage is owned by
+\MLX. Operations on this tensor go through the dispatcher to
+\MLX\ primitives, which produce new \MLX\ arrays, which become new
+\code{Storage}s, and so on.
+
+\subsection{How a CPU tensor's storage is constructed}
+\label{ssec:tensor_model:cpu_storage}
+
+For a CPU tensor, the path is symmetric but simpler:
+
+\begin{enumerate}
+  \item The dispatcher determines the device is \code{cpu}.
+  \item It calls \code{Allocator::alloc(nbytes)} on the size-class
+    pool, getting back a raw pointer.
+  \item It constructs a \code{Storage} with \code{provider = LucidPool},
+    \code{data} pointing to the pool buffer, and the deleter set
+    to \code{Allocator::free}.
+  \item It constructs a \code{TensorImpl} wrapping the
+    \code{Storage}.
+\end{enumerate}
+
+The CPU path does not involve \MLX. CPU tensors are wholly owned by
+\Lucid; only the GPU path delegates ownership to \MLX.
+
+\subsection{Round-tripping}
+\label{ssec:tensor_model:round_trip}
+
+A tensor that lives on \code{metal} and is moved to \code{cpu}
+(via \code{.to('cpu')} or implicitly through a CPU op) goes through
+the \code{SharedStorage} bridge of
+\chref{ch:unified_memory}~Section~\ref{sec:unified_memory:bridge}.
+The bridge produces a CPU pointer to the same physical bytes that
+the \MLX\ array holds, wraps it in a new \code{Storage} of provider
+\code{Mlx} (the storage is still owned by \MLX), and constructs a
+new \code{TensorImpl} with \code{device = cpu}.
+
+The result is two \code{TensorImpl}s, one with \code{device = metal}
+and one with \code{device = cpu}, sharing the same underlying
+bytes through different \code{Storage}s that both retain references
+to the same \code{mlx::core::array}. This is what makes the
+zero-copy bridge possible at the storage-model level: the
+provider tag is not the same as the device label, and a CPU-device
+tensor can have an \code{Mlx} provider.
+
+\section{Invariants}
+\label{sec:tensor_model:invariants}
+
+We close with a short list of invariants the rest of the engine
+relies on. Each is enforced either by construction or by an
+assertion in \code{TensorImpl}'s constructor.
+
+\begin{enumerate}
+  \item \textbf{Shape and stride parity.} \code{shape.size() ==
+    strides.size()}.
+  \item \textbf{Storage non-null.} For any tensor with nonzero
+    total element count, \code{storage} is non-null.
+  \item \textbf{Element count fits in storage.} For any tensor,
+    \code{storage\_offset + max\_addressable\_index <
+    storage->nbytes / sizeof(dtype)}.
+  \item \textbf{Device consistency.} \code{device ==
+    storage->device}.
+  \item \textbf{Dtype consistency.} \code{dtype ==
+    storage->dtype} (with the carve-out that \code{storage->dtype}
+    can be a byte-equivalent dtype for views that reinterpret;
+    relevant only for \code{tensor.view(dtype=...)} which \Lucid\
+    does not currently expose).
+  \item \textbf{Version monotonicity.} \code{version\_counter} is
+    monotone non-decreasing over the tensor's lifetime.
+  \item \textbf{Autograd leaf consistency.} If \code{is\_leaf} is
+    true, \code{grad\_fn} is null. Conversely, if \code{grad\_fn}
+    is non-null, \code{is\_leaf} is false.
+\end{enumerate}
+
+A violation of any invariant produces a \code{LucidError} from the
+constructor or from the asserting code path. Production builds keep
+the assertions enabled; the cost is negligible.
+
+\section{Summary and Forward References}
+\label{sec:tensor_model:summary}
+
+\Lucid's storage model is the conventional shape/stride/dtype/device
+plus storage tuple, with two distinguishing features: the
+\code{Storage}'s \code{provider} tag permits the underlying buffer
+to be owned by \MLX\ rather than by \Lucid, which is how the
+unified-memory bridge works at the type-system level; and the
+\code{AutogradMeta} is allocated lazily, which keeps the per-tensor
+overhead low for the great majority of intermediates.
+
+The next chapter, \chref{ch:allocator}, treats the size-class
+allocator that backs the \code{LucidPool} provider, and the memory
+accounting that exposes its state to the user. \chref{ch:backend_dispatch}
+treats the dispatcher that routes per-op work to the backends.
+\chref{ch:bridge_boundaries} catalogues the six places where the
+storage model crosses into external libraries.
+
+\begin{lucidnote}
+The user does not see the storage model directly. Through the
+Python \code{Tensor} class the user sees \code{.shape},
+\code{.dtype}, \code{.device}, and the autograd-related attributes
+(\code{.requires\_grad}, \code{.grad}, \code{.grad\_fn}). Strides
+are exposed through \code{.stride()} but are rarely consulted
+directly. \code{Storage}, \code{provider}, and the bridge
+mechanics are entirely internal.
+\end{lucidnote}

@@ -1,0 +1,473 @@
+% !TEX root = ../main.tex
+\chapter{Python--C++ Binding via pybind11}
+\label{ch:python_cpp_binding}
+
+\Lucid\ is a Python-fronted, C++-engined framework. The interface
+between the two languages is the topmost layer of the engine DAG
+(\chref{ch:layered_dag}), implemented through pybind11
+\cite{pybind11}. This chapter describes how that binding works in
+\Lucid\ specifically: the conventions, the contracts, the
+exception-translation policy, the reference-counting interplay
+between Python and C++ \code{shared\_ptr}, and the build-system
+integration that produces the \code{lucid.\_C} extension module.
+
+The binding layer is not large in absolute terms --- about 3500
+lines of C++ across the files in \code{lucid/\_C/bindings/} --- but
+it is the only place where pybind11 types appear. The discipline
+the chapter describes is what keeps the engine's lower layers
+pybind11-free, which in turn keeps the option open to expose the
+engine through a C API to a non-Python frontend in a future
+release.
+
+\section{Overview}
+\label{sec:python_cpp_binding:overview}
+
+pybind11 is a header-only C++ library that bridges between C++
+types and Python objects. The bridge has two principal operations:
+\emph{type binding}, which exposes a C++ class as a Python class,
+and \emph{function binding}, which exposes a C++ function as a
+Python callable. Both operations are declarative: the binding code
+specifies what to expose, and pybind11 generates the
+boilerplate that handles argument conversion, return-value
+conversion, reference counting, and exception translation.
+
+For \Lucid\ the binding code is:
+
+\begin{itemize}
+  \item \code{lucid/\_C/bindings/bind.cpp}: the module entry point,
+    \code{PYBIND11\_MODULE(engine, m)}.
+  \item \code{lucid/\_C/bindings/bind\_tensor.cpp}: the
+    \code{Tensor} class binding (about 400 lines).
+  \item Per-subsystem binding files: \code{bind\_bfunc.cpp},
+    \code{bind\_ufunc.cpp}, \code{bind\_gfunc.cpp},
+    \code{bind\_composite.cpp}, \code{bind\_autograd.cpp},
+    \code{bind\_nn.cpp}, \code{bind\_optim.cpp},
+    \code{bind\_linalg.cpp}, \code{bind\_fft.cpp},
+    \code{bind\_einops.cpp}, \code{bind\_complex.cpp},
+    \code{bind\_amp.cpp}, \code{bind\_profiler.cpp},
+    \code{bind\_random.cpp}, \code{bind\_compile.cpp}.
+  \item \code{bind\_errors.cpp}: the exception translator.
+  \item \code{bind\_op\_registry.cpp}: introspection binding for
+    the op registry.
+  \item \code{BindingGen.h}: helper templates for code generation.
+\end{itemize}
+
+The output of building these files is a single CPython extension
+module, \code{lucid/\_C/engine.cpython-XYZ.so}, where XYZ encodes
+the Python version. The module is loaded under the alias
+\code{\_C\_engine} per Hard Rule H2; see
+\secref{sec:python_cpp_binding:h2_alias}.
+
+\section{Module Initialisation}
+\label{sec:python_cpp_binding:module_init}
+
+The module entry point is declared with the
+\code{PYBIND11\_MODULE} macro:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+
+PYBIND11_MODULE(engine, m) {
+  m.doc() = "Lucid C++ engine bindings";
+
+  bind_errors(m);     // must come first --- registers exception translator
+  bind_tensor(m);
+  bind_ufunc(m);
+  bind_bfunc(m);
+  bind_gfunc(m);
+  bind_composite(m);
+  bind_autograd(m);
+  bind_nn(m);
+  bind_optim(m);
+  bind_linalg(m);
+  bind_fft(m);
+  bind_einops(m);
+  bind_complex(m);
+  bind_amp(m);
+  bind_profiler(m);
+  bind_random(m);
+  bind_compile(m);
+  bind_op_registry(m);
+}
+\end{lstlisting}
+
+Each \code{bind\_<subsystem>(m)} function adds its part of the
+surface to the module object. The ordering matters in one place:
+\code{bind\_errors} must run first so that the exception translator
+is installed before any other binding might throw.
+
+\subsection{The module-name convention}
+\label{ssec:python_cpp_binding:name_convention}
+
+The module is named \code{engine}, which means it is imported in
+Python as \code{from lucid.\_C import engine}. The alias convention
+of Hard Rule H2 requires that the import be aliased to
+\code{\_C\_engine}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid._C import engine as _C_engine
+\end{lstlisting}
+
+The alias prefix \code{\_C\_} flags that the symbol is the
+engine-level binding and makes greppability trivial. Section
+\ref{sec:python_cpp_binding:h2_alias} treats the alias rule in
+detail.
+
+\section{Type Bindings: The Tensor Class}
+\label{sec:python_cpp_binding:tensor_binding}
+
+The \code{Tensor} class is the central exposed type. Its binding,
+abbreviated:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void bind_tensor(py::module_& m) {
+  py::class_<TensorImpl, std::shared_ptr<TensorImpl>>(m, "Tensor")
+    .def(py::init<>())
+    .def_property_readonly("shape",
+        [](const TensorImpl& t) { return t.shape; })
+    .def_property_readonly("dtype",
+        [](const TensorImpl& t) { return t.dtype; })
+    .def_property_readonly("device",
+        [](const TensorImpl& t) { return t.device; })
+    .def_property("requires_grad",
+        &TensorImpl::requires_grad,
+        &TensorImpl::set_requires_grad)
+    .def("backward", &TensorImpl::backward,
+        py::arg("gradient") = py::none(),
+        py::arg("retain_graph") = false)
+    .def("detach", &TensorImpl::detach)
+    .def("clone",  &TensorImpl::clone)
+    // ... and so on, one binding per method
+    .def("__add__", [](const TensorImpl& a, const TensorImpl& b) {
+        return Dispatcher::instance().binary(OpKind::Add, a, b);
+    })
+    // ... and the rest of the operator-overload dunders
+    ;
+}
+\end{lstlisting}
+
+The crucial detail is the second template argument to
+\code{py::class\_}: \code{std::shared\_ptr<TensorImpl>}. This tells
+pybind11 that \code{TensorImpl} instances are managed through a
+\code{shared\_ptr}, which is how the engine internally tracks
+tensor lifetimes. The Python-side reference counting then
+participates in the same \code{shared\_ptr} count, so a tensor
+stays alive as long as either the Python object or any internal
+\code{shared\_ptr} refers to it.
+
+\subsection{Property versus method}
+\label{ssec:python_cpp_binding:property_method}
+
+The \code{def\_property\_readonly} versus \code{def} choice
+matches the Python convention. Attributes like \code{shape},
+\code{dtype}, \code{device} are exposed as properties (no
+parentheses needed at the call site), while operations like
+\code{backward}, \code{detach}, \code{clone} are exposed as
+methods. This is the \refframework-compatible surface that the
+user expects.
+
+\subsection{Method-like dunders}
+\label{ssec:python_cpp_binding:dunders}
+
+Operator overloads (\code{\_\_add\_\_}, \code{\_\_mul\_\_},
+\code{\_\_matmul\_\_}, etc.) are bound as lambdas that call into
+the dispatcher. Each lambda is one line; there are about 30 of
+them. The pattern is uniform enough that we could code-generate it
+from a list, but the gain is small and explicit code is easier to
+diff.
+
+\section{Function Bindings}
+\label{sec:python_cpp_binding:function_binding}
+
+Free functions are bound similarly to methods. Per-op bindings live
+in \code{bind\_ufunc.cpp}, \code{bind\_bfunc.cpp},
+\code{bind\_gfunc.cpp}, and \code{bind\_composite.cpp}, organised
+by op category.
+
+A typical unary binding:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void bind_ufunc(py::module_& m) {
+  m.def("relu",    &ops::relu,    py::arg("x"));
+  m.def("sigmoid", &ops::sigmoid, py::arg("x"));
+  m.def("tanh",    &ops::tanh,    py::arg("x"));
+  m.def("exp",     &ops::exp,     py::arg("x"));
+  m.def("log",     &ops::log,     py::arg("x"));
+  // ... 60 more
+}
+\end{lstlisting}
+
+Each call has the form \code{m.def("name", \&cpp\_function,
+py::arg("arg") = default)}. The \code{py::arg} machinery preserves
+argument names and default values across the binding, which means
+the Python-side caller can use keyword arguments and get IDE
+autocomplete.
+
+\subsection{Code generation for repetitive bindings}
+\label{ssec:python_cpp_binding:codegen}
+
+The unary and binary bindings are repetitive enough that we
+generate them from a single declarative table. \code{BindingGen.h}
+provides macros that take an op name, an op kind, and a category;
+each invocation produces the \code{m.def(...)} line above. The
+table is maintained in \code{bind\_ufunc.cpp} itself, near the
+top, so the file is self-contained and the generated output
+follows immediately.
+
+The alternative (code generation in CMake or in a separate Python
+script) was rejected as adding build-system complexity for marginal
+benefit.
+
+\section{Exception Translation}
+\label{sec:python_cpp_binding:exception_translation}
+
+\Lucid's engine raises a single C++ exception type,
+\code{LucidError}, defined in \code{core/Error.h}. The binding
+layer translates this exception into a Python exception of the same
+name. The translator is installed in \code{bind\_errors.cpp}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void bind_errors(py::module_& m) {
+  static py::exception<LucidError> py_lucid_error(m, "LucidError");
+  py::register_exception_translator([](std::exception_ptr p) {
+    try {
+      if (p) std::rethrow_exception(p);
+    } catch (const LucidError& e) {
+      py_lucid_error(e.what());
+    }
+  });
+}
+\end{lstlisting}
+
+The translator runs whenever a C++ function called from Python
+throws a \code{LucidError}. The Python side sees a
+\code{lucid.LucidError} with the original message, with no further
+adaptation needed at the call site.
+
+\subsection{Non-Lucid C++ exceptions}
+\label{ssec:python_cpp_binding:other_exceptions}
+
+C++ exceptions other than \code{LucidError} are translated by
+pybind11's default mechanism: \code{std::invalid\_argument}
+becomes \code{ValueError}, \code{std::out\_of\_range} becomes
+\code{IndexError}, \code{std::runtime\_error} becomes
+\code{RuntimeError}, and so on. \Lucid's engine code raises
+\code{LucidError} for everything that should reach the user; the
+default translations are a safety net for programmer errors
+(invariant violations, internal asserts) that should not happen in
+production.
+
+\subsection{The \texttt{LucidError} message format}
+\label{ssec:python_cpp_binding:error_format}
+
+\code{LucidError}'s message is constructed through a fluent builder
+(\code{ErrorBuilder} in \code{core/ErrorBuilder.cpp}) that supports
+attaching context: the operation name, the tensor shapes and
+dtypes, the device, the file and line of the throwing call. The
+builder produces structured strings that production users can grep
+and that automated diagnostics can parse. The format is documented
+in \chref{ch:error_handling}.
+
+\section{The \_C\_\{name\} Alias Convention (H2)}
+\label{sec:python_cpp_binding:h2_alias}
+
+Hard Rule H2 (\appref{app:hard_rules}) prescribes a uniform
+aliasing convention for every import from \code{lucid.\_C}:
+
+\begin{lucidrule}
+Imports from \code{lucid.\_C} must be aliased as
+\code{\_C\_\{name\}}, e.g.\ \code{from lucid.\_C import engine as
+\_C\_engine}. Bare imports (\code{from lucid.\_C import engine}) and
+short aliases (\code{as e}, \code{as eng}, \code{as engine}) are
+forbidden.
+\end{lucidrule}
+
+The motivation:
+
+\begin{enumerate}
+  \item \textbf{Grep-ability.} Every reference to the engine
+    binding is prefixed with \code{\_C\_}, so a grep for
+    \code{\_C\_} finds every engine call in the codebase. This is
+    the single most-used grep when investigating a binding-layer
+    bug.
+  \item \textbf{Disambiguation.} The \code{\_C\_} prefix signals
+    to the reader that the symbol crosses the Python/C++ boundary.
+    A bare \code{engine.something()} could be any module; an
+    \code{\_C\_engine.something()} cannot be mistaken.
+  \item \textbf{Refactor safety.} A future restructuring of the
+    binding layer (for example, splitting the single engine
+    module into multiple sub-modules) can be applied uniformly
+    across the codebase by a search-and-replace on \code{\_C\_engine}.
+    Bare aliases would have made the refactor non-mechanical.
+\end{enumerate}
+
+The rule is enforced by a static check
+(\code{tools/check\_c\_import\_naming.py}) that runs in CI.
+
+\section{GIL Handling}
+\label{sec:python_cpp_binding:gil}
+
+Python's Global Interpreter Lock (GIL) is held by default during
+every C++ function call from Python. For functions that perform
+substantial work without touching Python objects, releasing the
+GIL allows other Python threads (e.g., data-loader workers) to run
+concurrently.
+
+\Lucid's binding releases the GIL inside operations that:
+
+\begin{itemize}
+  \item Dispatch a kernel through \MLX\ or \Accelerate. Kernel
+    launches are non-trivial-duration operations that do not touch
+    Python.
+  \item Perform a \code{backward()} traversal. The autograd engine
+    walks the graph without Python interaction.
+  \item Block on a CPU-to-GPU bridge or vice versa. The bridge
+    waits on \Metal\ events.
+\end{itemize}
+
+The GIL release uses pybind11's \code{py::gil\_scoped\_release}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+TensorImpl ops::matmul(const TensorImpl& a, const TensorImpl& b) {
+  py::gil_scoped_release release;
+  return Dispatcher::instance().matmul(a, b);
+}
+\end{lstlisting}
+
+The scope guard releases the GIL on construction and reacquires on
+destruction. The reacquisition is automatic and exception-safe.
+
+\subsection{When not to release}
+\label{ssec:python_cpp_binding:no_release}
+
+The GIL is \emph{not} released in functions that:
+
+\begin{itemize}
+  \item Touch Python objects (callbacks, exceptions to be raised
+    on the calling thread).
+  \item Are short enough that the release/reacquire overhead would
+    dominate. The break-even point on Apple silicon is roughly
+    1\,$\mu$s of useful work; functions shorter than that should
+    keep the GIL.
+  \item Are called recursively from a context that has already
+    released. The scope guard supports nesting but the explicit
+    release adds noise without benefit.
+\end{itemize}
+
+The rule of thumb: release for any function that dispatches to a
+backend kernel; do not release for property getters, type queries,
+or other constant-time accessors.
+
+\section{Memory and Reference Counting}
+\label{sec:python_cpp_binding:memory}
+
+The interaction between Python's reference counting and C++'s
+\code{shared\_ptr} is the subtlest part of the binding. pybind11
+handles most of it transparently, but the discipline is worth
+stating.
+
+\subsection{shared\_ptr held by Python}
+\label{ssec:python_cpp_binding:py_shared_ptr}
+
+A Python \code{Tensor} object holds a \code{shared\_ptr<TensorImpl>}
+in its C++ representation. The \code{shared\_ptr}'s reference
+count is incremented when the Python object is created and
+decremented when the Python object is garbage-collected.
+
+Multiple Python aliases of the same tensor (for example,
+\code{a = b}) share the same \code{TensorImpl} through the same
+\code{shared\_ptr}; pybind11 handles this by recognising that the
+incoming object is already wrapped and returning the existing
+Python object rather than constructing a new one.
+
+\subsection{shared\_ptr passed between C++ functions}
+\label{ssec:python_cpp_binding:cpp_shared_ptr}
+
+Inside the engine, operations pass \code{shared\_ptr<TensorImpl>}
+around freely. The autograd graph holds \code{shared\_ptr}
+references to tensors saved for backward; the dispatcher constructs
+\code{shared\_ptr}-wrapping return values. The Python side does not
+need to know about these intermediate references; the lifetime
+they pin is observable only as ``memory usage that goes down after
+\code{backward()}.''
+
+\subsection{The risk: cycles}
+\label{ssec:python_cpp_binding:cycles}
+
+\code{shared\_ptr} cycles cause leaks: two objects holding
+\code{shared\_ptr} to each other never have their reference count
+reach zero. The autograd graph could in principle form cycles
+(through hooks or through closures), and we are careful in two
+specific places: \code{nn.Module}'s parameter registry holds
+\code{weak\_ptr}-equivalent references to its children to avoid
+parent-child cycles, and the \code{grad\_fn} chain is
+unidirectional so that no two backward nodes hold each other.
+
+The discipline is checked at code review; an explicit check would
+require a runtime cycle detector that we have not built.
+
+\section{Build System Integration}
+\label{sec:python_cpp_binding:build}
+
+The binding layer is built as a CPython extension module using
+scikit-build-core, with CMake as the underlying build system. The
+configuration files:
+
+\begin{itemize}
+  \item \code{pyproject.toml}: declares scikit-build-core as the
+    build backend and pins build-time dependencies (pybind11,
+    cmake).
+  \item \code{CMakeLists.txt}: top-level CMake; declares the
+    \code{engine} target and links it against pybind11, \MLX, and
+    \Accelerate.
+  \item \code{lucid/\_C/CMakeLists.txt}: declares the per-layer
+    sub-libraries described in \chref{ch:layered_dag} and links
+    them into the engine extension.
+\end{itemize}
+
+The build produces a single \code{.so} file (or, on macOS, a
+\code{.cpython-XYZ-darwin.so}) that pybind11's loading machinery
+recognises and exposes as the \code{engine} module under
+\code{lucid.\_C}.
+
+\subsection{The wheel and its constraints}
+\label{ssec:python_cpp_binding:wheel}
+
+The published wheel is built once per Python version against the
+minimum-target macOS SDK
+(\chref{ch:mlx_runtime}~Section~\ref{ssec:mlx_runtime:macos_constraint}).
+The wheel tag is \code{cp314-cp314-macosx\_26\_0\_arm64}, which
+encodes the Python version (3.14), the platform
+(\code{macosx\_26\_0}), and the architecture (\code{arm64}). The
+constraints come from \MLX: \Lucid's wheel must match \MLX's wheel
+tags to load successfully.
+
+This is the reason \Lucid\ does not currently distribute Linux or
+x86 wheels: \MLX\ does not, and \Lucid\ cannot run without \MLX.
+
+\section{Summary and Forward References}
+\label{sec:python_cpp_binding:summary}
+
+The Python/C++ binding in \Lucid\ is built on pybind11, organised
+into a single \code{engine} module with per-subsystem binding
+files, and disciplined by Hard Rule H2 (the \code{\_C\_\{name\}}
+alias convention). Exception translation is centralised in
+\code{bind\_errors.cpp}, GIL release is per-function with a
+1\,$\mu$s rule of thumb, and reference counting interoperates
+through \code{shared\_ptr<TensorImpl>} on both sides. The build
+produces a single extension module per Python version, tagged to
+match \MLX's wheel constraints.
+
+The next chapter, \chref{ch:lazy_imports}, closes
+\partref{part:system} with the lazy-import surface that the
+top-level Python package exposes. \chref{ch:error_handling}
+returns to the exception system from the diagnostics angle.
+
+\begin{lucidnote}
+For the user: the binding layer is invisible. The user imports
+\code{lucid}, constructs tensors and modules, and never directly
+touches the engine module. The only artefact that surfaces is the
+\code{LucidError} exception class, which is the single error type
+the framework raises.
+\end{lucidnote}

@@ -1,0 +1,533 @@
+% !TEX root = ../main.tex
+\chapter{Custom Function API}
+\label{ch:custom_functions}
+
+Not every operation a user wants to write fits the composite-of-
+primitives pattern (\chref{ch:composite_ops}). Some operations
+need a custom backward that differs from what autograd would
+derive automatically; some need to interact with a non-\Lucid\
+library; some need to inject a specific numerical-stability
+trick. The \emph{Custom Function API} is the escape hatch.
+
+This chapter describes the \code{lucid.autograd.Function} class:
+how to define a custom op, how the autograd engine integrates it,
+when to use it versus a composite, and the design considerations
+that come up in practice.
+
+The API is parity-compatible with \refframework's
+\code{torch.autograd.Function}; users familiar with that interface
+will see only minor naming differences.
+
+\section{Overview}
+\label{sec:custom_functions:overview}
+
+A \code{Function} subclass defines two static methods,
+\code{forward} and \code{backward}, and instructs the autograd
+engine to use them when the user calls
+\code{MyFunction.apply(args)}.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+
+class MyOp(lucid.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, scale):
+        ctx.save_for_backward(x)
+        ctx.scale = scale
+        return scale * x.exp()
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        (x,) = ctx.saved_tensors
+        scale = ctx.scale
+        grad_x = grad_out * scale * x.exp()
+        return grad_x, None  # None for non-tensor `scale`
+
+# Use it
+y = MyOp.apply(x, 3.0)
+y.sum().backward()
+\end{lstlisting}
+
+The \code{ctx} (context) object passes state between forward and
+backward: saved tensors via \code{ctx.save\_for\_backward(...)},
+non-tensor state via attribute assignment.
+
+\section{The Function Class}
+\label{sec:custom_functions:function_class}
+
+\code{lucid.autograd.Function} is the abstract base from which
+custom ops inherit. The implementation lives in
+\code{lucid/autograd/function.py}; it bridges to
+\code{lucid/\_C/autograd/CustomFunction.cpp} for the engine
+integration.
+
+\subsection{Required methods}
+\label{ssec:custom_functions:required}
+
+A subclass must define:
+
+\begin{itemize}
+  \item \code{forward(ctx, *inputs)}: receives the inputs (tensors
+    or non-tensor arguments), returns one or more output tensors.
+  \item \code{backward(ctx, *grad\_outputs)}: receives one
+    cotangent per output, returns one cotangent per input
+    (\code{None} for non-tensor inputs that don't need a
+    gradient).
+\end{itemize}
+
+Both are \code{@staticmethod} decorated. The class itself is never
+instantiated; \code{MyOp.apply(args)} is the call.
+
+\subsection{The Context object}
+\label{ssec:custom_functions:context}
+
+\code{ctx} is a per-call object that lives from the forward
+through the backward. The user uses it to:
+
+\begin{itemize}
+  \item Save tensors needed by backward:
+    \code{ctx.save\_for\_backward(t1, t2, ...)}. Later retrieved
+    in backward as \code{ctx.saved\_tensors}.
+  \item Stash non-tensor state: \code{ctx.my\_attr = value} in
+    forward, \code{ctx.my\_attr} in backward.
+  \item Inspect autograd state: \code{ctx.needs\_input\_grad} is
+    a tuple of booleans indicating which inputs require grad.
+  \item Mark inputs as not requiring grad even though they
+    nominally do: \code{ctx.mark\_non\_differentiable(t)}.
+\end{itemize}
+
+\subsection{The apply method}
+\label{ssec:custom_functions:apply}
+
+\code{MyOp.apply(*args)} is the user-facing entry point. Under
+the hood:
+
+\begin{enumerate}
+  \item Construct a fresh \code{ctx} object.
+  \item Call \code{forward(ctx, *args)} to get the outputs.
+  \item If any input requires grad, construct a
+    \code{CustomFunctionNode} carrying \code{ctx} and the user's
+    \code{backward} method. Wire it as the outputs'
+    \code{grad\_fn}.
+  \item Return the outputs.
+\end{enumerate}
+
+The \code{CustomFunctionNode} is a regular autograd \code{Node}
+(\chref{ch:autograd_engine}); the engine treats it like any
+other node during backward traversal.
+
+\section{Worked Example: A Custom Activation}
+\label{sec:custom_functions:custom_activation}
+
+Suppose we want to implement a non-standard activation,
+\code{swish\_beta(x) = x * sigmoid(beta * x)} with a learnable
+$\beta$. As a composite, the gradient through $\beta$ would be
+constructed by autograd automatically, but for didactic purposes
+we write it as a Function with an explicit backward.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.autograd import Function
+
+class SwishBeta(Function):
+    @staticmethod
+    def forward(ctx, x, beta):
+        sig = (beta * x).sigmoid()
+        out = x * sig
+        ctx.save_for_backward(x, beta, sig, out)
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        x, beta, sig, out = ctx.saved_tensors
+
+        # d/dx [x * sigmoid(beta*x)]
+        #   = sigmoid(beta*x) + x * beta * sigmoid(beta*x) * (1 - sigmoid(beta*x))
+        d_sig = sig * (1 - sig)
+        grad_x = grad_out * (sig + x * beta * d_sig)
+
+        # d/dbeta [x * sigmoid(beta*x)]
+        #   = x * x * sigmoid(beta*x) * (1 - sigmoid(beta*x))
+        grad_beta_per = grad_out * x * x * d_sig
+        grad_beta = grad_beta_per.sum()  # reduce to scalar
+
+        return grad_x, grad_beta
+\end{lstlisting}
+
+The forward saves four tensors (input, beta, the sigmoid
+intermediate, and the output). The backward derives the
+gradients in closed form using the saved quantities.
+
+\subsection{Why save the sigmoid intermediate}
+\label{ssec:custom_functions:save_intermediate}
+
+The sigmoid intermediate could be recomputed in backward from
+\code{x} and \code{beta}, but saving it costs $O(N)$ memory and
+saves one transcendental kernel evaluation. The trade-off favours
+saving for medium-to-large $x$. For very large $x$ where memory
+matters more than compute, the user can choose not to save and
+recompute instead --- \code{gradient\_checkpointing}
+(\chref{ch:gradient_checkpointing}) generalises this trade-off.
+
+\subsection{When this would be a primitive}
+\label{ssec:custom_functions:could_be_prim}
+
+If \code{SwishBeta} were used in every layer of a deep network,
+the per-call framework overhead and the saved-tensor cost would
+add up. At that point we would promote it to a primitive
+(\chref{ch:op_registry}), with a C++ kernel for the forward and
+a registered \code{BackwardSpec}. The Custom Function path is for
+operations not common enough to justify the primitive build cost.
+
+\section{Worked Example: Wrapping an External Library}
+\label{sec:custom_functions:external}
+
+Custom Function is the right tool when the operation is provided
+by an external library (a third-party C kernel, a MPSGraph
+operation \Lucid\ does not yet wrap, etc.).
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class ExternalGEMM(Function):
+    @staticmethod
+    def forward(ctx, A, B):
+        # Call an external C library
+        out = _external_gemm(A, B)
+        # Wrap result in a Lucid tensor sharing the bytes
+        out_tensor = lucid.from_dlpack(out)
+        ctx.save_for_backward(A, B)
+        return out_tensor
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        A, B = ctx.saved_tensors
+        # We know the gradient even though the forward was external
+        grad_A = grad_out @ B.transpose(-1, -2)
+        grad_B = A.transpose(-1, -2) @ grad_out
+        return grad_A, grad_B
+\end{lstlisting}
+
+The pattern: the forward routes through the external call, but
+the backward stays in \Lucid\ primitives. The framework only sees
+a single \code{ExternalGEMM} node in the backward graph; the
+external call's internals are opaque.
+
+\section{The needs\_input\_grad Optimisation}
+\label{sec:custom_functions:needs_input_grad}
+
+\code{ctx.needs\_input\_grad} is a tuple of booleans matching the
+input order. The user can inspect it in \code{backward} to skip
+computing gradients that the autograd engine will discard anyway.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class MyOp(Function):
+    @staticmethod
+    def forward(ctx, x, y, z):
+        ctx.save_for_backward(x, y, z)
+        return some_op(x, y, z)
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        x, y, z = ctx.saved_tensors
+        grad_x = grad_y = grad_z = None
+        if ctx.needs_input_grad[0]:
+            grad_x = ...  # expensive computation
+        if ctx.needs_input_grad[1]:
+            grad_y = ...
+        if ctx.needs_input_grad[2]:
+            grad_z = ...
+        return grad_x, grad_y, grad_z
+\end{lstlisting}
+
+The optimisation matters when some gradients are expensive and
+not always needed. For typical training where every parameter
+requires grad, every \code{needs\_input\_grad[i]} is True and the
+optimisation is moot.
+
+\section{Validating Custom Functions with gradcheck}
+\label{sec:custom_functions:gradcheck}
+
+A custom backward is a place where bugs hide. \Lucid's
+\code{gradcheck} (\chref{ch:gradcheck}) compares the analytical
+backward against a finite-difference approximation and raises if
+they disagree.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.autograd import gradcheck
+
+x = lucid.randn(5, requires_grad=True, dtype=lucid.float64)
+beta = lucid.tensor(0.7, requires_grad=True, dtype=lucid.float64)
+
+assert gradcheck(SwishBeta.apply, (x, beta), eps=1e-6, atol=1e-4)
+\end{lstlisting}
+
+\subsection{Why FP64 for gradcheck}
+\label{ssec:custom_functions:gradcheck_fp64}
+
+The numerical-derivative error is $O(\sqrt{\epsilon})$ where
+$\epsilon$ is machine precision. In FP32 that's $\sim 10^{-4}$,
+which is the threshold at which most gradchecks barely pass; in
+FP64 it's $\sim 10^{-8}$, leaving room for tight tolerances.
+
+\Lucid\ does not require FP64 for runtime use, but gradcheck
+should be in FP64 to give a meaningful signal. The tolerance for
+FP32 gradcheck has to be loose (\code{atol=1e-3}) and is less
+useful as a debugging tool.
+
+\section{Composing Functions}
+\label{sec:custom_functions:composing}
+
+Custom Functions compose: one Function's forward can call
+\code{apply} on another. The autograd engine builds the chain
+naturally.
+
+The chain has implications for higher-order differentiation
+(\chref{ch:higher_order}): a Function's backward that itself
+includes a Function call participates in the second-order
+gradient.
+
+\section{When Not to Use Custom Function}
+\label{sec:custom_functions:when_not}
+
+The decision tree:
+
+\begin{enumerate}
+  \item Can the op be expressed as a composition of existing
+    primitives? Use a composite
+    (\chref{ch:composite_ops}). The autograd-derived backward is
+    correct by construction.
+  \item Is the op called millions of times per training step on
+    a hot path? Build a primitive
+    (\chref{ch:op_registry}).
+  \item Otherwise: Custom Function.
+\end{enumerate}
+
+The middle ground (custom op needed, not on hot path, not
+expressible as composite) is the Custom Function use case. In
+practice it covers wrappers around external libraries, research
+prototype ops, and any case where the auto-derived backward is
+numerically problematic and needs an analytic replacement.
+
+\section{Implementation Notes}
+\label{sec:custom_functions:impl}
+
+The Python \code{Function} class is in
+\code{lucid/autograd/function.py}. It wraps the C++
+\code{CustomFunctionNode} in \code{lucid/\_C/autograd/CustomFunction.cpp}.
+
+\subsection{The Python-to-C++ boundary}
+\label{ssec:custom_functions:py_cpp_boundary}
+
+The custom \code{backward} is a Python function. The C++ engine,
+when it walks the backward graph and reaches a
+\code{CustomFunctionNode}, calls back into Python to invoke the
+function. This requires holding the GIL during the call, which is
+the one place in the engine that the GIL is acquired during
+backward.
+
+For pure-\Lucid-primitive backwards inside the custom function,
+the GIL is then released for the duration of each primitive call.
+The net overhead is a few microseconds per Custom Function call
+beyond a plain primitive node.
+
+\subsection{Memory model}
+\label{ssec:custom_functions:memory}
+
+The \code{ctx} object is held by the \code{CustomFunctionNode}
+for the lifetime of the backward graph. Anything assigned to
+\code{ctx} (saved tensors, Python attributes) lives until backward
+completes. The user should avoid storing large Python objects
+on \code{ctx} if memory is tight.
+
+\subsection{Thread safety}
+\label{ssec:custom_functions:thread_safety}
+
+Custom Function's \code{forward} and \code{backward} are called
+on the calling thread. Multiple concurrent backward passes (from
+different model invocations) instantiate different \code{ctx}
+objects and operate independently. The user's custom code is
+responsible for any internal thread safety (which is rare in
+practice).
+
+\section{Worked Example: A Straight-Through Estimator}
+\label{sec:custom_functions:ste_example}
+
+A common pattern in models that need a discrete decision (binary
+gating, quantisation, hard attention) is the \emph{straight-through
+estimator} (STE): the forward applies a non-differentiable rounding
+or thresholding, but the backward passes the gradient through
+unchanged, as if the rounding were the identity. This is a
+mathematically illegitimate but empirically effective approximation
+that lets gradient-based training work with discrete decisions.
+
+The STE is naturally a Custom Function:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class BinaryQuantize(Function):
+    @staticmethod
+    def forward(ctx, x):
+        # Forward: round to 0 or 1 based on sign
+        return (x > 0).astype(x.dtype)
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        # Straight-through: gradient passes unchanged
+        return grad_out
+
+binarize = BinaryQuantize.apply
+\end{lstlisting}
+
+This is two-line backward, but it could not be expressed as a
+composite because no composition of differentiable primitives
+produces the identity gradient through a step function. The Custom
+Function escape hatch is the only clean way.
+
+\subsection{Variants}
+\label{ssec:custom_functions:ste_variants}
+
+The STE family has several refinements:
+
+\begin{itemize}
+  \item \textbf{Clipped STE}: pass gradient through only when the
+    input is in a safe range, zero otherwise.
+  \item \textbf{Soft STE}: blend the analytical sub-gradient with
+    the straight-through gradient.
+  \item \textbf{Annealed STE}: start with a smooth surrogate
+    (sigmoid) and anneal toward hard binarisation.
+\end{itemize}
+
+Each is a 5--10 line Custom Function in \Lucid.
+
+\section{Worked Example: A Reverse-Mode Differentiable Solver}
+\label{sec:custom_functions:solver_example}
+
+Another use case: wrapping a numerical solver that does not admit
+straightforward AD. Consider a function that returns the root of a
+nonlinear equation via Newton's method:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class ImplicitRoot(Function):
+    @staticmethod
+    def forward(ctx, params, x0):
+        # Solve g(x; params) = 0 via Newton iteration
+        x = x0
+        for _ in range(50):
+            with lucid.no_grad():
+                gx = _g(x, params)
+                gx_x = _g_jac_x(x, params)
+                x = x - gx / gx_x
+        ctx.save_for_backward(x, params)
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        # Implicit function theorem:
+        # dx/dparams = -(d g/d x)^{-1} (d g/d params)
+        x, params = ctx.saved_tensors
+        gx_x = _g_jac_x(x, params)
+        gx_p = _g_jac_p(x, params)
+        grad_params = -(grad_out / gx_x) * gx_p
+        return grad_params, None  # x0 has no gradient
+\end{lstlisting}
+
+The forward runs an iterative solver that is not amenable to
+unrolling through autograd (the iteration count is dynamic and the
+intermediate states are not useful for gradients). The backward
+applies the implicit function theorem: the gradient with respect
+to the parameters is computed in closed form from the Jacobians of
+the residual function $g$ at the solution.
+
+This pattern --- iterative forward, analytical backward via the
+implicit function theorem --- is the standard mechanism for
+differentiable optimisation layers (DEQ, OptNet, and similar
+modern architectures).
+
+\section{Patterns and Anti-patterns}
+\label{sec:custom_functions:patterns}
+
+A catalogue of common mistakes when writing a Custom Function.
+
+\subsection{Pattern: clone before in-place}
+\label{ssec:custom_functions:clone_before}
+
+If the forward modifies an input in place, the saved-for-backward
+version is the modified one, and the backward gets wrong values.
+The fix is to clone first:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+@staticmethod
+def forward(ctx, x):
+    x_clone = x.clone()
+    x_clone.add_(1.0)        # safe: modifies clone
+    ctx.save_for_backward(x_clone)  # backward sees the modified value
+    return x_clone
+\end{lstlisting}
+
+\subsection{Anti-pattern: saving Python objects on ctx}
+\label{ssec:custom_functions:anti_pyobj}
+
+Avoid storing large Python objects on \code{ctx}: they live for
+the entire backward graph's lifetime and contribute to memory
+pressure. Save only what backward needs.
+
+\subsection{Anti-pattern: forgetting to handle non-tensor inputs}
+\label{ssec:custom_functions:anti_nontensor}
+
+If a Function takes non-tensor arguments (a scalar, a string, a
+configuration dict), the backward must return \code{None} for
+each. Forgetting produces a shape-mismatch error in the engine:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class BadFunc(Function):
+    @staticmethod
+    def forward(ctx, x, scale):  # scale is a Python float
+        ctx.scale = scale
+        return scale * x
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        return ctx.scale * grad_out   # WRONG: returns only one value
+        # Should be:
+        # return ctx.scale * grad_out, None
+\end{lstlisting}
+
+The framework expects one return value per input; \code{None} for
+non-tensor inputs.
+
+\subsection{Anti-pattern: writing to non-saved state}
+\label{ssec:custom_functions:anti_state}
+
+A Function whose forward modifies global state (a counter, a
+cache, a log) is not reproducible under autograd: a re-run during
+checkpointing (\chref{ch:gradient_checkpointing}) or
+gradgradcheck (\chref{ch:gradcheck}) will fire the side effect
+twice. Functions should be pure.
+
+\section{Summary and Forward References}
+\label{sec:custom_functions:summary}
+
+The Custom Function API is \Lucid's extension mechanism for
+operations that cannot be expressed as compositions of existing
+primitives and are not common enough to justify a C++ primitive.
+The user defines a \code{Function} subclass with
+\code{forward(ctx, *inputs)} and \code{backward(ctx, *grad\_outputs)}
+static methods; the framework integrates the custom op into the
+autograd graph through a \code{CustomFunctionNode}. The
+\code{ctx} object carries state between forward and backward.
+
+\code{gradcheck} (\chref{ch:gradcheck}) is the recommended
+validation step for any custom backward.
+
+The next chapter, \chref{ch:gradient_checkpointing}, treats the
+memory-saving recomputation pattern that interacts with the
+saved-tensor mechanism. \chref{ch:higher_order} treats
+higher-order differentiation, in which custom backwards
+participate naturally.
+
+\begin{lucidnote}
+For the user: \code{Function} is the right tool for one-off custom
+ops. If you are writing one and the backward is more than a few
+lines, consider whether the composite path
+(\chref{ch:composite_ops}) would suffice; if the backward is
+extremely performance-critical, consider whether a primitive
+(\chref{ch:op_registry}) is warranted.
+\end{lucidnote}

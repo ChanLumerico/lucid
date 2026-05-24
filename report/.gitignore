@@ -1,0 +1,37 @@
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.lof
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.idx
+*.ind
+*.ilg
+*.acn
+*.acr
+*.alg
+*.glg
+*.glo
+*.gls
+*.ist
+*.xdy
+*.pyg
+
+# Build output directories
+build/
+
+# Editor / OS
+.DS_Store
+*.swp
+*~
+
+# Uncomment to ignore PDF output (otherwise commit it):
+# main.pdf

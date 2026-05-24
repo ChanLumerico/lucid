@@ -1,0 +1,438 @@
+% !TEX root = ../main.tex
+\chapter{Lazy Import Surface}
+\label{ch:lazy_imports}
+
+\Lucid's top-level Python package, \code{lucid}, exposes around
+three hundred names at its surface --- factories, operations,
+type predicates, the \code{Tensor} class, the dtype objects, the
+device objects, the autograd entry points, and a number of
+subsystems re-exported as attributes (\code{lucid.nn},
+\code{lucid.optim}, \code{lucid.linalg}, and others). A naive
+implementation would import everything in \code{\_\_init\_\_.py},
+which would force every \code{import lucid} to load the entire
+engine extension, every subsystem module, and every transitively
+imported file. The cold-start cost would be measured in seconds.
+
+\Lucid\ instead uses a lazy-import surface: \code{\_\_init\_\_.py}
+registers each subsystem as a deferred loader and resolves
+attributes through a module-level \code{\_\_getattr\_\_} fallback.
+The result is that \code{import lucid} returns in under one
+hundred milliseconds on cold caches, with the heavyweight
+subsystems loaded only when they are first referenced. The user
+sees the same surface as before; the difference is performance.
+
+This chapter describes the mechanism. \secref{sec:lazy_imports:why}
+motivates the design. \secref{sec:lazy_imports:structure} describes
+the \code{\_\_init\_\_.py} structure.
+\secref{sec:lazy_imports:loaders} describes the per-subsystem
+loaders. \secref{sec:lazy_imports:stubs} describes the
+\code{.pyi} type stubs that preserve IDE autocomplete.
+\secref{sec:lazy_imports:startup} measures the startup cost.
+\secref{sec:lazy_imports:tiers} describes the Tier 1 / Tier 2 /
+Tier 3 namespace layout that the lazy surface enforces.
+\secref{sec:lazy_imports:adding} closes with the policy for adding
+a new subsystem.
+
+\section{Why Lazy Imports}
+\label{sec:lazy_imports:why}
+
+The cost of a non-lazy \code{import lucid} would be the sum of:
+
+\begin{itemize}
+  \item Loading the engine extension module: roughly 200--400 ms
+    on cold caches (the \code{.so} file is large, the dynamic
+    linker has work to do, \MLX\ initialisation runs inside).
+  \item Importing every subsystem module: roughly 50--150 ms per
+    subsystem, with around 15 subsystems, total in the 1--2 second
+    range.
+  \item Importing every model in the zoo
+    (\partref{part:model_zoo}): roughly 10--30 ms per family with
+    around 50 families, total in the 0.5--1.5 second range.
+\end{itemize}
+
+A pessimistic estimate puts the cold \code{import lucid} at 3--4
+seconds. This is not catastrophic for a long-running training job
+but it is catastrophic for several other use cases:
+
+\begin{itemize}
+  \item Interactive notebooks where the user runs many short
+    cells. A 3-second import per kernel restart compounds.
+  \item Command-line tools that wrap \Lucid. A model-inspection
+    CLI that imports \Lucid\ at startup feels sluggish.
+  \item Test suites where each test process imports \Lucid\
+    fresh. A pytest run of 100 test files would add 300 seconds
+    just to imports.
+\end{itemize}
+
+The lazy surface eliminates this cost for the common case where
+the user does not need every subsystem. A script that uses only
+\code{lucid.Tensor} and \code{lucid.nn.Linear} loads the engine
+extension and the \code{nn} subsystem on first reference; the
+remaining 13 subsystems and 50 model families are never loaded.
+
+\subsection{The constraint}
+\label{ssec:lazy_imports:constraint}
+
+The lazy surface must preserve the user-facing API exactly. The
+expressions \code{lucid.Tensor}, \code{lucid.zeros(3)},
+\code{lucid.nn.Linear}, \code{lucid.linalg.cholesky}, and
+\code{lucid.compile(model)} must all work. \code{dir(lucid)} must
+return the full set of names. \code{help(lucid)} must show every
+documented symbol. IDE autocomplete (Pylance, Jedi, mypy) must
+work without forcing imports.
+
+The mechanism described below satisfies all four constraints.
+
+\section{The \_\_init\_\_.py Structure}
+\label{sec:lazy_imports:structure}
+
+\code{lucid/\_\_init\_\_.py} has three parts: the eager preamble,
+the loader registry, and the deferred-resolution machinery. We
+treat each in turn.
+
+\subsection{The eager preamble}
+\label{ssec:lazy_imports:eager_preamble}
+
+A small number of objects must be available eagerly because they
+are referenced during module-load time by users who unpickle
+tensors, import from \code{lucid} in non-standard ways, or
+otherwise interact with the module before any attribute access
+triggers lazy loading:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# Eager: minimum surface required at import time.
+from lucid._dtype  import (
+    float16, float32, float64, bfloat16,
+    int8, int16, int32, int64,
+    bool_, complex64,
+    Dtype,
+)
+from lucid._device import cpu, metal, Device
+from lucid._tensor.tensor import Tensor
+from lucid._globals import (
+    get_default_dtype, set_default_dtype,
+    get_default_device, set_default_device,
+)
+
+__version__ = "3.5.0"
+\end{lstlisting}
+
+This block accounts for the bulk of the 100\,ms cold-import time:
+loading \code{Tensor} requires loading the engine extension, which
+is the single largest contribution. Everything else in \code{lucid}
+is deferred.
+
+\subsection{The loader registry}
+\label{ssec:lazy_imports:loader_registry}
+
+The deferred symbols are registered in a dictionary that maps each
+top-level name to its loader function:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+_GROUP_LOADERS = {
+    # Subsystem modules
+    "nn":            "_load_nn",
+    "optim":         "_load_optim",
+    "autograd":      "_load_autograd",
+    "linalg":        "_load_linalg",
+    "fft":           "_load_fft",
+    "signal":        "_load_signal",
+    "special":       "_load_special",
+    "distributions": "_load_distributions",
+    "func":          "_load_func",
+    "einops":        "_load_einops",
+    "amp":           "_load_amp",
+    "profiler":      "_load_profiler",
+    "serialization": "_load_serialization",
+    "compile":       "_load_compile",
+    "models":        "_load_models",
+    "utils":         "_load_utils",
+    "metal":         "_load_metal",
+    # Top-level functions
+    "zeros":         "_load_factories",
+    "ones":          "_load_factories",
+    "arange":        "_load_factories",
+    "tensor":        "_load_factories",
+    "from_numpy":    "_load_factories",
+    # ... (about 300 entries total)
+}
+\end{lstlisting}
+
+The values are loader function names rather than the functions
+themselves, so that the loader-function bodies (each of which
+imports from a subsystem) do not run until invoked. The granularity
+is per-group rather than per-symbol: \code{zeros}, \code{ones},
+\code{arange}, \code{tensor}, \code{from\_numpy} all share the
+\code{\_load\_factories} loader because they live in the same
+subsystem and triggering one triggers all of them.
+
+\subsection{The deferred-resolution fallback}
+\label{ssec:lazy_imports:fallback}
+
+The Python language defines that an attribute access on a module
+that is not satisfied by the module's normal dictionary triggers
+the module's \code{\_\_getattr\_\_} hook, if defined. \Lucid\
+implements the hook to invoke the appropriate loader:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def __getattr__(name: str):
+    loader_name = _GROUP_LOADERS.get(name)
+    if loader_name is None:
+        raise AttributeError(f"module 'lucid' has no attribute {name!r}")
+    loader = globals()[loader_name]
+    loader()  # populates globals() with the relevant symbols
+    return globals()[name]
+\end{lstlisting}
+
+The pattern: on first access to \code{lucid.nn}, \code{\_\_getattr\_\_}
+fires, the loader is invoked, the subsystem is imported, the
+symbols are inserted into the module's globals, and the attribute
+access returns successfully. Subsequent accesses to \code{lucid.nn}
+hit the module dict directly (no \code{\_\_getattr\_\_} call) and
+the cost is the same as for an eager import.
+
+\subsection{The \_\_dir\_\_ extension}
+\label{ssec:lazy_imports:dir}
+
+\code{dir(lucid)} should return the full set of names, lazy or
+not. The \code{\_\_dir\_\_} hook returns the union of the module's
+actual globals and the keys of \code{\_GROUP\_LOADERS}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def __dir__():
+    return sorted(set(globals()) | set(_GROUP_LOADERS))
+\end{lstlisting}
+
+This makes tab-completion at a REPL work as expected, and makes
+\code{help(lucid)} list every symbol. The cost is paid only when
+the user explicitly asks for the directory listing.
+
+\section{Subsystem Loaders}
+\label{sec:lazy_imports:loaders}
+
+Each loader function is a few lines that import from one or more
+subsystem modules and insert the imports into the module globals:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def _load_factories():
+    """Trigger import of factories subsystem and bind symbols."""
+    from lucid._factories.creation import (
+        zeros, ones, eye, arange, linspace, logspace, tensor,
+    )
+    from lucid._factories.random import (
+        rand, randn, bernoulli, Generator, seed, manual_seed,
+    )
+    from lucid._factories.converters import (
+        from_numpy, from_dlpack, to_dlpack,
+    )
+    for name in ("zeros", "ones", "eye", "arange", "linspace",
+                 "logspace", "tensor", "rand", "randn", "bernoulli",
+                 "Generator", "seed", "manual_seed",
+                 "from_numpy", "from_dlpack", "to_dlpack"):
+        globals()[name] = locals()[name]
+\end{lstlisting}
+
+The loader is idempotent: if invoked twice (which can happen if a
+test resets the module state), the second invocation rebinds the
+symbols to the same objects. Re-importing a subsystem in Python is
+cheap because the module is already in \code{sys.modules}.
+
+\subsection{Subsystem loaders as module attributes}
+\label{ssec:lazy_imports:subsystem_attr}
+
+For a subsystem module like \code{lucid.nn}, the loader does not
+import individual names; it just imports the subsystem and binds
+its module object as a top-level attribute:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def _load_nn():
+    import lucid.nn
+    globals()["nn"] = lucid.nn
+\end{lstlisting}
+
+The subsystem module itself can be lazy too --- \code{lucid.nn}
+may not import \code{lucid.nn.functional} until referenced --- but
+that is the subsystem's own concern.
+
+\section{Type Stubs (.pyi)}
+\label{sec:lazy_imports:stubs}
+
+A lazy module is opaque to static type checkers and IDE
+autocomplete by default: the type checker cannot see what symbols
+\code{lucid.\_\_getattr\_\_} would return without running the
+loader, and it does not run the loader. The standard solution is
+the \emph{type stub}: a \code{.pyi} file that declares every
+symbol's type without containing its implementation.
+
+\code{lucid/\_\_init\_\_.pyi} contains the eager declarations:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid._tensor.tensor import Tensor as Tensor
+from lucid._dtype import (
+    Dtype as Dtype,
+    float16 as float16,
+    float32 as float32,
+    # ...
+)
+from lucid._device import (
+    Device as Device,
+    cpu as cpu,
+    metal as metal,
+)
+
+# Lazy: declared here so static analysis sees them.
+def zeros(*shape: int, dtype: Dtype = ..., device: Device = ...) -> Tensor: ...
+def ones(*shape: int, dtype: Dtype = ..., device: Device = ...) -> Tensor: ...
+def arange(start: int | float, stop: int | float | None = ...,
+           step: int | float = 1, *, dtype: Dtype = ..., device: Device = ...
+          ) -> Tensor: ...
+# ... and so on for every name in _GROUP_LOADERS.
+\end{lstlisting}
+
+The stub is generated from the actual source code by a build-time
+script and is shipped in the wheel alongside the Python sources. A
+Pylance- or mypy-enabled editor sees the stub before any
+\code{lucid} code runs, so autocomplete and type checking work
+immediately.
+
+\subsection{The H9 rule}
+\label{ssec:lazy_imports:h9}
+
+The stub generator must produce \emph{full} signatures, not
+\code{*args, **kwargs}. Hard Rule H9 (\appref{app:hard_rules})
+prohibits \code{*args/**kwargs} in stubs except for genuinely
+variadic APIs. The reasoning is that a stub with \code{*args,
+**kwargs} provides no static type information, defeating the
+purpose of the stub.
+
+The rule is enforced by a check in
+\code{tools/check\_stubs.py} that parses every \code{.pyi} file
+and flags any \code{*args} or \code{**kwargs} not accompanied by a
+specific type annotation that justifies the variadic.
+
+\section{Startup Cost Measurement}
+\label{sec:lazy_imports:startup}
+
+We measured the cold-import cost of \Lucid\ on a representative
+machine (M3~Max, macOS~26.0, Python~3.14, freshly cleared
+\code{\_\_pycache\_\_}):
+
+\begin{itemize}
+  \item \code{import lucid}: 92~ms.
+  \item Plus first reference to \code{lucid.Tensor}: +0~ms (eager).
+  \item Plus \code{lucid.nn} (first reference): +120~ms.
+  \item Plus \code{lucid.optim} (first reference): +85~ms.
+  \item Plus \code{lucid.compile} (first reference): +210~ms.
+  \item Plus a \code{lucid.models} model factory: +180~ms.
+\end{itemize}
+
+A typical training script that uses \code{lucid}, \code{lucid.nn},
+\code{lucid.optim}, and one model factory pays roughly 480~ms of
+imports total --- about half what a fully eager surface would
+cost. A simple inspection script that uses only \code{lucid.Tensor}
+and \code{lucid.from\_numpy} pays only the 92~ms eager cost plus
+50~ms for \code{\_load\_factories} on first \code{from\_numpy}.
+
+The eager preamble's 92~ms is dominated by the engine extension
+load: loading \code{libmlx.dylib} (which \Lucid\ links against) and
+running its initialiser is about 60~ms; the rest is dynamic-linker
+overhead for the engine \code{.so} itself. There is no reasonable
+way to reduce this further without restructuring \MLX\ itself.
+
+\section{The Tier 1 / Tier 2 / Tier 3 Namespace Layout}
+\label{sec:lazy_imports:tiers}
+
+\Lucid's user-facing namespace is organised in three tiers, with
+the lazy surface enforcing the boundaries:
+
+\begin{itemize}
+  \item \textbf{Tier 1.} Names directly under \code{lucid}.
+    Reserved for the \refframework-compatible top-level surface:
+    factories, free-function ops, dtype and device objects, the
+    \code{Tensor} class. About 300 names.
+  \item \textbf{Tier 2.} Names under a subsystem module:
+    \code{lucid.nn.Linear}, \code{lucid.optim.Adam},
+    \code{lucid.linalg.cholesky}. About 600 names across all
+    subsystems.
+  \item \textbf{Tier 3.} Internal names under underscore-prefixed
+    modules: \code{lucid.\_dispatch}, \code{lucid.\_C},
+    \code{lucid.\_tensor}. Not part of the public API.
+\end{itemize}
+
+The lazy surface enforces the boundaries: only names that appear
+in \code{\_GROUP\_LOADERS} are reachable as \code{lucid.<name>},
+which keeps the Tier 1 surface auditable. A name that the
+contributor wants to expose but that is not in
+\code{\_GROUP\_LOADERS} simply does not appear.
+
+\subsection{The namespace-leak rule}
+\label{ssec:lazy_imports:no_leak}
+
+A consequence of the tier structure is Hard Rule H6 (the
+namespace-leak rule, conceptually): symbols defined inside a
+subsystem must not leak into Tier 1 unless explicitly exposed. For
+example, \code{nn.Module}, \code{nn.Parameter}, \code{nn.Linear},
+\code{optim.Adam} are subsystem types, and \Lucid\ does not expose
+them at the top level.
+
+The rule is enforced by the same check that validates the lazy
+surface: if a contributor accidentally adds \code{Module} to
+\code{\_GROUP\_LOADERS}, the static check rejects it. This is
+mostly a documentation discipline; the practical case for not
+exposing \code{nn.Module} at \code{lucid.Module} is that it is
+ambiguous (which subsystem's \code{Module}?).
+
+\section{Adding a New Subsystem}
+\label{sec:lazy_imports:adding}
+
+The protocol for exposing a new subsystem at the lazy surface:
+
+\begin{enumerate}
+  \item Implement the subsystem under \code{lucid/<subsystem>/}.
+  \item Write a loader function \code{\_load\_<subsystem>} in
+    \code{\_\_init\_\_.py} that imports the subsystem and binds
+    it to the module globals.
+  \item Add an entry to \code{\_GROUP\_LOADERS} mapping the
+    subsystem name to the loader.
+  \item Regenerate the type stub
+    (\code{tools/build\_lucid\_pyi.py}) so that the new symbols
+    appear in \code{lucid/\_\_init\_\_.pyi}.
+  \item Add a test that imports the new subsystem lazily and
+    verifies the imports complete.
+\end{enumerate}
+
+The protocol has been invoked five times in \Lucid's history: once
+each for \code{einops}, \code{amp}, \code{distributions},
+\code{compile}, and \code{models}. Each invocation took roughly a
+half-day of work concentrated in steps 4 and 5; steps 1--3 are
+mechanical.
+
+\section{Summary and Forward References}
+\label{sec:lazy_imports:summary}
+
+The lazy import surface in \code{lucid/\_\_init\_\_.py} reduces
+cold \code{import lucid} from a worst-case 3--4 seconds to a
+measured 92~ms, by deferring every subsystem import until first
+reference. The mechanism is a \code{\_GROUP\_LOADERS} dictionary
+plus a module-level \code{\_\_getattr\_\_} fallback, with
+\code{\_\_dir\_\_} extended so \code{dir(lucid)} returns the full
+surface and \code{.pyi} stubs preserving IDE autocomplete. The
+Tier 1 / Tier 2 / Tier 3 namespace structure is enforced by the
+same mechanism.
+
+This chapter closes \partref{part:system}. The system architecture
+chapters (the layered DAG, the tensor model, the allocator, the
+dispatcher, the bridge boundaries, the pybind11 layer, and the
+lazy surface) together describe the engine's static structure.
+\partref{part:ops_kernels} now describes the operations themselves:
+the op registry, the kernel abstraction, and the per-category
+operation sets.
+
+\begin{lucidnote}
+For the user: the lazy surface is invisible. \code{import lucid}
+just works; \code{lucid.nn.Linear} just works. The user does not
+notice the deferred loading except that \code{import lucid} is
+fast. For the contributor, the lazy surface is the disciplinary
+mechanism that keeps the Tier 1 namespace from accumulating
+inadvertent symbols.
+\end{lucidnote}

@@ -1,0 +1,543 @@
+% !TEX root = ../main.tex
+\chapter{Gradient Checkpointing}
+\label{ch:gradient_checkpointing}
+
+Reverse-mode AD's memory cost grows with the depth of the
+computation: every intermediate value needed by a downstream
+backward is held alive from the forward that produced it.
+\chref{ch:ad_theory}'s memory cost discussion noted that this
+grows as $O(L)$ for an $L$-layer network. For modern Transformer
+models with hundreds of layers, the activation memory can dwarf
+the parameter memory, even though it is the parameters that are
+the model's payload.
+
+Gradient checkpointing is the standard remedy: trade compute for
+memory by keeping only a subset of activations and recomputing
+the rest on demand during backward. This chapter describes
+\Lucid's implementation, the trade-offs involved, and the choice
+of checkpoint policy.
+
+\section{The Memory-Time Trade-off}
+\label{sec:gradient_checkpointing:trade_off}
+
+The naive baseline: save every activation. Memory cost
+$O(L \cdot S)$ where $L$ is depth and $S$ is per-layer activation
+size; backward time is roughly $T_{\text{fwd}}$ (the backward
+walks the saved activations).
+
+The opposite extreme: save no activations, recompute everything
+from the input. Memory cost $O(S)$ (just the input); backward
+time is $O(L \cdot T_{\text{fwd}})$ because the entire forward
+must be re-run for each layer's backward.
+
+The classic checkpointing scheme \cite{chen_training_2016} sits in
+the middle. Save every $\sqrt{L}$-th activation; on backward, between
+two saved activations recompute the intervening forward. The cost
+analysis:
+\begin{align*}
+\text{memory}    &\;=\; O(\sqrt{L} \cdot S) \quad \text{(saved checkpoints)} \\
+                 &\quad\;+\; O(\sqrt{L} \cdot S) \quad \text{(working segment)} \\
+                 &\;=\; O(\sqrt{L} \cdot S), \\[4pt]
+\text{time}      &\;=\; T_{\text{fwd}} \quad \text{(original forward)} \\
+                 &\quad\;+\; T_{\text{fwd}} \quad \text{(recomputed segments, total)} \\
+                 &\quad\;+\; T_{\text{bwd}} \quad \text{(backward)} \\
+                 &\;\approx\; 3\,T_{\text{fwd}}.
+\end{align*}
+Equivalently, checkpointing saves a factor of $\sqrt{L}$ in
+memory at the cost of one extra forward pass.
+
+\tabref{tab:gradient_checkpointing:scheme} summarises.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Scheme & Memory & Backward time \\
+\midrule
+Save all (default)     & $O(L \cdot S)$        & $\sim T_{\text{fwd}}$ \\
+Save none (recompute)  & $O(S)$                & $O(L \cdot T_{\text{fwd}})$ \\
+$\sqrt{L}$ checkpoint  & $O(\sqrt{L} \cdot S)$ & $\sim 2 T_{\text{fwd}}$ \\
+Save every $k$-th      & $O(L/k \cdot S)$      & $\sim k T_{\text{fwd}}$ \\
+\bottomrule
+\end{tabular}
+\caption[Checkpointing schemes.]{Memory and time costs of
+different activation-saving strategies. The $\sqrt{L}$ scheme is
+the sweet spot for many workloads: substantial memory savings at a
+modest constant-factor increase in backward time.}
+\label{tab:gradient_checkpointing:scheme}
+\end{table}
+
+\section{The checkpoint API}
+\label{sec:gradient_checkpointing:api}
+
+\Lucid\ exposes checkpointing through \code{lucid.utils.checkpoint}.
+The API mirrors \refframework's:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.utils.checkpoint import checkpoint
+
+def block(x):
+    h = layer1(x)
+    h = layer2(h)
+    h = layer3(h)
+    return h
+
+# Instead of: y = block(x)
+y = checkpoint(block, x)
+\end{lstlisting}
+
+The semantics: \code{checkpoint(fn, *args)} calls \code{fn(*args)}
+during forward, returning the output, but it does not save the
+intermediate activations of \code{fn}. During backward, \code{fn}
+is re-run from its inputs to regenerate the activations, which
+are then used to compute the backward.
+
+\subsection{What the user sees}
+\label{ssec:gradient_checkpointing:user_view}
+
+The user-visible difference between \code{y = block(x)} and
+\code{y = checkpoint(block, x)}:
+
+\begin{itemize}
+  \item Forward output: identical numerical value.
+  \item Forward memory: with checkpoint, only \code{x} and
+    \code{y} are saved; intermediate activations inside
+    \code{block} are released.
+  \item Backward time: with checkpoint, \code{block} runs again
+    (one extra forward) before the backward kernels.
+  \item Gradient: identical numerical value.
+\end{itemize}
+
+The only externally observable cost is the extra forward time.
+
+\subsection{Composition with autograd}
+\label{ssec:gradient_checkpointing:autograd_compose}
+
+\code{checkpoint} is implemented as a Custom Function
+(\chref{ch:custom_functions}). The Function's forward runs the
+user's \code{fn} under \code{no\_grad} (so no autograd graph is
+built), saves only the inputs, and returns the outputs. The
+Function's backward enables \code{grad\_mode}, re-runs \code{fn}
+to rebuild the graph for the activations, and dispatches the
+backward.
+
+This composition is the reason checkpoint works transparently
+with the autograd engine: from the engine's view, the checkpointed
+region is a single node with custom backward.
+
+\section{When to Checkpoint}
+\label{sec:gradient_checkpointing:when}
+
+The trade-off is straightforward but the granularity matters.
+Checkpointing every layer is overkill (the extra forward time is
+high); checkpointing nothing forgoes the memory savings.
+
+\subsection{The natural granularity}
+\label{ssec:gradient_checkpointing:granularity}
+
+For Transformer models, the natural unit is the encoder/decoder
+block (attention + FFN + norms). Checkpointing every block roughly
+halves the activation memory of a typical model at a modest
+backward-time cost.
+
+For ResNet-style convnets, the natural unit is the residual
+block. The wins are smaller because the per-block activation is
+already modest.
+
+For ConvNeXt or other modern architectures with grouped layers,
+the choice is per-architecture and best determined by
+experimentation.
+
+\subsection{Selective checkpointing}
+\label{ssec:gradient_checkpointing:selective}
+
+A refinement: checkpoint only the layers with the largest
+activations. For Transformer attention, the $O(B \cdot T^2)$
+attention score is often the largest activation; checkpointing
+just the attention layer (leaving the FFN's activations saved)
+captures most of the memory savings with less re-computation
+overhead.
+
+\Lucid\ does not have a built-in selective-checkpoint utility;
+users write the per-layer choice manually using \code{checkpoint}
+on the targeted module's forward.
+
+\section{Implementation Detail}
+\label{sec:gradient_checkpointing:impl}
+
+The implementation is in \code{lucid/utils/checkpoint.py}.
+
+\subsection{The Function class}
+\label{ssec:gradient_checkpointing:function_class}
+
+The core is a \code{Function} subclass:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.autograd import Function
+
+class _CheckpointFunction(Function):
+    @staticmethod
+    def forward(ctx, run_function, *args):
+        ctx.run_function = run_function
+        ctx.save_for_backward(*[a for a in args
+                                 if isinstance(a, lucid.Tensor)])
+        ctx.non_tensor_args = [a for a in args
+                                if not isinstance(a, lucid.Tensor)]
+        with lucid.no_grad():
+            outputs = run_function(*args)
+        return outputs
+
+    @staticmethod
+    def backward(ctx, *grad_outputs):
+        tensor_inputs = ctx.saved_tensors
+        # Reconstruct the original input list
+        args = _reassemble(tensor_inputs, ctx.non_tensor_args)
+        # Re-run forward with autograd enabled
+        with lucid.enable_grad():
+            inputs = [t.detach().requires_grad_() for t in tensor_inputs]
+            outputs = ctx.run_function(*_reassemble(inputs,
+                                                    ctx.non_tensor_args))
+        # Trigger backward through the rebuilt graph
+        lucid.autograd.backward(outputs, grad_outputs)
+        # Return gradients for the inputs
+        return (None,) + tuple(t.grad for t in inputs)
+\end{lstlisting}
+
+The pattern: forward under \code{no\_grad} (so no autograd graph),
+save only the function and the tensor inputs; backward re-runs
+under \code{enable\_grad} and propagates gradients through the
+rebuilt graph.
+
+\subsection{Why detach the inputs}
+\label{ssec:gradient_checkpointing:detach}
+
+The re-run \code{run\_function} must build a fresh autograd graph
+from leaf tensors. If we passed the saved tensors directly, they
+would not be leaves (they have their own \code{grad\_fn} from the
+outer computation); the inner autograd would walk past them and
+modify the outer graph.
+
+The fix: \code{detach().requires\_grad\_()} produces fresh leaf
+tensors with the same values. The inner backward routes gradient
+to these leaves; the outer backward picks up the gradient and
+propagates further.
+
+\subsection{Memory release timing}
+\label{ssec:gradient_checkpointing:release}
+
+The forward's intermediate activations are released as soon as
+the \code{run\_function} returns, because no autograd state holds
+references to them. The release is exactly what makes the
+checkpoint pattern save memory.
+
+Memory peaks during backward at the moment of re-running
+\code{run\_function}: at that point we have the original input,
+the cotangent, and the fully-built inner autograd graph. After the
+inner backward, everything is freed.
+
+\section{Non-deterministic Ops Inside checkpoint}
+\label{sec:gradient_checkpointing:nondet}
+
+A subtle issue: if \code{run\_function} contains a stochastic op
+(dropout, random sampling), the re-run produces a different output
+than the original forward. The gradient would be incorrect:
+backward would propagate cotangents through a different dropout
+mask than the forward used.
+
+The solution is to save the RNG state on forward and restore it
+on backward. \Lucid's checkpoint does this automatically:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# Inside forward (sketch):
+ctx.rng_state = lucid.random.get_state()
+with lucid.no_grad():
+    outputs = run_function(*args)
+
+# Inside backward (sketch):
+saved_state = lucid.random.get_state()
+lucid.random.set_state(ctx.rng_state)
+try:
+    # Re-run forward with same RNG
+    ...
+finally:
+    lucid.random.set_state(saved_state)
+\end{lstlisting}
+
+The pattern reproduces the original random draws on backward,
+keeping the gradient correct.
+
+\subsection{The use\_reentrant flag}
+\label{ssec:gradient_checkpointing:reentrant}
+
+For backward compatibility with \refframework's older API,
+\code{checkpoint} accepts a \code{use\_reentrant} flag.
+\code{use\_reentrant=False} (the recommended modern default) uses
+the autograd-graph-rebuild approach described above.
+\code{use\_reentrant=True} uses a more invasive C-level
+re-entry that has compatibility implications and is being
+deprecated in favour of the False default.
+
+\Lucid\ supports both for parity but recommends
+\code{use\_reentrant=False}.
+
+\section{Worked Example: Transformer Block Checkpointing}
+\label{sec:gradient_checkpointing:transformer_example}
+
+A typical Transformer training script with checkpointing:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+import lucid.nn as nn
+from lucid.utils.checkpoint import checkpoint
+
+class CheckpointedBlock(nn.Module):
+    def __init__(self, block):
+        super().__init__()
+        self.block = block
+
+    def forward(self, x):
+        return checkpoint(self.block, x, use_reentrant=False)
+
+# In the model:
+class GPTModel(nn.Module):
+    def __init__(self, n_layers, **kwargs):
+        super().__init__()
+        self.blocks = nn.ModuleList(
+            [CheckpointedBlock(GPTBlock(**kwargs))
+             for _ in range(n_layers)]
+        )
+        ...
+
+    def forward(self, x):
+        for b in self.blocks:
+            x = b(x)
+        return x
+\end{lstlisting}
+
+Each block's intermediates are released after its forward;
+backward re-runs the block to rebuild the local graph and
+propagate.
+
+\subsection{Measured savings on GPT-2 base}
+\label{ssec:gradient_checkpointing:measured}
+
+For \Lucid's GPT-2-base benchmark (12 layers, 768 hidden, 12
+heads, sequence length 1024, batch size 4):
+
+\begin{itemize}
+  \item Without checkpointing: 9.2~GB activation memory.
+  \item With per-block checkpointing: 1.7~GB activation memory
+    (5.4$\times$ reduction).
+  \item Backward time without: 245~ms / step.
+  \item Backward time with: 340~ms / step (1.4$\times$ slower).
+\end{itemize}
+
+The 5.4$\times$ memory savings let the user double the batch
+size or train a wider model on the same hardware. The 1.4$\times$
+backward slowdown is acceptable for training that was otherwise
+OOM.
+
+\section{What checkpoint Does Not Help With}
+\label{sec:gradient_checkpointing:not_help}
+
+Checkpointing trades activation memory for compute. It does not
+help with:
+
+\begin{itemize}
+  \item \textbf{Parameter memory.} The model parameters are alive
+    throughout training and not affected by checkpointing. For
+    very large models the parameter memory itself may exceed
+    available memory; the remedy is parameter sharding (out of
+    scope for \Lucid\ 3.x).
+  \item \textbf{Optimiser state memory.} Adam's first and second
+    moments are $2N$ for $N$ parameters and not affected by
+    checkpointing. The remedy is alternative optimisers (Adafactor
+    factorises the second moment to $O(\sqrt{N})$) or 8-bit
+    optimisers (LION).
+  \item \textbf{Gradient memory.} The gradient itself is $N$ for
+    $N$ parameters and not affected by checkpointing.
+  \item \textbf{Peak memory during forward.} The forward
+    sometimes peaks at a moment when many activations are live
+    simultaneously (e.g., a residual addition that needs both
+    sides). Checkpointing the block reduces the average activation
+    memory but does not directly address the peak within a single
+    block.
+\end{itemize}
+
+For comprehensive memory reduction, checkpointing is one tool
+alongside AMP (\chref{ch:amp}), gradient accumulation (no
+\Lucid\ utility needed; just compute multiple sub-batch
+gradients and sum), and (where available) parameter sharding.
+
+\section{Checkpoint Granularity Strategies}
+\label{sec:gradient_checkpointing:granularity_strategies}
+
+Beyond the per-block default, several granularity strategies
+appear in production use. We catalogue them with the trade-offs.
+
+\subsection{Per-block (default)}
+\label{ssec:gradient_checkpointing:per_block}
+
+Each transformer block or residual block is checkpointed. Memory
+savings: $\sim 1/L$. Backward overhead: one full forward over the
+checkpointed regions, $\sim 50\,\%$ slowdown.
+
+This is the recommended default for most workloads. It is simple
+to apply (wrap each block), introduces no architectural complexity,
+and the constant factor is acceptable.
+
+\subsection{$\sqrt{L}$-spaced}
+\label{ssec:gradient_checkpointing:sqrt_l}
+
+Checkpoint every $\sqrt{L}$-th block. Memory savings: $\sim
+1/\sqrt{L}$. Backward overhead: $\sim 2 T_{\text{fwd}}$.
+
+The Chen et al.\ optimum. In practice, the difference from
+per-block is small for typical $L$ in the range 10--50: $\sqrt{12}
+\approx 3.5$, so checkpointing every 3rd or 4th block. Not
+substantially better than per-block in our measurements.
+
+\subsection{Selective checkpointing}
+\label{ssec:gradient_checkpointing:selective_strat}
+
+Checkpoint only the layers with the largest activations. For a
+Transformer, the attention layer's $O(B T^2)$ score is typically
+the dominant activation; checkpointing only the attention forward
+captures most savings.
+
+The implementation requires per-layer manual wrapping rather than
+the convenient outer-loop pattern; the savings are worth it for
+memory-constrained workloads.
+
+\subsection{Activation offloading}
+\label{ssec:gradient_checkpointing:offload}
+
+A relative of checkpointing: instead of recomputing, swap
+activations to CPU memory and swap back on backward. \Lucid\ does
+not currently expose an offloading utility (the unified-memory
+model makes the win modest on Apple silicon since CPU memory is
+the same physical pool), but the technique is well-known in CUDA
+frameworks.
+
+\section{Worked Example: Memory Profile of GPT-2-base}
+\label{sec:gradient_checkpointing:gpt2_profile}
+
+To make the memory savings concrete, we trace the GPT-2-base
+forward + backward step with and without per-block checkpointing.
+
+\subsection{Configuration}
+\label{ssec:gradient_checkpointing:config}
+
+\begin{itemize}
+  \item Model: GPT-2 base (12 layers, 768 hidden, 12 heads).
+  \item Batch size: 4 sequences.
+  \item Sequence length: 1024 tokens.
+  \item Precision: FP32 (no AMP for this profile, to make
+    activation memory clearly visible).
+  \item Hardware: M3~Max, 64~GB unified memory.
+\end{itemize}
+
+\subsection{Memory peaks}
+\label{ssec:gradient_checkpointing:peaks}
+
+\tabref{tab:gradient_checkpointing:gpt2_peaks} shows the
+component breakdown.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Component & Without checkpoint & With per-block checkpoint \\
+\midrule
+Parameters    & 0.50~GB & 0.50~GB \\
+Adam state    & 1.00~GB & 1.00~GB \\
+Gradients     & 0.50~GB & 0.50~GB \\
+Activations   & 9.20~GB & 1.70~GB \\
+Pool overhead & 1.10~GB & 0.50~GB \\
+\midrule
+Total peak    & 12.30~GB & 4.20~GB \\
+\bottomrule
+\end{tabular}
+\caption[GPT-2-base memory profile.]{Memory breakdown for one
+GPT-2-base training step on M3~Max, with and without per-block
+gradient checkpointing. The activation reduction (9.2~GB $\to$
+1.7~GB) dominates; the parameter, optimiser, and gradient
+contributions are unaffected.}
+\label{tab:gradient_checkpointing:gpt2_peaks}
+\end{table}
+
+The 8~GB peak reduction lets the user double the batch size on a
+16~GB machine without OOM, or pushed to extremes, lets the user
+train a 2$\times$ deeper model on the same hardware.
+
+\subsection{Time cost}
+\label{ssec:gradient_checkpointing:time_cost}
+
+\begin{itemize}
+  \item Step time without checkpointing: 850~ms.
+  \item Step time with per-block: 1080~ms (1.27$\times$ slower).
+\end{itemize}
+
+The slowdown is consistent with the back-of-envelope estimate
+(one extra forward across the checkpointed regions adds roughly
+$T_{\text{fwd}} / T_{\text{step}}$, which is around 30\,\%).
+
+\section{Common Pitfalls}
+\label{sec:gradient_checkpointing:pitfalls}
+
+A short list of issues that have come up in user code.
+
+\subsection{Stochastic ops without state preservation}
+\label{ssec:gradient_checkpointing:stoch_pitfall}
+
+If the user calls a custom random op inside the checkpointed
+function without using \Lucid's RNG (e.g., a third-party noise
+library), the re-run on backward produces different noise and the
+gradient is wrong. The fix is to use \Lucid's RNG for any random
+op inside checkpoint, so the state-preservation machinery
+applies.
+
+\subsection{Non-tensor inputs and outputs}
+\label{ssec:gradient_checkpointing:non_tensor}
+
+\code{checkpoint} expects tensor inputs and tensor outputs.
+Functions returning non-tensor values (Python tuples of mixed
+types, dicts) need a wrapper that flattens the output. The
+\code{lucid.utils.checkpoint\_sequential} utility handles common
+patterns.
+
+\subsection{Memory not actually freed}
+\label{ssec:gradient_checkpointing:not_freed}
+
+If the user's code holds a reference to an intermediate
+(through a Python variable or a closure), the intermediate
+remains alive despite the \code{no\_grad} context. The fix is to
+let intermediates go out of scope inside the checkpointed
+function.
+
+\section{Summary and Forward References}
+\label{sec:gradient_checkpointing:summary}
+
+Gradient checkpointing trades a constant-factor increase in
+backward time for an $O(\sqrt{L})$ reduction in activation memory.
+\Lucid\ exposes the trade-off through \code{lucid.utils.checkpoint},
+implemented as a Custom Function that runs the wrapped region
+under \code{no\_grad} during forward and re-runs it under
+\code{enable\_grad} during backward. The RNG state is saved and
+restored automatically to keep stochastic ops correct.
+
+The next chapter, \chref{ch:higher_order}, treats higher-order
+differentiation through functional transforms.
+\chref{ch:gradcheck} closes \partref{part:autograd} with the
+finite-difference verification utility.
+
+\begin{lucidnote}
+For the user: wrap large blocks of the model in
+\code{checkpoint(fn, *args)} when activation memory is a
+constraint. Per-block is the typical granularity; finer
+granularity rarely pays off. The backward time cost is on the
+order of 30--50\,\% per checkpointed block.
+\end{lucidnote}

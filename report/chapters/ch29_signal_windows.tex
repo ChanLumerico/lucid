@@ -1,0 +1,522 @@
+% !TEX root = ../main.tex
+\chapter{Signal Processing Windows}
+\label{ch:signal_windows}
+
+Window functions are the unsung companions of the FFT. A raw
+finite-length signal, when transformed, exhibits spectral
+leakage --- energy from each frequency bin spreads into
+neighbouring bins because the implicit periodic extension of the
+finite window has discontinuities. Multiplying the signal by a
+smooth window (zero at the edges, peak in the middle) eliminates
+the discontinuity and confines the leakage to a controlled
+side-lobe pattern.
+
+\Lucid\ provides the standard window family at
+\code{lucid.signal.windows}, mirroring SciPy's
+\code{scipy.signal.windows}. The classic reference for the
+trade-offs is Harris's 1978 survey
+\cite{harris_blackman_1978}. This chapter describes each window,
+the trade-offs between them, and the standard usage patterns.
+
+\section{Why Windowing Matters}
+\label{sec:signal_windows:why}
+
+The DFT assumes the input is one period of a periodic signal. A
+finite-length real signal is almost never genuinely periodic; the
+implied periodic extension has a discontinuity at the wraparound
+boundary that the FFT interprets as a broadband signal.
+
+\figref{fig:signal_windows:leakage} sketches the phenomenon for
+a pure sinusoid: with no window, the spectrum has substantial
+energy in bins other than the sinusoid's frequency (spectral
+leakage); with a Hann window, the leakage is confined to a few
+neighbouring bins.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  ax/.style={->, >=stealth, thick},
+  bin/.style={fill=lucid.info.bg, thick},
+  leak/.style={fill=lucid.warn.bg!50, thick},
+  hdr/.style={font=\small\sffamily\bfseries, align=center},
+]
+  % Left: no window
+  \node[hdr] at (2, 4) {No window};
+  \draw[ax] (0, 0) -- (4.5, 0) node[right, font=\small] {bin};
+  \draw[ax] (0, 0) -- (0, 3.5) node[above, font=\small] {$|X|$};
+  \foreach \i/\h in {0/0.6, 1/0.9, 2/1.5, 3/3.0, 4/1.5, 5/0.9, 6/0.6, 7/0.4, 8/0.3} {
+    \fill[leak] ({0.4 + \i*0.45}, 0) rectangle ({0.7 + \i*0.45}, \h);
+  }
+
+  % Right: Hann window
+  \node[hdr] at (9, 4) {With Hann window};
+  \draw[ax] (6.5, 0) -- (11, 0) node[right, font=\small] {bin};
+  \draw[ax] (6.5, 0) -- (6.5, 3.5) node[above, font=\small] {$|X|$};
+  \foreach \i/\h in {0/0.05, 1/0.1, 2/0.5, 3/3.0, 4/0.5, 5/0.1, 6/0.05, 7/0.02, 8/0.02} {
+    \fill[bin] ({6.9 + \i*0.45}, 0) rectangle ({7.2 + \i*0.45}, \h);
+  }
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Spectral leakage with and without windowing.]{Schematic
+of spectral leakage. A pure sinusoid sampled into a finite-
+length window, then FFT'd: without windowing (left), the
+spectrum spreads over many bins; with a Hann window (right), the
+spread is confined to a few neighbouring bins. The peak height
+is reduced because the window itself reduces total signal
+energy, but the spectral concentration is dramatically improved.}
+\label{fig:signal_windows:leakage}
+\end{figure}
+
+\subsection{The trade-off}
+\label{ssec:signal_windows:trade_off}
+
+Windowing trades two things: \emph{main-lobe width} (the spread
+of energy from a single frequency component into adjacent bins)
+against \emph{side-lobe level} (how far away the spread extends
+before fully attenuating).
+
+\begin{itemize}
+  \item Rectangular (no window): main lobe is narrowest possible
+    (1 bin), side lobes are loudest possible (~-13~dB).
+  \item Hann: main lobe is wider (~2 bins), side lobes are
+    quieter (~-32~dB).
+  \item Blackman: even wider main lobe (~3 bins), even quieter
+    side lobes (~-58~dB).
+  \item Kaiser-Bessel: parameterised by a scalar that controls
+    the trade-off; can approach optimal main-lobe vs side-lobe.
+\end{itemize}
+
+The right choice depends on the application: closely spaced
+spectral components want narrow main lobes; faint signals next to
+loud ones want low side lobes.
+
+\section{Window Functions}
+\label{sec:signal_windows:functions}
+
+\Lucid's \code{lucid.signal.windows} subpackage provides eight
+standard windows. \tabref{tab:signal_windows:catalog} summarises.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lllc}
+\toprule
+Window & Formula sketch & Main lobe & Side lobe \\
+\midrule
+rectangular  & $w_n = 1$                       & 1 bin   & -13~dB \\
+hann         & $0.5 (1 - \cos(2\pi n/N))$     & 2 bins  & -32~dB \\
+hamming      & $0.54 - 0.46 \cos(2\pi n/N)$   & 2 bins  & -43~dB \\
+blackman     & sum of 3 cosines               & 3 bins  & -58~dB \\
+blackman-harris & sum of 4 cosines            & 3 bins  & -92~dB \\
+bartlett     & triangular                     & 2 bins  & -27~dB \\
+flattop      & 5-cosine for accurate amplitude & 5 bins & -90~dB \\
+kaiser       & Bessel-based, parameterised    & variable & variable \\
+\bottomrule
+\end{tabular}
+\caption[Window function catalogue.]{Standard window functions
+exposed by \code{lucid.signal.windows}. The main-lobe width and
+side-lobe level are the standard characterisations. Kaiser is
+parameterised by $\beta$, which interpolates between
+rectangular ($\beta = 0$) and very wide low-leakage windows
+($\beta \to \infty$).}
+\label{tab:signal_windows:catalog}
+\end{table}
+
+\subsection{Hann}
+\label{ssec:signal_windows:hann}
+
+\code{hann(M, sym=True)} returns a length-$M$ Hann window:
+\[
+w_n \;=\; \tfrac{1}{2}\left(1 - \cos \tfrac{2\pi n}{M - 1}\right),
+\qquad n = 0, 1, \ldots, M-1.
+\]
+Equivalently $w_n = \sin^2(\pi n / (M-1))$. The window is zero at
+both endpoints, smoothly rising to a peak of $1$ at the centre.
+
+The Hann is the default for STFT-based spectrogram computation:
+the time-frequency trade-off is balanced for typical audio
+applications.
+
+\subsection{Hamming}
+\label{ssec:signal_windows:hamming}
+
+Similar to Hann but with slightly different coefficients:
+\[
+w_n \;=\; 0.54 - 0.46 \cos \tfrac{2\pi n}{M-1}.
+\]
+The endpoints are $w_0 = w_{M-1} = 0.08$ rather than $0$, which
+slightly raises the time-domain DC offset but reduces the first
+side-lobe by about $10$~dB compared to Hann. The trade-off is
+application-dependent.
+
+\subsection{Blackman family}
+\label{ssec:signal_windows:blackman}
+
+\code{blackman(M)} is the three-term cosine sum:
+\[
+w_n \;=\; 0.42 - 0.5 \cos \tfrac{2\pi n}{M-1}
+       + 0.08 \cos \tfrac{4\pi n}{M-1}.
+\]
+Lower side lobes than Hann (about $-58$~dB vs $-32$~dB) at the
+cost of a wider main lobe.
+
+\code{blackman\_harris(M)} is a four-term sum:
+\[
+w_n \;=\; a_0 - a_1 \cos \tfrac{2\pi n}{M-1}
+       + a_2 \cos \tfrac{4\pi n}{M-1}
+       - a_3 \cos \tfrac{6\pi n}{M-1},
+\]
+with $(a_0, a_1, a_2, a_3) \approx (0.3585, 0.4884, 0.1413,
+0.0118)$. Side lobes drop to $-92$~dB, useful for detecting very
+faint signals next to loud ones.
+
+\subsection{Bartlett}
+\label{ssec:signal_windows:bartlett}
+
+The triangular window: linear ramp up, linear ramp down. Simple
+to compute, modest performance.
+
+\subsection{Kaiser}
+\label{ssec:signal_windows:kaiser}
+
+\code{kaiser(M, beta)}: parameterised by $\beta$, the Bessel-
+function shape parameter:
+\[
+w_n = \frac{I_0\left(\beta \sqrt{1 - \left(\frac{2n}{M-1} -
+1\right)^2}\right)}{I_0(\beta)},
+\]
+where $I_0$ is the zeroth-order modified Bessel function.
+
+Larger $\beta$ gives wider main lobe and lower side lobes. The
+common choices: $\beta = 5$ (similar to Hamming), $\beta = 8.6$
+(similar to Blackman-Harris).
+
+\section{Symmetric vs Periodic Windows}
+\label{sec:signal_windows:sym_periodic}
+
+A subtle but important convention: window functions can be
+generated in \emph{symmetric} form (designed for filtering, where
+symmetric means linear phase) or \emph{periodic} form (designed
+for STFT-like overlap-add, where periodic means the wraparound
+is seamless).
+
+The two differ only at the endpoints: the symmetric form has
+$w_0 = w_{M-1}$ (or both zero); the periodic form has $w_0 \neq
+w_{M-1}$ (specifically, the periodic form is one period of an
+extension that would wrap around).
+
+\Lucid's windows take a \code{sym} parameter (default
+\code{True}). For STFT use, set \code{sym=False}.
+
+\section{Worked Example: A Mel-Spectrogram Frontend}
+\label{sec:signal_windows:mel_example}
+
+A complete audio frontend that converts a raw waveform to a
+log-mel spectrogram:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+import lucid.fft as F
+import lucid.signal.windows as W
+
+def log_mel_spectrogram(audio, sr=16000, n_fft=1024,
+                        hop_size=256, n_mels=80):
+    # Frame the signal
+    window = W.hann(n_fft, sym=False)
+    n_frames = (audio.shape[0] - n_fft) // hop_size + 1
+    frames = lucid.stack([
+        audio[i*hop_size:i*hop_size + n_fft] * window
+        for i in range(n_frames)
+    ])
+    # STFT magnitude
+    spec = F.rfft(frames, dim=-1).abs()
+    # Mel filterbank (precomputed)
+    mel_filters = _build_mel_filterbank(n_fft, sr, n_mels)
+    mel_spec = spec @ mel_filters.T
+    # Log scale
+    return (mel_spec + 1e-10).log()
+\end{lstlisting}
+
+The pipeline is the standard for speech recognition front-ends:
+window the audio, FFT, project onto mel-scaled filters, take the
+log. Every step uses \Lucid\ primitives; the gradient flows back
+through the whole chain.
+
+\section{Implementation}
+\label{sec:signal_windows:implementation}
+
+The windows live in \code{lucid/signal/windows.py}. Each is a
+short composite (\chref{ch:composite_ops}) built from arange,
+cosine, and arithmetic. The windows are numpy-free.
+
+The windows are not differentiable in any useful sense (they
+are deterministic functions of the size $M$, not of input
+tensors), so they have no backward.
+
+\subsection{Caching}
+\label{ssec:signal_windows:caching}
+
+A typical training loop calls the same window with the same size
+many times per step. \Lucid\ does not internally cache the
+window, but the user can cache it once and reuse across calls.
+The CPU cost of generating a window is microseconds and rarely
+worth caching for performance; the cache is for code clarity.
+
+\subsection{Length conventions}
+\label{ssec:signal_windows:length}
+
+The window length $M$ is the FFT length $N$. The window is
+multiplied elementwise with the signal frame; if the signal is
+zero-padded (common for non-power-of-2 frame sizes), the window
+should be applied before padding.
+
+\section{Window-Function Backward Through STFT}
+\label{sec:signal_windows:stft_backward}
+
+Although the windows themselves are not differentiable, the
+STFT pipeline that uses them is. The window appears as a
+constant in the chain (\code{frames * window}); the backward
+treats it as a constant multiplier and propagates the upstream
+cotangent multiplied by the window.
+
+The user-side consequence: gradient flows naturally through
+window-based pipelines. A loss computed on a spectrogram
+backwards to the raw audio without special treatment.
+
+\section{Choosing a Window}
+\label{sec:signal_windows:choosing}
+
+A short guide.
+
+\begin{itemize}
+  \item \textbf{Default audio STFT}: Hann.
+  \item \textbf{Closely-spaced spectral components}: rectangular
+    (narrow main lobe) or Hamming.
+  \item \textbf{Faint signals next to loud}: Blackman, Blackman-
+    Harris, or Kaiser with high $\beta$.
+  \item \textbf{Accurate amplitude measurement of a known
+    spectral component}: flat-top.
+  \item \textbf{Linear-phase filter design}: any symmetric form;
+    Hamming or Blackman.
+\end{itemize}
+
+For most ML applications (speech recognition, audio
+classification, music generation), Hann is the default and works
+well.
+
+\section{Spectral Leakage: A Quantitative Analysis}
+\label{sec:signal_windows:leakage_quant}
+
+The leakage pattern of a window function is its Fourier transform
+$W(\omega)$. For a sinusoid of frequency $\omega_0$ multiplied by
+the window $w$ and transformed, the output spectrum is the
+convolution
+\[
+\widehat{(w \cdot x)}(\omega)
+\;=\; \int W(\omega - \omega') \cdot \delta(\omega' - \omega_0)\, d\omega'
+\;=\; W(\omega - \omega_0).
+\]
+The window's Fourier transform $W$ \emph{is} the spectral leakage
+pattern, shifted to the sinusoid's frequency.
+
+\subsection{The rectangular case}
+\label{ssec:signal_windows:rect_dft}
+
+The rectangular window of length $N$ has Fourier transform
+\[
+W_{\mathrm{rect}}(\omega) \;=\; \frac{\sin(N\omega/2)}{\sin(\omega/2)},
+\]
+the \emph{Dirichlet kernel}. The main lobe has width $4\pi/N$
+(zero crossings at $\omega = \pm 2\pi/N$); the side lobes have
+peak amplitude $1/(\sin(\pi \cdot 1.5/N) \cdot N) \approx
+2/(3\pi)$ relative to the main lobe, giving the famous
+$-13.3$\,dB attenuation.
+
+\subsection{The Hann case}
+\label{ssec:signal_windows:hann_dft}
+
+The Hann window is a cosine raised to the first power:
+\[
+w_n \;=\; \tfrac{1}{2}(1 - \cos 2\pi n / N).
+\]
+Its Fourier transform is a sum of three Dirichlet kernels
+(at $\omega = 0, \pm 2\pi/N$), each weighted by the cosine
+coefficients. The result has a main lobe twice as wide as the
+rectangular window but side lobes attenuated by an additional
+$\sim 20$\,dB.
+
+The trade-off generalises: an $M$-cosine window has $M$ times
+the rectangular main-lobe width and side lobes attenuated by
+roughly $20 (M-1)$\,dB.
+
+\section{The COLA Property}
+\label{sec:signal_windows:cola}
+
+For STFT to be invertible (the inverse short-time Fourier
+transform reconstructs the original signal exactly), the window
+must satisfy the \emph{constant overlap-add} (COLA) property:
+\[
+\sum_{m=-\infty}^{\infty} w(n - mH) \;=\; \text{constant},
+\]
+where $H$ is the hop size. The condition says that the summed
+overlap of shifted windows is uniform across the time axis.
+
+\subsection{COLA-compliant configurations}
+\label{ssec:signal_windows:cola_configs}
+
+Common COLA-compliant choices:
+\begin{itemize}
+  \item Hann window with $H = N/2$: $\sum_m w(n - mH) = 1$.
+  \item Hann window with $H = N/4$: $\sum = 1.5$.
+  \item Hamming window with $H = N/2$: $\sum = 1.08$.
+  \item Rectangular window with $H = N$: trivially COLA (no
+    overlap).
+\end{itemize}
+
+\subsection{Reconstructing from STFT}
+\label{ssec:signal_windows:istft}
+
+Given a STFT $X[m, k]$ produced with window $w$ and hop $H$, the
+inverse STFT reconstructs
+\[
+\hat x[n] \;=\; \frac{\sum_m w(n - mH) \cdot
+\mathrm{ifft}(X[m, :])[n - mH]}{\sum_m w(n - mH)^2}.
+\]
+The denominator is the COLA-squared term. When the window has
+been chosen COLA-compliant and the data unaltered, the
+reconstruction is exact (modulo edge effects at the very start
+and end of the signal).
+
+\section{Window Optimisation: The Kaiser--Bessel Family}
+\label{sec:signal_windows:kaiser_opt}
+
+The Kaiser window \cite{kaiser_window_1980} provides the closest
+approximation to the \emph{prolate spheroidal wave function},
+which is optimal in the sense of maximising the fraction of
+energy in the main lobe for a given side-lobe level.
+
+\subsection{The Kaiser--Bessel formula}
+\label{ssec:signal_windows:kaiser_formula}
+
+\[
+w_n \;=\; \frac{I_0\!\left(\beta \sqrt{1 - \left(\dfrac{2n}{N-1} - 1\right)^2}\right)}{I_0(\beta)},
+\quad n = 0, 1, \ldots, N-1,
+\]
+where $I_0$ is the zeroth-order modified Bessel function
+(\chref{ch:special_functions}). The parameter $\beta$ controls
+the trade-off:
+
+\begin{itemize}
+  \item $\beta = 0$: $I_0(0) = 1$ everywhere; the window is
+    rectangular.
+  \item $\beta = 5.0$: side lobes around $-37$\,dB; similar to
+    Hamming.
+  \item $\beta = 8.6$: side lobes around $-65$\,dB; similar to
+    Blackman.
+  \item $\beta = 12.0$: side lobes around $-100$\,dB.
+\end{itemize}
+
+\subsection{Choosing beta}
+\label{ssec:signal_windows:kaiser_beta}
+
+For a desired side-lobe attenuation $A$ in dB:
+\[
+\beta \;\approx\;
+\begin{cases}
+0 & A \leq 21, \\
+0.5842 (A - 21)^{0.4} + 0.07886 (A - 21) & 21 < A \leq 50, \\
+0.1102 (A - 8.7) & A > 50.
+\end{cases}
+\]
+The corresponding main-lobe width is
+\[
+\Delta \omega \;\approx\; \frac{2\pi (A - 8)}{2.285 (N - 1)}.
+\]
+A wider main lobe trades for lower side lobes; the user picks
+the balance.
+
+\section{Window Energy Corrections}
+\label{sec:signal_windows:energy_corrections}
+
+When a window is applied before FFT, the resulting spectrum is
+underestimated relative to the un-windowed signal because the
+window reduces total energy. Two correction conventions apply.
+
+\subsection{Coherent gain}
+\label{ssec:signal_windows:coherent_gain}
+
+The mean of the window:
+\[
+G_{\mathrm{coh}} \;=\; \frac{1}{N} \sum_n w_n.
+\]
+Used to correct the amplitude of a known spectral component.
+Hann: $G_{\mathrm{coh}} = 0.5$. Hamming: $G_{\mathrm{coh}} = 0.54$.
+
+\subsection{Power gain}
+\label{ssec:signal_windows:power_gain}
+
+The mean of the squared window:
+\[
+G_{\mathrm{pow}} \;=\; \frac{1}{N} \sum_n w_n^2.
+\]
+Used to correct the power of a broadband signal. Hann:
+$G_{\mathrm{pow}} = 3/8$. Hamming: $G_{\mathrm{pow}} \approx
+0.397$.
+
+These corrections appear inside the Welch PSD estimator
+(\chref{ch:fft}); the user does not see them directly in
+\Lucid's API but must apply them if interpreting raw STFT
+magnitudes as physical units.
+
+\section{Applications Beyond STFT}
+\label{sec:signal_windows:applications}
+
+Window functions appear outside spectrogram computation.
+
+\subsection{Pre-emphasis filtering}
+\label{ssec:signal_windows:pre_emphasis}
+
+Speech recognition often applies a first-order high-pass filter
+$y_n = x_n - 0.97 x_{n-1}$ before windowing. The
+combined filter is a window-equivalent; \Lucid\ does not provide
+a separate primitive but the user can chain the filter and the
+window manually.
+
+\subsection{Filter design}
+\label{ssec:signal_windows:filter_design}
+
+FIR filter design via the window method: take the inverse
+Fourier transform of the desired frequency response, truncate to
+a finite length, and apply a window to reduce ripple. The chosen
+window controls the trade-off between transition bandwidth and
+stop-band attenuation.
+
+\subsection{Image processing}
+\label{ssec:signal_windows:image_proc}
+
+2-D windows for image processing apply the same principles
+separately along each axis. \Lucid\ does not provide 2-D windows
+directly; the user can compute an outer product:
+\code{w2 = w.unsqueeze(0) * w.unsqueeze(1)}.
+
+\section{Summary and Forward References}
+\label{sec:signal_windows:summary}
+
+\code{lucid.signal.windows} provides the standard family of
+window functions for STFT and spectral analysis. The choice of
+window controls the main-lobe / side-lobe trade-off; Hann is the
+typical default. Windows are not differentiable themselves but
+participate transparently in differentiable STFT pipelines.
+
+The next chapter, \chref{ch:special_functions}, treats the
+special-function subpackage (erf, erfinv, Bessel, etc.).
+\chref{ch:distributions} treats probability distributions.
+\chref{ch:einops} closes \partref{part:math_subsystems} with
+tensor rearrangement algebra.
+
+\begin{lucidnote}
+For the user: \code{lucid.signal.windows.hann(N)} is the
+typical entry point. The result is a 1-D tensor of the requested
+length, ready to multiply with each frame of an STFT.
+\end{lucidnote}

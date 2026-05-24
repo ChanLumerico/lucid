@@ -1,0 +1,624 @@
+% !TEX root = ../main.tex
+\chapter{Apple Accelerate: BLAS, LAPACK, vDSP, vForce, BNNS}
+\label{ch:accelerate}
+
+The previous chapter described \MLX, the GPU-side substrate on which
+\Lucid\ depends. This chapter describes its CPU-side counterpart:
+\Accelerate, Apple's umbrella framework for high-performance
+numerical computing on macOS and iOS \cite{apple_accelerate}.
+\Accelerate\ has shipped with every release of macOS since 10.3
+(Panther, 2003); it is a stable, documented, and unavoidable
+dependency for any framework that wants to do serious CPU numerics
+on Apple hardware. \Lucid's CPU backend
+is built entirely on \Accelerate; no other CPU numerics library is
+linked into the engine, and no \Lucid\ CPU code path hand-rolls a
+SIMD kernel that \Accelerate\ already provides.
+
+The choice is not purely pragmatic. \Accelerate\ is the only way to
+access the AMX coprocessor (\chref{ch:apple_silicon}
+Section~\ref{sec:apple_silicon:amx}) without resorting to
+reverse-engineered instruction encodings, and the AMX path is the
+difference between roughly $128$ GFLOP/s of NEON throughput per
+P-core and roughly $2$ TFLOP/s of cluster-shared throughput on
+matrix multiplication. To bypass \Accelerate\ would be to give up
+that ten-fold gap. This chapter explains the sublayers of
+\Accelerate, how \Lucid\ uses each, and what compatibility
+considerations the framework has accumulated from the SDK churn of
+the 2020--2024 period.
+
+\section{Overview}
+\label{sec:accelerate:overview}
+
+\Accelerate\ is not a single library but an umbrella of related
+libraries, each presented to client code as a top-level header but
+backed by a shared dynamic library. The relevant sublayers, in the
+order they were introduced, are:
+
+\begin{itemize}
+  \item \textbf{BLAS} (Basic Linear Algebra Subprograms): the
+    Fortran-derived dense linear algebra interface, with Apple's
+    implementation since macOS 10.3.
+  \item \textbf{LAPACK} (Linear Algebra Package): the higher-level
+    decomposition and solver suite, also shipped since 10.3.
+  \item \textbf{vDSP} (Vector Digital Signal Processing): per-element
+    vector operations (arithmetic, comparisons, packing/unpacking,
+    FFT). Predates BLAS in the original Velocity Engine framework
+    on PowerPC.
+  \item \textbf{vForce}: transcendental and special functions on
+    vectors. A separate header for historical reasons (vForce was
+    originally a separate library; the symbols now live in
+    \code{libvecLib.dylib} like the rest of \Accelerate).
+  \item \textbf{vImage}: image-processing primitives. Not used by
+    \Lucid; mentioned for completeness.
+  \item \textbf{BNNS} (Basic Neural Network Subroutines): a
+    higher-level convolution and pooling library introduced in
+    macOS 10.13. The first \Accelerate\ sublayer with an explicit
+    ML focus.
+  \item \textbf{SparseSolvers}: sparse linear algebra. Not used by
+    \Lucid; sparse tensors are out of scope for \Lucid\ 3.x.
+\end{itemize}
+
+The four sublayers \Lucid\ actually uses are BLAS, LAPACK, vDSP,
+vForce, and BNNS. We treat each in turn.
+\tabref{tab:accelerate:sublayers} gives a one-page overview before
+we dive into each.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lllll}
+\toprule
+Sublayer & Introduced & Path to silicon & Lucid usage & File \\
+\midrule
+BLAS    & 10.3 (2003)  & AMX coprocessor   & GEMM, axpy, dot     & \texttt{AccelerateMath.cpp} \\
+LAPACK  & 10.3 (2003)  & BLAS + LAPACK     & cholesky, qr, svd   & \texttt{AccelerateMath.cpp} \\
+vDSP    & 10.0 (PowerPC) & NEON SIMD       & elementwise, reductions & \texttt{AccelerateMath.cpp} \\
+vForce  & 10.4 (2005)  & SIMD + lookup     & exp, log, sin, erf  & \texttt{AccelerateMath.cpp} \\
+BNNS    & 10.13 (2017) & AMX / SME         & conv2d, pooling     & \texttt{AccelerateConv.cpp} \\
+vImage  & 10.3 (2003)  & SIMD + custom     & \emph{not used}     & --- \\
+SparseSolvers & 10.13  & sparse BLAS       & \emph{not used}     & --- \\
+\bottomrule
+\end{tabular}
+\caption[Accelerate sublayers and \Lucid\ usage.]{The seven
+sublayers of Apple's \Accelerate\ framework, by introduction date,
+the hardware path each ultimately reaches, the operations \Lucid\
+delegates to each, and the \Lucid\ source file that wraps it. The
+two unused sublayers (vImage, SparseSolvers) are listed for
+completeness.}
+\label{tab:accelerate:sublayers}
+\end{table}
+
+\subsection{Linkage and headers}
+\label{ssec:accelerate:linkage}
+
+\Accelerate\ is exposed to C and C++ code through the umbrella header
+\code{<Accelerate/Accelerate.h>}, which transitively includes
+\code{<vecLib/vecLib.h>}, \code{<vecLib/cblas.h>},
+\code{<vecLib/clapack.h>}, and so on. The umbrella links the
+dynamic library \code{Accelerate.framework}, which is part of the
+macOS base system and present in every install.
+
+\Lucid's CMake build adds \code{Accelerate.framework} to the link
+line for the engine target. There is no separate find-package step
+because the framework is in the standard SDK location and
+\code{find\_library(ACCELERATE\_FRAMEWORK Accelerate)} resolves it
+unconditionally on Apple silicon.
+
+\subsection{Two SDK transitions}
+\label{ssec:accelerate:sdk_transitions}
+
+Two SDK transitions in the 2022--2024 period have affected the
+\Lucid\ build:
+
+\begin{enumerate}
+  \item \textbf{\code{ACCELERATE\_NEW\_LAPACK}.} In macOS 13.3,
+    Apple introduced a new LAPACK ABI that uses 64-bit integers for
+    matrix dimensions, replacing the legacy 32-bit ABI inherited
+    from netlib LAPACK. To opt into the new ABI, client code must
+    define \code{ACCELERATE\_NEW\_LAPACK=1} and
+    \code{ACCELERATE\_LAPACK\_ILP64=1} before including the headers.
+    \Lucid\ adopted the new ABI in version 3.0.2 as part of the
+    numpy-independence pass (vault:
+    \code{retro-3-0-2-numpy-free-standalone}), because the new ABI
+    is the only one that interoperates correctly with large
+    matrices.
+  \item \textbf{BNNS deprecation warnings.} Starting with macOS 14,
+    several BNNS functions are marked \code{API\_DEPRECATED} in the
+    public headers, on the grounds that CoreML provides equivalent
+    or higher-level functionality. The functions still work and are
+    still the fastest CPU convolution path; \Lucid\ silences the
+    warning by passing \code{-Wno-deprecated-declarations} only to
+    the file that includes the BNNS header, not framework-wide. The
+    discipline is documented in \code{arch-device-bifurcation-complete}.
+\end{enumerate}
+
+\section{BLAS and LAPACK}
+\label{sec:accelerate:blas}
+
+BLAS and LAPACK are the workhorses of \Lucid's CPU linear algebra.
+Together they cover matrix multiplication, factorisations
+(Cholesky, QR, SVD, eigendecomposition), and linear-system solvers.
+\Lucid\ uses them through the CBLAS and CLAPACK C-language
+interfaces, which avoid the Fortran calling convention but preserve
+the underlying column-major storage convention.
+
+\subsection{The CBLAS interface}
+\label{ssec:accelerate:cblas}
+
+CBLAS exposes the BLAS routines as C functions with a layout
+argument that selects between \code{CblasRowMajor} and
+\code{CblasColMajor}. \Lucid's CPU backend uses \code{CblasRowMajor}
+throughout, matching \Lucid's tensor storage convention. The
+function pattern is:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+#include <Accelerate/Accelerate.h>
+
+// C := alpha * A * B + beta * C
+cblas_sgemm(
+    CblasRowMajor,
+    CblasNoTrans, CblasNoTrans,
+    M, N, K,            // dims
+    alpha,
+    A_ptr, K,           // lda = stride of leading dimension
+    B_ptr, N,           // ldb
+    beta,
+    C_ptr, N);          // ldc
+\end{lstlisting}
+
+The \code{cblas\_sgemm} call, with operands large enough to amortise
+dispatch overhead, executes on the AMX coprocessor and achieves
+the throughput characterised in
+\chref{ch:apple_silicon}~Section~\ref{ssec:apple_silicon:amx_perf}.
+For operands below roughly $64 \times 64$, the AMX path is not
+selected (the dispatch overhead exceeds the win), and the call
+runs through NEON; for very small operands, scalar code in
+\Lucid's composite layer is sometimes faster still.
+
+The double-precision counterpart is \code{cblas\_dgemm}; \Lucid\
+exposes it but does not exercise it on the GPU path, because
+\Metal\ has no FP64 support and a mixed-device FP64 GEMM is rare
+in practice.
+
+\subsection{LAPACK routines used by Lucid}
+\label{ssec:accelerate:lapack_used}
+
+\Lucid's \code{linalg} subpackage (\chref{ch:linalg}) wraps the
+following LAPACK routines, in their CLAPACK form with the new
+ILP64 ABI:
+
+\begin{itemize}
+  \item \code{cholesky} \(\to\) \code{spotrf} / \code{dpotrf}
+    (Cholesky factorisation, lower-triangular).
+  \item \code{qr} \(\to\) \code{sgeqrf} + \code{sorgqr}
+    (QR factorisation followed by Q reconstruction).
+  \item \code{svd} \(\to\) \code{sgesdd} (divide-and-conquer SVD;
+    asymptotically faster than \code{sgesvd}).
+  \item \code{eigh} \(\to\) \code{ssyevd} (divide-and-conquer
+    symmetric eigendecomposition).
+  \item \code{solve} \(\to\) \code{sgesv} (general LU-based
+    solve).
+  \item \code{lstsq} \(\to\) \code{sgelsd} (divide-and-conquer
+    least-squares).
+  \item \code{inv} \(\to\) \code{sgetrf} + \code{sgetri} (LU
+    followed by explicit inverse construction).
+  \item \code{det}, \code{logdet} \(\to\) \code{sgetrf} followed
+    by Python-side product of diagonal entries.
+\end{itemize}
+
+The choice of divide-and-conquer variants (\code{sgesdd},
+\code{ssyevd}, \code{sgelsd}) over the simpler QR-based variants is
+deliberate: for matrices larger than a few hundred entries on each
+side, divide-and-conquer is significantly faster and Apple's
+implementation in \Accelerate's LAPACK is competitive with the best
+open-source LAPACK builds.
+
+\subsection{The linalg carve-out, revisited}
+\label{ssec:accelerate:linalg_carveout}
+
+\chref{ch:mlx_runtime}~Section~\ref{ssec:mlx_runtime:linalg_carveout}
+introduced the linalg carve-out: even when the user has selected
+\code{device=`metal'}, linear-algebra primitives dispatch on the CPU
+stream, because \Metal\ has no LAPACK-equivalent kernels.
+
+The mechanism is now visible from this chapter's perspective.
+\MLX's CPU stream uses, internally, the same \Accelerate\ BLAS and
+LAPACK that \Lucid's CPU backend uses directly. When \Lucid\
+dispatches a \code{cholesky} on a \code{metal} tensor, the path is:
+
+\begin{enumerate}
+  \item \Lucid\ moves the tensor through \code{SharedStorage} to a
+    CPU view (this is the bridge of \chref{ch:unified_memory}).
+  \item \Lucid\ calls \code{cblas\_sgemm}-style \Accelerate\ LAPACK
+    on the CPU view. Under the hood, \Accelerate\ uses the AMX
+    coprocessor for BLAS-3 portions and CPU code for the rest.
+  \item The result, residing in unified memory, is wrapped as an
+    \MLX\ array and returned as a metal-device tensor.
+\end{enumerate}
+
+The bridge is free in the contiguous case
+(\chref{ch:unified_memory}~Section~\ref{ssec:unified_memory:bridge_free});
+the only real cost is the LAPACK computation itself, which is
+several orders of magnitude larger than the bridge overhead for any
+matrix worth decomposing.
+
+\section{vDSP}
+\label{sec:accelerate:vdsp}
+
+vDSP is the lowest layer of \Accelerate\ that \Lucid\ uses. It
+provides per-element vector operations on contiguous arrays: scalar
+multiplication and addition, dot products, element-wise arithmetic,
+sums, means, and a small set of packing and conversion utilities.
+The primitives are mostly C functions with a strict naming
+convention: \code{vDSP\_<op>} for single-precision,
+\code{vDSP\_<op>D} for double-precision.
+
+\subsection{Primitives used by Lucid}
+\label{ssec:accelerate:vdsp_used}
+
+The CPU backend's elementwise kernels are thin wrappers over vDSP
+primitives. The most-used:
+
+\begin{itemize}
+  \item \code{vDSP\_vmul} / \code{vDSP\_vadd} / \code{vDSP\_vsub} /
+    \code{vDSP\_vdiv}: elementwise binary arithmetic on
+    single-precision vectors.
+  \item \code{vDSP\_vsadd} / \code{vDSP\_vsmul} / \code{vDSP\_vsdiv}:
+    scalar-broadcast variants.
+  \item \code{vDSP\_vneg}, \code{vDSP\_vabs}, \code{vDSP\_vsq}:
+    unary arithmetic.
+  \item \code{vDSP\_dotpr}, \code{vDSP\_sve} (sum), \code{vDSP\_meanv}
+    (mean), \code{vDSP\_maxv}, \code{vDSP\_minv}: reductions.
+  \item \code{vDSP\_vthr} (threshold), \code{vDSP\_vclip} (clamp).
+  \item \code{vDSP\_vfix32} (float-to-int conversion),
+    \code{vDSP\_vflt32} (int-to-float).
+\end{itemize}
+
+The full list \Lucid\ exposes is in
+\code{lucid/\_C/backend/cpu/AccelerateMath.cpp}, where each is
+wrapped behind a function with \refframework-compatible
+naming.
+
+\subsection{Stride support}
+\label{ssec:accelerate:vdsp_strides}
+
+vDSP primitives accept explicit stride arguments (the \code{N} and
+\code{stride} pair after each pointer), which means that they can
+operate on non-contiguous slices of a larger buffer without first
+copying to contiguity. \Lucid's CPU kernels exploit this for views
+that are unit-stride along the innermost dimension and arbitrarily
+strided along the outer dimensions; the dispatcher emits a vDSP
+call per outer-axis iteration.
+
+For views that are non-unit-stride along the innermost dimension
+(produced by certain transposes), \Lucid's CPU kernels first
+materialise a contiguous copy. The trade-off is amortised by the
+fact that such views are rare in practice and the contiguous copy
+cost is small relative to the subsequent kernel.
+
+\subsection{Why not OpenBLAS or MKL}
+\label{ssec:accelerate:vdsp_why_not_other}
+
+The natural alternative to vDSP would have been OpenBLAS, BLIS, or
+the Intel MKL. All three are excellent libraries, but none of them
+target AMX on Apple silicon. OpenBLAS on M-series uses NEON; BLIS
+uses NEON; MKL does not run on ARM at all. Bypassing vDSP would
+therefore have meant giving up the AMX path, which is the dominant
+single performance source for CPU-side BLAS-3 on Apple silicon.
+
+We have also benchmarked the OpenBLAS NEON path against \Accelerate\
+vDSP plus AMX on representative GEMM sizes and \Accelerate\ is
+faster by a factor of $3$--$5\times$ on $256 \times 256$ FP32 and
+larger. The conclusion is conclusive.
+
+\section{vForce}
+\label{sec:accelerate:vforce}
+
+vForce provides vectorised transcendental and special functions.
+The interface convention matches vDSP but the functions are
+mathematically richer:
+
+\begin{itemize}
+  \item \code{vvexpf}, \code{vvlogf}, \code{vvsinf}, \code{vvcosf},
+    \code{vvtanf} and their double-precision \code{vv*} counterparts.
+  \item \code{vvtanhf}, \code{vvsinhf}, \code{vvcoshf}.
+  \item \code{vvsqrtf}, \code{vvrsqrtf}.
+  \item \code{vverff}, \code{vverfinvf}.
+\end{itemize}
+
+\Lucid's CPU backend uses vForce wherever a primitive maps onto one
+of these; the wrappers are in
+\code{lucid/\_C/backend/cpu/AccelerateMath.cpp} alongside the vDSP
+wrappers. The win over a scalar transcendental loop is roughly
+$4$--$6\times$ on FP32 \code{exp} and \code{log}, falling to
+$2$--$3\times$ on the more complex \code{erf} family.
+
+A practical caveat: vForce's \code{vverfinvf} produces results that
+differ in the last few ULPs from the scalar \code{erfinvf} that
+ships in \code{libm.dylib}. \Lucid's gradcheck tolerance for
+\code{erfinv}-using ops is relaxed accordingly
+(\chref{ch:gradcheck}).
+
+\section{BNNS}
+\label{sec:accelerate:bnns}
+
+BNNS is the highest level of \Accelerate\ that \Lucid\ uses, and the
+most controversial. It is a convolution and neural-network primitive
+library introduced in macOS 10.13 (2017), at a time when ML inference
+on CPU was a more common need than it is now. Its API is shaped
+around the standard NN-inference vocabulary: tensors with
+explicit layout descriptors, convolution and pooling descriptors,
+fully-connected layers, activation functions, and a small set of
+loss-derivative primitives.
+
+\subsection{The convolution fast path}
+\label{ssec:accelerate:bnns_conv}
+
+The single most consequential BNNS function for \Lucid\ is
+\code{BNNSDirectApplyConvolutionLayer} (and its descriptor
+constructor \code{BNNSDirectFilterCreateConvolutionLayer}). On
+M-series hardware, this function dispatches the convolution kernel
+through the AMX coprocessor, achieving throughput unattainable
+through pure NEON code. For a $3 \times 3$ stride-1 padded
+convolution on a $224 \times 224$ input with 64 output channels and
+batch size 1, BNNS is roughly $8\times$ faster than a hand-written
+NEON convolution loop and $3\times$ faster than calling
+\code{cblas\_sgemm} on an im2col-flattened version.
+
+\Lucid's CPU convolution kernels (\code{lucid/\_C/backend/cpu/AccelerateConv.cpp})
+delegate to BNNS for the forward pass of \code{conv1d}, \code{conv2d},
+and \code{conv3d}, with descriptor caching so that repeated
+applications of the same layer to inputs of identical shape do not
+re-pay the descriptor-construction cost.
+
+\subsection{The deprecation warning}
+\label{ssec:accelerate:bnns_deprecation}
+
+Starting with macOS 14, several BNNS functions are marked
+\code{API\_DEPRECATED} in the public headers. Apple's stated reason
+is that CoreML provides equivalent or superior functionality at a
+higher abstraction level. The deprecation does not affect the
+runtime: the functions still work, still perform identically, and
+are still part of the system framework. Only the compile-time
+warning is generated.
+
+\Lucid\ silences the warning narrowly, in the single file that
+includes the BNNS header:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+// In AccelerateConv.cpp
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#include <Accelerate/Accelerate.h>
+#pragma clang diagnostic pop
+\end{lstlisting}
+
+The framework-wide \code{-Wno-deprecated-declarations} flag is
+explicitly \emph{not} used, because suppressing deprecation
+warnings globally would mask genuine bug-class issues elsewhere.
+The narrow scope is documented in \code{arch-device-bifurcation-complete}.
+
+\subsection{Why Lucid still uses BNNS}
+\label{ssec:accelerate:bnns_why}
+
+Three reasons keep BNNS in \Lucid's CPU backend:
+
+\begin{enumerate}
+  \item It is the only public Apple-supported path to CPU-side
+    matrix-coprocessor convolution. The alternative is reverse-
+    engineered AMX assembly, which is unsupportable.
+  \item The deprecation has not been followed by a removal. Apple
+    has marked the functions deprecated since macOS 14 without
+    removing them in macOS 15 or 26; we estimate the removal is
+    several years away, at which point SME-based replacements will
+    have matured.
+  \item CoreML, the recommended replacement, requires offline graph
+    compilation. \Lucid's CPU backend dispatches dynamically and
+    cannot accept the offline-compilation requirement without
+    losing the dynamic-shape support that the rest of the framework
+    is built on.
+\end{enumerate}
+
+The plan is to retain BNNS until either (a) Apple removes the
+functions and forces a migration, or (b) SME-based direct emission
+from \code{lucid.compile} (\chref{ch:compile_design}) reaches parity
+with BNNS throughput, whichever happens first.
+
+\section{AccelerateBackend in Lucid}
+\label{sec:accelerate:lucid_use}
+
+The C++ class that mediates between \Lucid's dispatcher and
+\Accelerate\ is \code{AccelerateBackend}
+(\code{lucid/\_C/backend/cpu/AccelerateBackend.\{h,cpp\}}). It
+implements the same \code{IBackend} interface as \code{MlxBackend}
+(\chref{ch:mlx_runtime}~Section~\ref{ssec:mlx_runtime:mlx_backend}),
+which is what allows the dispatcher to route operations to either
+backend uniformly.
+
+\subsection{File layout}
+\label{ssec:accelerate:file_layout}
+
+The backend is split across several files to manage the size of the
+implementation:
+
+\begin{itemize}
+  \item \code{AccelerateBackend.\{h,cpp\}}: the \code{IBackend}
+    implementation; dispatches per-op to the helpers below.
+  \item \code{AccelerateMath.cpp}: vDSP and vForce wrappers for
+    elementwise and reduction operations.
+  \item \code{AccelerateConv.cpp}: BNNS wrappers for convolution
+    forward; backward is composed from BLAS GEMM on im2col-flattened
+    gradient tensors.
+  \item \code{AccelerateBatchNorm.cpp}, \code{AccelerateLayerNorm.cpp},
+    \code{AccelerateInstanceNorm.cpp}, \code{AccelerateGroupNorm.cpp}:
+    normalisation kernels that fold mean / variance computation
+    with the normalising affine in a single pass.
+  \item \code{AccelerateRandom.cpp}: vDSP's random number generator
+    wrapped for \Lucid's \code{Generator} interface.
+  \item \code{Helpers.cpp}: tensor-to-vDSP shape and stride
+    conversions, descriptor caching, layout adapters.
+\end{itemize}
+
+The split is the result of incremental growth across multiple
+phases; the natural unit of factoring is the underlying
+\Accelerate\ sublayer, not the abstract op kind, because each
+sublayer has its own conventions and quirks.
+
+\subsection{Per-op routing inside the backend}
+\label{ssec:accelerate:per_op}
+
+Inside \code{AccelerateBackend}, the per-op routing is a switch on
+the abstract op kind:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+TensorImpl AccelerateBackend::binary(
+    OpKind op, const TensorImpl& a, const TensorImpl& b) {
+  switch (op) {
+    case OpKind::Add: return accel::vmul_vadd_path(a, b, /*op=*/Add);
+    case OpKind::Mul: return accel::vmul_vadd_path(a, b, /*op=*/Mul);
+    case OpKind::Pow: return accel::pow_path(a, b);
+    // ... and so on
+  }
+}
+\end{lstlisting}
+
+The helpers in the \code{accel} namespace are the actual vDSP /
+vForce wrappers; the backend class itself contains only routing.
+This structure mirrors \code{MlxBackend}'s and is what allows the
+two backends to be substitutable through the same dispatcher.
+
+\section{Threading and Concurrency}
+\label{sec:accelerate:threading}
+
+\Accelerate\ is internally multithreaded for large operations. The
+threading is managed by Grand Central Dispatch (GCD), the macOS
+system-wide task scheduler. Client code does not configure thread
+counts directly; instead, GCD allocates worker threads from its
+shared pool based on system load and the operation's estimated
+cost.
+
+\subsection{The implicit thread pool}
+\label{ssec:accelerate:threadpool}
+
+This implicit pooling has two consequences for \Lucid:
+
+\begin{enumerate}
+  \item There is no \code{omp\_set\_num\_threads}-equivalent that
+    the user can set. The number of threads \Accelerate\ uses for a
+    given operation is determined at runtime by GCD.
+  \item Operations from \Accelerate\ can compete with \Lucid's own
+    Python-level threads (e.g.\ data-loader workers) for CPU
+    cycles. The shared GCD pool prevents pathological
+    over-subscription, but there is no explicit isolation between
+    domains.
+\end{enumerate}
+
+In practice the scheduling is sensible: training workloads that
+dispatch from a single Python thread to \Accelerate\ get
+near-optimal P-core utilisation, and data-loading workers correctly
+yield to the training thread under load. \Lucid\ does not set
+explicit affinity hints
+(\chref{ch:apple_silicon}~Section~\ref{ssec:apple_silicon:scheduling})
+because the default behaviour is correct.
+
+\subsection{Lock-free reentrancy}
+\label{ssec:accelerate:reentrancy}
+
+\Accelerate's functions are reentrant: it is safe for two threads to
+call \code{cblas\_sgemm} simultaneously on disjoint inputs.
+\Lucid's autograd engine relies on this to dispatch independent
+operations from the optimiser step in parallel with the next
+forward pass's preparation (\chref{ch:optimizers}).
+
+\section{Quirks and Pitfalls}
+\label{sec:accelerate:quirks}
+
+We close with the three classes of issues that have surfaced during
+\Lucid's development.
+
+\subsection{LAPACK error returns}
+\label{ssec:accelerate:lapack_errors}
+
+LAPACK routines do not raise exceptions. They return an integer
+status code through the \code{info} out-parameter; a negative value
+indicates an invalid argument, a positive value indicates a numerical
+failure (singular matrix in \code{getrf}, non-positive-definite in
+\code{potrf}, non-convergence in \code{gesdd}).
+
+\Lucid's wrappers check \code{info} after every call and translate
+positive values into \code{LucidError(``cholesky failed: matrix not
+positive definite at row $k$'')}-style messages. Negative \code{info}
+values indicate a bug in the wrapper and are translated into
+internal assertions, since they should be unreachable.
+
+\subsection{Row-major vs.\ column-major}
+\label{ssec:accelerate:row_col}
+
+The native LAPACK convention is column-major; CLAPACK's
+\code{LAPACKE\_*} wrappers accept a layout argument to allow
+row-major input. \Lucid\ uses the CLAPACK \code{LAPACKE\_*} variants
+throughout, with \code{LAPACK\_ROW\_MAJOR}. The conversion overhead
+is internal to LAPACKE and is amortised over the decomposition cost.
+
+A historical bug (3.0.3) involved calling the older non-LAPACKE
+variant of \code{spotrf} and forgetting to transpose the input; the
+result was a successful-looking Cholesky of the matrix's transpose.
+The fix was to standardise on the LAPACKE wrappers throughout, and
+the standardisation is now enforced by a code-review checklist
+referenced in the \code{retro-3-0-3-perf-pass} note.
+
+\subsection{SDK version drift}
+\label{ssec:accelerate:sdk_drift}
+
+\Accelerate's API surface is largely stable, but individual
+functions have been added, deprecated, or had their behaviour
+clarified across SDK versions. The pattern that has caused the
+most churn for \Lucid\ is the LAPACK ILP64 ABI transition discussed
+in \secref{ssec:accelerate:sdk_transitions}. The discipline now is:
+
+\begin{enumerate}
+  \item Pin a minimum macOS deployment target (\Lucid\ uses
+    \code{MACOSX\_DEPLOYMENT\_TARGET=26.0}, matching \MLX's wheel).
+  \item Use only documented APIs that have been stable across the
+    minimum-target SDK and the current SDK.
+  \item Treat any deprecation warning that surfaces during build as
+    a TODO to either migrate to the suggested replacement or, if
+    the replacement does not exist (BNNS being the canonical
+    example), silence narrowly at the include site.
+\end{enumerate}
+
+The minimum-target choice is shared with \MLX\ because the two
+dependencies' wheel tags must agree; \chref{ch:mlx_runtime}
+~Section~\ref{ssec:mlx_runtime:macos_constraint} documents the
+constraint from \MLX's side.
+
+\section{Summary and Forward References}
+\label{sec:accelerate:summary}
+
+\Accelerate\ is the CPU-side substrate on which \Lucid\ stands. Its
+sublayers --- BLAS, LAPACK, vDSP, vForce, BNNS --- jointly provide
+matrix multiplication, decompositions, elementwise and
+transcendental kernels, and convolution. The framework is the only
+public Apple-supported path to the AMX coprocessor and is therefore
+the only path that achieves competitive CPU-side ML throughput on
+Apple silicon. \Lucid's \code{AccelerateBackend} wraps the
+relevant subset behind an \code{IBackend} interface that the
+dispatcher uses uniformly with \code{MlxBackend}.
+
+The remaining hardware-foundation chapter, \chref{ch:metal_mpsgraph},
+treats \Metal\ and \MPSGraph\ directly, since \Lucid's
+graph-capture compiler emits onto \MPSGraph\ rather than relying on
+\MLX's compile path. After that, the book moves into
+\partref{part:system}, which formalises the layered architecture
+the hardware chapters have implicitly sketched and explains how
+\Lucid's tensor model, allocator, dispatch, and bridge boundaries
+fit together at the engine level.
+
+\begin{lucidtip}
+For the user, the visible consequence of this chapter is that
+\code{device=`cpu'} in \Lucid\ corresponds to AMX-accelerated BLAS
+and BNNS through \Accelerate, not to a generic CPU fallback. This
+makes CPU-only training feasible for small models and certain
+non-convolutional workloads where the GPU's launch overhead would
+dominate. For training-time benchmarks see \chref{ch:perf_methodology}.
+\end{lucidtip}

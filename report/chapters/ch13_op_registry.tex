@@ -1,0 +1,487 @@
+% !TEX root = ../main.tex
+\chapter{Op Registry and Schema}
+\label{ch:op_registry}
+
+Operations are the unit of work in \Lucid: every numerical
+computation the framework performs is the application of one or
+more operations to one or more tensors. There are roughly 260 of
+them in the current release, ranging from arithmetic primitives
+(\code{add}, \code{mul}) to neural-network composites
+(\code{layer\_norm}, \code{multi\_head\_attention}) to control-flow
+constructs (\code{where}, \code{masked\_select}). Each carries
+metadata that the dispatcher, the autograd engine, the AMP system,
+the compile path, and the introspection tools all consult.
+
+The metadata lives in the op registry, the topic of this chapter.
+The registry is a single source of truth: a contributor who adds a
+new operation declares its schema in one place and the rest of the
+framework picks it up automatically. The registry is also what
+makes \Lucid's compile path tractable: the trace IR can be
+serialised, the emitter table can be code-generated, and the
+backward-pass topology can be derived from the registry's
+declarations without inspecting individual op implementations.
+
+This chapter describes the schema, the registry, the binding-code
+generation that consumes the registry, and the protocol for adding
+a new operation.
+
+\section{Overview}
+\label{sec:op_registry:overview}
+
+An \emph{op schema} is a structured record describing one
+operation. It contains the op's name, its inputs and outputs, its
+backward behaviour, its AMP policy, its determinism guarantees, its
+complexity class, and a small set of derived properties (whether it
+is differentiable, whether it is a view-producer, whether it has a
+constant-shape output).
+
+The \emph{op registry} is the in-process table that holds every
+op's schema. It is populated at engine initialisation by
+self-registering schema declarations in the per-op C++ files; the
+registry is then consulted by:
+
+\begin{itemize}
+  \item The dispatcher (\chref{ch:backend_dispatch}), which uses
+    the schema to validate argument shapes and dtypes before calling
+    the backend.
+  \item The autograd engine (\chref{ch:autograd_engine}), which
+    uses the schema's backward declaration to construct the
+    appropriate \code{grad\_fn} node.
+  \item The AMP system (\chref{ch:amp}), which uses the schema's
+    AMP policy to decide whether to cast inputs to FP16 or keep
+    them in FP32.
+  \item The compile path (\chref{ch:op_emitters}), which uses the
+    schema to look up the appropriate \MPSGraph\ emitter.
+  \item The introspection tools (\code{lucid.\_C.list\_ops()},
+    documentation generators, the docs site), which consult the
+    registry to enumerate the surface.
+\end{itemize}
+
+This many consumers might suggest a complex schema, but in practice
+the schema is small: about a dozen fields, all of them simple
+types. The discipline is keeping the schema lean enough that adding
+a new op is straightforward.
+
+\section{The OpSchema Structure}
+\label{sec:op_registry:schema}
+
+The schema is declared in \code{lucid/\_C/ops/registry/OpSchema.h}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct OpSchema {
+  std::string             name;            // canonical op name
+  uint32_t                version;         // schema version
+  ArgSpec                 inputs[8];       // input tensor specs
+  uint8_t                 n_inputs;
+  ArgSpec                 outputs[4];      // output tensor specs
+  uint8_t                 n_outputs;
+  BackwardSpec            backward;        // backward construction
+  AmpPolicy               amp;             // FP16/FP32 cast rule
+  ComplexityClass         complexity;      // O(1), O(N), O(N log N), O(N^2)
+  Determinism             determinism;     // deterministic / not
+  uint16_t                flags;           // packed boolean properties
+};
+\end{lstlisting}
+
+\subsection{Name and version}
+\label{ssec:op_registry:name_version}
+
+\code{name} is the canonical op name --- the string that appears
+in user-facing API (\code{add}, \code{matmul}, \code{layer\_norm})
+and in the trace IR. Names are lowercase, snake-case, and follow
+\refframework-compatible conventions where parity matters.
+
+\code{version} is a 32-bit integer that increments when the op's
+behaviour changes in a backward-incompatible way. This matters for
+checkpoint portability: a checkpoint saved with version 2 of
+\code{batch\_norm} cannot be loaded into a process running version
+3 without an explicit migration. The version field is the
+mechanism the serialisation layer (\chref{ch:serialization}) uses
+to refuse incompatible loads.
+
+\subsection{ArgSpec for inputs and outputs}
+\label{ssec:op_registry:argspec}
+
+\code{ArgSpec} describes one tensor argument:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct ArgSpec {
+  std::string  name;        // parameter name in user API
+  DtypeSet     allowed;     // permitted dtypes (bitmask)
+  uint8_t      rank_min;    // minimum rank
+  uint8_t      rank_max;    // maximum rank (255 = unbounded)
+  bool         optional;    // may be absent
+  bool         out;         // is this an output (vs input)
+};
+\end{lstlisting}
+
+The \code{name} matches the Python-side argument name, so the
+dispatcher can rebind keyword arguments to positional slots without
+maintaining a separate alias table. The \code{allowed} bitmask
+enumerates the dtypes the op accepts; the dispatcher raises
+\code{LucidError} if an input dtype is not in the set. The
+\code{rank\_min} / \code{rank\_max} pair bounds the input rank;
+arbitrary ranks use \code{rank\_max = 255}.
+
+\subsection{BackwardSpec}
+\label{ssec:op_registry:backward}
+
+\code{BackwardSpec} describes how the op's backward pass is
+constructed:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+enum class BackwardKind {
+  None,           // not differentiable
+  Inline,         // backward defined in C++
+  Custom,         // user-supplied via Function class
+  Composite,      // built from forward primitives
+};
+
+struct BackwardSpec {
+  BackwardKind     kind;
+  BackwardFn*      inline_fn;     // for Inline kind
+  SavedTensorList  saved;         // which forward tensors to save
+};
+\end{lstlisting}
+
+Most ops use \code{Inline}: the backward is a known function with
+a known shape. The function takes the saved tensors, the output
+gradient, and the input shapes, and returns the input gradients.
+The autograd engine sets up the \code{grad\_fn} node at forward
+time by reading \code{inline\_fn} from the schema.
+
+\subsection{AmpPolicy}
+\label{ssec:op_registry:amp}
+
+\code{AmpPolicy} encodes the op's behaviour under mixed precision:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+enum class AmpPolicy {
+  PromoteToWidest,    // default: keep widest input dtype
+  CastToHalf,         // force to FP16 under autocast
+  PreserveInputs,     // no casting; preserve user dtype exactly
+  ForceFloat32,       // always FP32 (reductions, softmax)
+};
+\end{lstlisting}
+
+Matrix multiplication uses \code{CastToHalf}: under autocast,
+\code{matmul} inputs are cast to FP16. Softmax uses
+\code{ForceFloat32}: the reduction accumulates in FP32 even when
+inputs are FP16, to prevent overflow. Pointwise arithmetic uses
+\code{PromoteToWidest}.
+
+\subsection{Complexity, determinism, and flags}
+\label{ssec:op_registry:misc}
+
+\code{ComplexityClass} is an enum
+(\code{O1}, \code{ON}, \code{ONLogN}, \code{ON2}, \code{ON3}) that
+the profiler uses to label per-op costs.
+
+\code{Determinism} is one of \code{Deterministic} or
+\code{Nondeterministic}. The \code{set\_deterministic(True)} mode
+(\chref{ch:reproducibility}) refuses to execute nondeterministic
+ops.
+
+\code{flags} is a 16-bit bitmask of additional boolean properties:
+\code{is\_view\_producer}, \code{is\_inplace}, \code{is\_constexpr},
+\code{has\_static\_output\_shape}, \code{requires\_contiguous}.
+
+\section{The OpRegistry}
+\label{sec:op_registry:registry}
+
+The registry is a singleton hash table from op name to schema,
+implemented in
+\code{lucid/\_C/ops/registry/OpRegistry.\{h,cpp\}}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class OpRegistry {
+public:
+  static OpRegistry& instance();
+  void           register_op(OpSchema schema);
+  const OpSchema& lookup(const std::string& name) const;
+  bool            has(const std::string& name) const;
+  std::vector<std::string> all_names() const;
+private:
+  std::unordered_map<std::string, OpSchema> table_;
+};
+\end{lstlisting}
+
+\subsection{Self-registration}
+\label{ssec:op_registry:self_register}
+
+Each op's C++ file contains a self-registering static initialiser:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+namespace {
+  struct AddRegistration {
+    AddRegistration() {
+      OpSchema s;
+      s.name = "add";
+      s.version = 1;
+      s.n_inputs = 2;
+      s.inputs[0] = {"a", DtypeSet::Numeric, 0, 255, false, false};
+      s.inputs[1] = {"b", DtypeSet::Numeric, 0, 255, false, false};
+      s.n_outputs = 1;
+      s.outputs[0] = {"out", DtypeSet::Numeric, 0, 255, false, true};
+      s.backward = {BackwardKind::Inline, &add_backward, {}};
+      s.amp = AmpPolicy::PromoteToWidest;
+      s.complexity = ComplexityClass::ON;
+      s.determinism = Determinism::Deterministic;
+      OpRegistry::instance().register_op(std::move(s));
+    }
+  } _add_reg;
+}
+\end{lstlisting}
+
+The pattern is verbose but explicit: a reader of
+\code{Arithmetic.cpp} sees \code{add}'s full schema in one place,
+without chasing a macro definition.
+
+\subsection{Initialisation order}
+\label{ssec:op_registry:init_order}
+
+\code{OpRegistry::instance()} uses a Meyer's singleton pattern
+(\code{static OpRegistry r; return r;}), which is initialised on
+first call. Since the first call is the first op's registration,
+the table is constructed before any registration runs --- avoiding
+the C++ static-initialisation-order fiasco.
+
+\section{Binding-Code Generation}
+\label{sec:op_registry:codegen}
+
+The pybind11 binding for each op
+(\chref{ch:python_cpp_binding}) is generated from the registry by
+a small build-time script, \code{tools/gen\_bindings.py}, run by
+CMake before the binding files are compiled. It reads the
+registry, then emits one \code{m.def(...)} line per op into
+\code{lucid/\_C/bindings/auto\_bind.gen.cpp}.
+
+The pattern handles the cases that are uniform: name, argument
+list, default values, return type. Ops with non-uniform
+characteristics (custom argument adaptation) are bound by hand and
+the generator skips them.
+
+\section{Adding a New Operation}
+\label{sec:op_registry:adding}
+
+The protocol:
+
+\begin{enumerate}
+  \item Implement the forward in
+    \code{lucid/\_C/ops/<category>/<file>.cpp}.
+  \item Implement the backward (inline C++ function or composite
+    decomposition).
+  \item Add the self-registering schema declaration.
+  \item Run \code{tools/gen\_bindings.py} (CMake does this
+    automatically).
+  \item Add a Python-side unit test exercising forward, backward,
+    and AMP behaviour.
+  \item Add a parity test against the reference framework.
+\end{enumerate}
+
+The framework ships a CLI, \code{python -m tools.new\_op}, that
+scaffolds the nine-file pattern for the common case
+(\code{retro-p6-new-op-cli}).
+
+\section{Schema Versioning and Checkpoint Portability}
+\label{sec:op_registry:versioning}
+
+Schema versions exist to keep checkpoints loadable across
+behavioural changes. A checkpoint records the schema version of
+every op; loading checks every op's version against the registry;
+a mismatch triggers either an automatic migration or refusal.
+
+The version is bumped only when behaviour changes affect numerical
+output, the saved-tensor set, or argument interpretation. It is
+\emph{not} bumped for pure-internal speed-ups or
+backward-compatible argument additions.
+
+Two historical migrations exist: \code{batch\_norm v1$\to$v2}
+rescaled \code{running\_var} from biased to unbiased; \code{cross\_entropy
+v1$\to$v2} changed the default reduction. Migrations live in
+\code{serialization/migrations.py} with tests against legacy
+checkpoints.
+
+\section{Introspection}
+\label{sec:op_registry:introspection}
+
+The registry is queryable from Python:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+names = lucid._C.list_ops()           # ~260 names
+schema = lucid._C.op_schema("add")    # dict
+lucid._C.has_op("custom_kernel")      # False
+\end{lstlisting}
+
+The introspection API is used by the documentation generator, by
+the compile path's emitter-table builder, and by the unit test
+suite that verifies every op has a parity test.
+
+\section{The Op Lifecycle}
+\label{sec:op_registry:lifecycle}
+
+Following a single op from declaration through user invocation
+clarifies how the registry interacts with the rest of the engine.
+\figref{fig:op_registry:lifecycle} sketches the path; we walk
+through it with \code{lucid.add(a, b)} as the example.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  step/.style={draw, rounded corners=2pt, font=\small\sffamily,
+               fill=lucid.info.bg, minimum width=8cm,
+               minimum height=0.7cm, align=left,
+               inner sep=4pt, inner xsep=8pt},
+  arrow/.style={->, >=stealth, thick, color=lucid.accent.dark,
+                shorten >=2pt, shorten <=2pt},
+  brace/.style={decorate, decoration={brace, amplitude=6pt},
+                color=lucid.muted, thick},
+  lbl/.style={font=\footnotesize\itshape, color=lucid.muted,
+              align=left},
+]
+  \node[step, fill=lucid.note.bg] (decl) at (0, 6)
+    {\textbf{Declare:} write OpSchema in C++};
+  \node[step, fill=lucid.note.bg] (build) at (0, 5)
+    {\textbf{Build:} static initialiser fires at process start};
+  \node[step] (call) at (0, 4)
+    {\textbf{Call:} user invokes \code{lucid.add(a, b)}};
+  \node[step] (lookup) at (0, 3)
+    {\textbf{Lookup:} dispatcher reads schema from registry};
+  \node[step] (validate) at (0, 2)
+    {\textbf{Validate:} check dtypes / shapes / device};
+  \node[step] (dispatch) at (0, 1)
+    {\textbf{Dispatch:} route to backend per device};
+  \node[step] (backward) at (0, 0)
+    {\textbf{Record backward:} BackwardSpec builds grad\_fn};
+  \node[step, fill=lucid.ok.bg] (result) at (0, -1)
+    {\textbf{Return:} TensorImpl with autograd metadata};
+
+  \draw[arrow] (decl) -- (build);
+  \draw[arrow] (build) -- (call);
+  \draw[arrow] (call) -- (lookup);
+  \draw[arrow] (lookup) -- (validate);
+  \draw[arrow] (validate) -- (dispatch);
+  \draw[arrow] (dispatch) -- (backward);
+  \draw[arrow] (backward) -- (result);
+
+  % Right-side brace + labels grouping build-time vs per-call steps
+  \draw[brace] (4.3, 6.35) -- (4.3, 4.65);
+  \node[lbl, right] at (4.7, 5.5) {build time\\(one-shot)};
+
+  \draw[brace] (4.3, 4.35) -- (4.3, -1.35);
+  \node[lbl, right] at (4.7, 1.5)
+    {per-call time\\${\sim}1.5\,\mu$s framework\\overhead on M3~Max};
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Op lifecycle.]{Lifecycle of one \Lucid\ operation. The
+schema is declared in the op's C++ file and registered at process
+start (top two steps; one-shot). Per-call cost is the dispatcher
+path: lookup, validation, backend dispatch, backward-graph
+construction. Framework overhead is roughly $1.5\,\mu$s on M3~Max;
+the backend kernel cost dominates for non-trivial inputs.}
+\label{fig:op_registry:lifecycle}
+\end{figure}
+
+The dispatcher's validation step deserves expansion. Given the
+schema's \code{inputs[].allowed} dtype bitmask, the validator
+rejects any input dtype not in the set. Given the
+\code{rank\_min}/\code{rank\_max} bounds, it rejects rank
+mismatches. The actual shape compatibility check
+(for binary broadcast, for reduction axis bounds) is handled by
+the per-op forward function rather than by the dispatcher, because
+those constraints are not uniformly expressible in the schema.
+
+\section{Implementation: From Schema to Bound Function}
+\label{sec:op_registry:impl_path}
+
+To trace the full chain from a schema declaration to a Python
+call, follow the example of \code{lucid.gelu}:
+
+\begin{enumerate}
+  \item \textbf{Schema declaration} in
+    \code{lucid/\_C/ops/ufunc/Activations.cpp}. The schema names
+    the op, its single input dtype set (floating types only), its
+    backward function pointer, and its AMP policy
+    (\code{PreserveInputs}).
+  \item \textbf{Self-registration}: the static initialiser at the
+    bottom of the file runs at \code{dlopen} time and inserts the
+    schema into \code{OpRegistry::instance().table\_}.
+  \item \textbf{Binding generation}: at build time,
+    \code{tools/gen\_bindings.py} reads the registry, sees
+    \code{gelu}, and emits \code{m.def("gelu", \&ops::gelu,
+    py::arg("x"))} into \code{auto\_bind.gen.cpp}.
+  \item \textbf{Compile and link}: the generated bindings file is
+    compiled into the engine extension module.
+  \item \textbf{Python wrapper}: in
+    \code{lucid/\_ops/composite/activation.py}, a small wrapper
+    \code{def gelu(x): return \_wrap(\_C\_engine.gelu(\_unwrap(x)))}
+    exposes the op at \code{lucid.nn.functional.gelu} and
+    indirectly at \code{lucid.gelu}.
+  \item \textbf{User call}: \code{lucid.gelu(x)} dispatches through
+    the Python wrapper, the dispatcher, the backend, and back ---
+    end to end, ${\sim} 2\,\mu s$ for the framework overhead plus
+    the kernel time.
+\end{enumerate}
+
+The chain is mechanical once the schema is right. Most of a
+contributor's time on a new op is spent on the backward derivation
+and the parity tests, not on the registration machinery.
+
+\section{Schema Statistics}
+\label{sec:op_registry:stats}
+
+\tabref{tab:op_registry:stats} breaks down the current registry by
+op category.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrl}
+\toprule
+Category & Count & Differentiable & Example \\
+\midrule
+Unary (ufunc)    & 64 & 51 & \code{relu}, \code{exp}, \code{erfinv} \\
+Binary (bfunc)   & 52 & 34 & \code{add}, \code{atan2}, \code{logaddexp} \\
+Generic (gfunc)  & 78 & 62 & \code{reshape}, \code{gather}, \code{cat} \\
+NN kernels       & 38 & 38 & \code{conv2d}, \code{layer\_norm}, \code{lstm} \\
+Linalg           & 31 & 24 & \code{cholesky}, \code{svd}, \code{solve} \\
+FFT              & 22 & 22 & \code{fft}, \code{rfft}, \code{ifftshift} \\
+Einops           & 6  & 6  & \code{rearrange}, \code{reduce}, \code{repeat} \\
+Complex          & 7  & 7  & \code{real}, \code{imag}, \code{conj} \\
+\midrule
+Total            & 298 & 244 & \\
+\bottomrule
+\end{tabular}
+\caption[Op registry composition.]{Counts of operations in the
+registry by category. Of the 298 registered ops, 244 are
+differentiable (have a non-trivial \code{BackwardSpec}). The
+remaining 54 are predicates (\code{isnan}, \code{isfinite}),
+argument reductions (\code{argmax}, \code{argmin}), bitwise ops,
+and rounding ops --- all returning either bool or integer outputs
+for which gradient is undefined.}
+\label{tab:op_registry:stats}
+\end{table}
+
+\section{Summary and Forward References}
+\label{sec:op_registry:summary}
+
+The op registry is the single source of truth for \Lucid's
+operation surface. Each op declares an \code{OpSchema} containing
+its name, version, input/output specs, backward declaration, AMP
+policy, complexity class, and determinism guarantee. Schemas
+self-register at engine initialisation; the registry is consulted
+by the dispatcher, the autograd engine, the AMP system, the compile
+path, and the introspection tools.
+
+\chref{ch:kernel_abstraction} treats the kernel layer that the ops
+dispatch through. Subsequent chapters treat the op categories one
+by one.
+
+\begin{lucidnote}
+For the user: the op registry is invisible. The user calls
+\code{lucid.add(a, b)}; the framework consults the registry under
+the hood to validate arguments, route to a backend, and construct
+the autograd node.
+\end{lucidnote}

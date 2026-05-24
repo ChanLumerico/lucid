@@ -1,0 +1,750 @@
+% !TEX root = ../main.tex
+\chapter{Probability Distributions}
+\label{ch:distributions}
+
+Probability distributions are the mathematical objects of
+Bayesian inference, generative modeling, variational autoencoders,
+and reinforcement learning. \Lucid\ exposes a comprehensive
+distributions subpackage at \code{lucid.distributions} that
+provides parameterised distribution objects with sample, density,
+log-density, KL divergence, and entropy methods.
+
+This chapter describes the subpackage's design, the supported
+distributions, the reparameterisation trick for differentiable
+sampling, and the KL-divergence registry.
+
+\section{Overview}
+\label{sec:distributions:overview}
+
+The subpackage follows the design of \refframework's
+\code{torch.distributions} and TensorFlow Probability: a
+\code{Distribution} abstract base, parameterised concrete
+subclasses, and a fluent interface for sample / log\_prob / mean
+/ variance / entropy / KL.
+
+\subsection{The 33 distributions}
+\label{ssec:distributions:catalogue}
+
+\Lucid\ supports 33 distributions across four categories:
+
+\begin{itemize}
+  \item \textbf{Continuous}: \code{Normal}, \code{Laplace},
+    \code{Cauchy}, \code{StudentT}, \code{Gumbel},
+    \code{Exponential}, \code{Gamma}, \code{Beta},
+    \code{Dirichlet}, \code{LogNormal}, \code{Weibull},
+    \code{Pareto}, \code{HalfNormal}, \code{HalfCauchy},
+    \code{Uniform}, \code{VonMises}.
+  \item \textbf{Discrete}: \code{Bernoulli}, \code{Binomial},
+    \code{Categorical}, \code{OneHotCategorical}, \code{Poisson},
+    \code{Geometric}, \code{NegativeBinomial},
+    \code{Multinomial}.
+  \item \textbf{Multivariate}: \code{MultivariateNormal},
+    \code{Wishart}, \code{LKJCholesky}, \code{Dirichlet}.
+  \item \textbf{Relaxed / continuous discrete}:
+    \code{RelaxedBernoulli}, \code{RelaxedOneHotCategorical}.
+  \item \textbf{Transformed / mixture}: \code{TransformedDistribution},
+    \code{MixtureSameFamily}, \code{Independent}.
+\end{itemize}
+
+\section{The Distribution Interface}
+\label{sec:distributions:interface}
+
+Every concrete distribution implements:
+
+\begin{itemize}
+  \item \code{sample(shape=())}: draw a sample of the requested
+    batch shape.
+  \item \code{rsample(shape=())}: differentiable sample (for
+    reparameterisable distributions).
+  \item \code{log\_prob(value)}: log probability density / mass at
+    \code{value}.
+  \item \code{cdf(value)}: cumulative distribution function (for
+    those that have closed-form CDF).
+  \item \code{icdf(value)}: inverse CDF.
+  \item \code{mean, variance, stddev, entropy}: properties /
+    methods returning the standard statistics.
+\end{itemize}
+
+\subsection{Shape conventions}
+\label{ssec:distributions:shapes}
+
+A distribution has three shape conceptions:
+
+\begin{itemize}
+  \item \textbf{batch\_shape}: independent distributions arranged
+    in a batch. For a Normal with mean shape $(B,)$ and stddev
+    shape $(B,)$, the batch shape is $(B,)$.
+  \item \textbf{event\_shape}: the shape of a single draw. For a
+    scalar Normal, event\_shape is $()$. For
+    \code{MultivariateNormal} of dimension $D$, event\_shape is
+    $(D,)$.
+  \item \textbf{sample\_shape}: requested shape of the sample;
+    prepended to batch\_shape and event\_shape.
+\end{itemize}
+
+\code{sample(shape=(K,))} of a \code{Normal} with batch shape
+$(B,)$ returns shape $(K, B)$. \code{sample(shape=(K, M))} of
+\code{MultivariateNormal} with batch shape $()$ and event shape
+$(D,)$ returns shape $(K, M, D)$.
+
+\subsection{The Independent wrapper}
+\label{ssec:distributions:independent}
+
+\code{Independent(base, n)} reinterprets the last $n$ dimensions
+of \code{base}'s batch\_shape as event\_shape. Useful when the
+user has a vector of independent scalar Normals and wants
+\code{log\_prob} to sum across them rather than return a
+per-element tensor:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.distributions import Normal, Independent
+
+# Batch of D-dim diagonal Normals
+mu = lucid.zeros(B, D)
+sigma = lucid.ones(B, D)
+base = Normal(mu, sigma)             # batch (B, D), event ()
+dist = Independent(base, 1)          # batch (B,), event (D,)
+
+x = dist.sample()                    # shape (B, D)
+lp = dist.log_prob(x)                # shape (B,), summed over D
+\end{lstlisting}
+
+\section{The Reparameterisation Trick}
+\label{sec:distributions:reparam}
+
+For training a model whose loss includes an expectation over a
+distribution (e.g., VAE evidence lower bound), the gradient of
+the expectation with respect to the distribution's parameters
+needs to be computable. The reparameterisation trick is the
+standard mechanism.
+
+\subsection{The trick}
+\label{ssec:distributions:reparam_trick}
+
+Suppose a sample $x \sim p_\theta$ can be written as $x =
+g_\theta(\epsilon)$ where $\epsilon$ comes from a fixed,
+parameter-free distribution $q$. Then
+\[
+\nabla_\theta \,\mathbb{E}_{x \sim p_\theta}[f(x)]
+\;=\; \nabla_\theta \,\mathbb{E}_{\epsilon \sim q}[f(g_\theta(\epsilon))]
+\;=\; \mathbb{E}_{\epsilon \sim q}\!\left[\nabla_\theta f(g_\theta(\epsilon))\right].
+\]
+The expectation and gradient commute because $q$ does not depend
+on $\theta$. The gradient passes through the deterministic
+$g_\theta$; the stochastic $\epsilon$ is a constant from autograd's
+view.
+
+For Gaussian:
+\[
+x \sim \mathcal{N}(\mu, \sigma^2)
+\;\Longleftrightarrow\;
+x = \mu + \sigma \cdot \epsilon,
+\quad \epsilon \sim \mathcal{N}(0, 1).
+\]
+The gradients are then immediate:
+$\partial x / \partial \mu = 1$ and $\partial x / \partial \sigma
+= \epsilon$. Autograd handles both automatically.
+
+For other reparameterisable distributions the transform is
+analogous: $\mathrm{Exponential}(\lambda)$ as $x = -\log(u)/\lambda$
+with $u \sim \mathcal{U}(0, 1)$; $\mathrm{Uniform}(a, b)$ as $x =
+a + (b - a) u$; etc.
+
+\subsection{rsample}
+\label{ssec:distributions:rsample}
+
+\code{rsample()} returns a reparameterised sample for
+distributions that admit the trick. The implementation calls
+\code{torch.randn}-style noise and applies the differentiable
+transformation.
+
+Distributions that support \code{rsample}: \code{Normal},
+\code{Uniform}, \code{Laplace}, \code{Gumbel}, \code{Exponential},
+\code{Pareto}, \code{LogNormal}, \code{StudentT},
+\code{HalfNormal}, \code{HalfCauchy}, \code{Cauchy},
+\code{Beta}, \code{Dirichlet}, \code{Gamma},
+\code{MultivariateNormal}.
+
+\code{sample} (non-r) is the version that produces a sample
+without the reparameterisation graph; useful when gradients are
+not needed.
+
+\subsection{Score-function estimator}
+\label{ssec:distributions:score_function}
+
+For non-reparameterisable distributions (discrete distributions,
+some heavy-tailed continuous), the score-function estimator
+(REINFORCE) is the alternative:
+\[
+\nabla_\theta \mathbb{E}_{x \sim p_\theta}[f(x)] =
+\mathbb{E}_{x \sim p_\theta}[f(x) \nabla_\theta \log p_\theta(x)].
+\]
+
+\Lucid\ does not provide a built-in score-function gradient
+helper, but the user can implement it explicitly:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+x = dist.sample()                # non-differentiable sample
+log_p = dist.log_prob(x)         # differentiable in dist's params
+loss = -(reward * log_p).mean()  # score-function objective
+\end{lstlisting}
+
+The pattern is standard for policy gradient in RL.
+
+\section{KL Divergence}
+\label{sec:distributions:kl}
+
+The Kullback--Leibler divergence
+\[
+D_{\mathrm{KL}}(p \,\|\, q)
+\;=\; \mathbb{E}_{x \sim p}\!\left[\log \frac{p(x)}{q(x)}\right]
+\;=\; \int p(x) \log \frac{p(x)}{q(x)} \, dx
+\]
+measures the directed distance from $p$ to $q$. It is
+non-negative, zero iff $p = q$ almost everywhere, asymmetric in
+its arguments, and unbounded above. It is the standard objective
+in variational inference, the regulariser in $\beta$-VAE, and the
+core quantity in information theory's notion of inefficient
+coding.
+
+For two univariate Gaussians the closed form is
+\[
+D_{\mathrm{KL}}\!\bigl(\mathcal{N}(\mu_1, \sigma_1^2) \,\|\, \mathcal{N}(\mu_2, \sigma_2^2)\bigr)
+\;=\; \log \frac{\sigma_2}{\sigma_1}
+   + \frac{\sigma_1^2 + (\mu_1 - \mu_2)^2}{2\sigma_2^2}
+   - \frac{1}{2}.
+\]
+For two categorical distributions over the same support,
+\[
+D_{\mathrm{KL}}(p \,\|\, q) \;=\; \sum_i p_i \log \frac{p_i}{q_i}.
+\]
+The first form appears in every VAE loss; the second in
+distillation, label-smoothing, and policy-gradient
+regularisation.
+
+\subsection{Closed-form KLs}
+\label{ssec:distributions:closed_form_kl}
+
+For many pairs $(p, q)$ of common distributions, the KL has a
+closed-form expression that avoids the expensive Monte-Carlo
+estimate. \Lucid\ maintains a registry of these in
+\code{lucid/distributions/kl.py}:
+
+\begin{itemize}
+  \item Normal -- Normal: closed form involving mean diff and
+    log-stddev ratio.
+  \item Categorical -- Categorical: $\sum_i p_i \log(p_i / q_i)$.
+  \item Bernoulli -- Bernoulli: closed form.
+  \item Gamma -- Gamma: closed form involving lgamma and digamma.
+  \item Beta -- Beta: closed form.
+  \item Dirichlet -- Dirichlet: closed form.
+  \item MultivariateNormal -- MultivariateNormal: closed form
+    involving log-det and trace.
+\end{itemize}
+
+The registry has 20 pairs as of \Lucid\ 3.5.
+
+\subsection{Monte-Carlo fallback}
+\label{ssec:distributions:mc_kl}
+
+For pairs not in the registry, \code{kl\_divergence(p, q)} falls
+back to an MC estimate:
+\[
+\widehat{D_{\text{KL}}}(p \| q) = \frac{1}{N} \sum_{i=1}^N \log
+\frac{p(x_i)}{q(x_i)}, \quad x_i \sim p.
+\]
+
+The MC estimate is noisy; the user should average over many
+samples for a meaningful loss.
+
+\subsection{Registering a custom KL}
+\label{ssec:distributions:custom_kl}
+
+The user can register a custom closed-form KL via a decorator:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.distributions import register_kl, MyDist
+
+@register_kl(MyDist, MyDist)
+def _kl_mydist_mydist(p, q):
+    return ...  # closed-form expression
+\end{lstlisting}
+
+\code{kl\_divergence(p, q)} will then pick the registered
+implementation.
+
+\section{Worked Example: VAE Loss}
+\label{sec:distributions:vae_example}
+
+The Variational Autoencoder's loss is the evidence lower bound
+(ELBO):
+\[
+\mathcal{L} = \mathbb{E}_{q(z|x)}[\log p(x|z)] -
+D_{\text{KL}}(q(z|x) \| p(z)).
+\]
+
+In \Lucid:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.distributions import Normal, kl_divergence
+
+# Encoder produces mean and log-stddev of q(z|x)
+mu, log_sigma = encoder(x)
+sigma = log_sigma.exp()
+q_z = Normal(mu, sigma)
+
+# Sample z via reparameterisation
+z = q_z.rsample()
+
+# Decoder produces parameters of p(x|z)
+x_recon = decoder(z)
+p_x_given_z = Normal(x_recon, lucid.tensor(0.1))
+recon_loss = -p_x_given_z.log_prob(x).sum(dim=-1).mean()
+
+# KL divergence to the prior p(z) = N(0, I)
+prior = Normal(lucid.zeros_like(mu), lucid.ones_like(sigma))
+kl_loss = kl_divergence(q_z, prior).sum(dim=-1).mean()
+
+loss = recon_loss + kl_loss
+loss.backward()
+\end{lstlisting}
+
+The \code{rsample} makes the path from \code{loss} back to the
+encoder's parameters differentiable. The closed-form
+Normal-Normal KL avoids MC noise.
+
+\section{Constraints}
+\label{sec:distributions:constraints}
+
+Distribution parameters have constraints (variances are positive,
+probabilities are in $[0, 1]$, simplex distributions sum to 1).
+\Lucid\ exposes a \code{constraints} submodule that names these
+constraints and a \code{transforms} submodule that bijects
+between constrained and unconstrained spaces.
+
+\subsection{Why constraints matter}
+\label{ssec:distributions:why_constraints}
+
+Optimising a positive parameter directly (e.g., a Gamma rate)
+risks the optimiser producing a negative update that the
+distribution then rejects with NaN. The standard remedy is to
+parameterise via the unconstrained space and transform at the
+distribution's input.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.distributions import Gamma
+from lucid.distributions.transforms import ExpTransform
+
+# Parameterise log-rate as the unconstrained variable
+log_rate = lucid.tensor(0.0, requires_grad=True)
+rate = log_rate.exp()  # always positive
+
+dist = Gamma(rate, 1.0)
+# Optimise log_rate freely; rate stays in (0, infty).
+\end{lstlisting}
+
+\subsection{TransformedDistribution}
+\label{ssec:distributions:transformed}
+
+\code{TransformedDistribution(base, transform)} composes a base
+distribution with a bijective transform. The
+\code{log\_prob} correctly accounts for the Jacobian:
+\[
+\log p_Y(y) = \log p_X(\text{inv}(y)) - \log |J_{T}(\text{inv}(y))|.
+\]
+
+This is the mechanism for normalising flows: a chain of
+transformed distributions, each transform learnable.
+
+\section{Implementation Notes}
+\label{sec:distributions:impl}
+
+The distributions live in \code{lucid/distributions/}. Each
+distribution is a Python class deriving from \code{Distribution}.
+
+\subsection{Numpy-free}
+\label{ssec:distributions:numpy_free}
+
+Per Hard Rule H4, no distribution code imports numpy. The
+implementations use only \Lucid\ primitives and special-function
+calls. Erfinv-based Gaussian sampling on CPU,
+\Lucid's Ziggurat on GPU.
+
+\subsection{Composition with optim}
+\label{ssec:distributions:compose_optim}
+
+The distributions interact with the optimisers
+(\chref{ch:optimizers}) through their parameters. A
+\code{Distribution} created from \code{requires\_grad=True}
+tensors backwards through both the sample and the log\_prob; the
+optimiser updates the underlying tensors and the next sample
+reflects the change.
+
+\section{Univariate Continuous Distributions in Detail}
+\label{sec:distributions:continuous_detail}
+
+The most-used continuous distributions, with their densities,
+log-likelihoods, and gradient identities.
+
+\subsection{Normal}
+\label{ssec:distributions:normal_detail}
+
+Density:
+\[
+p(x; \mu, \sigma) \;=\; \frac{1}{\sigma\sqrt{2\pi}}
+\exp\!\left(-\frac{(x - \mu)^2}{2\sigma^2}\right).
+\]
+Log-likelihood:
+\[
+\log p(x; \mu, \sigma) \;=\; -\tfrac{1}{2}\log(2\pi) - \log\sigma
+- \frac{(x - \mu)^2}{2\sigma^2}.
+\]
+Gradients:
+\[
+\frac{\partial \log p}{\partial \mu} = \frac{x - \mu}{\sigma^2},
+\qquad
+\frac{\partial \log p}{\partial \sigma} = -\frac{1}{\sigma} +
+\frac{(x - \mu)^2}{\sigma^3}.
+\]
+Entropy: $H = \tfrac{1}{2}\log(2\pi e \sigma^2)$.
+
+\subsection{Gamma}
+\label{ssec:distributions:gamma_detail}
+
+Density (rate parameterisation, $\alpha$ shape, $\beta$ rate):
+\[
+p(x; \alpha, \beta) \;=\; \frac{\beta^\alpha}{\Gamma(\alpha)}
+x^{\alpha - 1} e^{-\beta x},
+\quad x > 0.
+\]
+Log-likelihood:
+\[
+\log p \;=\; \alpha \log \beta - \log\Gamma(\alpha) + (\alpha - 1)\log x - \beta x.
+\]
+Gradients (involving the digamma function $\psi$):
+\[
+\frac{\partial \log p}{\partial \alpha} = \log \beta - \psi(\alpha) + \log x,
+\qquad
+\frac{\partial \log p}{\partial \beta} = \frac{\alpha}{\beta} - x.
+\]
+Mean: $\alpha/\beta$. Variance: $\alpha/\beta^2$.
+
+\subsection{Beta}
+\label{ssec:distributions:beta_detail}
+
+Density:
+\[
+p(x; \alpha, \beta) \;=\; \frac{1}{\mathrm{B}(\alpha, \beta)}
+x^{\alpha - 1} (1 - x)^{\beta - 1},
+\quad x \in (0, 1).
+\]
+Mean: $\alpha / (\alpha + \beta)$. The Beta is the conjugate
+prior for the Bernoulli likelihood; this is the source of its
+prominence in Bayesian inference.
+
+\subsection{Dirichlet}
+\label{ssec:distributions:dirichlet_detail}
+
+The multivariate generalisation of Beta, defined on the
+$(K-1)$-simplex:
+\[
+p(x; \alpha) \;=\; \frac{1}{\mathrm{B}(\alpha)}
+\prod_{i=1}^K x_i^{\alpha_i - 1},
+\quad x_i \geq 0,\ \sum_i x_i = 1,
+\]
+where $\mathrm{B}(\alpha) = \prod_i \Gamma(\alpha_i) /
+\Gamma(\sum_i \alpha_i)$. Conjugate prior for categorical
+likelihoods.
+
+\subsection{Exponential and related}
+\label{ssec:distributions:exp_related}
+
+Exponential with rate $\lambda$:
+\[
+p(x; \lambda) \;=\; \lambda e^{-\lambda x},
+\quad x \geq 0.
+\]
+Memoryless. Maximum-entropy distribution given a fixed mean.
+
+Laplace (double exponential):
+\[
+p(x; \mu, b) \;=\; \frac{1}{2b} \exp\!\left(-\frac{|x - \mu|}{b}\right).
+\]
+
+Cauchy (heavy-tailed, infinite mean/variance):
+\[
+p(x; \mu, \gamma) \;=\; \frac{1}{\pi \gamma\left[1 + ((x - \mu)/\gamma)^2\right]}.
+\]
+
+\section{Discrete Distributions in Detail}
+\label{sec:distributions:discrete_detail}
+
+\subsection{Bernoulli}
+\label{ssec:distributions:bernoulli}
+
+Single trial with success probability $p$:
+\[
+P(X = 1) = p,\quad P(X = 0) = 1 - p.
+\]
+Log-likelihood:
+\[
+\log P(X = x) \;=\; x \log p + (1 - x) \log(1 - p).
+\]
+The sigmoid output of a logistic regression model is naturally
+the parameter of a Bernoulli.
+
+\subsection{Categorical}
+\label{ssec:distributions:categorical}
+
+The discrete distribution over $K$ classes with probability
+vector $\pi$:
+\[
+P(X = k) = \pi_k,\quad k = 1, \ldots, K,\ \sum_k \pi_k = 1.
+\]
+The softmax output of a multi-class classifier is naturally
+$\pi$. The cross-entropy loss is the negative log-likelihood:
+\[
+\mathcal{L} \;=\; -\log \pi_{y} \;=\; -y^\top \log \pi
+\]
+(where $y$ is the one-hot label).
+
+\subsection{Binomial and Poisson}
+\label{ssec:distributions:binomial_poisson}
+
+Binomial: number of successes in $n$ Bernoulli trials:
+\[
+P(X = k) \;=\; \binom{n}{k} p^k (1 - p)^{n - k}.
+\]
+Poisson: count of events in fixed interval with mean rate
+$\lambda$:
+\[
+P(X = k) \;=\; \frac{\lambda^k e^{-\lambda}}{k!}.
+\]
+Poisson is the limit of Binomial with $n \to \infty$, $p \to 0$,
+$np = \lambda$.
+
+\section{Multivariate Distributions}
+\label{sec:distributions:multivariate}
+
+\subsection{Multivariate Normal}
+\label{ssec:distributions:mvn}
+
+The density of $\mathcal{N}(\mu, \Sigma)$ on $\mathbb{R}^d$:
+\[
+p(x) \;=\; \frac{1}{(2\pi)^{d/2} |\Sigma|^{1/2}}
+\exp\!\left(-\tfrac{1}{2}(x - \mu)^\top \Sigma^{-1} (x - \mu)\right).
+\]
+Log-likelihood (the form used computationally):
+\[
+\log p(x) \;=\; -\tfrac{d}{2}\log(2\pi) - \tfrac{1}{2}\log|\Sigma|
+- \tfrac{1}{2}(x - \mu)^\top \Sigma^{-1} (x - \mu).
+\]
+
+\Lucid\ supports three parameterisations of $\Sigma$:
+\begin{itemize}
+  \item \code{covariance\_matrix}: full $\Sigma$.
+  \item \code{precision\_matrix}: $\Sigma^{-1}$.
+  \item \code{scale\_tril}: Cholesky factor $L$ with $\Sigma = L
+    L^\top$.
+\end{itemize}
+The Cholesky parameterisation is the most numerically robust and
+the default in most tutorials.
+
+KL between two MVNs:
+\[
+D_{\mathrm{KL}}\!\bigl(\mathcal{N}(\mu_1, \Sigma_1) \,\|\, \mathcal{N}(\mu_2, \Sigma_2)\bigr)
+= \tfrac{1}{2}\!\left[\operatorname{tr}(\Sigma_2^{-1} \Sigma_1)
++ (\mu_2 - \mu_1)^\top \Sigma_2^{-1} (\mu_2 - \mu_1)
+- d + \log\frac{|\Sigma_2|}{|\Sigma_1|}\right].
+\]
+
+\subsection{Wishart and inverse Wishart}
+\label{ssec:distributions:wishart}
+
+The Wishart is the conjugate prior for the precision matrix of a
+multivariate Normal in Bayesian inference. The inverse Wishart is
+the prior for the covariance matrix.
+
+\subsection{LKJ-Cholesky}
+\label{ssec:distributions:lkj}
+
+The LKJ distribution is a prior over correlation matrices. The
+Cholesky parameterisation \code{LKJCholesky(d, concentration)}
+returns the Cholesky factor of a correlation matrix.
+
+\section{Variational Inference: A Worked Example}
+\label{sec:distributions:vi_detail}
+
+To illustrate the distribution machinery in context, we walk
+through a variational autoencoder (VAE) loss derivation
+\cite{kingma_vae_2014}.
+
+\subsection{The setup}
+\label{ssec:distributions:vi_setup}
+
+A latent-variable model has the form $p(x, z) = p(x|z) p(z)$
+with prior $p(z) = \mathcal{N}(0, I)$ and likelihood $p(x|z)$
+parameterised by a neural network. The marginal likelihood
+$p(x) = \int p(x|z) p(z)\, dz$ is intractable.
+
+The variational approximation introduces $q(z|x)$, also
+parameterised by a neural network (the encoder), and considers
+the evidence lower bound (ELBO):
+\[
+\log p(x) \;\geq\; \mathbb{E}_{q(z|x)}[\log p(x|z)] - D_{\mathrm{KL}}(q(z|x) \,\|\, p(z)).
+\]
+
+\subsection{The ELBO terms}
+\label{ssec:distributions:elbo_terms}
+
+The reconstruction term $\mathbb{E}_{q(z|x)}[\log p(x|z)]$ is
+estimated by sampling $z \sim q(z|x)$ (via reparameterisation
+for differentiability) and computing $\log p(x | z)$.
+
+The KL term has closed form for the case
+$q(z|x) = \mathcal{N}(\mu(x), \mathrm{diag}\sigma^2(x))$ and
+$p(z) = \mathcal{N}(0, I)$:
+\[
+D_{\mathrm{KL}}(q \,\|\, p) \;=\; \tfrac{1}{2} \sum_{i=1}^d
+\bigl(\mu_i^2 + \sigma_i^2 - 1 - \log \sigma_i^2\bigr).
+\]
+This is the famous ``KL divergence to standard normal'' term that
+appears in every VAE training loss.
+
+\section{Score-Function Estimator}
+\label{sec:distributions:score_estimator}
+
+For distributions that do not admit reparameterisation (discrete
+distributions, certain heavy-tailed continuous), the score-
+function estimator (REINFORCE) is the alternative:
+\[
+\nabla_\theta \mathbb{E}_{x \sim p_\theta}[f(x)]
+\;=\; \mathbb{E}_{x \sim p_\theta}[f(x) \nabla_\theta \log p_\theta(x)].
+\]
+
+\subsection{Variance}
+\label{ssec:distributions:score_variance}
+
+The score-function estimator is unbiased but has high variance.
+The standard variance-reduction trick uses a baseline $b$ that
+does not depend on $x$:
+\[
+\nabla_\theta \mathbb{E}[f(x)]
+\;=\; \mathbb{E}[(f(x) - b) \nabla_\theta \log p_\theta(x)].
+\]
+The expectation is unchanged (since
+$\mathbb{E}[\nabla \log p_\theta] = 0$), but the variance can be
+reduced by choosing $b$ near $\mathbb{E}[f(x)]$.
+
+This is the algorithmic basis of REINFORCE with a baseline, the
+ancestor of modern policy-gradient algorithms in RL.
+
+\subsection{Implementation pattern}
+\label{ssec:distributions:score_pattern}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# Forward
+dist = Categorical(logits=policy_logits)
+action = dist.sample()
+log_p = dist.log_prob(action)
+reward = env.step(action)   # non-differentiable
+
+# Score-function gradient
+baseline = reward.mean().detach()
+loss = -((reward - baseline) * log_p).mean()
+loss.backward()
+\end{lstlisting}
+
+\section{Transformed Distributions and Normalising Flows}
+\label{sec:distributions:flows}
+
+\code{TransformedDistribution(base, transform)} composes a base
+distribution with a bijective transform. By the change-of-variables
+formula:
+\[
+\log p_Y(y) \;=\; \log p_X(T^{-1}(y)) - \log |J_T(T^{-1}(y))|,
+\]
+where $J_T$ is the Jacobian of $T$. \Lucid\ supports several
+transforms:
+
+\begin{itemize}
+  \item \code{AffineTransform}: $y = a x + b$.
+  \item \code{ExpTransform}: $y = e^x$.
+  \item \code{SigmoidTransform}: $y = \sigma(x)$.
+  \item \code{TanhTransform}: $y = \tanh(x)$.
+  \item \code{StickBreakingTransform}: maps $\mathbb{R}^{K-1}$
+    to the $K$-simplex.
+\end{itemize}
+
+\subsection{Normalising flows}
+\label{ssec:distributions:flow_arch}
+
+A \emph{normalising flow} chains several transforms:
+\[
+y = T_K \circ T_{K-1} \circ \cdots \circ T_1(x), \quad
+x \sim p_X.
+\]
+The resulting density is
+\[
+\log p_Y(y) \;=\; \log p_X(x) - \sum_{k=1}^K \log |J_{T_k}|.
+\]
+
+The transforms are chosen so that both $T$ and $T^{-1}$ and
+$\log |J|$ are tractable. Common choices: coupling layers (RealNVP),
+autoregressive transforms (MAF, IAF), spline-based transforms
+(neural spline flows).
+
+\Lucid\ does not currently ship a flow library out of the box,
+but the building blocks (\code{TransformedDistribution} plus the
+transforms) make implementation straightforward.
+
+\section{Constraint and Transform Machinery}
+\label{sec:distributions:constraints_detail}
+
+The \code{constraints} submodule names common parameter
+constraints:
+\begin{itemize}
+  \item \code{positive}: $\theta > 0$.
+  \item \code{interval(a, b)}: $a < \theta < b$.
+  \item \code{simplex}: $\theta_i \geq 0$, $\sum_i \theta_i = 1$.
+  \item \code{positive\_definite}: matrix is symmetric and PD.
+  \item \code{lower\_cholesky}: lower-triangular with positive
+    diagonal.
+\end{itemize}
+
+The \code{biject\_to(constraint)} function returns a transform
+that maps unconstrained $\mathbb{R}^n$ to the constrained space:
+\begin{itemize}
+  \item For \code{positive}: \code{ExpTransform()}.
+  \item For \code{interval(a, b)}: scaled sigmoid.
+  \item For \code{simplex}: \code{StickBreakingTransform()}.
+\end{itemize}
+
+This pattern lets the user optimise an unconstrained variable
+and have the constraint enforced by the transform.
+
+\section{Summary and Forward References}
+\label{sec:distributions:summary}
+
+\code{lucid.distributions} provides 33 parameterised
+probability-distribution classes with sample / log\_prob / entropy
+/ KL methods. The reparameterisation trick supports
+differentiable sampling for the 15 distributions that admit it;
+the score-function estimator is the alternative for the rest.
+The KL-divergence registry contains 20 closed-form pairs with a
+Monte-Carlo fallback.
+
+The next chapter, \chref{ch:einops}, closes
+\partref{part:math_subsystems} with the tensor-rearrangement
+algebra. \partref{part:neural_networks} then begins the
+neural-network library proper.
+
+\begin{lucidnote}
+For the user: \code{lucid.distributions} is parity-compatible
+with \refframework's \code{torch.distributions}. Most patterns
+(rsample for differentiable, log\_prob for likelihood, kl\_divergence
+for variational losses) work identically.
+\end{lucidnote}

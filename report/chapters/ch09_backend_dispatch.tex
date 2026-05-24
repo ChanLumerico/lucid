@@ -1,0 +1,553 @@
+% !TEX root = ../main.tex
+\chapter{Backend Dispatch}
+\label{ch:backend_dispatch}
+
+A tensor framework's dispatch layer is the indirection that maps a
+device-agnostic operation request --- ``add these two tensors'' ---
+to a device-specific implementation. In \Lucid\ the dispatch
+layer is small and explicit: a single \code{Dispatcher} class
+inspects the input tensors' device tag and routes to one of two
+concrete backends, with two well-defined carve-outs that route a
+device-tagged tensor through the opposite backend's path. This
+chapter formalises the dispatcher's contract, describes the two
+backends and the carve-outs, and explains how the Python side
+mirrors the C++ structure.
+
+The dispatcher is also where the \emph{H3 hard rule} from
+\appref{app:hard_rules} is enforced: CPU stream uses only \Accelerate,
+GPU stream uses only \MLX, with the two named exceptions. Any new
+backend code that violates the rule is rejected at review. The
+discipline is what keeps the engine simple at the cost of writing
+fewer one-off kernels.
+
+The chapter proceeds: \secref{sec:backend_dispatch:ibackend}
+describes the \code{IBackend} interface;
+\secref{sec:backend_dispatch:dispatcher} describes the
+\code{Dispatcher} class; \secref{sec:backend_dispatch:cpu_gpu}
+describes the two backends; \secref{sec:backend_dispatch:carveouts}
+describes the linalg and data-dependent-output carve-outs;
+\secref{sec:backend_dispatch:mpsgraph_carveout} treats the 3.4 per-op
+\MPSGraph\ dispatch; \secref{sec:backend_dispatch:dtype_promo}
+describes type promotion; \secref{sec:backend_dispatch:python}
+treats the Python side; \secref{sec:backend_dispatch:perf} closes
+with the cost model.
+
+\section{The IBackend Interface}
+\label{sec:backend_dispatch:ibackend}
+
+\code{IBackend} (in \code{lucid/\_C/backend/IBackend.h}) is the
+abstract interface every backend implements. It is a large
+interface --- one method per op category --- but each method has a
+narrow contract:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class IBackend {
+public:
+  virtual ~IBackend() = default;
+
+  // Memory
+  virtual TensorImpl allocate(Shape s, Dtype dt) = 0;
+  virtual void       free(TensorImpl& t)         = 0;
+
+  // Elementwise
+  virtual TensorImpl unary (OpKind, const TensorImpl&)               = 0;
+  virtual TensorImpl binary(OpKind, const TensorImpl&, const TensorImpl&) = 0;
+
+  // Reductions
+  virtual TensorImpl reduce(OpKind, const TensorImpl&,
+                            AxisSet, bool keepdims) = 0;
+
+  // Matrix multiplication
+  virtual TensorImpl matmul(const TensorImpl& a, const TensorImpl& b) = 0;
+
+  // Convolution
+  virtual TensorImpl conv2d(const TensorImpl& x, const TensorImpl& w,
+                            ConvParams) = 0;
+  // ... and so on, one method per operation category
+};
+\end{lstlisting}
+
+The interface is intentionally op-category-granular, not per-op.
+Within \code{unary}, the \code{OpKind} enum distinguishes
+\code{Relu}, \code{Sigmoid}, \code{Tanh}, etc. This keeps the
+interface from exploding to hundreds of methods, at the cost of an
+internal switch inside each method. The switch is small and
+predictable; modern CPUs predict it perfectly after the first
+invocation.
+
+\subsection{Why a virtual interface}
+\label{ssec:backend_dispatch:why_virtual}
+
+The virtual-call overhead is roughly 2--5 nanoseconds per dispatch
+on modern Apple silicon. Compared to the cost of any nontrivial
+operation it dispatches to (microseconds for a small GPU launch,
+hundreds of microseconds for a matrix multiplication), this is
+negligible.
+
+A template-based static dispatch would have been the alternative.
+We chose virtual dispatch for two reasons: (i)~the binary size
+under templates is much larger (every op kind generates new code
+per backend); (ii)~runtime device selection requires runtime
+dispatch anyway, since the user can change a tensor's device
+between calls.
+
+\section{The Dispatcher Class}
+\label{sec:backend_dispatch:dispatcher}
+
+\code{Dispatcher} (in \code{lucid/\_C/backend/Dispatcher.h}) is
+the front door. It holds pointers to the two concrete backends and
+routes every operation through the appropriate one.
+\figref{fig:backend_dispatch:routing} sketches the full routing
+graph including the two H3 carve-outs and the 3.4 per-op
+\MPSGraph\ shim.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  in/.style={draw, rounded corners=2pt, font=\small\sffamily,
+             fill=lucid.note.bg, minimum width=3.4cm,
+             minimum height=0.9cm, align=center, inner sep=4pt},
+  dec/.style={draw, diamond, aspect=2, font=\small\sffamily,
+              fill=lucid.code.bg, inner sep=2pt, align=center,
+              minimum width=2.6cm},
+  be/.style={draw, rounded corners=2pt, font=\small\sffamily,
+             fill=lucid.info.bg, minimum width=3.6cm,
+             minimum height=0.9cm, align=center, inner sep=4pt},
+  cv/.style={draw, rounded corners=2pt, font=\small\sffamily,
+             fill=lucid.ok.bg, minimum width=3.6cm,
+             minimum height=0.9cm, align=center, inner sep=4pt},
+  arrow/.style={->, >=stealth, thick, color=lucid.accent.dark,
+                shorten >=2pt, shorten <=2pt},
+  lbl/.style={font=\footnotesize\itshape, color=lucid.muted,
+              fill=white, inner sep=2pt},
+]
+  \node[in] (op) at (0, 6) {Op request\\(OpKind, tensors)};
+  \node[dec] (dev) at (0, 4) {device?};
+
+  \node[dec] (cv1) at (-6.5, 2) {linalg?\\data-dep?};
+  \node[be] (accel) at (-6.5, -0.5) {AccelerateBackend\\(vDSP/BLAS/BNNS)};
+
+  \node[dec] (cv2) at (6.5, 2) {MPSGraph\\carve-out?};
+  \node[be] (mlx) at (6.5, -0.5) {MlxBackend\\(\MLX\ primitives)};
+  \node[cv] (mpsg) at (6.5, -3) {MpsBuilder\\(per-op compile)};
+
+  \draw[arrow] (op) -- (dev);
+  \draw[arrow] (dev.west) to[bend right=10]
+    node[lbl, midway, above] {cpu} (cv1.north);
+  \draw[arrow] (dev.east) to[bend left=10]
+    node[lbl, midway, above] {metal} (cv2.north);
+
+  \draw[arrow] (cv1) -- node[lbl, right] {no} (accel);
+  \draw[arrow] (cv1.south) to[bend right=15]
+    node[lbl, midway, below] {linalg / data-dep} (mlx.north west);
+
+  \draw[arrow] (cv2) -- node[lbl, right] {no} (mlx);
+  \draw[arrow] (cv2.east) to[bend left=30]
+    node[lbl, midway, right] {gelu, layernorm, \ldots} (mpsg.east);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Dispatcher routing.]{Op-request routing inside
+\Lucid's dispatcher. The primary decision is the input tensor's
+\code{device} tag. The two H3 carve-outs (linalg and
+data-dependent output ops) cross from the cpu branch to the metal
+branch under the hood; the 3.4 per-op \MPSGraph\ carve-out
+intercepts a small set of metal-device ops and routes them through
+the \code{MpsBuilder} compilation path instead of \MLX.}
+\label{fig:backend_dispatch:routing}
+\end{figure}
+
+\tabref{tab:backend_dispatch:carveouts} summarises the carve-outs.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tabular}{lllll}
+\toprule
+Carve-out & Ops affected & User device & Actual path & Rationale \\
+\midrule
+linalg          & cholesky, qr, svd, eigh, ... & metal $\to$ cpu & MLX (CPU stream) & no Metal LAPACK \\
+data-dep output & nonzero, unique, masked\_select & metal $\to$ cpu & Accelerate & shape needs value read \\
+3.4 MPSGraph    & gelu, layernorm, embedding\_bwd, ... & metal & MPSGraph & 3--30$\times$ over MLX \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption[Dispatcher carve-outs.]{The three named carve-outs in
+\Lucid's dispatcher. Each is justified by a structural reason
+that the framework cannot work around at the dispatch level.}
+\label{tab:backend_dispatch:carveouts}
+\end{table}
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class Dispatcher {
+public:
+  static Dispatcher& instance();
+
+  TensorImpl unary(OpKind op, const TensorImpl& x) {
+    return select_backend(x.device)->unary(op, x);
+  }
+  TensorImpl binary(OpKind op, const TensorImpl& a, const TensorImpl& b) {
+    if (a.device != b.device) {
+      throw LucidError("binary op across devices");
+    }
+    return select_backend(a.device)->binary(op, a, b);
+  }
+  // ... and so on
+
+private:
+  IBackend* select_backend(Device d) {
+    return (d == Device::Cpu) ? &accelerate_backend_ : &mlx_backend_;
+  }
+
+  AccelerateBackend accelerate_backend_;
+  MlxBackend        mlx_backend_;
+};
+\end{lstlisting}
+
+The dispatcher is a singleton. The two backend members are
+constructed eagerly at the singleton's first access; constructing
+them takes a few microseconds each (mostly \MLX's initialisation).
+
+\subsection{Cross-device errors}
+\label{ssec:backend_dispatch:cross_device}
+
+Binary and higher-arity operations require all inputs to share a
+device. The dispatcher checks this at the front door and raises
+\code{LucidError("binary op across devices")} on mismatch, with a
+message that names the operation and the two devices.
+
+The user-side convention is to \code{.to(device)} explicitly before
+the operation, rather than to expect implicit moves. \Lucid\ does
+not implicitly move tensors across devices for two reasons: the
+move has a real cost (the bridge of \chref{ch:unified_memory} is
+free only in the contiguous case), and the move's direction is not
+unambiguous (which device should the result land on?).
+
+\subsection{Per-op routing inside the backend}
+\label{ssec:backend_dispatch:per_op_internal}
+
+Once the dispatcher hands a request to a backend, the backend uses
+the \code{OpKind} enum to switch to the per-op implementation. For
+\code{AccelerateBackend}, the switch table routes to vDSP / vForce
+/ BLAS / BNNS helpers in \code{AccelerateMath.cpp} and friends. For
+\code{MlxBackend}, the switch routes to \MLX\ primitive calls in
+\code{MlxBackend.cpp}.
+
+The switch is one indirection layer that could in principle be
+collapsed (a backend could expose one method per op) but is kept
+for code organisation: a 260-op backend would have 260 virtual
+methods, which is unmanageable.
+
+\section{The Two Backends}
+\label{sec:backend_dispatch:cpu_gpu}
+
+The two concrete backends are described in detail in the hardware
+chapters: \chref{ch:accelerate} for the CPU side and
+\chref{ch:mlx_runtime} for the GPU side. This section gives the
+short version from the dispatcher's perspective.
+
+\subsection{AccelerateBackend}
+\label{ssec:backend_dispatch:accelerate}
+
+\code{AccelerateBackend} is the CPU implementation of
+\code{IBackend}. Every method routes to an \Accelerate-backed
+helper:
+
+\begin{itemize}
+  \item Elementwise unary/binary $\to$ vDSP primitives (for
+    arithmetic) or vForce primitives (for transcendentals).
+  \item Reductions $\to$ vDSP reductions (\code{vDSP\_sve},
+    \code{vDSP\_meanv}, etc.).
+  \item \code{matmul} $\to$ \code{cblas\_sgemm} or
+    \code{cblas\_dgemm}.
+  \item \code{conv2d} $\to$ BNNS direct convolution.
+  \item Allocation $\to$ \Lucid's pool wrapping the system
+    allocator.
+\end{itemize}
+
+\code{AccelerateBackend} does not link against \MLX. It is the
+self-contained CPU path.
+
+\subsection{MlxBackend}
+\label{ssec:backend_dispatch:mlx}
+
+\code{MlxBackend} is the GPU implementation. Every method routes
+to an \MLX\ primitive call with \code{stream=mx.gpu}:
+
+\begin{itemize}
+  \item Elementwise $\to$ \code{mlx::core::add}, etc.
+  \item Reductions $\to$ \code{mlx::core::sum}, etc.
+  \item \code{matmul} $\to$ \code{mlx::core::matmul}.
+  \item \code{conv2d} $\to$ \code{mlx::core::conv2d}.
+  \item Allocation $\to$ \Lucid's pool wrapping
+    \code{mlx::core::array}'s storage.
+\end{itemize}
+
+\code{MlxBackend} does not link against \Accelerate\ for its own
+operations, except indirectly through \MLX\ itself (which uses
+\Accelerate\ in its CPU stream).
+
+\section{The Two Carve-Outs}
+\label{sec:backend_dispatch:carveouts}
+
+The H3 rule (\appref{app:hard_rules}) has two named carve-outs.
+Both are documented here.
+
+\subsection{The linalg carve-out}
+\label{ssec:backend_dispatch:linalg_carveout}
+
+Linear-algebra decompositions (\code{cholesky}, \code{qr},
+\code{svd}, \code{eigh}, \code{solve}, \code{lstsq}, \code{inv},
+\code{det}, \code{logdet}, \code{matrix\_exp}) are not implemented
+in \Metal. \MLX\ provides them only on its CPU stream, where they
+delegate to \Accelerate's LAPACK. \Lucid's dispatcher recognises
+this and routes linalg ops through \MLX-on-CPU regardless of the
+user's chosen device:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+TensorImpl Dispatcher::cholesky(const TensorImpl& a) {
+  // Linalg carve-out: always CPU stream, even for metal tensors.
+  TensorImpl a_cpu = (a.device == Device::Metal)
+      ? bridge_metal_to_cpu(a)
+      : a;
+  TensorImpl r_cpu = mlx_backend_.cholesky(a_cpu, /*stream=*/mx::cpu);
+  return (a.device == Device::Metal)
+      ? bridge_cpu_to_metal(r_cpu)
+      : r_cpu;
+}
+\end{lstlisting}
+
+The bridge is the zero-copy \code{SharedStorage} of
+\chref{ch:unified_memory}, so the round-trip is free in the
+contiguous case. The carve-out's user-visible effect is that
+\code{lucid.linalg.cholesky(x)} on a metal tensor takes the same
+time it would on a CPU tensor, plus a negligible bridge overhead;
+the device argument is effectively fictive for these operations.
+
+The chapter that fills in the linalg subsystem is
+\chref{ch:linalg}.
+
+\subsection{The data-dependent output carve-out}
+\label{ssec:backend_dispatch:data_dep_carveout}
+
+A second class of operations produces output whose shape depends on
+the input \emph{values}, not just the input shape. The canonical
+examples are \code{nonzero}, \code{unique}, and
+\code{boolean\_mask\_select}. \MLX\ supports these on the GPU
+stream, but the runtime cost includes a synchronous read of the
+input values to determine the output shape, which forces a
+GPU-to-CPU stall. The stall is unavoidable in any framework on any
+platform; it is fundamental to the operation.
+
+\Lucid's dispatcher recognises this and explicitly bridges to the
+CPU for the value read, then back to the GPU for the output:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+TensorImpl Dispatcher::nonzero(const TensorImpl& x) {
+  if (x.device == Device::Metal) {
+    TensorImpl x_cpu = bridge_metal_to_cpu(x);
+    TensorImpl r_cpu = accelerate_backend_.nonzero(x_cpu);
+    return bridge_cpu_to_metal(r_cpu);
+  }
+  return accelerate_backend_.nonzero(x);
+}
+\end{lstlisting}
+
+The user-visible effect is that data-dependent ops on metal tensors
+are not faster than on CPU tensors. We document this in the API
+reference (\chref{ch:indexing}); the small cost is the price of
+supporting the operation at all.
+
+\section{The Per-Op MPSGraph Carve-out}
+\label{sec:backend_dispatch:mpsgraph_carveout}
+
+\Lucid\ 3.4 introduced a third carve-out: a small set of GPU
+operations dispatch through \MPSGraph\ instead of \MLX, because the
+\MPSGraph\ implementations are substantially faster for those ops.
+The current set:
+
+\begin{itemize}
+  \item GELU (forward and backward).
+  \item LayerNorm (forward and backward).
+  \item Embedding backward.
+  \item MaxPool backward.
+  \item SiLU (forward and backward).
+  \item SoftmaxCrossEntropyWithLogits.
+\end{itemize}
+
+The dispatcher's GPU path checks for these ops first and, if
+matched, constructs a one-op \MPSGraph, compiles it, and runs it
+through the MpsBuilder infrastructure
+(\chref{ch:mps_builder}). The compiled graph is cached so that
+subsequent invocations with the same input shape skip recompilation.
+
+The carve-out is invisible to the user: \code{nn.GELU} produces the
+same numerical result regardless of whether it dispatched through
+\MLX\ or \MPSGraph. The chapter that documents this in detail is
+\chref{ch:mpsgraph_dispatch}.
+
+\subsection{When to add a new MPSGraph carve-out}
+\label{ssec:backend_dispatch:add_mpsgraph}
+
+The policy is to add a new op to the per-op \MPSGraph\ carve-out
+when the empirical speedup over the \MLX\ implementation exceeds a
+factor of three on a representative training workload and when the
+\MPSGraph\ implementation matches \MLX's numerical behaviour to
+within $10^{-5}$ relative tolerance for the dtype.
+
+Both criteria are necessary: a small speedup does not justify the
+maintenance overhead of a parallel implementation, and numerical
+divergence would silently change training trajectories.
+
+\section{Type Promotion}
+\label{sec:backend_dispatch:dtype_promo}
+
+The dispatcher also handles dtype promotion: when a binary operation
+receives inputs of different dtypes, the dispatcher promotes both
+to a common dtype before calling the backend. The promotion rules
+mirror NumPy's:
+
+\begin{itemize}
+  \item Floats win over ints (\code{float32 + int32 $\to$ float32}).
+  \item Wider wins over narrower
+    (\code{float16 + float32 $\to$ float32}).
+  \item Signed wins over unsigned at equal width (rare in \Lucid,
+    which does not expose unsigned integers, but the rule is
+    preserved for \MLX-side inter-op).
+  \item \code{bfloat16 + float16 $\to$ float32} (the two narrow
+    floats are not directly compatible; promotion to FP32 is the
+    only safe choice).
+\end{itemize}
+
+The rules are encoded in
+\code{lucid/\_ops/composite/dtype.py} as a promotion table; the
+dispatcher consults the table at every binary op call. The table is
+small enough to fit in L1 cache.
+
+\subsection{Promotion in AMP mode}
+\label{ssec:backend_dispatch:amp_promo}
+
+Mixed precision (AMP, \chref{ch:amp}) overrides the default
+promotion in two ways: under \code{autocast}, certain operations
+are forced to FP16 even when their inputs are FP32, and certain
+operations (typically reductions) are forced to FP32 even when
+inputs are FP16. The override is implemented as an AMP-aware shim
+in the dispatcher; we treat the shim's details in
+\chref{ch:amp_integration}.
+
+\section{The Python Side}
+\label{sec:backend_dispatch:python}
+
+The C++ dispatcher described above is reached through a Python-side
+dispatcher in \code{lucid/\_dispatch.py}, which performs the
+\code{\_wrap} / \code{\_unwrap} between Python \code{Tensor} and
+engine \code{TensorImpl}.
+
+\subsection{The wrap/unwrap pair}
+\label{ssec:backend_dispatch:wrap_unwrap}
+
+The two functions:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid._C import engine as _C_engine
+
+def _unwrap(obj):
+    """Tensor -> TensorImpl, or scalar -> 0d TensorImpl."""
+    if isinstance(obj, Tensor):
+        return obj._impl
+    if isinstance(obj, (int, float, bool, complex)):
+        return _C_engine.scalar_tensor(obj)
+    raise TypeError(...)
+
+def _wrap(impl):
+    """TensorImpl -> Tensor."""
+    t = Tensor.__new__(Tensor)
+    t._impl = impl
+    return t
+\end{lstlisting}
+
+Note the import: \code{from lucid.\_C import engine as \_C\_engine}.
+The alias is mandatory per Hard Rule H2 (\appref{app:hard_rules});
+bare \code{import engine} or \code{as e} is rejected at review.
+
+\subsection{Per-op wrappers}
+\label{ssec:backend_dispatch:py_wrappers}
+
+Each Python-side op wrapper is a thin function that unwraps inputs,
+calls the C++ dispatcher (which is itself bound through pybind11),
+and wraps the result:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def add(a, b):
+    return _wrap(_C_engine.add(_unwrap(a), _unwrap(b)))
+\end{lstlisting}
+
+The wrappers are auto-generated for elementwise ops (a single
+template fills in 60+ unary/binary functions); only ops with
+nontrivial Python-side adaptation (e.g.\ argument-name remapping,
+default-value handling) are written by hand.
+
+The result is that the Python overhead per op call is a few
+microseconds: argument validation, unwrap, C++ call, wrap. This is
+dominated by the cost of any nontrivial operation but matters for
+elementwise ops on small tensors.
+
+\section{Performance Characteristics}
+\label{sec:backend_dispatch:perf}
+
+The end-to-end cost of a single op call, in nanoseconds on M3~Max:
+
+\begin{itemize}
+  \item Python wrapper (unwrap, argument validation): $\approx 800$
+    ns.
+  \item Pybind11 boundary (Python $\to$ C++): $\approx 200$ ns.
+  \item C++ dispatcher (device check, switch to backend): $\approx
+    20$ ns.
+  \item Backend per-op switch (\code{OpKind} to implementation):
+    $\approx 5$ ns.
+  \item Provider call (\MLX\ primitive or vDSP function): varies;
+    typically 200\,ns to several $\mu$s.
+  \item Pybind11 boundary back: $\approx 200$ ns.
+  \item Python wrap: $\approx 200$ ns.
+\end{itemize}
+
+Total framework overhead per op call: roughly 1.5\,$\mu$s, of which
+half is Python-side. For elementwise ops on small tensors, the
+overhead can match the kernel cost; for medium and large tensors,
+the overhead is negligible.
+
+\Lucid\ 3.5's compile path (\chref{ch:compile_design}) eliminates
+the per-op overhead inside compiled regions: the dispatcher runs
+once during tracing and the compiled graph then executes without
+per-op Python/C++ boundary crossings. The win is most visible on
+small-tensor-heavy workloads where the overhead would otherwise
+dominate.
+
+\section{Summary and Forward References}
+\label{sec:backend_dispatch:summary}
+
+The backend dispatch layer in \Lucid\ is small and explicit: a
+single \code{Dispatcher} routes per-op requests to one of two
+\code{IBackend} implementations (\code{AccelerateBackend} for CPU,
+\code{MlxBackend} for GPU), with two named carve-outs (linalg
+routes through CPU stream regardless of device; data-dependent
+output ops also route through CPU) and a third carve-out for the
+3.4 per-op \MPSGraph\ dispatch. The Python side mirrors the C++
+structure through \code{lucid/\_dispatch.py}, with the H2-required
+\code{\_C\_engine} alias.
+
+The next chapter, \chref{ch:bridge_boundaries}, catalogues the six
+places where \Lucid\ touches the world outside the engine.
+\chref{ch:python_cpp_binding} then describes the pybind11 layer
+that the dispatcher sits on top of. \chref{ch:op_registry} returns
+to the dispatch question from the op-registration angle.
+
+\begin{lucidnote}
+For the user: device choice (\code{cpu} vs \code{metal}) controls
+which backend the dispatcher selects, with the linalg carve-out
+making the choice fictive for decomposition ops. Cross-device
+binary operations raise an error rather than implicit-moving; the
+user is expected to \code{.to(device)} explicitly.
+\end{lucidnote}

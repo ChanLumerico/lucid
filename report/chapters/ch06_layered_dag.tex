@@ -1,0 +1,652 @@
+% !TEX root = ../main.tex
+\chapter{The Layered Dependency DAG}
+\label{ch:layered_dag}
+
+\partref{part:hardware} described the substrate on which \Lucid\ runs.
+\partref{part:system} describes \Lucid\ itself, beginning here with
+the most consequential single piece of architecture in the engine:
+the layered dependency DAG that organises every C++ source file and
+every Python module in the codebase.
+
+The DAG is not a documentation artefact. It is enforced by the build
+system, by code-review policy (the \emph{Hard Rules} of
+\appref{app:hard_rules}), and by a class of automated checks that
+run on every pull request. The chapter that the reader is now reading
+exists because the DAG is the thing that, once internalised, makes
+the rest of the engine code easy to navigate. A new contributor who
+understands the seven layers and their permitted edges can locate
+any operation, any class, any allocation in roughly the time it takes
+to skim a directory listing. A contributor who has not internalised
+it spends hours hunting for definitions that turn out to live two
+layers below where intuition suggested.
+
+We proceed bottom up. \secref{sec:layered_dag:layers} describes the
+seven layers and their contents. \secref{sec:layered_dag:rules}
+states the edge rules that the DAG enforces.
+\secref{sec:layered_dag:enforcement} describes how the rules are
+enforced --- through CMake target boundaries, through code review,
+and through a small set of static checks.
+\secref{sec:layered_dag:python_mirror} treats the Python side, which
+mirrors the C++ DAG with a smaller set of layers.
+\secref{sec:layered_dag:crosscutting} catalogues the cross-cutting
+concerns (allocator, error, dispatch) that touch multiple layers
+without violating the DAG. \secref{sec:layered_dag:adding} describes
+the procedure for adding a new layer or a new file within an existing
+layer.
+
+\section{Why a Layered Architecture}
+\label{sec:layered_dag:why}
+
+The engine is roughly \(45{,}000\) lines of C++ across more than
+two hundred translation units, plus a comparable volume of Python
+code that mirrors it. At that scale, an architecture without
+explicit structural rules tends to collapse into an undirected
+dependency graph, with each module reaching into every other module
+that has a useful symbol. Two years into the project, every file
+includes every other file; build times explode; refactoring becomes
+impossible; new contributors cannot tell where a feature should
+live.
+
+The cure is a directed acyclic graph of dependencies, with a small
+number of layers, and with an enforced rule that edges go only
+downward. This is not a novel pattern --- it is the standard
+operating-system-kernel layout, the standard compiler-construction
+pattern, the standard database-system layout --- but it is unusual
+in ML frameworks, which tend to grow organically and tolerate
+arbitrary internal cycles.
+
+The benefits, concretely, for \Lucid:
+
+\begin{enumerate}
+  \item \textbf{Compile-time isolation.} A change in the highest
+    layer (\code{bindings}) recompiles only that layer; a change in
+    the lowest layer (\code{core}) recompiles everything. The CMake
+    target graph mirrors the DAG, so this isolation is automatic.
+  \item \textbf{Testability.} Each layer can be tested against
+    mocks of the layer immediately below. \Lucid's C++ unit tests
+    follow this pattern: \code{test/core/} tests \code{core} in
+    isolation, \code{test/backend/} tests \code{backend} against
+    in-memory mocks of \code{core}, and so on.
+  \item \textbf{Mental model.} A contributor reading source code
+    can rely on the rule that any symbol referenced is defined in
+    the current layer or strictly below. This eliminates the
+    ``where could this possibly come from'' search that pervades
+    cyclic codebases.
+  \item \textbf{Refactoring discipline.} Changes to a layer's
+    public API force consumers in higher layers to adapt, in a
+    direction that the build system actually checks. This is the
+    inverse of the situation in cyclic codebases, where a
+    refactoring must be performed simultaneously across every
+    affected file.
+\end{enumerate}
+
+The cost is up-front structural design and ongoing discipline:
+contributors must occasionally accept that the right place for a
+new piece of code is not the most convenient one. The \emph{Hard
+Rules} (\appref{app:hard_rules}) encode the discipline.
+
+\section{The Seven Layers}
+\label{sec:layered_dag:layers}
+
+The C++ engine is organised into seven layers, each occupying a
+directory under \code{lucid/\_C/}. We describe them from the bottom
+up. The corresponding Python tree, which is shallower, is treated
+separately in \secref{sec:layered_dag:python_mirror}.
+
+\figref{fig:layered_dag:overview} gives the full stack at a glance;
+the subsequent subsections expand each layer.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  layer/.style={draw, rounded corners=2pt, minimum width=12cm,
+                minimum height=22pt, font=\small\sffamily,
+                inner sep=4pt, align=left},
+  l0/.style={layer, fill=lucid.note.bg},
+  l1/.style={layer, fill=lucid.ok.bg},
+  l2/.style={layer, fill=lucid.info.bg},
+  l3/.style={layer, fill=lucid.code.bg},
+  arrow/.style={->, >=stealth, thick, color=lucid.accent.dark,
+                shorten >=2pt, shorten <=2pt},
+]
+  \node[l0] (core) at (0, 0)
+    {\textbf{L0 core} \quad Dtype, Device, Shape, Allocator, Error, GradMode, AmpPolicy};
+  \node[l0] (tensor) at (0, 1.0)
+    {\textbf{L1 tensor} \quad TensorImpl, Storage, AutogradMeta};
+  \node[l1] (backend) at (0, 2.0)
+    {\textbf{L2 backend} \quad IBackend, Dispatcher, AccelerateBackend, MlxBackend};
+  \node[l1] (kernel) at (0, 3.0)
+    {\textbf{L3 kernel} \quad UnaryKernel, BinaryKernel, ReduceKernel, primitives/};
+  \node[l2] (autograd) at (0, 4.0)
+    {\textbf{L4 autograd} \quad Engine, Node, AccumulateGrad, CustomFunction};
+  \node[l2] (ops) at (0, 5.0)
+    {\textbf{L5 ops / nn / optim / compile} \quad $\sim$260 ops, NN kernels, optimisers, MpsBuilder};
+  \node[l3] (bindings) at (0, 6.0)
+    {\textbf{L6 bindings} \quad pybind11 module: \texttt{lucid.\_C.engine}};
+
+  \draw[arrow] (tensor) -- (core);
+  \draw[arrow] (backend) -- (tensor);
+  \draw[arrow] (kernel) -- (backend);
+  \draw[arrow] (autograd) -- (kernel);
+  \draw[arrow] (ops) -- (autograd);
+  \draw[arrow] (bindings) -- (ops);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[The Lucid engine DAG.]{The seven-layer dependency DAG of
+the \Lucid\ C++ engine. Solid arrows indicate direct dependency
+(layer above includes from layer below). No back-edges (arrows from
+a lower layer to a higher one) are permitted; the absence is
+enforced by the CMake target graph and verified by
+\texttt{tools/check\_dag.py}. Cross-cutting concerns (allocator,
+error, dispatch) are defined in \texttt{core} (L0) and consumed
+from every layer above.}
+\label{fig:layered_dag:overview}
+\end{figure}
+
+The DAG is not a documentation idealisation. It corresponds
+directly to the directory layout under \code{lucid/\_C/}, to the
+CMake target structure, and to the build's link line.
+\tabref{tab:layered_dag:files} summarises the per-layer files and
+their approximate volumes.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrl}
+\toprule
+Layer & Directory & SLOC & Key types / files \\
+\midrule
+L0 core      & \texttt{lucid/\_C/core/}     & $\sim$1\,800  & Dtype, Device, Shape, Allocator, LucidError \\
+L1 tensor    & \texttt{lucid/\_C/tensor/}   & $\sim$1\,200  & TensorImpl, Storage, AutogradMeta \\
+L2 backend   & \texttt{lucid/\_C/backend/}  & $\sim$6\,500  & IBackend, Dispatcher, two backends \\
+L3 kernel    & \texttt{lucid/\_C/kernel/}   & $\sim$3\,400  & Kernel templates + primitives \\
+L4 autograd  & \texttt{lucid/\_C/autograd/} & $\sim$4\,900  & Engine, Node, CustomFunction \\
+L5 ops       & \texttt{lucid/\_C/ops/}      & $\sim$11\,000 & $\sim$260 op implementations \\
+L5 nn        & \texttt{lucid/\_C/nn/}       & $\sim$4\,800  & Conv, BatchNorm, LSTM, Attention \\
+L5 optim     & \texttt{lucid/\_C/optim/}    & $\sim$1\,700  & Optimizer family + LR schedulers \\
+L5 compile   & \texttt{lucid/\_C/compile/}  & $\sim$5\,200  & Tracer, MpsBuilder, OpEmitters \\
+L6 bindings  & \texttt{lucid/\_C/bindings/} & $\sim$3\,500  & pybind11 wrappers \\
+\midrule
+Total        &                              & $\sim$45\,000 & \\
+\bottomrule
+\end{tabular}
+\caption[Engine SLOC by layer.]{Approximate source-lines-of-code
+per engine layer, as of \Lucid\ 3.5. Layer~5 dominates the line
+count because it hosts the \(\sim 260\) operation implementations
+and the model-zoo helpers.}
+\label{tab:layered_dag:files}
+\end{table}
+
+\subsection{Layer 0: core}
+\label{ssec:layered_dag:core}
+
+\code{lucid/\_C/core/} contains the foundational types on which
+every other layer depends. It has no dependencies on any other
+\Lucid\ code; only on the C++ standard library and on Apple's
+\Accelerate\ (for low-level math helpers). The contents are
+deliberately minimal:
+
+\begin{itemize}
+  \item \code{Dtype.h}: the dtype enum and conversion helpers.
+  \item \code{Device.h}: the device enum (CPU / Metal) and a small
+    set of capability queries.
+  \item \code{Shape.h}, \code{Shape.cpp}: the shape vector type
+    with broadcast and validation operations.
+  \item \code{Allocator.h}, \code{Allocator.cpp}: the size-class
+    allocator pool.
+  \item \code{MemoryStats.h}: per-device allocation statistics.
+  \item \code{Error.h}, \code{ErrorBuilder.cpp}: the
+    \code{LucidError} exception class and the fluent builder used
+    by every error site (\appref{app:pillars} for the production
+    pillar P1 that motivates it).
+  \item \code{Determinism.h}, \code{Determinism.cpp}: the
+    deterministic-kernel-selection flag.
+  \item \code{GradMode.h}, \code{GradMode.cpp}: the
+    \code{no\_grad} / \code{enable\_grad} state.
+  \item \code{AmpPolicy.h}, \code{AmpPolicy.cpp}: the mixed
+    precision dtype-casting rules.
+  \item \code{Generator.h}, \code{Generator.cpp}: the random
+    number generator state.
+\end{itemize}
+
+The discipline: nothing in \code{core} may include from any other
+\code{lucid/\_C/} directory. Violating this rule introduces a
+dependency cycle, since every other layer depends on \code{core}.
+
+\subsection{Layer 1: tensor}
+\label{ssec:layered_dag:tensor}
+
+\code{lucid/\_C/tensor/} contains the tensor model itself:
+
+\begin{itemize}
+  \item \code{TensorMeta.h}: the \code{TensorImpl} class --- shape,
+    stride, dtype, device, storage offset, and a handle to the
+    backing storage.
+  \item \code{AutogradMeta.h}: the per-tensor autograd metadata
+    (\code{requires\_grad}, \code{grad\_fn}, backward hooks).
+  \item \code{Storage.h}: the reference-counted storage object
+    that wraps a backing buffer (allocated through \code{core}'s
+    \code{Allocator}).
+\end{itemize}
+
+\code{tensor} depends on \code{core}. It does not depend on any
+backend (since \code{TensorImpl} is backend-agnostic) and does not
+know how operations are dispatched (that is the next layer's job).
+The chapter that fills in this layer in depth is
+\chref{ch:tensor_model}.
+
+\subsection{Layer 2: backend}
+\label{ssec:layered_dag:backend}
+
+\code{lucid/\_C/backend/} contains the abstract backend interface
+and the two concrete implementations:
+
+\begin{itemize}
+  \item \code{IBackend.h}: the pure-virtual interface that every
+    backend implements: \code{allocate}, \code{deallocate},
+    elementwise op categories, reductions, matmul, convolution,
+    and so on.
+  \item \code{Dispatcher.h}, \code{Dispatcher.cpp}: the router
+    that selects a backend based on a tensor's device.
+  \item \code{cpu/AccelerateBackend.\{h,cpp\}} and several
+    helper files: the \Accelerate-backed CPU backend
+    (\chref{ch:accelerate}).
+  \item \code{gpu/MlxBackend.\{h,cpp\}}: the \MLX-backed GPU
+    backend (\chref{ch:mlx_runtime}).
+  \item \code{gpu/SharedStorage.\{h,cpp\}}: the zero-copy
+    CPU/GPU bridge (\chref{ch:unified_memory}).
+\end{itemize}
+
+\code{backend} depends on \code{core} and \code{tensor}. It is the
+first layer that touches external libraries (\Accelerate, \MLX) at
+build time. The chapter that fills in this layer is
+\chref{ch:backend_dispatch}.
+
+\subsection{Layer 3: kernel}
+\label{ssec:layered_dag:kernel}
+
+\code{lucid/\_C/kernel/} contains the kernel abstraction --- the
+templates that take a backend-agnostic operation and dispatch it
+through the backend's primitives:
+
+\begin{itemize}
+  \item \code{IKernel.h}: the abstract base.
+  \item \code{UnaryKernel.h}, \code{BinaryKernel.h},
+    \code{ReduceKernel.h}, \code{NaryKernel.h},
+    \code{VariadicKernel.h}: the templates per arity class.
+  \item \code{Contig.h}: contiguity inference and conversion.
+  \item \code{primitives/}: data-dependent primitives that cannot
+    be expressed as plain elementwise or reduction operations
+    (Gather, Scatter, Im2Col, Pad, Sort, NonZero, Unique,
+    SearchSorted, and others).
+\end{itemize}
+
+\code{kernel} depends on \code{core}, \code{tensor}, and
+\code{backend}. The chapter is \chref{ch:kernel_abstraction}.
+
+\subsection{Layer 4: autograd}
+\label{ssec:layered_dag:autograd}
+
+\code{lucid/\_C/autograd/} contains the differentiation engine:
+
+\begin{itemize}
+  \item \code{Node.h}, \code{Node.cpp}: the base class for
+    backward nodes.
+  \item \code{AutogradNode.h}: the templated convenience class
+    used by most ops.
+  \item \code{Engine.h}, \code{Engine.cpp}: the reverse-mode
+    backward walker (topological sort + per-node \code{apply}).
+  \item \code{AccumulateGrad.\{h,cpp\}}: the leaf node that holds
+    accumulated gradients on parameters.
+  \item \code{CustomFunction.\{h,cpp\}}, \code{FuncOp.h}: the
+    user-extensible custom-function machinery.
+  \item \code{FusionPass.\{h,cpp\}}: a forward-only fusion pass
+    that combines compatible adjacent ops (e.g.\ Linear+ReLU,
+    SDPA).
+\end{itemize}
+
+\code{autograd} depends on \code{core}, \code{tensor},
+\code{backend}, and \code{kernel}. It is responsible for
+constructing the backward graph as ops execute and for traversing
+it on \code{backward()}. \chref{ch:autograd_engine} fills in the
+details.
+
+\subsection{Layer 5: ops, nn, optim, linalg, fft, einops, complex,
+compile}
+\label{ssec:layered_dag:ops}
+
+The fifth layer is broad. It contains the actual operation
+implementations, grouped into several sibling directories:
+
+\begin{itemize}
+  \item \code{lucid/\_C/ops/}: the elementwise (ufunc, bfunc),
+    generic (gfunc), composite, linalg, fft, einops, and complex
+    operations. Each operation is a single C++ file that takes
+    backend-agnostic \code{TensorImpl} inputs, dispatches through
+    \code{backend} or constructs through \code{kernel}, and
+    returns one or more outputs. There are roughly 260 such
+    operations.
+  \item \code{lucid/\_C/nn/}: neural-network-specific kernels
+    (Conv, BatchNorm, GroupNorm, LayerNorm, Embedding, LSTM,
+    MultiheadAttention, Interpolate, AdaptivePool, Dropout). These
+    differ from \code{ops/} in that they often manage internal
+    running statistics or expose neural-network-specific APIs.
+  \item \code{lucid/\_C/optim/}: the optimiser implementations
+    (Optimizer base class, SGD, Adam family, AdaGrad family,
+    RMSprop, LBFGS, and a number of LR schedulers).
+  \item \code{lucid/\_C/compile/}: the graph-capture compiler ---
+    Tracer, TraceIR, MpsBuilder, ExecutableCache, OpEmitters
+    (\chref{ch:compile_design}).
+\end{itemize}
+
+These siblings all depend on \code{core} through \code{autograd}.
+They do not depend on each other; an \code{ops/} file does not
+include from \code{nn/} or \code{optim/}, and vice versa. The
+chapters that fill in the contents of layer 5 are
+\chref{ch:op_registry} through \chref{ch:lr_schedulers} for
+operations and optimisers, and \partref{part:graph_compile} for
+the compile path.
+
+\subsection{Layer 6: bindings}
+\label{ssec:layered_dag:bindings}
+
+\code{lucid/\_C/bindings/} contains the pybind11 binding code that
+exposes the C++ engine to Python. Each binding file wraps a
+related set of operations:
+
+\begin{itemize}
+  \item \code{bind.cpp}: the module bootstrap.
+  \item \code{bind\_tensor.cpp}: the \code{Tensor} class.
+  \item \code{bind\_bfunc.cpp}, \code{bind\_ufunc.cpp},
+    \code{bind\_gfunc.cpp}, \code{bind\_composite.cpp}: per-op
+    bindings.
+  \item \code{bind\_autograd.cpp}, \code{bind\_nn.cpp},
+    \code{bind\_optim.cpp}, \code{bind\_linalg.cpp},
+    \code{bind\_fft.cpp}, \code{bind\_einops.cpp},
+    \code{bind\_complex.cpp}, \code{bind\_amp.cpp},
+    \code{bind\_profiler.cpp}, \code{bind\_random.cpp},
+    \code{bind\_compile.cpp}: subsystem-level bindings.
+  \item \code{bind\_errors.cpp}: the exception translation that
+    maps \code{LucidError} to a Python exception.
+  \item \code{bind\_op\_registry.cpp}: a binding for the op
+    registry that introspection tools can read.
+\end{itemize}
+
+\code{bindings} depends on every layer below it. It is the only
+layer that links against pybind11 itself; the rest of the engine
+is pure C++. This isolation matters: \Lucid's engine could in
+principle be linked into a non-Python program by replacing the
+bindings layer with a C API, and we have kept the option open by
+ensuring no pybind11 types leak into lower layers.
+
+\chref{ch:python_cpp_binding} fills in the binding details.
+
+\section{Dependency Rules}
+\label{sec:layered_dag:rules}
+
+The dependency rules between layers are simple and absolute.
+
+\subsection{Acyclicity}
+\label{ssec:layered_dag:acyclic}
+
+The dependency graph between layers is acyclic. There is no edge
+from a lower-numbered layer back up to a higher-numbered one. The
+ordering is total: \code{core} $\prec$ \code{tensor} $\prec$
+\code{backend} $\prec$ \code{kernel} $\prec$ \code{autograd}
+$\prec$ \code{ops}/\code{nn}/\code{optim}/\code{compile} $\prec$
+\code{bindings}.
+
+The ordering implies, for any pair of layers $A$ and $B$ with
+$A \prec B$:
+
+\begin{itemize}
+  \item $B$ may include headers from $A$.
+  \item $B$ may call functions defined in $A$.
+  \item $A$ may not include headers from $B$.
+  \item $A$ may not name any type defined in $B$.
+  \item $A$ may not call any function defined in $B$.
+\end{itemize}
+
+\subsection{Edge directness}
+\label{ssec:layered_dag:directness}
+
+Edges are typically direct: layer $i+1$ depends on layer $i$, not
+on layer $i-2$. But edges may legitimately skip layers when the
+intermediate layer does not own the abstraction in question. For
+example, \code{ops/Reduction.cpp} (layer 5) depends directly on
+\code{core/Dtype.h} (layer 0) and on \code{kernel/ReduceKernel.h}
+(layer 3) but not on \code{tensor/} or \code{backend/} headers,
+because the reduction is expressed in terms of kernel templates
+that themselves handle tensor and backend concerns.
+
+Skipping layers is fine. Reversing direction is not.
+
+\subsection{Sibling independence within layer 5}
+\label{ssec:layered_dag:siblings}
+
+Within layer 5, the four sibling directories (\code{ops/},
+\code{nn/}, \code{optim/}, \code{compile/}) do not depend on each
+other. This is not a logical necessity --- one could imagine
+\code{nn/} reusing some \code{ops/} composition --- but it is an
+empirical discipline that prevents the layer from collapsing into
+a tangle. When a \code{nn/} kernel needs a primitive that
+\code{ops/} provides, it depends on the layer-4 \code{autograd}
+representation of the primitive, not on \code{ops/} directly.
+
+\code{compile/} is a partial exception: it must enumerate every op
+its emitter supports, which means it has read-only knowledge of
+the names and signatures in \code{ops/} and \code{nn/}. We
+implement this by having \code{compile/OpEmitters/} hold a table
+of emitter functions keyed by op name; the table is populated at
+build time by code generation from a single source of truth in
+\code{compile/OpRegistry.h}, not by header includes.
+
+\section{Enforcement}
+\label{sec:layered_dag:enforcement}
+
+The DAG would be a documentation artefact if it were not enforced.
+\Lucid\ enforces it through three independent mechanisms.
+
+\subsection{CMake target boundaries}
+\label{ssec:layered_dag:cmake}
+
+Each layer is a separate CMake target. The CMakeLists structure
+under \code{lucid/\_C/} declares one library per layer, with
+explicit \code{target\_link\_libraries} edges that mirror the
+permitted dependencies. Trying to use a symbol from a layer that
+is not in the current target's link line produces a link error,
+which is caught at build time rather than at code review.
+
+This is the strongest enforcement mechanism. A contributor who
+attempts to violate the DAG sees a build failure within seconds of
+saving the file.
+
+\subsection{Code review policy}
+\label{ssec:layered_dag:review}
+
+The Hard Rules of \appref{app:hard_rules} include an explicit
+rule (H-rule on layer dependency) that any pull request which
+adds an edge in the wrong direction is rejected. Reviewers are
+expected to verify, for each new include in a header, that the
+include's directory is at or below the current file's layer.
+
+In practice this rarely needs invocation, because the CMake
+boundary catches the violation first. But the rule exists for the
+edge case in which a violation passes CMake (for example, a
+contributor adds the offending edge to the CMake target as part of
+the same PR), and it gives the reviewer explicit grounds to
+reject.
+
+\subsection{The \texttt{tools/check\_dag.py} script}
+\label{ssec:layered_dag:check_dag}
+
+A small static-analysis script in \code{tools/check\_dag.py}
+parses the include statements in every C++ header and source file
+under \code{lucid/\_C/} and verifies that every include's target
+directory is at or below the source file's layer. The script is
+run as part of the pre-commit hook and as part of the CI check
+list; a violation fails the build.
+
+The script is simple (under two hundred lines of Python) and uses
+only the standard library. It is the fallback in case a CMake
+restructuring inadvertently relaxes the target boundary.
+
+\section{The Python Mirror}
+\label{sec:layered_dag:python_mirror}
+
+The Python side of \Lucid\ mirrors the C++ DAG with a smaller set
+of layers. The structure is:
+
+\begin{itemize}
+  \item \textbf{Foundation:} \code{lucid/\_types.py},
+    \code{lucid/\_dtype.py}, \code{lucid/\_device.py},
+    \code{lucid/\_globals.py}. Pure Python, no engine dependency.
+  \item \textbf{Engine binding:} \code{lucid/\_C/} (the compiled
+    extension module produced by the C++ layers). Imported under
+    the \code{\_C\_<name>} alias convention required by Hard Rule
+    H2.
+  \item \textbf{Dispatch:} \code{lucid/\_dispatch.py}, the single
+    boundary that wraps and unwraps between Python \code{Tensor}
+    and engine-side \code{TensorImpl}.
+  \item \textbf{Tensor:} \code{lucid/\_tensor/} (the \code{Tensor}
+    class, methods, dunders, indexing, conversion, repr).
+  \item \textbf{Factories:} \code{lucid/\_factories/} (tensor
+    creation: \code{zeros}, \code{ones}, \code{tensor},
+    \code{from\_numpy}, \code{from\_dlpack}, random).
+  \item \textbf{Op wrappers:} \code{lucid/\_ops/} (the registry
+    of free functions and Tensor methods exposed at the top level).
+  \item \textbf{Subsystem modules:} \code{lucid/autograd/},
+    \code{lucid/nn/}, \code{lucid/optim/}, \code{lucid/linalg/},
+    \code{lucid/fft/}, \code{lucid/signal/},
+    \code{lucid/special/}, \code{lucid/distributions/},
+    \code{lucid/func/}, \code{lucid/einops/}, \code{lucid/amp/},
+    \code{lucid/profiler/}, \code{lucid/serialization/},
+    \code{lucid/compile/}, \code{lucid/models/}.
+  \item \textbf{Top-level package:} \code{lucid/\_\_init\_\_.py},
+    the lazy-loading dispatch surface
+    (\chref{ch:lazy_imports}).
+\end{itemize}
+
+The Python rules are looser than the C++ rules, because Python
+permits cycles that the C++ build would reject, but the convention
+is the same: factories depend on engine binding, tensor depends on
+factories + engine binding, subsystem modules depend on
+tensor/factories/engine, and the top-level package depends on
+everything.
+
+The convention is enforced by code review rather than by automation,
+because a comprehensive Python import-graph checker would have to
+parse Python's dynamic import semantics, which is more work than
+the benefit justifies.
+
+\section{Cross-cutting Concerns}
+\label{sec:layered_dag:crosscutting}
+
+A handful of concerns touch every layer without violating the DAG.
+The pattern is the same in each case: the concern is defined in
+\code{core} and consumed by every layer above. Three are worth
+naming explicitly.
+
+\subsection{The allocator}
+\label{ssec:layered_dag:allocator_xc}
+
+\code{core/Allocator} is the size-class pool that every backend's
+memory allocations route through. Layer 2 (\code{backend}) wraps
+the underlying provider's allocator (\MLX's or \Accelerate's) and
+funnels requests through the pool. Layer 5 (\code{ops}) and beyond
+do not allocate directly; they always go through the backend.
+
+The chapter is \chref{ch:allocator}.
+
+\subsection{Error handling}
+\label{ssec:layered_dag:errors_xc}
+
+\code{core/Error} defines \code{LucidError}, the single exception
+type that propagates from any layer back to Python. Layer 6
+(\code{bindings}) installs the pybind11 translator that maps
+\code{LucidError} to the Python \code{LucidError} class.
+Intermediate layers may catch and rethrow with additional context;
+the chapter is \chref{ch:error_handling}.
+
+\subsection{Dispatch}
+\label{ssec:layered_dag:dispatch_xc}
+
+The dispatcher (layer 2, \code{backend/Dispatcher.h}) is the
+single function that routes per-op requests to the correct backend.
+Above it, \code{ops/} files do not call backends directly; they
+call the dispatcher with the op kind and the input tensors, and
+the dispatcher selects the implementation. This indirection is
+what allows the same op file to work for both CPU and GPU without
+conditional code.
+
+The chapter is \chref{ch:backend_dispatch}.
+
+\section{Adding a Layer or a File}
+\label{sec:layered_dag:adding}
+
+The protocol for adding a new file within an existing layer is
+short:
+
+\begin{enumerate}
+  \item Identify the layer that the new file belongs to. The
+    criterion is: what does the file depend on? If it depends only
+    on \code{core}, it lives in \code{tensor} or higher; if it
+    depends on \code{tensor}, in \code{backend} or higher; and so
+    on.
+  \item Add the file under the appropriate directory.
+  \item Update the CMakeLists in that directory to include the
+    new file in the layer's library target.
+  \item Add the file's tests to the corresponding
+    \code{test/<layer>/} directory.
+  \item Confirm the build still passes and the check\_dag script
+    accepts the new file.
+\end{enumerate}
+
+Adding a new layer is much rarer and requires explicit design
+discussion. The reason: a new layer either fits between two
+existing ones (in which case it adds a hop to every dependency
+chain through that point) or sits at the top above
+\code{bindings} (in which case it suggests the engine has grown a
+new audience). Both situations have happened exactly once each in
+\Lucid's history. The first was the addition of \code{kernel} as a
+layer above \code{backend}, which absorbed the kernel-template
+logic that had previously lived in individual \code{ops/} files
+and was being duplicated. The second was the introduction of
+\code{compile/} as a sibling of \code{ops/}, \code{nn/}, and
+\code{optim/}, which was added to host the graph-capture compiler
+without polluting the eager-mode hierarchy.
+
+\section{Summary and Forward References}
+\label{sec:layered_dag:summary}
+
+The layered DAG is the structural invariant that makes the \Lucid\
+engine tractable. Seven layers, edges only from higher to lower,
+enforced by the CMake target graph plus a static analysis script
+plus code-review discipline. Every other architectural decision in
+the engine fits within the DAG; every cross-cutting concern is
+located in \code{core} and consumed by every layer above; the
+Python side mirrors the C++ side with a smaller and looser set of
+rules.
+
+The chapters that follow expand on individual layers.
+\chref{ch:tensor_model} describes layer 1 in detail.
+\chref{ch:allocator} treats the cross-cutting allocator.
+\chref{ch:backend_dispatch} treats layer 2 and the dispatcher.
+\chref{ch:bridge_boundaries} catalogues the six places where the
+engine touches the outside world.
+\chref{ch:python_cpp_binding} returns to layer 6 with a focus on
+the pybind11 contract. \chref{ch:lazy_imports} closes
+\partref{part:system} with the Python-side lazy-import surface
+that the top-level package uses to make \Lucid\ importable in
+under one hundred milliseconds despite the size of its subsystem
+tree.
+
+\begin{lucidnote}
+The DAG is invisible at the user surface --- the user imports
+\code{lucid}, constructs a model, calls \code{forward}, and never
+sees layer boundaries. The DAG matters only to contributors and to
+the build system. But its presence is the reason \Lucid\ has not
+collapsed into the tangle of mutual includes that ML frameworks of
+comparable scope sometimes become.
+\end{lucidnote}

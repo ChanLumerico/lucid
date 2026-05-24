@@ -1,0 +1,761 @@
+% !TEX root = ../main.tex
+\chapter{MLX Runtime: Graph-Eager Hybrid}
+\label{ch:mlx_runtime}
+
+\Lucid's GPU backend is not implemented against \Metal\ directly. It
+is implemented against \MLX, Apple's open-source machine-learning
+framework for Apple silicon, which Apple's machine-learning research
+group released in late 2023 \cite{hannun_mlx_2023}. The choice to sit
+on top of \MLX\ rather than to wrap \Metal\ directly is the most
+consequential single architectural decision in \Lucid: it determines
+the shape of the dispatch layer, the cost model the autograd engine
+must respect, the format of the intermediate representation in
+\code{lucid.compile}, and even the contents of the wheel that
+\code{pip install lucid} delivers (which carries an \MLX\ dependency
+constraint of \(\geq 0.31\)). This chapter explains what \MLX\ is,
+how its execution model works, and how \Lucid\ uses it.
+
+The exposition is organised around four observations. First,
+\MLX\ is a \emph{lazy graph} runtime: ordinary operations build an
+unevaluated computation graph, and a separate \code{eval} call
+materialises results. This is unusual among contemporary ML
+frameworks and shapes nearly every consequence that follows. Second,
+\MLX's primitive set is intentionally closer to NumPy's than to
+\refframework's; some operations \Lucid\ exposes are constructed in
+the Python composite layer (\chref{ch:composite_ops}) rather than
+delegated to \MLX. Third, \MLX's runtime exposes a small set of
+\emph{streams} that abstract over CPU and GPU execution; \Lucid's
+device model uses these streams as its bedrock. Fourth, \MLX\ has
+quirks --- some inherited from NumPy, some specific to Apple silicon
+--- that the framework above must guard against; we catalogue the
+two that have most affected \Lucid's correctness.
+
+\section{Overview}
+\label{sec:mlx_runtime:overview}
+
+\MLX\ is a research-driven framework with a small core team and a
+fast release cadence; the API surface that \Lucid\ targets has been
+broadly stable since version \(0.10\), with consistent additions but
+few removals. The framework has the following high-level shape:
+
+\begin{itemize}
+  \item A C++ core implementing the array primitive, the lazy graph,
+    the function transformations, and the kernel set.
+  \item A Python binding (\code{mlx.core}) that exposes the C++
+    surface as Python objects.
+  \item Companion Python modules (\code{mlx.nn}, \code{mlx.optimizers},
+    \code{mlx.utils}) that build higher-level constructs on top of
+    the core. \Lucid\ does not use these companion modules; we build
+    our own equivalents.
+  \item Metal kernels (in MSL) compiled at install time or on first
+    use, plus a small CPU fallback path used when the array is on
+    the CPU stream.
+\end{itemize}
+
+The piece \Lucid\ targets is the C++ core, accessed through the
+Python binding for most user-facing operations and through
+\code{lucid/\_C/backend/gpu/MlxBackend.\{h,cpp\}} for engine-side
+operations. The Lucid C++ engine links against \code{libmlx.dylib}
+at build time and dispatches GPU work through MLX's API.
+
+\subsection{What MLX is, what MLX is not}
+\label{ssec:mlx_runtime:what_is}
+
+\MLX\ is not a deep-learning framework in the same sense that
+\refframework\ is. It does not own a module class hierarchy, it does
+not own an autograd engine with arbitrary backward functions, it
+does not own an optimiser zoo. It is closer to a unified-memory
+analogue of JAX's \code{jax.numpy} layer: an array library with
+function transformations (\code{vmap}, \code{grad}, \code{jit}) that
+the user composes manually.
+
+This narrow scope is the property that makes \MLX\ a good substrate
+for \Lucid. We do not duplicate \MLX's array implementation; we
+delegate to it. We do not reimplement \MLX's kernels; we call them.
+But we add (i) a parameter-and-module abstraction that \MLX\ lacks,
+(ii) an autograd engine that handles \refframework-compatible custom
+\code{Function} classes (\chref{ch:custom_functions}), (iii) a
+dispatcher that selects between \MLX, \Accelerate, and \MPSGraph
+depending on operation and device, (iv) an extensive model zoo, and
+(v) a graph-capture compiler (\chref{ch:compile_design}). The
+relationship is layered: \Lucid\ on \MLX, not \Lucid\ alongside
+\MLX.
+
+\subsection{Why MLX, not Metal directly}
+\label{ssec:mlx_runtime:why_mlx}
+
+A reasonable alternative would have been for \Lucid\ to wrap \Metal\
+directly, in the way \refframework\ wraps CUDA directly. Three
+considerations tipped the decision toward \MLX:
+
+\begin{enumerate}
+  \item \textbf{Kernel coverage.} \MLX\ ships a mature library of
+    Metal kernels for elementwise, reduction, indexing, GEMM,
+    convolution, FFT, and reduction-with-gather operations. Writing
+    these from scratch would have been a multi-year effort and would
+    have produced kernels that converge on \MLX's anyway.
+  \item \textbf{Lazy graph as a free optimisation tier.} Because
+    \MLX\ is lazy, sequences of operations fuse opportunistically.
+    \Lucid\ benefits from these fusions without owning a separate
+    optimiser. The trade-off is the synchronisation discipline of
+    \secref{sec:mlx_runtime:execution}, which we accept.
+  \item \textbf{Maintenance bandwidth.} A two-engineer team cannot
+    maintain a full Metal kernel library and a full ML framework. By
+    leaning on \MLX, \Lucid\ spends its engineering budget on the
+    layers above the kernel (autograd, modules, training, model zoo)
+    where the user-visible features are.
+\end{enumerate}
+
+The cost is a dependency we do not control: when \MLX\ ships a
+breaking API change in a new minor release, \Lucid\ must adapt.
+\secref{sec:mlx_runtime:versioning} discusses the discipline by
+which we manage this.
+
+\section{The Graph-Eager Hybrid Execution Model}
+\label{sec:mlx_runtime:execution}
+
+The single most important property of \MLX\ for the rest of this
+book is its execution model. \MLX\ is \emph{lazy}: an ordinary
+operation does not run when it is invoked. It is added to an internal
+computation graph, and a result placeholder is returned. The
+placeholder appears to the caller as an array, with shape and dtype
+metadata available immediately, but with no backing buffer. The
+backing buffer materialises only when \emph{evaluation} is forced.
+
+\subsection{The lazy graph}
+\label{ssec:mlx_runtime:lazy_graph}
+
+\figref{fig:mlx_runtime:lazy_graph} sketches the model. Operations
+construct nodes in a DAG; the DAG is materialised by an explicit
+\code{eval} call (or by an implicit read of the bytes through, e.g.,
+the bridge of \chref{ch:unified_memory}).
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  user/.style={draw, rounded corners=2pt, font=\small\ttfamily,
+               fill=lucid.code.bg, minimum height=22pt,
+               minimum width=2.4cm, inner sep=4pt},
+  prim/.style={draw, rounded corners=2pt, font=\small\sffamily,
+               fill=lucid.info.bg, minimum height=28pt,
+               minimum width=3cm, inner sep=4pt, align=center},
+  buf/.style={draw, rounded corners=2pt, font=\small\sffamily,
+              fill=lucid.ok.bg, minimum height=42pt,
+              minimum width=2.8cm, inner sep=4pt, align=center},
+  arrow/.style={->, >=stealth, thick, color=lucid.accent.dark,
+                shorten >=2pt, shorten <=2pt},
+  ev/.style={->, >=stealth, very thick, color=lucid.warn.fg,
+             dashed, shorten >=4pt, shorten <=4pt},
+  header/.style={font=\small\bfseries, color=lucid.muted},
+]
+  % Column headers
+  \node[header] at (-5.5, 4.2) {User code};
+  \node[header] at (-0.5, 4.2) {Lazy graph (DAG)};
+  \node[header] at ( 5.5, 4.2) {Backing buffer};
+
+  % User-visible variables (left column)
+  \node[user] (var_a) at (-5.5, 3.2) {a};
+  \node[user] (var_b) at (-5.5, 2.2) {b};
+  \node[user] (var_c) at (-5.5, 1.2) {c = a + b};
+  \node[user] (var_d) at (-5.5, 0.2) {d = c * 2};
+
+  % Graph nodes (middle column)
+  \node[prim] (p_a) at (-0.5, 3.2) {leaf};
+  \node[prim] (p_b) at (-0.5, 2.2) {leaf};
+  \node[prim] (p_c) at (-0.5, 1.2) {primitive\_add};
+  \node[prim] (p_d) at (-0.5, 0.2) {primitive\_mul};
+
+  \draw[arrow] (p_a.east) -- ++(0.6,0) |- (p_c.east);
+  \draw[arrow] (p_b.east) -- ++(0.4,0) |- (p_c.east);
+  \draw[arrow] (p_c) -- (p_d);
+
+  % Materialised buffer (right column, appears on eval)
+  \node[buf] (buf_d) at (5.5, 0.2) {Buffer for d\\(materialised)};
+
+  % Eval trigger
+  \node[font=\small\ttfamily, color=lucid.warn.fg, align=center]
+       (eval) at (0, -1.8)
+    {mx.eval(d)\\or d.numpy()};
+  \draw[ev] (eval.east) to[out=0, in=-90]
+    node[font=\footnotesize\itshape, midway, below right, fill=white,
+         inner sep=2pt] {walk DAG, schedule}
+    (buf_d.south);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[MLX lazy graph execution.]{MLX's graph-eager hybrid
+execution model. User code constructs arrays; each operation
+appends a primitive node to the lazy DAG without computing
+anything. The buffer materialises only when an explicit
+\code{eval} or implicit read forces evaluation, at which point
+MLX walks the DAG backward from the target, schedules primitives
+on the appropriate stream, and writes the result into a backing
+\code{MTL::Buffer}.}
+\label{fig:mlx_runtime:lazy_graph}
+\end{figure}
+
+When the user writes
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import mlx.core as mx
+a = mx.array([1.0, 2.0, 3.0])
+b = mx.array([4.0, 5.0, 6.0])
+c = a + b           # no computation happens here
+d = c * 2           # still no computation
+\end{lstlisting}
+the variable \code{d} holds an array object whose shape is
+\((3,)\), whose dtype is \code{float32}, and whose underlying
+buffer does not yet exist. The graph held by \MLX\ records:
+\code{c = primitive\_add(a, b); d = primitive\_multiply(c, 2)}. Both
+operations are \emph{deferred}.
+
+The structure of this graph is a directed acyclic graph (DAG) of
+\emph{primitives}, where each primitive is a leaf operation (an
+elementwise add, a matmul, a reduction) and each node has zero or
+more input arrays and one or more output arrays. An array is itself
+a tuple of (primitive that produced it, position in that primitive's
+output list, shape, dtype, strides).
+
+\subsection{Evaluation triggers}
+\label{ssec:mlx_runtime:eval_triggers}
+
+Evaluation is forced by any of the following:
+
+\begin{enumerate}
+  \item An explicit \code{mx.eval(d)} or \code{d.eval()} call.
+  \item A read of the array's bytes through \code{d.data<T>()}
+    (which is what \code{numpy.asarray}, \code{tolist}, and \Lucid's
+    \code{SharedStorage::from\_mlx} all do indirectly).
+  \item A print or repr operation.
+  \item An assignment into an \code{mx.array} via item assignment
+    (\code{d[0] = 7.0}), which evaluates the array before
+    in-place modification.
+\end{enumerate}
+
+Each of these triggers \MLX\ to walk the DAG backward from the
+target, schedule primitives onto the appropriate stream, and block
+until the result is materialised.
+
+\subsection{Why lazy by default}
+\label{ssec:mlx_runtime:lazy_why}
+
+The lazy default is unusual; most ML frameworks (\refframework\
+chief among them) are eager by default. The argument for laziness on
+Apple silicon is concrete:
+
+\begin{itemize}
+  \item Apple silicon's GPU has high kernel-launch overhead relative
+    to its kernel cost, especially for short kernels. Fusing adjacent
+    kernels eliminates launches that would otherwise dominate the
+    total time.
+  \item The unified memory model makes intermediates cheap to fuse
+    away. There is no allocation cost to be paid for fusion across
+    primitives.
+  \item Lazy evaluation enables operator-level optimisations
+    (constant folding, broadcast collapsing, transpose absorption)
+    without a separate compiler tier.
+\end{itemize}
+
+The cost is that the framework above \MLX\ must reason about when
+evaluation happens. \Lucid\ has had two incidents in which a missed
+evaluation produced a memory leak (\chref{ch:unified_memory}
+Section~\ref{ssec:unified_memory:lazy_leak}) and one in which a
+deferred evaluation produced a write-after-read race in an in-place
+update. The fix in every case has been to insert a strategically
+placed \code{eval} at a synchronisation point.
+
+\subsection{Asynchronous evaluation}
+\label{ssec:mlx_runtime:async_eval}
+
+\MLX\ added \code{async\_eval} in version \(0.10\), which submits the
+graph for evaluation without blocking. The caller may continue to
+build the next portion of the graph while the GPU works on the
+submitted portion; subsequent eager reads block as usual.
+
+\Lucid\ uses \code{async\_eval} in two places. First, the optimiser
+step (\chref{ch:optimizers}) evaluates the updated parameters
+asynchronously so that the next forward pass can begin construction
+in parallel. Second, the backward engine
+(\chref{ch:autograd_engine}) submits accumulated gradients
+asynchronously when their consumer is ready.
+
+The benefit, on the training loop of a 100M-parameter Transformer,
+is roughly \(5\)\,ms per backward pass on an M3 Max --- a small but
+real fraction of total step time. The fix landed in 3.3.0 as part of
+the AMP rollout; see \chref{ch:amp_integration}.
+
+\section{The Array Primitive}
+\label{sec:mlx_runtime:array}
+
+The central data type in \MLX\ is \code{mlx::core::array} (Python:
+\code{mlx.core.array}). It is the unit of every operation; it is
+what \Lucid's \code{TensorImpl} wraps (\chref{ch:tensor_model}). We
+describe its structure and the interface that the rest of \Lucid\
+relies on.
+
+\subsection{Structure}
+\label{ssec:mlx_runtime:array_structure}
+
+Conceptually, an \code{mlx::core::array} is:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct array {
+  Shape           shape;     // dimensions
+  Strides         strides;   // element strides per dimension
+  Dtype           dtype;     // element type
+  Primitive*      primitive; // producer (null for leaf)
+  std::vector<array> inputs; // upstream arrays
+  size_t          out_index; // which output of primitive
+  std::shared_ptr<Buffer> buffer; // materialised storage, or null
+  // ... auxiliary fields for lazy evaluation
+};
+\end{lstlisting}
+
+The fields that matter for \Lucid:
+
+\begin{itemize}
+  \item \code{shape}, \code{dtype} are always known and used by
+    \Lucid's metadata layer to populate \code{Tensor.shape} and
+    \code{Tensor.dtype} without forcing evaluation.
+  \item \code{strides} encode lazy view operations
+    (\code{transpose}, \code{slice}, non-trivial \code{reshape}) and
+    must \emph{not} be passed naively to a CPU consumer, because
+    \code{data<T>()} returns the bytes in their pre-view layout.
+    This is the source of the bridge contiguity discipline of
+    \chref{ch:unified_memory}.
+  \item \code{buffer} is the materialised storage, null until
+    evaluation. The pointer to its contents is what
+    \code{data<T>()} returns.
+  \item \code{primitive} and \code{inputs} define the DAG that
+    \code{eval} walks.
+\end{itemize}
+
+\subsection{Dtype and conversion}
+\label{ssec:mlx_runtime:array_dtype}
+
+\MLX\ supports the following dtypes:
+
+\begin{itemize}
+  \item Floating point: \code{float16}, \code{float32}, \code{bfloat16}
+    (since 0.5), \code{float64} (CPU stream only; not supported on
+    GPU because \Metal\ has no native FP64).
+  \item Integer: \code{int8}, \code{int16}, \code{int32},
+    \code{int64}, and unsigned variants.
+  \item \code{bool}, \code{complex64}.
+\end{itemize}
+
+\Lucid\ exposes the same set, modulo two carve-outs. First, \Lucid's
+\code{float64} dtype is only valid on \code{device=`cpu'}; an attempt
+to construct a \code{float64} tensor on \code{device=`metal'} raises
+\code{LucidError(``float64 not supported on Metal'')}. Second,
+\Lucid\ does not currently expose unsigned integer types in the
+top-level surface, because \refframework\ parity favours signed
+integers and the user demand for unsigned is small.
+
+Conversion between dtypes uses \MLX's \code{astype} primitive, which
+is lazy like any other. A common pitfall (one that has burned
+\Lucid\ in 3.0.3) is that \code{astype} followed by a CPU bridge
+must \code{eval} before the bridge, because \code{astype} is itself
+deferred; the bridge's \code{contiguous().eval()} sequence does
+this correctly only if it sees \code{astype} as the head of the
+lazy chain.
+
+\subsection{The data\textless T\textgreater\ accessor}
+\label{ssec:mlx_runtime:array_data}
+
+The most performance-critical method on \code{mlx::core::array} for
+\Lucid\ is \code{data<T>()}. It returns a raw pointer to the
+buffer's contents, typed as \code{T*}. The pointer is valid as long
+as the array is live (and, transitively, as long as any \MLX\ array
+that shares storage with it is live). The pointer is to bytes in
+the array's stored layout, which is \emph{not} the same as the
+strided layout if the array has been produced by a lazy view
+operation.
+
+The full discipline for using \code{data<T>()} from \Lucid\ is:
+
+\begin{enumerate}
+  \item Make the array contiguous via \code{mlx::core::contiguous(a)}.
+  \item Evaluate via \code{eval(a)}.
+  \item Access via \code{a.data<T>()}.
+  \item Hold the array (a \code{shared\_ptr<array>}) for the
+    lifetime of the CPU access.
+\end{enumerate}
+
+The \code{SharedStorage} class
+(\chref{ch:unified_memory} Section~\ref{ssec:unified_memory:bridge_iface})
+encapsulates this discipline. No \Lucid\ code outside that class
+calls \code{data<T>()} directly.
+
+\section{Streams and Devices}
+\label{sec:mlx_runtime:streams}
+
+\MLX's execution unit is a \emph{stream}: an ordered queue of
+primitives that share a target device and execute in submission
+order. There are two streams in the default configuration: the CPU
+stream and the GPU stream. A primitive submitted to one stream
+executes on that stream's device; primitives on different streams
+execute concurrently and synchronise only when an array's bytes are
+read or when an explicit barrier is inserted.
+
+\subsection{The default device}
+\label{ssec:mlx_runtime:default_device}
+
+\MLX\ exposes a global default device through \code{mx.set\_default\_device()}.
+The default is the GPU on machines that have one (i.e., all Apple
+silicon), and the CPU on machines that do not. \Lucid\ does not use
+the global default; the dispatcher (\chref{ch:backend_dispatch})
+explicitly selects the stream per operation based on the tensor's
+\code{device} attribute. This ensures that \Lucid's behaviour is
+deterministic regardless of any global state \MLX\ may carry.
+
+\subsection{Stream-aware primitives}
+\label{ssec:mlx_runtime:stream_primitives}
+
+Every \MLX\ primitive accepts an optional \code{stream=} or
+\code{device=} argument that overrides the default for that
+operation. \Lucid's dispatcher uses this to enforce per-op device
+placement: a \code{cpu} tensor's operation is dispatched with
+\code{stream=mx.cpu}, a \code{metal} tensor's operation with
+\code{stream=mx.gpu}. The two streams may run concurrently, but
+\Lucid's autograd engine enforces a happens-before relation at the
+tensor boundary so that downstream operations see consistent state.
+
+\subsection{The linalg carve-out}
+\label{ssec:mlx_runtime:linalg_carveout}
+
+There is one carve-out that is worth highlighting: linear-algebra
+primitives (\code{cholesky}, \code{qr}, \code{svd}, \code{eigh},
+\code{solve}, \code{lstsq}) are implemented in \MLX\ only on the CPU
+stream. \Metal\ does not currently provide LAPACK-equivalent kernels;
+\MLX\ uses \Accelerate's LAPACK under the hood, which is itself
+CPU-only.
+
+\Lucid's linalg API therefore has an unusual property: even when the
+user has chosen \code{device=`metal'}, a \code{lucid.linalg.cholesky}
+call dispatches on the CPU stream. The result is wrapped as a
+metal-device tensor only after the linalg primitive returns. The
+overhead is one \code{SharedStorage} bridge transfer per call, which
+is negligible relative to the cost of the decomposition itself for
+matrices larger than \(64 \times 64\). This is the \emph{linalg
+carve-out} referenced throughout the book
+(\chref{ch:linalg}, \chref{ch:backend_dispatch}); it is the only
+operation in \Lucid\ for which device placement is partly fictive.
+
+\section{The Primitive Set}
+\label{sec:mlx_runtime:primitives}
+
+\MLX's primitive set occupies a middle ground between NumPy and
+\refframework. The naming convention favours NumPy
+(\code{transpose}, not \code{permute}; \code{concatenate}, not
+\code{cat}; \code{stack} but not \code{vstack}); the broadcasting
+semantics are NumPy's; the reduction signatures
+(\code{axis=}, \code{keepdims=}) are NumPy's.
+
+\subsection{Elementwise and reduction}
+\label{ssec:mlx_runtime:elementwise}
+
+The elementwise set is comprehensive: arithmetic, comparison, logical
+and bitwise operations, transcendental functions
+(\code{exp}, \code{log}, \code{sin}, \code{cos}, \code{tanh},
+\code{erf}, \code{erfinv}), rounding
+(\code{floor}, \code{ceil}, \code{round}, \code{trunc}). \Lucid\
+delegates nearly every elementwise primitive to \MLX\ directly,
+exposing them with \refframework-style names through the dispatcher.
+
+The reduction set covers \code{sum}, \code{mean}, \code{max},
+\code{min}, \code{prod}, \code{var}, \code{std}, \code{any},
+\code{all}, with per-axis and global variants. \code{argmax} and
+\code{argmin} are also primitives. \code{logsumexp} is a primitive
+since 0.18 (\Lucid\ implemented it as a composite before that).
+
+\subsection{Shape manipulation}
+\label{ssec:mlx_runtime:shape}
+
+Reshape, transpose, broadcast-to, expand-dims, squeeze, swapaxes,
+flatten, ravel, split, concatenate, stack. The interesting subset is
+the lazy ones: \code{transpose} and \code{reshape} on most shapes
+return a non-materialised array with adjusted strides (the
+stride-trap discussed above). \code{concatenate} and \code{stack}
+necessarily allocate.
+
+\subsection{Indexing and gather/scatter}
+\label{ssec:mlx_runtime:indexing}
+
+\MLX\ supports advanced indexing through array indices (\code{a[idx]})
+and through the \code{take} and \code{take\_along\_axis} primitives.
+The scatter family is split into two primitives with similar names
+but different semantics:
+
+\begin{itemize}
+  \item \code{scatter\_add(a, indices, updates)}: NumPy-style
+    \code{np.add.at(a, indices, updates)} semantics. Multiple
+    index lists, one per source dimension.
+  \item \code{scatter\_add\_axis(a, axis, indices, updates)}:
+    \refframework-style \code{scatter\_add\_(dim, indices, updates)}
+    semantics. Single index list along one axis.
+\end{itemize}
+
+Passing one's indices to the wrong variant produces an immediate
+shape-mismatch failure (\code{``Number of index arrays does not
+match number of dimensions''}). \Lucid's gather/scatter wrappers
+(\chref{ch:indexing}) defensively use the correct variant based on
+the call shape; a vault note (\code{engine-mlx-scatter-axis-vs-multiaxis})
+captures the diagnostic that surfaced this distinction the first
+time.
+
+\subsection{Linear algebra and FFT}
+\label{ssec:mlx_runtime:linalg_fft}
+
+The linalg primitives live in \code{mlx.core.linalg} and operate on
+the CPU stream as discussed in
+\secref{ssec:mlx_runtime:linalg_carveout}. The FFT primitives
+(\code{fft}, \code{ifft}, \code{rfft}, \code{irfft}, with their
+multi-dimensional variants) live in \code{mlx.core.fft} and run on
+both streams; \Lucid's \code{lucid.fft} module
+(\chref{ch:fft}) wraps them with consistent normalisation
+conventions.
+
+\subsection{Convolution and neural-network primitives}
+\label{ssec:mlx_runtime:nn_prims}
+
+\code{conv1d}, \code{conv2d}, \code{conv3d}, and their transposed
+counterparts are primitives. Pooling, batch-norm-style fused kernels,
+and attention's softmax fused with a scale are not first-class
+primitives but rather compositions in the \code{mlx.nn} module that
+\Lucid\ does not use; \Lucid's \code{nn.functional} layer
+(\chref{ch:linear_conv_norm}) calls the core conv primitives
+directly and composes the rest in its own kernels.
+
+\section{Function Transformations}
+\label{sec:mlx_runtime:transforms}
+
+\MLX\ inherits from JAX a small set of function-level transformations
+that operate on Python functions of arrays and return new functions
+with new behaviours. The list is short: \code{grad}, \code{vmap},
+\code{jit} (also called \code{mlx.compile}), \code{vjp},
+\code{jvp}, and a few utilities.
+
+\Lucid\ does not, for the most part, expose these transformations to
+the user. The reason is parity: \refframework's user-facing API
+expresses differentiation through the \code{Module.backward} and
+\code{tensor.backward} pattern, not through a functional
+\code{grad}. \Lucid\ therefore implements its own autograd engine
+(\chref{ch:autograd_engine}) on top of \MLX's primitives, and
+\MLX's \code{grad} sits unused.
+
+The two transformations \Lucid\ does use are \code{vmap} and
+\code{jit}, but only indirectly:
+
+\begin{itemize}
+  \item \code{vmap} is exposed in \Lucid\ as
+    \code{lucid.func.vmap} (\chref{ch:higher_order}), where it
+    composes onto \Lucid\ tensors. The implementation delegates to
+    \MLX's \code{vmap} on the underlying arrays.
+  \item \code{jit} (i.e., \code{mlx.compile}) is \emph{not} the
+    mechanism behind \code{lucid.compile}. \Lucid's compile path
+    (\chref{ch:compile_design}) emits onto \MPSGraph\ rather than
+    \MLX's compile; the reasons are detailed in that chapter.
+\end{itemize}
+
+\section{Lucid's Use of MLX}
+\label{sec:mlx_runtime:lucid_use}
+
+We can now describe how \Lucid\ sits on top of \MLX. The integration
+has three layers.
+
+\subsection{The MlxBackend interface}
+\label{ssec:mlx_runtime:mlx_backend}
+
+\code{MlxBackend} (in \code{lucid/\_C/backend/gpu/}) is the C++ class
+that mediates between \Lucid's dispatcher and \MLX. Its interface is
+roughly:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class MlxBackend : public IBackend {
+public:
+  TensorImpl allocate(Shape, Dtype) override;
+  TensorImpl unary(OpKind, const TensorImpl& x) override;
+  TensorImpl binary(OpKind, const TensorImpl& a, const TensorImpl& b) override;
+  TensorImpl reduce(OpKind, const TensorImpl& x, AxisSet, bool keepdims) override;
+  TensorImpl matmul(const TensorImpl& a, const TensorImpl& b) override;
+  // ... and so on for every primitive category
+};
+\end{lstlisting}
+
+Each method translates a \Lucid\ operation request into the
+corresponding \MLX\ primitive call, with the \code{stream} argument
+fixed to \code{mx.gpu}. The return value is a new \code{TensorImpl}
+that wraps the \MLX\ array returned by the primitive.
+
+\subsection{Dispatch into MLX from the engine}
+\label{ssec:mlx_runtime:dispatch}
+
+The dispatcher (\chref{ch:backend_dispatch}) routes a per-op request
+to one of the backends based on the tensor's device. For
+\code{device=`metal'}, the route is \code{MlxBackend} unconditionally,
+with one exception (the MPSGraph per-op carve-out introduced in 3.4;
+\chref{ch:mpsgraph_dispatch}). For \code{device=`cpu'}, the route is
+\code{AccelerateBackend} \emph{except} for the linalg carve-out,
+where it is also \code{MlxBackend} but with \code{stream=mx.cpu}.
+
+The Python-side dispatcher (\code{lucid/\_dispatch.py}) is symmetric
+but operates on Python \code{Tensor} objects. It performs the
+\code{\_wrap} / \code{\_unwrap} between \code{Tensor} and
+\code{TensorImpl}, then defers to the C++ dispatcher for the actual
+op routing.
+
+\subsection{Bridge from MLX to Lucid Tensor}
+\label{ssec:mlx_runtime:bridge}
+
+The final layer is the bridge from \code{mlx::core::array} to
+\Lucid's \code{TensorImpl}. The bridge wraps the array in a
+\code{TensorImpl} that holds the array as a \code{shared\_ptr},
+inherits the array's shape and dtype, and computes the tensor's
+strides from the array's strides. Autograd metadata
+(\code{requires\_grad}, \code{grad\_fn}) is allocated separately
+because \MLX\ has no notion of these.
+
+When the inverse direction is needed --- a \code{TensorImpl} that
+came from elsewhere needs to be passed to an \MLX\ primitive ---
+the bridge unwraps the \code{shared\_ptr<array>} that the
+\code{TensorImpl} holds. This is always free; the array was
+constructed on the \MLX\ side originally.
+
+\section{Quirks and Pitfalls}
+\label{sec:mlx_runtime:quirks}
+
+Two \MLX\ behaviours have been the source of bugs in \Lucid's
+history; both are documented in the engine vault, both have shaped
+the framework's defensive coding.
+
+\subsection{data\textless T\textgreater\ ignores strides}
+\label{ssec:mlx_runtime:data_strides}
+
+The first quirk has been discussed in detail in
+\chref{ch:unified_memory}: \code{mlx::core::array::data<T>()} returns
+a pointer to bytes in the array's stored layout, not the strided
+layout. A lazy transpose of a \(4 \times 8\) array of dtype
+\code{float32} returns an \(8 \times 4\) array whose
+\code{data<T>()} pointer points to the original \(4 \times 8\)
+contiguous block.
+
+The discipline is enforced by \code{SharedStorage} and is
+non-negotiable: \code{contiguous} then \code{eval} then
+\code{data<T>()}. The vault note
+\code{engine-mlx-data-ignores-strides} is the source-of-truth for
+the regression that surfaced this in 3.0 series.
+
+\subsection{Two scatter variants}
+\label{ssec:mlx_runtime:two_scatters}
+
+The second quirk is the existence of two primitives with similar
+names and different semantics: \code{scatter\_add} (NumPy-style
+multi-axis index arrays) and \code{scatter\_add\_axis}
+(\refframework-style single-axis indices along one axis). A
+\Lucid\ wrapper that picks the wrong variant produces a runtime
+error of the form ``Number of index arrays does not match number of
+dimensions of input''. The fix in 3.0 series was to standardise on
+\code{scatter\_add\_axis} for the \refframework-compatible API and
+to use \code{scatter\_add} only in NumPy-bridge code paths. The
+vault note \code{engine-mlx-scatter-axis-vs-multiaxis} captures the
+investigation.
+
+\subsection{Axis vs.\ axes nomenclature}
+\label{ssec:mlx_runtime:axis_axes}
+
+\MLX\ uses \code{axis=} (singular) for some reductions and
+\code{axes=} (plural) for others. The convention follows NumPy:
+operations that accept exactly one axis use \code{axis=}; operations
+that accept a tuple of axes (or a single axis as a tuple) use
+\code{axes=}. \Lucid\ standardised on \code{dim=} and \code{dims=}
+internally for \refframework\ parity, and the dispatcher rewrites
+between conventions on each call. The Phase~7 engine rename retro
+(\code{retro-axis-to-dim-rename}) records the design.
+
+\section{Version Compatibility and the Wheel Constraint}
+\label{sec:mlx_runtime:versioning}
+
+\MLX\ is a young framework on a fast cadence. \Lucid\ pins a minimum
+version (\code{mlx >= 0.31}) and tracks releases as they ship. The
+constraint discipline has three parts.
+
+\subsection{API stability per minor version}
+\label{ssec:mlx_runtime:api_stability}
+
+\MLX's minor releases (0.18, 0.20, etc.) sometimes introduce
+breaking changes. The standard pattern is that \MLX\ deprecates an
+API in version \(N\) and removes it in version \(N+2\). \Lucid's
+build pins the minimum supported \MLX\ version conservatively and
+the maximum loosely. The wheel that \code{pip install lucid} fetches
+declares \code{mlx>=0.31,<1.0}, which gives \MLX\ room to ship
+minor releases that \Lucid\ has not been tested against.
+
+\subsection{Platform constraint: macOS \(\geq 26.0\)}
+\label{ssec:mlx_runtime:macos_constraint}
+
+The wheel constraint is tied to \MLX's own wheel constraint. As of
+\MLX\ 0.31, the published wheel is tagged \code{macosx\_26\_0\_arm64},
+which means it requires macOS 26.0 (Tahoe) and the arm64 architecture.
+There is no Linux wheel; there is no Intel-Mac wheel; there is no
+older-macOS wheel. \Lucid\ inherits these constraints and matches
+them with its own build target (\code{MACOSX\_DEPLOYMENT\_TARGET=26.0}).
+
+The \code{mlx-metal} split package (introduced in \MLX\ 0.20)
+separates the Metal kernel binaries from the core Python package
+to reduce wheel size. \Lucid's build links against the combined
+package and does not need to know about the split.
+
+\subsection{Per-version conditional code}
+\label{ssec:mlx_runtime:per_version}
+
+A small number of \Lucid\ code paths are guarded by \MLX\ version
+checks. The pattern is:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from packaging.version import Version
+import mlx.core as mx
+
+if Version(mx.__version__) >= Version("0.18"):
+    out = mx.logsumexp(x, axis=axis)
+else:
+    out = _composite_logsumexp(x, axis=axis)
+\end{lstlisting}
+
+These conditional paths are exceptional; the policy is to delete the
+fallback once the minimum supported \MLX\ version exceeds the
+introduction point. \Lucid's current minimum (\(0.31\)) elides
+roughly half a dozen such fallbacks that were present in earlier
+\Lucid\ releases.
+
+\section{Summary and Forward References}
+\label{sec:mlx_runtime:summary}
+
+\MLX\ is the GPU-side substrate on which \Lucid\ is built. Its lazy
+graph model gives \Lucid\ a free fusion tier and forces a
+synchronisation discipline that the framework above must respect.
+Its array primitive is the storage type that \Lucid's \code{Tensor}
+wraps. Its stream model is the basis for \Lucid's device routing,
+with the one carve-out that linear algebra is dispatched on the CPU
+stream regardless of user device choice. Its quirks
+(\code{data<T>()} stride-ignorance, two scatter variants, axis
+nomenclature drift) have been the source of historical bugs that
+have shaped \Lucid's defensive layers.
+
+The next chapter, \chref{ch:accelerate}, takes the CPU-side
+counterpart to \MLX --- the \Accelerate\ framework --- and describes
+how its BLAS, LAPACK, vDSP, vForce, and BNNS sublayers compose into
+the \code{AccelerateBackend} that \Lucid's dispatcher targets when
+the user has chosen \code{device=`cpu'}.
+\chref{ch:metal_mpsgraph} then closes \partref{part:hardware} by
+treating \Metal\ and \MPSGraph\ directly, since both are needed for
+the graph-capture compiler. After that, the book moves to the
+software architecture proper.
+
+\begin{lucidnote}
+For day-to-day use, the relevant \MLX\ facts are: (1) \MLX\ is lazy,
+so \code{eval} is the synchronisation primitive; (2) \MLX's array
+is the storage layer \Lucid\ delegates to; (3) device placement in
+\Lucid\ corresponds to stream selection in \MLX, with the linalg
+carve-out. The remaining detail in this chapter is required when
+debugging the bridge boundary or extending the dispatcher.
+\end{lucidnote}

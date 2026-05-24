@@ -1,0 +1,516 @@
+% !TEX root = ../main.tex
+\chapter{Indexing}
+\label{ch:indexing}
+
+Indexing is the family of operations that select or update elements
+of a tensor based on positions specified by integers, integer
+tensors, or boolean tensors. The category is large and complex
+because the index specification can take many forms --- scalar
+indices, slices, integer tensors, boolean masks, or any combination
+of these --- and each form has slightly different semantics for
+which dimensions are kept and how the output is shaped.
+
+\Lucid's indexing surface follows NumPy's, modulo a small number of
+\refframework-compatibility adjustments. The implementation in
+\code{lucid/\_C/kernel/primitives/Gather.cpp} and
+\code{Scatter.cpp} handles the dispatch; the Python side in
+\code{lucid/\_tensor/\_indexing.py} translates user-facing index
+expressions into a normalised internal form.
+
+\secref{sec:indexing:basic} treats basic (slice-based) indexing.
+\secref{sec:indexing:advanced} treats advanced indexing (integer
+tensors, boolean masks). \secref{sec:indexing:mixed} treats mixed
+basic-and-advanced indexing. \secref{sec:indexing:gather_scatter}
+treats the gather and scatter primitives.
+\secref{sec:indexing:masked} treats masked operations.
+\secref{sec:indexing:put_inplace} treats in-place index assignment.
+
+\tabref{tab:indexing:semantics_summary} summarises the indexing
+regimes side by side.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tabular}{lllll}
+\toprule
+Index form & Result is & Cost & Differentiable & Example \\
+\midrule
+scalar             & view (smaller rank)   & metadata only & yes & \code{x[3]} \\
+slice              & view (same rank)      & metadata only & yes & \code{x[1:5]} \\
+slice (neg step)   & view (negative stride) & metadata only & yes & \code{x[::-1]} \\
+\code{None}        & view (larger rank)    & metadata only & yes & \code{x[None]} \\
+\code{...}         & view (same rank)      & metadata only & yes & \code{x[..., 0]} \\
+int tensor (1 axis) & fresh tensor         & copy via gather & yes & \code{x[idx]} \\
+int tensors (n axes) & fresh tensor        & copy via gather & yes & \code{x[i, j]} \\
+bool mask          & fresh, data-dep shape & CPU stall + copy & yes & \code{x[mask]} \\
+mixed basic+advanced & fresh tensor        & copy via gather & yes & \code{x[1:5, idx]} \\
+\code{gather}      & fresh tensor          & copy with indices & yes & \code{x.gather(dim, idx)} \\
+\code{scatter}     & fresh tensor          & write with indices & yes & \code{out.scatter(...)} \\
+\code{scatter\_add} & fresh tensor         & write+accum       & yes (det. on CPU) & duplicate-idx accumulate \\
+\code{where}       & fresh tensor          & two muls + add    & yes & \code{where(c, x, y)} \\
+\code{masked\_fill} & fresh tensor         & broadcast assign  & yes & \code{x.masked\_fill(m, v)} \\
+in-place \code{x[idx]=v} & modifies x      & scatter           & version bump & avoid for saved tensors \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption[Indexing regimes.]{Indexing operations classified by
+return type (view vs fresh tensor), runtime cost,
+differentiability, and example syntax. Basic indexing (scalars,
+slices, \code{None}, \code{...}) is always free; advanced indexing
+(integer tensors, boolean masks) always copies. Boolean-mask
+indexing additionally forces a GPU-to-CPU stall to read the mask's
+values for the output-shape computation.}
+\label{tab:indexing:semantics_summary}
+\end{table}
+
+\section{Basic Indexing}
+\label{sec:indexing:basic}
+
+Basic indexing uses scalars, slices (\code{a:b:c}), and \code{None}
+(for axis insertion). It always returns a view of the source ---
+no data motion, no copy.
+
+\subsection{Scalar index}
+\label{ssec:indexing:scalar}
+
+\code{x[i]} for integer \code{i} selects the \(i\)-th element
+along axis 0, returning a tensor of rank one less. The result is
+a view: shape and strides are adjusted, the storage offset
+advances by \(i \cdot \text{stride}_0\).
+
+Negative indices count from the end (NumPy convention).
+Out-of-range indices raise \code{LucidError}.
+
+\subsection{Slice}
+\label{ssec:indexing:slice}
+
+\code{x[a:b:c]} selects every \(c\)-th element from \(a\) to
+\(b\). The result is a view with the appropriate stride scaling
+(\code{stride *= c}) and storage offset.
+
+A negative step (\code{x[::-1]}) produces a reversed view with
+negative stride. The \code{TensorImpl} carries the negative stride
+through; the dispatcher's contiguity predicate flags such tensors
+as non-contiguous (since canonical strides are positive).
+
+\subsection{Multi-axis basic indexing}
+\label{ssec:indexing:multi_basic}
+
+\code{x[1:5, :, 2]} combines slices, full-axis selectors, and
+scalar indices in one expression. The dispatcher walks the index
+tuple, applies each piece to the corresponding axis, and returns
+a view with the composed metadata.
+
+The full-axis selector \code{:} (or \code{slice(None)} in
+\code{\_\_getitem\_\_} parlance) leaves the axis unchanged. The
+ellipsis \code{...} stands in for as many full-axis selectors as
+needed to match the rank.
+
+\subsection{None for axis insertion}
+\label{ssec:indexing:none_insert}
+
+\code{x[None]} inserts a new leading axis of size 1, equivalent to
+\code{x.unsqueeze(0)}. \code{x[:, None]} inserts a new axis at
+position 1. The \code{None} is a NumPy-compatible alias for
+\code{unsqueeze} embedded in the indexing syntax.
+
+\section{Advanced Indexing}
+\label{sec:indexing:advanced}
+
+Advanced indexing uses integer tensors or boolean tensors as
+indices. Unlike basic indexing, advanced indexing always returns a
+new tensor (copies the selected elements), because the selected
+positions may not form a contiguous region.
+
+\subsection{Integer-tensor indexing}
+\label{ssec:indexing:int_tensor}
+
+\code{x[idx]} for an integer tensor \code{idx} selects the
+elements at the positions named by \code{idx}. The result's shape
+combines \code{idx}'s shape with the trailing axes of \code{x}:
+
+\begin{itemize}
+  \item \code{x[idx]} where \code{x.shape == (N, D)} and
+    \code{idx.shape == (K,)} returns shape \code{(K, D)} --- one
+    selected row per index.
+  \item \code{x[idx]} where \code{idx.shape == (K, M)} returns
+    shape \code{(K, M, D)} --- one row per index in the index
+    grid.
+\end{itemize}
+
+\subsection{Multi-axis integer-tensor indexing}
+\label{ssec:indexing:multi_int}
+
+\code{x[row\_idx, col\_idx]} for two integer tensors selects
+elements at the pointwise paired positions. \code{row\_idx} and
+\code{col\_idx} must broadcast to a common shape; the result has
+that shape:
+
+\begin{itemize}
+  \item \code{row\_idx = [0, 1, 2]}, \code{col\_idx = [0, 1, 2]}
+    selects the diagonal of \code{x}.
+  \item \code{row\_idx = [[0, 1], [2, 3]]}, \code{col\_idx = [0, 1]}
+    broadcasts \code{col\_idx} to \code{[[0, 1], [0, 1]]} and
+    selects a \(2 \times 2\) grid.
+\end{itemize}
+
+This is the most general indexing form; \code{gather} is its
+explicit primitive (\secref{sec:indexing:gather_scatter}).
+
+\subsection{Boolean-mask indexing}
+\label{ssec:indexing:bool_mask}
+
+\code{x[mask]} for a boolean tensor \code{mask} of the same shape
+as \code{x} returns the 1-D tensor of elements where \code{mask}
+is \code{True}. The output shape depends on the input \emph{values}
+(the count of \code{True}s), making this a data-dependent operation.
+
+The implementation requires reading the mask values, which forces
+a CPU-stream-side reduction (\chref{ch:backend_dispatch}'s
+data-dependent carve-out). The result is then either constructed
+on the CPU or bridged back to the original device.
+
+\subsection{Partial-axis boolean mask}
+\label{ssec:indexing:partial_bool}
+
+\code{x[mask]} where \code{mask}'s shape is a prefix of \code{x}'s
+shape selects entire trailing sub-tensors. \code{x[mask]} with
+\code{x.shape == (B, C, H, W)} and \code{mask.shape == (B,)}
+returns a tensor of shape \code{(K, C, H, W)} where \(K\) is the
+number of \code{True}s in \code{mask}.
+
+\section{Mixed Basic and Advanced Indexing}
+\label{sec:indexing:mixed}
+
+The most complex case: an index expression that combines slices
+and integer tensors. The semantics follow NumPy's, which are
+slightly counterintuitive: the advanced indices are gathered into
+the leading axes of the result, and the basic indices follow.
+
+\code{x[1:5, idx]} where \code{x.shape == (10, N, D)} and
+\code{idx.shape == (K,)} returns a tensor of shape \code{(4, K, D)}
+---  the slice \code{1:5} contributes the leading axis (size 4),
+the integer tensor \code{idx} contributes the next axis (size K),
+and the trailing axes of \code{x} (size D) are preserved.
+
+The full rule is documented in NumPy's advanced-indexing section
+and \Lucid\ follows it bit-for-bit. The Python dispatcher in
+\code{\_indexing.py} normalises the expression to a canonical form
+that the C++ gather primitive consumes.
+
+\section{Gather and Scatter}
+\label{sec:indexing:gather_scatter}
+
+The explicit primitives:
+
+\begin{itemize}
+  \item \code{gather(x, dim, index)}: \code{out[i, j, ...] =
+    x[i, index[i, j, ...], ...]} (with \code{dim} = 1 in the
+    example).
+  \item \code{scatter(out, dim, index, src)}: \code{out[i,
+    index[i, j, ...], ...] = src[i, j, ...]}.
+  \item \code{scatter\_add(out, dim, index, src)}: as scatter but
+    with addition (multiple writes to the same position
+    accumulate).
+\end{itemize}
+
+\code{gather} is the most-used primitive in attention: the
+indexing in $\text{softmax}(QK^T / \sqrt{d}) V$ could be expressed as
+a gather of \code{V} by attention weights. \code{scatter\_add} is
+the workhorse of embedding backward and of any operation that
+distributes a per-sample loss across positions.
+
+\subsection{Index validation}
+\label{ssec:indexing:index_validation}
+
+Indices must be in-range for the target dimension. The kernel
+validates this once before iterating: out-of-range indices raise
+\code{LucidError("index out of bounds")} with the offending value
+and the bound. Validation costs one reduction pass over the index
+tensor; it is the price of correctness.
+
+\subsection{Determinism of scatter\_add}
+\label{ssec:indexing:scatter_nondet}
+
+\code{scatter\_add} with duplicate indices is \emph{nondeterministic}
+on GPU: multiple writes to the same position may be ordered
+arbitrarily, and floating-point addition is non-associative, so
+the result depends on order. The schema's
+\code{Determinism::Nondeterministic} flag signals this; under
+\code{lucid.set\_deterministic(True)} (\chref{ch:reproducibility}),
+the dispatcher refuses to run \code{scatter\_add} on GPU and falls
+back to a CPU stream that uses a stable order.
+
+\subsection{The two scatter variants}
+\label{ssec:indexing:two_scatters}
+
+\MLX\ exposes two scatter primitives with similar names but
+different semantics (\chref{ch:mlx_runtime}~Section~\ref{ssec:mlx_runtime:two_scatters}).
+\Lucid's wrappers route to \code{scatter\_add\_axis} for the
+\refframework-compatible single-axis case; the NumPy-style
+multi-axis case is exposed under
+\code{\_C\_engine.scatter\_add\_np} for the bridge code that needs
+it.
+
+\section{Masked Operations}
+\label{sec:indexing:masked}
+
+\Lucid\ provides several operations that use a boolean mask
+without performing a full advanced-indexing dispatch:
+
+\begin{itemize}
+  \item \code{masked\_select(x, mask)}: equivalent to \code{x[mask]}.
+  \item \code{masked\_fill(x, mask, value)}: returns a copy of
+    \code{x} with positions where \code{mask} is \code{True}
+    replaced by \code{value}.
+  \item \code{masked\_scatter(x, mask, src)}: fills positions
+    where \code{mask} is \code{True} with consecutive values from
+    \code{src}.
+  \item \code{where(condition, x, y)}: pointwise selection ---
+    \code{out[i] = x[i] if condition[i] else y[i]}.
+\end{itemize}
+
+\code{where} is the most-used; it is the differentiable
+alternative to \code{masked\_select} (\code{where} preserves the
+shape and admits gradients through both branches, while
+\code{masked\_select} produces a data-dependent shape).
+
+\subsection{Backward through where}
+\label{ssec:indexing:where_back}
+
+The gradient of \code{where(cond, x, y)} routes the gradient to
+either \code{x} or \code{y} based on \code{cond}. The
+\code{cond} input has zero gradient (it is boolean, not
+differentiable).
+
+The implementation uses two pointwise multiplications:
+\code{grad\_x = cond * grad\_out}, \code{grad\_y = (1 - cond) *
+grad\_out}. This is more wasteful than a true gather --- it
+computes both branches' gradients and masks --- but it is simpler
+and the cost is comparable for most workloads.
+
+\section{In-Place Index Assignment}
+\label{sec:indexing:put_inplace}
+
+\code{x[idx] = value} assigns \code{value} into the positions
+named by \code{idx}, modifying \code{x} in place. The assignment
+goes through the scatter primitive internally.
+
+\subsection{Autograd interaction}
+\label{ssec:indexing:autograd_inplace}
+
+In-place assignment to a tensor that is part of an autograd graph
+is allowed but increments the version counter
+(\chref{ch:tensor_model}). If a downstream backward expects the
+pre-assignment state, the version check fires and raises an
+error with a message that names the operation.
+
+The recommended pattern when in-place assignment is needed and
+gradients are also needed is to assign through \code{x = x.clone()}
+first or to use \code{x.index\_put(idx, value)}, which returns a
+fresh tensor.
+
+\subsection{Index\_put}
+\label{ssec:indexing:index_put}
+
+\code{x.index\_put(indices, values, accumulate=False)} is the
+functional (out-of-place) form. \code{accumulate=True} makes it a
+scatter-add rather than a scatter-set.
+
+\code{index\_put} is the autograd-safe primitive; the dispatcher
+constructs a backward that, for the set form, routes the gradient
+to either the source \code{x} (positions not touched) or the
+\code{values} (positions touched), and for the accumulate form,
+sums the gradient over both.
+
+\section{Advanced Indexing Rules in Detail}
+\label{sec:indexing:advanced_rules}
+
+NumPy's advanced indexing rules are notorious for surprises. This
+section walks through the cases that have caused user confusion in
+\Lucid\ and gives the canonical interpretation.
+
+\subsection{The leading-axes rule for mixed indexing}
+\label{ssec:indexing:leading_axes}
+
+When an index expression combines basic and advanced indices, the
+output's advanced-indexed dimensions appear \emph{first}, followed
+by the basic-indexed dimensions. This holds even when the advanced
+indices are not contiguous in the expression.
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+x.shape = (A, B, C, D, E)
+idx_b = lucid.arange(B)
+idx_d = lucid.arange(D)
+
+# Case 1: all advanced indices are contiguous in expression
+r1 = x[:, idx_b, idx_d, :, :]
+# r1.shape = (A, B, D, E)  -- usual broadcast semantics
+
+# Case 2: advanced indices separated by basic indices
+r2 = x[:, idx_b, :, idx_d, :]
+# r2.shape = (B, D, A, C, E)  -- ADVANCED dims pulled to front!
+\end{lstlisting}
+
+The second case surprises users because the slice axes are
+``demoted'' to the trailing positions. The rule is NumPy's, and
+\Lucid\ follows it for compatibility. The mitigation: when in
+doubt, use \code{gather} explicitly; the output shape is then
+predictable.
+
+\subsection{Boolean masks at non-leading positions}
+\label{ssec:indexing:bool_nonlead}
+
+\code{x[:, mask, :]} where \code{mask} is a 1-D boolean tensor of
+length equal to \code{x.shape[1]} selects the columns where
+\code{mask} is true:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+x.shape = (B, T, D)
+mask.shape = (T,)
+r = x[:, mask, :]      # shape (B, K, D) where K = mask.sum()
+\end{lstlisting}
+
+The shape's $K$ component is data-dependent (\code{mask.sum()})
+and forces the dispatcher's data-dependent-output carve-out: the
+mask is read on the CPU stream, $K$ is computed, then a gather
+on the original axis produces the result.
+
+\subsection{Negative indices versus integer-tensor indices}
+\label{ssec:indexing:neg_indices}
+
+\code{x[-1]} works (counts from the end). \code{x[lucid.tensor(-1)]}
+also works (the integer tensor is interpreted as positions, with
+negatives counted from the end of the indexed axis). But
+\code{x[lucid.tensor([-1, -2])]} is also legal --- the negative
+indices apply elementwise to the index tensor.
+
+The convention is consistent: any integer used as an index is
+interpreted relative to the corresponding axis length, with
+negatives wrapping. Out-of-range positives raise; out-of-range
+negatives wrap once and then raise.
+
+\section{Gather/Scatter Implementation Detail}
+\label{sec:indexing:gather_scatter_impl}
+
+The \code{gather} and \code{scatter} primitives are the workhorses
+of advanced indexing. Their implementations live in
+\code{lucid/\_C/kernel/primitives/Gather.cpp} and
+\code{Scatter.cpp}.
+
+\subsection{Gather's kernel structure}
+\label{ssec:indexing:gather_struct}
+
+The simplest case --- \code{out[i, j] = x[i, idx[i, j]]} for a 2-D
+input --- is straightforward. The general $N$-dimensional case
+requires iterating over the output's full index space, computing
+the corresponding input position from \code{idx}, and reading.
+
+For GPU dispatch, the operation translates to \MLX's
+\code{take\_along\_axis} primitive in the single-axis case and to
+\code{gather\_nd}-style multi-axis primitives in the general case.
+For CPU dispatch, the operation reduces to a vectorised loop with
+gather-style address computation.
+
+\subsection{Scatter's two semantics}
+\label{ssec:indexing:scatter_two}
+
+\code{scatter} has two semantics, both supported:
+
+\begin{itemize}
+  \item \textbf{Set}: \code{out[idx] = src}. If multiple
+    \code{idx} entries point at the same output position, the
+    last write wins (non-deterministic on GPU because ``last'' is
+    parallel-execution-order dependent).
+  \item \textbf{Accumulate} (\code{scatter\_add}): \code{out[idx]
+    += src}. Multiple writes to the same position sum; the order
+    of summation is parallel-execution-order dependent and
+    floating-point non-associative, hence non-deterministic.
+\end{itemize}
+
+Both semantics are exposed; the user picks via the \code{reduce}
+argument or the named alias \code{scatter\_add}.
+
+\subsection{The embedding case}
+\label{ssec:indexing:embedding_case}
+
+The most common application of scatter-add is embedding backward.
+\code{nn.Embedding}'s forward gathers from the weight matrix:
+\code{out[i, j] = W[idx[i, j], :]}. The backward scatters the
+output gradient back into the weight matrix's positions:
+\code{grad\_W[idx[i, j], :] += grad\_out[i, j, :]}.
+
+Because the same vocabulary token may appear many times in a
+batch (think ``the'' in a language batch), many gradients
+accumulate at the same row of \code{grad\_W}. The non-determinism
+is real and observable; under \code{lucid.set\_deterministic(True)}
+the backward falls back to a serial scatter on the CPU stream.
+
+The 3.4 per-op \MPSGraph\ carve-out for
+\code{embedding\_backward} accelerates the GPU path by an order of
+magnitude over the naive \MLX\ scatter-add; the determinism
+trade-off is the same as for the MLX path.
+
+\section{Benchmarks}
+\label{sec:indexing:benchmarks}
+
+\tabref{tab:indexing:benchmark} reports measured throughput for
+several indexing operations on M3~Max.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrl}
+\toprule
+Operation & Configuration & Time (ms) & Notes \\
+\midrule
+basic slice & \code{x[1:1000, :]}, $x$ is $(2000, 768)$    & 0.002 & metadata only \\
+basic slice & \code{x[:, ::2]}, $x$ is $(2000, 768)$       & 0.002 & metadata only \\
+int gather & \code{x[idx]}, $x$ is $(50k, 768)$, $|idx|=512$ & 0.4 & per-row gather \\
+bool mask  & \code{x[mask]}, $x$ is $(50k, 768)$, mask 10\% true & 1.8 & CPU stall + gather \\
+scatter\_add & embed bwd, $|V|=50k$, batch 64, len 512 & 2.1 & MPSGraph carve-out \\
+scatter\_add & same, MLX baseline             & 28.0 & 13$\times$ slower \\
+where      & 3-arg, all $(2k, 768)$ FP32      & 0.5 & two muls + add \\
+masked\_fill & $(2k, 768)$ FP32, dense mask    & 0.3 & broadcast assign \\
+\bottomrule
+\end{tabular}
+\caption[Indexing benchmarks.]{Per-op times on M3~Max for
+representative indexing operations. Basic slices are essentially
+free. Gather and scatter run at memory-bandwidth-bound rates for
+contiguous outputs. Boolean masks pay an additional CPU stall to
+read the mask values. The embedding-backward \MPSGraph\ carve-out
+gives roughly a 13$\times$ speedup over the eager \MLX\ path, the
+largest single-op gain from the 3.4 per-op carve-out family.}
+\label{tab:indexing:benchmark}
+\end{table}
+
+\section{Summary and Forward References}
+\label{sec:indexing:summary}
+
+Indexing in \Lucid\ spans three regimes: basic indexing (slices,
+scalars, \code{None}) returns views; advanced indexing (integer
+tensors, boolean masks) returns fresh tensors; mixed
+basic-and-advanced follows NumPy's combination rules. The explicit
+primitives \code{gather}, \code{scatter}, and \code{scatter\_add}
+underlie advanced indexing and are also exposed directly for
+performance-critical use. Masked operations
+(\code{where}, \code{masked\_select}, \code{masked\_fill}) cover
+the common conditional-selection patterns. In-place assignment is
+allowed but raises through the autograd version check if the
+modified tensor was saved for backward.
+
+The next chapter, \chref{ch:composite_ops}, closes
+\partref{part:ops_kernels} with the pure-Python composite layer
+that builds higher-level ops on top of the primitives described in
+this part.
+
+\begin{lucidnote}
+For the user: indexing is the place where the Pythonic syntax
+\code{x[..., -1]} or \code{x[mask]} hides substantial machinery.
+The basic-vs-advanced distinction matters when performance is at
+stake (basic is free, advanced copies); the autograd-version
+interaction matters when in-place assignment intersects with
+gradients. For most use, the syntax is transparent.
+\end{lucidnote}

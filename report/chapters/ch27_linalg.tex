@@ -1,0 +1,668 @@
+% !TEX root = ../main.tex
+\chapter{Linear Algebra}
+\label{ch:linalg}
+
+Linear algebra is the mathematical substrate of most machine
+learning. Matrix multiplication is the dominant flop; matrix
+factorisations underlie PCA, low-rank fine-tuning, gradient
+preconditioning, and a variety of regularisation techniques;
+linear solvers appear inside differential-equation and
+control-theoretic models. \Lucid\ exposes a comprehensive
+linear-algebra subpackage at \code{lucid.linalg} that wraps the
+LAPACK routines provided by \Accelerate.
+
+This chapter describes the subpackage's surface, the
+implementation choices, and the unique constraint that defines
+its dispatch behaviour: the \emph{linalg carve-out} introduced in
+\chref{ch:backend_dispatch}~Section~\ref{sec:backend_dispatch:carveouts},
+which routes every linalg call through the CPU stream regardless
+of the user's device.
+
+\section{Overview}
+\label{sec:linalg:overview}
+
+The \code{lucid.linalg} surface mirrors \refframework's
+\code{torch.linalg} closely, with the same routine names,
+signatures, and return conventions. The subpackage contains
+roughly 31 functions, falling into five families:
+
+\begin{itemize}
+  \item \textbf{Decompositions}: \code{cholesky}, \code{qr},
+    \code{svd}, \code{eigh}, \code{lu}, \code{ldl}.
+  \item \textbf{Solvers}: \code{solve}, \code{lstsq},
+    \code{triangular\_solve}, \code{cholesky\_solve}.
+  \item \textbf{Matrix functions}: \code{inv}, \code{det},
+    \code{slogdet}, \code{matrix\_exp}, \code{matrix\_power},
+    \code{matrix\_rank}.
+  \item \textbf{Norms}: \code{norm}, \code{matrix\_norm},
+    \code{vector\_norm}, \code{cond}.
+  \item \textbf{Products}: \code{cross}, \code{outer},
+    \code{vecdot}, \code{multi\_dot}.
+\end{itemize}
+
+\subsection{The H8 namespace rule}
+\label{ssec:linalg:h8_rule}
+
+Per Hard Rule H8, every linalg op is accessible only via
+\code{lucid.linalg.*}, never at the top level
+(\code{lucid.cholesky} is invalid) and never as a Tensor method
+(\code{x.norm()} is invalid). The rule disambiguates: \code{norm}
+could mean vector norm or matrix norm, and the subpackage
+namespace makes the intent explicit.
+
+The rule also catches user errors at API surface. A user typing
+\code{x.norm()} gets an AttributeError instead of an undocumented
+default; the message points to \code{lucid.linalg.norm} or
+\code{lucid.linalg.vector\_norm} per the user's actual intent.
+
+\section{The Linalg Carve-Out, Restated}
+\label{sec:linalg:carveout}
+
+Linear-algebra decompositions are not implemented in \Metal.
+\MLX\ provides them only on its CPU stream, where they delegate
+to \Accelerate's LAPACK. The dispatcher recognises this and
+routes every linalg call through the CPU stream regardless of the
+user's selected device.
+
+\subsection{What the user sees}
+\label{ssec:linalg:user_view}
+
+\code{lucid.linalg.cholesky(x)} on a \code{metal} tensor:
+
+\begin{enumerate}
+  \item Dispatcher recognises linalg op, applies carve-out.
+  \item \code{SharedStorage} bridge transfers \code{x} to CPU
+    view (zero-copy in the contiguous case).
+  \item \MLX\ runs the decomposition on its CPU stream, calling
+    \Accelerate's \code{spotrf}.
+  \item Result wrapped back as a metal tensor.
+\end{enumerate}
+
+The bridge and the wrap-back are sub-microsecond; the
+decomposition cost dominates. For matrices larger than $64 \times
+64$, the cost is determined entirely by the LAPACK routine, and
+the choice of device is fictive.
+
+\subsection{Why this is acceptable}
+\label{ssec:linalg:why_acceptable}
+
+LAPACK on Apple's AMX coprocessor through \Accelerate\ is
+competitive with the best open-source implementations and faster
+than any naive Metal kernel for decompositions of any non-trivial
+size. The carve-out is the right architectural choice given the
+hardware reality.
+
+\section{Decomposition Routines}
+\label{sec:linalg:decompositions}
+
+\subsection{Cholesky}
+\label{ssec:linalg:cholesky}
+
+\code{cholesky(A)} returns the lower-triangular Cholesky factor
+$L$ such that
+\[
+A \;=\; L L^\top, \qquad L_{ii} > 0,
+\]
+requiring $A$ symmetric positive definite. The factor is unique.
+The routine is the fastest decomposition: it costs
+$N^3/3 + O(N^2)$ flops, half of LU's cost.
+
+The algorithm computes $L$ column by column:
+\[
+L_{jj} \;=\; \sqrt{A_{jj} - \sum_{k<j} L_{jk}^2},
+\qquad
+L_{ij} \;=\; \frac{1}{L_{jj}}\!\left(A_{ij} - \sum_{k<j} L_{ik} L_{jk}\right)
+\quad (i > j).
+\]
+A non-positive value under the square root signals
+non-positive-definite $A$; the routine raises.
+
+Backward: given $\bar L$ (the cotangent of $L$), define
+\[
+P \;=\; \operatorname{tril}(L^\top \bar L) - \tfrac{1}{2}\operatorname{diag}(L^\top \bar L).
+\]
+Then
+\[
+\bar A \;=\; \tfrac{1}{2}\, L^{-\top} (P + P^\top) L^{-1}.
+\]
+\Lucid's autograd registers this analytical gradient; the user
+does not see the derivation.
+
+\subsection{QR}
+\label{ssec:linalg:qr}
+
+\code{qr(A)} returns $(Q, R)$ where $A = QR$, $Q$ is orthogonal,
+$R$ is upper triangular. Two modes:
+
+\begin{itemize}
+  \item \code{mode='reduced'} (default): returns
+    $Q \in \mathbb{R}^{m \times k}$, $R \in \mathbb{R}^{k \times
+    n}$ for $A \in \mathbb{R}^{m \times n}$, $k = \min(m, n)$.
+  \item \code{mode='complete'}: returns full $Q \in
+    \mathbb{R}^{m \times m}$.
+\end{itemize}
+
+Implementation: Householder reflections via \Accelerate's
+\code{sgeqrf} for the factorisation, \code{sorgqr} for the
+explicit $Q$ reconstruction.
+
+\subsection{SVD}
+\label{ssec:linalg:svd}
+
+\code{svd(A)} returns $(U, S, V^\top)$ where $A = U \Sigma V^\top$
+and $\Sigma = \text{diag}(S)$. The implementation uses
+\Accelerate's \code{sgesdd} (divide-and-conquer), which is
+asymptotically faster than the QR-based \code{sgesvd} for
+matrices larger than a few hundred entries on each side.
+
+Modes:
+\begin{itemize}
+  \item \code{full\_matrices=True}: $U \in \mathbb{R}^{m \times
+    m}$, $V \in \mathbb{R}^{n \times n}$, $S \in \mathbb{R}^{\min(m,
+    n)}$.
+  \item \code{full\_matrices=False}: $U \in \mathbb{R}^{m \times
+    k}$, $V \in \mathbb{R}^{n \times k}$, $k = \min(m, n)$.
+\end{itemize}
+
+The truncated form is typically what's wanted.
+
+\subsection{Eigendecomposition}
+\label{ssec:linalg:eigh}
+
+\code{eigh(A)} returns $(w, V)$ where $A v_i = w_i v_i$ for $A$
+symmetric (Hermitian). Implementation: \code{ssyevd}
+(divide-and-conquer).
+
+\Lucid\ does not currently expose \code{eig} for general
+non-symmetric matrices, on the grounds that ML rarely needs it
+and \refframework\ deprecated it.
+
+\section{Solvers}
+\label{sec:linalg:solvers}
+
+\subsection{Solve}
+\label{ssec:linalg:solve}
+
+\code{solve(A, B)} solves $AX = B$ for $X$. Implementation: LU
+factorisation via \code{sgesv}.
+
+\subsection{Least squares}
+\label{ssec:linalg:lstsq}
+
+\code{lstsq(A, B)} solves $\min_X \|AX - B\|_F$ via SVD-based
+divide-and-conquer (\code{sgelsd}). Returns the minimum-norm
+solution when $A$ is rank-deficient.
+
+\subsection{Triangular solve}
+\label{ssec:linalg:triangular_solve}
+
+\code{triangular\_solve(A, B, upper=True)} solves $AX = B$ when
+$A$ is triangular. Cheaper than general solve: $O(N^2)$ flops
+instead of $O(N^3)$.
+
+\section{Matrix Functions}
+\label{sec:linalg:matrix_functions}
+
+\subsection{inv}
+\label{ssec:linalg:inv}
+
+\code{inv(A)} returns $A^{-1}$. Implementation: LU + back
+substitution (\code{sgetrf} + \code{sgetri}).
+
+For solving systems, prefer \code{solve(A, B)} over \code{inv(A) @
+B}: more numerically stable and faster.
+
+\subsection{Determinant}
+\label{ssec:linalg:det}
+
+\code{det(A)} returns $\det(A)$. For ill-conditioned matrices,
+prefer \code{slogdet(A)} which returns $(\text{sign},
+\log|\det|)$ and avoids overflow / underflow.
+
+\subsection{Matrix exponential}
+\label{ssec:linalg:matrix_exp}
+
+\code{matrix\_exp(A)} returns $e^A = \sum_{k} A^k / k!$.
+Implementation: Pade approximation with scaling and squaring.
+
+\section{Backward Through Linalg}
+\label{sec:linalg:backward}
+
+The backward for each linalg routine has a known closed form
+that \Lucid\ has implemented. The derivations are textbook but
+not always pleasant; \tabref{tab:linalg:backward_summary}
+summarises the form.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{ll}
+\toprule
+Routine & Backward form \\
+\midrule
+cholesky  & triangular solve involving $L^{-1}$ \\
+qr        & dense formula with $Q^\top \bar Q$, $R^{-1}$ \\
+svd       & three terms; depends on $\bar U$, $\bar S$, $\bar V$ \\
+eigh      & two terms; involves $V^\top \bar V$, eigenvalue gaps \\
+solve     & two solves: $X^\top$, then propagate to $\bar A$ \\
+det       & $\det(A) \cdot (A^{-1})^\top \cdot \bar y$ \\
+slogdet   & $(A^{-1})^\top \cdot \bar y_{\log}$ \\
+matrix\_exp & series expansion of $e^A \bar Y$ \\
+\bottomrule
+\end{tabular}
+\caption[Linalg backward forms.]{Closed-form backward
+expressions for the main linalg routines. The expressions are
+generally well-behaved at well-conditioned inputs and become
+numerically delicate at near-singular ones; the autograd engine
+returns NaN in the latter case.}
+\label{tab:linalg:backward_summary}
+\end{table}
+
+\subsection{Failure modes}
+\label{ssec:linalg:failure_modes}
+
+The backward through SVD or eigh becomes singular when the input
+has repeated singular values / eigenvalues. The formula has
+$1 / (\sigma_i - \sigma_j)$ terms; equal singular values produce
+division by zero.
+
+\Lucid's implementation returns NaN in these cases, matching
+\refframework's behaviour. The mitigation is to add a small
+random perturbation to the input.
+
+\section{Performance Notes}
+\label{sec:linalg:perf}
+
+Measured throughput on M3~Max for representative sizes:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Op & Size & Time \\
+\midrule
+cholesky & $1024 \times 1024$  & 14~ms \\
+cholesky & $4096 \times 4096$  & 410~ms \\
+qr       & $1024 \times 1024$  & 28~ms \\
+qr       & $4096 \times 4096$  & 920~ms \\
+svd      & $1024 \times 1024$  & 110~ms \\
+svd      & $4096 \times 4096$  & 4.8~s \\
+eigh     & $1024 \times 1024$  & 96~ms \\
+eigh     & $4096 \times 4096$  & 4.2~s \\
+inv      & $1024 \times 1024$  & 22~ms \\
+\bottomrule
+\end{tabular}
+\caption[Linalg throughput on M3~Max.]{Measured wall-clock times
+for square-matrix decompositions on M3~Max via \Accelerate's
+LAPACK. Cholesky is the cheapest (positive-definite assumption);
+SVD and eigh are the most expensive (dense decomposition with
+iterative refinement).}
+\label{tab:linalg:perf}
+\end{table}
+
+\section{QR and Householder Reflections}
+\label{sec:linalg:qr_detail}
+
+The QR factorisation is the workhorse of orthogonal-projection
+methods (least squares, Gram--Schmidt orthogonalisation, the QR
+algorithm for eigenvalues) \cite{golub_van_loan_2013,trefethen_bau_1997}.
+\Lucid\ implements it via \Accelerate's Householder routine
+\code{sgeqrf} \cite{householder_1958}, which is the standard
+numerically-stable construction.
+
+\subsection{Householder reflections}
+\label{ssec:linalg:householder}
+
+A Householder reflection $H = I - 2 v v^\top / (v^\top v)$ for a
+unit vector $v$ is a symmetric orthogonal matrix that reflects
+any input through the hyperplane orthogonal to $v$. The key
+property: given any vector $x$, we can choose $v$ so that $H x$
+is a multiple of $e_1$ (the first standard basis vector):
+\[
+v \;=\; x - \mathrm{sign}(x_1)\,\|x\|\,e_1.
+\]
+
+QR proceeds by applying Householder reflections to the columns of
+$A$ in sequence, each reflection zeroing out the entries below
+the diagonal of one column:
+\[
+H_n \cdots H_2 H_1 A \;=\; R \quad (\text{upper triangular}),
+\]
+and $Q = H_1 H_2 \cdots H_n$ is the product of reflections. The
+algorithm costs $\sim 2 m n^2 - 2 n^3 / 3$ flops for
+$A \in \mathbb{R}^{m \times n}$ with $m \geq n$.
+
+\subsection{The pseudo-inverse via QR}
+\label{ssec:linalg:pinv_qr}
+
+The Moore--Penrose pseudo-inverse of $A \in \mathbb{R}^{m \times
+n}$ (with $m \geq n$, full column rank) is
+\[
+A^+ \;=\; (A^\top A)^{-1} A^\top \;=\; R^{-1} Q^\top,
+\]
+the second form using $A = QR$. The computation via QR is
+numerically preferable to forming and inverting $A^\top A$
+because $\kappa(A^\top A) = \kappa(A)^2$ (the condition number
+squares).
+
+\Lucid's \code{linalg.pinv} uses the QR-based form for tall
+matrices and the SVD-based form for general rectangular and
+rank-deficient inputs.
+
+\subsection{Backward through QR}
+\label{ssec:linalg:qr_backward}
+
+The backward through QR is non-trivial. Given $A = QR$ and
+cotangents $\bar Q, \bar R$, the input cotangent is
+\[
+\bar A \;=\; \bigl[Q\,(\bar R\, R^\top + R\, \bar R^\top) +
+(I - Q Q^\top)\, \bar Q\bigr] R^{-\top}
+\]
+with the symmetric correction
+\[
+\bar R\, R^\top + R\, \bar R^\top
+\;\text{replaced by}\;
+\operatorname{copyltu}(\bar R\, R^\top - Q^\top \bar Q),
+\]
+where \code{copyltu} copies the lower triangle to the upper to
+enforce symmetry. The derivation requires careful tracking of the
+implicit constraint that $Q^\top Q = I$. \Lucid's autograd ships
+the correct backward; the derivation is in the source comments of
+\code{lucid/\_C/ops/linalg/qr\_backward.cpp}.
+
+\section{SVD in Depth}
+\label{sec:linalg:svd_detail}
+
+The singular value decomposition factors any $A \in
+\mathbb{R}^{m \times n}$ as
+\[
+A \;=\; U \Sigma V^\top, \quad
+U \in \mathbb{R}^{m \times m},\ V \in \mathbb{R}^{n \times n},\
+\Sigma \in \mathbb{R}_{\geq 0}^{m \times n}\ \text{diagonal}.
+\]
+The columns of $U$ are the left singular vectors, the columns of
+$V$ are the right singular vectors, and the diagonal entries of
+$\Sigma$ (ordered decreasingly) are the singular values
+$\sigma_1 \geq \sigma_2 \geq \cdots \geq \sigma_{\min(m,n)} \geq
+0$.
+
+\subsection{Geometric interpretation}
+\label{ssec:linalg:svd_geom}
+
+The SVD says any linear map decomposes into a rotation $V^\top$,
+a scaling along axes $\Sigma$, and another rotation $U$. The
+singular values measure how much each axis is stretched; the
+right singular vectors are the input directions of maximum
+stretch; the left singular vectors are the output directions.
+
+\subsection{Low-rank approximation}
+\label{ssec:linalg:low_rank}
+
+The Eckart--Young theorem \cite{eckart_young_1936} says the best
+rank-$k$ approximation of $A$ in the Frobenius norm is obtained
+by truncating the SVD:
+\[
+A_k \;=\; \sum_{i=1}^{k} \sigma_i u_i v_i^\top,
+\]
+with error
+\[
+\|A - A_k\|_F^2 \;=\; \sum_{i > k} \sigma_i^2.
+\]
+This is the mathematical basis of PCA (with mean-centred data),
+of low-rank fine-tuning (LoRA), and of randomised matrix sketching.
+
+\subsection{Backward through SVD}
+\label{ssec:linalg:svd_backward}
+
+The SVD backward involves three cotangents ($\bar U$, $\bar
+\Sigma$, $\bar V$) producing $\bar A$. The expression has a
+delicate term
+\[
+F_{ij} \;=\; \frac{1}{\sigma_j^2 - \sigma_i^2}, \quad i \neq j,
+\]
+which becomes singular when any two singular values are equal.
+The full backward formula is
+\begin{align*}
+\bar A \;=\;
+&U\,\bar\Sigma\, V^\top \\[2pt]
+&+ \tfrac{1}{2} U (F \odot (U^\top \bar U - \bar U^\top U)) \Sigma V^\top \\
+&+ \tfrac{1}{2} U \Sigma (F \odot (V^\top \bar V - \bar V^\top V)) V^\top.
+\end{align*}
+The $F$ terms vanish when only $\bar \Sigma$ is non-zero (e.g.,
+when backpropagating only through singular values), which is the
+case for nuclear-norm regularisation and is therefore numerically
+safe. The $F$ terms become NaN when the input has repeated
+singular values; \Lucid\ returns NaN in that case and the user
+must regularise.
+
+\section{Eigendecomposition: eigh}
+\label{sec:linalg:eigh_detail}
+
+For a symmetric (Hermitian) matrix $A \in \mathbb{R}^{n \times
+n}$, the spectral theorem gives
+\[
+A \;=\; V \Lambda V^\top, \quad
+V \in \mathbb{R}^{n \times n}\ \text{orthogonal},\
+\Lambda = \operatorname{diag}(\lambda_1, \ldots, \lambda_n).
+\]
+
+\Lucid's \code{eigh} returns $(\lambda, V)$ ordered with
+$\lambda_1 \leq \cdots \leq \lambda_n$.
+
+\subsection{Backward through eigh}
+\label{ssec:linalg:eigh_back}
+
+Given cotangents $\bar \lambda$ and $\bar V$, the input cotangent
+is
+\[
+\bar A \;=\; V\,\bigl(\bar\Lambda + (G \odot (V^\top \bar V))\bigr) V^\top,
+\]
+where $\bar\Lambda = \operatorname{diag}(\bar\lambda)$ and
+\[
+G_{ij} \;=\; \begin{cases}
+\dfrac{1}{\lambda_j - \lambda_i} & i \neq j \\
+0 & i = j.
+\end{cases}
+\]
+Like the SVD backward, the $G$ term diverges at repeated
+eigenvalues. The same regularisation advice applies.
+
+\subsection{Inverse iteration for selected eigenvalues}
+\label{ssec:linalg:inverse_iteration}
+
+For very large symmetric matrices where only a few extreme
+eigenvalues are wanted (the typical case in spectral clustering
+or graph Laplacian computations), full \code{eigh} is wasteful.
+\Lucid\ does not currently expose a partial-eigendecomposition
+routine; users needing one resort to power iteration or
+\code{scipy.sparse.linalg.eigsh} for sparse matrices.
+
+\section{Cross, Outer, vecdot, and multi-dot}
+\label{sec:linalg:products}
+
+The non-decomposition products in \code{lucid.linalg}.
+
+\subsection{cross}
+\label{ssec:linalg:cross}
+
+The cross product
+\[
+a \times b \;=\; \bigl(a_2 b_3 - a_3 b_2,\ a_3 b_1 - a_1 b_3,\
+a_1 b_2 - a_2 b_1\bigr)
+\]
+for $a, b \in \mathbb{R}^3$, with batch broadcasting. Backward:
+$\bar a = \bar y \times b$, $\bar b = a \times \bar y$ (using
+the antisymmetric identity).
+
+\subsection{outer}
+\label{ssec:linalg:outer}
+
+\code{outer(a, b)} returns $a b^\top \in \mathbb{R}^{m \times
+n}$ for $a \in \mathbb{R}^m$, $b \in \mathbb{R}^n$. The same as
+\code{a.unsqueeze(-1) * b.unsqueeze(-2)} but with the explicit
+linalg semantic.
+
+\subsection{vecdot}
+\label{ssec:linalg:vecdot}
+
+\code{vecdot(a, b, dim=-1)} returns the inner product
+$\sum_i a_i b_i$ along the named axis. Backward is
+$(b\,\bar y,\ a\,\bar y)$.
+
+\subsection{The multi-dot chain product}
+\label{ssec:linalg:multi_dot}
+
+\code{multi\_dot([A1, A2, ..., An])} computes the product $A_1
+A_2 \cdots A_n$ in the order that minimises total flops. The order
+matters substantially: for a chain $M \cdot v$ where $M$ is
+$n \times n$ and $v$ is $n \times 1$, computing right-to-left
+costs $n^2$ flops, while left-to-right would cost $n^3$ if done
+naively.
+
+The minimum-cost parenthesisation is the classic dynamic-
+programming problem with $O(n^3)$ table-filling cost in the
+number of matrices.
+
+\section{Numerical Conditioning}
+\label{sec:linalg:conditioning}
+
+The numerical behaviour of a linear-algebra routine depends on
+the \emph{condition number} of its input. For a square invertible
+matrix $A$, the 2-norm condition number is
+\[
+\kappa_2(A) \;=\; \|A\|_2 \cdot \|A^{-1}\|_2 \;=\; \frac{\sigma_{\max}(A)}{\sigma_{\min}(A)}.
+\]
+A small perturbation $\delta A$ in the input can cause a
+perturbation in the output bounded by $\kappa(A) \cdot \|\delta
+A\| / \|A\|$. Routines on poorly-conditioned matrices lose
+precision proportionally.
+
+\subsection{Recognising ill-conditioning}
+\label{ssec:linalg:ill_cond}
+
+\code{cond(A)} returns $\kappa_2(A)$ via the SVD. Heuristics:
+\begin{itemize}
+  \item $\kappa < 10^3$: well-conditioned; full FP32 precision.
+  \item $10^3 < \kappa < 10^6$: moderately ill-conditioned; expect
+    3--4 digit precision loss in FP32.
+  \item $\kappa > 10^9$: ill-conditioned; consider FP64 or
+    regularisation.
+\end{itemize}
+
+\subsection{Regularisation}
+\label{ssec:linalg:regularisation}
+
+The standard remedy for ill-conditioning is to add a small
+multiple of the identity:
+\[
+A' \;=\; A + \lambda I.
+\]
+The condition number is bounded:
+\[
+\kappa_2(A') \;\leq\; \frac{\sigma_{\max}(A) + \lambda}{\sigma_{\min}(A) + \lambda}
+\;\leq\; \frac{\sigma_{\max}(A)}{\lambda}.
+\]
+The trade-off is bias: $A'$ is no longer the original matrix.
+Typical regularisation strengths: $\lambda \sim 10^{-6}$ for
+mild conditioning issues.
+
+\section{Implementation Mapping}
+\label{sec:linalg:impl_mapping}
+
+\tabref{tab:linalg:impl_mapping} maps the public functions to
+their LAPACK backends.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Lucid function & LAPACK routine(s) & Notes \\
+\midrule
+\code{cholesky}        & \code{spotrf}, \code{dpotrf}   & SPD only \\
+\code{qr}              & \code{sgeqrf}, \code{sorgqr}   & Householder \\
+\code{svd}             & \code{sgesdd}                  & divide-and-conquer \\
+\code{eigh}            & \code{ssyevd}                  & divide-and-conquer \\
+\code{solve}           & \code{sgesv}                   & LU with partial pivoting \\
+\code{lstsq}           & \code{sgelsd}                  & SVD-based DC \\
+\code{inv}             & \code{sgetrf} + \code{sgetri}  & LU + back-substitution \\
+\code{det}             & \code{sgetrf}                  & product of diagonal \\
+\code{slogdet}         & \code{sgetrf}                  & log-product of diagonal \\
+\code{matrix\_exp}     & custom Pade + scaling          & no direct LAPACK \\
+\code{triangular\_solve} & \code{strtrs}                & specialised solve \\
+\code{cholesky\_solve} & \code{spotrs}                  & specialised solve \\
+\code{ldl}             & \code{ssytrf}                  & symmetric indefinite \\
+\bottomrule
+\end{tabular}
+\caption[Linalg backend mapping.]{Mapping from \Lucid's
+\code{linalg} functions to the underlying LAPACK routines that
+\Accelerate\ provides. The CLAPACK \code{LAPACKE\_*} wrappers are
+used throughout for the row-major-aware API.}
+\label{tab:linalg:impl_mapping}
+\end{table}
+
+\section{Applications in ML}
+\label{sec:linalg:applications}
+
+A few patterns where the linalg subpackage appears in modern ML.
+
+\subsection{Principal Component Analysis (PCA)}
+\label{ssec:linalg:pca}
+
+Given data $X \in \mathbb{R}^{n \times d}$ (mean-centred), PCA
+finds the directions of maximum variance:
+\[
+X = U \Sigma V^\top,
+\quad \text{principal components} = V_{:,1:k},
+\quad \text{scores} = U_{:,1:k} \Sigma_{1:k,1:k}.
+\]
+In \Lucid:
+\begin{lstlisting}[style=lucid,language=LucidPython]
+X = X - X.mean(dim=0, keepdims=True)
+U, S, Vt = lucid.linalg.svd(X, full_matrices=False)
+components = Vt[:k]
+scores = U[:, :k] * S[:k]
+\end{lstlisting}
+
+\subsection{Low-rank fine-tuning (LoRA)}
+\label{ssec:linalg:lora}
+
+LoRA \cite{hu_lora_2021} represents a weight delta as a low-rank
+product:
+\[
+\Delta W = B A, \quad B \in \mathbb{R}^{d \times r},\
+A \in \mathbb{R}^{r \times d},\ r \ll d.
+\]
+The fine-tuned weight is $W + B A$. The original weight $W$ is
+frozen; only $A$ and $B$ are trained. \Lucid\ provides this as
+a module; the underlying linear algebra is plain \code{matmul}.
+
+\subsection{Spectral normalisation}
+\label{ssec:linalg:spec_norm}
+
+The spectral norm of a weight matrix $\|W\|_2 = \sigma_1(W)$
+bounds the Lipschitz constant of the linear map. Spectral
+normalisation \cite{miyato_specnorm_2018} divides $W$ by an
+estimate of its largest singular value, computed via power
+iteration (one or two iterations per forward) rather than a full
+SVD.
+
+\section{Summary and Forward References}
+\label{sec:linalg:summary}
+
+\code{lucid.linalg} exposes a comprehensive set of linear-algebra
+routines that delegate to \Accelerate's LAPACK via the CPU
+stream. The carve-out makes device choice fictive; the bridge
+cost is negligible. Backward forms are known in closed form for
+every routine, with the caveat that SVD and eigh become
+numerically singular at degenerate inputs.
+
+The next chapter, \chref{ch:fft}, treats the FFT subpackage that
+shares the same dispatch carve-out.
+
+\begin{lucidnote}
+For the user: \code{lucid.linalg} is the only namespace. Device
+argument is informational only for linalg ops; the actual
+computation always runs on CPU through \Accelerate.
+\end{lucidnote}

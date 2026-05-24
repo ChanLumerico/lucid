@@ -1,0 +1,890 @@
+% !TEX root = ../main.tex
+\chapter{Apple Silicon Architecture}
+\label{ch:apple_silicon}
+
+The substrate on which \Lucid\ executes is not a generic compute fabric.
+It is a tightly integrated, vertically designed system-on-chip family
+(\emph{Apple silicon}, sometimes \emph{Apple~M}) that Apple introduced in
+November 2020 with the M1 and has iterated on each subsequent year through
+the M2 (2022), M3 (2023), and M4 (2024) generations. Every architectural
+choice in \Lucid\ --- from the device split into a CPU stream and a GPU
+stream (\chref{ch:backend_dispatch}), to the carve-out that runs linear
+algebra through \MLX\ even when the user selected the CPU
+(\chref{ch:linalg}), to the deliberate avoidance of the Neural Engine
+(\secref{sec:apple_silicon:ane}) --- presupposes a reader who understands
+the chip beneath the runtime. This chapter exists to provide that
+understanding.
+
+We approach the silicon the way a compiler writer would: as a
+heterogeneous collection of compute units sharing a single unified memory
+through a coherent fabric, with each unit exposing a distinct programming
+model and a distinct cost profile.\footnote{We deliberately defer
+\emph{unified memory} itself to \chref{ch:unified_memory}; here we treat
+it as a property of the SoC that gives every compute unit a coherent view
+of the same DRAM pool, and we return to its detailed model later.} The
+exposition is organised by compute unit. \secref{sec:apple_silicon:cpu}
+covers the CPU complex, with its heterogeneous performance and efficiency
+cores. \secref{sec:apple_silicon:amx} treats the Apple Matrix Coprocessor
+(AMX) and its transition to the ARM Scalable Matrix Extension (SME) in
+the M4. \secref{sec:apple_silicon:ane} discusses the Neural Engine and
+explains, with reference to \Lucid's design constraints, why it is
+intentionally absent from \Lucid's dispatch graph.
+\secref{sec:apple_silicon:gpu} describes the GPU, which is the workhorse
+of nearly every training workload on the platform.
+\secref{sec:apple_silicon:memory} addresses the memory hierarchy and
+system-level cache (SLC). Finally,
+\secref{sec:apple_silicon:generations} compares the four generations
+quantitatively, and \secref{sec:apple_silicon:ml_implications} draws the
+conclusions that motivate the rest of the book.
+
+\section{Overview}
+\label{sec:apple_silicon:overview}
+
+Apple silicon refers to a family of ARMv8 (and, from the M4 onwards,
+ARMv9-A) SoCs designed by Apple's silicon engineering group and
+manufactured by TSMC on its leading-edge processes
+\cite{apple_m1_2020,apple_m4_2024}. The first member,
+M1, shipped in late 2020 on TSMC's first-generation 5\,nm node (N5);
+M2 used an enhanced 5\,nm node (N5P) in mid-2022; M3 moved to a
+first-generation 3\,nm node (N3B) in late 2023; M4 moved again to
+TSMC's N3E in mid-2024.\footnote{Process generation matters more than
+it might appear: each shrink alters not only the area budget but the
+voltage/frequency curve, which feeds into the power envelope that
+ultimately bounds sustained ML throughput. We revisit this in
+\secref{sec:apple_silicon:ml_implications}.}
+
+The hallmark of Apple silicon, and the property that most distinguishes
+it from contemporaneous discrete-GPU systems, is the integration of
+heterogeneous compute units --- a CPU complex, a GPU, a Neural Engine
+(NPU), and one or more matrix coprocessors --- on a single die, all
+accessing a single physical DRAM pool through a single coherent fabric.
+There is no PCIe boundary between the CPU and the accelerator; there is
+no explicit \code{cudaMemcpy} step; the GPU does not have a private
+VRAM. This is what \emph{unified memory} means at the SoC level, and it
+is the architectural reason why \Lucid's CPU--GPU bridge is designed
+around zero-copy view sharing rather than data marshalling
+(\chref{ch:unified_memory}, \chref{ch:bridge_boundaries}).
+
+The family has four published tiers, each obtained by stamping
+additional copies of the same building blocks:
+\begin{itemize}
+  \item \textbf{Base} (M1 / M2 / M3 / M4): one CPU complex with a small
+    P-core cluster (typically 4 cores) and a small E-core cluster
+    (typically 4 cores), a moderate GPU (7--10 cores), 8--24\,GB DRAM,
+    and roughly 60--120\,GB/s of memory bandwidth.
+  \item \textbf{Pro}: an enlarged P-core cluster (6--10 cores), a
+    larger GPU (14--20 cores), wider memory bus (4 channels of
+    LPDDR5), and 200\,GB/s-class bandwidth.
+  \item \textbf{Max}: another doubling of the P-core complex and GPU
+    (24--40 GPU cores), 8 channels of LPDDR5, and 400\,GB/s-class
+    bandwidth.
+  \item \textbf{Ultra}: two Max dies connected through Apple's
+    \emph{UltraFusion} silicon interposer to present a single logical
+    SoC with up to 64 GPU cores and 800\,GB/s of aggregate bandwidth.
+\end{itemize}
+
+For \Lucid, the relevant generalisation is the following: as one moves
+from base to Ultra, the available GPU compute grows roughly $8\times$,
+memory bandwidth grows roughly $13\times$, but per-thread CPU
+performance changes only marginally. This shapes the dispatch
+philosophy laid out in \chref{ch:backend_dispatch}: any
+performance-critical work that can be expressed as a GPU primitive
+must be sent to \MLX, because the CPU side does not scale with the
+chip tier.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  block/.style={draw, rounded corners=2pt, minimum height=22pt,
+                minimum width=2.6cm, font=\small\sffamily,
+                inner sep=4pt, align=center},
+  cpu/.style={block, fill=lucid.note.bg},
+  gpu/.style={block, fill=lucid.info.bg},
+  acc/.style={block, fill=lucid.code.bg},
+  fabric/.style={draw, fill=lucid.rule, minimum width=14cm,
+                 minimum height=18pt, font=\small\sffamily\bfseries,
+                 align=center},
+  mem/.style={draw, rounded corners=2pt, fill=lucid.ok.bg,
+              minimum height=22pt, minimum width=2.8cm,
+              font=\small\sffamily, align=center, inner sep=4pt},
+  dram/.style={draw, dashed, minimum width=14cm, minimum height=20pt,
+               font=\small\sffamily\itshape, align=center},
+  link/.style={thick, color=lucid.muted},
+]
+  % Compute tier (top)
+  \node[cpu] (pc)    at (-5.5, 2.4) {P-cores};
+  \node[acc] (amx)   at (-2.8, 2.4) {AMX / SME};
+  \node[cpu] (ec)    at ( 0,   2.4) {E-cores};
+  \node[gpu] (gpu)   at ( 2.8, 2.4) {GPU cores};
+  \node[gpu] (ane)   at ( 5.5, 2.4) {Neural Engine};
+
+  % Fabric
+  \node[fabric] (fab) at (0, 0.3) {Apple Fabric (coherent NoC)};
+
+  % Memory tier (bottom)
+  \node[mem] (slc) at (-4, -1.6) {System Level\\Cache};
+  \node[mem] (mc)  at ( 4, -1.6) {Memory\\Controllers};
+  \node[dram] (dram) at (0, -3.3) {LPDDR4X / LPDDR5(X) DRAM};
+
+  % Vertical links from compute to fabric
+  \draw[link] (pc.south)  -- (pc.south  |- fab.north);
+  \draw[link] (amx.south) -- (amx.south |- fab.north);
+  \draw[link] (ec.south)  -- (ec.south  |- fab.north);
+  \draw[link] (gpu.south) -- (gpu.south |- fab.north);
+  \draw[link] (ane.south) -- (ane.south |- fab.north);
+
+  % Vertical links from fabric to memory
+  \draw[link] (slc.north) -- (slc.north |- fab.south);
+  \draw[link] (mc.north)  -- (mc.north  |- fab.south);
+
+  % SLC + MC to DRAM
+  \draw[link] (slc.south) -- (slc.south |- dram.north);
+  \draw[link] (mc.south)  -- (mc.south  |- dram.north);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Apple silicon SoC topology.]{Schematic floorplan of an Apple
+silicon SoC. All compute units --- the CPU complex (P-cores, E-cores,
+AMX/SME), the GPU, the Neural Engine, and fixed-function media blocks
+--- communicate with DRAM through a single coherent fabric (the Apple
+Fabric, sometimes called the system-level interconnect) that also
+hosts the System Level Cache. \Lucid\ targets the CPU complex (through
+\Accelerate) and the GPU (through \MLX\ and \MPSGraph); the Neural
+Engine is intentionally not part of the dispatch graph, for reasons
+described in \secref{sec:apple_silicon:ane}.}
+\label{fig:apple_silicon_topology}
+\end{figure}
+
+The remainder of this chapter inspects each block in
+\figref{fig:apple_silicon_topology} in turn. We pay particular attention
+to (i)~the contracts the unit exposes to a runtime, (ii)~the
+microarchitectural quirks that shape \Lucid's kernels and dispatch
+policy, and (iii)~the generation-over-generation drift that affects
+backward compatibility and version-gated code paths.
+
+\section{SoC Floorplan and Coherent Fabric}
+\label{sec:apple_silicon:floorplan}
+
+A modern Apple SoC is not a monolithic die in the architectural sense
+that an Intel Xeon of comparable transistor count is. It is, instead,
+a tiled die: a grid of physically distinct \emph{clusters} (CPU
+clusters, GPU cluster groups, the Neural Engine, the media engines,
+and so on) connected by a network-on-chip (NoC) that Apple internally
+calls the \emph{Apple Fabric}. The fabric is a coherent interconnect:
+loads and stores from any client (a CPU core, a GPU shader core, the
+Neural Engine) observe a single, well-ordered view of memory, with the
+fabric and the System Level Cache acting in concert to ensure that a
+write by the GPU becomes visible to a subsequent CPU load without an
+explicit invalidation.
+
+This coherence guarantee is what enables \Lucid's bridge boundary
+(\chref{ch:bridge_boundaries}) to be a metadata operation rather than
+a \code{memcpy}: when \Lucid\ converts an \MLX\ array to a
+contiguous CPU view, the underlying bytes are not moved, only
+relabelled.\footnote{The mechanism is described in detail in
+\chref{ch:tensor_model} and the \texttt{SharedStorage} class in
+\code{lucid/\_C/backend/gpu/SharedStorage.cpp}. The short version is
+that we extract the \code{MTL::Buffer*} backing an \code{mlx::core::array}
+through \code{mlx::core::array::data<T>()}, then expose its bytes
+through the same Accelerate-facing pointer that the CPU backend would
+have used.}
+
+The fabric has three properties that matter for ML workloads.
+
+\paragraph{Coherence at the cache-line granularity.} Coherence is
+managed at the standard ARM cache-line width (128 bytes on Apple
+silicon's L1 and L2; the SLC operates at the same granularity to the
+fabric). This means that false-sharing pathologies that plague
+multi-socket x86 systems --- where two cores writing into adjacent
+cache lines stall each other --- still exist on Apple silicon, but
+they are bounded to the local cluster, since the fabric is the only
+coherence point. In practice this affects \Lucid\ only in the
+parameter-update path of distributed training (which is not yet
+supported; see \chref{ch:reproducibility}).
+
+\paragraph{Cluster-local L2 caches.} Each CPU cluster owns a private
+L2 (typically 12--16\,MB for the P-cluster and 4\,MB for the
+E-cluster). Inter-cluster traffic --- including all traffic from CPU
+to GPU --- must traverse the fabric and is filtered by the SLC.
+Latency to the SLC is roughly $80$ to $120$ cycles depending on
+generation; latency to DRAM, when SLC misses, is in the $150$--$200$
+cycle range on the P-cores. These numbers are not published by Apple
+and have been characterised by independent researchers
+\cite{johnson_m1_microarch_2021}.\footnote{The
+most thorough published characterisation of the M1 microarchitecture
+is by Dougall Johnson and the Asahi Linux project. Subsequent
+generations have been benchmarked by SemiAnalysis and Anandtech-style
+deep dives; numbers in this chapter are typical of those reports and
+should be treated as approximate.}
+
+\paragraph{Asymmetric bandwidth.} The fabric is not bandwidth-uniform.
+The GPU has a wider connection to the fabric than any single CPU
+cluster; the Neural Engine has its own dedicated path. In aggregate,
+the GPU can saturate roughly $80$--$90\,\%$ of the chip's memory
+bandwidth on a sustained streaming workload, while a single CPU core
+can drive perhaps $30$--$40\,\%$.\footnote{This asymmetry is part of
+why \Lucid's CPU backend uses \BNNS\ for convolutions: it is the only
+CPU-side API on macOS that accesses the fabric through a
+matrix-coprocessor-accelerated path rather than a single-core path.}
+The Ultra variants double the fabric and thus the aggregate
+bandwidth, but the per-client peak does not scale linearly.
+
+\section{The CPU Complex}
+\label{sec:apple_silicon:cpu}
+
+Apple's CPU complex is a heterogeneous (\emph{big.LITTLE}) design that
+combines a small number of large, out-of-order \emph{performance
+cores} (P-cores) with a larger number of small, energy-optimised
+\emph{efficiency cores} (E-cores). The cluster organisation has
+remained stable across generations, but every core microarchitecture
+has been re-implemented at least once.
+
+\subsection{Performance cores}
+\label{ssec:apple_silicon:p_cores}
+
+The P-core is the most-quoted aspect of Apple silicon's
+microarchitecture, and the most thoroughly reverse-engineered. Its
+distinguishing properties are well-documented through Apple's
+patents, Asahi Linux's reverse engineering, and Dougall Johnson's
+public micro-benchmarks. We summarise the salient design choices.
+
+\subsubsection{Pipeline width and out-of-order resources}
+
+Every Apple P-core since Firestorm (M1) decodes \emph{eight
+instructions per cycle} and dispatches across roughly the same number
+of issue ports. This is the widest sustained-decode design in any
+shipping general-purpose CPU and roughly twice the width of
+contemporaneous x86 cores (which decode 4--6 instructions per cycle).
+The implication is that ILP-rich code --- pointer chasing, tight
+arithmetic loops --- runs unusually fast per cycle on Apple P-cores,
+which is why ARM-translated Intel binaries (\code{Rosetta 2}) reach
+$60$--$80\,\%$ of native performance despite the translation overhead.
+
+The reorder buffer (ROB) on Firestorm is roughly $630$ entries; later
+generations have grown this further. For comparison, contemporaneous
+x86 ROBs are in the $350$--$500$ range. The wide front-end and deep
+ROB are what enable the P-core to absorb the latency to the SLC and
+DRAM without stalling.
+
+\subsubsection{NEON and the SIMD path}
+
+Each P-core has four 128-bit NEON pipes; this corresponds to four
+single-precision multiply--add throughputs per cycle per core, or
+$128$ GFLOP/s at 4\,GHz. NEON is the SIMD ISA \Accelerate's
+\code{vDSP} layer targets directly; the \code{vDSP\_vmul}, \code{vsmsa},
+and similar primitives in \Lucid's CPU backend
+(\chref{ch:backend_dispatch}) compile down to NEON.
+
+Crucially, NEON is \emph{not} the path used by \BNNS\ for
+convolutions. \BNNS\ goes through the AMX coprocessor
+(\secref{sec:apple_silicon:amx}), which is shared by the whole
+P-cluster and can sustain matrix-multiply throughput an order of
+magnitude higher than four NEON pipes can.
+
+\subsubsection{SME and the M4 transition}
+
+The M4 generation is the first Apple silicon to expose the ARM
+Scalable Matrix Extension (SME) \cite{arm_sme_2021} at the ISA
+level. SME is the architected successor to the (still
+undocumented) AMX instruction set;
+it gives software a portable, ARM-blessed API for matrix-multiply
+acceleration. SME operates on \emph{tiles} of variable width
+(\code{ZA} register file) and provides outer-product accumulation
+instructions analogous to AMX's \code{outer-product} micro-ops.
+
+For \Lucid\ the practical implication is small in the short term and
+large in the long term:
+\begin{enumerate}
+  \item In the short term, \Accelerate's \BNNS\ on M4 transparently
+    uses SME where it would have used AMX on M1--M3, so \Lucid's CPU
+    backend gets the benefit without any code change.
+  \item In the long term, SME's portability means that \Lucid\ could
+    eventually emit SME intrinsics directly from \code{lucid.compile}
+    (\chref{ch:compile_design}) without depending on \Accelerate. This
+    is on the roadmap but is not in the 3.5 series.
+\end{enumerate}
+
+\subsubsection{Performance counters and observation}
+
+The P-cores expose roughly $400$ performance monitoring unit (PMU)
+events. These are not exposed through standard ARM PMU mechanisms on
+macOS; instead, the \code{Instruments.app} CPU Counters template (or
+the underlying \code{kperf} API) is the only supported access path.
+\Lucid's profiler (\chref{ch:profiler_determinism}) uses
+\code{mach\_absolute\_time()} for wall-clock timing and does not
+currently read PMU counters; the user is expected to use Instruments
+for cycle-level analysis.
+
+\subsection{Efficiency cores}
+\label{ssec:apple_silicon:e_cores}
+
+The E-cores are interesting for \Lucid\ less because of what they
+execute than because of what they \emph{do not} execute. They are
+designed for sustained low-power operation, with a much narrower
+front-end (typically 4-wide decode) and a smaller ROB ($\sim 180$
+entries on Icestorm). They run at lower frequencies (peak roughly
+$2$\,GHz, against $3.2$--$4.5$\,GHz for the P-cores) and lack the
+parallel NEON throughput of the P-cores.
+
+For an ML workload, the consequence is that any thread which falls
+onto an E-core will be roughly $4$--$6\times$ slower per cycle than
+the same thread on a P-core, and run at a lower clock besides. This
+matters because the macOS scheduler will move threads off the P-cores
+when their QoS class is set to background or utility
+(\secref{ssec:apple_silicon:scheduling}). \Lucid's main training
+loop, by design, uses no thread-affinity hints and runs at the
+default QoS class \code{USER\_INITIATED}; this places it on P-cores
+unless the user has dropped to background, which is the correct
+behaviour for training workloads but means that \Lucid\ will
+\emph{not} oversubscribe E-cores even when they are idle.
+
+\subsection{Big.LITTLE scheduling and QoS}
+\label{ssec:apple_silicon:scheduling}
+
+macOS implements scheduling through Grand Central Dispatch (GCD),
+which expresses thread priority through QoS classes:
+\code{USER\_INTERACTIVE}, \code{USER\_INITIATED}, \code{UTILITY},
+\code{BACKGROUND}, and \code{DEFAULT}. The lower three classes
+(\code{UTILITY}, \code{BACKGROUND}, \code{DEFAULT}) are eligible for
+the E-cluster; the upper two are confined to the P-cluster, modulo
+thermal pressure. The kernel performs the placement; user code has no
+direct affinity API.
+
+This is why \Lucid's data-loader threads
+(\chref{ch:data_pipeline}) explicitly leave the QoS class unset,
+which inherits \code{USER\_INITIATED} from the calling thread. Setting
+it to \code{UTILITY} would have placed I/O workers on E-cores, which
+sounds reasonable but is in fact counter-productive: the disk and
+network I/O is bound by the SSD's NVMe controller rather than CPU,
+and the cost of repeatedly waking an E-core dominates the savings
+from keeping the P-cores idle.
+
+\section{Apple Matrix Coprocessor (AMX) and SME}
+\label{sec:apple_silicon:amx}
+
+The Apple Matrix Coprocessor is, as of the time of writing, the most
+performance-critical and least-documented component of Apple silicon.
+It is an undocumented matrix-multiply accelerator shared by the
+P-cluster (each P-cluster has one AMX unit; the E-cluster does not)
+and accessible only through reserved instruction encodings that are
+not part of the architected ARM ISA. Its existence is acknowledged by
+Apple only through patent filings and through the throughput of
+\Accelerate's BLAS routines, which exceed what is possible with NEON
+alone by a factor of four to ten.
+
+\subsection{Instruction format and execution model}
+\label{ssec:apple_silicon:amx_isa}
+
+AMX instructions are encoded as ARM-reserved opcodes that the
+processor decodes into messages to the shared coprocessor. The unit
+operates as a tile machine: it owns a set of internal register tiles
+(\code{X}, \code{Y}, \code{Z}) holding submatrices of $32 \times 32$
+to $64 \times 64$ depending on element type, and it executes
+outer-product micro-operations that accumulate into the \code{Z}
+tile. A typical $\code{mlx\_outer}$-style instruction takes two row
+vectors from \code{X} and \code{Y} and accumulates their outer
+product into a slice of \code{Z}; chaining these reproduces GEMM with
+peak throughput around $2$\,TFLOP/s on M1 P-cluster, scaling roughly
+linearly with cluster count thereafter.
+
+The encoding has been documented unofficially in reverse-engineering
+work by Dougall Johnson and others, and exposed through low-level
+libraries such as \texttt{aarch64-jit-amx}. Apple has never blessed
+direct AMX programming; the supported path has always been
+\Accelerate.
+
+\subsection{Throughput characteristics}
+\label{ssec:apple_silicon:amx_perf}
+
+Empirical AMX throughput, measured through \code{cblas\_sgemm}, sits
+in the range of $1.5$ to $2.5$ TFLOP/s per P-cluster on
+single-precision matrix multiplication of sizes
+$\geq 256 \times 256$. Smaller matrices do not amortise the
+cluster-internal dispatch cost and run at NEON throughput or lower.
+Mixed precision (BF16 inputs, FP32 accumulate) on M3 and later
+roughly doubles the peak, but \Accelerate\ has not, as of the 3.5
+series of \Lucid, exposed BF16 \code{cblas\_gemm\_bf16bf16f32} on all
+SDKs; \Lucid's CPU backend therefore still uses FP32 GEMM by default,
+and the BF16 enablement lives in the AMP roadmap.
+
+\subsection{Relationship to ARM SME in the M4 generation}
+\label{ssec:apple_silicon:sme}
+
+The M4 introduces the ARM Scalable Matrix Extension (SME) as the
+architected successor to AMX. SME is a fully documented ARM ISA
+extension (ARMv9.2-A) with portable assembly, intrinsics, and
+debugger support. From \Accelerate's perspective the transition is
+seamless: \BNNS\ and \code{cblas\_sgemm} produce the same outputs on
+SME and AMX, with the dispatcher selecting at runtime based on
+\code{sysctl}-reported features.
+
+For \Lucid, three things change with SME:
+
+\begin{enumerate}
+  \item The CPU backend (\Accelerate) becomes future-proof: a future
+    macOS version that drops AMX shims will still run, because the
+    pathway used by \Accelerate\ is now ARM-architected.
+  \item The compile path (\chref{ch:compile_design}) acquires a
+    portable target. \Lucid\ does not currently emit SME instructions
+    directly, but \code{lucid.compile} could in principle emit them
+    in a future generation, removing the dependency on \Accelerate's
+    in-process dispatch.
+  \item The cost model for the CPU backend changes: SME tiles are
+    of \emph{variable} width (the \code{SVL} parameter), and the M4
+    exposes a tile size of $512$ bits, which makes some smaller-matrix
+    operations more efficient than they were on AMX. \Lucid's
+    dispatcher does not currently exploit this, but future Accelerate
+    versions are expected to.
+\end{enumerate}
+
+\section{Apple Neural Engine (ANE)}
+\label{sec:apple_silicon:ane}
+
+The Neural Engine is the most marketed and the least useful of Apple
+silicon's accelerators from \Lucid's perspective. It is a fixed
+function unit: a 16-core (M1, M2) or 16/32-core (M3, M4) NPU
+specialised for low-precision neural-network inference, with a peak
+throughput on M4 quoted by Apple at $38$ TOPS at INT8.
+
+The ANE is exposed exclusively through CoreML and ML Compute. It does
+not accept arbitrary kernels, does not support arbitrary dtypes
+(INT8 and FP16 only; no FP32, no BF16 on most generations, no FP64
+ever), and operates only on graphs that have been compiled offline
+into the CoreML format. There is no SDK that exposes the ANE for
+training; there is no online graph submission API.
+
+This places the ANE outside \Lucid's scope by construction. \Lucid\
+targets \emph{training} workloads, which require:
+\begin{enumerate}
+  \item Gradient computation, hence backward kernels for every op.
+  \item Mixed precision with FP32 master weights, hence FP32
+    arithmetic.
+  \item Dynamic graph construction at the Python level, hence online
+    submission.
+\end{enumerate}
+The ANE satisfies none of these. A future inference-only
+\code{lucid.deploy} target could compile a trained model to CoreML
+and benefit from the ANE on user devices, but the ANE will never be
+part of the training graph and is therefore not part of this
+chapter's primary subject. We mention it here only to forestall the
+common question of why \Lucid\ does not use it.
+
+\section{The GPU}
+\label{sec:apple_silicon:gpu}
+
+The GPU is the workhorse. On any non-trivial neural network, the GPU
+performs more than $95\,\%$ of the floating-point arithmetic, even
+when the CPU side is doing its job (data loading, gradient
+accumulation, optimiser updates). \Lucid's compile path
+(\chref{ch:graph_capture_wins}) emits its compiled graphs onto the
+GPU via \MPSGraph; the \MLX\ runtime executes its eager kernels on
+the GPU; the CPU is a coordinator. Understanding the GPU's
+microarchitecture is therefore central to understanding \Lucid's
+performance profile.
+
+\subsection{Compute hierarchy}
+\label{ssec:apple_silicon:gpu_compute}
+
+Apple's GPU is organised as a number of \emph{GPU cores} (Apple's
+marketing term; the architectural unit is sometimes called a
+\emph{shader core} or \emph{compute unit}). Each GPU core contains:
+\begin{itemize}
+  \item Several \emph{shader execution units}, each capable of
+    executing 32-lane SIMD (\emph{SIMD group} in Metal parlance) FP32
+    operations per cycle.
+  \item A texture unit and ray-tracing unit (on M3 and later).
+  \item Local memory (called \emph{threadgroup memory} in Metal),
+    typically $32$\,KB per core.
+  \item Register file for in-flight threads (each thread gets a
+    private slice).
+\end{itemize}
+
+The base M1 has 7 or 8 GPU cores; M1~Pro has 14 or 16; M1~Max has
+24 or 32; M1~Ultra has 48 or 64. The M2 and M3 generations followed
+a similar scaling pattern, with each tier roughly doubling the
+previous. M4~Max as of the time of writing has up to 40 GPU cores.
+
+Each GPU core can sustain in the neighbourhood of $200$ FP32 GFLOP/s
+at base clocks. The aggregate throughput thus scales linearly with
+core count, modulo memory bandwidth and thermal constraints. The
+M1~Max's 32-core GPU delivers approximately $10.4$ TFLOP/s FP32
+peak; the M3~Max's 40-core GPU is approximately $14$ TFLOP/s. These
+are the numbers that bound \Lucid's training throughput on
+matrix-multiply-bound workloads.
+
+\subsection{Memory hierarchy on the GPU side}
+\label{ssec:apple_silicon:gpu_mem}
+
+Each GPU core sees memory through a layered hierarchy:
+\begin{enumerate}
+  \item \textbf{Registers.} Per-thread, allocated by the Metal
+    compiler from a fixed pool ($32$\,KB to $64$\,KB per core
+    depending on generation). Register pressure governs occupancy.
+  \item \textbf{Threadgroup memory.} A small, fast, software-managed
+    scratchpad shared by all threads in a threadgroup; typically
+    $32$\,KB.
+  \item \textbf{Tile memory.} A dedicated on-chip buffer used during
+    render-target operations; less relevant for compute.
+  \item \textbf{System Level Cache.} Shared with the CPU; the GPU's
+    only path to DRAM goes through the SLC.
+  \item \textbf{DRAM (LPDDR).} The unified pool.
+\end{enumerate}
+
+There is no separate VRAM, no separate L2 the GPU owns exclusively.
+The SLC is the only large on-chip GPU cache, and it is shared with
+every other client of the fabric. Whether this is an advantage or a
+disadvantage depends on the workload: well-behaved single-tenant ML
+training benefits from larger effective cache; a system under display
+or video-encode pressure can starve the GPU.
+
+\subsection{Dynamic Caching (M3 and later)}
+\label{ssec:apple_silicon:gpu_dyncache}
+
+The M3 generation introduced \emph{Dynamic Caching}, which Apple
+describes as ``allocating GPU memory in real time based on what each
+program needs.'' Concretely, the GPU's register and threadgroup-memory
+allocation, which on M1/M2 was determined statically at shader compile
+time, becomes runtime-virtualised on M3 and later: the hardware
+allocates registers dynamically to in-flight threads, enabling higher
+effective occupancy on shaders that previously over-allocated
+registers.
+
+For \Lucid\ this is observable but not directly programmable.
+Compiled \MLX\ and \MPSGraph\ kernels benefit transparently when run
+on M3 or M4 hardware; the same kernels on M1/M2 do not. We document
+the empirical effect in \chref{ch:mpsgraph_dispatch}, where the M3
+generation shows a step change in per-op throughput for irregular
+kernels (reductions over non-contiguous axes, scatter-with-gather
+patterns).
+
+\subsection{Hardware ray tracing and mesh shaders}
+\label{ssec:apple_silicon:gpu_rt}
+
+The M3 generation also added hardware ray tracing and mesh shader
+support. Neither is relevant for ML training and we mention them only
+to clarify the silicon budget: a portion of the GPU die area on M3
+and later is dedicated to graphics-only features, which is part of
+why per-core compute throughput grew less than the marketing core
+count would suggest on the M3 transition.
+
+\subsection{Metal Performance Shaders and MPSGraph}
+\label{ssec:apple_silicon:gpu_mpsg}
+
+The software interface to the GPU has two layers:
+\begin{enumerate}
+  \item \textbf{\Metal.} The low-level API: command buffers, shader
+    programs in MSL (Metal Shading Language), explicit synchronisation.
+    \MLX\ uses Metal directly for its kernels.
+  \item \textbf{\MPSGraph.} The high-level API: a graph IR that the
+    Metal Performance Shaders framework compiles to optimised
+    multi-kernel sequences. \Lucid's compile path
+    (\chref{ch:mps_builder}) emits onto \MPSGraph.
+\end{enumerate}
+
+These are not mutually exclusive. \MLX\ continues to dispatch most
+eager kernels through its own MSL; \MPSGraph\ is used in \Lucid\
+only by \code{lucid.compile} and by a small set of per-op
+optimisations introduced in 3.4 (\chref{ch:mpsgraph_dispatch}). The
+two paths can coexist within a single program because they ultimately
+share the same Metal command queue and the same unified memory pool.
+
+\section{Memory System}
+\label{sec:apple_silicon:memory}
+
+Every load and store on Apple silicon, regardless of which compute
+unit issued it, ultimately resolves through the same memory
+controllers to the same LPDDR pool. This section describes the
+characteristics of that pool, which set the upper bound on data-bound
+workloads (i.e.\ most of deep learning).
+
+\subsection{LPDDR generations and channels}
+\label{ssec:apple_silicon:memory_lpddr}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+SoC & DRAM type & Channels & Capacity range & Peak BW (GB/s) \\
+\midrule
+M1        & LPDDR4X-4266 & 4  & 8--16\,GB     & $\approx 68$    \\
+M1 Pro    & LPDDR5-6400  & 4  & 16--32\,GB    & $\approx 200$   \\
+M1 Max    & LPDDR5-6400  & 8  & 32--64\,GB    & $\approx 400$   \\
+M1 Ultra  & LPDDR5-6400  & 16 & 64--128\,GB   & $\approx 800$   \\
+\midrule
+M2        & LPDDR5-6400  & 4  & 8--24\,GB     & $\approx 100$   \\
+M2 Pro    & LPDDR5-6400  & 4  & 16--32\,GB    & $\approx 200$   \\
+M2 Max    & LPDDR5-6400  & 8  & 32--96\,GB    & $\approx 400$   \\
+M2 Ultra  & LPDDR5-6400  & 16 & 64--192\,GB   & $\approx 800$   \\
+\midrule
+M3        & LPDDR5-6400  & 4  & 8--24\,GB     & $\approx 100$   \\
+M3 Pro    & LPDDR5-6400  & 3  & 18--36\,GB    & $\approx 150$   \\
+M3 Max    & LPDDR5-6400  & 8 or 6 & 36--128\,GB & $\approx 300$--$400$ \\
+\midrule
+M4        & LPDDR5X-7500 & 4  & 16--32\,GB    & $\approx 120$   \\
+M4 Pro    & LPDDR5X-8533 & 4  & 24--48\,GB    & $\approx 273$   \\
+M4 Max    & LPDDR5X-8533 & 8  & 36--128\,GB   & $\approx 546$   \\
+\bottomrule
+\end{tabular}
+\caption[Apple silicon memory subsystem summary.]{Memory subsystem
+summary across Apple silicon generations. ``Peak BW'' is the
+theoretical maximum aggregate bandwidth; sustained bandwidth from a
+single client is typically $60$--$80\,\%$ of peak.}
+\label{tab:apple_silicon_memory}
+\end{table}
+
+\tabref{tab:apple_silicon_memory} summarises the memory subsystem
+across generations. Two observations relevant to \Lucid:
+
+\begin{enumerate}
+  \item The M3~Pro is the only generation that reduced peak bandwidth
+    relative to its predecessor (M2~Pro). This was driven by a
+    rebalancing of the die for cost and yield; the practical
+    consequence is that some training workloads benchmarked on
+    M2~Pro run \emph{slower} on M3~Pro, and \Lucid's performance
+    documentation flags this explicitly
+    (\chref{ch:stabilization}).
+  \item M4~Max's $546$\,GB/s sits between M2~Max and M2~Ultra. For
+    \Lucid's GPT-2 base benchmark, this places M4~Max above the
+    sustained training throughput of a single M2~Ultra under thermal
+    pressure, which is the only documented data-point at the Ultra
+    tier; we revisit in \chref{ch:graph_capture_wins}.
+\end{enumerate}
+
+\subsection{System Level Cache}
+\label{ssec:apple_silicon:memory_slc}
+
+The System Level Cache (SLC) is a last-level cache shared by every
+client of the fabric. Its size grows with the chip tier:
+$8$\,MB on M1, $24$\,MB on M1~Pro, $48$\,MB on M1~Max, $96$\,MB on
+M1~Ultra. M3 and M4 use comparable sizes. SLC is filled and evicted
+by hardware-managed coherence; software has no direct allocation
+hints other than memory-allocator placement strategies that
+\Accelerate\ uses internally.
+
+For ML workloads the SLC affects two things:
+\begin{enumerate}
+  \item \textbf{Activation reuse.} A forward pass that fits its
+    activations into the SLC can be re-read by the backward pass
+    without paying DRAM bandwidth twice. The cut-off is generally
+    around $50$--$100$ MB of total activations for the Max tier,
+    which corresponds to a moderate batch size on ResNet-50 or a
+    small batch on a Transformer of GPT-2~base size.
+  \item \textbf{Inter-cluster traffic.} When the CPU and GPU exchange
+    a buffer through \Lucid's bridge, the SLC absorbs the transfer
+    if the buffer is small. This is why our microbenchmarks
+    (\chref{ch:perf_methodology}) show roughly the same CPU-to-GPU
+    latency for buffers under $4$\,MB regardless of whether the
+    buffer was just written or has been resident for some time.
+\end{enumerate}
+
+\subsection{Bandwidth versus arithmetic intensity}
+\label{ssec:apple_silicon:memory_intensity}
+
+The roofline model captures the trade-off between memory bandwidth
+and arithmetic intensity. For an Apple silicon M3~Max with $400$
+GB/s of memory bandwidth and roughly $14$\,TFLOP/s of FP32 GPU peak,
+the ridge point of the roofline lies at an arithmetic intensity of
+$14 \times 10^{12} \,/\, 400 \times 10^9 \approx 35$ FLOPs per byte.
+For comparison, an NVIDIA H100 has a ridge point near $250$ FLOPs
+per byte: ML kernels that are bandwidth-bound on H100 are often
+compute-bound on Apple silicon, and vice versa. This shifts the set
+of optimisations that pay off. \Lucid's no-compile sweep
+(\chref{ch:no_compile_sweep}) is an example: algorithmic changes
+that reduce arithmetic count (using $\mathrm{sum} / N$ in place of
+$\mathrm{mean}$ to fold a scalar division earlier) yield real
+speedups on Apple silicon precisely because the workload is closer
+to compute-bound than memory-bound at typical operation sizes.
+
+\section{The Apple Silicon Family: M1 through M4}
+\label{sec:apple_silicon:generations}
+
+Having described the constituent blocks, we now summarise the
+generational evolution. Each generation can be understood as a set of
+deltas relative to its predecessor: process node, P-core
+microarchitecture, GPU enhancements, AMX/SME transition, and memory
+subsystem refresh.
+
+\subsection{M1 (2020)}
+\label{ssec:apple_silicon:m1}
+
+The M1 introduced the architecture template that all subsequent
+generations refined. Salient properties:
+\begin{itemize}
+  \item TSMC N5; 16 billion transistors.
+  \item Firestorm P-cores (8-wide decode, ROB $\approx 630$); 4 of
+    them in the base configuration.
+  \item Icestorm E-cores (4-wide decode); 4 of them.
+  \item GPU: 7 or 8 cores; up to $2.6$\,TFLOP/s FP32.
+  \item AMX1.
+  \item LPDDR4X-4266, 4 channels, 68\,GB/s, up to 16\,GB.
+\end{itemize}
+The M1 Pro, Max, and Ultra variants applied the cluster-replication
+pattern described earlier: the same blocks, more of them, faster
+memory bus.
+
+\subsection{M2 (2022)}
+\label{ssec:apple_silicon:m2}
+
+The M2 was an iteration on N5 (specifically, N5P), and applied two
+classes of changes:
+\begin{itemize}
+  \item Avalanche P-cores, Blizzard E-cores. Same width, refined
+    schedulers and improved branch prediction; roughly $10$--$15\,\%$
+    IPC improvement.
+  \item GPU bumped to 10 cores at the base tier; LPDDR transition to
+    LPDDR5-6400.
+  \item AMX2 (incremental).
+\end{itemize}
+No fundamental architectural change; this was a refinement
+generation.
+
+\subsection{M3 (2023)}
+\label{ssec:apple_silicon:m3}
+
+The M3 was a major architectural step:
+\begin{itemize}
+  \item Move to N3B (3\,nm), a substantial process shrink.
+  \item Everest P-cores; further IPC growth.
+  \item GPU receives Dynamic Caching, hardware ray tracing, mesh
+    shader support. Performance per core grows.
+  \item AMX3.
+  \item Mixed memory bus configurations: M3~Pro reduced its memory
+    bus relative to M2~Pro, an anomaly noted in
+    \tabref{tab:apple_silicon_memory}.
+\end{itemize}
+
+\subsection{M4 (2024)}
+\label{ssec:apple_silicon:m4}
+
+The M4 transitioned to N3E (a refinement of N3) and architecturally
+crossed into ARMv9.2-A:
+\begin{itemize}
+  \item First Apple SoC to expose SME at the ISA level (in place of
+    AMX).
+  \item LPDDR5X transition (7500 MT/s base; 8533 MT/s on Pro and
+    Max).
+  \item Continued GPU refinements; mature Dynamic Caching.
+  \item Improved Neural Engine quoted at $38$ TOPS.
+\end{itemize}
+For \Lucid, the M4 transition is the most important since M1: it is
+the first generation on which \code{lucid.compile} could plausibly
+target SME directly in a future release, removing the dependency on
+\Accelerate's in-process dispatch.
+
+\section{Implications for ML Workloads}
+\label{sec:apple_silicon:ml_implications}
+
+We close this chapter with the qualitative conclusions that frame the
+rest of the book.
+
+\subsection{The dispatch trade-off}
+\label{ssec:apple_silicon:ml_dispatch}
+
+Apple silicon's heterogeneous compute means that a framework has at
+least three reasonable backends for any given operation: the GPU
+(via \MLX\ and/or \MPSGraph), the CPU's NEON pipes (via direct
+SIMD), and the CPU's matrix coprocessor (via \Accelerate's \BNNS\
+and BLAS). The Neural Engine is a fourth in principle but absent
+from training graphs, as discussed.
+
+The performance ordering between these backends is not monotone in
+problem size. For small matrices ($\lesssim 64\times 64$), NEON or
+even scalar code can be competitive because GPU kernel launch
+overhead dominates and AMX's cluster-internal dispatch overhead is
+also non-trivial. For medium matrices ($64$--$256$), AMX dominates.
+For large matrices ($\geq 512$), the GPU dominates because of its
+aggregate throughput advantage. \Lucid's dispatch logic
+(\chref{ch:backend_dispatch}) does not attempt to choose between
+these dynamically at the framework level: the user picks a device
+(\code{cpu} or \code{metal}) and within that device the BLAS or
+\MLX\ library applies its own internal heuristic.
+
+\subsection{The memory-bandwidth ceiling}
+\label{ssec:apple_silicon:ml_bw}
+
+Apple silicon's most distinctive performance property is its very
+high memory bandwidth relative to its compute. On the largest
+configurations (Ultra), the bandwidth-to-compute ratio approaches one
+byte per FLOP, which is roughly an order of magnitude better than a
+discrete GPU. This is what makes large-batch streaming workloads
+(autoencoders, certain Transformer training regimes with large
+sequence length) practical on Apple silicon despite the modest peak
+compute.
+
+The corollary is that bandwidth-bound kernels (layer norm,
+softmax, attention, anything that touches every element of a large
+tensor exactly once) tend to be the bottleneck on small Apple
+silicon configurations. \Lucid's normalisation family rewrites
+(\chref{ch:no_compile_sweep}) target these explicitly.
+
+\subsection{The power envelope}
+\label{ssec:apple_silicon:ml_power}
+
+Every Apple SoC is bound by a thermal design power (TDP) envelope
+that determines sustained performance. The M-series TDPs range from
+roughly $20$\,W on the base M1 to roughly $90$\,W on the M1~Ultra;
+the M4 family has comparable envelopes. Under sustained load, all
+configurations throttle from their peak frequencies, and the GPU
+cores are the largest single consumer.
+
+For ML training, this matters in two ways:
+\begin{enumerate}
+  \item A burst-mode benchmark (the first few iterations of a
+    training run) does not predict sustained throughput. \Lucid's
+    benchmark methodology (\chref{ch:perf_methodology}) discards
+    the first $20$--$50$ iterations to allow the chip to settle.
+  \item Active cooling matters. The MacBook Pro chassis throttles
+    less aggressively than the MacBook Air; the Mac Studio less than
+    either. Numbers in \Lucid's performance documentation are taken
+    on Mac Studio M-series hardware to control for this.
+\end{enumerate}
+
+\subsection{The compile-vs-eager trade-off}
+\label{ssec:apple_silicon:ml_compile}
+
+Finally, the existence of \MPSGraph\ as a graph-level abstraction
+above \Metal\ means that an ML framework on Apple silicon faces a
+genuine choice between eager dispatch (each op submitted as a Metal
+command buffer) and graph capture (a sequence of ops compiled into a
+single \MPSGraph\ executable). \MLX\ defaults to eager; \Lucid's
+\code{lucid.compile} (\chref{ch:compile_design}) opts into graph
+capture for a measurable win on most training workloads. The
+trade-offs and the exact wins are documented in
+\chref{ch:graph_capture_wins}.
+
+\section{Summary and Forward References}
+\label{sec:apple_silicon:summary}
+
+Apple silicon is a tightly integrated, heterogeneous SoC family whose
+defining properties --- unified coherent memory, multiple
+fixed-function accelerators, and a wide-but-low-frequency CPU complex
+--- collectively dictate every interesting design decision in
+\Lucid. The five compute units described in this chapter --- P-cores,
+E-cores, AMX/SME, the Neural Engine, and the GPU --- form the set of
+candidate dispatch targets, of which \Lucid\ uses four (the Neural
+Engine is excluded by construction).
+
+The remainder of \partref{part:hardware} expands on the runtime
+implications. \chref{ch:unified_memory} formalises the unified memory
+model and describes how \Lucid\ exploits it without ever issuing an
+explicit copy. \chref{ch:mlx_runtime} introduces \MLX\ as the
+GPU-side runtime that \Lucid\ depends on, including its
+graph-eager hybrid execution model. \chref{ch:accelerate} introduces
+\Accelerate\ as the CPU-side counterpart. \chref{ch:metal_mpsgraph}
+treats \Metal\ and \MPSGraph\ directly, since both are visible to
+\Lucid's compile path. After these four foundation chapters, the
+book proceeds to the system architecture proper in
+\partref{part:system}, where the hardware view of this chapter becomes
+a software dependency graph that \Lucid\ has been engineered to
+respect.
+
+\begin{lucidtip}
+For readers primarily interested in framework-level concerns rather
+than silicon-level concerns, \secref{sec:apple_silicon:ml_implications}
+contains the only consequences they need to internalise: the dispatch
+trade-off between three backends, the memory-bandwidth ceiling, the
+thermal envelope, and the compile-vs-eager trade-off. The remainder of
+this chapter can be returned to as a reference when those concerns
+become concrete.
+\end{lucidtip}

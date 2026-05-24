@@ -1,0 +1,512 @@
+% !TEX root = ../main.tex
+\chapter{Reductions}
+\label{ch:reductions}
+
+Reductions are operations that collapse one or more axes of a
+tensor, replacing each collapsed axis with a single aggregated
+value. They differ from unary and binary functions in three ways:
+the output shape differs from the input shape (one or more
+dimensions are removed), the operation requires a choice of which
+axes to collapse, and numerical stability becomes a first-class
+concern for long reductions.
+
+\Lucid\ ships about 20 reduction ops. They all instantiate
+\code{ReduceKernel<Op>}
+(\chref{ch:kernel_abstraction}~Section~\ref{sec:kernel_abstraction:reduce})
+with a different reducer struct, but the user-facing axis
+arguments and the numerical-stability machinery are uniform.
+
+\secref{sec:reductions:semantics} describes the axis semantics.
+\secref{sec:reductions:simple} treats the simple reductions
+(\code{sum}, \code{mean}, \code{max}, etc.).
+\secref{sec:reductions:statistical} treats statistical reductions
+(\code{var}, \code{std}, \code{logsumexp}).
+\secref{sec:reductions:argument} treats argument reductions
+(\code{argmax}, \code{argmin}).
+\secref{sec:reductions:boolean} treats boolean reductions
+(\code{any}, \code{all}).
+\secref{sec:reductions:stability} treats numerical stability.
+
+\section{Axis Semantics}
+\label{sec:reductions:semantics}
+
+Every reduction op takes an optional \code{dim} (or \code{dims})
+argument and a \code{keepdims} flag:
+
+\begin{itemize}
+  \item \code{dim=None} (or omitted): reduce over all axes,
+    producing a scalar.
+  \item \code{dim=k} for a single integer \code{k}: reduce over
+    axis \(k\), producing a tensor with one fewer dimension (or
+    the same number with \code{keepdims=True}).
+  \item \code{dim=(k1, k2, ...)} for a tuple: reduce over the
+    listed axes, producing a tensor with that many fewer
+    dimensions (or the same with \code{keepdims=True}).
+\end{itemize}
+
+Negative axis values are interpreted as offsets from the end (NumPy
+convention).
+
+\figref{fig:reductions:axis_collapse} visualises the axis-collapse
+semantics for the three common cases.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  cell/.style={draw, minimum width=0.6cm, minimum height=0.6cm,
+               font=\footnotesize, fill=lucid.info.bg, inner sep=0pt},
+  out/.style={draw, minimum width=0.6cm, minimum height=0.6cm,
+              font=\footnotesize, fill=lucid.ok.bg, very thick,
+              inner sep=0pt},
+  hdr/.style={font=\small\sffamily\bfseries, align=center},
+  cap/.style={font=\footnotesize\itshape, color=lucid.muted,
+              align=center},
+]
+  % Input: 3x4 matrix (top-left)
+  \node[hdr] at (0.9, 3) {Input shape $(3, 4)$};
+  \foreach \i in {0, 1, 2} {
+    \foreach \j in {0, 1, 2, 3} {
+      \node[cell] at (\j*0.6, 2-\i*0.6) {};
+    }
+  }
+
+  % Output 1: sum over dim=0 (row of 4 cells, top-right)
+  \node[hdr] at (6, 3) {\code{sum(dim=0)} $\to$ $(4,)$};
+  \foreach \j in {0, 1, 2, 3} {
+    \node[out] at (5.1+\j*0.6, 2) {};
+  }
+  \node[cap] at (6, 1.0)
+    {dim 0 collapsed:\\rank drops to 1};
+
+  % Output 2: sum over dim=1 keepdims (column of 3 cells, bottom-left)
+  \node[hdr, align=center] at (0.9, -1.0)
+    {\code{sum(dim=1, keepdims=True)} $\to$ $(3, 1)$};
+  \foreach \i in {0, 1, 2} {
+    \node[out] at (0.9, -2-\i*0.6) {};
+  }
+  \node[cap] at (0.9, -4.5)
+    {dim 1 collapsed but\\preserved (size-1)};
+
+  % Output 3: global sum -> scalar
+  \node[hdr] at (6, -1.0) {\code{sum()} $\to$ scalar};
+  \node[out] at (6, -2) {};
+  \node[cap] at (6, -2.9)
+    {all dims collapsed};
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Reduction shape transformations.]{Reduction along
+different axis specifications applied to the same $(3, 4)$ input.
+Without \code{keepdims}, the reduced dimensions disappear (top
+right). With \code{keepdims=True}, they remain as size-1
+placeholders (bottom left), which makes the result naturally
+broadcast-compatible with the original input --- the pattern used
+throughout normalisation and centring code. A global reduction
+(bottom right) collapses every dimension and returns a scalar.}
+\label{fig:reductions:axis_collapse}
+\end{figure}
+
+\subsection{The keepdims flag}
+\label{ssec:reductions:keepdims}
+
+\code{keepdims=True} preserves the rank by leaving a 1 in the
+reduced dimension's slot. For \code{x} of shape \((B, C, H, W)\),
+\code{x.sum(dim=1, keepdims=True)} returns shape \((B, 1, H, W)\)
+whereas \code{x.sum(dim=1)} returns \((B, H, W)\).
+
+The keepdims form is the natural input to a subsequent broadcast:
+\code{x - x.mean(dim=-1, keepdims=True)} subtracts the per-row
+mean without needing an explicit \code{unsqueeze}. This pattern
+recurs throughout neural-network code (layer normalisation, mean
+centring).
+
+\subsection{The \texttt{dim} vs \texttt{axis} naming}
+\label{ssec:reductions:dim_axis}
+
+\Lucid\ standardised on \code{dim} (singular) and \code{dims}
+(plural) in the engine-wide rename that happened during Phase 7
+(vault: \code{retro-axis-to-dim-rename}). The change brought parity
+with the \refframework\ convention and away from NumPy's \code{axis}
+naming. The Python dispatchers translate \code{axis=...} to
+\code{dim=...} for NumPy-style callers, so both spellings work; the
+canonical form is \code{dim}.
+
+\section{Simple Reductions}
+\label{sec:reductions:simple}
+
+The simple reductions:
+
+\begin{itemize}
+  \item \code{sum(x)}: \(\sum_i x_i\). Backward: gradient
+    broadcasts to every input position.
+  \item \code{prod(x)}: \(\prod_i x_i\). Backward: gradient times
+    product divided by each entry (with the standard zero-input
+    workaround).
+  \item \code{mean(x)}: \(\frac{1}{N}\sum_i x_i\). Backward:
+    gradient divided by \(N\), broadcast.
+  \item \code{max(x)}: \(\max_i x_i\). Backward: gradient routes
+    to the maximum-valued input; ties get a 1/k split where \(k\)
+    is the count of maxima.
+  \item \code{min(x)}: analogous.
+  \item \code{amax(x), amin(x)}: aliases for \code{max} and
+    \code{min} (NumPy compatibility).
+  \item \code{median(x)}: median value; backward: gradient routes
+    to the median-rank element with the 1/k tie-breaking.
+  \item \code{quantile(x, q)}: linear-interpolation quantile.
+  \item \code{nanmean, nansum, nanmedian}: like the
+    above but skip NaN entries.
+\end{itemize}
+
+The variants prefixed \code{nan} skip NaN inputs in the reduction.
+The implementation is a mask-then-reduce: replace NaNs with the
+reducer's identity, reduce, then renormalise where appropriate.
+
+\subsection{prod's backward at zero}
+\label{ssec:reductions:prod_zero}
+
+\code{prod}'s backward is mathematically \(\partial_i \prod_j x_j =
+\prod_{j \neq i} x_j\). The naive computation as
+\code{prod(x) / x[i]} is undefined when any \code{x[i]} is zero.
+\Lucid\ uses the standard workaround: explicitly compute
+\(\prod_{j \neq i}\) without the division by tracking partial
+products from both sides of \(i\). The implementation is in
+\code{ops/gfunc/Reduction.cpp}.
+
+\section{Statistical Reductions}
+\label{sec:reductions:statistical}
+
+The statistical family:
+
+\begin{itemize}
+  \item \code{var(x, unbiased=True)}: variance, optionally with
+    Bessel's correction (\(N-1\) denominator).
+  \item \code{std(x, unbiased=True)}: standard deviation.
+  \item \code{nanvar, nanstd}: NaN-skipping variants.
+  \item \code{logsumexp(x)}: \(\log\sum_i e^{x_i}\), computed
+    via the max-shift trick.
+  \item \code{cumsum(x), cumprod(x)}: cumulative reductions
+    (technically a scan, not a reduction; output has the same
+    shape as input).
+  \item \code{cummax(x), cummin(x)}: cumulative max/min.
+\end{itemize}
+
+\subsection{Variance and Bessel's correction}
+\label{ssec:reductions:bessel}
+
+The \code{unbiased=True} flag divides by \(N - 1\) instead of \(N\),
+producing an unbiased estimator of the population variance. The
+default is \code{True}, matching \refframework. NumPy's default
+\code{ddof=0} (biased) is the opposite, which has surprised users
+porting code; we document this prominently in the API reference.
+
+The historical schema migration \code{batch\_norm v1$\to$v2}
+(\chref{ch:op_registry}) was precisely this issue: BN's running
+variance was stored biased and changed to unbiased in v2 to match
+\refframework. The migration rescales by \(N/(N-1)\).
+
+\subsection{logsumexp and the max-shift trick}
+\label{ssec:reductions:logsumexp}
+
+Naive \code{log(sum(exp(x)))} overflows for moderately large
+\(x\) (e.g., \code{exp(1000)} is \(+\infty\) in any IEEE 754
+precision). The standard workaround:
+
+\[
+\text{logsumexp}(x) = m + \log \sum_i e^{x_i - m},
+\quad m = \max_i x_i.
+\]
+
+The subtraction inside \code{exp} keeps the exponents bounded, and
+the added \(m\) recovers the correct magnitude. \Lucid's
+\code{logsumexp} kernel implements this directly rather than
+chaining \code{log}-\code{sum}-\code{exp}.
+
+The backward of \code{logsumexp} is the softmax:
+\(\partial_i \text{logsumexp}(x) = \text{softmax}(x)_i\). This is
+the gradient identity that makes softmax-cross-entropy losses
+numerically tractable.
+
+\section{Argument Reductions}
+\label{sec:reductions:argument}
+
+\begin{itemize}
+  \item \code{argmax(x, dim)}: index of the maximum along
+    \code{dim}.
+  \item \code{argmin(x, dim)}: index of the minimum.
+  \item \code{topk(x, k, dim, largest=True)}: returns the top
+    \code{k} values and their indices along \code{dim}.
+  \item \code{kthvalue(x, k, dim)}: returns the \(k\)-th value (in
+    sorted order) along \code{dim}.
+\end{itemize}
+
+Argument reductions return integer tensors and are not
+differentiable. Backward returns zero gradient.
+
+\subsection{The topk backward through value}
+\label{ssec:reductions:topk_backward}
+
+The \emph{values} returned by \code{topk} (not the indices)
+\emph{are} differentiable: the gradient routes to the corresponding
+input positions identified by the indices. \Lucid's \code{topk}
+implementation handles this in two ways depending on use:
+
+\begin{itemize}
+  \item If the caller uses only the values
+    (\code{vals, \_ = lucid.topk(x, k)} and then \code{vals.sum().backward()}),
+    the backward scatters the gradient to the top-\(k\) input
+    positions.
+  \item If the caller uses only the indices, no gradient is
+    constructed.
+\end{itemize}
+
+The autograd engine determines this by inspecting which output is
+referenced downstream.
+
+\section{Boolean Reductions}
+\label{sec:reductions:boolean}
+
+\begin{itemize}
+  \item \code{any(x)}: true if any entry is true (or nonzero).
+  \item \code{all(x)}: true if every entry is true.
+\end{itemize}
+
+Boolean reductions are not differentiable. They are commonly used
+in conditional logic that does not need gradients (early-stopping
+checks, NaN detection in the gradients themselves).
+
+\section{Numerical Stability}
+\label{sec:reductions:stability}
+
+Long reductions are where floating-point error compounds the most,
+and \Lucid\ has several mechanisms for managing it.
+
+\subsection{Reduction-in-higher-precision}
+\label{ssec:reductions:higher_precision}
+
+Reductions over FP16 or BF16 tensors automatically accumulate in
+FP32, then cast back. The kernel template handles this through the
+\code{AmpPolicy::ForceFloat32} declaration on the reduction op's
+schema (\chref{ch:op_registry}).
+
+Without this, summing \(10^6\) FP16 values would lose roughly
+\(\log_2(10^6) \approx 20\) bits of precision in the accumulator,
+which is much more than FP16's \(\sim 11\)-bit mantissa. With FP32
+accumulation, the loss is \(\sim 20\) bits in FP32's 23-bit
+mantissa, which leaves \(\sim 3\) bits of precision --- still
+enough to be useful, and the result is cast back to FP16 only at
+the end.
+
+\subsection{Kahan summation}
+\label{ssec:reductions:kahan}
+
+\Lucid\ does not implement Kahan-style compensated summation. The
+trade-off: Kahan summation gives much better precision but at
+roughly \(4\times\) the cost. For our typical workloads, the
+FP32-accumulation approach gives enough precision without the cost.
+
+The decision is documented in the FP32-accumulation schema
+declaration; a user who needs better precision can request it by
+casting to FP64 (CPU only) before the reduction.
+
+\subsection{Compensated mean: sum then divide}
+\label{ssec:reductions:mean_div}
+
+\code{mean(x)} is computed as \code{sum(x) / numel(x)} rather than
+as an incremental running mean. The reasoning: \code{sum} is
+implemented in higher precision (FP32) and the division by a
+known integer is a single round-to-nearest operation. The
+incremental running mean accumulates roundoff at every step,
+whereas the divide-once approach accumulates it only at the
+final step.
+
+This is the optimisation referenced in the no-compile sweep
+(\chref{ch:no_compile_sweep}): replacing \code{mean} with
+\code{sum / N} folds the divide earlier in the computation graph,
+which can yield a measurable performance improvement on
+bandwidth-bound workloads.
+
+\section{Performance Characteristics}
+\label{sec:reductions:perf}
+
+\subsection{Contiguous vs strided axis}
+\label{ssec:reductions:contig_strided}
+
+Reducing a contiguous axis is much faster than reducing a strided
+one: the contiguous case allows the backend to issue a single
+strided-load instruction per cache line, while the strided case
+requires per-element address computation. The kernel template
+chooses between two implementations based on the input's strides
+(\chref{ch:kernel_abstraction}~Section~\ref{ssec:kernel_abstraction:axis_select}).
+
+\subsection{The MPSGraph carve-out: LayerNorm}
+\label{ssec:reductions:layernorm_mps}
+
+Although individual reductions do not have an \MPSGraph\ carve-out
+(\MLX's reductions are competitive), \code{layer\_norm} ---  which
+is composed of \code{mean} and \code{var} reductions followed by a
+broadcast affine --- does. The \MPSGraph\ implementation fuses
+all three steps into a single kernel and achieves substantially
+better throughput than the equivalent \MLX\ sequence.
+
+The carve-out is per-op (it triggers for the composite
+\code{layer\_norm}, not for the individual reductions). See
+\chref{ch:mpsgraph_dispatch} for the full list.
+
+\section{Worked Numerical-Stability Examples}
+\label{sec:reductions:worked_stability}
+
+The general principle of FP32-accumulation under AMP is best
+understood through worked examples.
+
+\subsection{Example: large-batch mean in FP16}
+\label{ssec:reductions:large_mean}
+
+Consider computing the mean of $10^6$ FP16 values, each drawn from
+a normal distribution with variance 1. Naively in FP16:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+x = lucid.randn(1_000_000, dtype=lucid.float16)
+m = x.mean()                   # FP16 accumulator: WRONG
+\end{lstlisting}
+
+FP16 has 11-bit mantissa, giving roughly 4-decimal-digit precision.
+After accumulating $10^6$ random values of magnitude $\sim 1$, the
+running sum reaches $\sim 1000$ (because $\sqrt{10^6} = 1000$ by
+central limit). Each addition of a new $\sim 1$-magnitude value
+into a $\sim 1000$ accumulator loses the lowest bits; the
+accumulated error is on the order of $10^6 \cdot 10^{-4} \cdot 1 =
+100$. The reported mean is wrong by a factor of $\sim 100$.
+
+\Lucid's actual implementation forces FP32 accumulation:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+x = lucid.randn(1_000_000, dtype=lucid.float16)
+m = x.mean()                   # FP32 accumulator (per AmpPolicy)
+                               # then cast back to FP16
+\end{lstlisting}
+
+FP32's 23-bit mantissa gives roughly 7-decimal-digit precision.
+Accumulating $10^6$ values of magnitude $1$ into a $1000$-magnitude
+accumulator loses $\sim 10^{-7}$ per add, total error $\sim 0.1$,
+which is well within FP16's representable precision for a result
+of magnitude $\sim 0$. The cast back to FP16 at the end loses no
+additional precision because the result already fits.
+
+\subsection{Example: softmax with extreme logits}
+\label{ssec:reductions:softmax_extreme}
+
+Softmax is defined as $\text{softmax}(x)_i = e^{x_i} / \sum_j
+e^{x_j}$. With extreme inputs, the naive computation overflows:
+$e^{1000}$ is $+\infty$ in FP32.
+
+The standard trick subtracts the max: $\text{softmax}(x)_i =
+e^{x_i - m} / \sum_j e^{x_j - m}$ where $m = \max_i x_i$. The
+exponents are now all in $(-\infty, 0]$ and the largest is
+exactly 0, so the largest $e^{x_i - m} = 1$ and the sum is
+between 1 and $N$. No overflow possible.
+
+\Lucid's \code{softmax} primitive implements this internally;
+\code{lucid.nn.functional.softmax} delegates. The composite
+implementation (\chref{ch:composite_ops}) makes the trick
+explicit.
+
+\subsection{Example: variance with Bessel correction}
+\label{ssec:reductions:var_bessel}
+
+For a sample $x_1, \ldots, x_N$, the unbiased variance estimator
+is
+\[
+s^2 = \frac{1}{N - 1} \sum_{i=1}^N (x_i - \bar{x})^2.
+\]
+\Lucid's \code{var} defaults to \code{unbiased=True}, matching
+\refframework. NumPy's default (\code{ddof=0}) uses $N$ instead of
+$N-1$, the biased estimator.
+
+The two differ by a factor of $N/(N-1)$, which is small for large
+$N$ but matters for small samples. The
+\code{batch\_norm v1$\to$v2} migration was exactly this issue:
+running variance was stored biased and changed to unbiased to
+match \refframework's BN; checkpoints saved before the migration
+need rescaling.
+
+\section{Performance and Benchmarks}
+\label{sec:reductions:perf_benchmarks}
+
+\subsection{Bandwidth ceiling}
+\label{ssec:reductions:bw_ceiling}
+
+For large tensors a reduction is bandwidth-bound: read $N$
+elements, write 1 or a few output elements. The throughput ceiling
+on M3~Max (400~GB/s) for FP32 reductions is approximately
+$400 / 4 = 100$ giga-elements per second. Measured rates for the
+contiguous case come within 70--85\,\% of this ceiling depending
+on the reduction op and the axis structure.
+
+For small tensors the launch overhead dominates: a reduction over
+a 1~KB tensor takes the same wall-clock time as one over a 64~KB
+tensor on the GPU, because both pay the kernel-launch cost.
+
+\subsection{Strided-axis penalty}
+\label{ssec:reductions:strided_penalty}
+
+Reducing along an inner axis with non-unit stride is roughly
+$2$--$4\times$ slower than reducing along a unit-stride axis. The
+penalty comes from address computation and from poor cache
+utilisation (the strided reads do not coalesce into cache-line
+loads).
+
+\tabref{tab:reductions:strided_bench} reports measured throughput
+on M3~Max for a $1024 \times 1024 \times 16$ FP32 tensor under
+different reduction axes.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{llrl}
+\toprule
+Reduction & Axis & Throughput (GE/s) & Cache behaviour \\
+\midrule
+\code{sum} & dim=2 (innermost, contig) & 82 & coalesced loads \\
+\code{sum} & dim=0 (outermost, contig per row) & 75 & coalesced loads \\
+\code{sum} & dim=1 (middle, contig per row) & 68 & coalesced loads \\
+\code{sum} & dim=1 (middle, after transpose) & 22 & strided loads \\
+\code{sum} & dim=-1 (innermost, after transpose) & 18 & strided + scatter \\
+\bottomrule
+\end{tabular}
+\caption[Reduction throughput by axis.]{\code{sum} throughput on
+M3~Max for a $1024 \times 1024 \times 16$ FP32 tensor under
+different axis configurations. The strided cases (last two rows)
+are 3--4$\times$ slower than the contiguous cases. The remedy is
+to either \code{contiguous()} the tensor before the reduction (one
+extra pass over the data) or to fuse the reduction with the
+upstream transpose at the kernel level, which \Lucid's dispatcher
+does opportunistically when the pattern is recognisable.}
+\label{tab:reductions:strided_bench}
+\end{table}
+
+\section{Summary and Forward References}
+\label{sec:reductions:summary}
+
+The reduction category contains roughly 20 ops covering simple
+reductions (sum, mean, max, etc.), statistical reductions (var,
+std, logsumexp), argument reductions (argmax, topk, kthvalue), and
+boolean reductions (any, all). All instantiate
+\code{ReduceKernel<Op>} and inherit the kernel's axis-iteration
+machinery. Numerical stability is managed through FP32 accumulation
+under AMP and through algorithm-specific tricks for the
+exponential-family reductions (logsumexp's max shift).
+
+The next chapter, \chref{ch:shape_view}, treats shape and view
+manipulation --- operations that change a tensor's shape without
+changing its element values. \chref{ch:indexing} treats indexing
+and gather/scatter. \chref{ch:composite_ops} closes Part III with
+the pure-Python composite layer.
+
+\begin{lucidnote}
+For the user: reductions are exposed both as free functions
+(\code{lucid.sum(x)}) and as Tensor methods (\code{x.sum()}). The
+common patterns --- per-row mean with \code{dim=-1, keepdims=True},
+batch-wise reduction with \code{dim=0} --- are idiomatic and run
+without any explicit per-element loop.
+\end{lucidnote}

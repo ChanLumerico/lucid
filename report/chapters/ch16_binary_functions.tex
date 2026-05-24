@@ -1,0 +1,450 @@
+% !TEX root = ../main.tex
+\chapter{Binary Functions}
+\label{ch:binary_functions}
+
+Binary functions are elementwise operations on two inputs.
+\Lucid\ ships approximately 50 of them, in four categories:
+arithmetic, comparison, logical, and bitwise. Each is an
+instantiation of \code{BinaryKernel<Op>}
+(\chref{ch:kernel_abstraction}~Section~\ref{sec:kernel_abstraction:binary})
+and inherits the kernel template's broadcasting and type-promotion
+machinery automatically.
+
+The interesting questions for binary functions are not the
+individual forward expressions --- those are obvious --- but rather
+the rules that govern how the kernel handles inputs of mismatched
+shape, mismatched dtype, or mismatched device. We treat each rule
+in turn, then enumerate the ops.
+
+\secref{sec:binary_functions:broadcast} describes broadcasting.
+\secref{sec:binary_functions:promotion} describes type promotion.
+\secref{sec:binary_functions:device_check} describes the
+cross-device rule.
+\secref{sec:binary_functions:arithmetic}--\secref{sec:binary_functions:bitwise}
+enumerate the op categories.
+
+\section{Broadcasting}
+\label{sec:binary_functions:broadcast}
+
+Broadcasting is the rule by which two tensors of different but
+\emph{compatible} shapes are extended to a common shape without
+copying the data. \Lucid\ implements the NumPy broadcasting rule,
+which is identical to \refframework's.
+
+\subsection{The rule}
+\label{ssec:binary_functions:broadcast_rule}
+
+Given two shapes \(s_1\) and \(s_2\):
+
+\begin{enumerate}
+  \item Pad the shorter shape with leading 1s until both have the
+    same rank.
+  \item For each dimension, the output dimension size is the
+    maximum of the two inputs at that dimension.
+  \item The broadcast is legal if and only if, at each dimension,
+    the two input sizes are either equal or one of them is 1.
+  \item A dimension of size 1 in an input is repeated to match
+    the corresponding output dimension --- but the repetition is
+    \emph{virtual}: the input tensor is exposed through a stride of
+    0 along the repeated dimension, with no data duplication.
+\end{enumerate}
+
+A \code{LucidError} is raised if the shapes are incompatible. The
+error message gives both shapes and the dimension that
+disagrees.
+
+\subsection{Implementation: stride-0 expansion}
+\label{ssec:binary_functions:stride_zero}
+
+The mechanism by which broadcasting is free is the stride-0
+trick. A tensor of shape \((3, 1, 5)\) broadcast to \((3, 4, 5)\)
+is represented internally as a tensor of shape \((3, 4, 5)\) whose
+strides for the broadcast dimension are zero --- every read along
+that dimension lands at the same memory location. The kernel does
+not need to know broadcasting happened; it iterates over the
+output shape with the input's (modified) strides and the right
+values flow through.
+
+The cost is a small bit of stride-handling logic inside the kernel,
+plus a one-time shape computation. There is no per-element overhead.
+
+\subsection{Backward through broadcasting}
+\label{ssec:binary_functions:broadcast_back}
+
+If the forward broadcast a tensor from \((3, 1, 5)\) to \((3, 4,
+5)\), the backward gradient (of shape \((3, 4, 5)\)) must be summed
+along the broadcast dimension to match the original \((3, 1, 5)\)
+input. \code{BinaryKernel} records the broadcast pattern at
+forward time and applies the reverse-sum at backward time
+automatically.
+
+This is the \emph{unbroadcast} step --- it lives in the kernel
+template, not in each op, since the pattern is identical for every
+binary op.
+
+\section{Type Promotion}
+\label{sec:binary_functions:promotion}
+
+When the two inputs have different dtypes, the kernel promotes
+both to a common dtype before invoking the backend. The promotion
+rules are described in
+\chref{ch:backend_dispatch}~Section~\ref{sec:backend_dispatch:dtype_promo};
+the short version is NumPy's rules.
+
+\subsection{Scalar-tensor promotion}
+\label{ssec:binary_functions:scalar_promo}
+
+A common case is a tensor combined with a Python scalar
+(\code{x + 1.0}). The scalar is wrapped into a 0-d tensor of
+the appropriate dtype (\code{float32} for a Python \code{float},
+\code{int64} for a Python \code{int}), then promotion runs as for
+two tensors. The Python wrapper performs this conversion before
+dispatching.
+
+A subtle behaviour: \code{x + 1} where \code{x} is \code{float32}
+does not promote to \code{int64}; the scalar 1 is interpreted in
+\code{x}'s dtype context. This matches NumPy and prevents an
+\code{int} addition from accidentally upcasting an FP32 tensor.
+
+\section{Cross-Device Check}
+\label{sec:binary_functions:device_check}
+
+If the two input tensors are on different devices, the kernel
+raises \code{LucidError("binary op across devices: a is on cpu,
+b is on metal")}. \Lucid\ does not implicitly move tensors across
+devices; the user must call \code{.to(device)} explicitly.
+
+The rule applies to all binary ops, including comparisons. A
+\code{Tensor.\_\_eq\_\_} of a CPU tensor and a metal tensor is an
+error, not a silent move.
+
+\section{Arithmetic}
+\label{sec:binary_functions:arithmetic}
+
+The arithmetic ops:
+
+\begin{itemize}
+  \item \code{add(a, b) = a + b}; backward: gradient flows to both
+    inputs unchanged (modulo unbroadcast).
+  \item \code{sub(a, b) = a - b}; backward: \code{grad\_a =
+    grad\_out}, \code{grad\_b = -grad\_out}.
+  \item \code{mul(a, b) = a * b}; backward: \code{grad\_a =
+    b * grad\_out}, \code{grad\_b = a * grad\_out}.
+  \item \code{div(a, b) = a / b}; backward: \code{grad\_a =
+    grad\_out / b}, \code{grad\_b = -a / b\textasciicircum{}2 * grad\_out}.
+  \item \code{pow(a, b)} returns $a^b$; backward: $\partial_a = b
+    \cdot a^{b-1} \cdot \text{grad\_out}$, $\partial_b = a^b \cdot
+    \ln(a) \cdot \text{grad\_out}$.
+  \item \code{floordiv(a, b) = \lfloor a / b \rfloor}; integer
+    division. Non-differentiable.
+  \item \code{mod(a, b) = a - b * floordiv(a, b)}; remainder.
+    Non-differentiable.
+  \item \code{atan2(y, x) = \arctan(y/x)} with quadrant; backward:
+    \code{grad\_y = x / (x\textasciicircum{}2 + y\textasciicircum{}2) * grad\_out}, \code{grad\_x =
+    -y / (x\textasciicircum{}2 + y\textasciicircum{}2) * grad\_out}.
+  \item \code{hypot(a, b)} returns $\sqrt{a^2 + b^2}$; backward derived
+    accordingly.
+  \item \code{logaddexp(a, b)} returns $\ln(e^a + e^b)$;
+    numerically stable via the max-shift trick.
+  \item \code{maximum(a, b), minimum(a, b)}; backward: gradient
+    routes to the larger / smaller input, undefined at equality
+    (we use 0.5 split by convention).
+\end{itemize}
+
+\subsection{The pow special case}
+\label{ssec:binary_functions:pow_special}
+
+\code{pow}'s backward expression $b \cdot a^{b-1}$ is undefined
+for \code{a = 0, b < 1} (division by zero) and for negative \code{a}
+with non-integer \code{b} (complex result). \Lucid\ returns zero
+gradient at the undefined cases and propagates NaN otherwise,
+matching \refframework. Parity tests check both behaviours.
+
+\section{Comparison}
+\label{sec:binary_functions:comparison}
+
+\begin{itemize}
+  \item \code{eq(a, b)}: elementwise equality. Returns bool.
+  \item \code{ne(a, b)}: elementwise inequality.
+  \item \code{lt(a, b), le(a, b), gt(a, b), ge(a, b)}: ordering
+    comparisons.
+\end{itemize}
+
+Comparisons are not differentiable (the derivative of a step
+function is a Dirac delta, which we represent as zero). The
+autograd engine returns zero gradient for the inputs.
+
+\subsection{Equality on floating-point}
+\label{ssec:binary_functions:fp_eq}
+
+\code{eq} on floating-point tensors is exact equality, not
+tolerance-based. For tolerance comparisons, \code{isclose(a, b,
+atol, rtol)} is the unary primitive that uses
+\(|a - b| \leq \text{atol} + \text{rtol} \cdot |b|\).
+
+\section{Logical}
+\label{sec:binary_functions:logical}
+
+The logical operators work on boolean tensors (or treat numeric
+tensors as boolean, with nonzero as true):
+
+\begin{itemize}
+  \item \code{logical\_and(a, b)}: elementwise AND.
+  \item \code{logical\_or(a, b)}: elementwise OR.
+  \item \code{logical\_xor(a, b)}: elementwise XOR.
+\end{itemize}
+
+The unary \code{logical\_not} is in the unary chapter and follows
+the same convention.
+
+All logical ops are non-differentiable.
+
+\section{Bitwise}
+\label{sec:binary_functions:bitwise}
+
+The bitwise operators work on integer tensors:
+
+\begin{itemize}
+  \item \code{bitwise\_and, bitwise\_or, bitwise\_xor}: per-bit
+    operations.
+  \item \code{lshift(a, b), rshift(a, b)}: arithmetic shifts.
+\end{itemize}
+
+Bitwise ops require both inputs to be integer dtypes; a
+\code{LucidError} is raised if a float is passed. Non-differentiable.
+
+\section{Operator Overloading}
+\label{sec:binary_functions:overload}
+
+Every arithmetic binary op is exposed both as a free function
+(\code{lucid.add(a, b)}) and through Python operator overloading
+on \code{Tensor} (\code{a + b}). The dunder methods
+(\code{\_\_add\_\_}, \code{\_\_radd\_\_}, \code{\_\_iadd\_\_}, etc.)
+route through the same dispatcher.
+
+The in-place dunders (\code{\_\_iadd\_\_}, \code{\_\_imul\_\_})
+invoke in-place ops if the tensor is not part of an autograd graph
+and out-of-place ops otherwise. The choice avoids the in-place
+version corrupting saved tensors for backward.
+
+\subsection{Scalar interaction}
+\label{ssec:binary_functions:scalar_interact}
+
+The \code{\_\_radd\_\_}-style reflected dunders handle
+\code{scalar + tensor} the same as \code{tensor + scalar}. The
+scalar is wrapped to a 0-d tensor of the tensor's dtype, then the
+normal binary op runs.
+
+This is the convention that makes \code{1 + lucid.zeros(3)} work.
+
+\section{The Broadcasting Algorithm in Detail}
+\label{sec:binary_functions:broadcast_algo}
+
+The high-level broadcasting rule given above hides a non-trivial
+algorithm. This section walks through the algorithm step by step,
+because the implementation in
+\code{lucid/\_C/kernel/BinaryKernel.cpp} is one of the most
+performance-critical pieces of code in the engine and the
+correctness depends on getting every step right.
+
+\subsection{Shape compatibility check}
+\label{ssec:binary_functions:compat_check}
+
+Given input shapes $s_a = (a_0, a_1, \ldots, a_{m-1})$ and
+$s_b = (b_0, b_1, \ldots, b_{n-1})$ with $m \leq n$ (after
+right-aligning by padding $s_a$ with leading 1s to length $n$),
+the output shape is the elementwise maximum:
+\[
+o_i = \max(a_i', b_i) \quad \text{where } a_i' = \begin{cases}
+1 & i < n - m \\
+a_{i - (n-m)} & \text{otherwise}.
+\end{cases}
+\]
+The broadcast is legal if and only if at each $i$, either
+$a_i' = b_i$ or one of them equals 1.
+
+The check runs in $O(n)$ time --- one pass over the rank, no per-
+element work.
+
+\subsection{Stride translation}
+\label{ssec:binary_functions:stride_xlate}
+
+To make the binary kernel iterate over the output shape while
+reading the two inputs through their original strides, each
+input's strides are mapped to the output rank as follows:
+
+\begin{itemize}
+  \item For dimensions present in the input
+    (\(i \geq n - m\) for the shorter input), use the input's
+    original stride.
+  \item For dimensions added by padding, use stride 0.
+  \item For dimensions where the input has size 1 but the output
+    is larger, use stride 0 (the stride-0 broadcast trick).
+\end{itemize}
+
+The kernel then iterates over the output's $\prod_i o_i$ positions,
+computing the linear offset into each input as the dot product of
+the iteration index with the translated stride vector. The
+arithmetic is simple but the addressing must be computed per
+element; on modern Apple silicon CPUs the address computation
+generates one MAC per dimension per element, which is the cost
+of generality.
+
+\subsection{Broadcast unbroadcast on backward}
+\label{ssec:binary_functions:unbroadcast_algo}
+
+The backward of a broadcast binary op must reverse the broadcast:
+the upstream gradient has the output shape, but each input expects
+a gradient of its original shape. The transformation is a sum
+along each axis where the input was expanded:
+
+\[
+\text{grad\_a} = \sum_{\text{broadcast dims of } a} \text{grad\_out}.
+\]
+
+The kernel records the broadcast pattern at forward time (which
+axes were stride-0 for each input) and the backward applies the
+corresponding reduction. The reduction is fused into a single
+kernel rather than a sequence of per-axis sums, which saves
+intermediate allocations.
+
+\section{Worked Examples}
+\label{sec:binary_functions:examples}
+
+We work through three representative binary op invocations to make
+the broadcasting and unbroadcast concrete.
+
+\subsection{Example: bias addition}
+\label{ssec:binary_functions:bias_example}
+
+A linear layer's bias addition:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# x.shape = (B, T, D); bias.shape = (D,)
+out = x + bias        # broadcasts bias to (B, T, D)
+\end{lstlisting}
+
+Forward: the bias is right-aligned to shape $(1, 1, D)$ and stride-
+zero-expanded to $(B, T, D)$. The kernel iterates over $B \cdot T
+\cdot D$ positions, reading bias through stride 0 along the first
+two axes (every read of bias along those axes lands at the same
+memory).
+
+Backward: \code{grad\_out} has shape $(B, T, D)$; the gradient for
+the bias is summed over the first two axes:
+\[
+\text{grad\_bias} = \sum_{b, t} \text{grad\_out}_{b, t, :}.
+\]
+The kernel performs this reduction in a single fused pass.
+
+\subsection{Example: outer product via broadcast}
+\label{ssec:binary_functions:outer_example}
+
+An outer product written as a broadcast multiplication:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# u.shape = (M,); v.shape = (N,)
+outer = u[:, None] * v[None, :]   # shape (M, N)
+\end{lstlisting}
+
+Forward: \code{u[:, None]} has shape $(M, 1)$ with strides
+$(\text{stride}_u, 0)$. \code{v[None, :]} has shape $(1, N)$ with
+strides $(0, \text{stride}_v)$. Broadcasting expands both to
+$(M, N)$: \code{u} is read with stride $(\text{stride}_u, 0)$ ---
+the second axis still uses stride 0, so each row reads the same
+$u_i$. Similarly for \code{v}.
+
+The element at position $(i, j)$ of the output is $u_i \cdot v_j$
+--- the outer product.
+
+Backward: gradient \code{grad\_out} of shape $(M, N)$ flows back.
+For \code{u} (which was broadcast along axis 1), sum over axis 1:
+\code{grad\_u = grad\_out.sum(dim=1)}. For \code{v}, sum over
+axis 0.
+
+\subsection{Example: incompatible shapes}
+\label{ssec:binary_functions:incompat_example}
+
+A typical user mistake:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# x.shape = (B, T, D); y.shape = (B, D)
+out = x + y     # error: T != D and neither is 1
+\end{lstlisting}
+
+After right-alignment, \code{y} becomes $(1, B, D)$. The two
+shapes are $(B, T, D)$ and $(1, B, D)$. At axis 1, $T \neq B$ and
+neither is 1; the broadcast is rejected. The error message names
+both shapes and the offending axis.
+
+\section{Complexity and Performance}
+\label{sec:binary_functions:complexity}
+
+Binary kernels are $O(N)$ in the total element count of the output
+tensor. The constant factor varies by op:
+
+\begin{itemize}
+  \item Pure arithmetic (\code{add}, \code{mul}): one
+    multiply-add per element, plus address computation.
+  \item Transcendental (\code{atan2}, \code{logaddexp}): one
+    transcendental function call per element. On Apple silicon
+    these go through vForce's \code{vvatan2f}-style primitives or
+    \MLX's \code{atan2} primitive, both well-optimised.
+  \item Bitwise: one instruction per element, often the cheapest
+    case.
+\end{itemize}
+
+\subsection{Memory bandwidth bound}
+\label{ssec:binary_functions:bw_bound}
+
+For tensors larger than the SLC (typically several megabytes),
+binary kernels are memory-bandwidth-bound: the kernel reads two
+inputs, writes one output, achieving roughly $3 N \cdot \text{dtype
+size}$ bytes of memory traffic. On an M3~Max with 400~GB/s of
+memory bandwidth, the upper bound for FP32 binary kernels is
+roughly $400 / 12 \approx 33$ billion elements per second.
+
+Measured throughputs on representative workloads come within
+80--90\,\% of this bound for the contiguous case. The shortfall is
+due to a mix of address-computation overhead and the kernel
+launch cost.
+
+\subsection{The stride-0 efficiency}
+\label{ssec:binary_functions:stride0_eff}
+
+A broadcast that uses stride-0 is faster than the equivalent
+materialised broadcast (\code{repeat}). The reason is cache
+behaviour: a stride-0 read along an axis hits the same cache line
+repeatedly, while a materialised broadcast reads distinct cache
+lines. For a $(B, 1, D)$ tensor broadcast to $(B, T, D)$ with $T =
+1024$ and $D = 768$, the stride-0 broadcast reads $B D$ floats
+($B \cdot 3$\,KB) while the materialised version reads $B T D$
+floats ($B \cdot 3$\,MB) --- a thousand-fold reduction in DRAM
+traffic.
+
+The user-visible consequence: prefer broadcast over \code{repeat}
+when the broadcast is read-only.
+
+\section{Summary and Forward References}
+\label{sec:binary_functions:summary}
+
+The binary functions are roughly 50 ops across arithmetic,
+comparison, logical, and bitwise categories, all instantiations of
+\code{BinaryKernel<Op>}. Broadcasting follows NumPy rules and is
+implemented through stride-0 expansion (free) with reverse-sum
+unbroadcasting on the backward (also handled in the kernel
+template). Type promotion follows NumPy rules. Cross-device
+operations raise rather than implicitly move.
+
+The next chapter, \chref{ch:reductions}, treats reductions ---
+operations that collapse one or more axes of a tensor.
+\chref{ch:shape_view} treats shape and view operations.
+\chref{ch:indexing} treats indexing and gather/scatter.
+
+\begin{lucidnote}
+For the user: binary ops are the most ergonomic part of the API
+because Python operator overloading makes them transparent. The
+expression \code{x + y * z} compiles into three op calls with the
+correct broadcasting, promotion, and autograd-graph construction
+all handled automatically.
+\end{lucidnote}

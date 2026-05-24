@@ -1,0 +1,462 @@
+% !TEX root = ../main.tex
+\chapter{Kernel Abstraction Layer}
+\label{ch:kernel_abstraction}
+
+\chref{ch:op_registry} described the op-level surface: \(\sim 260\)
+operations, each carrying a schema, dispatched through the backend
+to either \MLX\ or \Accelerate. The dispatch hides which library
+runs an op, but it does not hide the structural similarities
+between ops in the same category. Every unary elementwise op
+(\code{relu}, \code{exp}, \code{sigmoid}, \ldots) shares the same
+control structure: iterate over elements, apply a scalar function,
+write to the output. Every reduction op (\code{sum}, \code{mean},
+\code{max}, \ldots) shares an axis-iteration pattern. Every binary
+op shares a broadcasting machinery.
+
+If each op's C++ file replicated this control structure, the engine
+would contain dozens of nearly identical loops. The \emph{kernel
+abstraction layer} extracts the structure into a small set of
+templated kernels --- one per arity class --- and reduces each
+per-op file to a declaration of its scalar function plus any
+op-specific knowledge.
+
+This chapter describes the kernel layer. It is the layer below
+\code{ops/} and above \code{backend/} in the DAG of
+\chref{ch:layered_dag}: ops call into kernel templates; kernel
+templates call into backend primitives. \secref{sec:kernel_abstraction:why}
+motivates the layer; \secref{sec:kernel_abstraction:ikernel}
+describes the abstract interface;
+\secref{sec:kernel_abstraction:unary}
+through~\ref{sec:kernel_abstraction:variadic} treat each kernel
+class; \secref{sec:kernel_abstraction:contig} treats the
+contiguity inference that the kernels consult; and
+\secref{sec:kernel_abstraction:primitives} treats the
+data-dependent primitives that do not fit the standard kernel
+templates.
+
+\section{Why a Kernel Layer}
+\label{sec:kernel_abstraction:why}
+
+The argument for a kernel abstraction is straightforward
+duplication-elimination, but the consequences are large:
+
+\begin{itemize}
+  \item \textbf{Code volume.} Without the layer, the \(\sim 60\)
+    unary ops would each contain a full elementwise loop with
+    stride handling, broadcasting, dtype dispatch, and AMP-aware
+    casting. With the layer, each op file declares its scalar
+    function (\code{[](float x) \{ return x > 0 ? x : 0; \}} for
+    ReLU) and the template handles the loop. The per-op file
+    shrinks from \(\sim 150\) lines to \(\sim 30\).
+  \item \textbf{Backend uniformity.} A single point of dispatch
+    means a single place to add cross-cutting concerns: AMP
+    casting, deterministic execution, profiling hooks. We added
+    profiler instrumentation once, in the kernel layer, and every
+    op got it.
+  \item \textbf{Testability.} The kernel templates can be tested
+    against synthetic scalar functions without invoking any real
+    op. The unit tests in \code{test/kernel/} exercise the
+    templates with mock functions and predetermined inputs.
+  \item \textbf{Compile-time amortisation.} Each kernel template
+    is instantiated once per arity class and once per backend, not
+    once per op. Total compile time for the \code{ops/} directory
+    is roughly a quarter of what it would be without the layer.
+\end{itemize}
+
+\section{The IKernel Interface}
+\label{sec:kernel_abstraction:ikernel}
+
+\code{IKernel}, declared in \code{lucid/\_C/kernel/IKernel.h}, is
+the abstract base for all kernel templates.
+\figref{fig:kernel_abstraction:hierarchy} sketches the hierarchy:
+five arity-specialised templates above \code{IKernel} for the
+regular case, plus a sibling \code{primitives/} directory of
+hand-written kernels for the data-dependent operations.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  base/.style={draw, rounded corners=4pt, font=\small\sffamily\bfseries,
+               fill=lucid.note.bg, minimum width=3.4cm,
+               minimum height=0.9cm, align=center},
+  tmpl/.style={draw, rounded corners=2pt, font=\footnotesize\sffamily,
+               fill=lucid.info.bg, minimum width=3cm,
+               minimum height=0.7cm, align=center, inner sep=3pt},
+  prim/.style={draw, rounded corners=2pt, font=\footnotesize\sffamily,
+               fill=lucid.ok.bg, minimum width=3cm,
+               minimum height=0.7cm, align=center, inner sep=3pt},
+  inherit/.style={->, >=stealth, thick, color=lucid.accent.dark,
+                  shorten >=2pt, shorten <=2pt},
+]
+  \node[base] (ikernel) at (0, 4.5) {IKernel};
+
+  % Row 1: templated arity classes
+  \node[tmpl] (unary) at (-6.4, 2.5) {UnaryKernel$<$Op$>$};
+  \node[tmpl] (binary) at (-3.2, 2.5) {BinaryKernel$<$Op$>$};
+  \node[tmpl] (reduce) at (0, 2.5) {ReduceKernel$<$Op$>$};
+  \node[tmpl] (nary)   at (3.2, 2.5) {NaryKernel$<$Op,N$>$};
+  \node[tmpl] (variad) at (6.4, 2.5) {VariadicKernel$<$Op$>$};
+
+  % Row 2: data-dependent primitives
+  \node[prim] (gather)  at (-6.4, 0.5) {Gather};
+  \node[prim] (scatter) at (-3.2, 0.5) {Scatter};
+  \node[prim] (im2col)  at (0, 0.5) {Im2Col};
+  \node[prim] (sort)    at (3.2, 0.5) {Sort, TopK};
+  \node[prim] (nonzero) at (6.4, 0.5) {NonZero, Unique};
+
+  \draw[inherit] (unary) -- (ikernel);
+  \draw[inherit] (binary) -- (ikernel);
+  \draw[inherit] (reduce) -- (ikernel);
+  \draw[inherit] (nary) -- (ikernel);
+  \draw[inherit] (variad) -- (ikernel);
+
+  \draw[inherit] (gather)  to[bend left=8]  (ikernel);
+  \draw[inherit] (scatter) to[bend left=4]  (ikernel);
+  \draw[inherit] (im2col)  --                (ikernel);
+  \draw[inherit] (sort)    to[bend right=4] (ikernel);
+  \draw[inherit] (nonzero) to[bend right=8] (ikernel);
+
+  % Row labels (placed beneath each row, not to the side)
+  \node[font=\footnotesize\itshape, color=lucid.muted, align=center]
+    at (-9, 2.5) {Templated\\arity classes};
+  \node[font=\footnotesize\itshape, color=lucid.muted, align=center]
+    at (-9, 0.5) {Hand-written\\data-dep primitives};
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Kernel hierarchy.]{The \code{IKernel} hierarchy. The
+five arity-class templates (top row) handle the regular cases ---
+each unary, binary, reduction, fixed-arity, and variadic op is one
+template instantiation. The data-dependent primitives (bottom row)
+are full implementations rather than templates, because their
+output shape or layout depends on input values; they live in
+\texttt{kernel/primitives/}.}
+\label{fig:kernel_abstraction:hierarchy}
+\end{figure}
+
+It is intentionally minimal:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class IKernel {
+public:
+  virtual ~IKernel() = default;
+
+  // Allocate the output tensor(s) given input shape/dtype.
+  virtual std::vector<TensorImpl> allocate_outputs(
+      const std::vector<const TensorImpl*>& inputs) const = 0;
+
+  // Run the kernel on the given inputs, writing into outputs.
+  virtual void apply(
+      const std::vector<const TensorImpl*>& inputs,
+      const std::vector<TensorImpl*>& outputs) const = 0;
+};
+\end{lstlisting}
+
+The interface deliberately abstracts away the arity: a unary
+kernel sees one input and one output; a binary kernel sees two
+inputs and one output; a reduction kernel sees one input, an axis
+specification, and one output. Concrete kernel templates fix the
+arity and the dispatch pattern.
+
+\section{UnaryKernel}
+\label{sec:kernel_abstraction:unary}
+
+\code{UnaryKernel<Op>}, in \code{lucid/\_C/kernel/UnaryKernel.h},
+is the template for single-input pointwise operations. It is
+parameterised by an \code{Op} struct that defines the scalar
+function and its backward:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct ReluOp {
+  static constexpr const char* name = "relu";
+
+  template <typename T>
+  static T forward(T x) { return x > T(0) ? x : T(0); }
+
+  template <typename T>
+  static T backward(T x, T grad_out) {
+      return x > T(0) ? grad_out : T(0);
+  }
+};
+
+using ReluKernel = UnaryKernel<ReluOp>;
+\end{lstlisting}
+
+\subsection{Forward dispatch}
+\label{ssec:kernel_abstraction:unary_forward}
+
+The template's forward dispatch:
+
+\begin{enumerate}
+  \item Allocate output tensor with the same shape and dtype as
+    the input (with AMP override if applicable).
+  \item Look up the input's device and route to the appropriate
+    backend.
+  \item Call the backend's \code{unary(OpKind, input)} where
+    \code{OpKind} is derived from \code{Op::name}.
+\end{enumerate}
+
+The backend's \code{unary} method dispatches to the actual
+implementation: for CPU, a vDSP / vForce primitive; for GPU, an
+\MLX\ primitive. The template itself does not write the loop --- it
+delegates to the backend, which delegates to the underlying
+library's kernel.
+
+\subsection{Backward dispatch}
+\label{ssec:kernel_abstraction:unary_backward}
+
+The backward dispatch constructs a \code{grad\_fn} node that, on
+\code{backward()}, calls \code{Op::backward(saved\_input,
+grad\_output)} elementwise. The saved-input list is one tensor (the
+forward input). The backward kernel runs through the same template
+machinery, dispatched to the same backend.
+
+For ops where the backward depends only on the output (e.g.\
+\code{tanh}, where \code{tanh'(x) = 1 - tanh(x)\textasciicircum{}2}), the
+\code{Op} struct sets a flag and the autograd engine saves the
+output rather than the input. This is a memory optimisation for
+the common case where the output is the same size as the input.
+
+\section{BinaryKernel}
+\label{sec:kernel_abstraction:binary}
+
+\code{BinaryKernel<Op>}, in \code{lucid/\_C/kernel/BinaryKernel.h},
+is the template for two-input pointwise operations:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct AddOp {
+  static constexpr const char* name = "add";
+
+  template <typename T>
+  static T forward(T a, T b) { return a + b; }
+
+  template <typename T>
+  static std::pair<T,T> backward(T a, T b, T grad_out) {
+      return {grad_out, grad_out};
+  }
+};
+\end{lstlisting}
+
+The template handles three concerns beyond what \code{UnaryKernel}
+handles:
+
+\begin{itemize}
+  \item \textbf{Broadcasting.} If the two inputs have different
+    shapes that are NumPy-broadcast-compatible, the kernel
+    computes the broadcast shape and runs over it with strided
+    access.
+  \item \textbf{Type promotion.} If the two inputs have different
+    dtypes, the kernel promotes both to a common dtype before
+    calling the backend (\chref{ch:backend_dispatch}~Section~\ref{sec:backend_dispatch:dtype_promo}).
+  \item \textbf{Cross-device check.} The kernel raises
+    \code{LucidError} if the two inputs are on different devices.
+\end{itemize}
+
+The backward returns a pair of gradients, one per input. The
+autograd engine threads each gradient to the corresponding input
+tensor's \code{grad}.
+
+\subsection{Broadcast unbroadcast}
+\label{ssec:kernel_abstraction:unbroadcast}
+
+A subtle case: if the inputs were broadcast in forward, the
+backward must sum the gradient over the broadcast dimensions to
+match each input's original shape. \code{BinaryKernel} handles
+this internally: it records the broadcast pattern at forward time
+and applies the reverse sum at backward time.
+
+The handling is the same for every binary op, which is why it lives
+in the template rather than in each op's file.
+
+\section{ReduceKernel}
+\label{sec:kernel_abstraction:reduce}
+
+\code{ReduceKernel<Op>}, in \code{lucid/\_C/kernel/ReduceKernel.h},
+is the template for reductions:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+struct SumOp {
+  static constexpr const char* name = "sum";
+
+  template <typename T> static T init()         { return T(0); }
+  template <typename T> static T combine(T a, T b) { return a + b; }
+  template <typename T> static T finalize(T s, size_t n) { return s; }
+  // (mean's finalize divides; std's finalize takes sqrt; etc.)
+};
+\end{lstlisting}
+
+The reduction is parameterised by \code{init} (the identity),
+\code{combine} (the binary reducer), and \code{finalize} (any
+post-processing). The template handles axis selection,
+\code{keepdims}, and the choice between a single-axis and
+multi-axis reduction.
+
+\subsection{Axis selection}
+\label{ssec:kernel_abstraction:axis_select}
+
+Reductions over different axes have different access patterns: a
+contiguous axis reduces with unit-stride loads; a non-contiguous
+axis requires strided access. The kernel inspects the input's
+strides and chooses between two implementations:
+
+\begin{itemize}
+  \item Contiguous reduction: pass through to the backend's
+    one-shot reduction primitive.
+  \item Strided reduction: loop over outer axes manually, with
+    one-shot reduction over the innermost axis.
+\end{itemize}
+
+The backend itself often makes finer choices below this level
+(vDSP's \code{vDSP\_sve}-style sum has its own strided variants),
+but the kernel's coarse choice keeps the dispatch tractable.
+
+\subsection{Numerical stability}
+\label{ssec:kernel_abstraction:reduce_stability}
+
+Naive summation accumulates rounding error proportional to the
+number of elements summed. For reductions over very large tensors
+in FP16 or BF16, this matters: the accumulated error can exceed
+the meaningful precision of the result.
+
+The kernel handles this with a \code{ForceFloat32} promotion (the
+\code{AmpPolicy} discussed in \chref{ch:op_registry}): reductions
+in FP16/BF16 accumulate in FP32 and cast back at the end. The cost
+is one extra cast per kernel; the benefit is correct results.
+
+\code{logsumexp} specifically requires the standard numerical
+trick (\code{logsumexp(x) = max(x) + log(sum(exp(x - max(x))))}),
+which the kernel implements directly rather than chaining the
+naive composition.
+
+\section{NaryKernel and VariadicKernel}
+\label{sec:kernel_abstraction:variadic}
+
+The remaining two kernel templates handle ops with more than two
+inputs:
+
+\begin{itemize}
+  \item \code{NaryKernel<Op, N>}: fixed arity \(N\). Used for
+    operations like \code{addcmul} (\(N = 3\), three same-shape
+    pointwise inputs) and \code{where} (\(N = 3\), condition plus
+    two same-shape value tensors).
+  \item \code{VariadicKernel<Op>}: variable arity. Used for
+    operations like \code{cat} (concatenate any number of tensors
+    along an axis) and \code{stack} (stack any number of tensors
+    into a new axis).
+\end{itemize}
+
+The two templates share most of their implementation. The split
+exists because the fixed-arity case can use stack-allocated input
+pointers, while the variable-arity case needs a vector.
+
+\section{Contiguity Inference}
+\label{sec:kernel_abstraction:contig}
+
+\code{Contig.h} in the kernel directory provides the contiguity
+queries that the kernel templates consult before deciding between
+a fast path (assume contiguous, call backend's one-shot kernel)
+and a slow path (handle strided access manually).
+
+\subsection{The is\_contig\_along predicate}
+\label{ssec:kernel_abstraction:is_contig_along}
+
+The query is more nuanced than ``is the whole tensor contiguous.''
+For a binary kernel, what matters is whether \emph{both inputs} are
+contiguous along the axis the kernel iterates over. For a reduction
+kernel, what matters is whether the reduced axis is contiguous.
+\code{Contig.h} provides predicates for these specific cases:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+bool is_contiguous(const TensorImpl&);
+bool is_contiguous_along(const TensorImpl&, int axis);
+bool is_unit_stride_innermost(const TensorImpl&);
+bool both_contiguous(const TensorImpl&, const TensorImpl&);
+\end{lstlisting}
+
+The predicates are constant-time after the first call (the result
+is cached on the \code{TensorImpl}).
+
+\subsection{When to materialise}
+\label{ssec:kernel_abstraction:materialise}
+
+If the kernel cannot run on a non-contiguous view, it materialises
+the input via the backend's \code{contiguous} primitive. The cost
+is one copy; the alternative would be a slow kernel that handles
+arbitrary strides, which is generally not worth the implementation
+complexity.
+
+The materialise-vs-strided decision is made per-kernel, not
+per-op. Some kernel templates accept strided input (most
+elementwise); others always materialise (the convolution backward,
+the FFT). The choice is documented in the kernel template's
+implementation.
+
+\section{Primitive Kernels (Data-Dependent Operations)}
+\label{sec:kernel_abstraction:primitives}
+
+Not every operation fits the templated kernel pattern.
+Data-dependent operations --- where the output shape or layout
+depends on the input values, not just the input shapes --- have
+their own files in \code{lucid/\_C/kernel/primitives/}. The list:
+
+\begin{itemize}
+  \item \code{Gather}: \code{out[i, j] = input[i, indices[i, j]]}.
+    Output shape comes from the indices, not from the input.
+  \item \code{Scatter}: the inverse; writes \code{updates} into
+    \code{input} at positions given by \code{indices}.
+  \item \code{Im2Col}: rearranges convolution inputs into a column
+    matrix for GEMM-based convolution.
+  \item \code{Pad}: adds padding around a tensor.
+  \item \code{Sort}: sorts along an axis; output values are
+    permuted.
+  \item \code{NonZero}: returns the coordinates of nonzero
+    entries; output shape depends on the input values.
+  \item \code{Unique}: returns the unique values in a tensor;
+    output shape is at most input shape.
+  \item \code{SearchSorted}: binary-searches one tensor in
+    another.
+\end{itemize}
+
+These primitives are full implementations, not templates: each one
+has its own forward and backward code, its own dispatch to the
+backend's specialised functions, and (in the case of \code{NonZero}
+and \code{Unique}) its own CPU-stream forcing because the output
+shape requires reading the input values.
+
+\subsection{The CPU stream forcing}
+\label{ssec:kernel_abstraction:cpu_stream_force}
+
+For \code{NonZero} and \code{Unique} on metal tensors, the
+dispatcher's data-dependent-output carve-out
+(\chref{ch:backend_dispatch}~Section~\ref{ssec:backend_dispatch:data_dep_carveout})
+bridges the tensor to CPU, runs the primitive, and bridges the
+result back. The kernel itself sees only CPU tensors; the bridging
+is the dispatcher's responsibility.
+
+\section{Summary and Forward References}
+\label{sec:kernel_abstraction:summary}
+
+The kernel abstraction layer extracts the common control structure
+from \Lucid's operations into a small set of templates:
+\code{UnaryKernel}, \code{BinaryKernel}, \code{ReduceKernel},
+\code{NaryKernel}, \code{VariadicKernel}. Each template
+parameterises over an \code{Op} struct that defines the scalar
+function and (where applicable) its backward. Contiguity inference
+keeps the templates from running slow paths on contiguous inputs,
+and a small set of data-dependent primitives lives outside the
+templated machinery for the cases that do not fit.
+
+The next four chapters describe the op categories that use these
+templates: \chref{ch:unary_functions} for unary ops,
+\chref{ch:binary_functions} for binary ops, \chref{ch:reductions}
+for reductions, and \chref{ch:shape_view} for shape and broadcast
+ops. \chref{ch:indexing} treats the indexing primitives, and
+\chref{ch:composite_ops} treats the pure-Python composite layer.
+
+\begin{lucidnote}
+For the user: the kernel layer is invisible. The user calls
+\code{lucid.relu(x)}; the call passes through the dispatcher to
+\code{UnaryKernel<ReluOp>}, which dispatches to the backend's
+\code{relu} primitive. The whole chain runs in microseconds for
+non-trivial inputs.
+\end{lucidnote}

@@ -1,0 +1,478 @@
+% !TEX root = ../main.tex
+\chapter{Bridge Boundaries to the External World}
+\label{ch:bridge_boundaries}
+
+\Lucid's engine is a closed system. Inside \code{lucid/} there are
+no imports of \code{numpy}, no calls into \code{scipy}, no
+dependence on any third-party numerical library other than \MLX\
+and \Accelerate, both of which are themselves wrapped by \Lucid's
+backends. The closure is enforced by Hard Rule H4
+(\appref{app:hard_rules}), which is in turn enforced by a static
+check that scans every Python file in \code{lucid/} for forbidden
+imports.
+
+But the engine is not a sealed system. It must accept data from the
+outside (an image dataset arriving as numpy arrays, a checkpoint
+loaded from disk), and it must hand data to the outside (a tensor
+converted to numpy for plotting, a model state serialised for
+distribution). The reconciliation is a set of six explicitly named
+\emph{bridge boundaries}: six places in \code{lucid/} where
+external libraries are permitted, each justified by a specific
+interoperability need and each documented in this chapter.
+
+Any place outside these six where a forbidden import appears is a
+hard-rule violation that fails CI. This chapter exists to enumerate
+the boundaries, justify each one, describe what crosses each
+boundary, and document the discipline that keeps them as the only
+contact points with the outside world.
+
+The boundaries, in order:
+
+\begin{enumerate}
+  \item \code{lucid/\_factories/converters.py}: external array
+    ingest --- \code{tensor}, \code{from\_numpy},
+    \code{from\_dlpack}, \code{to\_dlpack}.
+  \item \code{lucid/\_tensor/tensor.py}: tensor-side egress ---
+    \code{Tensor.numpy()}, \code{Tensor.\_\_dlpack\_\_},
+    \code{Tensor.\_to\_impl}.
+  \item \code{lucid/\_tensor/\_repr.py}: display only ---
+    \code{\_\_repr\_\_} and \code{\_\_str\_\_}.
+  \item \code{lucid/\_types.py}: typing protocol ---
+    \code{TYPE\_CHECKING}-only imports.
+  \item \code{lucid/serialization/} and
+    \code{lucid/optim/\{optimizer,lbfgs\}.py}: checkpoint
+    serialisation --- \code{state\_dict}, \code{load\_state\_dict}.
+  \item \code{lucid/utils/data/dataloader.py}: external data
+    ingest --- \code{DataLoader}'s collate path.
+\end{enumerate}
+
+\tabref{tab:bridge_boundaries:summary} gives the same information
+in a quick-reference form.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tabular}{rllll}
+\toprule
+\# & File & Direction & External lib & Use case \\
+\midrule
+1 & \code{\_factories/converters.py} & ingest  & numpy, dlpack & \code{tensor()}, \code{from\_numpy} \\
+2 & \code{\_tensor/tensor.py}        & egress  & numpy, dlpack & \code{.numpy()}, \code{\_\_dlpack\_\_} \\
+3 & \code{\_tensor/\_repr.py}        & display & numpy         & \code{\_\_repr\_\_} formatting \\
+4 & \code{\_types.py}                & typing  & numpy (TYPE\_CHECKING) & \code{NDArrayLike} alias \\
+5 & \code{serialization/}, \code{optim/optimizer.py} & checkpoint & numpy, safetensors & \code{state\_dict} I/O \\
+  & \code{optim/lbfgs.py} & checkpoint & numpy & LBFGS history \\
+6 & \code{utils/data/dataloader.py}  & ingest  & numpy         & default \code{collate\_fn} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption[The six bridge boundaries.]{The exhaustive list of places
+in \code{lucid/} where an external numerical library may be
+imported. Any \texttt{import numpy} (or scipy, torch, jax, etc.)
+outside these six files is a Hard Rule H4 violation rejected by
+\texttt{tools/check\_bridges.py} in CI.}
+\label{tab:bridge_boundaries:summary}
+\end{table}
+
+\secref{sec:bridge_boundaries:rule} states the rule.
+Sections~\ref{sec:bridge_boundaries:b1}--\ref{sec:bridge_boundaries:b6}
+treat each boundary in turn.
+\secref{sec:bridge_boundaries:enforcement} describes how the rule
+is enforced. \secref{sec:bridge_boundaries:adding} describes the
+policy for adding (or rejecting) a seventh boundary.
+
+\section{Hard Rule H4 Restated}
+\label{sec:bridge_boundaries:rule}
+
+The verbatim text of H4:
+
+\begin{lucidrule}
+Lucid internal behaviour (\code{lucid/}'s composite, tensor, nn,
+optim, autograd, ops, linalg, fft, signal, special, distributions,
+einops, amp, profiler) must not depend on any external library.
+NumPy, SciPy, or any other external package may not be imported.
+Only the Lucid C++ engine and the Python standard library are
+permitted. The sole exception is the six bridge boundaries
+enumerated below.
+\end{lucidrule}
+
+The motivation is twofold:
+
+\begin{enumerate}
+  \item \textbf{Numerical hermeticism.} An external numerical
+    library injected into a computational path can subtly change
+    the dtype, the layout, or the numerical result of an operation.
+    Such a change is invisible at the import line and emerges only
+    when a parity test against the reference framework fails.
+    Keeping the engine numpy-free means every numerical decision is
+    made by \Lucid\ code that can be audited and changed under our
+    own discipline.
+  \item \textbf{Dependency surface.} Every external import is a
+    place where a future \code{pip install} can fail, a version
+    constraint can drift, or a security patch must be tracked.
+    The six bridge boundaries are explicitly version-pinned and
+    quarantined; the rest of the engine is unaffected by changes
+    in the external ecosystem.
+\end{enumerate}
+
+The rule was established in early \Lucid\ 3.x and tightened in 3.0.2
+when the framework completed its numpy-independence pass (vault:
+\code{retro-3-0-2-numpy-free-standalone}). The six boundaries
+listed here are the residue of that pass.
+
+\section{Boundary 1: External Array Ingest}
+\label{sec:bridge_boundaries:b1}
+
+\code{lucid/\_factories/converters.py} is the file that constructs
+\Lucid\ tensors from external array-like objects. It imports
+\code{numpy} unconditionally (numpy is a required dependency) and
+\code{torch}-style DLPack producers conditionally (DLPack is the
+standard cross-framework tensor protocol).
+
+The functions exposed:
+
+\begin{itemize}
+  \item \code{lucid.tensor(data, dtype=None, device=None)}:
+    construct a tensor from a Python scalar, list, numpy array, or
+    array-like. The function inspects the input type and routes
+    accordingly; numpy arrays go through \code{from\_numpy}, lists
+    are converted via numpy first, scalars become 0-d tensors.
+  \item \code{lucid.from\_numpy(arr)}: zero-copy construction from
+    a contiguous numpy array. The numpy buffer is wrapped in a
+    \code{Storage} with \code{provider = External} and the numpy
+    array is held alive for the storage's lifetime through a
+    closure deleter.
+  \item \code{lucid.from\_dlpack(capsule)}: construction from a
+    DLPack capsule \cite{dlpack}. Same zero-copy mechanic; the
+    capsule's deleter is invoked when the storage is freed.
+  \item \code{lucid.to\_dlpack(tensor)}: production of a DLPack
+    capsule from a \Lucid\ tensor, for interop with other DLPack
+    consumers.
+\end{itemize}
+
+\subsection{Why DLPack is routed through numpy}
+\label{ssec:bridge_boundaries:dlpack_numpy}
+
+The DLPack path in \Lucid\ goes through numpy as an intermediate.
+Specifically, \code{from\_dlpack} first calls
+\code{numpy.from\_dlpack(capsule)} and then \code{from\_numpy} on
+the resulting numpy array. The alternative would have been to
+construct a \Lucid\ tensor directly from the DLPack capsule, which
+would avoid the numpy round-trip.
+
+The alternative was implemented and abandoned. The vault note
+\code{arch-dlpack-via-numpy} records the reasoning: the direct
+DLPack path was 350 lines of C code that handled dtype mapping,
+stride translation, and capsule lifetime; the indirect path through
+numpy is 5 lines of Python; the performance difference is
+unmeasurable (DLPack is a metadata transfer, no data motion) and
+numpy's DLPack implementation is well-tested. The maintenance cost
+of the direct path was deemed not worth the marginal architectural
+purity.
+
+\section{Boundary 2: Tensor-Side Egress}
+\label{sec:bridge_boundaries:b2}
+
+\code{lucid/\_tensor/tensor.py} contains the \code{Tensor} class
+definition. The class has three methods that touch numpy or
+DLPack:
+
+\begin{itemize}
+  \item \code{Tensor.numpy()}: return a numpy view of the tensor's
+    data. The tensor must be on \code{device=cpu}; for a metal
+    tensor, the user must first call \code{.to('cpu')}.
+  \item \code{Tensor.\_\_dlpack\_\_()}: the dunder that
+    third-party DLPack consumers call to obtain a capsule.
+  \item \code{Tensor.\_to\_impl(device)}: internal device-move
+    implementation that, in one specific case, uses numpy as a
+    fallback for an unusual dtype combination.
+\end{itemize}
+
+Of these, \code{.numpy()} is by far the most-used. The
+implementation is:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def numpy(self):
+    if self.device.type != 'cpu':
+        raise LucidError("call .to('cpu') before .numpy()")
+    if self.requires_grad:
+        raise LucidError("call .detach() before .numpy()")
+    return _C_engine.tensor_to_numpy(self._impl)
+\end{lstlisting}
+
+The two preconditions (\code{.to('cpu')}, \code{.detach()}) are
+explicit: \Lucid\ does not silently move to CPU and does not
+silently detach. The reasoning is the same as for cross-device
+binary ops (\chref{ch:backend_dispatch}): the user should be
+intentional about device moves and about breaking the autograd
+graph.
+
+The \code{tensor\_to\_numpy} bound C++ function constructs a numpy
+array whose buffer points at the \code{TensorImpl}'s storage and
+holds a reference to the \code{TensorImpl} through a numpy capsule
+deleter. The conversion is zero-copy: the numpy array reads the
+same physical bytes as the tensor.
+
+\subsection{Why repr is a separate boundary}
+\label{ssec:bridge_boundaries:repr_separate}
+
+A natural question: why is the tensor's \code{\_\_repr\_\_} a
+separate boundary (boundary 3) rather than part of
+\code{tensor.py}? The answer is organisational: \code{tensor.py}
+must import numpy for the egress functions and we want to keep its
+internal logic away from display code. \code{\_repr.py} is a
+single-purpose file that does only formatting, which keeps the
+diff for any repr-related change small and reviewable.
+
+\section{Boundary 3: Display Only}
+\label{sec:bridge_boundaries:b3}
+
+\code{lucid/\_tensor/\_repr.py} is the file that implements
+\code{Tensor.\_\_repr\_\_} and \code{Tensor.\_\_str\_\_}. It
+imports numpy because numpy's pretty-printing
+(\code{numpy.array2string}) is the well-tested standard for
+displaying multi-dimensional arrays in Python. \Lucid's repr
+delegates to it:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def _format_tensor(t):
+    """Construct a repr string for a Tensor."""
+    arr = numpy.asarray(_C_engine.tensor_to_numpy(t._impl))
+    body = numpy.array2string(arr, precision=4, suppress_small=True)
+    return f"Tensor({body}, dtype={t.dtype}, device={t.device})"
+\end{lstlisting}
+
+The function is invoked only by the Python interpreter when the
+user asks for a repr (typing the variable name at a REPL prompt,
+calling \code{print}, embedding in an f-string). It does not run
+during training and contributes no runtime overhead.
+
+\subsection{The display carve-out is read-only}
+\label{ssec:bridge_boundaries:repr_readonly}
+
+The repr code reads tensor data and returns a string; it does not
+modify the tensor, does not produce a new tensor, and does not
+affect any state outside the function. This makes it the least
+risky of the six boundaries: even a bug in the repr code (typing
+wrong dtype, getting precision wrong) does not corrupt
+computation. The boundary is enumerated for completeness rather
+than for any correctness concern.
+
+\section{Boundary 4: Typing Protocol}
+\label{sec:bridge_boundaries:b4}
+
+\code{lucid/\_types.py} contains the type aliases that the rest of
+\Lucid\ uses for static type checking. It imports numpy under a
+\code{TYPE\_CHECKING} guard so that the import has no runtime cost:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as _np
+    NDArrayLike = _np.ndarray
+else:
+    NDArrayLike = object
+\end{lstlisting}
+
+The pattern: at runtime, \code{NDArrayLike} is just \code{object}
+(no numpy import); at type-check time, \code{mypy} sees the real
+\code{numpy.ndarray} alias. This satisfies the type system without
+adding a runtime dependency.
+
+The boundary is named because, technically, the file does import
+numpy. The import is dead at runtime but live at lint time. We list
+it explicitly to forestall the question of why \code{\_types.py}
+contains the word \code{numpy}.
+
+\subsection{Why TYPE\_CHECKING and not a string annotation}
+\label{ssec:bridge_boundaries:typing_string}
+
+The alternative would have been to use string annotations:
+\code{NDArrayLike = "numpy.ndarray"}. \Lucid\ rejects this pattern
+per Hard Rule H7 (no string type hints), which is enforced by mypy
+\code{strict} configuration. The \code{TYPE\_CHECKING} block is
+the H7-compliant equivalent.
+
+\section{Boundary 5: Checkpoint Serialisation}
+\label{sec:bridge_boundaries:b5}
+
+\code{lucid/serialization/} and two files in \code{lucid/optim/}
+(\code{optimizer.py} and \code{lbfgs.py}) form the fifth boundary.
+The serialisation subsystem reads and writes \code{state\_dict}
+files, which by convention contain numpy arrays.
+
+\subsection{The state\_dict format}
+\label{ssec:bridge_boundaries:state_dict}
+
+A \code{state\_dict} is a Python dict mapping string keys
+(parameter names) to tensor values. \Lucid's \code{save} function
+serialises the dict using Python's \code{pickle} format, with each
+\Lucid\ tensor converted to a numpy array on the way out. The
+inverse, \code{load}, reads the pickle and converts numpy arrays
+back to \Lucid\ tensors.
+
+The numpy intermediate is necessary because the pickle format does
+not know how to represent a \Lucid\ tensor by itself. We could have
+added a custom pickle reducer, but the user-facing benefit is
+zero: external tools that read checkpoints (e.g.\ for inference
+deployment in non-\Lucid\ environments) expect numpy arrays, and
+exposing \Lucid\ tensors would have required the reader to depend
+on \Lucid.
+
+\subsection{The safetensors path}
+\label{ssec:bridge_boundaries:safetensors}
+
+\code{lucid.serialization} also supports the safetensors format
+\cite{safetensors}, which is a tensor-format-only alternative to
+pickle that is safer (no arbitrary code execution during load) and
+faster (memory-mapped read). The safetensors path uses the
+\code{safetensors} Python library, which is itself numpy-aware. The boundary is therefore
+double: numpy for the tensor representation, safetensors for the
+format. Both are quarantined to \code{lucid/serialization/}.
+
+\subsection{Why lbfgs is part of this boundary}
+\label{ssec:bridge_boundaries:lbfgs}
+
+\code{lucid/optim/lbfgs.py} is the only optimiser that maintains
+state that does not fit the standard \code{state\_dict} schema
+(LBFGS maintains a history of past gradients and parameter steps).
+Its \code{state\_dict} / \code{load\_state\_dict} are non-trivial
+and touch the numpy boundary directly rather than going through
+the generic serialisation path. The optimiser base class
+(\code{lucid/optim/optimizer.py}) likewise has a small numpy touch
+for parameter group serialisation.
+
+This was a deliberate trade-off: factoring the LBFGS state out into
+the generic path would have required generalising the schema in a
+way that benefits only LBFGS, and the cost of two extra files in
+the bridge enumeration was lower than the cost of the
+generalisation.
+
+\section{Boundary 6: External Data Ingest}
+\label{sec:bridge_boundaries:b6}
+
+\code{lucid/utils/data/dataloader.py} is the user-facing data
+loading utility. Its \code{DataLoader} class accepts a
+\code{Dataset} that produces samples, batches them, optionally
+collates them, and yields a stream of batched tensors.
+
+The boundary appears in the collate path, which is where samples
+become tensors. The default \code{collate\_fn} accepts numpy arrays
+and lists of numpy arrays and turns them into \Lucid\ tensors via
+\code{lucid.from\_numpy}. It also accepts Python scalars, lists,
+and dicts of any of the above.
+
+\subsection{Why the data path is its own boundary}
+\label{ssec:bridge_boundaries:why_data}
+
+The data ingest path is the single largest source of external data
+volume in a typical training workload --- every image, every text
+token, every audio sample passes through it. Routing this through
+the existing \code{lucid.tensor} or \code{lucid.from\_numpy}
+boundary would have been correct but inconvenient: the
+\code{DataLoader} class needs to know about collation, batching,
+multi-process worker coordination, and other concerns that
+\code{from\_numpy} does not.
+
+The boundary therefore exists for organisational reasons: the data
+loading code is concentrated in one place, and that place is
+allowed to import numpy. The user can write a custom
+\code{collate\_fn} that imports anything; \Lucid's contract is that
+the default collate works for numpy-formatted samples.
+
+\section{Enforcement}
+\label{sec:bridge_boundaries:enforcement}
+
+The H4 rule is enforced by a static check in
+\code{tools/check\_bridges.py}. The check walks every \code{.py}
+file under \code{lucid/}, parses imports, and verifies that no
+file outside the six named files imports any of the forbidden
+modules (numpy, scipy, torch, jax, tensorflow, and a handful of
+others).
+
+The check runs as part of the pre-commit hook and as part of CI. A
+violation fails the build and the contributor is asked to either
+(a) move the new dependency into a bridge file or (b) eliminate
+the dependency.
+
+\subsection{The bridge whitelist}
+\label{ssec:bridge_boundaries:whitelist}
+
+The whitelist is hard-coded in \code{tools/check\_bridges.py}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+BRIDGE_FILES = {
+    "lucid/_factories/converters.py",
+    "lucid/_tensor/tensor.py",
+    "lucid/_tensor/_repr.py",
+    "lucid/_types.py",
+    "lucid/serialization/__init__.py",
+    "lucid/optim/optimizer.py",
+    "lucid/optim/lbfgs.py",
+    "lucid/utils/data/dataloader.py",
+}
+
+FORBIDDEN_OUTSIDE_BRIDGE = {
+    "numpy", "scipy", "torch", "jax", "tensorflow", "pandas",
+    "sklearn", "xarray", "cupy",
+}
+\end{lstlisting}
+
+The list is short and stable; changes require explicit review.
+
+\section{Adding a Seventh Boundary}
+\label{sec:bridge_boundaries:adding}
+
+The policy for adding a new bridge boundary:
+
+\begin{enumerate}
+  \item Document the user-visible need that the new boundary
+    serves. If the need can be satisfied by routing through an
+    existing boundary, do that instead.
+  \item Document the external library that the new boundary will
+    import.
+  \item Add the file to the whitelist in
+    \code{tools/check\_bridges.py}.
+  \item Update this chapter (and the relevant API reference
+    chapter) to include the new boundary.
+\end{enumerate}
+
+The policy has been invoked zero times since the rule was
+established. Every additional integration since then has been
+satisfied by extending one of the existing boundaries (e.g.,
+adding safetensors support to \code{serialization/} or DLPack
+support to \code{converters.py}). The intent is to keep the count
+at six indefinitely.
+
+\section{Summary and Forward References}
+\label{sec:bridge_boundaries:summary}
+
+\Lucid's engine is hermetically sealed against external numerical
+libraries except at six explicitly named bridge boundaries. The
+boundaries are: external array ingest (\code{converters.py}),
+tensor-side egress (\code{tensor.py}), display
+(\code{\_repr.py}), typing protocol (\code{\_types.py}),
+checkpoint serialisation (\code{serialization/} and two optim
+files), and external data ingest (\code{dataloader.py}). Hard Rule
+H4 enforces the closure; a static check rejects any new import of
+a forbidden library outside the whitelist.
+
+The next chapter, \chref{ch:python_cpp_binding}, describes the
+pybind11 layer that the Python side of \Lucid\ sits on.
+\chref{ch:lazy_imports} closes \partref{part:system} with the
+lazy-import surface that the top-level package presents to the
+user. \chref{ch:serialization} returns to boundary 5 with a focus
+on the serialisation formats themselves; \chref{ch:data_pipeline}
+returns to boundary 6.
+
+\begin{lucidnote}
+For the user: the bridge boundaries are invisible from the API
+surface. \code{lucid.from\_numpy(arr)} just works; \code{.numpy()}
+just works; \code{lucid.save} and \code{lucid.load} just work.
+The chapter is for the contributor who needs to understand where
+numpy or DLPack can legitimately appear in the codebase and where
+it cannot.
+\end{lucidnote}

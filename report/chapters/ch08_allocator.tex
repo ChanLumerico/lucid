@@ -1,0 +1,475 @@
+% !TEX root = ../main.tex
+\chapter{Allocator and Memory Accounting}
+\label{ch:allocator}
+
+Every tensor allocation in \Lucid\ passes through a custom size-class
+allocator before reaching the underlying provider (\MLX's allocator
+for GPU tensors, the system allocator for CPU tensors). The
+allocator's job is twofold: amortise the cost of frequent
+small-to-medium allocations by recycling buffers, and account for
+memory in a way the user can query. This chapter describes both
+roles.
+
+The allocator is conventional in shape --- it is a size-class pool
+of the variety familiar from CUDA-side ML frameworks --- but its
+parameters are tuned to Apple silicon's memory characteristics and
+its accounting separates pool state from provider state in a way
+that has occasionally surprised users (\code{lucid.memory\_stats()}
+can disagree with \code{Activity Monitor}; the explanation is in
+\secref{sec:allocator:accounting}).
+
+The chapter is organised bottom up: \secref{sec:allocator:why}
+motivates the pool, \secref{sec:allocator:size_classes} describes
+the size-class structure, \secref{sec:allocator:fast_path} describes
+the allocation and free fast paths,
+\secref{sec:allocator:accounting} describes the accounting API,
+\secref{sec:allocator:empty_cache} describes the drain operation,
+\secref{sec:allocator:oom} describes OOM handling, and
+\secref{sec:allocator:coordination} discusses the lack of
+coordination with the provider's own pool.
+
+\section{Why a Pool}
+\label{sec:allocator:why}
+
+The naive design is to call the provider's allocator
+(\MLX\ or system \code{malloc}) on every tensor allocation and
+release. This works correctly but is slow in two ways. First, each
+provider call has nontrivial overhead --- \MLX's allocator
+synchronises with the GPU's command queue to know which buffers are
+in flight, which costs a microsecond at least and sometimes more.
+Second, the provider's own pool may have its own size classes that
+do not match \Lucid's typical allocation sizes, causing
+fragmentation and wasted memory.
+
+A pool above the provider solves both problems. The pool retains a
+freelist of recently-freed buffers, so a request that matches a
+freelist entry returns in constant time without touching the
+provider. The pool also rounds allocation sizes to its own size
+classes, which gives it deterministic memory behaviour independent
+of the provider's internal heuristics.
+
+The cost is the pool itself: a small amount of code, a small amount
+of bookkeeping memory, and the rare case where the pool retains a
+buffer that the provider would have preferred to free.
+\secref{sec:allocator:empty_cache} describes the user-visible
+mitigation for that case.
+
+\section{Size Classes}
+\label{sec:allocator:size_classes}
+
+\Lucid's pool uses 23 size classes arranged in a roughly geometric
+progression. The exact sizes are chosen to match typical ML
+allocation patterns; \tabref{tab:allocator:size_classes} gives the
+full list.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{rrrrl}
+\toprule
+Idx & Size & Idx & Size & Notes \\
+\midrule
+ 0 & 16\,B    & 12 & 64\,KB   & \\
+ 1 & 32\,B    & 13 & 128\,KB  & \\
+ 2 & 64\,B    & 14 & 256\,KB  & \\
+ 3 & 128\,B   & 15 & 512\,KB  & \\
+ 4 & 256\,B   & 16 & 1\,MB    & \\
+ 5 & 512\,B   & 17 & 2\,MB    & \\
+ 6 & 1\,KB    & 18 & 4\,MB    & \\
+ 7 & 2\,KB    & 19 & 8\,MB    & \\
+ 8 & 4\,KB    & 20 & 16\,MB   & \\
+ 9 & 8\,KB    & 21 & 32\,MB   & \\
+10 & 16\,KB   & 22 & 64\,MB   & largest pooled \\
+11 & 32\,KB   & ---  & $>$64\,MB & passthrough to provider \\
+\bottomrule
+\end{tabular}
+\caption[Allocator size classes.]{The 23 size classes in \Lucid's
+allocator pool. Each class has a per-device freelist of depth at
+most \(k_{\max} = 32\). Requests over 64\,MB bypass the pool and
+go directly to the provider, on the rationale that very large
+buffers are rarely reused at the same size and pooling them would
+waste memory.}
+\label{tab:allocator:size_classes}
+\end{table}
+
+\begin{itemize}
+  \item Small classes (16, 32, 64, 128, 256, 512, 1024 bytes) cover
+    per-scalar workspaces, small index arrays, and small parameter
+    buffers.
+  \item Medium classes (2K, 4K, 8K, 16K, 32K, 64K, 128K, 256K) cover
+    moderate activation buffers and most layer weights.
+  \item Large classes (512K, 1M, 2M, 4M, 8M, 16M, 32M, 64M) cover
+    large activations, weight matrices, and gradient buffers.
+\end{itemize}
+
+A request for $n$ bytes is rounded up to the smallest size class
+$\geq n$. Requests larger than 64\,MB are passed through to the
+provider without pooling; the largest buffers are unlikely to be
+reused at the same size and pooling them would waste memory.
+
+The 23-class structure is determined empirically. We chose it after
+profiling a representative set of training workloads (ResNet-50,
+ViT-B, GPT-2-base) and observing the distribution of allocation
+sizes; the geometric progression captures the long tail without
+producing internal fragmentation greater than a factor of two on
+typical requests.
+
+\subsection{Internal fragmentation}
+\label{ssec:allocator:internal_frag}
+
+The trade-off in size-class pools is that a request for, say, 1100
+bytes is rounded up to the 2K class, wasting 948 bytes. The worst
+case is a request just over a size-class boundary, which wastes
+just under one full size-class worth of memory.
+
+For \Lucid's typical workloads the average wasted fraction is
+roughly 15--20\,\%, which is acceptable given the speed-up from
+pooling. The pool is not the right tool for memory-constrained
+inference workloads where each byte matters; for those, the user
+can disable the pool by calling \code{lucid.set\_allocator\_pool(False)}
+and pay the provider-allocator overhead per call.
+
+\subsection{External fragmentation}
+\label{ssec:allocator:external_frag}
+
+External fragmentation --- the inability to satisfy a request even
+when the total free memory exceeds the request size --- is largely
+a non-issue under unified memory on Apple silicon. The kernel's VM
+subsystem is happy to reorganise pages on demand; the allocator
+sees a flat address space and does not need to perform compaction.
+This is one of the simplifying assumptions Apple silicon's memory
+model affords.
+
+\section{Freelist and Depth Limits}
+\label{sec:allocator:freelists}
+
+Each size class has a freelist: a stack of recently-freed buffers
+of that size. The freelist is bounded by the constant
+\code{kMaxDepth = 32}. When a buffer is freed:
+
+\begin{itemize}
+  \item If the freelist has fewer than 32 entries, the buffer is
+    pushed onto the stack.
+  \item Otherwise, the buffer is returned to the provider.
+\end{itemize}
+
+The depth limit is what keeps the pool's memory footprint bounded.
+Without it, a training loop that allocates and frees many tensors
+per iteration would accumulate freelist entries indefinitely.
+
+The choice of 32 is empirical. We measured the freelist depth
+distribution across representative workloads and observed that
+depths above 8 rarely benefit from re-allocation (the same buffer
+is not re-requested often enough), but the cost of evicting at
+depth 32 versus depth 8 is small in the workload we measured. The
+slightly conservative cap gives some head-room for workloads we did
+not profile.
+
+\subsection{The freelist as a stack, not a queue}
+\label{ssec:allocator:lifo}
+
+The freelist is LIFO: the most recently freed buffer is the first
+candidate for reuse. This is the right policy for cache behaviour:
+the most recently used buffer is most likely to still be resident
+in SLC, so handing it back to a re-allocator is a cache-warm
+operation. FIFO would have the opposite (cache-cold) behaviour.
+
+The implementation is a \code{std::vector} used as a stack; push
+and pop are \code{back()} operations.
+
+\section{The Allocation Fast Path}
+\label{sec:allocator:fast_path}
+
+The allocation path, in pseudocode:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void* Allocator::alloc(size_t nbytes, Device dev) {
+  size_t cls = size_class_index(nbytes);   // O(log 23) = O(1)
+  Freelist& fl = freelists_[dev][cls];
+
+  if (!fl.empty()) {
+    void* p = fl.pop_back();
+    stats_[dev].allocated += class_size(cls);
+    stats_[dev].alloc_calls++;
+    return p;
+  }
+
+  void* p = provider_alloc(class_size(cls), dev);
+  if (!p) throw LucidError("out of memory");
+  stats_[dev].allocated += class_size(cls);
+  stats_[dev].reserved  += class_size(cls);
+  stats_[dev].alloc_calls++;
+  return p;
+}
+\end{lstlisting}
+
+The fast path (freelist hit) is a few memory accesses and a stack
+pop, on the order of 50 nanoseconds. The slow path
+(\code{provider\_alloc}) ranges from microseconds (system
+\code{malloc}) to tens of microseconds (\MLX's command-queue-aware
+allocator). On a training step that allocates several thousand
+buffers, the freelist hit rate is typically above 95\,\% after the
+first dozen iterations.
+
+\subsection{Thread safety}
+\label{ssec:allocator:thread_safety}
+
+The freelists are protected by a per-device mutex. The lock is held
+only during the freelist operation itself; the provider call (if
+needed) is performed without the lock. This is acceptable because
+provider allocators are themselves thread-safe.
+
+For \Lucid's typical workload --- a single training thread
+dispatching to the pool --- the lock is uncontended and adds a few
+nanoseconds. For multi-threaded data loaders that allocate from
+worker threads, the lock can be contended; we measured a worst-case
+overhead of 10\,\% on a workload with 8 simultaneous worker
+threads, which we judge acceptable.
+
+\section{The Deallocation Path}
+\label{sec:allocator:dealloc}
+
+The deallocation path:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void Allocator::free(void* p, size_t nbytes, Device dev) {
+  size_t cls = size_class_index(nbytes);
+  Freelist& fl = freelists_[dev][cls];
+
+  stats_[dev].allocated -= class_size(cls);
+  stats_[dev].free_calls++;
+
+  if (fl.size() < kMaxDepth) {
+    fl.push_back(p);
+  } else {
+    provider_free(p, dev);
+    stats_[dev].reserved -= class_size(cls);
+  }
+}
+\end{lstlisting}
+
+The fast path (push to freelist) is again on the order of 50
+nanoseconds. The slow path (return to provider) is the bottleneck
+only when the freelist is consistently saturated.
+
+\section{Memory Accounting}
+\label{sec:allocator:accounting}
+
+The pool maintains per-device statistics that the user can query.
+The public Python API:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+stats = lucid.memory_stats('metal')
+# {'allocated': 4_812_345_678,
+#  'reserved':  5_368_709_120,
+#  'peak_allocated': 5_201_022_400,
+#  'peak_reserved':  5_368_709_120,
+#  'alloc_calls': 87234,
+#  'free_calls':  82910}
+
+lucid.reset_peak('metal')      # zero the peak high-water marks
+\end{lstlisting}
+
+The fields:
+
+\begin{itemize}
+  \item \code{allocated}: total bytes currently in use by live
+    tensors (sum across size classes).
+  \item \code{reserved}: total bytes the pool has from the
+    provider (sum of buffers in use plus buffers on freelists).
+    Always $\geq$ \code{allocated}.
+  \item \code{peak\_allocated}: high-water mark of \code{allocated}
+    since the process began or since \code{reset\_peak()}.
+  \item \code{peak\_reserved}: corresponding high-water mark of
+    \code{reserved}.
+  \item \code{alloc\_calls}, \code{free\_calls}: cumulative
+    counters since process start.
+\end{itemize}
+
+\subsection{Pool vs.\ provider stats}
+\label{ssec:allocator:pool_vs_provider}
+
+A common confusion: \code{lucid.memory\_stats()['allocated']} is
+the pool's view of allocated memory, not the system's view of
+memory used by the process. The provider may hold additional memory
+in its own caches (\MLX's own allocator pool has separate
+bookkeeping; the system allocator's free regions are similar), and
+the kernel may have additional buffers allocated for the Metal
+command queue itself.
+
+The user-visible reconciliation:
+
+\begin{itemize}
+  \item \code{allocated} from \Lucid\ corresponds to live tensors.
+  \item \code{reserved} from \Lucid\ minus \code{allocated} is
+    held by \Lucid's freelists.
+  \item Activity Monitor's reported memory minus \Lucid's
+    \code{reserved} is held by \MLX, the Metal driver, and the
+    rest of the process.
+\end{itemize}
+
+\code{lucid.empty\_cache()} closes the gap between
+\code{reserved} and \code{allocated} by draining the freelists; it
+does not affect the gap between \code{reserved} and Activity
+Monitor's number, which is the responsibility of \MLX's own pool.
+
+\section{The empty\_cache API}
+\label{sec:allocator:empty_cache}
+
+\code{lucid.empty\_cache()} drains every freelist back to the
+provider:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+lucid.empty_cache()              # both devices
+lucid.empty_cache('cpu')         # CPU only
+lucid.empty_cache('metal')       # GPU only
+\end{lstlisting}
+
+The operation iterates each size class on the requested device,
+popping every freelist entry and calling \code{provider\_free} on
+it. After the call, \code{reserved == allocated} and the pool is
+in its leanest state.
+
+\subsection{When to call}
+\label{ssec:allocator:when_empty_cache}
+
+The recommended pattern is to call \code{empty\_cache} at
+transition points:
+
+\begin{itemize}
+  \item Between training and validation phases in a training loop.
+    The two phases often have different working-set sizes; draining
+    in between lets the next phase build its own freelists
+    appropriately.
+  \item After loading a checkpoint that allocates and frees large
+    temporary buffers. The pool may have retained buffers that the
+    next training step will not need.
+  \item Before sampling a memory snapshot for profiling, to ensure
+    the snapshot reflects live state rather than freelist headroom.
+\end{itemize}
+
+\code{empty\_cache} is not free: each freelist drain is one
+provider call, and a large pool can have several hundred entries
+across size classes. The cost is on the order of milliseconds and
+should not be called inside a tight loop.
+
+\subsection{What empty\_cache does not do}
+\label{ssec:allocator:not_empty_cache}
+
+It does not affect live tensors. Anything the user holds a
+reference to remains allocated.
+
+It does not affect the autograd graph. Tensors retained by
+\code{grad\_fn} chains for backward computation remain alive; the
+graph must be released (by completing or releasing the forward
+pass) before its retained tensors can be freed.
+
+It does not free memory held by \MLX's own pool. \MLX\ has its own
+\code{mx.clear\_memory()}-equivalent function; \Lucid\ does not
+invoke it because the policies are independent. A user who wants
+both layers drained should call both.
+
+\section{Out-of-Memory Handling}
+\label{sec:allocator:oom}
+
+When the provider's allocator returns null, \Lucid's allocator
+raises \code{LucidError("out of memory")} with the requested size,
+the current pool state, and the device. The error message is
+designed to be diagnostic:
+
+\begin{verbatim}
+LucidError: out of memory
+  request: 268435456 bytes (256 MB) on device=metal
+  pool reserved: 14782 MB
+  pool allocated: 14503 MB
+  pool peak reserved: 14782 MB
+  hint: call lucid.empty_cache() to drain freelists;
+        if still failing, reduce batch size or activation memory.
+\end{verbatim}
+
+The error is fatal in the sense that the framework does not
+attempt a fallback: it does not silently reduce batch size, does
+not silently move to CPU, does not silently retry with smaller
+shapes. The reasoning is that any such fallback would change the
+numerics of the training run in ways the user did not request, and
+silent gradient changes are worse than an explicit failure.
+
+\subsection{Memory pressure events versus OOM}
+\label{ssec:allocator:pressure_oom}
+
+OOM is the terminal failure mode. macOS memory-pressure events
+(\code{DISPATCH\_MEMORYPRESSURE\_WARN},
+\code{DISPATCH\_MEMORYPRESSURE\_CRITICAL}) are pre-OOM signals from
+the kernel asking processes to release caches. \Lucid\ does not
+itself subscribe to these events at the engine layer; the providers
+(\MLX, \Accelerate) subscribe on their own behalf. The user can
+respond by calling \code{empty\_cache} manually.
+
+\section{Coordination with the Provider's Pool}
+\label{sec:allocator:coordination}
+
+\Lucid's pool sits above the provider's pool. The two pools have
+independent freelists, independent size-class structures, and
+independent eviction policies. There is no API by which \Lucid\
+can ask \MLX\ to drop its own cache, nor vice versa.
+
+The consequence is that the layered pools can together hold more
+memory than either would alone. In the worst case, \Lucid's pool
+holds a freelist entry that \MLX\ would have evicted, and
+\MLX's pool holds the underlying buffer that \Lucid's freelist
+just freed. We have not measured this composite overhead but
+estimate it at 5--10\,\% of total reserved memory in typical
+training workloads.
+
+The simplification we adopted, for the sake of code clarity, was to
+let each pool manage itself. Coordinating them would have required
+a callback interface that we judged not worth the maintenance cost.
+
+\subsection{When to disable Lucid's pool}
+\label{ssec:allocator:disable_pool}
+
+For memory-constrained workloads on small machines (8\,GB unified
+memory or less), the layered overhead can matter. The user can
+disable \Lucid's pool entirely:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+lucid.set_allocator_pool(False)
+# Now every alloc/free goes directly to the provider.
+# The freelist depth is effectively zero.
+\end{lstlisting}
+
+The cost is the per-call overhead of provider allocation, which is
+several microseconds. On a training step that allocates a few
+thousand buffers, the disabled-pool overhead is around 10\,ms per
+step --- noticeable but acceptable for workloads where memory is
+tighter than time.
+
+The default is enabled; disabling is the rare case.
+
+\section{Summary and Forward References}
+\label{sec:allocator:summary}
+
+\Lucid's allocator is a size-class pool with 23 classes and a
+per-class freelist of depth 32. It sits above the provider
+(\MLX\ for GPU, the system allocator for CPU) and amortises
+per-call overhead by recycling recently-freed buffers. The pool's
+state is exposed through \code{lucid.memory\_stats} and drained
+through \code{lucid.empty\_cache}; OOM raises \code{LucidError}
+without silent fallback.
+
+The next chapter, \chref{ch:backend_dispatch}, treats the
+dispatcher that selects between the CPU and GPU backends.
+\chref{ch:bridge_boundaries} catalogues the six places where the
+allocator's contract crosses into external libraries.
+\chref{ch:profiler_determinism} returns to the allocator from the
+profiling angle, since per-op memory accounting depends on the
+pool's bookkeeping.
+
+\begin{lucidtip}
+For the user, the two operational levers exposed by this chapter
+are \code{lucid.memory\_stats()} (for observing) and
+\code{lucid.empty\_cache()} (for acting). Both are cheap to call
+during development and expensive enough not to call in a tight
+loop. The OOM error message is designed to suggest \code{empty\_cache}
+first, then a batch-size reduction.
+\end{lucidtip}

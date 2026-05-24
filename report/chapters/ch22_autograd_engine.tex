@@ -1,0 +1,568 @@
+% !TEX root = ../main.tex
+\chapter{The Autograd Engine}
+\label{ch:autograd_engine}
+
+The previous chapter explained reverse-mode AD as an algorithm.
+This chapter explains \Lucid's implementation of it. The autograd
+engine lives in \code{lucid/\_C/autograd/} (\chref{ch:layered_dag},
+Layer 4) and is the component that constructs the backward graph
+during forward execution, walks it during \code{backward()}, and
+accumulates cotangents into parameter \code{.grad} fields.
+
+The engine is conventional in shape --- reverse-mode AD engines
+have converged on a similar structure across frameworks --- but
+the details are where the implementation lives. We treat the
+\code{Node} class, the engine's traversal algorithm, the
+saved-tensor mechanism, the version-counter check that catches
+in-place modification errors, the hook system, and the anomaly
+detector.
+
+\secref{sec:autograd_engine:overview} sketches the architecture.
+\secref{sec:autograd_engine:node} treats the \code{Node} class.
+\secref{sec:autograd_engine:construction} treats forward-time
+graph construction.
+\secref{sec:autograd_engine:traversal} treats backward traversal.
+\secref{sec:autograd_engine:accumulate} treats
+\code{AccumulateGrad} on leaves.
+\secref{sec:autograd_engine:saved} treats saved tensors.
+\secref{sec:autograd_engine:version} treats the version counter.
+\secref{sec:autograd_engine:hooks} treats hooks.
+\secref{sec:autograd_engine:anomaly} treats the anomaly detector.
+
+\section{Architectural Overview}
+\label{sec:autograd_engine:overview}
+
+The engine has three principal components, each implemented as a
+C++ class under \code{lucid/\_C/autograd/}:
+
+\begin{itemize}
+  \item \code{Node}: one node in the backward graph. Concrete
+    subclasses (one per op category) implement the VJP.
+  \item \code{Engine}: the traversal driver. Walks the backward
+    graph in reverse topological order, calling each node's
+    \code{apply} with the accumulated cotangent.
+  \item \code{AccumulateGrad}: a special leaf node that
+    accumulates the final cotangent into a tensor's \code{.grad}
+    field.
+\end{itemize}
+
+The supporting machinery includes the \code{AutogradMeta} on each
+tensor (\chref{ch:tensor_model}~Section~\ref{sec:tensor_model:autograd_meta}),
+the saved-tensor list per node, the hook registries, and the
+anomaly detector.
+
+\figref{fig:autograd_engine:overview} sketches the relationship.
+
+\begin{figure}[t]
+\centering
+\begin{adjustbox}{max width=\textwidth, center}
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, font=\small\sffamily,
+              minimum width=3.5cm, minimum height=1.1cm,
+              align=center, inner sep=4pt},
+  tensor/.style={box, fill=lucid.note.bg},
+  node/.style={box, fill=lucid.info.bg},
+  leaf/.style={box, fill=lucid.ok.bg},
+  engine/.style={box, fill=lucid.code.bg, minimum width=4cm,
+                 minimum height=1.4cm},
+  fwd/.style={->, >=stealth, thick, color=lucid.accent.dark,
+              shorten >=2pt, shorten <=2pt},
+  bwd/.style={->, >=stealth, thick, color=lucid.warn.fg,
+              dashed, shorten >=2pt, shorten <=2pt},
+]
+  % Top: tensors
+  \node[tensor] (param) at (-5, 3) {parameter\\(leaf, \texttt{requires\_grad})};
+  \node[tensor] (act1) at (0, 3) {intermediate};
+  \node[tensor] (loss) at (5, 3) {loss\\(scalar)};
+
+  % Middle: backward nodes
+  \node[leaf] (accumg) at (-5, 0.5) {AccumulateGrad};
+  \node[node] (n_op1) at (0, 0.5) {MulBackward};
+  \node[node] (n_op2) at (5, 0.5) {SumBackward};
+
+  % Bottom: engine
+  \node[engine] (eng) at (0, -1.8) {Engine::backward()\\(topological walk)};
+
+  \draw[fwd] (param) -- node[font=\footnotesize, right] {grad\_fn} (accumg);
+  \draw[fwd] (act1) -- node[font=\footnotesize, right] {grad\_fn} (n_op1);
+  \draw[fwd] (loss) -- node[font=\footnotesize, right] {grad\_fn} (n_op2);
+
+  \draw[bwd] (n_op2) -- (n_op1);
+  \draw[bwd] (n_op1) -- (accumg);
+
+  \draw[fwd, color=lucid.muted] (eng) -- (n_op2);
+  \draw[fwd, color=lucid.muted] (eng) -- (n_op1);
+  \draw[fwd, color=lucid.muted] (eng) -- (accumg);
+\end{tikzpicture}
+\end{adjustbox}
+\caption[Autograd engine architecture.]{The autograd engine. Each
+tensor that requires grad carries a \code{grad\_fn} pointer to
+its backward \code{Node}. Nodes form a backward DAG (dashed
+arrows) that mirrors the forward DAG. \code{Engine::backward()}
+walks the backward DAG in reverse topological order, applying
+each node's VJP. Leaves use \code{AccumulateGrad} to deposit
+their cotangent into the tensor's \code{.grad} field.}
+\label{fig:autograd_engine:overview}
+\end{figure}
+
+\section{The Node Class}
+\label{sec:autograd_engine:node}
+
+\code{Node} is the base class for all backward operations.
+Defined in \code{lucid/\_C/autograd/Node.h}:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class Node {
+public:
+  virtual ~Node() = default;
+
+  // Apply this node's VJP: take output cotangents, return
+  // input cotangents.
+  virtual std::vector<TensorImpl> apply(
+      const std::vector<TensorImpl>& output_grads) = 0;
+
+  // The list of upstream nodes that this node will propagate
+  // gradient to (one per input that requires grad).
+  std::vector<std::shared_ptr<Node>> next_nodes;
+
+  // For each next_node, which output position of that node
+  // does this node's input correspond to.
+  std::vector<uint32_t> next_output_indices;
+
+  // The forward inputs / outputs that were saved for this
+  // backward.
+  std::vector<TensorImpl> saved_tensors;
+
+  // Hooks
+  std::vector<Hook> pre_hooks;
+  std::vector<Hook> post_hooks;
+};
+\end{lstlisting}
+
+\subsection{Per-op subclasses}
+\label{ssec:autograd_engine:per_op_subclass}
+
+Each differentiable op has a corresponding \code{Node} subclass
+that implements \code{apply}. The pattern is uniform:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class MulBackward : public AutogradNode<MulBackward, 2> {
+public:
+  // saved_tensors = {a, b}; output_grads = {grad_y}
+  std::vector<TensorImpl> apply(
+      const std::vector<TensorImpl>& output_grads) override {
+    const auto& grad_y = output_grads[0];
+    const auto& a = saved_tensors[0];
+    const auto& b = saved_tensors[1];
+    return {
+      Dispatcher::instance().binary(OpKind::Mul, b, grad_y),
+      Dispatcher::instance().binary(OpKind::Mul, a, grad_y),
+    };
+  }
+};
+\end{lstlisting}
+
+\code{AutogradNode<Derived, NInputs>} is a CRTP base that
+provides boilerplate (\code{next\_nodes} sizing, default
+\code{saved\_tensors} handling). Per-op subclasses provide only
+the \code{apply} body.
+
+\subsection{Why per-op classes, not function pointers}
+\label{ssec:autograd_engine:why_classes}
+
+A function-pointer approach would have been simpler in line
+count but loses two properties:
+
+\begin{itemize}
+  \item \textbf{Polymorphic state.} Some backwards need state
+    beyond the saved tensors (e.g., \code{ConvBackward} needs the
+    stride and padding from the forward call). Per-op subclasses
+    hold this state cleanly; function pointers would have needed
+    a void-pointer context.
+  \item \textbf{Debugging.} A \code{Node} subclass has a name that
+    appears in stack traces and the anomaly detector's output.
+    Function pointers would have lost this.
+\end{itemize}
+
+The boilerplate cost is amortised by the CRTP base.
+
+\section{Forward-Time Construction}
+\label{sec:autograd_engine:construction}
+
+During the forward pass, when a differentiable op runs, the
+dispatcher consults the op's schema and, if backward is needed,
+constructs a backward node and attaches it to the output tensor's
+\code{AutogradMeta}.
+
+\subsection{The construction sequence}
+\label{ssec:autograd_engine:construction_seq}
+
+For \code{c = a * b} where \code{a.requires\_grad == True}:
+
+\begin{enumerate}
+  \item Dispatcher routes to backend, computes \code{c} value.
+  \item Dispatcher checks: does any input require grad? If yes,
+    proceed.
+  \item Construct \code{MulBackward} node.
+  \item Save \code{a} and \code{b} into the node's
+    \code{saved\_tensors}.
+  \item Wire \code{next\_nodes}: \code{next\_nodes[0] =
+    a.grad\_fn}, \code{next\_nodes[1] = b.grad\_fn} (or
+    \code{AccumulateGrad} for leaves).
+  \item Set \code{c.grad\_fn = MulBackward instance}.
+  \item Set \code{c.requires\_grad = True} (inherits from
+    inputs).
+  \item Return \code{c}.
+\end{enumerate}
+
+The whole sequence takes a few microseconds on top of the actual
+multiplication. For multiplications on small tensors the
+overhead is noticeable; for any non-trivial op the kernel
+dominates.
+
+\subsection{Disabling under no\_grad}
+\label{ssec:autograd_engine:no_grad}
+
+The construction sequence above is skipped when the global
+\code{GradMode} flag is off (\code{lucid.no\_grad()} context).
+\code{c.grad\_fn} remains null, \code{c.requires\_grad} remains
+false, and no autograd state is constructed.
+
+This is the standard pattern for evaluation: wrap the inference
+forward in \code{with lucid.no\_grad():} to avoid building a
+backward graph that will never be traversed.
+
+\subsection{Inference mode}
+\label{ssec:autograd_engine:inference_mode}
+
+\code{lucid.inference\_mode()} is a stricter version of
+\code{no\_grad}: it additionally disables the version counter
+and a few other autograd hooks, giving slightly better
+performance at the cost of forbidding any later differentiation
+through tensors created inside the context.
+
+The cost difference is roughly 5--10\,\% on small-tensor
+workloads; \code{no\_grad} is the safer default.
+
+\section{Backward Traversal}
+\label{sec:autograd_engine:traversal}
+
+When the user calls \code{loss.backward()}, the engine walks the
+backward graph in reverse topological order, calling each node's
+\code{apply}.
+
+\subsection{The traversal algorithm}
+\label{ssec:autograd_engine:algorithm}
+
+The algorithm is standard reverse-mode AD:
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+void Engine::backward(TensorImpl& loss) {
+  // Seed the queue with the loss's grad_fn
+  auto root = loss.grad_fn();
+  std::unordered_map<Node*, std::vector<TensorImpl>> cotangents;
+  cotangents[root.get()] = {ones_like(loss)};
+
+  // Topological sort
+  auto order = topological_sort_from(root);
+
+  // Walk in reverse order, applying each node
+  for (auto& node : order) {
+    auto& outputs = cotangents[node.get()];
+    auto inputs = node->apply(outputs);
+    // Distribute input cotangents to upstream nodes
+    for (size_t i = 0; i < node->next_nodes.size(); ++i) {
+      auto& upstream = node->next_nodes[i];
+      uint32_t pos = node->next_output_indices[i];
+      cotangents[upstream.get()].at(pos) =
+          add_or_accumulate(cotangents[upstream.get()].at(pos),
+                            inputs[i]);
+    }
+  }
+}
+\end{lstlisting}
+
+The key step is the accumulation: if a node has multiple
+upstream contributors (e.g., the multi-variable chain rule's
+$+=$), each contribution adds rather than replaces.
+
+\subsection{Topological sort}
+\label{ssec:autograd_engine:topo_sort}
+
+The topological sort uses Kahn's algorithm: identify nodes with
+no outgoing edges (the loss's \code{grad\_fn} initially), emit
+them, decrement the in-degree of their predecessors, and repeat.
+
+The sort is done once per \code{backward()} call. For a graph
+with $N$ nodes it costs $O(N)$ time. For a typical training step
+with a few thousand nodes, the sort itself is negligible
+relative to the per-node \code{apply} cost.
+
+\subsection{Multiple roots}
+\label{ssec:autograd_engine:multi_root}
+
+\code{Engine::backward()} accepts a list of root tensors and a
+list of seed gradients (one per root). For most uses there is one
+root (the loss) and one seed (\code{ones\_like(loss)}). The
+multi-root form is used for vector-valued objectives like
+multi-task loss, where the backward is the weighted sum of per-
+task backwards.
+
+\section{AccumulateGrad on Leaves}
+\label{sec:autograd_engine:accumulate}
+
+A leaf tensor (parameter created by the user with
+\code{requires\_grad=True}) does not have a forward op that
+produced it, so it has no per-op backward node. Instead, the
+engine attaches an \code{AccumulateGrad} node to it.
+
+\subsection{The AccumulateGrad node}
+\label{ssec:autograd_engine:accumg_node}
+
+\code{AccumulateGrad} is the simplest \code{Node}: its
+\code{apply} adds the incoming cotangent to the leaf tensor's
+\code{.grad} field. There are no upstream nodes; the cotangent
+stops here.
+
+\begin{lstlisting}[style=lucidcpp,language=C++]
+class AccumulateGrad : public Node {
+public:
+  TensorImpl variable;  // the leaf tensor
+
+  std::vector<TensorImpl> apply(
+      const std::vector<TensorImpl>& output_grads) override {
+    const auto& g = output_grads[0];
+    if (!variable.autograd_meta()->grad) {
+      variable.autograd_meta()->grad = g.clone();
+    } else {
+      Dispatcher::instance().binary(
+          OpKind::Add,
+          *variable.autograd_meta()->grad,
+          g);
+    }
+    return {};  // no upstream
+  }
+};
+\end{lstlisting}
+
+\subsection{The optimizer.zero\_grad pattern}
+\label{ssec:autograd_engine:zero_grad}
+
+Because \code{AccumulateGrad} adds rather than replaces, gradients
+accumulate across \code{backward()} calls until explicitly
+cleared. The standard pattern at the start of each training step:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+optimizer.zero_grad()
+loss = model(x)
+loss.backward()
+optimizer.step()
+\end{lstlisting}
+
+\code{optimizer.zero\_grad()} iterates over the optimiser's
+parameter groups and sets each \code{.grad} to None (which causes
+the next \code{AccumulateGrad} to clone rather than add). The
+default behaviour matches \refframework's; \code{set\_to\_none=False}
+zeros in place if memory pressure forbids re-allocation.
+
+\section{Saved Tensors}
+\label{sec:autograd_engine:saved}
+
+The backward function for an op needs forward quantities to
+compute its VJP. The framework saves these quantities at forward
+time and holds them until backward consumes them.
+
+\subsection{What gets saved}
+\label{ssec:autograd_engine:what_saved}
+
+The op's schema declares which forward tensors are needed:
+
+\begin{itemize}
+  \item Some backwards need the inputs (e.g., \code{mul} needs
+    both inputs).
+  \item Some need the output (e.g., \code{sigmoid} backward uses
+    $y(1-y)$, where $y$ is the output).
+  \item Some need both.
+  \item Some need neither (e.g., \code{add} backward is just the
+    identity per input).
+\end{itemize}
+
+The schema's \code{BackwardSpec::saved} list names the saved
+quantities. The engine snapshots them into the node's
+\code{saved\_tensors} vector at forward time.
+
+\subsection{Memory cost}
+\label{ssec:autograd_engine:saved_memory}
+
+Saved tensors are the dominant memory cost of training. For a
+deep model with $L$ layers and per-layer activation size $S$, the
+total saved memory is $L \cdot S$. This grows linearly with depth
+and is the reason gradient checkpointing
+(\chref{ch:gradient_checkpointing}) exists.
+
+\subsection{Why save outputs when possible}
+\label{ssec:autograd_engine:save_outputs}
+
+For ops like \code{sigmoid} and \code{tanh}, the backward can be
+computed from either the input or the output (since the output is
+a function of the input). Saving the output is preferable because
+the output is computed anyway and saving it costs no additional
+forward computation; saving the input would require keeping the
+input alive after the forward, which the runtime might otherwise
+have freed.
+
+The schema's \code{BackwardSpec::saved} for these ops explicitly
+names the output, and the engine acts accordingly.
+
+\section{The Version Counter}
+\label{sec:autograd_engine:version}
+
+In-place modification of a tensor that was saved for backward
+would silently corrupt the gradient: the backward function would
+read the modified value instead of the original. The version
+counter catches this class of bug.
+
+\subsection{Mechanism}
+\label{ssec:autograd_engine:version_mech}
+
+Each \code{TensorImpl} carries a 64-bit \code{version\_counter}
+that increments on every in-place op (\code{add\_}, \code{mul\_},
+\code{copy\_}, etc.). When a tensor is saved for backward, the
+engine captures the current counter value. At backward time, the
+engine compares the captured value to the current value. A
+mismatch raises:
+
+\begin{verbatim}
+LucidError: one of the variables needed for gradient computation
+has been modified by an inplace operation. The variable was a
+saved tensor of MulBackward, which expected version 0 but found
+version 1.
+\end{verbatim}
+
+\subsection{When the check fires}
+\label{ssec:autograd_engine:version_fires}
+
+The check fires for code like:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+x = lucid.tensor([1.0, 2.0], requires_grad=True)
+y = x * 2          # MulBackward saves x
+x.add_(1.0)        # in-place: x.version_counter goes 0 -> 1
+y.sum().backward() # raises: version mismatch on saved x
+\end{lstlisting}
+
+The user fix is either to avoid the in-place op or to clone
+first: \code{x = x.clone(); x.add\_(1.0); ...}.
+
+\subsection{When the check doesn't fire}
+\label{ssec:autograd_engine:version_misses}
+
+The version counter is per-\code{TensorImpl}, not per-byte. An
+in-place op on a view of the saved tensor modifies the underlying
+storage but not the saved tensor's version counter; the check
+misses. The user should avoid in-place ops on views of saved
+tensors.
+
+This is one of the few correctness gaps in the autograd engine.
+The mitigation is convention (avoid in-place on saved tensors)
+plus the anomaly detector (which catches NaN gradients that often
+indicate corruption).
+
+\section{Hooks}
+\label{sec:autograd_engine:hooks}
+
+The user can attach \emph{hooks} to tensors and modules to
+intercept the autograd flow without modifying the op
+implementation.
+
+\subsection{Tensor hooks}
+\label{ssec:autograd_engine:tensor_hooks}
+
+\code{tensor.register\_hook(fn)} attaches a function to a tensor's
+\code{grad\_fn}. The function is called with the cotangent before
+it propagates upstream, and may return a modified cotangent.
+
+Use cases:
+\begin{itemize}
+  \item Gradient clipping at a specific tensor (rare; usually
+    done at the parameter level).
+  \item Logging or visualisation (sniff the cotangent without
+    changing it).
+  \item Gradient masking (zero out cotangents for certain
+    components).
+\end{itemize}
+
+\subsection{Module hooks}
+\label{ssec:autograd_engine:module_hooks}
+
+\code{module.register\_forward\_hook(fn)} and
+\code{register\_backward\_hook(fn)} attach to a \code{Module}
+instance and fire on every forward and backward through the
+module. The forward hook sees the module inputs and outputs; the
+backward hook sees the gradient inputs and outputs.
+
+The backward hook is the typical mechanism for debugging
+gradient flow: print the magnitude of the gradient at each
+layer to find vanishing or exploding gradients.
+
+The chapter for module hooks proper is
+\chref{ch:module_system}.
+
+\section{The Anomaly Detector}
+\label{sec:autograd_engine:anomaly}
+
+\code{lucid.autograd.set\_detect\_anomaly(True)} enables a
+diagnostic mode that helps locate the source of NaN or Inf in
+gradients.
+
+\subsection{What it does}
+\label{ssec:autograd_engine:anomaly_does}
+
+When enabled:
+\begin{itemize}
+  \item The forward pass records the Python call stack of every
+    op for later use in error messages.
+  \item The backward pass checks each output cotangent for NaN
+    or Inf. The first occurrence raises an error with the saved
+    forward call stack, identifying the originating op.
+\end{itemize}
+
+Without the anomaly detector, a NaN in a gradient propagates
+silently and the user sees only the eventual symptom (NaN
+parameters after the optimiser step, training divergence). The
+detector trades performance (5--10x slowdown of the backward
+pass) for diagnostic clarity.
+
+\subsection{When to use}
+\label{ssec:autograd_engine:anomaly_when}
+
+Recommended whenever training mysteriously produces NaN
+gradients. Not recommended for normal training; the slowdown is
+substantial.
+
+\section{Summary and Forward References}
+\label{sec:autograd_engine:summary}
+
+\Lucid's autograd engine implements reverse-mode AD through a
+\code{Node}-based backward graph constructed at forward time and
+traversed by \code{Engine::backward()} in reverse topological
+order. Per-op \code{Node} subclasses implement the VJP;
+\code{AccumulateGrad} handles leaf accumulation; the version
+counter catches in-place corruption; hooks expose the autograd
+flow to user code; the anomaly detector helps diagnose NaN
+gradients.
+
+The next chapter, \chref{ch:custom_functions}, treats the
+user-facing \code{Function} class that lets the user define
+custom ops with custom backwards.
+\chref{ch:gradient_checkpointing} treats the memory-saving
+recomputation pattern. \chref{ch:higher_order} treats functional
+transforms.
+
+\begin{lucidnote}
+For the user: \code{loss.backward()} is the only entry point.
+Behind it, the engine walks the saved DAG and accumulates
+gradients into \code{.grad}. The version counter, the hook
+system, and the anomaly detector are the three knobs the user can
+use to inspect and intervene in the process.
+\end{lucidnote}

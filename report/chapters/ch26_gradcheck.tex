@@ -1,0 +1,535 @@
+% !TEX root = ../main.tex
+\chapter{Numerical Gradient Checking}
+\label{ch:gradcheck}
+
+A bug in a custom backward (\chref{ch:custom_functions}) or in a
+freshly added primitive's \code{BackwardSpec}
+(\chref{ch:op_registry}) is one of the easiest classes of bug to
+introduce and one of the hardest to detect by inspection. The
+gradient is silently wrong; training appears to proceed; the
+model converges to the wrong place or fails to converge at all;
+the cause is far upstream of the symptom.
+
+\code{gradcheck} is the standard remedy: compare the analytical
+backward against a finite-difference approximation and assert
+agreement to within a tolerance. The technique is old (it predates
+modern AD by decades) and the implementation is short, but the
+practical use requires understanding several subtleties.
+
+This chapter describes \Lucid's \code{lucid.autograd.gradcheck},
+its sister \code{gradgradcheck} for second-order verification, and
+the choices that go into setting tolerances.
+
+\section{The Idea}
+\label{sec:gradcheck:idea}
+
+For a function $f : \mathbb{R}^N \to \mathbb{R}$, the analytical
+gradient is $\nabla f$. The two-sided finite-difference
+approximation is
+\[
+\widehat{\partial f}_i = \frac{f(x + h e_i) - f(x - h e_i)}{2h},
+\]
+where $e_i$ is the $i$-th unit vector and $h$ is a small step
+size. \code{gradcheck} computes both and asserts they agree to
+within absolute and relative tolerances.
+
+For a vector-output function $f : \mathbb{R}^N \to \mathbb{R}^M$,
+the analytical Jacobian is computed via $M$ reverse-mode VJP calls
+(one per output, with a one-hot cotangent), and the finite-
+difference Jacobian is computed via $2N$ forward calls.
+\code{gradcheck} compares the two $M \times N$ matrices entry by
+entry.
+
+\subsection{Why the comparison is informative}
+\label{ssec:gradcheck:informative}
+
+The two computations use entirely different mechanisms:
+
+\begin{itemize}
+  \item Analytical: walks the autograd graph backward, calling
+    each op's VJP.
+  \item Numerical: calls the forward function $2N$ times with
+    perturbed inputs.
+\end{itemize}
+
+A bug in either is unlikely to be a bug in both. If the two agree
+to $10^{-6}$ relative error, the analytical backward is almost
+certainly correct.
+
+\section{The API}
+\label{sec:gradcheck:api}
+
+\code{lucid.autograd.gradcheck} signature:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def gradcheck(
+    func,            # the function to check
+    inputs,          # tuple of tensors
+    *,
+    eps=1e-6,        # finite-difference step size
+    atol=1e-5,       # absolute tolerance
+    rtol=1e-3,       # relative tolerance
+    raise_exception=True,
+) -> bool:
+    ...
+\end{lstlisting}
+
+Typical use:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.autograd import gradcheck
+
+x = lucid.randn(5, requires_grad=True, dtype=lucid.float64)
+y = lucid.randn(5, requires_grad=True, dtype=lucid.float64)
+
+def f(x, y):
+    return (x * y).sum()
+
+assert gradcheck(f, (x, y))
+\end{lstlisting}
+
+The call returns True if every gradient entry agrees within
+tolerance and raises (or returns False, with
+\code{raise\_exception=False}) otherwise.
+
+\subsection{The FP64 convention}
+\label{ssec:gradcheck:fp64_conv}
+
+The user passes FP64 tensors, not FP32. The reasoning is the
+numerical-error trade-off discussed in
+\chref{ch:custom_functions}~Section~\ref{ssec:custom_functions:gradcheck_fp64}:
+finite differences with a step of $10^{-6}$ in FP32 lose all
+useful precision; in FP64 they retain $\sim 8$ digits.
+
+\Lucid's \code{gradcheck} raises with a helpful message if any
+input is FP32 (\code{LucidError: gradcheck requires FP64 inputs
+for meaningful tolerance}), suggesting the user cast first.
+
+\section{Tolerance Setting}
+\label{sec:gradcheck:tolerance}
+
+The tolerance is the single most important parameter. Too tight,
+and a correct backward fails due to the finite-difference error.
+Too loose, and a buggy backward passes.
+
+\subsection{Theoretical tolerance}
+\label{ssec:gradcheck:theoretical_tol}
+
+For a step size $h$, the central-difference approximation
+\[
+\widehat{f'}(x) \;=\; \frac{f(x+h) - f(x-h)}{2h}
+\]
+has total error
+\[
+\bigl|\widehat{f'}(x) - f'(x)\bigr|
+\;\leq\;
+\underbrace{\frac{h^2}{6} \bigl|f'''(\xi)\bigr|}_{\text{truncation}}
+\;+\;
+\underbrace{\frac{\epsilon}{h} \bigl|f(x)\bigr|}_{\text{round-off}}.
+\]
+The truncation term grows with $h^2$; the round-off term grows
+as $1/h$. Their sum has a unique minimum, attained at
+\[
+h^{*} \;=\; \left(\frac{3\,\epsilon\,|f(x)|}{|f'''(\xi)|}\right)^{1/3}
+\;\approx\; \epsilon^{1/3},
+\]
+giving an optimal error of order $\epsilon^{2/3}$. In FP64
+($\epsilon \approx 10^{-16}$), the optimum is $h^* \approx
+10^{-5}$ and the floor is $\approx 10^{-10}$. In FP32
+($\epsilon \approx 10^{-7}$), the optimum is $h^* \approx
+10^{-2}$ and the floor is $\approx 10^{-4}$ --- barely enough
+precision to distinguish a correct gradient from a buggy one,
+which is why gradcheck insists on FP64.
+
+\Lucid's default $h = 10^{-6}$ is slightly above the optimum; the
+default tolerance $\text{atol} = 10^{-5}$ leaves room for a
+generous safety margin.
+
+\subsection{Per-op tolerance adjustments}
+\label{ssec:gradcheck:per_op_tol}
+
+Some ops have intrinsically larger finite-difference error:
+
+\begin{itemize}
+  \item Transcendental ops (\code{exp}, \code{log}) lose
+    precision through their internal computation; tolerance must
+    be looser, typically \code{atol=1e-4}.
+  \item Operations with extreme value range (\code{erfinv} near
+    $|x|=1$, \code{logsumexp} with extreme logits) need
+    case-specific tolerances; sometimes the function must be
+    restricted to a safe input range for gradcheck.
+  \item Discontinuous ops (\code{relu} at 0, \code{abs} at 0)
+    cannot be gradchecked at the discontinuity; the inputs must
+    be chosen to avoid the discontinuous point.
+\end{itemize}
+
+\Lucid's test suite has per-op tolerance overrides where needed,
+documented in the test files themselves.
+
+\section{What gradcheck Catches}
+\label{sec:gradcheck:catches}
+
+A bug in the backward almost always produces a measurable
+disagreement. The common failure modes:
+
+\subsection{Sign error}
+\label{ssec:gradcheck:sign_error}
+
+A backward with the wrong sign (e.g., \code{return -grad\_out}
+instead of \code{return grad\_out}) disagrees by a factor of
+exactly 2 (since the relative error is 200\,\%). \code{gradcheck}
+catches this immediately.
+
+\subsection{Missing factor}
+\label{ssec:gradcheck:missing_factor}
+
+A backward that omits a constant factor (e.g., the $2$ in
+$d/dx\, x^2 = 2x$) disagrees by that factor. \code{gradcheck}
+catches this immediately.
+
+\subsection{Wrong saved tensor}
+\label{ssec:gradcheck:wrong_saved}
+
+A backward that uses the wrong saved quantity (e.g., the input
+when it should have been the output) produces a disagreement that
+depends on the input range. \code{gradcheck} catches it for
+non-pathological inputs.
+
+\subsection{Unbroadcast error}
+\label{ssec:gradcheck:unbroadcast_error}
+
+A backward that forgets to sum over the broadcast dimensions (the
+unbroadcast step of \chref{ch:binary_functions}) produces a
+gradient with the wrong shape, which \code{gradcheck} reports as
+a shape mismatch.
+
+\section{What gradcheck Does Not Catch}
+\label{sec:gradcheck:misses}
+
+A short list of cases where \code{gradcheck} can pass on a buggy
+backward.
+
+\subsection{Errors that are below tolerance}
+\label{ssec:gradcheck:below_tol}
+
+A backward that is wrong by less than the tolerance passes. The
+remedy is a tighter tolerance, which requires FP64 inputs (which
+gradcheck enforces).
+
+\subsection{Errors at points not tested}
+\label{ssec:gradcheck:not_tested}
+
+\code{gradcheck} tests at the specific input the user passes. A
+bug that manifests only at extreme inputs (very large, very
+small, NaN, Inf) may not surface in a randomised test. The
+mitigation is to test multiple input regimes (small, moderate,
+large) and to spot-check extreme cases manually.
+
+\subsection{Errors in saved-output backward when the output is constant}
+\label{ssec:gradcheck:const_out}
+
+If a backward uses a saved output and the test inputs happen to
+produce a constant output (or near-constant), the backward may
+appear correct even if the output-dependence is wrong. The
+mitigation is varied test inputs.
+
+\subsection{Non-deterministic ops}
+\label{ssec:gradcheck:nondet}
+
+Operations with non-deterministic backward (\code{scatter\_add}
+with duplicate indices on GPU) produce different cotangents on
+different runs. \code{gradcheck} cannot pass deterministically for
+these; the test must be skipped or run on a deterministic stream.
+
+\section{gradgradcheck}
+\label{sec:gradcheck:gradgradcheck}
+
+For higher-order verification, \code{gradgradcheck} checks the
+gradient of the gradient. It's the natural extension when the
+backward itself contains another backward (e.g., when the model
+uses a meta-learning algorithm that requires second-order
+gradients).
+
+The mechanism is the same: build the second-order graph via
+\code{backward(create\_graph=True)}, then run \code{gradcheck} on
+the resulting gradient function.
+
+\subsection{When to gradgradcheck}
+\label{ssec:gradcheck:when_gg}
+
+\begin{itemize}
+  \item When using \code{hessian}, \code{jacrev o jacrev}, or
+    other compositions that require second-order autograd.
+  \item When implementing a custom backward that itself uses
+    \Lucid\ primitives whose second derivatives must be correct.
+\end{itemize}
+
+For ordinary first-order training, gradgradcheck is unnecessary.
+
+\section{The Parity-Test Policy}
+\label{sec:gradcheck:parity_policy}
+
+\Lucid's testing policy
+(\chref{ch:testing}) requires every public op to have:
+
+\begin{enumerate}
+  \item A unit test exercising correctness against a known
+    expected output.
+  \item A parity test comparing against the reference framework's
+    output to within a tight tolerance.
+  \item A \code{gradcheck} verifying the backward.
+  \item For ops with non-trivial second derivatives, a
+    \code{gradgradcheck}.
+\end{enumerate}
+
+The discipline catches the easy classes of bug at PR time, before
+the op ships. It does not catch the hard cases (numerical
+pathologies at extreme inputs, non-determinism), which require
+case-by-case attention.
+
+\section{Implementation}
+\label{sec:gradcheck:implementation}
+
+\code{gradcheck} is implemented in \code{lucid/autograd/gradcheck.py}.
+The core loop:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def gradcheck(func, inputs, eps=1e-6, atol=1e-5, rtol=1e-3,
+              raise_exception=True):
+    # Validate FP64
+    for t in inputs:
+        if t.dtype != lucid.float64:
+            raise LucidError("gradcheck requires float64 inputs")
+
+    # Compute analytical gradients (one per output entry)
+    analytical = _analytical_jacobian(func, inputs)
+
+    # Compute numerical gradients via central difference
+    numerical = _numerical_jacobian(func, inputs, eps)
+
+    # Compare entry by entry
+    for a, n in zip(analytical, numerical):
+        diff = (a - n).abs()
+        tol = atol + rtol * n.abs()
+        if (diff > tol).any():
+            if raise_exception:
+                raise LucidError(
+                    f"gradcheck failed: max diff {diff.max()} "
+                    f"exceeds tolerance {tol.max()}")
+            return False
+    return True
+\end{lstlisting}
+
+The full implementation handles edge cases: complex-valued
+functions, sparse outputs, the \code{check\_undefined\_grad}
+option, and a few others. The core idea is the central-difference
+loop above.
+
+\subsection{Cost}
+\label{ssec:gradcheck:cost}
+
+A \code{gradcheck} on a function with $N$ inputs and $M$ outputs
+costs $2N$ forward calls plus $M$ backward calls. For typical
+unit tests with small $N$ and $M$ (single-digit), the cost is
+under a second.
+
+For larger inputs ($N$ in the hundreds), the cost is significant
+but acceptable for a one-time correctness check. \code{gradcheck}
+is not run during normal training; it's a development-time tool.
+
+\section{Worked Example: Validating a Custom Function}
+\label{sec:gradcheck:worked}
+
+The custom \code{SwishBeta} from
+\chref{ch:custom_functions}~Section~\ref{sec:custom_functions:custom_activation}:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.autograd import gradcheck
+
+x = lucid.randn(5, requires_grad=True, dtype=lucid.float64)
+beta = lucid.tensor(0.7, requires_grad=True, dtype=lucid.float64)
+
+# Validate first-order gradient
+assert gradcheck(SwishBeta.apply, (x, beta), eps=1e-6, atol=1e-5)
+print("SwishBeta first-order gradient verified")
+\end{lstlisting}
+
+If we had introduced the sign error (\code{return -grad\_x,
+-grad\_beta} instead of the correct signs), the test would have
+failed with a relative error of approximately 2.0:
+
+\begin{verbatim}
+LucidError: gradcheck failed: max diff 1.84e+00 exceeds
+tolerance 6.21e-05
+\end{verbatim}
+
+The failure points at the input and the offending Function class,
+making the bug easy to locate.
+
+\section{Debugging a Failed gradcheck}
+\label{sec:gradcheck:debugging_failure}
+
+\code{gradcheck} produces an error message with the maximum
+disagreement and its location. The message tells the user what
+failed; it doesn't tell why. A short debugging recipe.
+
+\subsection{Step 1: print both gradients}
+\label{ssec:gradcheck:debug_print}
+
+Replace \code{gradcheck} with manual computation:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+
+# Analytical
+x = lucid.randn(3, requires_grad=True, dtype=lucid.float64)
+y = my_func(x).sum()
+y.backward()
+print("analytical:", x.grad)
+
+# Numerical (one-sided for brevity)
+def num_grad(f, x, eps=1e-6):
+    g = lucid.zeros_like(x)
+    for i in range(x.numel()):
+        x_perturbed = x.clone()
+        x_perturbed.flat[i] += eps
+        f_plus = f(x_perturbed)
+        x_perturbed.flat[i] -= 2*eps
+        f_minus = f(x_perturbed)
+        g.flat[i] = (f_plus - f_minus) / (2*eps)
+    return g
+
+print("numerical:", num_grad(lambda x_: my_func(x_).sum(), x))
+\end{lstlisting}
+
+The visual comparison often makes the bug obvious (a sign error
+flips, a missing factor shrinks, a wrong saved tensor adds noise
+to specific entries).
+
+\subsection{Step 2: simplify the function}
+\label{ssec:gradcheck:debug_simplify}
+
+If the function is composed of multiple parts, isolate each. Run
+\code{gradcheck} on each part separately. The failing part is
+the source of the bug.
+
+\subsection{Step 3: check the saved tensors}
+\label{ssec:gradcheck:debug_saved}
+
+A common bug class: backward uses the wrong saved tensor. Print
+the saved tensors at the start of \code{backward}, compare to the
+forward inputs / outputs you expected. Mismatches surface here.
+
+\subsection{Step 4: check shape}
+\label{ssec:gradcheck:debug_shape}
+
+A backward that produces the wrong gradient shape (a missing
+\code{sum} after broadcasting, an off-by-one slice) is caught
+early by gradcheck's shape check. The error message names the
+shapes; line them up against the input shape and the expected
+gradient shape.
+
+\section{gradcheck vs Other Verification Tools}
+\label{sec:gradcheck:vs_other}
+
+\code{gradcheck} is one tool in a suite of verification
+mechanisms.
+
+\subsection{vs parity testing}
+\label{ssec:gradcheck:vs_parity}
+
+A parity test (\chref{ch:testing}) compares against a reference
+framework's output. It catches forward bugs and backward bugs
+together, but it only works for ops where a reference exists. For
+genuinely new ops or custom Functions, gradcheck is the only
+option.
+
+The two are complementary: parity tests catch ``the answer is
+wrong'' bugs; gradcheck catches ``the answer is right but the
+gradient is wrong'' bugs.
+
+\subsection{vs anomaly detection}
+\label{ssec:gradcheck:vs_anomaly}
+
+\code{lucid.autograd.set\_detect\_anomaly(True)}
+(\chref{ch:autograd_engine}) catches NaN gradients at runtime. It
+doesn't catch wrong (but finite) gradients; gradcheck does.
+
+\subsection{vs unit testing}
+\label{ssec:gradcheck:vs_unit}
+
+A unit test that compares against a hand-derived expected value
+catches the same class of bug as gradcheck for specific inputs.
+gradcheck generalises: it works against any input the user
+chooses, with the analytical machinery doing the comparison
+automatically.
+
+\section{The check\_undefined\_grad Option}
+\label{sec:gradcheck:undefined_grad}
+
+\code{gradcheck} has an option \code{check\_undefined\_grad=True}
+(default True in \Lucid\ 3.5) that additionally verifies the
+function handles the case where the upstream cotangent is
+\code{None} (undefined). This case arises when the user's
+downstream consumer discards an output (e.g., \code{out = (a, b,
+c); use(a); del b, c}); the engine passes \code{None} as the
+cotangent for the discarded outputs.
+
+The Function's backward should handle this by returning
+\code{None} for the corresponding inputs. The check verifies
+that the analytical backward does so consistently.
+
+For most user code the check is irrelevant; for library code
+shipping in \Lucid's core, it's essential.
+
+\section{Tolerance Recipes}
+\label{sec:gradcheck:tolerance_recipes}
+
+A reference for setting tolerances for common situations.
+
+\begin{itemize}
+  \item \textbf{Default FP64}: \code{atol=1e-5}, \code{rtol=1e-3}.
+  \item \textbf{Transcendental (exp, log, trig)}: \code{atol=1e-4},
+    \code{rtol=1e-3}.
+  \item \textbf{Reductions over large tensors}: \code{atol=1e-4},
+    \code{rtol=1e-3} (accumulated error grows with size).
+  \item \textbf{Complex composite (multiple primitives)}:
+    \code{atol=1e-4}, \code{rtol=1e-2}.
+  \item \textbf{Erfinv, Bessel, special functions}:
+    \code{atol=1e-3}, \code{rtol=1e-2} (intrinsic precision
+    limit).
+  \item \textbf{FP32 (if FP64 not possible)}: \code{atol=1e-2},
+    \code{rtol=1e-1} --- barely useful, only catches gross bugs.
+\end{itemize}
+
+The general rule: pick the tightest tolerance that the function's
+intrinsic precision permits, and tighten the test as the
+implementation matures.
+
+\section{Summary and Forward References}
+\label{sec:gradcheck:summary}
+
+\code{lucid.autograd.gradcheck} compares the analytical reverse-
+mode gradient against a finite-difference approximation, asserting
+agreement to within absolute and relative tolerance.
+\code{gradgradcheck} extends to second-order verification.
+\Lucid's test suite requires gradcheck for every public op, which
+catches the easy classes of backward bug at PR time. The tool is
+a development-time correctness check, not a training-time
+mechanism.
+
+This chapter closes \partref{part:autograd}. \partref{part:math_subsystems}
+treats the mathematical subpackages (linalg, FFT, signal,
+special functions, distributions, einops) that build on the
+autograd machinery covered here.
+
+\begin{lucidnote}
+For the user: \code{gradcheck} is the right tool when you have
+written a custom \code{Function} and want to verify its backward.
+The standard recipe is FP64 inputs, the default tolerances, and
+\code{raise\_exception=True} (the default) to surface failures
+loudly. For first-order, \code{gradcheck}; for second-order,
+\code{gradgradcheck}.
+\end{lucidnote}
