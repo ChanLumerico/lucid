@@ -2,55 +2,543 @@
 \chapter{Loss Functions}
 \label{ch:losses}
 
-\todo[inline]{Chapter 37 --- Loss Functions. Multi-level scaffold below; prose to follow.}
+The loss function is the scalar objective that gradient descent
+minimises. The choice of loss encodes the modelling assumption:
+mean-squared error implies a Gaussian likelihood; cross-entropy
+implies a categorical likelihood; Huber implies robustness to
+outliers. \Lucid\ provides the standard loss family at
+\code{lucid.nn} and \code{lucid.nn.functional}, mirroring
+\refframework's surface.
 
-\section{Overview}
-\label{sec:losses:overview}
+This chapter catalogues the loss functions with their
+mathematical definitions, the numerical-stability tricks for
+each, the reduction conventions, and the gradient flow into the
+model.
 
-\section{Architecture}
-\label{sec:losses:arch}
+\section{The Reduction Convention}
+\label{sec:losses:reduction}
 
-\subsection{Core building blocks}
-\label{ssec:losses:blocks}
+Every \Lucid\ loss function accepts a \code{reduction} argument:
 
-\subsection{Variants and parameterizations}
-\label{ssec:losses:variants}
+\begin{itemize}
+  \item \code{'mean'} (default): average over all elements.
+  \item \code{'sum'}: sum over all elements.
+  \item \code{'none'}: no reduction; return per-element loss.
+\end{itemize}
 
-\section{Forward Computation}
-\label{sec:losses:forward}
+The \code{'mean'} default matches \refframework. For some losses
+(notably \code{cross\_entropy}), the convention is to mean over
+the batch, sum over the per-sample loss dimensions.
 
-\subsection{Mathematical formulation}
-\label{ssec:losses:formulation}
+\subsection{Why the reduction matters}
+\label{ssec:losses:why_reduction}
 
-\subsection{Implementation in Lucid}
-\label{ssec:losses:impl}
+The gradient with respect to the parameters scales with the
+reduction:
+\[
+\nabla_\theta \mathcal{L}_{\text{mean}} \;=\; \frac{1}{N} \nabla_\theta \mathcal{L}_{\text{sum}}.
+\]
+Switching from \code{'mean'} to \code{'sum'} at constant learning
+rate scales the effective gradient by $N$, equivalent to
+multiplying the learning rate by $N$. This is the source of the
+``my training broke when I changed reduction'' bug class.
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+\section{Regression Losses}
+\label{sec:losses:regression}
 
-\section{Training Considerations}
-\label{sec:losses:training}
+\subsection{Mean Squared Error (L2)}
+\label{ssec:losses:mse}
 
-\subsection{Initialization strategy}
-\label{ssec:losses:init}
+\[
+\mathcal{L}_{\text{MSE}}(y, \hat y) \;=\; \frac{1}{N} \sum_i (y_i - \hat y_i)^2.
+\]
 
-\subsection{Backward pass}
-\label{ssec:losses:backward}
+Backward (per element): $2(\hat y_i - y_i)/N$ (with the
+\code{'mean'} convention).
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:losses:optim_amp}
+\code{nn.MSELoss(reduction='mean')}. Used for continuous-valued
+regression. Implies a Gaussian likelihood with fixed variance.
+
+\subsection{Mean Absolute Error (L1)}
+\label{ssec:losses:l1}
+
+\[
+\mathcal{L}_{\text{L1}}(y, \hat y) \;=\; \frac{1}{N} \sum_i |y_i - \hat y_i|.
+\]
+
+Backward (per element): $\mathrm{sign}(\hat y_i - y_i) / N$.
+
+\code{nn.L1Loss}. More robust to outliers than MSE because the
+gradient magnitude is bounded.
+
+\subsection{Huber loss}
+\label{ssec:losses:huber}
+
+A hybrid of L1 and L2:
+\[
+\mathcal{L}_{\text{Huber}}(y, \hat y; \delta) \;=\; \frac{1}{N} \sum_i
+\begin{cases}
+\tfrac{1}{2}(y_i - \hat y_i)^2 & |y_i - \hat y_i| \leq \delta, \\
+\delta(|y_i - \hat y_i| - \tfrac{1}{2}\delta) & |y_i - \hat y_i| > \delta.
+\end{cases}
+\]
+
+Quadratic near zero (so the gradient is well-behaved), linear far
+from zero (so outliers do not dominate). \code{nn.HuberLoss}.
+
+\subsection{Smooth L1}
+\label{ssec:losses:smooth_l1}
+
+A variant of Huber with $\delta = 1$ (and a slightly different
+constant):
+\[
+\mathcal{L}_{\text{SmoothL1}} \;=\; \frac{1}{N} \sum_i
+\begin{cases}
+\tfrac{1}{2}(y_i - \hat y_i)^2 & |y_i - \hat y_i| < 1, \\
+|y_i - \hat y_i| - \tfrac{1}{2} & \text{otherwise}.
+\end{cases}
+\]
+
+\code{nn.SmoothL1Loss}. Used in object detection (Faster R-CNN's
+bounding-box regression).
+
+\section{Classification Losses}
+\label{sec:losses:classification}
+
+\subsection{Cross-entropy}
+\label{ssec:losses:cross_entropy}
+
+For a classification problem with $C$ classes, the
+cross-entropy loss is
+\[
+\mathcal{L}_{\text{CE}}(\mathrm{logits}, y) \;=\; -\log\!\left(\frac{e^{\mathrm{logits}_y}}{\sum_c e^{\mathrm{logits}_c}}\right)
+\;=\; -\mathrm{logits}_y + \mathrm{logsumexp}(\mathrm{logits}).
+\]
+
+The second form is the numerically stable computation: use
+\code{logsumexp} (which has the max-shift trick built in) rather
+than computing softmax then log.
+
+\code{nn.CrossEntropyLoss(weight=None, ignore\_index=-100, label\_smoothing=0.0, reduction='mean')}.
+Inputs are raw logits (not softmax outputs); the loss applies
+softmax + negative-log-likelihood as a single fused op.
+
+\subsection{The \texttt{ignore\_index} option}
+\label{ssec:losses:ignore_index}
+
+Tokens with label \code{ignore\_index} are excluded from the
+loss (their per-element loss is set to 0). Used for padding
+positions in language modelling: pad tokens have label
+\code{-100}, and the loss skips them.
+
+\subsection{Label smoothing}
+\label{ssec:losses:label_smoothing}
+
+A regulariser that replaces hard one-hot labels with a soft
+distribution: $1 - \epsilon$ on the true class, $\epsilon /
+(C-1)$ on each other class. Encourages calibrated probabilities
+and discourages overconfidence:
+\[
+\mathcal{L}_{\text{LS}}(\mathrm{logits}, y) \;=\; -\sum_c q_c \log p_c
+\]
+with $q_y = 1 - \epsilon$, $q_{c \neq y} = \epsilon / (C-1)$, and
+$p = \mathrm{softmax}(\mathrm{logits})$.
+
+\subsection{Binary cross-entropy}
+\label{ssec:losses:bce}
+
+For binary classification, equivalent to softmax cross-entropy
+with $C = 2$:
+\[
+\mathcal{L}_{\text{BCE}}(p, y) \;=\; -y \log p - (1-y) \log(1-p).
+\]
+
+\code{nn.BCELoss(p, y)} where $p$ is already in $[0, 1]$.
+
+\code{nn.BCEWithLogitsLoss(logits, y)} accepts logits directly and
+fuses the sigmoid + BCE for numerical stability:
+\[
+\mathcal{L} \;=\; -y \cdot \mathrm{logits} + \log(1 + e^{\mathrm{logits}})
+\;=\; \max(\mathrm{logits}, 0) - y \cdot \mathrm{logits} + \log(1 + e^{-|\mathrm{logits}|}).
+\]
+The reformulation avoids overflow in the exponential.
+
+\subsection{Focal loss}
+\label{ssec:losses:focal}
+
+A modification of cross-entropy \cite{lin_focal_2017} that
+down-weights well-classified examples:
+\[
+\mathcal{L}_{\text{focal}} \;=\; -\alpha_y (1 - p_y)^\gamma \log p_y.
+\]
+With $\gamma = 0$ this reduces to (class-weighted) cross-entropy;
+with $\gamma > 0$ the focus shifts to hard examples. Used in
+object detection (RetinaNet) where the foreground/background
+imbalance is extreme.
+
+The intuition by example: with $p_y = 0.9$ (easy correct), the
+modulating factor $(1 - 0.9)^2 = 0.01$ reduces the loss by
+100$\times$. With $p_y = 0.1$ (hard mistake), the factor
+$0.9^2 = 0.81$ barely changes the loss. The gradient signal
+from hard examples therefore dominates training.
+
+Not provided as a built-in in \code{lucid.nn} (it is a
+short composite); the user can write it directly:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+def focal_loss(logits, target, alpha=0.25, gamma=2.0):
+    log_p = lucid.nn.functional.log_softmax(logits, dim=-1)
+    p = log_p.exp()
+    p_y = p.gather(-1, target.unsqueeze(-1)).squeeze(-1)
+    log_p_y = log_p.gather(-1, target.unsqueeze(-1)).squeeze(-1)
+    return -(alpha * (1 - p_y) ** gamma * log_p_y).mean()
+\end{lstlisting}
+
+\subsection{Dice and IoU losses}
+\label{ssec:losses:dice_iou}
+
+For segmentation tasks where the foreground class is sparse
+(small objects in large images), cross-entropy is dominated by
+the easy background pixels. The Dice loss \cite{ronneberger_unet_2015}
+optimises overlap directly:
+\[
+  \mathcal{L}_{\text{Dice}} \;=\; 1 - \frac{2 \sum_i p_i \cdot t_i + \epsilon}{\sum_i p_i + \sum_i t_i + \epsilon},
+\]
+where $p_i \in [0, 1]$ is the predicted probability and
+$t_i \in \{0, 1\}$ is the target. The smoothing $\epsilon$
+(typically $10^{-7}$) prevents division by zero for
+empty masks.
+
+A close relative is the IoU loss
+\cite{lin_focal_2017}:
+\[
+  \mathcal{L}_{\text{IoU}} \;=\; 1 - \frac{\sum_i p_i \cdot t_i}{\sum_i p_i + \sum_i t_i - \sum_i p_i \cdot t_i},
+\]
+which is differentiable and optimises a near-equivalent quantity.
+Either is the typical recipe for U-Net-style biomedical
+segmentation.
+
+\section{Distribution Distances}
+\label{sec:losses:distribution}
+
+\subsection{KL divergence}
+\label{ssec:losses:kl}
+
+\code{nn.KLDivLoss(log\_target=False, reduction='batchmean')}
+computes
+\[
+\mathcal{L}_{\text{KL}}(\mathrm{log\_p}, q) \;=\; \sum_i q_i (\log q_i - \mathrm{log\_p}_i).
+\]
+Input convention: the first argument is the \emph{log} of the
+prediction (already log-softmaxed), the second is the target
+distribution (not log).
+
+This is the same KL discussed in
+\chref{ch:distributions}~Section~\ref{sec:distributions:kl}; the
+\code{nn} module wrapping is a convenience for use inside
+\code{Sequential}-style training loops.
+
+\subsection{JSD and Wasserstein}
+\label{ssec:losses:jsd_wasserstein}
+
+The Jensen-Shannon divergence and Wasserstein distances are
+relevant for some GAN training procedures. \Lucid\ does not
+provide these as built-in losses; users implement them when
+needed.
+
+\section{Sequence Losses}
+\label{sec:losses:sequence}
+
+\subsection{CTC loss}
+\label{ssec:losses:ctc}
+
+Connectionist Temporal Classification: a loss for alignment-free
+sequence prediction where the output length differs from the
+input length. Used in speech recognition (transcribe audio to
+text without timestamp alignment).
+
+\code{nn.CTCLoss(log\_probs, targets, input\_lengths, target\_lengths)}.
+The mathematical content (forward-backward dynamic programming
+over a special character alphabet that includes a blank symbol)
+is involved; the implementation in \Lucid\ delegates to the
+standard recurrence.
+
+\subsection{Negative log-likelihood}
+\label{ssec:losses:nll}
+
+\code{nn.NLLLoss(log\_probs, targets)}: takes already-log-softmaxed
+inputs and indexes into them by target. Equivalent to
+\code{CrossEntropyLoss} except the user is responsible for the
+log-softmax.
+
+The split exists because some applications want to compute the
+log-softmax once and use it for multiple losses or auxiliary
+quantities.
+
+\section{Pairwise and Triplet Losses}
+\label{sec:losses:pairwise}
+
+\subsection{Cosine embedding}
+\label{ssec:losses:cosine}
+
+\code{nn.CosineEmbeddingLoss(x1, x2, y, margin=0)}: $y = 1$
+pushes $x_1$ and $x_2$ to be cosine-similar, $y = -1$ pushes
+them to be dissimilar:
+\[
+\mathcal{L} \;=\; \begin{cases}
+1 - \cos(x_1, x_2) & y = 1, \\
+\max(0, \cos(x_1, x_2) - m) & y = -1.
+\end{cases}
+\]
+
+\subsection{Triplet margin}
+\label{ssec:losses:triplet}
+
+\code{nn.TripletMarginLoss(anchor, positive, negative, margin=1.0)}:
+push the anchor closer to the positive than to the negative by at
+least the margin:
+\[
+\mathcal{L} \;=\; \max(0, \|a - p\|_2 - \|a - n\|_2 + m).
+\]
+Used in metric learning (face recognition, image retrieval).
+
+\section{Numerical Stability}
+\label{sec:losses:numerical_stability}
+
+The most common loss-related bug is the unstable composition of
+softmax then negative log:
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# UNSTABLE: softmax can underflow to 0, log(0) = -inf
+p = logits.softmax(dim=-1)
+loss = -(p * target).log().sum()
+\end{lstlisting}
+
+The stable form fuses the two:
+\begin{lstlisting}[style=lucid,language=LucidPython]
+# STABLE: log-softmax via logsumexp
+log_p = logits.log_softmax(dim=-1)
+loss = -(log_p * target).sum()
+\end{lstlisting}
+
+\code{CrossEntropyLoss} and \code{BCEWithLogitsLoss} encapsulate
+the stable fusion. The rule of thumb: if the input is logits,
+use the \code{*WithLogitsLoss} variant.
+
+\subsection{The log-sum-exp trick}
+\label{ssec:losses:logsumexp}
+
+The log-sum-exp identity, the foundation of stable softmax:
+\[
+  \log \sum_i e^{x_i} \;=\; \max_i x_i + \log \sum_i e^{x_i - \max_i x_i}.
+\]
+Subtracting the max from every $x_i$ shifts the largest
+exponent to zero (so $e^0 = 1$ is the largest term and no
+overflow occurs); the sum is then between 1 and $n$ (where $n$
+is the number of terms), and its log is bounded by $\log n$.
+The subtracted max is added back outside the log, preserving
+the value.
+
+The cross-entropy loss using log-sum-exp:
+\[
+  -\log \frac{e^{x_y}}{\sum_c e^{x_c}}
+  \;=\;
+  \log \sum_c e^{x_c} - x_y
+  \;=\;
+  \max_c x_c + \log \sum_c e^{x_c - \max_c x_c} - x_y.
+\]
+
+\subsection{Overflow vs underflow regimes}
+\label{ssec:losses:overflow_underflow}
+
+For FP32, the safe range of $e^x$ is approximately
+$x \in [-87, 88]$ (outside which we get underflow or overflow).
+For FP16, the range narrows to roughly $[-15, 11]$ --- which is
+why softmax and the log-loss combinations are blacklisted
+under FP16 AMP (\chref{ch:amp}); they are silently promoted
+to FP32 for the unstable steps and cast back for the result.
+
+The log-sum-exp trick is always applied; the dtype promotion is
+an additional safety belt for the tail of cases where even the
+shifted log-sum-exp overflows. In practice, both are needed:
+the trick eliminates the common case, the FP32 promotion
+catches the rare ones.
+
+\section{Contrastive Losses}
+\label{sec:losses:contrastive}
+
+Self-supervised learning has popularised a family of losses
+based on contrasting pairs of representations.
+
+\subsection{NT-Xent (SimCLR)}
+\label{ssec:losses:nt_xent}
+
+For a batch of $2N$ representations consisting of $N$ positive
+pairs $(z_i, z_{i^+})$, the NT-Xent loss is
+\[
+  \mathcal{L} \;=\;
+  -\log \frac{\exp(\mathrm{sim}(z_i, z_{i^+}) / \tau)}
+              {\sum_{k \neq i} \exp(\mathrm{sim}(z_i, z_k) / \tau)},
+\]
+where $\mathrm{sim}$ is cosine similarity and $\tau$ is the
+temperature (typically 0.07--0.5). The positive pair is two
+augmented views of the same image; the negatives are all other
+samples in the batch.
+
+The temperature controls the loss landscape's sharpness: small
+$\tau$ heavily penalises near-positive negatives; large $\tau$
+treats them more uniformly. Typical default $\tau = 0.1$.
+
+\subsection{InfoNCE}
+\label{ssec:losses:infonce}
+
+A more general formulation:
+\[
+  \mathcal{L}_{\text{InfoNCE}}
+  \;=\;
+  -\log \frac{\exp(f(x, c) / \tau)}{\sum_{x' \in \mathcal{N} \cup \{x\}} \exp(f(x', c) / \tau)},
+\]
+where $f(x, c)$ is a similarity score between a query $x$ and
+a context $c$, and $\mathcal{N}$ is a set of negative samples.
+NT-Xent is a special case with $c = z_{i^+}$ and the in-batch
+negatives.
+
+InfoNCE is the loss behind CLIP (text--image pairs), MoCo
+(momentum-encoded negatives), and many other contrastive
+methods.
+
+\section{Class Imbalance}
+\label{sec:losses:class_imbalance}
+
+For datasets where one class dominates (medical diagnosis,
+fraud detection), the standard cross-entropy gives the majority
+class disproportionate gradient. Three mitigations:
+
+\subsection{Per-class weight}
+\label{ssec:losses:class_weight}
+
+\code{CrossEntropyLoss(weight=w)} where $w \in \mathbb{R}^C$ scales
+each class's loss contribution. Setting $w_c = 1 / N_c$
+(inverse frequency) equalises the average per-class gradient.
+
+\subsection{Focal loss}
+\label{ssec:losses:focal_imbalance}
+
+Down-weights easy examples (typically majority-class
+correct-prediction examples). Discussed above.
+
+\subsection{Re-sampling}
+\label{ssec:losses:resampling}
+
+Re-sample the dataset to balance classes (oversample minority,
+undersample majority). Handled at the data-loader level, not the
+loss level.
+
+\section{Multi-Task Losses}
+\label{sec:losses:multi_task}
+
+A multi-task model has multiple outputs and multiple losses.
+The standard pattern is to sum the losses with task-specific
+weights:
+\[
+\mathcal{L} \;=\; \sum_t \lambda_t \mathcal{L}_t.
+\]
+
+The weights $\lambda_t$ balance the task contributions. They are
+usually hand-tuned; learnable variants (uncertainty weighting,
+GradNorm) exist but are not built into \Lucid.
+
+\section{Performance and Dispatch}
+\label{sec:losses:perf}
+
+Most loss functions are sequences of primitives (matmul, softmax,
+reduction). They dispatch through the standard backend with no
+special fast paths.
+
+\code{CrossEntropyLoss} is the exception: the fused
+softmax-cross-entropy-with-logits kernel is in the 3.4 per-op
+\MPSGraph\ carve-out
+(\chref{ch:mpsgraph_dispatch}). The fused kernel computes the
+loss and the gradient in one pass, saving the intermediate
+softmax materialisation.
+
+\tabref{tab:losses:perf} reports measured times on M3~Max.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Loss & Tensor shape & Time (ms) \\
+\midrule
+MSE                       & $(B, D) = (256, 1024)$ & 0.05 \\
+L1                        & $(256, 1024)$          & 0.06 \\
+Huber                     & $(256, 1024)$          & 0.08 \\
+Cross-entropy (fused)     & logits $(B, C) = (256, 50000)$ & 0.45 \\
+Cross-entropy (composite) & same                     & 2.1  \\
+BCEWithLogitsLoss         & $(B, D) = (256, 1)$    & 0.04 \\
+KLDivLoss                 & $(256, 1024)$          & 0.18 \\
+CTCLoss                   & seq=$(T, B, C) = (200, 32, 30)$ & 8.2 \\
+\bottomrule
+\end{tabular}
+\caption[Loss function timings.]{Per-call timings for
+representative loss functions on M3~Max. The cross-entropy fused
+path is 4--5$\times$ faster than the equivalent composite. CTC's
+high cost is the dynamic-programming forward/backward over the
+sequence.}
+\label{tab:losses:perf}
+\end{table}
+
+\section{Choosing a Loss}
+\label{sec:losses:choosing}
+
+A short decision guide for new tasks.
+
+\begin{itemize}
+  \item \textbf{Regression of continuous values}: MSE (default),
+    L1 (robust), Huber (compromise).
+  \item \textbf{Multi-class classification}: CrossEntropyLoss with
+    raw logits.
+  \item \textbf{Multi-label classification (multiple binary
+    decisions per sample)}: BCEWithLogitsLoss.
+  \item \textbf{Variational autoencoder}: MSE / BCE for
+    reconstruction + KL divergence to prior. See
+    \chref{ch:distributions}.
+  \item \textbf{Speech recognition or other alignment-free
+    sequence prediction}: CTCLoss.
+  \item \textbf{Metric learning (face recognition, retrieval)}:
+    TripletMarginLoss or CosineEmbeddingLoss.
+  \item \textbf{Object detection}: SmoothL1Loss for bounding
+    boxes + CrossEntropyLoss (or focal) for class.
+\end{itemize}
 
 \section{Implementation Notes}
-\label{sec:losses:notes}
+\label{sec:losses:impl_notes}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:losses:layout}
+Loss modules live in \code{lucid/nn/modules/loss.py}; the
+functional forms in \code{lucid/nn/functional/loss.py}.
+Most are short composites; the only C++-primitive losses are
+CrossEntropy (fused with softmax) and CTC (the dynamic-programming
+recurrence is impractical in pure Python at production speeds).
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:losses:pitfalls}
-
-\section{Worked Examples and Benchmarks}
-\label{sec:losses:examples}
-
-\section{Summary and Cross-References}
+\section{Summary and Forward References}
 \label{sec:losses:summary}
+
+\Lucid\ provides the standard loss family at \code{lucid.nn} and
+\code{lucid.nn.functional}, covering regression (MSE / L1 / Huber
+/ SmoothL1), classification (CrossEntropy / BCE / focal),
+distribution distances (KL), and sequence losses (CTC, NLL). The
+\code{*WithLogitsLoss} variants and the fused softmax-cross-
+entropy are the numerically stable choices when the input is raw
+logits.
+
+The next chapter, \chref{ch:initialization}, treats weight
+initialisation theory. \chref{ch:optimizers} treats optimisers.
+\chref{ch:amp} treats mixed precision.
+
+\begin{lucidnote}
+For the user: the loss API is drop-in compatible with
+\refframework. The most common choice is
+\code{nn.CrossEntropyLoss()} for classification and
+\code{nn.MSELoss()} for regression; both expect raw outputs
+(logits or values) and handle the appropriate fusion internally.
+\end{lucidnote}

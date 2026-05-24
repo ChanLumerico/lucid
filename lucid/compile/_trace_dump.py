@@ -82,6 +82,21 @@ def trace_to_dict(graph: TraceGraph) -> dict[str, object]:
     dict
         ``{"format": ..., "next_id": ..., "ops": [...]}`` — round-trips
         through :func:`json.dumps` / :func:`json.loads` without loss.
+
+    Examples
+    --------
+    >>> from lucid.compile import _tracing
+    >>> from lucid.compile._trace_dump import trace_to_dict
+    >>> with _tracing() as tracer:                # doctest: +SKIP
+    ...     out = model(x)
+    >>> payload = trace_to_dict(tracer.graph)
+    >>> payload["format"]
+    'lucid.compile.trace/v1'
+
+    See Also
+    --------
+    trace_to_json : same payload, serialised to a JSON string.
+    dump_to_path_if_debug_enabled : auto-dump when the env flag is set.
     """
     return {
         "format": "lucid.compile.trace/v1",
@@ -106,6 +121,23 @@ def trace_to_json(graph: TraceGraph, *, indent: int = 2) -> str:
         The pretty-printed JSON text.  Stable ordering: ``"format"``,
         ``"next_id"``, ``"ops"`` keys come out in insertion order
         thanks to Python's dict guarantee.
+
+    Examples
+    --------
+    >>> from lucid.compile import _tracing
+    >>> from lucid.compile._trace_dump import trace_to_json
+    >>> with _tracing() as tracer:                # doctest: +SKIP
+    ...     out = model(x)
+    >>> print(trace_to_json(tracer.graph)[:120])
+    {
+      "format": "lucid.compile.trace/v1",
+      "next_id": ...
+
+    See Also
+    --------
+    trace_to_dict : the underlying dict-builder.
+    lucid.compile._compiled_module.CompiledModule.graph_dump : per-key
+        wrapper that calls this for each cache entry.
     """
     return json.dumps(trace_to_dict(graph), indent=indent)
 

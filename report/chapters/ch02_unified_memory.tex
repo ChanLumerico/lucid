@@ -451,7 +451,7 @@ remaining steps are pure metadata.
               minimum height=1.3cm},
   arrow/.style={->, >=stealth, thick, color=lucid.accent.dark,
                 shorten >=2pt, shorten <=2pt},
-  step/.style={font=\footnotesize\itshape, color=lucid.muted,
+  steplbl/.style={font=\footnotesize\itshape, color=lucid.muted,
                fill=white, inner sep=2pt},
 ]
   % MLX side
@@ -465,10 +465,10 @@ remaining steps are pure metadata.
   % Shared backing buffer
   \node[buf] (buffer) at (0, -0.8) {Single \texttt{MTL::Buffer} (Shared storage mode)\\physical DRAM, no copy};
 
-  \draw[arrow] (mlx_array) -- node[step, right] {step 1: ensure contiguous} (mlx_contig);
-  \draw[arrow] (mlx_contig) -- node[step, midway, sloped, above]
+  \draw[arrow] (mlx_array) -- node[steplbl, right] {step 1: ensure contiguous} (mlx_contig);
+  \draw[arrow] (mlx_contig) -- node[steplbl, midway, sloped, above]
     {step 2: materialise} (buffer.north -| mlx_contig.south);
-  \draw[arrow] (buffer.north -| cpu_ptr.south) -- node[step, midway, sloped, above]
+  \draw[arrow] (buffer.north -| cpu_ptr.south) -- node[steplbl, midway, sloped, above]
     {step 3: expose pointer} (cpu_ptr);
   \draw[arrow] (cpu_ptr) -- (cpu_view);
 \end{tikzpicture}

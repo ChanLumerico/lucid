@@ -203,7 +203,7 @@ reverse topological order from the loss to the parameters.
   op/.style={draw, rounded corners=2pt, fill=lucid.info.bg,
              minimum width=1.4cm, minimum height=0.8cm,
              font=\small\sffamily, align=center},
-  out/.style={draw, circle, fill=lucid.ok.bg, minimum size=0.9cm,
+  outnode/.style={draw, circle, fill=lucid.ok.bg, minimum size=0.9cm,
               font=\small\sffamily\bfseries},
   fwd/.style={->, >=stealth, thick, color=lucid.accent.dark,
               shorten >=2pt, shorten <=2pt},
@@ -215,7 +215,7 @@ reverse topological order from the loss to the parameters.
   \node[op]  (m)  at (3, 1)    {$\times$};
   \node[op]  (a)  at (6, 0.5)  {$+$};
   \node[op]  (s)  at (9, 0.5)  {$\sigma$};
-  \node[out] (L)  at (12, 0.5) {$L$};
+  \node[outnode] (L)  at (12, 0.5) {$L$};
 
   \draw[fwd] (x1) -- (m);
   \draw[fwd] (x2) -- (m);

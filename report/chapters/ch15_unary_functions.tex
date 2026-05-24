@@ -79,20 +79,22 @@ parity tests check.
 The exponential family:
 
 \begin{itemize}
-  \item \code{exp(x) = e\textasciicircum{}x}; backward: \code{grad\_in = exp(x) *
-    grad\_out} (saved tensor: output).
-  \item \code{exp2(x) = 2\textasciicircum{}x}; backward: \code{grad\_in = ln(2) *
-    2\textasciicircum{}x * grad\_out}.
-  \item \code{log(x) = \ln(x)}; backward: \code{grad\_in = 1/x *
-    grad\_out}.
-  \item \code{log2(x)} computes $\log_2 x$; backward: \code{grad\_in =
-    1/(x \ln(2)) * grad\_out}.
-  \item \code{log10(x)} computes $\log_{10} x$; backward: analogous with
-    \(\ln(10)\).
-  \item \code{log1p(x) = \ln(1 + x)}; backward: \code{grad\_in =
-    1/(1+x) * grad\_out}. Numerically stable for small \(x\).
-  \item \code{expm1(x) = e\textasciicircum{}x - 1}; backward: \code{grad\_in = (1
-    + expm1(x)) * grad\_out}. Numerically stable for small \(x\).
+  \item \code{exp(x)} computes $e^x$; backward:
+    \code{grad\_in = exp(x) * grad\_out} (saved tensor: output).
+  \item \code{exp2(x)} computes $2^x$; backward:
+    \code{grad\_in = ln(2) * exp2(x) * grad\_out}.
+  \item \code{log(x)} computes $\ln(x)$; backward:
+    \code{grad\_in = 1/x * grad\_out}.
+  \item \code{log2(x)} computes $\log_2 x$; backward:
+    \code{grad\_in = 1/(x ln(2)) * grad\_out}.
+  \item \code{log10(x)} computes $\log_{10} x$; backward:
+    analogous with $\ln(10)$.
+  \item \code{log1p(x)} computes $\ln(1 + x)$; backward:
+    \code{grad\_in = 1/(1+x) * grad\_out}. Numerically stable
+    for small $x$.
+  \item \code{expm1(x)} computes $e^x - 1$; backward:
+    \code{grad\_in = (1 + expm1(x)) * grad\_out}. Numerically
+    stable for small $x$.
 \end{itemize}
 
 \subsection{Numerical stability for small inputs}
@@ -145,12 +147,12 @@ for \code{tanh}-heavy networks.
 \label{sec:unary_functions:round}
 
 \begin{itemize}
-  \item \code{floor(x) = \lfloor x \rfloor}.
-  \item \code{ceil(x) = \lceil x \rceil}.
+  \item \code{floor(x)} computes $\lfloor x \rfloor$.
+  \item \code{ceil(x)} computes $\lceil x \rceil$.
   \item \code{round(x)}: banker's rounding (round half to even),
     matching IEEE 754 default.
   \item \code{trunc(x)}: round toward zero.
-  \item \code{frac(x) = x - trunc(x)}.
+  \item \code{frac(x)} computes $x - \mathrm{trunc}(x)$.
 \end{itemize}
 
 The rounding ops have zero gradient (they are piecewise constant
@@ -203,10 +205,10 @@ documented per-op in the API reference.
 The activation functions used by neural networks:
 
 \begin{itemize}
-  \item \code{relu(x) = \max(0, x)}; backward: \code{grad\_in = (x
-    > 0) * grad\_out}.
-  \item \code{leaky\_relu(x, negative\_slope)}: \code{x} if \code{x
-    > 0}, else \code{negative\_slope * x}.
+  \item \code{relu(x)} computes $\max(0, x)$; backward:
+    \code{grad\_in = (x > 0) * grad\_out}.
+  \item \code{leaky\_relu(x, negative\_slope)}: \code{x} if
+    $x > 0$, else \code{negative\_slope * x}.
   \item \code{prelu(x, alpha)}: \code{leaky\_relu} with learnable
     \code{alpha}.
   \item \code{elu(x)}: \code{x} if \code{x > 0}, else
@@ -220,7 +222,7 @@ The activation functions used by neural networks:
   \item \code{silu(x) = x * sigmoid(x)}: Sigmoid Linear Unit.
   \item \code{sigmoid(x) = 1 / (1 + exp(-x))}.
   \item \code{tanh(x)}: see hyperbolic family.
-  \item \code{softplus(x) = \ln(1 + e\textasciicircum{}x)}.
+  \item \code{softplus(x)} computes $\ln(1 + e^x)$.
   \item \code{softsign(x) = x / (1 + |x|)}.
   \item \code{hardshrink(x, lambda)}: \code{x} if \code{|x| >
     lambda}, else 0.

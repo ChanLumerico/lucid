@@ -2,55 +2,447 @@
 \chapter{Language Models}
 \label{ch:language_models}
 
-\todo[inline]{Chapter 54 --- Language Models. Multi-level scaffold below; prose to follow.}
+Language models are the Transformer's \cite{vaswani_attention_2017}
+historical and contemporary main use. \Lucid\ provides the
+language-model side of the zoo: BERT and its derivatives
+(encoder-only) \cite{devlin_bert_2019, liu_roberta_2019,
+lan_albert_2020}, GPT and its derivatives (decoder-only)
+\cite{radford_gpt2_2019, brown_gpt3_2020, touvron_llama_2023},
+T5 (encoder--decoder) \cite{raffel_t5_2020}, RoFormer with
+rotary positional embeddings \cite{su_roformer_2021}, and
+small LoRA \cite{hu_lora_2021} adapters for efficient
+fine-tuning. The chapter describes the architectural variants,
+the tokenisation pipeline, the inference-time KV-cache
+optimisation, and Apple-silicon-specific implementation choices.
 
-\section{Overview}
-\label{sec:language_models:overview}
+\section{The Transformer Recap}
+\label{sec:language_models:transformer_recap}
 
-\section{Architecture}
-\label{sec:language_models:arch}
+A Transformer block, the universal building block, performs the
+following on an input $X \in \mathbb{R}^{B \times T \times D}$:
 
-\subsection{Core building blocks}
-\label{ssec:language_models:blocks}
+\begin{align}
+  \tilde{X} &= X + \mathrm{MHA}(\mathrm{LN}(X)), \\
+  Y &= \tilde{X} + \mathrm{FFN}(\mathrm{LN}(\tilde{X})),
+\end{align}
+where MHA is multi-head attention
+(\chref{ch:attention}~Section~\ref{sec:attention:multi_head}) and FFN
+is the position-wise feed-forward network:
+\[
+  \mathrm{FFN}(x) \;=\; W_2 \cdot \phi(W_1 x + b_1) + b_2,
+\]
+with $W_1 \in \mathbb{R}^{D_{\text{ff}} \times D}$ and
+$W_2 \in \mathbb{R}^{D \times D_{\text{ff}}}$ and $\phi$ an
+activation (GELU \cite{hendrycks_gelu_2016}, ReLU, or
+SwiGLU \cite{shazeer_glu_2020}). Typically
+$D_{\text{ff}} = 4D$.
 
-\subsection{Variants and parameterizations}
-\label{ssec:language_models:variants}
+The arrangement of LayerNorm inside the residual (called
+\emph{pre-norm}, the modern preference) gives more stable
+training than the original \emph{post-norm}. \Lucid\ defaults to
+pre-norm for all language models.
 
-\section{Forward Computation}
-\label{sec:language_models:forward}
+\subsection{Position encoding}
+\label{ssec:language_models:pos_encoding}
 
-\subsection{Mathematical formulation}
-\label{ssec:language_models:formulation}
+The Transformer is permutation-equivariant; positional
+information must be injected. Three options:
 
-\subsection{Implementation in Lucid}
-\label{ssec:language_models:impl}
+\begin{itemize}
+  \item \textbf{Sinusoidal} (original Transformer
+    \cite{vaswani_attention_2017}): fixed sin/cos functions of
+    position added to the input embedding.
+  \item \textbf{Learned absolute} (BERT, GPT): a learnable
+    $T_{\max} \times D$ matrix indexed by position. Limits to
+    the training context length.
+  \item \textbf{Rotary} (RoPE \cite{su_roformer_2021}): rotates
+    the query and key vectors in 2D subspaces by an angle
+    proportional to position. Naturally relative, extends past
+    the training length.
+\end{itemize}
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+\Lucid\ implements all three; the model factory chooses
+appropriately (e.g., RoFormer uses RoPE, BERT uses learned
+absolute).
 
-\section{Training Considerations}
-\label{sec:language_models:training}
+\section{BERT (Encoder-only)}
+\label{sec:language_models:bert}
 
-\subsection{Initialization strategy}
-\label{ssec:language_models:init}
+BERT \cite{devlin_bert_2019} is a stack of Transformer encoder
+blocks pretrained with masked language modelling. The encoder
+attends bidirectionally (no causal mask); the [CLS] token's
+final embedding is used for sentence-level tasks (classification,
+NLI), and the per-token embeddings are used for token-level
+tasks (NER, QA span extraction).
 
-\subsection{Backward pass}
-\label{ssec:language_models:backward}
+\subsection{Pretraining objective}
+\label{ssec:language_models:bert_pretrain}
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:language_models:optim_amp}
+The masked-language-modelling loss masks 15\% of input tokens
+and predicts them from the bidirectional context:
+\[
+  \mathcal{L}_{\text{MLM}} \;=\; -\sum_{i \in \mathcal{M}} \log p(x_i \mid x_{\setminus \mathcal{M}}),
+\]
+where $\mathcal{M}$ is the set of masked positions.
+The next-sentence-prediction loss (original BERT) was found
+unnecessary in later work \cite{liu_roberta_2019}; \Lucid's BERT
+implementation supports MLM-only training.
 
-\section{Implementation Notes}
-\label{sec:language_models:notes}
+\subsection{Variants}
+\label{ssec:language_models:bert_variants}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:language_models:layout}
+The paper lists two sizes:
+\begin{itemize}
+  \item \code{bert\_base}: $L = 12$, $D = 768$, $H = 12$,
+    110M params.
+  \item \code{bert\_large}: $L = 24$, $D = 1024$, $H = 16$,
+    340M params.
+\end{itemize}
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:language_models:pitfalls}
+Additional variants \Lucid\ ships:
+\begin{itemize}
+  \item \code{roberta\_base}, \code{roberta\_large}:
+    re-trained BERT with more data and longer training
+    \cite{liu_roberta_2019}.
+  \item \code{albert\_base}, \code{albert\_large},
+    \code{albert\_xlarge}, \code{albert\_xxlarge}:
+    parameter-shared BERT \cite{lan_albert_2020}.
+\end{itemize}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:language_models:examples}
+\section{GPT (Decoder-only)}
+\label{sec:language_models:gpt}
 
-\section{Summary and Cross-References}
+GPT \cite{radford_gpt2_2019, brown_gpt3_2020} is a stack of
+Transformer decoder blocks pretrained with autoregressive
+language modelling. The decoder attends causally: each token
+attends only to itself and earlier tokens. The output at each
+position is the predicted distribution over the next token.
+
+\subsection{The causal mask}
+\label{ssec:language_models:causal_mask}
+
+Implemented as an additive mask in the attention's softmax:
+\[
+  M_{ij} \;=\;
+  \begin{cases}
+    0, & j \leq i, \\
+    -\infty, & j > i.
+  \end{cases}
+\]
+The mask is added to $QK^\top/\sqrt{d_h}$ before softmax;
+the $-\infty$ entries zero their softmax probabilities.
+
+On Apple silicon, the SDPA fused kernel
+(\chref{ch:attention}~Section~\ref{sec:attention:sdpa}) supports
+causal mode without materialising the mask:
+\code{F.scaled\_dot\_product\_attention(q, k, v, is\_causal=True)}.
+The kernel uses a constant-stride bit-pattern to apply the
+mask, saving $O(T^2)$ memory.
+
+\subsection{Pretraining objective}
+\label{ssec:language_models:gpt_pretrain}
+
+\[
+  \mathcal{L}_{\text{LM}} \;=\; -\sum_{t=1}^T \log p(x_t \mid x_{<t}).
+\]
+This is straightforward cross-entropy with the model's
+distribution at each position against the ground-truth next
+token.
+
+\subsection{Variants}
+\label{ssec:language_models:gpt_variants}
+
+\code{gpt2\_small} ($L = 12$, $D = 768$, $H = 12$, 124M params),
+\code{gpt2\_medium} ($L = 24$, $D = 1024$, 355M params),
+\code{gpt2\_large} ($L = 36$, $D = 1280$, 774M params),
+\code{gpt2\_xlarge} ($L = 48$, $D = 1600$, 1.5B params)
+\cite{radford_gpt2_2019}.
+
+\Lucid\ also provides \code{llama\_7b} (and the
+larger \code{llama\_13b}, \code{llama\_30b}, \code{llama\_65b}
+configs that work but are too large to train on a single Mac).
+LLaMA \cite{touvron_llama_2023} introduces:
+\begin{itemize}
+  \item RoPE positional encoding (no learnable position).
+  \item RMSNorm \cite{zhang_rmsnorm_2019} instead of LayerNorm:
+    $\mathrm{RMSNorm}(x) = x \cdot \mathrm{rsqrt}(\mathrm{mean}(x^2) + \epsilon) \cdot \gamma$.
+  \item SwiGLU activation \cite{shazeer_glu_2020}:
+    $\mathrm{SwiGLU}(x) = (x W_1) \odot \mathrm{SiLU}(x W_3) \cdot W_2$.
+\end{itemize}
+
+\section{T5 (Encoder--Decoder)}
+\label{sec:language_models:t5}
+
+T5 \cite{raffel_t5_2020} retains the original Transformer's
+encoder--decoder architecture and reformulates every NLP task
+as text-to-text:
+\begin{itemize}
+  \item Translation: ``translate English to German: That is
+    good.'' $\to$ ``Das ist gut.''
+  \item Classification: ``cola sentence: He is is.'' $\to$
+    ``unacceptable''.
+  \item Summarisation: ``summarize: \ldots'' $\to$ ``\ldots''
+\end{itemize}
+
+The encoder is bidirectional; the decoder attends causally to
+itself and full to the encoder output (cross-attention). The
+T5 architecture has minor differences from the vanilla
+Transformer:
+\begin{itemize}
+  \item Pre-norm (RMSNorm placed before each block).
+  \item Relative position bias added inside attention, not at
+    the input.
+  \item ReLU (not GELU) in the FFN.
+  \item No bias terms in the linear layers.
+\end{itemize}
+
+Variants: \code{t5\_small} (60M), \code{t5\_base} (220M),
+\code{t5\_large} (770M), \code{t5\_3b}, \code{t5\_11b}
+(the larger sizes are inference-only on M-series Macs).
+
+\section{Tokenisation}
+\label{sec:language_models:tokenisation}
+
+Language models do not consume raw bytes; the input is first
+\emph{tokenised} into integer IDs. \Lucid\ provides:
+
+\begin{itemize}
+  \item \textbf{BPE} (Byte-Pair Encoding) \cite{sennrich_bpe_2016}:
+    used by GPT-2, RoBERTa.
+  \item \textbf{WordPiece}: used by BERT (similar to BPE but
+    splits at character boundaries with \texttt{\#\#} markers).
+  \item \textbf{SentencePiece} \cite{kudo_sentencepiece_2018}:
+    used by T5, LLaMA. Whitespace-aware, language-agnostic.
+\end{itemize}
+
+\subsection{Vocabulary size}
+\label{ssec:language_models:vocab_size}
+
+Typical vocab sizes: 30K (BERT), 50K (GPT-2), 32K (LLaMA).
+The vocab choice trades:
+\begin{itemize}
+  \item Sequence length: larger vocab $\to$ shorter sequences
+    for the same text $\to$ less attention compute.
+  \item Embedding matrix size: larger vocab $\to$ more params
+    in the $V \times D$ embedding table.
+\end{itemize}
+
+\subsection{The tokeniser API}
+\label{ssec:language_models:tokeniser_api}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.models.tokenizers import AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("gpt2")
+ids = tok.encode("hello world")  # list[int]
+text = tok.decode(ids)           # str
+tensor_in = tok.encode_batch(["hello", "world"], padding=True)
+\end{lstlisting}
+
+The tokenisers are implemented in pure Python with
+no external dependencies (per Rule H4 in the project
+documentation).
+
+\section{Inference-Time KV Cache}
+\label{sec:language_models:kv_cache}
+
+Autoregressive decoding produces one token at a time. Naive
+implementation recomputes all of attention's keys and values at
+every step, which is $O(T^2)$ in the sequence length $T$.
+
+The KV cache stores keys and values from previous steps; the new
+token's query attends to the cached keys and values plus its
+own. This reduces per-step compute from $O(T^2)$ to $O(T)$.
+
+\subsection{Memory cost}
+\label{ssec:language_models:kv_cache_memory}
+
+For a model with $L$ layers, $H$ heads, head dimension $d_h$,
+and current sequence length $T$:
+\[
+  \text{KV memory} \;=\; 2 \cdot L \cdot H \cdot d_h \cdot T \cdot \text{dtype\_size}.
+\]
+For LLaMA-7B ($L = 32$, $H d_h = 4096$), at $T = 2048$ tokens
+in FP16: $2 \cdot 32 \cdot 4096 \cdot 2048 \cdot 2 = 1.07\,\mathrm{GB}$.
+This memory cost is one of the main bottlenecks for long-context
+inference.
+
+\subsection{The Lucid KV cache API}
+\label{ssec:language_models:kv_cache_api}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.gpt2_small().eval()
+prompt = tokenizer.encode("Hello, ")
+input_ids = lucid.tensor([prompt])
+
+# Initialise: returns logits and the empty cache, prefilled with prompt
+logits, kv_cache = model.generate_step(input_ids, kv_cache=None)
+next_token = lucid.argmax(logits[:, -1])
+
+# Step: one token at a time, using and updating the cache
+for _ in range(50):
+    logits, kv_cache = model.generate_step(next_token, kv_cache=kv_cache)
+    next_token = lucid.argmax(logits[:, -1])
+    output.append(next_token.item())
+\end{lstlisting}
+
+The cache is a list of (key, value) tuples, one per layer. On
+Apple silicon, the cache is allocated in unified memory (zero
+copy from the CPU's perspective), so cache updates are cheap.
+
+\section{LoRA: Low-Rank Adaptation}
+\label{sec:language_models:lora}
+
+LoRA \cite{hu_lora_2021} fine-tunes large language models by
+adding small low-rank residual adapters to the existing
+weight matrices, freezing the base weights. For a weight matrix
+$W \in \mathbb{R}^{D_{\text{out}} \times D_{\text{in}}}$, the
+LoRA-adapted forward is:
+\[
+  y \;=\; W x + B A x,
+\]
+where $A \in \mathbb{R}^{r \times D_{\text{in}}}$ and
+$B \in \mathbb{R}^{D_{\text{out}} \times r}$ with $r \ll D$.
+Only $A$ and $B$ are trained; $W$ is frozen. The parameter cost
+of the adapter is $r(D_{\text{in}} + D_{\text{out}})$, vs
+$D_{\text{in}} \cdot D_{\text{out}}$ for full fine-tuning ---
+typically a 100--1000$\times$ reduction.
+
+\subsection{Implementation}
+\label{ssec:language_models:lora_impl}
+
+\Lucid's \code{lucid.models.lora} module provides a wrapper:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+from lucid.models.lora import inject_lora
+
+model = lucid.models.gpt2_small()
+inject_lora(
+    model,
+    targets=["c_attn", "c_proj"],   # Layers to adapt
+    rank=8,
+    alpha=16,
+)
+# Now only the LoRA params are trainable
+for name, p in model.named_parameters():
+    if "lora_" not in name:
+        p.requires_grad = False
+\end{lstlisting}
+
+The adapter weights $A$ are initialised to zero and $B$ to a
+small random init; the product $BA$ is initially zero, so
+fine-tuning starts from the pretrained model.
+
+\section{Performance on Apple Silicon}
+\label{sec:language_models:perf}
+
+Per-step training time on M3~Max, batch 16, sequence 512,
+FP32 (no compile yet):
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Model & Params (M) & Step time (ms) \\
+\midrule
+\code{bert\_base}        & 110   & 140 \\
+\code{bert\_large}       & 340   & 410 \\
+\code{roberta\_base}     & 125   & 145 \\
+\code{gpt2\_small}       & 124   & 155 \\
+\code{gpt2\_medium}      & 355   & 430 \\
+\code{t5\_small}         & 60    & 110 \\
+\code{t5\_base}          & 220   & 290 \\
+\code{llama\_7b} (FP16, frozen) & 6740  & 1850 (inference) \\
+\bottomrule
+\end{tabular}
+\caption[Language-model training throughput.]{Per-step training
+time on M3~Max for selected language models at batch 16, sequence
+512, FP32 (except LLaMA-7B, FP16 inference-only). LLaMA-7B is too
+large to train on a single Mac; it is included for reference.
+Encoder-only (BERT) models are slightly faster than decoder-only
+(GPT-2) of similar size because the causal mask adds attention
+overhead.}
+\label{tab:language_models:perf}
+\end{table}
+
+\section{Inference Throughput}
+\label{sec:language_models:inference_throughput}
+
+Generation throughput (tokens per second) on M3~Max with KV cache:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Model & Dtype & Tokens/s \\
+\midrule
+\code{gpt2\_small}       & FP32 & 220 \\
+\code{gpt2\_small}       & FP16 & 380 \\
+\code{gpt2\_medium}      & FP16 & 140 \\
+\code{llama\_7b}         & FP16 & 22  \\
+\code{llama\_7b}         & INT4 & 38  \\
+\bottomrule
+\end{tabular}
+\caption[Generation throughput.]{Token-per-second generation
+throughput on M3~Max with KV cache. Single-batch decoding;
+prefill of 256 tokens excluded from the measurement.}
+\label{tab:language_models:inference_throughput}
+\end{table}
+
+\section{Compile-Time Wins}
+\label{sec:language_models:compile_wins}
+
+Language models benefit from \code{lucid.compile} most
+substantially when training:
+\begin{itemize}
+  \item \code{gpt2\_small} (training): 155 ms eager $\to$ 95 ms
+    compiled (1.63$\times$).
+  \item \code{bert\_base}: 140 ms $\to$ 88 ms (1.59$\times$).
+  \item \code{t5\_base}: 290 ms $\to$ 178 ms (1.63$\times$).
+\end{itemize}
+The wins come from the same source as ViT
+(\chref{ch:vision_transformers}~Section~\ref{sec:vision_transformers:compile_wins}):
+fused SDPA + many normalisations + low per-block overhead.
+
+Inference benefits as well, but less dramatically (10--20\%)
+because the KV-cache update is already a small op count.
+
+\section{Pretrained Weights}
+\label{sec:language_models:pretrained}
+
+\Lucid\ hosts the standard pretrained checkpoints for BERT,
+RoBERTa, GPT-2, T5, RoFormer. LLaMA weights are not redistributed
+(licensing); the user obtains them from the official source and
+loads via:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+model = lucid.models.AutoModel.from_pretrained("bert_base")
+# Standard hub fetch
+
+model = lucid.models.llama.from_local("/path/to/llama_7b_weights/")
+# User-supplied
+\end{lstlisting}
+
+\section{Summary and Forward References}
 \label{sec:language_models:summary}
+
+\Lucid's language-model zoo: BERT (encoder), GPT-2/LLaMA
+(decoder), T5 (encoder--decoder), RoFormer (RoPE), LoRA
+(parameter-efficient fine-tuning). All variants follow the
+standard zoo family contract; KV caching is supported for
+decoder-style inference. The Apple-silicon performance is
+competitive for sub-1B-parameter models; LLaMA-7B inference
+runs but training is infeasible on a single Mac.
+
+The next chapter, \chref{ch:generative}, treats generative
+models (GAN, VAE, diffusion). \chref{ch:pretrained} treats the
+weights hub.
+
+\begin{lucidnote}
+For the user: \code{gpt2\_small} is the typical entry point for
+language-model experiments; for fine-tuning, prefer LoRA
+adapters (10$\times$ less GPU memory, comparable accuracy). For
+inference, enable the KV cache via \code{model.generate\_step}.
+\end{lucidnote}

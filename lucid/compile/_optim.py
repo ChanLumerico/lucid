@@ -464,6 +464,16 @@ class _CompiledStepBase:
         fresh objects, changing their TensorImpl identity.  The
         cached executable's input plan keys feeds by identity, so
         the safe default is to retrace on the next step.
+
+        Parameters
+        ----------
+        sd : dict
+            ``optimizer.state_dict()`` payload — passed straight to
+            the wrapped optimizer's own ``load_state_dict``.
+
+        See Also
+        --------
+        lucid.optim.Optimizer.load_state_dict : the underlying call.
         """
         self._opt.load_state_dict(sd)
         # Recompile next step — state buffer identity may have moved.

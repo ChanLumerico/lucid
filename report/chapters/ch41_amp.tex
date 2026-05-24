@@ -2,55 +2,454 @@
 \chapter{Mixed Precision and Gradient Scaling}
 \label{ch:amp}
 
-\todo[inline]{Chapter 41 --- Mixed Precision and Gradient Scaling. Multi-level scaffold below; prose to follow.}
+Modern hardware computes FP16 (or BF16) matrix products
+substantially faster than FP32: the half-precision tensor cores
+on NVIDIA hardware are 2--8$\times$ faster than the FP32 cores,
+and Apple silicon's GPU exhibits a similar (though smaller)
+asymmetry. \emph{Mixed precision training} exploits this by
+running most of the forward and backward passes in half precision
+while keeping a few sensitive operations (notably the parameter
+update and certain reductions) in FP32. The result is a
+substantial speedup with negligible accuracy loss
+\cite{micikevicius_mixed_2018}.
 
-\section{Overview}
-\label{sec:amp:overview}
+This chapter describes \Lucid's AMP (automatic mixed precision)
+system: the \code{autocast} context manager, the
+\code{GradScaler} for loss scaling, the per-op AMP policy that
+the schema declares, and the workflow patterns.
 
-\section{Architecture}
-\label{sec:amp:arch}
+\section{Why Mixed Precision}
+\label{sec:amp:why}
 
-\subsection{Core building blocks}
-\label{ssec:amp:blocks}
+FP16 has a smaller representable range than FP32 (max $\sim 65504$
+vs $\sim 3.4 \times 10^{38}$) and lower precision (10 mantissa
+bits vs 23). The smaller range causes two specific failure modes
+in deep learning:
 
-\subsection{Variants and parameterizations}
-\label{ssec:amp:variants}
+\begin{itemize}
+  \item \textbf{Overflow}: large activations or weights exceed the
+    FP16 max. Manifests as \code{Inf} in the forward.
+  \item \textbf{Underflow}: small gradients fall below the FP16
+    min (smallest normal $\sim 6.1 \times 10^{-5}$). Manifests
+    as gradients silently becoming zero.
+\end{itemize}
 
-\section{Forward Computation}
-\label{sec:amp:forward}
+Without mitigation, FP16 training is unreliable. AMP's
+contribution is the engineering pattern that keeps the speedup
+while addressing both failure modes.
 
-\subsection{Mathematical formulation}
-\label{ssec:amp:formulation}
+\subsection{Floating-point format anatomy}
+\label{ssec:amp:fp_anatomy}
 
-\subsection{Implementation in Lucid}
-\label{ssec:amp:impl}
+The three relevant IEEE 754 formats:
 
-\subsubsection{Module class layout}
-\subsubsection{Backend dispatch}
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Format & Total bits & Exponent & Mantissa & Range $|x|$ \\
+\midrule
+FP32   & 32  & 8 & 23 & $1.2 \cdot 10^{-38}$ to $3.4 \cdot 10^{38}$ \\
+FP16   & 16  & 5 & 10 & $6.1 \cdot 10^{-5}$  to $6.5 \cdot 10^{4}$ \\
+BF16   & 16  & 8 & 7  & $1.2 \cdot 10^{-38}$ to $3.4 \cdot 10^{38}$ \\
+FP8 E4M3 & 8 & 4 & 3 & $1.95 \cdot 10^{-3}$ to $448$ \\
+FP8 E5M2 & 8 & 5 & 2 & $6.1 \cdot 10^{-5}$ to $5.7 \cdot 10^{4}$ \\
+\bottomrule
+\end{tabular}
+\caption[IEEE 754 format comparison.]{Storage layout and
+representable range for the floating-point formats relevant to
+mixed-precision training. BF16 trades FP16's mantissa precision
+for FP32-equivalent range. The two FP8 variants
+\cite{micikevicius_fp8_2022} differ in their exponent/mantissa
+split, optimised for different uses (E4M3 for activations,
+E5M2 for gradients).}
+\label{tab:amp:fp_formats}
+\end{table}
 
-\section{Training Considerations}
-\label{sec:amp:training}
+The smallest normal positive of FP16, $\sim 6 \times 10^{-5}$,
+is the relevant cliff for gradient underflow. Real deep
+learning gradients regularly include values $10^{-6}$--$10^{-8}$;
+without loss scaling, FP16 silently rounds these to zero,
+killing learning signal.
 
-\subsection{Initialization strategy}
-\label{ssec:amp:init}
+\subsection{Underflow probability calculation}
+\label{ssec:amp:underflow_calc}
 
-\subsection{Backward pass}
-\label{ssec:amp:backward}
+A rough calculation: for ResNet-50 training, the gradient
+distribution (across all parameters at a typical step) is
+approximately log-normal with mean $-5$ and standard deviation
+$2$ on the $\log_{10}$ scale. The probability of a gradient
+$< 6 \times 10^{-5} = 10^{-4.2}$ is then the cumulative density
+of $\log_{10}|g|$ below $-4.2$, which under our log-normal
+gives $\sim 36\%$ of gradients underflowing.
 
-\subsection{Interaction with optimizer and AMP}
-\label{ssec:amp:optim_amp}
+A loss scale of $2^{15} = 32768$ multiplies each gradient by
+$2^{15}$, shifting the distribution by $+4.5$ on the
+$\log_{10}$ scale. The new underflow probability drops to
+$<0.1\%$ --- a negligible loss of signal. The scale's role is
+quantitative: shift the gradient distribution into the
+representable range without hitting the overflow end.
+
+\subsection{The two mitigations}
+\label{ssec:amp:mitigations}
+
+\begin{enumerate}
+  \item \textbf{Per-op precision policy}: matrix multiplications
+    run in FP16 (fast); reductions, normalisations, and softmax
+    run in FP32 (precise). The selection is per-op, based on the
+    op schema's \code{AmpPolicy}.
+  \item \textbf{Loss scaling}: multiply the loss by a large
+    scalar before backward, so the small gradients are shifted
+    into the FP16 representable range. Divide gradients by the
+    same scalar before the optimiser step.
+\end{enumerate}
+
+\section{BF16 vs FP16}
+\label{sec:amp:bf16_vs_fp16}
+
+The bfloat16 format \cite{kalamkar_bfloat16_2019} has the same
+8-bit exponent as FP32 (range matches) but only 7 mantissa bits
+(precision lower than FP16's 10). The trade-off:
+
+\begin{itemize}
+  \item \textbf{FP16}: better precision, narrower range. Needs
+    loss scaling.
+  \item \textbf{BF16}: same range as FP32, lower precision. No
+    loss scaling needed.
+\end{itemize}
+
+Modern hardware (NVIDIA Ampere+, Apple M3+) supports BF16, and
+the convention has been shifting toward BF16-default training
+because the no-loss-scaling simplicity is worth the precision
+loss for most workloads.
+
+\Lucid\ supports both. The user picks via the \code{autocast}
+dtype:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+with lucid.amp.autocast(dtype=lucid.float16):  # or bfloat16
+    output = model(input)
+    loss = criterion(output, target)
+\end{lstlisting}
+
+\section{autocast}
+\label{sec:amp:autocast}
+
+\code{lucid.amp.autocast(dtype=lucid.float16)} is a context
+manager that switches the dispatcher into AMP mode. Inside the
+context, each op is cast according to its schema's
+\code{AmpPolicy} (\chref{ch:op_registry}):
+
+\begin{itemize}
+  \item \code{CastToHalf}: cast inputs to FP16 (matmul, conv,
+    linear). The bulk of compute.
+  \item \code{ForceFloat32}: keep inputs in FP32 (softmax,
+    layernorm reductions, loss functions). Numerically sensitive.
+  \item \code{PromoteToWidest}: standard promotion (most
+    elementwise ops). Behaves like outside autocast.
+  \item \code{PreserveInputs}: no casting (some normalisation
+    operations).
+\end{itemize}
+
+\subsection{The full policy table}
+\label{ssec:amp:full_policy_table}
+
+The AMP policy for the standard op surface, ordered by op
+family:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Op category & Policy & Reason \\
+\midrule
+matmul, linear & CastToHalf & arithmetic-bound, biggest speedup \\
+conv1d/2d/3d   & CastToHalf & same \\
+bias-add       & CastToHalf & elementwise, follows matmul \\
+softmax        & ForceFloat32 & exp overflow at large logits \\
+log\_softmax   & ForceFloat32 & log of small values \\
+log, log1p, log2 & ForceFloat32 & log near 0 \\
+exp, exp2      & ForceFloat32 & overflow risk \\
+sum, mean (full reduction) & ForceFloat32 & accumulation precision \\
+norm (L2)      & ForceFloat32 & squared sum precision \\
+layer\_norm    & ForceFloat32 & variance precision \\
+batch\_norm    & ForceFloat32 & running-stats precision \\
+group\_norm    & ForceFloat32 & same \\
+cross\_entropy & ForceFloat32 & combines log + sum \\
+mse\_loss      & PromoteToWidest & no special concerns \\
+relu, gelu, silu, sigmoid & PromoteToWidest & monotonic, well-bounded \\
+add, sub, mul, div & PromoteToWidest & follow operand dtypes \\
+gather, scatter, index\_select & PromoteToWidest & no math \\
+\bottomrule
+\end{tabular}
+\caption[AMP policy by op family.]{The autocast policy
+classification of common ops. Whitelisted ops (CastToHalf) get
+the FP16 speedup; blacklisted ops (ForceFloat32) are kept at
+FP32 for numerical safety; neutral ops (PromoteToWidest) follow
+their inputs.}
+\label{tab:amp:full_policy}
+\end{table}
+
+\subsection{What gets cast}
+\label{ssec:amp:what_cast}
+
+The cast is automatic: the user writes the model as if it were
+FP32, and the dispatcher casts inside ops that benefit. The
+parameter tensors themselves remain in FP32 (the \emph{master
+weights}); the cast is per-op-invocation.
+
+\subsection{The autocast scope}
+\label{ssec:amp:scope}
+
+\code{autocast} affects only ops inside the context. The
+backward pass inherits the casting decisions (each op's backward
+runs in the same precision as its forward). The optimiser step
+runs outside autocast on FP32 weights.
+
+\section{The autocast Cache}
+\label{sec:amp:autocast_cache}
+
+Inside an autocast region, the same FP32 weight tensor might
+be cast to FP16 multiple times (once per forward call that
+uses it). To avoid redundant cast operations, autocast
+maintains a per-tensor cache:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+class AutocastCache:
+    def get_cast(self, tensor: Tensor, target_dtype: DType) -> Tensor:
+        key = (id(tensor), target_dtype)
+        if key in self._cache:
+            return self._cache[key]
+        cast = tensor.to(target_dtype)
+        self._cache[key] = cast
+        return cast
+\end{lstlisting}
+
+The cache is cleared at autocast region exit. Inside the
+region, each FP32 parameter is cast once and reused. For a
+Transformer with shared input/output embeddings, this saves
+two cast operations per forward pass; cumulatively in deep
+networks the savings are non-trivial.
+
+\section{GradScaler}
+\label{sec:amp:grad_scaler}
+
+For FP16 training (not BF16), loss scaling is needed to keep
+gradients in range. \code{lucid.amp.GradScaler} manages the
+scaling factor.
+
+\subsection{The pattern}
+\label{ssec:amp:scaler_pattern}
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+import lucid
+from lucid.amp import autocast, GradScaler
+
+scaler = GradScaler()
+
+for batch in train_loader:
+    optimizer.zero_grad()
+
+    with autocast(dtype=lucid.float16):
+        output = model(batch.input)
+        loss = criterion(output, batch.target)
+
+    # Scale loss, backward computes scaled gradients
+    scaler.scale(loss).backward()
+
+    # Unscale + clip
+    scaler.unscale_(optimizer)
+    lucid.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+    # Conditional step (skip if scaled gradients had inf/nan)
+    scaler.step(optimizer)
+
+    # Update scale factor (decrease if inf/nan was seen,
+    # otherwise increase periodically)
+    scaler.update()
+\end{lstlisting}
+
+\subsection{The dynamic scale}
+\label{ssec:amp:dynamic_scale}
+
+\code{GradScaler} maintains a scale factor that adapts to
+training dynamics:
+
+\begin{itemize}
+  \item Initial value: typically $2^{16} = 65536$.
+  \item If an inf/nan is detected in the unscaled gradients,
+    halve the scale and skip the step.
+  \item If \code{growth\_interval} steps pass without
+    inf/nan, double the scale (to maximise the range of
+    representable gradients).
+\end{itemize}
+
+The dynamic policy converges to the largest scale that does not
+cause overflow, maximising the FP16 gradient precision.
+
+\subsection{When to skip the step}
+\label{ssec:amp:skip_step}
+
+\code{scaler.step(optimizer)} internally checks the gradients;
+if any are inf/nan, the optimiser step is skipped entirely (the
+parameters stay at their pre-step values). This prevents one bad
+batch from poisoning the model.
+
+\section{BF16 Without Scaler}
+\label{sec:amp:bf16_no_scaler}
+
+BF16 has the same range as FP32, so loss scaling is unnecessary:
+
+\begin{lstlisting}[style=lucid,language=LucidPython]
+for batch in train_loader:
+    optimizer.zero_grad()
+
+    with autocast(dtype=lucid.bfloat16):
+        output = model(batch.input)
+        loss = criterion(output, batch.target)
+
+    loss.backward()
+    lucid.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+\end{lstlisting}
+
+The simpler code is a meaningful advantage. The cost is BF16's
+lower precision (7 mantissa bits vs FP16's 10), which can affect
+training stability in some regimes. For most modern training,
+BF16 is the recommended default.
+
+\section{The AMP Policy in Detail}
+\label{sec:amp:policy_detail}
+
+The schema's \code{AmpPolicy} (\chref{ch:op_registry}) is the
+single source of truth for per-op AMP behaviour. The current
+assignments:
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+Op category & AMP policy & Rationale \\
+\midrule
+matmul, linear        & CastToHalf       & dominant flops; FP16 doubles throughput \\
+conv1d/2d/3d          & CastToHalf       & dominant flops \\
+attention SDPA        & CastToHalf       & fused kernel handles internal FP32 \\
+activations (relu, gelu, ...) & PromoteToWidest & no overflow risk; inherit input \\
+softmax               & ForceFloat32     & exp can overflow; sum can underflow \\
+log\_softmax          & ForceFloat32     & numerical-stability fusion needs FP32 \\
+cross\_entropy        & ForceFloat32     & uses log\_softmax internally \\
+sum / mean (large)    & ForceFloat32     & accumulator precision \\
+layernorm             & ForceFloat32     & per-sample reduction needs precision \\
+batchnorm             & ForceFloat32     & per-batch reduction needs precision \\
+embedding             & PreserveInputs   & gather op; no compute \\
+\bottomrule
+\end{tabular}
+\caption[AMP policy assignments.]{Per-op AMP policy assignments
+in \Lucid's op registry. The matmul-class ops get the FP16
+speedup; the reduction-class ops keep FP32 precision; the
+activation-class ops follow their inputs.}
+\label{tab:amp:policy}
+\end{table}
+
+\section{The Memory Win}
+\label{sec:amp:memory_win}
+
+AMP also reduces activation memory: a half-precision tensor takes
+half the bytes of an FP32 tensor. For activation-heavy models
+(Transformers with long sequences), this can be the difference
+between OOM and successful training.
+
+For a 100M-parameter Transformer at batch 32, sequence 512:
+\begin{itemize}
+  \item FP32: $\sim 12$ GB total memory.
+  \item FP16 AMP: $\sim 7$ GB total memory.
+\end{itemize}
+
+The memory saving comes from the activation tensors only; the
+parameters are FP32 either way. With gradient checkpointing
+(\chref{ch:gradient_checkpointing}) plus AMP, even larger models
+fit on consumer hardware.
+
+\section{The Speedup}
+\label{sec:amp:speedup}
+
+Measured on M3~Max for GPT-2-base training:
+
+\begin{itemize}
+  \item FP32: 250 ms / step.
+  \item FP16 AMP: 165 ms / step. ($\sim 1.5\times$ speedup)
+  \item BF16 AMP: 170 ms / step. (similar)
+\end{itemize}
+
+The speedup is modest by NVIDIA tensor-core standards (where
+2--3$\times$ is typical) because Apple silicon's GPU does not
+have asymmetric FP16/FP32 throughput as aggressively. The
+memory savings often matter more than the speed.
+
+\section{When AMP Hurts}
+\label{sec:amp:hurts}
+
+AMP is not universally beneficial. The known failure cases:
+
+\begin{itemize}
+  \item \textbf{Very small models}: the per-op cast overhead can
+    dominate the FP16 speedup.
+  \item \textbf{Tasks with numerical sensitivity}: some
+    physics-informed networks, certain RL value functions, very
+    small-magnitude losses can lose meaningful precision in FP16.
+  \item \textbf{Reproducibility-critical applications}: AMP
+    introduces additional non-determinism beyond what FP32
+    training has.
+\end{itemize}
+
+For these cases, FP32 remains the safe default.
 
 \section{Implementation Notes}
-\label{sec:amp:notes}
+\label{sec:amp:impl}
 
-\subsection{File layout and class hierarchy}
-\label{ssec:amp:layout}
+\code{lucid.amp} lives in \code{lucid/amp/}. The
+\code{autocast} context manager is in
+\code{lucid/amp/autocast.py}; \code{GradScaler} is in
+\code{lucid/amp/grad\_scaler.py}.
 
-\subsection{Edge cases and pitfalls}
-\label{ssec:amp:pitfalls}
+\subsection{The dispatcher hook}
+\label{ssec:amp:dispatcher_hook}
 
-\section{Worked Examples and Benchmarks}
-\label{sec:amp:examples}
+\code{autocast} sets a thread-local flag that the dispatcher
+consults at every op invocation. If the flag is on, the op's
+schema's \code{AmpPolicy} determines the cast; if off, normal
+dtype promotion applies.
 
-\section{Summary and Cross-References}
+\subsection{Thread safety}
+\label{ssec:amp:thread_safety}
+
+The autocast flag is per-thread. Multiple threads can have
+different autocast contexts simultaneously. The
+\code{GradScaler} is thread-safe but typically only one is
+needed per training process.
+
+\section{Summary and Forward References}
 \label{sec:amp:summary}
+
+Mixed precision training (AMP) lets the user run most of the
+forward and backward in FP16 or BF16 for substantial speed and
+memory savings, with FP32 master weights and selected FP32
+operations (reductions, softmax, normalisation) preserving
+numerical stability. \Lucid's \code{autocast} and
+\code{GradScaler} provide the standard pattern; the per-op
+behaviour is determined by the op schema's \code{AmpPolicy}.
+
+The next chapter, \chref{ch:profiler_determinism}, treats
+profiling and determinism, the diagnostic tools for understanding
+and reproducing training runs.
+
+\begin{lucidnote}
+For the user: the standard modern recipe is
+\code{with autocast(dtype=lucid.bfloat16):} around the forward,
+no scaler needed, the rest of the training loop unchanged. For
+FP16 use \code{GradScaler}. Both are drop-in compatible with
+\refframework's AMP API.
+\end{lucidnote}

@@ -66,6 +66,20 @@ class EagerFallbackSet:
 
     Cleared by :meth:`CompiledModule.clear_cache` so the user can opt
     back into a compile retry after a deliberate model change.
+
+    Examples
+    --------
+    >>> from lucid.compile._fallback import EagerFallbackSet
+    >>> blacklist = EagerFallbackSet()
+    >>> blacklist.add(key)
+    >>> if key in blacklist:                 # fast-path skip
+    ...     return run_eager(model, args, kwargs)
+
+    See Also
+    --------
+    run_eager : the actual eager-dispatch helper.
+    lucid.compile.CompiledModule : keeps one ``EagerFallbackSet`` per
+        compiled module instance.
     """
 
     def __init__(self) -> None:

@@ -76,6 +76,26 @@ def compiled_step(
 
     Phase 1.3 acceptance: ``ResNet-18 + CE + SGD, 5 steps``, param
     drift < 5e-3 vs eager.
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn, lucid.nn.functional as F
+    >>> import lucid.optim as optim
+    >>> from lucid.compile._function import compiled_step
+    >>> model = nn.Linear(8, 4).to('metal')
+    >>> opt = optim.SGD(model.parameters(), lr=0.1)
+    >>> for batch in batches:                       # doctest: +SKIP
+    ...     opt.zero_grad()
+    ...     loss = compiled_step(model, batch.x,
+    ...                          lambda y: F.cross_entropy(y, batch.target))
+    ...     opt.step()
+
+    See Also
+    --------
+    lucid.compile.make_step : the cached entry point preferred for
+        repeated training loops — wraps this in a signature-keyed
+        cache so the compile cost amortises.
+    lucid.compile.compile : module-level entrypoint.
     """
     # Local imports to avoid circulars during package init.
     from lucid._dispatch import _unwrap, _wrap

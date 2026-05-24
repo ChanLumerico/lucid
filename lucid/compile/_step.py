@@ -337,7 +337,7 @@ def make_step(
         # accidentally end up with a "compiled" wrapper around it.
         try:
             key = signature_of(model, x_args, {}, dynamic=dynamic)
-        except (TypeError, AttributeError):
+        except TypeError, AttributeError:
             key = None  # un-hashable → fresh per-call compile only
 
         if key is not None and key in eager_only:

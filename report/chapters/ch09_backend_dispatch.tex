@@ -105,7 +105,7 @@ graph including the two H3 carve-outs and the 3.4 per-op
 \centering
 \begin{adjustbox}{max width=\textwidth, center}
 \begin{tikzpicture}[
-  in/.style={draw, rounded corners=2pt, font=\small\sffamily,
+  inbox/.style={draw, rounded corners=2pt, font=\small\sffamily,
              fill=lucid.note.bg, minimum width=3.4cm,
              minimum height=0.9cm, align=center, inner sep=4pt},
   dec/.style={draw, diamond, aspect=2, font=\small\sffamily,
@@ -122,7 +122,7 @@ graph including the two H3 carve-outs and the 3.4 per-op
   lbl/.style={font=\footnotesize\itshape, color=lucid.muted,
               fill=white, inner sep=2pt},
 ]
-  \node[in] (op) at (0, 6) {Op request\\(OpKind, tensors)};
+  \node[inbox] (op) at (0, 6) {Op request\\(OpKind, tensors)};
   \node[dec] (dev) at (0, 4) {device?};
 
   \node[dec] (cv1) at (-6.5, 2) {linalg?\\data-dep?};

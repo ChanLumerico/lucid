@@ -19,7 +19,7 @@ try:
             f"lucid C++ engine ABI mismatch: expected {_EXPECTED_ABI}, "
             f"got {_abi}. Rebuild the engine."
         )
-except (TypeError, ValueError):
+except TypeError, ValueError:
     pass  # Mocked during docs build — skip ABI check
 
 # fmt: off
