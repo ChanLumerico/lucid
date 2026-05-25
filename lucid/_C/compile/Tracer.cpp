@@ -80,6 +80,13 @@ void Tracer::on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImpl
     //     so the builder can materialise an MPSGraph placeholder and
     //     bind the input data at run time without races against
     //     buffer release).
+    // Last-write-wins semantics: callers (e.g. ops with non-diff
+    // inputs like ``embedding``'s indices) may invoke ``on_op_io``
+    // a second time after the autograd kernel's internal call to
+    // fill in the full graph-level input list.  Clear here so the
+    // most recent call is authoritative; append would otherwise
+    // duplicate ids and confuse the emitter's resolve step.
+    node.inputs.clear();
     node.inputs.reserve(inputs.size());
     for (const auto& inp : inputs) {
         TensorImpl* raw = inp.get();

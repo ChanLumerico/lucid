@@ -68,9 +68,6 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, weight->dtype(),
                                             weight->device(), false);
-    if (auto* trc = ::lucid::compile::current_tracer()) {
-        (void)trc;  // wire_autograd below records on_op_io internally
-    }
 
     auto bwd = std::make_shared<EmbeddingBackward>();
     bwd->saved_indices_ = indices->storage();
@@ -79,6 +76,15 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     bwd->padding_idx_ = padding_idx;
     bwd->weight_shape_ = weight->shape();
     kernel::NaryKernel<EmbeddingBackward, 1>::wire_autograd(std::move(bwd), {weight}, out, false);
+
+    // The autograd wiring above only registers ``weight`` as a trace
+    // input (indices is an int tensor — not differentiable), but the
+    // compile path needs BOTH so the ``embedding`` emitter can call
+    // ``gatherWithUpdatesTensor:indicesTensor:``.  Overwrite the trace
+    // entry now (Tracer::on_op_io is last-write-wins).
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({weight, indices}, out);
+    }
     return out;
 }
 
