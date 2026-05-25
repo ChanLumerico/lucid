@@ -175,6 +175,31 @@ bool should_dispatch_layer_norm_backward(std::int64_t outer,
 // :func:`batch_norm_train_forward`, :func:`batch_norm_train_backward`.
 bool should_dispatch_batch_norm_train(std::int64_t numel, Dtype dt);
 
+// Dispatch the BN training forward through a 2-pass custom Metal
+// kernel pair (reduce + normalize) instead of the MPSGraph
+// composite.  Targets the 2.5–2.8× gap to torch MPS on ImageNet-
+// scale activations (perf-baseline-rebench-2026-05-25).
+//
+// Parameters
+// ----------
+// per_channel_numel : std::int64_t
+//     ``N × H × W`` — elements reduced into each channel.  Threshold
+//     here so tiny channel-tiles stay on MLX where the dispatch
+//     setup cost dominates.
+// dt : Dtype
+//     Element dtype.  Only ``F32`` is wired by the custom kernel;
+//     other dtypes fall back to the MPSGraph composite.
+//
+// Returns
+// -------
+// bool
+//     ``true`` iff the custom Metal path should be used.
+//
+// See Also
+// --------
+// :func:`bn_train_metal_forward` — the kernel pair.
+bool should_dispatch_bn_train_metal(std::int64_t per_channel_numel, Dtype dt);
+
 // Dispatch Softmax backward through MPSGraph for large reduction axes.
 //
 // The MLX path is a 4-op chain (``gz / sum / diff / result``) that

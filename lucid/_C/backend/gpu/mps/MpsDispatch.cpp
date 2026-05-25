@@ -124,6 +124,30 @@ bool should_dispatch_batch_norm_train(std::int64_t numel, Dtype dt) {
     return false;
 }
 
+bool should_dispatch_bn_train_metal(std::int64_t per_channel_numel,
+                                    Dtype dt) {
+    (void)per_channel_numel;
+    (void)dt;
+    if (!enabled()) return false;
+    // Measurement note (2026-05-25, M4 Max F32):
+    //
+    //   shape            custom Metal   MLX-only   verdict
+    //   (8,64,256²)      11.81 ms       10.50 ms   regression
+    //   (32,64,56²)      2.25 ms        2.28 ms    parity
+    //
+    // The 2-pass design (reduce → normalize) pays an unavoidable
+    // 2× kernel-dispatch + sync overhead.  Combined with MLX's
+    // own simdgroup-optimised reduction primitive, my custom path
+    // loses on the big-tile shape that this work was intended to
+    // help.  Higher thread counts (256 → 1024) didn't recover the
+    // gap.  Closing it likely needs a 1-pass cooperative kernel
+    // using float atomic-add accumulators (Metal 3+) — out of
+    // scope for now.
+    //
+    // Kernel pair kept in MpsKernels.mm as reference; default OFF.
+    return false;
+}
+
 bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt) {
     (void)numel;
     (void)dt;

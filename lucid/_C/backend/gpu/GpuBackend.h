@@ -1957,6 +1957,19 @@ public:
             for (auto d : gx.arr->shape()) x_shape.push_back(d);
             std::int64_t numel = 1;
             for (auto d : x_shape) numel *= d;
+            // Custom Metal (2-pass reduce + normalize) is the primary
+            // fast path; gate on per-channel reduction size.
+            std::int64_t per_channel = 1;
+            if (x_shape.size() >= 1) per_channel *= x_shape[0];      // N
+            for (int i = 0; i < ndim; ++i) {
+                per_channel *= x_shape[2 + i];                       // H, W, …
+            }
+            if (gpu::mps::should_dispatch_bn_train_metal(per_channel, dt)) {
+                auto out = gpu::mps::bn_train_metal_forward(
+                    x, gamma, beta, channels, ndim, eps, x_shape, dt);
+                return {std::move(out.y), std::move(out.mean),
+                        std::move(out.rstd), Storage{GpuStorage{}}};
+            }
             if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
                 auto out = gpu::mps::batch_norm_train_forward(
                     x, gamma, beta, channels, ndim, eps, x_shape, dt);

@@ -679,6 +679,283 @@ Storage gelu_exact_metal_backward(const Storage& x, const Storage& grad,
     return gelu_exact_backward(x, grad, shape, dt);
 }
 
+// ── BatchNorm train forward — custom 2-pass Metal kernel ──────────────────
+//
+// Strategy: separate the reduction from the normalize / affine pass.
+//
+//   Pass 1 (`bn_train_fwd_reduce_f32`):
+//     - One threadgroup per channel (so the C32-aligned slot fits in
+//       SIMD-shared memory).
+//     - 256 threads/group stride over (N * H * W) elements.
+//     - simd_sum → threadgroup_barrier → simd_sum across the 8
+//       simdgroups → thread 0 writes ``mean[c]`` + ``rstd[c]``.
+//
+//   Pass 2 (`bn_train_fwd_normalize_f32`):
+//     - Plain elementwise: ``y[n,c,h,w] = (x - mean[c]) * rstd[c] *
+//       gamma[c] + beta[c]``.
+//
+// The MPSGraph ``normalizationWithTensor:`` route (above, ~1500 LOC
+// down) was measured at noise level vs MLX on M4 Max
+// (perf-baseline-rebench-2026-05-25 dispatch audit).  This custom
+// kernel matches torch MPS's hand-tuned approach and reclaims a
+// fraction of the 2.5–2.8× gap.
+
+namespace {
+
+constexpr const char* kBnFwdReduceF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void bn_train_fwd_reduce_f32(
+    device const float* x      [[buffer(0)]],   // [N, C, H*W]
+    device       float* mean   [[buffer(1)]],   // [C]
+    device       float* rstd   [[buffer(2)]],   // [C]
+    constant uint& N           [[buffer(3)]],
+    constant uint& C           [[buffer(4)]],
+    constant uint& HW          [[buffer(5)]],
+    constant float& eps        [[buffer(6)]],
+    uint tid                   [[thread_position_in_threadgroup]],
+    uint tgid                  [[threadgroup_position_in_grid]],
+    uint tg_size               [[threads_per_threadgroup]],
+    uint simd_lane             [[thread_index_in_simdgroup]],
+    uint simd_id               [[simdgroup_index_in_threadgroup]])
+{
+    const uint c = tgid;
+    if (c >= C) return;
+    const uint N_total = N * HW;
+
+    // Per-thread strided accumulation along the channel's flattened
+    // (n, hw) axis.  Layout is x[n, c, hw] → idx = (n*C + c)*HW + hw.
+    float local_sum = 0.0f;
+    float local_sumsq = 0.0f;
+    for (uint i = tid; i < N_total; i += tg_size) {
+        uint n = i / HW;
+        uint hw = i - n * HW;
+        uint idx = (n * C + c) * HW + hw;
+        float v = x[idx];
+        local_sum   += v;
+        local_sumsq += v * v;
+    }
+
+    // Reduce within the SIMD group (32 lanes).
+    local_sum   = simd_sum(local_sum);
+    local_sumsq = simd_sum(local_sumsq);
+
+    // Stage per-simdgroup partials into threadgroup memory, then reduce
+    // across the 8 simdgroups (assumes ≤ 32 simdgroups / tg, which is
+    // the M-series cap).
+    threadgroup float tg_sum[32];
+    threadgroup float tg_sumsq[32];
+    if (simd_lane == 0) {
+        tg_sum[simd_id]   = local_sum;
+        tg_sumsq[simd_id] = local_sumsq;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (simd_id == 0) {
+        const uint n_simd_groups = (tg_size + 31u) / 32u;
+        float s  = simd_lane < n_simd_groups ? tg_sum[simd_lane]   : 0.0f;
+        float ss = simd_lane < n_simd_groups ? tg_sumsq[simd_lane] : 0.0f;
+        s  = simd_sum(s);
+        ss = simd_sum(ss);
+        if (simd_lane == 0) {
+            float inv_n = 1.0f / float(N_total);
+            float m = s * inv_n;
+            float var = ss * inv_n - m * m;
+            mean[c] = m;
+            rstd[c] = rsqrt(var + eps);
+        }
+    }
+}
+)MSL";
+
+constexpr const char* kBnFwdNormalizeF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void bn_train_fwd_normalize_f32(
+    device const float* x     [[buffer(0)]],   // [N, C, H*W]
+    device const float* mean  [[buffer(1)]],   // [C]
+    device const float* rstd  [[buffer(2)]],   // [C]
+    device const float* gamma [[buffer(3)]],   // [C]
+    device const float* beta  [[buffer(4)]],   // [C]
+    device       float* y     [[buffer(5)]],   // [N, C, H*W]
+    constant uint& C          [[buffer(6)]],
+    constant uint& HW         [[buffer(7)]],
+    constant uint& total      [[buffer(8)]],
+    uint gid                  [[thread_position_in_grid]])
+{
+    if (gid >= total) return;
+    // gid = (n * C + c) * HW + hw   →   c = (gid / HW) % C
+    uint n_c = gid / HW;
+    uint c   = n_c - (n_c / C) * C;
+    float xv = x[gid];
+    y[gid] = (xv - mean[c]) * rstd[c] * gamma[c] + beta[c];
+}
+)MSL";
+
+// Compute the per-channel stat shape (1, C, 1, ..., 1) for ndim
+// spatial dims — matches the existing MPSGraph ``batch_norm_train_forward``
+// layout so callers don't need a separate reshape.
+Shape bn_stat_full_shape(int channels, int ndim) {
+    Shape s;
+    s.reserve(2 + static_cast<std::size_t>(ndim));
+    s.push_back(1);
+    s.push_back(channels);
+    for (int i = 0; i < ndim; ++i) s.push_back(1);
+    return s;
+}
+
+}  // namespace
+
+BatchNormForwardOut bn_train_metal_forward(const Storage& x,
+                                           const Storage& gamma,
+                                           const Storage& beta,
+                                           int channels,
+                                           int ndim,
+                                           double eps,
+                                           const Shape& x_shape,
+                                           Dtype dt) {
+    if (dt != Dtype::F32) {
+        // F16 path: delegate to the MPSGraph composite (which already
+        // handles both dtypes).  F16 reduction needs higher-precision
+        // accumulators and a separate kernel pair — not in scope here.
+        return batch_norm_train_forward(x, gamma, beta, channels, ndim,
+                                        eps, x_shape, dt);
+    }
+
+    const auto& gx = std::get<GpuStorage>(x);
+    const auto& gg = std::get<GpuStorage>(gamma);
+    const auto& gb = std::get<GpuStorage>(beta);
+    if (!gx.arr || !gg.arr || !gb.arr)
+        throw std::runtime_error(
+            "mps::bn_train_metal_forward: input storage has no MLX array");
+
+    BufferView x_view  = array_to_buffer(*gx.arr);
+    BufferView g_view  = array_to_buffer(*gg.arr);
+    BufferView b_view  = array_to_buffer(*gb.arr);
+    id<MTLBuffer> x_buf = (__bridge id<MTLBuffer>)x_view.mtl_buffer;
+    id<MTLBuffer> g_buf = (__bridge id<MTLBuffer>)g_view.mtl_buffer;
+    id<MTLBuffer> b_buf = (__bridge id<MTLBuffer>)b_view.mtl_buffer;
+
+    id<MTLDevice> device =
+        (__bridge id<MTLDevice>)shared_mtl_device();
+    id<MTLCommandQueue> queue =
+        (__bridge id<MTLCommandQueue>)shared_mtl_queue();
+
+    // N = x_shape[0]; HW = product of spatial dims.
+    const std::uint32_t N32 = static_cast<std::uint32_t>(x_shape[0]);
+    const std::uint32_t C32 = static_cast<std::uint32_t>(channels);
+    std::uint32_t HW32 = 1;
+    for (int i = 0; i < ndim; ++i) {
+        HW32 *= static_cast<std::uint32_t>(x_shape[2 + i]);
+    }
+    const std::size_t total_numel = static_cast<std::size_t>(N32) *
+                                     static_cast<std::size_t>(C32) *
+                                     static_cast<std::size_t>(HW32);
+
+    // Output buffers: y same size as x, stat buffers shape (C,) but
+    // exposed as (1, C, 1, …, 1) via reshape on the MLX side.
+    const std::size_t y_bytes    = shape_nbytes(x_shape, dt);
+    const std::size_t stat_bytes = static_cast<std::size_t>(C32) * sizeof(float);
+
+    id<MTLBuffer> y_buf    =
+        [device newBufferWithLength:y_bytes
+                            options:MTLResourceStorageModeShared];
+    id<MTLBuffer> mean_buf =
+        [device newBufferWithLength:stat_bytes
+                            options:MTLResourceStorageModeShared];
+    id<MTLBuffer> rstd_buf =
+        [device newBufferWithLength:stat_bytes
+                            options:MTLResourceStorageModeShared];
+    if (!y_buf || !mean_buf || !rstd_buf)
+        throw std::runtime_error("mps::bn_train_metal_forward: MTLBuffer alloc failed");
+
+    const float eps_f = static_cast<float>(eps);
+
+    @autoreleasepool {
+        id<MTLComputePipelineState> pso_reduce = compile_custom_metal(
+            kBnFwdReduceF32MSL, @"bn_train_fwd_reduce_f32", device);
+        id<MTLComputePipelineState> pso_normalize = compile_custom_metal(
+            kBnFwdNormalizeF32MSL, @"bn_train_fwd_normalize_f32", device);
+
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+
+        // Pass 1: per-channel reduction → mean[C], rstd[C].
+        {
+            id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+            [enc setComputePipelineState:pso_reduce];
+            [enc setBuffer:x_buf    offset:0 atIndex:0];
+            [enc setBuffer:mean_buf offset:0 atIndex:1];
+            [enc setBuffer:rstd_buf offset:0 atIndex:2];
+            [enc setBytes:&N32 length:sizeof(N32)   atIndex:3];
+            [enc setBytes:&C32 length:sizeof(C32)   atIndex:4];
+            [enc setBytes:&HW32 length:sizeof(HW32) atIndex:5];
+            [enc setBytes:&eps_f length:sizeof(eps_f) atIndex:6];
+            // 1024 threads/group on the reduce path: each per-channel
+            // tile in large workloads (8 × 256² = 524288 elements)
+            // benefits from 4× more parallel SIMD lanes per channel,
+            // bringing the per-thread inner loop from 2048 → 512
+            // elements.
+            const NSUInteger tpg = std::min(
+                (NSUInteger)1024, pso_reduce.maxTotalThreadsPerThreadgroup);
+            MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+            // One threadgroup per channel.
+            MTLSize grid = MTLSizeMake(static_cast<NSUInteger>(C32), 1, 1);
+            [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+            [enc endEncoding];
+        }
+
+        // Pass 2: per-element normalize + affine.
+        {
+            id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+            [enc setComputePipelineState:pso_normalize];
+            [enc setBuffer:x_buf    offset:0 atIndex:0];
+            [enc setBuffer:mean_buf offset:0 atIndex:1];
+            [enc setBuffer:rstd_buf offset:0 atIndex:2];
+            [enc setBuffer:g_buf    offset:0 atIndex:3];
+            [enc setBuffer:b_buf    offset:0 atIndex:4];
+            [enc setBuffer:y_buf    offset:0 atIndex:5];
+            [enc setBytes:&C32 length:sizeof(C32)   atIndex:6];
+            [enc setBytes:&HW32 length:sizeof(HW32) atIndex:7];
+            std::uint32_t total_u32 = static_cast<std::uint32_t>(total_numel);
+            [enc setBytes:&total_u32 length:sizeof(total_u32) atIndex:8];
+            const NSUInteger tpg = std::min(
+                (NSUInteger)256, pso_normalize.maxTotalThreadsPerThreadgroup);
+            MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+            MTLSize grid = MTLSizeMake(
+                (total_numel + tpg - 1) / tpg, 1, 1);
+            [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+            [enc endEncoding];
+        }
+
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+
+    // Wrap buffers as MLX arrays.  ``y`` keeps the full x_shape; stat
+    // buffers get a broadcast shape (1, C, 1, …, 1) so downstream
+    // backward / normalisation reuses them without reshape.
+    void* y_raw    = (__bridge_retained void*)y_buf;
+    void* mean_raw = (__bridge_retained void*)mean_buf;
+    void* rstd_raw = (__bridge_retained void*)rstd_buf;
+
+    ::mlx::core::array y_arr = buffer_to_array(
+        y_raw, std::vector<int>(x_shape.begin(), x_shape.end()), dt);
+
+    const Shape stat_shape = bn_stat_full_shape(channels, ndim);
+    ::mlx::core::array mean_arr = buffer_to_array(
+        mean_raw, std::vector<int>(stat_shape.begin(), stat_shape.end()), dt);
+    ::mlx::core::array rstd_arr = buffer_to_array(
+        rstd_raw, std::vector<int>(stat_shape.begin(), stat_shape.end()), dt);
+
+    return BatchNormForwardOut{
+        Storage{gpu::wrap_mlx_array(std::move(y_arr), dt)},
+        Storage{gpu::wrap_mlx_array(std::move(mean_arr), dt)},
+        Storage{gpu::wrap_mlx_array(std::move(rstd_arr), dt)},
+    };
+}
+
 // ── GELU tanh-approx backward — fused MPSGraph kernel ─────────────────────
 
 namespace {

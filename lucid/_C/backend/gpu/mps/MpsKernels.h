@@ -389,6 +389,45 @@ BatchNormForwardOut batch_norm_train_forward(const Storage& x,
                                              const Shape& x_shape,
                                              Dtype dt);
 
+// BatchNorm training-mode forward via custom Metal compute kernels
+// (F32 only).
+//
+// Two-pass design: (1) per-channel reduce that materialises
+// ``mean[C]`` + ``rstd[C]`` using simdgroup_sum + threadgroup
+// staging; (2) elementwise normalize+affine ``y = (x-μ) * rstd * γ + β``.
+// Empirically faster than the MPSGraph composite above when the
+// reduction tile size is large (per-channel ``N×H×W`` ≥ ~64K
+// elements); the MPSGraph composite has framework overhead that
+// dominates on smaller channel tiles.
+//
+// Parameters
+// ----------
+// x, gamma, beta : const Storage&
+//     Same semantics as :func:`batch_norm_train_forward`.
+// channels, ndim, eps, x_shape, dt : same
+//     Same semantics.  ``dt`` must be ``F32`` — F16 falls back to
+//     the MPSGraph composite.
+//
+// Returns
+// -------
+// BatchNormForwardOut
+//     ``(y, mean, rstd)`` matching the MPSGraph variant's output
+//     layout — ``mean`` / ``rstd`` carry shape ``(1, C, 1, …, 1)``
+//     so backward can broadcast without an extra reshape.
+//
+// See Also
+// --------
+// :func:`should_dispatch_bn_train_metal` — dispatch gate.
+// :func:`batch_norm_train_forward` — MPSGraph fallback.
+BatchNormForwardOut bn_train_metal_forward(const Storage& x,
+                                           const Storage& gamma,
+                                           const Storage& beta,
+                                           int channels,
+                                           int ndim,
+                                           double eps,
+                                           const Shape& x_shape,
+                                           Dtype dt);
+
 // Bundle of BatchNorm train backward outputs.
 //
 // Attributes
