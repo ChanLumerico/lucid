@@ -250,6 +250,11 @@ bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt);
 // :func:`silu_backward` — the kernel that gets dispatched.
 bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt);
 
+// Dispatch SiLU forward / backward through a custom Metal compute
+// kernel (float4-vectorised, single pass).  Same shape gate as the
+// GELU Metal path: F32 only, numel ≥ 128K and numel % 4 == 0.
+bool should_dispatch_silu_metal(std::int64_t numel, Dtype dt);
+
 // Dispatch the embedding backward (``scatter_add`` along axis 0) to the
 // MPSGraph ``MPSGraphScatterModeAdd`` primitive instead of MLX's
 // ``scatter_add_axis`` composition.  MLX's path is 14 – 28× slower on

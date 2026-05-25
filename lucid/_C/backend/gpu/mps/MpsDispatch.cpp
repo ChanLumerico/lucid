@@ -158,6 +158,25 @@ bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt) {
     return false;
 }
 
+bool should_dispatch_silu_metal(std::int64_t numel, Dtype dt) {
+    (void)numel;
+    (void)dt;
+    if (!enabled()) return false;
+    // Measurement (2026-05-25, M4 Max F32 ffn-scale):
+    //   (8,1024,768)   fwd  Custom 1.82 ms  MLX 1.14 ms  (1.6× slower)
+    //   (8,1024,3072)  fwd  Custom 6.84 ms  MLX 3.67 ms  (1.9× slower)
+    //   bwd numbers parallel (custom 1.5-1.6× slower than MLX).
+    //
+    // Pattern note: custom Metal beats MLX on **deep** elementwise
+    // composites (GELU has 9 ops, custom Metal wins 1.9×).  SiLU is
+    // only 2 ops (sigmoid * x); MLX kernel-fuses both into a single
+    // kernel that's well-tuned for M-series, leaving no room for our
+    // single-pass custom kernel to amortise its dispatch overhead.
+    //
+    // Kernels kept in MpsKernels.mm as reference; default OFF.
+    return false;
+}
+
 bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt) {
     (void)axis_size;
     (void)dt;

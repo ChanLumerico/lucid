@@ -189,6 +189,20 @@ Storage silu_backward(const Storage& x,
                       const Shape& shape,
                       Dtype dt);
 
+// SiLU forward via a one-pass custom Metal compute kernel.
+// ``y = x * sigmoid(x) = x / (1 + exp(-x))``.  Same float4-vectorised
+// dispatcher (``metal_unary_f32``) as the GELU custom kernels.
+Storage silu_metal_forward(const Storage& x,
+                           const Shape& shape,
+                           Dtype dt);
+
+// SiLU backward via custom Metal kernel.  ``dy/dx = σ(x) · (1 +
+// x · (1 - σ(x)))``.
+Storage silu_metal_backward(const Storage& x,
+                            const Storage& grad,
+                            const Shape& shape,
+                            Dtype dt);
+
 // GELU exact (Gaussian-CDF) forward via fused MPSGraph kernel.
 //
 // Replaces the 10-op MLX composition of the erf-approximation

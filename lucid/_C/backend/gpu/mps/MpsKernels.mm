@@ -327,6 +327,44 @@ kernel void gelu_exact_bwd_f32(device const float4* x   [[buffer(0)]],
 }
 )MSL";
 
+// SiLU forward / backward — single-pass float4-vectorised kernels.
+// Math:
+//   silu(x)   = x * sigmoid(x) = x / (1 + exp(-x))
+//   silu'(x)  = σ(x) * (1 + x * (1 - σ(x)))   where σ = sigmoid
+constexpr const char* kSiluF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void silu_f32(device const float4* x   [[buffer(0)]],
+                     device float4*       y   [[buffer(1)]],
+                     constant uint&       n4  [[buffer(2)]],
+                     uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    float4 xv = x[gid];
+    float4 sig = 1.0f / (1.0f + exp(-xv));
+    y[gid] = xv * sig;
+}
+)MSL";
+
+constexpr const char* kSiluBwdF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+kernel void silu_bwd_f32(device const float4* x   [[buffer(0)]],
+                         device const float4* g   [[buffer(1)]],
+                         device float4*       dx  [[buffer(2)]],
+                         constant uint&       n4  [[buffer(3)]],
+                         uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    float4 xv = x[gid];
+    float4 gv = g[gid];
+    float4 sig = 1.0f / (1.0f + exp(-xv));
+    // dy/dx = sig * (1 + x * (1 - sig))
+    float4 dydx = sig * (1.0f + xv * (1.0f - sig));
+    dx[gid] = gv * dydx;
+}
+)MSL";
+
 constexpr const char* kGeluTanhBwdF32MSL = R"MSL(
 #include <metal_stdlib>
 using namespace metal;
@@ -677,6 +715,34 @@ Storage gelu_exact_metal_backward(const Storage& x, const Storage& grad,
         return out;
     }
     return gelu_exact_backward(x, grad, shape, dt);
+}
+
+// ── SiLU (Swish) custom Metal — uses metal_unary_f32/metal_binary_f32 ──
+
+Storage silu_metal_forward(const Storage& x, const Shape& shape, Dtype dt) {
+    Storage out = metal_unary_f32(x, shape, dt, kSiluF32MSL, @"silu_f32");
+    if (std::holds_alternative<GpuStorage>(out) &&
+        std::get<GpuStorage>(out).arr) {
+        return out;
+    }
+    // Fall through: caller already validated dt; this path is taken only
+    // when numel % 4 != 0.  MLX produces silu via a 2-op composite
+    // (sigmoid * x); the dispatch predicate ought to have screened the
+    // shape, but defend with a safe return.
+    throw std::runtime_error(
+        "mps::silu_metal_forward: numel % 4 != 0; caller must gate via "
+        "should_dispatch_silu_metal which already requires numel % 4 == 0");
+}
+
+Storage silu_metal_backward(const Storage& x, const Storage& grad,
+                            const Shape& shape, Dtype dt) {
+    Storage out = metal_binary_f32(x, grad, shape, dt,
+                                   kSiluBwdF32MSL, @"silu_bwd_f32");
+    if (std::holds_alternative<GpuStorage>(out) &&
+        std::get<GpuStorage>(out).arr) {
+        return out;
+    }
+    return silu_backward(x, grad, shape, dt);
 }
 
 // ── BatchNorm train forward — custom 2-pass Metal kernel ──────────────────

@@ -470,6 +470,11 @@ public:
     // --------
     // :meth:`silu_backward`.
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
+        std::int64_t numel = 1;
+        for (std::int64_t d : shape) numel *= d;
+        if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
+            return gpu::mps::silu_metal_forward(a, shape, dt);
+        }
         return mlx_unary(a, shape, dt,
                          [](auto& x) { return ::mlx::core::multiply(x, ::mlx::core::sigmoid(x)); });
     }
@@ -487,6 +492,9 @@ public:
         const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
+        if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
+            return gpu::mps::silu_metal_backward(a, grad, shape, dt);
+        }
         if (gpu::mps::should_dispatch_silu_backward(numel, dt)) {
             return gpu::mps::silu_backward(a, grad, shape, dt);
         }
