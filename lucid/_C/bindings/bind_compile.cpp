@@ -394,6 +394,48 @@ void register_compile(py::module_& m) {
         "with exactly the listed ids — used by CompiledModule to mask "
         "Python-discarded intermediates from the executable's output list.");
 
+    // Phase 1.10 AOT export: expose the previously-internal
+    // ``save_executable`` / ``load_executable`` C++ APIs as the
+    // Python-facing user surface.  Stable user-facing pickle / AOT
+    // serialisation now flows through these.
+    m.def(
+        "save_executable",
+        [](const std::shared_ptr<PyCompiledExecutable>& wrapper,
+           const std::string& path) -> bool {
+            if (!wrapper)
+                throw std::invalid_argument("save_executable: null wrapper");
+            return lucid::compile::save_executable(wrapper->raw(), path);
+        },
+        py::arg("executable"), py::arg("path"),
+        "Serialise the executable to ``<path>.mpsgraphpackage`` (Apple-native "
+        "MPSGraphExecutable archive, macOS 14+) and ``<path>.meta`` (Lucid I/O "
+        "plan).  Returns ``True`` on success.  Both files together constitute "
+        "one saved compile artifact — ``load_executable`` expects them paired.  "
+        "Same on-disk format as the internal ``LUCID_COMPILE_DISK_CACHE`` "
+        "path.  Throws on null wrapper; returns ``False`` on I/O / "
+        "serialisation failure.");
+
+    m.def(
+        "load_executable",
+        [](const std::string& path) -> py::object {
+            std::string err;
+            lucid::compile::CompiledExecutable* exe =
+                lucid::compile::load_executable(path, &err);
+            if (exe == nullptr) {
+                if (!err.empty()) throw std::runtime_error(err);
+                return py::none();
+            }
+            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+        },
+        py::arg("path"),
+        "Reload a CompiledExecutable previously saved via "
+        "``save_executable(executable, path)``.  Expects both "
+        "``<path>.mpsgraphpackage`` and ``<path>.meta`` to exist.  Returns "
+        "the executable on success, ``None`` on missing files / format "
+        "mismatch; throws on a corrupted .meta sidecar.  ABI-version mismatch "
+        "(SDK or engine bump) is rejected at load time — callers must "
+        "recompile from the source trace.");
+
     // Phase 1.3: forward + backward in one executable.
     m.def(
         "compile_trace_with_backward",

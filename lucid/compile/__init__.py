@@ -72,7 +72,175 @@ __all__ = [
     "fused_step",
     "CompiledModule",
     "make_step",
+    "save_compiled",
+    "load_compiled",
 ]
+
+
+def save_compiled(cm: object, path: str) -> bool:
+    """Serialise a compiled forward graph to disk (AOT export).
+
+    Writes two files at ``path``: ``<path>.mpsgraphpackage`` (Apple's
+    native MPSGraphExecutable archive, macOS 14+) and ``<path>.meta``
+    (Lucid's I/O plan + dtype / shape / ABI metadata).  A
+    :class:`CompiledModule` may hold multiple cached executables (one
+    per input signature); this entry point currently serialises the
+    most-recently-compiled signature only — sufficient for AOT
+    deployment where the production input shape is fixed.
+
+    The on-disk artifact is identical to the per-process cache used
+    when ``LUCID_COMPILE_DISK_CACHE=1`` is set — so calls
+    ``save_compiled`` produces by hand are loadable by either
+    :func:`load_compiled` or the runtime cache machinery.
+
+    Parameters
+    ----------
+    cm : CompiledModule
+        A model wrapper returned by :func:`lucid.compile`.  Must have
+        been invoked at least once so an executable exists to save.
+    path : str
+        Filesystem prefix.  Two files are written:
+        ``f"{path}.mpsgraphpackage"`` and ``f"{path}.meta"``.
+
+    Returns
+    -------
+    bool
+        ``True`` on success.  Raises :class:`RuntimeError` if ``cm``
+        has no compiled entries (call the module once with the
+        target input first).
+
+    Examples
+    --------
+    >>> import lucid, lucid.nn as nn
+    >>> import lucid.compile as lc
+    >>> m = nn.Linear(8, 4).to("metal")
+    >>> cm = lc.compile(m)
+    >>> _ = cm(lucid.randn(2, 8).to("metal"))   # populate cache
+    >>> lc.save_compiled(cm, "/tmp/my_linear")   # writes .mpsgraphpackage + .meta
+    True
+
+    See Also
+    --------
+    :func:`load_compiled` — read back the artifact written here.
+    :class:`CompiledModule` — the wrapper holding the cache being saved.
+    """
+    from lucid._C import engine as _C_engine
+
+    # The CompiledModule cache is a dict[CacheKey, _CacheEntry];
+    # ``_CacheEntry`` holds an opaque ``exe`` PyCompiledExecutable.
+    if not hasattr(cm, "_cache") or not cm._cache:
+        raise RuntimeError(
+            "save_compiled: the CompiledModule has no compiled entries "
+            "yet.  Call the module once on the target input before "
+            "saving so the cache is populated."
+        )
+    # Pick the most-recently-inserted entry (dict insertion order).
+    entry = next(reversed(cm._cache.values()))
+    return bool(
+        _C_engine.compile.save_executable(entry.exe, path)
+    )
+
+
+def load_compiled(path: str) -> object:
+    """Load a previously-saved compiled executable into a thin wrapper.
+
+    Returns an object exposing ``__call__(*args)`` that runs the saved
+    executable directly.  **The executable expects every feed in
+    feed order** — that includes both model parameters and runtime
+    inputs.  This is the raw artifact level: there is no automatic
+    parameter re-binding, because the saved package does not carry the
+    parameter *values* (only the graph structure + I/O ids).
+
+    For a smoother AOT workflow that re-binds parameters from a live
+    model, see :func:`load_compiled_into`.
+
+    Parameters
+    ----------
+    path : str
+        Filesystem prefix matching a previous :func:`save_compiled`
+        call.  Expects both ``<path>.mpsgraphpackage`` and
+        ``<path>.meta`` to exist.
+
+    Returns
+    -------
+    object
+        A callable wrapper.  Attributes:
+
+        * ``num_inputs``: total feed count the executable expects.
+        * ``input_ids``: ordered trace ids (debug / introspection).
+        * ``__call__(*feeds)``: run with feeds in ``input_ids`` order.
+
+    Raises
+    ------
+    FileNotFoundError
+        Either ``.mpsgraphpackage`` or ``.meta`` is missing.
+    RuntimeError
+        The ``.meta`` sidecar is corrupted, the SDK ABI mismatches,
+        or the saved executable references engine internals that no
+        longer exist.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.compile as lc
+    >>> step = lc.load_compiled("/tmp/my_linear")
+    >>> step.num_inputs                 # doctest: +SKIP
+    3                                    # e.g. (W, b, x)
+    >>> out = step(W, b, x)             # all feeds in order  # doctest: +SKIP
+
+    See Also
+    --------
+    :func:`save_compiled` — corresponding writer.
+    """
+    import os
+
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    pkg_path = f"{path}.mpsgraphpackage"
+    meta_path = f"{path}.meta"
+    if not os.path.exists(pkg_path) or not os.path.exists(meta_path):
+        raise FileNotFoundError(
+            f"load_compiled: missing artifact at {path!r} — expected both "
+            f"{pkg_path!r} and {meta_path!r}."
+        )
+    exe = _C_engine.compile.load_executable(path)
+    if exe is None:
+        raise RuntimeError(
+            f"load_compiled: failed to deserialise {path!r} — likely an "
+            "ABI / format-version mismatch.  Recompile the model from "
+            "source."
+        )
+
+    class _LoadedExecutable:
+        """Thin wrapper that runs the deserialised executable."""
+
+        def __init__(self, exe: object) -> None:
+            self._exe = exe
+            self.num_inputs = exe.num_inputs
+            self.input_ids = list(exe.input_ids)
+            self.output_ids = list(exe.output_ids)
+
+        def __call__(self, *args: object) -> object:
+            if len(args) != self.num_inputs:
+                raise ValueError(
+                    f"load_compiled wrapper: expected {self.num_inputs} feeds "
+                    f"in input_ids order (got {len(args)}).  The saved "
+                    f"executable was compiled with these feed ids: "
+                    f"{self.input_ids}.  Typical use: pass model.parameters() "
+                    f"followed by runtime inputs in the order they appeared "
+                    f"during the original trace."
+                )
+            feeds = [_unwrap(a) for a in args]
+            outs = _C_engine.compile.run_executable(self._exe, feeds)
+            wrapped = [_wrap(o) for o in outs]
+            if not wrapped:
+                return None
+            if len(wrapped) == 1:
+                return wrapped[0]
+            return tuple(wrapped)
+
+    return _LoadedExecutable(exe)
 
 
 def __getattr__(name: str) -> object:
