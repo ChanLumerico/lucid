@@ -126,16 +126,22 @@ def make_step(
     from lucid.compile._fallback import EagerFallbackSet, run_eager
     from lucid.compile._signature import signature_of
 
-    # Phase 1.6 dynamic-batch is deferred to 3.5.1 — see the matching
-    # guard in :class:`CompiledModule`.  Backward graphs through
-    # ``gradientForPrimaryTensor:`` reject dynamic-shape primaries
-    # outright, so make_step in particular cannot honour the flag.
-    if dynamic:
+    # Phase 1.6 dynamic-batch: gated behind ``LUCID_COMPILE_DYNAMIC=1``
+    # alongside the matching surface in :class:`CompiledModule`.  Until
+    # macOS 25 ``gradientForPrimaryTensor:`` aborted on symbolic-shape
+    # primaries; reopened 2026-05-25 to characterise the macOS 26
+    # / MPSGraph SDK state.  Falls back to NotImplementedError unless
+    # the env opt-in is set.
+    import os as _os_step
+    _dyn_opt_in = _os_step.environ.get(
+        "LUCID_COMPILE_DYNAMIC", "0",
+    ) in ("1", "true", "True")
+    if dynamic and not _dyn_opt_in:
         raise NotImplementedError(
-            "lucid.compile.make_step(..., dynamic=True) is deferred to "
-            "3.5.1.  MPSGraph's gradientForPrimaryTensor: refuses to "
-            "build backward for symbolic-shape primaries; use static "
-            "shapes and let the per-BS cache populate."
+            "lucid.compile.make_step(..., dynamic=True) is gated behind "
+            "LUCID_COMPILE_DYNAMIC=1 while macOS 26's MPSGraph backward "
+            "support for symbolic-shape primaries is being characterised. "
+            "Set the env var to opt in; otherwise use static shapes."
         )
 
     cache: dict[Any, _StepEntry] = {}

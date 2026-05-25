@@ -348,17 +348,22 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
 
         // Wrap each output MTLBuffer back into a GpuStorage-backed
         // TensorImpl.  ``__bridge_retained`` transfers the strong ref
-        // into the MLX deleter.
+        // into the MLX deleter.  Phase 1.6 dynamic-batch: use the
+        // per-call ``realized_output_shapes`` (leading axis rewritten
+        // to the current BS) instead of the trace-time shape — failing
+        // to do so leaves the wrapped Tensor reporting the trace BS
+        // while the MTLBuffer holds run-time-BS data, truncating the
+        // user's view of the result.
         for (std::size_t j = 0; j < total_outs; ++j) {
             void* raw = (__bridge_retained void*)out_bufs[j];
-            std::vector<int> mlx_shape(exe->output_shapes[j].begin(),
-                                       exe->output_shapes[j].end());
+            const Shape& wrap_shape = realized_output_shapes[j];
+            std::vector<int> mlx_shape(wrap_shape.begin(), wrap_shape.end());
             ::mlx::core::array arr = lucid::gpu::mps::buffer_to_array(
                 raw, std::move(mlx_shape), exe->output_dtypes[j]);
             GpuStorage gs;
             gs.arr = std::make_shared<::mlx::core::array>(std::move(arr));
             outputs.push_back(std::make_shared<TensorImpl>(
-                Storage{std::move(gs)}, exe->output_shapes[j], exe->output_dtypes[j],
+                Storage{std::move(gs)}, wrap_shape, exe->output_dtypes[j],
                 Device::GPU, false));
         }
     }
@@ -458,6 +463,20 @@ LUCID_API void run_executable_inplace(
             if (impl->device() != Device::GPU)
                 throw std::invalid_argument(
                     "run_executable_inplace: input feed not on GPU");
+            // Phase 1.6 follow-up: ``run_executable_inplace`` only
+            // supports static-batch executables (caller must rebuild
+            // when the per-call shape changes), so any feed whose
+            // shape diverges from the trace-time shape would either
+            // produce silently-truncated results or write past the
+            // output buffer.  Reject the call up front with a clear
+            // message instead.
+            if (impl->shape() != exe->input_shapes[i])
+                throw std::invalid_argument(
+                    "run_executable_inplace: input feed shape mismatch at "
+                    "slot " + std::to_string(i) +
+                    " (expected the trace-time shape; got a different shape "
+                    "— recompile the executable for the new shape, or use "
+                    "the dynamic forward path).");
             const auto& gs = std::get<GpuStorage>(impl->storage());
             if (!gs.arr)
                 throw std::runtime_error(

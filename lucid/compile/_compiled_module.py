@@ -321,19 +321,24 @@ class CompiledModule:
         NotImplementedError
             When ``dynamic=True`` is passed.
         """
-        # Phase 1.6 (symbolic batch axis) is deferred to 3.5.1.  The
-        # underlying MPSGraph SDK rejects dynamic-shape lowering for
-        # conv-heavy graphs (MLIR pass manager abort) and emits
-        # numerically incorrect results for some op families even on
-        # MLP-style graphs.  ``dynamic=True`` is therefore a planned
-        # surface that is intentionally locked off — better to raise
-        # at construction time than silently return wrong gradients.
-        if dynamic:
+        # Phase 1.6 (symbolic batch axis): the C++ side (compile_or_cached
+        # / compile_trace) already accepts ``dynamic_batch=True``.  Until
+        # macOS 25 the MPSGraph SDK aborted on conv-heavy graphs (MLIR
+        # pass manager) and drifted numerically on MLP placeholders, so
+        # this surface stayed locked off.  Re-enabled 2026-05-25 behind
+        # ``LUCID_COMPILE_DYNAMIC=1`` opt-in to characterize the macOS
+        # 26 / MPSGraph SDK state — flip the default to ``True`` once
+        # the model-zoo regression sweep is clean.
+        import os as _os
+        _dyn_opt_in = _os.environ.get(
+            "LUCID_COMPILE_DYNAMIC", "0",
+        ) in ("1", "true", "True")
+        if dynamic and not _dyn_opt_in:
             raise NotImplementedError(
-                "lucid.compile(..., dynamic=True) is deferred to 3.5.1. "
-                "MPSGraph's symbolic-shape lowering is too unstable to be "
-                "production-safe (MLIR abort on conv-heavy graphs; "
-                "numerical drift on dynamic placeholders).  Use a static "
+                "lucid.compile(..., dynamic=True) is gated behind "
+                "LUCID_COMPILE_DYNAMIC=1 while macOS 26's MPSGraph "
+                "symbolic-shape support is being characterised.  "
+                "Set the env var to opt in; otherwise use a static "
                 "shape and let the per-BS cache populate organically — "
                 "the cache entry per shape is cheap because MPSGraph's "
                 "own kernel cache is shared across them."
@@ -342,7 +347,7 @@ class CompiledModule:
         # inner model is NOT registered as a submodule (otherwise
         # parameters / state_dict double-count).
         object.__setattr__(self, "_model", model)
-        object.__setattr__(self, "_dynamic", False)
+        object.__setattr__(self, "_dynamic", bool(dynamic))
         object.__setattr__(self, "_cache", {})  # type: ignore[var-annotated]
         object.__setattr__(self, "_eager_only", EagerFallbackSet())
         object.__setattr__(self, "_call_counter", {})  # type: ignore[var-annotated]
