@@ -46,6 +46,60 @@ namespace lucid::gpu::mps {
 // :func:`gelu_exact_forward` — Gaussian-CDF variant.
 Storage gelu_forward(const Storage& x, const Shape& shape, Dtype dt);
 
+// GELU forward via a one-pass custom Metal compute kernel (tanh
+// approximation, F32 only).
+//
+// Empirically the MPSGraph 9-op build above produces no measurable
+// speedup vs MLX (both fuse into ~the same multi-op chain on
+// M-series).  This kernel matches torch MPS's hand-tuned approach:
+// read x once, evaluate the closed-form in registers, write y once.
+// Routed when ``should_dispatch_gelu_metal`` returns true.
+//
+// Parameters
+// ----------
+// x : const Storage&
+//     Input activation tensor (GpuStorage, F32 only).
+// shape : const Shape&
+//     Logical shape of ``x``.
+// dt : Dtype
+//     Element dtype.  Non-F32 silently falls back to
+//     :func:`gelu_forward` (MPSGraph composite).
+//
+// Returns
+// -------
+// Storage
+//     Fresh GPU result identical in shape + dtype to ``x``.
+//
+// See Also
+// --------
+// :func:`gelu_metal_backward` — corresponding backward.
+// :func:`should_dispatch_gelu_metal` — dispatch gate.
+Storage gelu_metal_forward(const Storage& x, const Shape& shape, Dtype dt);
+
+// GELU backward via a one-pass custom Metal compute kernel (tanh
+// approximation, F32 only).  Same rationale as
+// :func:`gelu_metal_forward`.
+//
+// Parameters
+// ----------
+// x : const Storage&
+//     Original forward input.
+// grad : const Storage&
+//     Upstream gradient.
+// shape : const Shape&
+//     Logical shape.
+// dt : Dtype
+//     Element dtype.
+//
+// Returns
+// -------
+// Storage
+//     Gradient w.r.t. ``x``.
+Storage gelu_metal_backward(const Storage& x,
+                            const Storage& grad,
+                            const Shape& shape,
+                            Dtype dt);
+
 // GELU backward (tanh approximation).
 //
 // Fused MPSGraph evaluation of the derivative of the tanh

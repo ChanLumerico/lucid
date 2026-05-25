@@ -57,7 +57,25 @@ bool should_dispatch_gelu(std::int64_t numel, Dtype dt) {
     // Phase 0 measurement: GELU is 13–31× slower on MLX across every shape
     // (transformer_acts, ffn-big, rn18 activations).  Universal dispatch
     // until Phase 4 measurement shows a regime where MLX wins.
-    return enabled();
+    //
+    // 2026-05-25 rebench correction: the 13-31× gap was an artifact of
+    // MLX lazy graph (perf-baseline-rebench-2026-05-25).  Real gap is
+    // 3.83× on ffn_big, but the existing MPSGraph 9-op composite below
+    // **doesn't help** (1.07× vs MLX = noise; 0.91× = mild regression
+    // on fwd).  Route through ``should_dispatch_gelu_metal`` instead —
+    // the custom Metal kernel matches torch MPS.  Keep this predicate
+    // returning false so the MPSGraph build is no longer used by default.
+    return false;
+}
+
+bool should_dispatch_gelu_metal(std::int64_t numel, Dtype dt) {
+    if (!enabled()) return false;
+    if (dt != Dtype::F32) return false;
+    // Small inputs: the compute-pass setup cost dominates the per-element
+    // gain.  Threshold at 128K elements (≈ 1 transformer head's
+    // sequence on a small model) — below this the MLX composite is
+    // already fine.  Tune in Phase 4 if needed.
+    return numel >= (1LL << 17);
 }
 
 bool should_dispatch_gelu_exact(std::int64_t numel, Dtype dt) {

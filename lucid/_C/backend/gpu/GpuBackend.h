@@ -524,8 +524,16 @@ public:
         // 3.4 Phase 2 pilot: dispatch to MPSGraph when policy allows.  MLX
         // path stays bit-for-bit identical below.  Per-op shortlist:
         // obsidian/perf/perf-mpsgraph-shortlist-2026-05.md.
+        //
+        // 2026-05-25: custom Metal compute kernel is the primary fast path
+        // — the MPSGraph 9-op composite produces no measurable speedup
+        // vs MLX, but a single-pass MSL kernel does (matches torch MPS).
+        // See perf-baseline-rebench-2026-05-25.md.
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
+        if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
+            return gpu::mps::gelu_metal_forward(a, shape, dt);
+        }
         if (gpu::mps::should_dispatch_gelu(numel, dt)) {
             return gpu::mps::gelu_forward(a, shape, dt);
         }
@@ -600,6 +608,9 @@ public:
     gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
+        if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
+            return gpu::mps::gelu_metal_backward(a, grad, shape, dt);
+        }
         if (gpu::mps::should_dispatch_gelu(numel, dt)) {
             return gpu::mps::gelu_backward(a, grad, shape, dt);
         }

@@ -68,6 +68,33 @@ bool debug_enabled();
 // :func:`should_dispatch_gelu_exact` — Gaussian-CDF variant.
 bool should_dispatch_gelu(std::int64_t numel, Dtype dt);
 
+// Dispatch the GELU (tanh approximation) through a custom Metal
+// compute kernel instead of the 9-op MPSGraph composite.  The
+// composite produces no measurable speedup vs MLX on M-series; a
+// single-pass MSL kernel matches torch MPS's ~4× win on
+// transformer-scale activations.
+//
+// Parameters
+// ----------
+// numel : std::int64_t
+//     Total element count.  Small inputs (under ~128K elements) skip
+//     dispatch because the compute-pass setup cost dominates.
+// dt : Dtype
+//     Element dtype.  Only ``F32`` is currently supported by the MSL
+//     kernel; other dtypes return ``false`` and fall back to the MLX
+//     composite.
+//
+// Returns
+// -------
+// bool
+//     ``true`` if the custom Metal path should be used.
+//
+// See Also
+// --------
+// :func:`gelu_metal_forward` / :func:`gelu_metal_backward` — the
+// kernels.
+bool should_dispatch_gelu_metal(std::int64_t numel, Dtype dt);
+
 // Always dispatch GELU exact (Gaussian-CDF) through MPSGraph.
 //
 // The MLX path composes erf via a 10-op approximation chain; MPSGraph

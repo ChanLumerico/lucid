@@ -200,6 +200,265 @@ Storage gelu_forward(const Storage& x, const Shape& shape, Dtype dt) {
     return Storage{gpu::wrap_mlx_array(std::move(out_arr), dt)};
 }
 
+// ── GELU tanh-approx — custom Metal compute kernel ────────────────────────
+//
+// The MPSGraph 9-op composite above produces no measurable speedup vs
+// MLX (both compile down to roughly the same multi-op kernel chain on
+// M-series).  Torch MPS reaches ~4× faster on (8, 1024, 3072) by
+// dispatching a single hand-tuned Metal kernel.  We match that with
+// a one-pass MSL kernel below: read x once, evaluate GELU in registers,
+// write y once.  Threadgroup geometry tuned to 256 threads/group
+// (default M-series sweet spot for memory-bound elementwise ops).
+//
+// Falls back to the MPSGraph build above via the dispatch predicate
+// when the env-gated metal path is disabled.
+
+namespace {
+
+// MSL source for the tanh-approximation GELU.  Single kernel, in-register
+// arithmetic.  The function symbol is ``gelu_tanh_f32`` (we currently
+// only ship the F32 variant; the F16 variant is straight-line if added
+// later).
+constexpr const char* kGeluTanhF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+// Vectorised: process 4 elements per thread via float4 loads / stores.
+// One float4 = 16 bytes, matches the natural alignment of MTLBuffer
+// allocations.  Per-thread elements / vector width = 4, so the dispatch
+// grid is shrunk 4× and the thread count drops accordingly.
+kernel void gelu_tanh_f32(device const float4* x   [[buffer(0)]],
+                          device float4*       y   [[buffer(1)]],
+                          constant uint&       n4  [[buffer(2)]],
+                          uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    const float k1 = 0.7978845608028654f;
+    const float k2 = 0.044715f;
+    float4 xv = x[gid];
+    float4 x2 = xv * xv;
+    float4 x3 = x2 * xv;
+    float4 inner = k1 * (xv + k2 * x3);
+    float4 t = tanh(inner);
+    y[gid] = 0.5f * xv * (1.0f + t);
+}
+)MSL";
+
+// MSL source for the tanh-approximation GELU backward.  Reads x AND
+// grad_out, writes grad_in.
+constexpr const char* kGeluTanhBwdF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+// Vectorised float4 version of the GELU-tanh backward.
+kernel void gelu_tanh_bwd_f32(device const float4* x   [[buffer(0)]],
+                              device const float4* g   [[buffer(1)]],
+                              device float4*       dx  [[buffer(2)]],
+                              constant uint&       n4  [[buffer(3)]],
+                              uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    const float k1 = 0.7978845608028654f;
+    const float k2 = 0.044715f;
+    float4 xv = x[gid];
+    float4 gv = g[gid];
+    float4 x2 = xv * xv;
+    float4 x3 = x2 * xv;
+    float4 inner = k1 * (xv + k2 * x3);
+    float4 t = tanh(inner);
+    float4 t2 = t * t;
+    float4 term1 = 0.5f * (1.0f + t);
+    float4 dinner = k1 * (1.0f + 3.0f * k2 * x2);
+    float4 term2 = 0.5f * xv * (1.0f - t2) * dinner;
+    dx[gid] = gv * (term1 + term2);
+}
+)MSL";
+
+struct MetalPipelineEntry {
+    id<MTLComputePipelineState> pso = nil;
+    id<MTLLibrary> lib = nil;
+};
+
+// Single per-process cache for our custom Metal kernels — key is the
+// MSL function name.  Compilation happens once on first use.
+NSMutableDictionary<NSString*, NSValue*>* custom_metal_cache(void) {
+    static dispatch_once_t once;
+    static NSMutableDictionary* cache;
+    dispatch_once(&once, ^{ cache = [NSMutableDictionary new]; });
+    return cache;
+}
+
+id<MTLComputePipelineState>
+compile_custom_metal(const char* msl_src, NSString* fn_name,
+                     id<MTLDevice> device) {
+    NSMutableDictionary* cache = custom_metal_cache();
+    @synchronized(cache) {
+        NSValue* hit = cache[fn_name];
+        if (hit) {
+            return (__bridge id<MTLComputePipelineState>)hit.pointerValue;
+        }
+        NSError* err = nil;
+        NSString* src = [NSString stringWithUTF8String:msl_src];
+        id<MTLLibrary> lib =
+            [device newLibraryWithSource:src options:nil error:&err];
+        if (!lib) {
+            throw std::runtime_error(
+                std::string("mps::compile_custom_metal: ") +
+                [fn_name UTF8String] + ": " +
+                (err ? [err.localizedDescription UTF8String] : "no library"));
+        }
+        id<MTLFunction> fn = [lib newFunctionWithName:fn_name];
+        if (!fn) {
+            throw std::runtime_error(
+                std::string("mps::compile_custom_metal: function not found: ") +
+                [fn_name UTF8String]);
+        }
+        id<MTLComputePipelineState> pso =
+            [device newComputePipelineStateWithFunction:fn error:&err];
+        if (!pso) {
+            throw std::runtime_error(
+                std::string("mps::compile_custom_metal: pipeline state failed: ") +
+                (err ? [err.localizedDescription UTF8String] : "unknown"));
+        }
+        // Retain so the cache holds a live reference.  Using NSValue
+        // pointerValue with __bridge_retained keeps the pso alive until
+        // process exit (acceptable — cache is process-lifetime).
+        cache[fn_name] = [NSValue valueWithPointer:(__bridge_retained void*)pso];
+        return pso;
+    }
+}
+
+// Shared single-input / single-output unary launcher for our custom
+// GELU forward kernel.  Zero-copy input via array_to_buffer.
+Storage gelu_metal_forward_impl(const Storage& x, const Shape& shape,
+                                Dtype dt) {
+    if (dt != Dtype::F32) {
+        // Fall back to MPSGraph composite for non-F32 (F16 path not yet
+        // ported to MSL; caller checks should_dispatch_gelu and routes
+        // accordingly).
+        return gelu_forward(x, shape, dt);
+    }
+    const auto& gx = std::get<GpuStorage>(x);
+    if (!gx.arr)
+        throw std::runtime_error("mps::gelu_metal_forward: input has no MLX array");
+    BufferView in_view = array_to_buffer(*gx.arr);
+    id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)in_view.mtl_buffer;
+    id<MTLDevice> device =
+        (__bridge id<MTLDevice>)shared_mtl_device();
+    id<MTLCommandQueue> queue =
+        (__bridge id<MTLCommandQueue>)shared_mtl_queue();
+
+    std::size_t numel = 1;
+    for (auto d : shape) numel *= static_cast<std::size_t>(d);
+    // Vectorised kernel needs numel divisible by 4.  Fall back to the
+    // MPSGraph composite when this constraint fails (rare for typical
+    // transformer shapes where the trailing dim is a multiple of 4).
+    if (numel % 4 != 0) {
+        return gelu_forward(x, shape, dt);
+    }
+    const std::size_t n4 = numel / 4;
+    const std::size_t out_nbytes = shape_nbytes(shape, dt);
+    id<MTLBuffer> out_buf =
+        [device newBufferWithLength:out_nbytes
+                            options:MTLResourceStorageModeShared];
+    if (!out_buf)
+        throw std::runtime_error("mps::gelu_metal_forward: MTLBuffer alloc failed");
+
+    @autoreleasepool {
+        id<MTLComputePipelineState> pso =
+            compile_custom_metal(kGeluTanhF32MSL, @"gelu_tanh_f32", device);
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+        [enc setComputePipelineState:pso];
+        [enc setBuffer:in_buf offset:0 atIndex:0];
+        [enc setBuffer:out_buf offset:0 atIndex:1];
+        uint32_t n4_u32 = static_cast<uint32_t>(n4);
+        [enc setBytes:&n4_u32 length:sizeof(uint32_t) atIndex:2];
+        // 256 threads/threadgroup — M-series default sweet spot.  Each
+        // thread processes one float4 = 4 elements.
+        const NSUInteger tpg = std::min(
+            (NSUInteger)256, pso.maxTotalThreadsPerThreadgroup);
+        MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+        MTLSize grid = MTLSizeMake((n4 + tpg - 1) / tpg, 1, 1);
+        [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+        [enc endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+
+    void* out_buf_raw = (__bridge_retained void*)out_buf;
+    ::mlx::core::array out_arr = buffer_to_array(
+        out_buf_raw, std::vector<int>(shape.begin(), shape.end()), dt);
+    return Storage{gpu::wrap_mlx_array(std::move(out_arr), dt)};
+}
+
+Storage gelu_metal_backward_impl(const Storage& x, const Storage& grad,
+                                 const Shape& shape, Dtype dt) {
+    if (dt != Dtype::F32) {
+        return gelu_backward(x, grad, shape, dt);
+    }
+    const auto& gx = std::get<GpuStorage>(x);
+    const auto& gg = std::get<GpuStorage>(grad);
+    if (!gx.arr || !gg.arr)
+        throw std::runtime_error("mps::gelu_metal_backward: input has no MLX array");
+    BufferView x_view = array_to_buffer(*gx.arr);
+    BufferView g_view = array_to_buffer(*gg.arr);
+    id<MTLBuffer> x_buf = (__bridge id<MTLBuffer>)x_view.mtl_buffer;
+    id<MTLBuffer> g_buf = (__bridge id<MTLBuffer>)g_view.mtl_buffer;
+    id<MTLDevice> device =
+        (__bridge id<MTLDevice>)shared_mtl_device();
+    id<MTLCommandQueue> queue =
+        (__bridge id<MTLCommandQueue>)shared_mtl_queue();
+
+    std::size_t numel = 1;
+    for (auto d : shape) numel *= static_cast<std::size_t>(d);
+    if (numel % 4 != 0) {
+        return gelu_backward(x, grad, shape, dt);
+    }
+    const std::size_t n4 = numel / 4;
+    const std::size_t out_nbytes = shape_nbytes(shape, dt);
+    id<MTLBuffer> dx_buf =
+        [device newBufferWithLength:out_nbytes
+                            options:MTLResourceStorageModeShared];
+    if (!dx_buf)
+        throw std::runtime_error("mps::gelu_metal_backward: MTLBuffer alloc failed");
+
+    @autoreleasepool {
+        id<MTLComputePipelineState> pso =
+            compile_custom_metal(kGeluTanhBwdF32MSL, @"gelu_tanh_bwd_f32", device);
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+        [enc setComputePipelineState:pso];
+        [enc setBuffer:x_buf offset:0 atIndex:0];
+        [enc setBuffer:g_buf offset:0 atIndex:1];
+        [enc setBuffer:dx_buf offset:0 atIndex:2];
+        uint32_t n4_u32 = static_cast<uint32_t>(n4);
+        [enc setBytes:&n4_u32 length:sizeof(uint32_t) atIndex:3];
+        const NSUInteger tpg = std::min(
+            (NSUInteger)256, pso.maxTotalThreadsPerThreadgroup);
+        MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+        MTLSize grid = MTLSizeMake((n4 + tpg - 1) / tpg, 1, 1);
+        [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+        [enc endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+
+    void* out_buf_raw = (__bridge_retained void*)dx_buf;
+    ::mlx::core::array out_arr = buffer_to_array(
+        out_buf_raw, std::vector<int>(shape.begin(), shape.end()), dt);
+    return Storage{gpu::wrap_mlx_array(std::move(out_arr), dt)};
+}
+
+}  // namespace
+
+// Public wrappers — pick up the env-gated custom-Metal path.
+Storage gelu_metal_forward(const Storage& x, const Shape& shape, Dtype dt) {
+    return gelu_metal_forward_impl(x, shape, dt);
+}
+Storage gelu_metal_backward(const Storage& x, const Storage& grad,
+                            const Shape& shape, Dtype dt) {
+    return gelu_metal_backward_impl(x, grad, shape, dt);
+}
+
 // ── GELU tanh-approx backward — fused MPSGraph kernel ─────────────────────
 
 namespace {
