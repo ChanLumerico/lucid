@@ -415,4 +415,54 @@ Storage softmax_backward(const Storage& z,
                          const Shape& shape,
                          Dtype dt);
 
+// Embedding backward — scatter-add gradient rows into the weight grad
+// table via a single fused MPSGraph kernel.
+//
+// Replaces the MLX ``scatter_add_axis`` composition inside
+// :meth:`GpuBackend::embedding_backward` with MPSGraph's native
+// ``MPSGraphScatterModeAdd`` primitive.  The MPS path is ~28× faster
+// on GPT-2-scale inputs (M_total × D ≥ 6M) per
+// ``perf-mlx-op-baseline-2026-05.md``; gated behind
+// :func:`should_dispatch_embedding_backward`.
+//
+// Parameters
+// ----------
+// grad_out : const Storage&
+//     Upstream gradient, shape ``indices_shape + (D,)`` flattened to
+//     ``(M_total, D)`` internally.
+// indices : const Storage&
+//     Integer indices into the embedding table, shape
+//     ``indices_shape``.  Flattened to ``(M_total,)`` internally.
+//     Dtype is int64 (auto-cast inside the kernel if needed).
+// N : std::int64_t
+//     Vocabulary size — first dim of the weight table.  Defines the
+//     output rows of ``dW``.
+// D : std::int64_t
+//     Embedding dimension — second dim of the weight table.
+// M_total : std::int64_t
+//     Product of ``indices_shape``.  The number of scatter rows.
+// padding_idx : int
+//     If ``>= 0``, rows of ``grad_out`` whose corresponding index
+//     equals ``padding_idx`` are zeroed before the scatter-add (so
+//     the padding row of ``dW`` stays at zero).  ``< 0`` disables
+//     the mask.
+// dt : Dtype
+//     Element dtype of ``grad_out`` and the output ``dW``.
+//
+// Returns
+// -------
+// Storage
+//     Gradient w.r.t. the embedding weight table, shape ``(N, D)``.
+//
+// See Also
+// --------
+// :func:`should_dispatch_embedding_backward` — dispatch gate.
+Storage embedding_backward(const Storage& grad_out,
+                           const Storage& indices,
+                           std::int64_t N,
+                           std::int64_t D,
+                           std::int64_t M_total,
+                           int padding_idx,
+                           Dtype dt);
+
 }  // namespace lucid::gpu::mps

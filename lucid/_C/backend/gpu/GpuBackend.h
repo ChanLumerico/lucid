@@ -3996,6 +3996,16 @@ public:
         std::size_t M_total = 1;
         for (auto d : indices_shape)
             M_total *= static_cast<std::size_t>(d);
+        // MPSGraph ScatterModeAdd is ~14-28× faster than the MLX path
+        // on GPT-style inputs (M_total × D ≥ 1M); gated to keep tiny
+        // embedding tables on the MLX path where dispatch overhead would
+        // dominate.
+        if (gpu::mps::should_dispatch_embedding_backward(
+                static_cast<std::int64_t>(M_total), D, dt)) {
+            return gpu::mps::embedding_backward(
+                grad_out, indices, N, D,
+                static_cast<std::int64_t>(M_total), padding_idx, dt);
+        }
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
         const auto& gg = std::get<GpuStorage>(grad_out);
         const auto& gi = std::get<GpuStorage>(indices);

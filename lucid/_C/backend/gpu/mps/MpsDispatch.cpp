@@ -118,4 +118,35 @@ bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt) {
     return false;
 }
 
+bool should_dispatch_embedding_backward(std::int64_t M_total,
+                                        std::int64_t D,
+                                        Dtype dt) {
+    (void)M_total;
+    (void)D;
+    (void)dt;
+    if (!enabled()) return false;
+    // Phase 4 fresh measurement (2026-05-25, M4 Max, gpt2-input
+    // 8×1024×768) found the MPSGraph ``scatterWithDataTensor:`` path
+    // 3–10× **slower** than MLX's ``scatter_add_axis`` once the
+    // benchmark forces gradient consumption per iteration:
+    //
+    //   gpt2-input         MLX 1.72 ms   MPSGraph 6.72 ms   (3.9× slower)
+    //   gpt2-input-pad     MLX 1.98 ms   MPSGraph 7.31 ms   (3.7× slower)
+    //   vocab-input        MLX 2.30 ms   MPSGraph 18.09 ms  (7.9× slower)
+    //   large_emb (50K×1K) MLX 3.35 ms   MPSGraph 36.05 ms  (10.7× slower)
+    //
+    // The Phase 0 baseline (perf-mlx-op-baseline-2026-05.md) that
+    // reported MLX 28× slower than torch did NOT force grad eval, so
+    // MLX's lazy graph skipped the scatter entirely.  Once eval is
+    // forced the MLX path is already faster than torch MPS (ref 1.25 ms
+    // for gpt2-input).
+    //
+    // Kernel kept in MpsKernels for two reasons: (a) opt-in
+    // ``LUCID_MPS_EMBEDDING_BWD=1`` for future SDK regressions, (b)
+    // documentation of the canonical MPSGraph scatter pattern.  Default
+    // dispatch is OFF.
+    const char* force = std::getenv("LUCID_MPS_EMBEDDING_BWD");
+    return force && std::string(force) == "1";
+}
+
 }  // namespace lucid::gpu::mps
