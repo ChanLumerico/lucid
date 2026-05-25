@@ -245,6 +245,88 @@ kernel void gelu_tanh_f32(device const float4* x   [[buffer(0)]],
 
 // MSL source for the tanh-approximation GELU backward.  Reads x AND
 // grad_out, writes grad_in.
+// Exact-GELU (erf-based) variant — the default of ``F.gelu(x)``
+// (no ``approximate="tanh"`` arg).  Same per-thread float4 pattern.
+// The exact-GELU kernels below inline a polynomial erf approximation
+// (Abramowitz & Stegun 7.1.26, max abs error ≈ 1.5e-7) directly —
+// MSL has no native ``erf`` builtin.  Inlined per-kernel rather than
+// shared via a common header so the MSL compile of each kernel is
+// self-contained (libraries are compiled from a single source string).
+
+constexpr const char* kGeluExactF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+inline float4 erf_approx_f4(float4 x) {
+    const float p  = 0.3275911f;
+    const float a1 = 0.254829592f;
+    const float a2 = -0.284496736f;
+    const float a3 = 1.421413741f;
+    const float a4 = -1.453152027f;
+    const float a5 = 1.061405429f;
+    float4 ax = abs(x);
+    float4 t  = 1.0f / (1.0f + p * ax);
+    float4 t2 = t  * t;
+    float4 t3 = t2 * t;
+    float4 t4 = t3 * t;
+    float4 t5 = t4 * t;
+    float4 poly = a1*t + a2*t2 + a3*t3 + a4*t4 + a5*t5;
+    float4 y = 1.0f - poly * exp(-ax * ax);
+    return sign(x) * y;
+}
+
+kernel void gelu_exact_f32(device const float4* x   [[buffer(0)]],
+                           device float4*       y   [[buffer(1)]],
+                           constant uint&       n4  [[buffer(2)]],
+                           uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    const float inv_sqrt2 = 0.7071067811865476f;
+    float4 xv = x[gid];
+    float4 e = erf_approx_f4(xv * inv_sqrt2);
+    y[gid] = 0.5f * xv * (1.0f + e);
+}
+)MSL";
+
+constexpr const char* kGeluExactBwdF32MSL = R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+
+inline float4 erf_approx_f4(float4 x) {
+    const float p  = 0.3275911f;
+    const float a1 = 0.254829592f;
+    const float a2 = -0.284496736f;
+    const float a3 = 1.421413741f;
+    const float a4 = -1.453152027f;
+    const float a5 = 1.061405429f;
+    float4 ax = abs(x);
+    float4 t  = 1.0f / (1.0f + p * ax);
+    float4 t2 = t  * t;
+    float4 t3 = t2 * t;
+    float4 t4 = t3 * t;
+    float4 t5 = t4 * t;
+    float4 poly = a1*t + a2*t2 + a3*t3 + a4*t4 + a5*t5;
+    float4 y = 1.0f - poly * exp(-ax * ax);
+    return sign(x) * y;
+}
+
+// d/dx[0.5*x*(1+erf(x/sqrt(2)))] = Φ(x) + x * φ(x).
+kernel void gelu_exact_bwd_f32(device const float4* x   [[buffer(0)]],
+                               device const float4* g   [[buffer(1)]],
+                               device float4*       dx  [[buffer(2)]],
+                               constant uint&       n4  [[buffer(3)]],
+                               uint                 gid [[thread_position_in_grid]]) {
+    if (gid >= n4) return;
+    const float inv_sqrt2 = 0.7071067811865476f;
+    const float inv_sqrt_2pi = 0.3989422804014327f;
+    float4 xv = x[gid];
+    float4 gv = g[gid];
+    float4 e = erf_approx_f4(xv * inv_sqrt2);
+    float4 cdf = 0.5f * (1.0f + e);
+    float4 pdf = inv_sqrt_2pi * exp(-0.5f * xv * xv);
+    dx[gid] = gv * (cdf + xv * pdf);
+}
+)MSL";
+
 constexpr const char* kGeluTanhBwdF32MSL = R"MSL(
 #include <metal_stdlib>
 using namespace metal;
@@ -457,6 +539,144 @@ Storage gelu_metal_forward(const Storage& x, const Shape& shape, Dtype dt) {
 Storage gelu_metal_backward(const Storage& x, const Storage& grad,
                             const Shape& shape, Dtype dt) {
     return gelu_metal_backward_impl(x, grad, shape, dt);
+}
+
+namespace {
+
+// Generic single-input unary dispatcher.  Used by the exact-GELU
+// variant; mirrors gelu_metal_forward_impl's structure but parameterised
+// by the MSL function name.
+Storage metal_unary_f32(const Storage& x, const Shape& shape, Dtype dt,
+                        const char* msl_src, NSString* fn_name) {
+    if (dt != Dtype::F32) {
+        return Storage{};  // caller must guard with should_dispatch_gelu_metal
+    }
+    const auto& gx = std::get<GpuStorage>(x);
+    if (!gx.arr)
+        throw std::runtime_error("mps::metal_unary_f32: input has no MLX array");
+    BufferView in_view = array_to_buffer(*gx.arr);
+    id<MTLBuffer> in_buf = (__bridge id<MTLBuffer>)in_view.mtl_buffer;
+    id<MTLDevice> device =
+        (__bridge id<MTLDevice>)shared_mtl_device();
+    id<MTLCommandQueue> queue =
+        (__bridge id<MTLCommandQueue>)shared_mtl_queue();
+
+    std::size_t numel = 1;
+    for (auto d : shape) numel *= static_cast<std::size_t>(d);
+    if (numel % 4 != 0) return Storage{};  // caller must guard
+    const std::size_t n4 = numel / 4;
+    const std::size_t out_nbytes = shape_nbytes(shape, dt);
+    id<MTLBuffer> out_buf =
+        [device newBufferWithLength:out_nbytes
+                            options:MTLResourceStorageModeShared];
+    if (!out_buf)
+        throw std::runtime_error("mps::metal_unary_f32: MTLBuffer alloc failed");
+
+    @autoreleasepool {
+        id<MTLComputePipelineState> pso =
+            compile_custom_metal(msl_src, fn_name, device);
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+        [enc setComputePipelineState:pso];
+        [enc setBuffer:in_buf offset:0 atIndex:0];
+        [enc setBuffer:out_buf offset:0 atIndex:1];
+        uint32_t n4_u32 = static_cast<uint32_t>(n4);
+        [enc setBytes:&n4_u32 length:sizeof(uint32_t) atIndex:2];
+        const NSUInteger tpg = std::min(
+            (NSUInteger)256, pso.maxTotalThreadsPerThreadgroup);
+        MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+        MTLSize grid = MTLSizeMake((n4 + tpg - 1) / tpg, 1, 1);
+        [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+        [enc endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+
+    void* out_buf_raw = (__bridge_retained void*)out_buf;
+    ::mlx::core::array out_arr = buffer_to_array(
+        out_buf_raw, std::vector<int>(shape.begin(), shape.end()), dt);
+    return Storage{gpu::wrap_mlx_array(std::move(out_arr), dt)};
+}
+
+// Binary input + single output (x, grad → dx).
+Storage metal_binary_f32(const Storage& x, const Storage& g,
+                         const Shape& shape, Dtype dt,
+                         const char* msl_src, NSString* fn_name) {
+    if (dt != Dtype::F32) return Storage{};
+    const auto& gx = std::get<GpuStorage>(x);
+    const auto& gg = std::get<GpuStorage>(g);
+    if (!gx.arr || !gg.arr)
+        throw std::runtime_error("mps::metal_binary_f32: input has no MLX array");
+    BufferView x_view = array_to_buffer(*gx.arr);
+    BufferView g_view = array_to_buffer(*gg.arr);
+    id<MTLBuffer> x_buf = (__bridge id<MTLBuffer>)x_view.mtl_buffer;
+    id<MTLBuffer> g_buf = (__bridge id<MTLBuffer>)g_view.mtl_buffer;
+    id<MTLDevice> device =
+        (__bridge id<MTLDevice>)shared_mtl_device();
+    id<MTLCommandQueue> queue =
+        (__bridge id<MTLCommandQueue>)shared_mtl_queue();
+
+    std::size_t numel = 1;
+    for (auto d : shape) numel *= static_cast<std::size_t>(d);
+    if (numel % 4 != 0) return Storage{};
+    const std::size_t n4 = numel / 4;
+    const std::size_t out_nbytes = shape_nbytes(shape, dt);
+    id<MTLBuffer> out_buf =
+        [device newBufferWithLength:out_nbytes
+                            options:MTLResourceStorageModeShared];
+    if (!out_buf)
+        throw std::runtime_error("mps::metal_binary_f32: MTLBuffer alloc failed");
+
+    @autoreleasepool {
+        id<MTLComputePipelineState> pso =
+            compile_custom_metal(msl_src, fn_name, device);
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+        [enc setComputePipelineState:pso];
+        [enc setBuffer:x_buf offset:0 atIndex:0];
+        [enc setBuffer:g_buf offset:0 atIndex:1];
+        [enc setBuffer:out_buf offset:0 atIndex:2];
+        uint32_t n4_u32 = static_cast<uint32_t>(n4);
+        [enc setBytes:&n4_u32 length:sizeof(uint32_t) atIndex:3];
+        const NSUInteger tpg = std::min(
+            (NSUInteger)256, pso.maxTotalThreadsPerThreadgroup);
+        MTLSize threadgroup = MTLSizeMake(tpg, 1, 1);
+        MTLSize grid = MTLSizeMake((n4 + tpg - 1) / tpg, 1, 1);
+        [enc dispatchThreadgroups:grid threadsPerThreadgroup:threadgroup];
+        [enc endEncoding];
+        [cb commit];
+        [cb waitUntilCompleted];
+    }
+
+    void* out_buf_raw = (__bridge_retained void*)out_buf;
+    ::mlx::core::array out_arr = buffer_to_array(
+        out_buf_raw, std::vector<int>(shape.begin(), shape.end()), dt);
+    return Storage{gpu::wrap_mlx_array(std::move(out_arr), dt)};
+}
+
+}  // namespace
+
+Storage gelu_exact_metal_forward(const Storage& x, const Shape& shape, Dtype dt) {
+    Storage out = metal_unary_f32(x, shape, dt, kGeluExactF32MSL,
+                                  @"gelu_exact_f32");
+    // Guard fall-through: when dt != F32 or numel % 4 != 0, the helper
+    // returns an empty Storage to signal "caller please fall back."
+    if (std::holds_alternative<GpuStorage>(out) &&
+        std::get<GpuStorage>(out).arr) {
+        return out;
+    }
+    return gelu_exact_forward(x, shape, dt);
+}
+
+Storage gelu_exact_metal_backward(const Storage& x, const Storage& grad,
+                                  const Shape& shape, Dtype dt) {
+    Storage out = metal_binary_f32(x, grad, shape, dt,
+                                   kGeluExactBwdF32MSL, @"gelu_exact_bwd_f32");
+    if (std::holds_alternative<GpuStorage>(out) &&
+        std::get<GpuStorage>(out).arr) {
+        return out;
+    }
+    return gelu_exact_backward(x, grad, shape, dt);
 }
 
 // ── GELU tanh-approx backward — fused MPSGraph kernel ─────────────────────

@@ -95,6 +95,10 @@ bool should_dispatch_gelu(std::int64_t numel, Dtype dt);
 // kernels.
 bool should_dispatch_gelu_metal(std::int64_t numel, Dtype dt);
 
+// Same as :func:`should_dispatch_gelu_metal` but for the exact
+// (erf-based) GELU variant — the default ``F.gelu(x)`` path.
+bool should_dispatch_gelu_exact_metal(std::int64_t numel, Dtype dt);
+
 // Always dispatch GELU exact (Gaussian-CDF) through MPSGraph.
 //
 // The MLX path composes erf via a 10-op approximation chain; MPSGraph

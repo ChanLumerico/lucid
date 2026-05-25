@@ -564,6 +564,9 @@ public:
     Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
+        if (gpu::mps::should_dispatch_gelu_exact_metal(numel, dt)) {
+            return gpu::mps::gelu_exact_metal_forward(a, shape, dt);
+        }
         if (gpu::mps::should_dispatch_gelu_exact(numel, dt)) {
             return gpu::mps::gelu_exact_forward(a, shape, dt);
         }

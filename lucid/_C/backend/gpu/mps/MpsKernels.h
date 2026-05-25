@@ -100,6 +100,29 @@ Storage gelu_metal_backward(const Storage& x,
                             const Shape& shape,
                             Dtype dt);
 
+// GELU exact (erf-based) forward via custom Metal kernel.  Matches the
+// default ``F.gelu(x)`` path (``approximate="none"``).  Same wrapper
+// pattern as :func:`gelu_metal_forward` — uses Metal's intrinsic
+// ``erf`` for the closed-form computation.
+//
+// See Also
+// --------
+// :func:`gelu_metal_forward` — tanh-approx variant.
+Storage gelu_exact_metal_forward(const Storage& x,
+                                 const Shape& shape,
+                                 Dtype dt);
+
+// GELU exact (erf-based) backward via custom Metal kernel.
+//
+// Math
+// ----
+// ``dy/dx = Φ(x) + x · φ(x)`` where ``Φ`` is the standard normal CDF
+// and ``φ`` its PDF.
+Storage gelu_exact_metal_backward(const Storage& x,
+                                  const Storage& grad,
+                                  const Shape& shape,
+                                  Dtype dt);
+
 // GELU backward (tanh approximation).
 //
 // Fused MPSGraph evaluation of the derivative of the tanh

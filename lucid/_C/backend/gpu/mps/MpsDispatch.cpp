@@ -78,47 +78,60 @@ bool should_dispatch_gelu_metal(std::int64_t numel, Dtype dt) {
     return numel >= (1LL << 17);
 }
 
+bool should_dispatch_gelu_exact_metal(std::int64_t numel, Dtype dt) {
+    (void)numel;
+    (void)dt;
+    // Disabled by default — the inlined Abramowitz polynomial erf
+    // (~14 ops + exp) makes the per-call compute 2× heavier than the
+    // MLX erf chain, and the bench shows a regression vs MLX on
+    // ffn_big-scale shapes.  Kernel kept for future SDK versions
+    // where Metal exposes a native ``erf`` intrinsic.
+    return false;
+}
+
 bool should_dispatch_gelu_exact(std::int64_t numel, Dtype dt) {
     (void)numel;
     (void)dt;
-    // Exact (erf-based) GELU is the default Python F.gelu path — same
-    // universal-win profile as the tanh-approx variant.  Phase 0 baseline
-    // measured this path at 13-30× vs torch MPS.
-    return enabled();
+    // 2026-05-25 rebench: the "13-30×" gap was measuring MLX lazy
+    // graph construction (perf-baseline-rebench-2026-05-25.md).  Real
+    // gap on properly-evaled bench is ~1.7×, and our MPSGraph 10-op
+    // erf composite doesn't measurably help vs MLX.  Off by default;
+    // kept compilable for future SDK reactivation.
+    return false;
 }
 
 bool should_dispatch_layer_norm_backward(std::int64_t outer,
                                          std::int64_t normalized_size,
                                          Dtype dt) {
+    (void)outer;
+    (void)normalized_size;
     (void)dt;
-    // Llama-scale (normalized_size=4096, outer~4096) sees the biggest gap
-    // (~2.4× torch).  Smaller transformer Q/K/V projections (normalized=768)
-    // have a smaller gap (~2× torch) but dispatch overhead bites more.
-    // Threshold = normalized_size >= 512 AND outer >= 256 ≈ "real layer".
-    if (!enabled()) return false;
-    return normalized_size >= 512 && outer >= 256;
+    // 2026-05-25 rebench: Lucid MLX LayerNorm fwd is 1.5× **faster**
+    // than torch MPS on llama-scale (perf-baseline-rebench-2026-05-25)
+    // and the bwd dispatch shows noise-level differences vs MLX
+    // (1.02×) per the dispatch audit.  Off by default; kept compilable.
+    return false;
 }
 
 bool should_dispatch_batch_norm_train(std::int64_t numel, Dtype dt) {
+    (void)numel;
     (void)dt;
-    // ResNet shapes (≤ 2M numel) already at torch parity via MLX; the
-    // dispatch overhead would hurt.  ImageNet-scale large_acts (~26M
-    // numel) is 5.5× torch — that's the case we dispatch.  Threshold
-    // at 8M numel cleanly separates these regimes.
-    if (!enabled()) return false;
-    return numel >= 8 * 1024 * 1024;
+    // 2026-05-25 rebench: the 5.5× gap was lazy-graph artifact; real
+    // gap is 2.8× but our MPSGraph dispatch shows noise vs MLX (1.00×
+    // per dispatch audit).  See perf-bn-train-gap-deferred-2026-05-25
+    // — closing the gap needs a custom Metal kernel, not MPSGraph.
+    // Off by default; kept compilable for future SDK or BNNS route.
+    return false;
 }
 
 bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt) {
+    (void)numel;
     (void)dt;
-    // Phase 4 measurement (Mac Studio M4 Max):
-    //   1M numel:  MLX 0.27 ms → MPS 0.44 ms (regression, dispatch ohead bites)
-    //   3M numel:  MLX 0.53 ms → MPS 0.63 ms (mild regression)
-    //   12.5M numel: MLX 2.63 ms → MPS 1.70 ms (1.55× win, ratio 5.75→3.68× torch)
-    // Dispatch overhead (~150 µs/call) only amortizes on large activations
-    // — FFN-scale (B*L*D ≥ ~6M) gets the benefit, CNN activation shapes don't.
-    if (!enabled()) return false;
-    return numel >= 6 * 1024 * 1024;
+    // 2026-05-25 rebench: silu_bwd 2.7× vs torch (real but mild); the
+    // existing dispatch shows 1.11× vs MLX (noise) per dispatch audit.
+    // Off by default; pattern same as silu_fwd / gelu_fwd — needs
+    // custom Metal kernel to close further, MPSGraph route is dead.
+    return false;
 }
 
 bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt) {
