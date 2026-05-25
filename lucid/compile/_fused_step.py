@@ -61,6 +61,12 @@ Limitations
 from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
+# Hot-path imports — hoisted out of ``_FusedStep._run`` so the
+# per-call ``from ... import _unwrap`` / ``import lucid as _lucid``
+# bookkeeping (≈ 30-50 μs on M-series) doesn't run every training
+# step.  Phase 1.10 per-call overhead reduction.
+from lucid._dispatch import _unwrap as _unwrap_hot
+import lucid as _lucid_hot
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -428,6 +434,7 @@ class _FusedStep:
         # ``compile_generic_fused_step`` so the long-run + training
         # regression matrix continues to exercise the production code.
         import os as _os
+
         _use_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in ("1", "true", "True")
         if _use_vars:
             # Build (feed_id, write_id) pairs: each parameter feed
@@ -520,6 +527,16 @@ class _FusedStep:
                 "doesn't match _trace_update output count"
             )
         self._exe = exe
+        # Phase 1.10 per-call overhead reduction: pre-unwrap the
+        # opt-output target TensorImpls.  These are stable across calls
+        # (params + state buffers live for the lifetime of the model),
+        # so we pay the unwrap once at compile time rather than every
+        # ``_run``.  The list is rebuilt with a fresh loss_impl at
+        # slot 0 each call (loss is the only non-stable target).
+        from lucid._dispatch import _unwrap as _unwrap_hot
+        self._opt_target_impls = tuple(
+            _unwrap_hot(t) for t in self._output_targets
+        )
 
     def _run(self, args: tuple[Tensor, ...]) -> Tensor:
         """Bind feeds + targets and invoke the cached executable in-place.
@@ -541,24 +558,22 @@ class _FusedStep:
         Tensor
             Scalar loss for this step.
         """
-        from lucid._dispatch import _unwrap
-        import lucid as _lucid
-
         self._current_args = args
-        feeds = [_unwrap(r()) for r in self._input_resolvers]
+        feeds = [_unwrap_hot(r()) for r in self._input_resolvers]
 
         # Fresh loss tensor (single-element output that flows back to
         # Python; not in-place since callers want a clean handle).
-        loss_tensor = _lucid.zeros(
+        loss_tensor = _lucid_hot.zeros(
             *self._loss_shape if self._loss_shape else (),
             dtype=self._loss_dtype,
             device=self._loss_device,
         )
 
-        # Output target list: [loss_scratch, opt_outputs in order].
-        output_targets = [_unwrap(loss_tensor)]
-        for t in self._output_targets:
-            output_targets.append(_unwrap(t))
+        # Output target list: [loss_scratch, opt_target_impls...].
+        # ``_opt_target_impls`` was pre-unwrapped at compile time;
+        # using ``list(tuple)`` then ``append`` is faster than the
+        # previous append-in-loop pattern.
+        output_targets = [_unwrap_hot(loss_tensor), *self._opt_target_impls]
 
         _C_engine.compile.run_executable_inplace(self._exe, feeds, output_targets)
         return loss_tensor
