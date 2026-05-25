@@ -620,6 +620,20 @@ CompiledExecutable* compile_trace_with_backward(
             input_dtypes.push_back(feed_dtype);
         }
 
+        // Pre-compute trace-wide consumed set — multi-output emitters
+        // (split / split_at / unbind / chunk / topk / lstm) need this
+        // to know which pieces to bind.  See parallel block in
+        // compile_trace + compile_generic_fused_step.
+        {
+            std::unordered_set<TensorId> trace_consumed;
+            for (const auto& n : graph.ops)
+                for (TensorId iid : n.inputs)
+                    if (iid >= 0)
+                        trace_consumed.insert(iid);
+            trace_consumed.insert(loss_id);
+            ctx.set_consumed_inputs(trace_consumed);
+        }
+
         // Emit forward ops.
         for (const auto& node : graph.ops) {
             OpEmitter* emitter = find_emitter(node.name);
@@ -1343,6 +1357,30 @@ CompiledExecutable* compile_generic_fused_step(
             [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
         }
 
+        // Pre-compute the trace-wide "consumed by some op" set so the
+        // multi-output emitters (split / split_at / unbind / chunk /
+        // topk / lstm) bind every piece that any downstream op reads.
+        // Without this set, ``ctx.is_consumed`` returns false for every
+        // piece and the emitters skip binding piece[1+] — embedding /
+        // attention chains that consume piece[1+] then fail with
+        // ``emitter 'embedding' returned nullptr`` because the
+        // indices id has no MPSGraph binding.
+        {
+            std::unordered_set<TensorId> trace_consumed;
+            for (const auto& n : graph.ops)
+                for (TensorId iid : n.inputs)
+                    if (iid >= 0)
+                        trace_consumed.insert(iid);
+            // Also mark the explicit graph targets as consumed (loss +
+            // output_target_ids) so emitters that produce them as multi-
+            // output slots still bind them.
+            trace_consumed.insert(loss_id);
+            for (TensorId tid : output_target_ids)
+                if (tid >= 0)
+                    trace_consumed.insert(tid);
+            ctx.set_consumed_inputs(trace_consumed);
+        }
+
         // Emit ops in trace order.  Before reaching the first op that
         // consumes a ghost grad, derive grads via
         // ``gradientForPrimaryTensor:withTensors:`` and bind each
@@ -1722,6 +1760,23 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
                 return fail("compile_generic_fused_step_with_vars: param id " +
                             std::to_string(pid) + " has no binding");
             [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
+        }
+
+        // Pre-compute trace-wide consumed set — see parallel block in
+        // compile_generic_fused_step.  Required for multi-output emitters
+        // (split / split_at / unbind / chunk / topk / lstm) to bind every
+        // piece any downstream op reads.
+        {
+            std::unordered_set<TensorId> trace_consumed;
+            for (const auto& n : graph.ops)
+                for (TensorId iid : n.inputs)
+                    if (iid >= 0)
+                        trace_consumed.insert(iid);
+            trace_consumed.insert(loss_id);
+            for (TensorId tid : output_target_ids)
+                if (tid >= 0)
+                    trace_consumed.insert(tid);
+            ctx.set_consumed_inputs(trace_consumed);
         }
 
         // Step 3: emit trace ops with ghost-grad derivation, same as

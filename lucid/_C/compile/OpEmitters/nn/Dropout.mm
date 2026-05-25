@@ -41,9 +41,27 @@ inline void* emit_identity(BuilderContext& ctx, const OpNode& node) {
     return ctx.resolve(x_id);  // same MPSGraphTensor* — zero copy
 }
 
-// dropout / dropoutnd / alpha_dropout — passthrough when ``training``
-// is false or ``p`` is zero; otherwise nullptr (eager fallback) until
-// RNG-emitter coverage lands.
+// dropout / dropoutnd / alpha_dropout
+// ────────────────────────────────────
+// Coverage:
+//   * training == false  OR  p == 0  → identity bind (zero-copy passthrough,
+//     applies to BERT / GPT / ViT in eval mode where dropout is a no-op).
+//   * training == true   AND p  > 0  → nullptr (eager fallback).
+//
+// RNG-based mask emission was prototyped (2026-05-25) using
+// ``randomTensorWithShape:descriptor:`` + ``>`` + cast + multiply, but
+// MPSGraph's ``gradientForPrimaryTensor:`` crashes inside
+// ``MPSGraphAutomaticDifferentiation.mm`` with
+// ``"Not a predecessor of primaryTensor"`` when it encounters the
+// random tensor in the backward traversal — apparently the random op
+// is not on a differentiable path so autograd refuses to walk past it
+// even though the gradient w.r.t. ``x`` should be the trivially-known
+// ``grad_out * (mask / (1-p))``.  Closing this needs either a custom
+// emitter that pre-derives the backward (treat mask as a saved
+// constant, emit ``mask*scale`` for fwd, then explicitly attach
+// ``grad_out * (mask*scale)`` for backward), or waiting for an
+// MPSGraph SDK update.  Until then training-mode transformers stay on
+// the eager path.
 template <bool ALPHA>
 class DropoutPassthroughEmitterT final : public OpEmitter {
 public:
@@ -54,7 +72,7 @@ public:
         const double p = double_attr(node, "p", 0.5);
         if (!training || p == 0.0)
             return emit_identity(ctx, node);
-        // RNG path not yet emit-able — caller falls back to eager.
+        // RNG path causes MPSGraph autograd to abort.  Eager fallback.
         return nullptr;
     }
 
