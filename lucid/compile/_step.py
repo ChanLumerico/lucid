@@ -133,8 +133,10 @@ def make_step(
     # / MPSGraph SDK state.  Falls back to NotImplementedError unless
     # the env opt-in is set.
     import os as _os_step
+
     _dyn_opt_in = _os_step.environ.get(
-        "LUCID_COMPILE_DYNAMIC", "0",
+        "LUCID_COMPILE_DYNAMIC",
+        "0",
     ) in ("1", "true", "True")
     if dynamic and not _dyn_opt_in:
         raise NotImplementedError(

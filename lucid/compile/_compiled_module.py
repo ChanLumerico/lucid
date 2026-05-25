@@ -330,8 +330,10 @@ class CompiledModule:
         # 26 / MPSGraph SDK state — flip the default to ``True`` once
         # the model-zoo regression sweep is clean.
         import os as _os
+
         _dyn_opt_in = _os.environ.get(
-            "LUCID_COMPILE_DYNAMIC", "0",
+            "LUCID_COMPILE_DYNAMIC",
+            "0",
         ) in ("1", "true", "True")
         if dynamic and not _dyn_opt_in:
             raise NotImplementedError(
