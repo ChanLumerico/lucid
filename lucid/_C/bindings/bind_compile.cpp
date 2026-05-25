@@ -553,6 +553,18 @@ void register_compile(py::module_& m) {
                 auto impl = py::cast<lucid::TensorImplPtr>(item.second);
                 feeds.emplace(tid, std::move(impl));
             }
+            // Note (2026-05-25): a disk-cache variant of this path was
+            // prototyped — see git log for the experiment — but
+            // measured slower than recompile on the fused_step case
+            // (warm cache hit 129 ms vs fresh compile 132 ms; first
+            // cold hit 828 ms while the OS file cache warmed).  The
+            // forward-only ``compile_or_cached`` disk cache still
+            // wins (6× cold-start) because forward MPSGraph packages
+            // are smaller and serialise faster; fused_step packages
+            // include the autograd-derived backward chain which
+            // appears expensive to deserialise.  Decision: in-memory
+            // session cache only for fused_step until the package
+            // format improves.
             std::string err;
             lucid::compile::CompiledExecutable* exe =
                 lucid::compile::compile_generic_fused_step(
