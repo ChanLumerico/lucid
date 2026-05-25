@@ -438,6 +438,18 @@ class _FusedStep:
             # outputs are the new params, followed by new state
             # buffers.  Only the param-tier entries get promoted to
             # variables; momenta / m / v stay as input/output feeds.
+            #
+            # State-buffer promotion was investigated (2026-05-25,
+            # tracked alongside Tier 2-A): replacing the swap-buffer
+            # dance for m / v / momenta with ``assignVariable:``
+            # produced a **regression** of +10–20% per step on every
+            # measured workload (mlp / deep_mlp / Adam / SGD).  The
+            # MPSGraph variable path appears to serialise around
+            # ``assignVariable`` writes in a way the in/out-feed
+            # double-buffer doesn't on M-series.  Conclusion: keep
+            # variables for the param tier only; state stays on the
+            # feed/output path.  See ``obsidian/perf/perf-state-vars-regression.md``
+            # for the bench data.
             variable_pairs: list[tuple[int, int]] = []
             for i, pid in enumerate(param_ids):
                 if i < len(output_target_ids):
