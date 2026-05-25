@@ -503,6 +503,19 @@ class _FusedStep:
                     _s
                 ]
 
+        # Pinned constants (mirror of CompiledModule's ``input_source``
+        # treatment): if a trace external_feed isn't a known
+        # param/state/scalar/positional, save the original TensorImpl
+        # and return it verbatim every call.  Covers ad-hoc tensors
+        # the model materialises inside ``forward()`` and whose impl
+        # identity isn't stable across calls (``Conv2d(bias=False)``
+        # produces a fresh zero-bias tensor on each forward via
+        # :func:`conv_bias_or_zero`; ``BatchNorm`` running-stats
+        # buffers; SiLU's constant scalars; etc.).  Using the
+        # first-trace impl is correct for these because they're
+        # semantic constants — no per-call updates happen on them
+        # through the fused step.
+        from lucid._tensor.tensor import Tensor as _TensorT  # noqa: PLC0415
         resolvers: list[Callable[[], Tensor]] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
@@ -510,10 +523,11 @@ class _FusedStep:
                 raise RuntimeError(f"fused_step: input id {tid} not in external_feeds")
             r = impl_to_resolver.get(id(impl))
             if r is None:
-                raise RuntimeError(
-                    f"fused_step: input id {tid} has no resolver — "
-                    "trace captured an unexpected tensor"
-                )
+                # Pin the impl directly — wrap as a Tensor view (no
+                # grad, no autograd hook) and return it verbatim every
+                # call.
+                pinned_tensor = _TensorT(impl, requires_grad=False)
+                r = (lambda _t=pinned_tensor: _t)
             resolvers.append(r)
         self._input_resolvers = resolvers
 
