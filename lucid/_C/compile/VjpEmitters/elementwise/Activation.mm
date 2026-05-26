@@ -279,6 +279,7 @@ struct ActivationVjpRegistrar {
         register_vjp_emitter(std::make_unique<TanhVjp>());
         register_vjp_emitter(std::make_unique<SiluVjp>());
         register_vjp_emitter(std::make_unique<GeluVjp>());
+        register_vjp_emitter(std::make_unique<GeluExactVjp>());
         register_vjp_emitter(std::make_unique<AstypeVjp>());
     }
 };
