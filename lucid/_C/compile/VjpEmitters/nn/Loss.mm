@@ -56,7 +56,12 @@ public:
         MPSGraphTensor* t = as_tensor(bctx.forward(tg_id));
         if (g == nil || grad == nil || x == nil || t == nil) return false;
 
-        MPSDataType dt = x.dataType;
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        t = cast_if_needed(g, t, chain_dt);
+
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* diff =
             [g subtractionWithPrimaryTensor:x secondaryTensor:t name:nil];
         MPSGraphTensor* two = [g constantWithScalar:2.0 dataType:dt];
@@ -187,18 +192,28 @@ inline LossPieces unpack_loss(BackwardContext& bctx, const OpNode& node,
     p.g = (__bridge MPSGraph*)bctx.graph();
     p.input = as_tensor(bctx.forward(p.input_id));
     p.target = as_tensor(bctx.forward(tg_id));
-    if (p.g == nil || p.input == nil || p.target == nil) return p;
+    p.grad_out = as_tensor(grad_outs[0]);
+    if (p.g == nil || p.input == nil || p.target == nil || p.grad_out == nil)
+        return p;
+
+    // Mixed-dtype reconciliation (autocast): all gradient math runs in
+    // the chain's dtype (the seed grad's dtype).  Cast the forward
+    // logits/log-p to that dtype so downstream multiplies + scatter +
+    // softmax recompute use one precision throughout.
+    const MPSDataType chain_dt = p.grad_out.dataType;
+    p.input = cast_if_needed(p.g, p.input, chain_dt);
 
     std::vector<std::int64_t> in_shape = shape_of_mps(p.input);
     if (in_shape.size() < 2) return p;
     p.B = in_shape[0];
     p.C = in_shape[1];
 
-    MPSDataType ft = p.input.dataType;
+    MPSDataType ft = chain_dt;
     // Optional class weight at inputs[2].
     if (node.inputs.size() >= 3 && node.inputs[2] >= 0) {
         MPSGraphTensor* w = as_tensor(bctx.forward(node.inputs[2]));
         if (w != nil) {
+            w = cast_if_needed(p.g, w, chain_dt);
             p.w_gather =
                 [p.g gatherAlongAxis:0
                    withUpdatesTensor:w
@@ -216,7 +231,6 @@ inline LossPieces unpack_loss(BackwardContext& bctx, const OpNode& node,
     NSArray<NSNumber*>* axes_all =
         @[ [NSNumber numberWithLongLong:0] ];
     p.denom = [p.g reductionSumWithTensor:p.keep_f axes:axes_all name:nil];
-    p.grad_out = as_tensor(grad_outs[0]);
     p.ok = true;
     return p;
 }
@@ -263,7 +277,7 @@ public:
         if (![p.g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)])
             return false;
 
-        MPSDataType dt = p.input.dataType;
+        MPSDataType dt = p.grad_out.dataType;
         MPSGraphTensor* scale =
             scale_per_sample(p.g, p.grad_out, p.w_gather, p.keep_f, p.denom,
                               p.reduction, dt);
@@ -294,7 +308,7 @@ public:
         if (![p.g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)])
             return false;
 
-        MPSDataType dt = p.input.dataType;
+        MPSDataType dt = p.grad_out.dataType;
         // scale_per_sample carries the -1 factor (NLL convention).
         MPSGraphTensor* scale =
             scale_per_sample(p.g, p.grad_out, p.w_gather, p.keep_f, p.denom,
@@ -380,7 +394,13 @@ public:
         if (g == nil || grad == nil || x == nil || t == nil || w == nil)
             return false;
 
-        MPSDataType dt = x.dataType;
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        t = cast_if_needed(g, t, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
         MPSGraphTensor* eps_t = [g constantWithScalar:eps dataType:dt];
         // x*(1-x) + eps
@@ -459,7 +479,14 @@ public:
         if (g == nil || grad == nil || x == nil || t == nil || w == nil || pw == nil)
             return false;
 
-        MPSDataType dt = x.dataType;
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        t = cast_if_needed(g, t, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+        pw = cast_if_needed(g, pw, chain_dt);
+
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
         MPSGraphTensor* s = [g sigmoidWithTensor:x name:nil];
         // factor = (pw - 1) * t + 1
@@ -531,7 +558,12 @@ public:
         MPSGraphTensor* t = as_tensor(bctx.forward(tg_id));
         if (g == nil || grad == nil || x == nil || t == nil) return false;
 
-        MPSDataType dt = x.dataType;
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        t = cast_if_needed(g, t, chain_dt);
+
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* delta_t = [g constantWithScalar:delta dataType:dt];
         MPSGraphTensor* diff =
             [g subtractionWithPrimaryTensor:x secondaryTensor:t name:nil];

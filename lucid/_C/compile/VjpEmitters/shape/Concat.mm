@@ -102,19 +102,24 @@ public:
         if (grad_outs.size() != node.outputs.size()) return false;
         NSMutableArray<MPSGraphTensor*>* pieces =
             [NSMutableArray arrayWithCapacity:node.outputs.size()];
-        // Use the first non-null grad's dtype for zero pieces, falling
-        // back to the forward input dtype.
+        // Use the first non-null grad's dtype for zero pieces — this is
+        // the chain dtype (under autocast, the forward input may be F32
+        // master while grads are F16; the synthesised zero pieces must
+        // match the grad pieces' dtype so concat succeeds).  Fall back
+        // to the forward input dtype only when no grads exist.
         MPSDataType dt = MPSDataTypeFloat32;
+        bool dt_from_grad = false;
         for (void* gp : grad_outs) {
             if (gp != nullptr) {
                 dt = as_tensor(gp).dataType;
+                dt_from_grad = true;
                 break;
             }
         }
         TensorId x_id = node.inputs[0];
         if (x_id < 0) return false;
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
-        if (x != nil)
+        if (!dt_from_grad && x != nil)
             dt = x.dataType;
 
         for (std::size_t k = 0; k < node.outputs.size(); ++k) {

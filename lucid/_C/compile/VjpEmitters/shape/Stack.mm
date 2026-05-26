@@ -220,7 +220,13 @@ public:
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
         if (g == nil || x == nil) return false;
+        // Pick dtype for any synthesised zero pieces — prefer the
+        // chain dtype (from any present grad) so concat doesn't mix
+        // F16 grad slices with F32 zero slices under autocast.
         MPSDataType dt = x.dataType;
+        for (void* gp : grad_outs) {
+            if (gp != nullptr) { dt = as_tensor(gp).dataType; break; }
+        }
 
         NSMutableArray<MPSGraphTensor*>* pieces =
             [NSMutableArray arrayWithCapacity:node.outputs.size()];
@@ -336,10 +342,12 @@ public:
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         if (x_shape.empty()) return false;
 
+        // Base zero buffer dtype = grad's chain dtype so scatter-add
+        // matches its updates dtype (autocast: x may be F32, grad F16).
         MPSGraphTensor* base =
             [g constantWithScalar:0.0
                             shape:shape_to_ns(x_shape)
-                         dataType:x.dataType];
+                         dataType:v_grad.dataType];
         MPSGraphTensor* dx =
             [g scatterAlongAxis:axis
                   withDataTensor:base

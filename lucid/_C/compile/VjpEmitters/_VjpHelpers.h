@@ -50,6 +50,33 @@ namespace lucid::compile {
     }
 }
 
+// Cast ``t`` to ``target`` if its dtype doesn't already match — no-op
+// otherwise.  Returns the (possibly-cast) tensor.  Used by VJPs to
+// reconcile mixed-dtype operands under autocast: every VJP convention
+// is that all intermediate arithmetic runs in ``grad.dataType``
+// (the chain's dominant dtype).  Forward activations like ``x`` /
+// ``gamma`` / ``beta`` cast to that dtype at the VJP prologue; the
+// astype VJP at the param boundary handles the final cast back to
+// the param's master dtype on the way to the optimizer.
+//
+// Without this reconciliation, under ``with autocast(F16)`` the
+// downstream binary builders fail MPSGraph's same-dtype check
+// (``'mps.multiply' op requires the same element type for all
+// operands and results``), exposing every VJP that calls
+// ``multiplicationWithPrimaryTensor:`` / ``additionWithPrimaryTensor:``
+// / etc. on a mix of grad (F16) + forward activation (F32 master).
+//
+// The convention is grad-dominant (not output-dominant) because the
+// grad's dtype determines the downstream chain's dtype — we minimize
+// per-VJP casts by aligning to the side that's already in the right
+// precision for whatever comes next in the backward walk.
+[[maybe_unused]] inline MPSGraphTensor* cast_if_needed(
+    MPSGraph* g, MPSGraphTensor* t, MPSDataType target) {
+    if (t == nil || g == nil) return t;
+    if (t.dataType == target) return t;
+    return [g castTensor:t toType:target name:@"vjp_dtype_cast"];
+}
+
 // Lift a ``Shape`` (``std::vector<int64_t>``) to an ``NSArray<NSNumber*>``.
 [[maybe_unused]] inline NSArray<NSNumber*>* shape_to_ns(const std::vector<std::int64_t>& s) {
     NSMutableArray<NSNumber*>* out = [NSMutableArray arrayWithCapacity:s.size()];
@@ -177,9 +204,18 @@ axes_for_unreduce(const std::vector<std::int64_t>& broadcast,
 // the gradient w.r.t. ``x``, OR ``nil`` to abort the VJP.  On success
 // the helper calls :func:`BackwardContext::accumulate_grad(x_id, dx)`
 // and returns ``true``; on any guard failure it returns ``false``.
+//
+// Mixed-dtype reconciliation under autocast (the chain-dominant
+// convention — see ``cast_if_needed``): by default the forward
+// activation ``x_t`` is cast to ``grad_t.dataType`` before the body
+// runs, so all body arithmetic is in one dtype.  VJPs that genuinely
+// need the original forward dtype (e.g. ``AstypeVjp`` which casts the
+// grad *back* to the input dtype) opt out by passing
+// ``cast_forward_to_grad=false``.
 template <class Body>
 inline bool emit_unary_vjp(BackwardContext& bctx, const OpNode& node,
-                           const std::vector<void*>& grad_outs, Body body) {
+                           const std::vector<void*>& grad_outs, Body body,
+                           bool cast_forward_to_grad = true) {
     if (node.inputs.size() != 1 || grad_outs.empty() || grad_outs[0] == nullptr)
         return false;
     TensorId x_id = node.inputs[0];
@@ -188,6 +224,8 @@ inline bool emit_unary_vjp(BackwardContext& bctx, const OpNode& node,
     MPSGraphTensor* go = as_tensor(grad_outs[0]);
     MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
     if (g == nil || x == nil || go == nil) return false;
+    if (cast_forward_to_grad)
+        x = cast_if_needed(g, x, go.dataType);
     MPSGraphTensor* dx = body(g, x, go);
     if (dx == nil) return false;
     bctx.accumulate_grad(x_id, from_tensor(dx));

@@ -61,6 +61,12 @@ public:
         MPSGraphTensor* gamma = as_tensor(bctx.forward(g_id));
         if (graph == nil || grad == nil || x == nil || gamma == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast): all arithmetic runs
+        // in grad's dtype; cast forward activations up front.
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(graph, x, chain_dt);
+        gamma = cast_if_needed(graph, gamma, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         std::vector<std::int64_t> g_shape = shape_of_mps(gamma);
         if (x_shape.empty() || g_shape.empty() || g_shape.size() > x_shape.size())
@@ -87,7 +93,7 @@ public:
         for (std::size_t i = lead; i < x_rank; ++i)
             N *= (double)x_shape[i];
 
-        MPSDataType dt = x.dataType;
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* eps_t = [graph constantWithScalar:eps dataType:dt];
 
         // mean, var, x_centered, rstd, x_hat.
@@ -217,8 +223,20 @@ public:
             gamma == nil)
             return false;
 
+        // Mixed-dtype reconciliation (autocast): all forward
+        // activations get cast to grad's dtype so downstream
+        // arithmetic runs in one precision.  See cast_if_needed.
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(graph, x, chain_dt);
+        rm = cast_if_needed(graph, rm, chain_dt);
+        rv = cast_if_needed(graph, rv, chain_dt);
+        gamma = cast_if_needed(graph, gamma, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
-        if (x_shape.size() < 2) return false;
+        if (x_shape.size() < 2) {
+            if (!node.outputs.empty()) x_shape = node.outputs[0].shape;
+            if (x_shape.size() < 2) return false;
+        }
         const std::size_t rank = x_shape.size();
         const std::int64_t C = x_shape[1];
 
@@ -230,7 +248,7 @@ public:
         MPSGraphTensor* rv_b = [graph reshapeTensor:rv withShape:affine_ns name:nil];
         MPSGraphTensor* g_b = [graph reshapeTensor:gamma withShape:affine_ns name:nil];
 
-        MPSDataType dt = x.dataType;
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* eps_t = [graph constantWithScalar:eps dataType:dt];
         MPSGraphTensor* var_eps =
             [graph additionWithPrimaryTensor:rv_b secondaryTensor:eps_t name:nil];
@@ -323,8 +341,21 @@ public:
         MPSGraphTensor* gamma = as_tensor(bctx.forward(g_id));
         if (graph == nil || grad == nil || x == nil || gamma == nil) return false;
 
+        // Mixed-dtype reconciliation: cast forward activations to
+        // grad's dtype so downstream arithmetic stays in one
+        // precision under autocast.  See cast_if_needed in
+        // _VjpHelpers.h.
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(graph, x, chain_dt);
+        gamma = cast_if_needed(graph, gamma, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
-        if (x_shape.size() < 2) return false;
+        if (x_shape.size() < 2) {
+            if (!node.outputs.empty()) {
+                x_shape = node.outputs[0].shape;
+            }
+            if (x_shape.size() < 2) return false;
+        }
         const std::size_t rank = x_shape.size();
         const std::int64_t C = x_shape[1];
 
@@ -457,6 +488,11 @@ public:
         MPSGraphTensor* gamma = as_tensor(bctx.forward(g_id));
         if (graph == nil || grad == nil || x == nil || gamma == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(graph, x, chain_dt);
+        gamma = cast_if_needed(graph, gamma, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         std::vector<std::int64_t> g_shape = shape_of_mps(gamma);
         if (x_shape.empty() || g_shape.empty() || g_shape.size() > x_shape.size())
@@ -479,7 +515,7 @@ public:
         for (std::size_t i = lead; i < x_rank; ++i)
             N *= (double)x_shape[i];
 
-        MPSDataType dt = x.dataType;
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* eps_t = [graph constantWithScalar:eps dataType:dt];
 
         // Recompute rstd + norm_x.
@@ -590,8 +626,16 @@ public:
         MPSGraphTensor* gamma = as_tensor(bctx.forward(g_id));
         if (graph == nil || grad == nil || x == nil || gamma == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(graph, x, chain_dt);
+        gamma = cast_if_needed(graph, gamma, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
-        if (x_shape.size() < 2) return false;
+        if (x_shape.size() < 2) {
+            if (!node.outputs.empty()) x_shape = node.outputs[0].shape;
+            if (x_shape.size() < 2) return false;
+        }
         const std::size_t rank = x_shape.size();
         const std::int64_t N = x_shape[0];
         const std::int64_t C = x_shape[1];
@@ -621,7 +665,7 @@ public:
         MPSGraphTensor* gamma_b =
             [graph reshapeTensor:gamma withShape:shape_to_ns(affine) name:nil];
 
-        MPSDataType dt = x.dataType;
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* eps_t = [graph constantWithScalar:eps dataType:dt];
 
         // Forward recomputation (in grouped layout): mean, var, rstd, x_hat.
@@ -749,13 +793,18 @@ public:
         MPSGraphTensor* grad = as_tensor(grad_outs[0]);
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
         if (g == nil || grad == nil || x == nil) return false;
+
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         if (x_shape.empty()) return false;
         const std::int64_t nd = (std::int64_t)x_shape.size();
         if (axis < 0) axis += nd;
         if (axis < 0 || axis >= nd) return false;
 
-        MPSDataType dt = x.dataType;
+        MPSDataType dt = chain_dt;
         MPSGraphTensor* x_sq =
             [g multiplicationWithPrimaryTensor:x secondaryTensor:x name:nil];
         MPSGraphTensor* sum =

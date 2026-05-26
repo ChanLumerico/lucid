@@ -82,9 +82,9 @@ def test_fused_step_autocast_mlp_trains() -> None:
         metal.synchronize()
         losses.append(float(loss.item()))
 
-    assert losses[0] > losses[-1], (
-        f"expected loss to decrease over 5 SGD steps; got {losses}"
-    )
+    assert (
+        losses[0] > losses[-1]
+    ), f"expected loss to decrease over 5 SGD steps; got {losses}"
 
 
 def test_fused_step_autocast_preserves_f32_master_weights() -> None:
@@ -160,9 +160,9 @@ def test_fused_step_autocast_layernorm_mlp_trains() -> None:
         metal.synchronize()
         losses.append(float(loss.item()))
 
-    assert losses[0] > losses[-1], (
-        f"expected loss to decrease over 5 SGD steps; got {losses}"
-    )
+    assert (
+        losses[0] > losses[-1]
+    ), f"expected loss to decrease over 5 SGD steps; got {losses}"
 
 
 # ── Forward-only ── `lucid.compile(model)` + autocast ──────────────
@@ -292,4 +292,99 @@ def test_lucid_compile_forward_autocast_matches_eager() -> None:
     assert rel_diff < 1e-2, (
         f"compile output diverges from eager under autocast; "
         f"rel_diff={rel_diff:.4e}"
+    )
+
+
+class _ResBlock(nn.Module):
+    """ResNet-style residual block: conv-bn-relu-conv-bn + residual + relu.
+
+    Exercises the systemic VJP mixed-dtype reconciliation path:
+    - The residual ``h + x`` creates two-path grad accumulation, which
+      under autocast can route F32 (eager-downcast forward) and F16
+      (chain) grads to the same accumulator.
+    - The conv VJP needs matching dtypes on its grad + weight inputs.
+    - The ReLU VJP must derive its mask dtype from grad, not from x.
+    """
+
+    def __init__(self, c: int = 16) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(c, c, 3, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(c)
+        self.conv2 = nn.Conv2d(c, c, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(c)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        h = F.relu(self.bn1(self.conv1(x)))
+        h = self.bn2(self.conv2(h))
+        return F.relu(h + x)
+
+
+class _ResNetMini(nn.Module):
+    """conv stem → maxpool → ResBlock → adaptive avg pool → linear.
+
+    Mirrors the canonical ResNet topology in miniature; the ResBlock
+    plus the stem chain together exposed the systemic VJP mixed-dtype
+    bug that landed with P5.3 (Activation / Arith / Norm / Conv /
+    Linear / Loss / Shape VJPs all needing chain-dtype reconciliation).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(3, 16, 3, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(16)
+        self.pool = nn.MaxPool2d(2)
+        self.block = _ResBlock(16)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(16, 4)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        h = F.relu(self.bn(self.conv(x)))
+        h = self.pool(h)
+        h = self.block(h)
+        h = self.gap(h).flatten(1)
+        return self.fc(h)
+
+
+def test_fused_step_autocast_resnet_mini_trains() -> None:
+    """ResNet-mini + fused_step + autocast(F16) with manual VJP REQUIRED.
+
+    The ``LUCID_MANUAL_VJP_REQUIRE=1`` env gate forces every VJP in the
+    backward walker to land via a manual emitter — no fallback to
+    MPSGraph autograd permitted.  This is the regression gate for the
+    P5 systemic mixed-dtype reconciliation: if any VJP body multiplies
+    a F16 chain operand with a F32 forward activation, MPSGraph's
+    same-dtype check trips and ``compile_generic_fused_step`` raises.
+    """
+    import os
+
+    lucid.manual_seed(0)
+    model = _ResNetMini().to(COMPILE_DEVICE)
+    model.train()
+    opt = optim.SGD(model.parameters(), lr=1e-2)
+
+    def _ce_loss(pred: lucid.Tensor, target: lucid.Tensor) -> lucid.Tensor:
+        return F.cross_entropy(pred, target)
+
+    prev_require = os.environ.get("LUCID_MANUAL_VJP_REQUIRE")
+    os.environ["LUCID_MANUAL_VJP_REQUIRE"] = "1"
+    try:
+        step = fused_step(model, _ce_loss, opt)
+        x = lucid.randn(4, 3, 8, 8).to(COMPILE_DEVICE)
+        t = lucid.randint(0, 4, (4,)).to(COMPILE_DEVICE)
+
+        losses: list[float] = []
+        for _ in range(3):
+            with amp.autocast(dtype=lucid.float16):
+                loss = step(x, t)
+            metal.synchronize()
+            losses.append(float(loss.item()))
+    finally:
+        if prev_require is None:
+            os.environ.pop("LUCID_MANUAL_VJP_REQUIRE", None)
+        else:
+            os.environ["LUCID_MANUAL_VJP_REQUIRE"] = prev_require
+
+    assert losses[0] > losses[-1], (
+        f"expected ResNet-mini loss to decrease over 3 SGD steps under "
+        f"autocast + LUCID_MANUAL_VJP_REQUIRE=1; got {losses}"
     )

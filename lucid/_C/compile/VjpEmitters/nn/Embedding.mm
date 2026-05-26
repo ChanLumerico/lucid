@@ -98,12 +98,13 @@ public:
         MPSGraphTensor* grad_grid =
             [g reshapeTensor:grad withShape:grad_grid_ns name:nil];
 
-        // base = zeros((V, D))   dtype = W.dtype.
+        // base = zeros((V, D))   dtype = grad's dtype (chain dtype
+        // under autocast — W may be F32 master while grad is F16).
         std::vector<std::int64_t> base_shape{ V, D };
         NSArray<NSNumber*>* base_ns = shape_to_ns(base_shape);
         MPSGraphTensor* base = [g constantWithScalar:0.0
                                                 shape:base_ns
-                                             dataType:W.dataType];
+                                             dataType:grad.dataType];
 
         MPSGraphTensor* dW =
             [g scatterAlongAxis:(NSInteger)0
@@ -160,9 +161,11 @@ public:
         std::vector<std::int64_t> d_shape = shape_of_mps(data);
         if (d_shape.empty()) return false;
         NSArray<NSNumber*>* base_ns = shape_to_ns(d_shape);
+        // Base dtype = grad's dtype (chain dtype) so scatter-add of
+        // grad updates onto base works under autocast.
         MPSGraphTensor* base = [g constantWithScalar:0.0
                                                 shape:base_ns
-                                             dataType:data.dataType];
+                                             dataType:grad.dataType];
 
         MPSGraphTensor* d_data =
             [g scatterAlongAxis:axis

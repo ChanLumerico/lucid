@@ -35,11 +35,22 @@ struct BinaryGradPair {
 // the full-shape gradient w.r.t. each input, then unreduce back to the
 // pre-broadcast shape and accumulate.  Factored as a helper so each
 // per-op body stays the math-only minimum.  ``body(c) -> BinaryGradPair``.
+//
+// Mixed-dtype reconciliation (autocast): the forward emit casts both
+// operands to the recorded output dtype, but ``bctx.forward(*)`` returns
+// the original (uncast) producer binding, so ``c.a`` / ``c.b`` may have
+// different dtypes than each other and ``c.go``.  All arithmetic in the
+// gradient body must run in ``c.go.dataType`` (the chain's dtype), so
+// we cast both forward activations to that dtype before invoking the
+// per-op body.
 template <class Body>
 inline bool accumulate_binary(BackwardContext& bctx, const OpNode& node,
                                const std::vector<void*>& grad_outs, Body body) {
     BinaryVjpCtx c = unpack_binary_vjp(bctx, node, grad_outs);
     if (!c.ok) return false;
+    const MPSDataType chain_dt = c.go.dataType;
+    c.a = cast_if_needed(c.g, c.a, chain_dt);
+    c.b = cast_if_needed(c.g, c.b, chain_dt);
     BinaryGradPair g = body(c);
     if (g.da == nil || g.db == nil) return false;
     bctx.accumulate_grad(c.a_id,
@@ -131,7 +142,8 @@ public:
               const std::vector<void*>& grad_outs) override {
         return accumulate_binary(bctx, node, grad_outs,
             [](const BinaryVjpCtx& c) -> BinaryGradPair {
-                MPSDataType dt = c.a.dataType;
+                // c.a / c.b already cast to chain dtype by accumulate_binary.
+                MPSDataType dt = c.go.dataType;
                 MPSGraphTensor* one = [c.g constantWithScalar:1.0 dataType:dt];
                 MPSGraphTensor* bm1 =
                     [c.g subtractionWithPrimaryTensor:c.b secondaryTensor:one name:nil];

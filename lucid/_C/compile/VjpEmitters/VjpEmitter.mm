@@ -225,6 +225,17 @@ void BackwardContext::accumulate_grad(TensorId tid, void* grad) {
     MPSGraph* g = (__bridge MPSGraph*)graph_;
     MPSGraphTensor* a = (__bridge MPSGraphTensor*)it->second;
     MPSGraphTensor* b = (__bridge MPSGraphTensor*)grad;
+    // Mixed-dtype reconciliation: under autocast, gradients from
+    // different paths in the backward walk may have different dtypes
+    // (e.g. residual + main path).  Cast b to match a's dtype so the
+    // add succeeds — MPSGraph's additionWithPrimaryTensor: requires
+    // matching dtypes and would otherwise fail with
+    // ``'mps.add' op requires the same element type for all operands
+    // and results``.  We pick a's dtype (the existing accumulator)
+    // arbitrarily; either choice works as long as we're consistent.
+    if (a != nil && b != nil && a.dataType != b.dataType) {
+        b = [g castTensor:b toType:a.dataType name:@"grad_accum_cast"];
+    }
     MPSGraphTensor* s =
         [g additionWithPrimaryTensor:a secondaryTensor:b name:@"grad_accum"];
     it->second = (__bridge void*)s;

@@ -95,6 +95,14 @@ public:
         MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
         if (g == nil || grad == nil || x == nil || w == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast).  MPSGraph's
+        // convolution2DDataGradient + WeightsGradient APIs require
+        // matching dtypes on grad + w (for data-grad) and grad + x
+        // (for weights-grad).  Cast forward x / w to grad's dtype.
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+
         MPSGraphConvolution2DOpDescriptor* desc =
             make_conv2d_desc((*S)[1], (*S)[0], (*D)[1], (*D)[0], (*P)[1], (*P)[0], groups);
         if (desc == nil) return false;
@@ -175,6 +183,11 @@ public:
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
         MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
         if (g == nil || grad == nil || x == nil || w == nil) return false;
+
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
 
         // Reshape x (B, C, L) → (B, C, 1, L); w (Cout, Cin/g, K) → (Cout, Cin/g, 1, K).
         // grad shape is (B, C_out, L_out) → reshape to (B, C_out, 1, L_out).
@@ -275,6 +288,11 @@ public:
         MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
         if (g == nil || grad == nil || x == nil || w == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+
         MPSGraphConvolution3DOpDescriptor* desc =
             [MPSGraphConvolution3DOpDescriptor
                 descriptorWithStrideInX:(NSUInteger)(*S)[2]
@@ -371,6 +389,11 @@ public:
         MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
         if (g == nil || grad == nil || x == nil || w == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
+
         MPSGraphConvolution2DOpDescriptor* desc =
             make_conv2d_desc((*S)[1], (*S)[0], 1, 1, (*P)[1], (*P)[0], groups);
         if (desc == nil) return false;
@@ -445,6 +468,11 @@ public:
         MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
         MPSGraphTensor* w = as_tensor(bctx.forward(w_id));
         if (g == nil || grad == nil || x == nil || w == nil) return false;
+
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        w = cast_if_needed(g, w, chain_dt);
 
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         std::vector<std::int64_t> w_shape = shape_of_mps(w);

@@ -22,6 +22,9 @@ namespace {
 
 // ────────────────────────────────────────────────────────────────────
 // ReLU: dA = grad * (x > 0).
+//
+// All constants / casts derive from ``go.dataType`` (the chain dtype) —
+// ``x`` is pre-cast to that dtype by ``emit_unary_vjp``.
 // ────────────────────────────────────────────────────────────────────
 class ReluVjp final : public VjpEmitter {
 public:
@@ -30,7 +33,7 @@ public:
               const std::vector<void*>& grad_outs) override {
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
-                MPSDataType dt = x.dataType;
+                MPSDataType dt = go.dataType;
                 MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:dt];
                 MPSGraphTensor* mask =
                     [g greaterThanWithPrimaryTensor:x secondaryTensor:zero name:nil];
@@ -54,8 +57,8 @@ public:
               const std::vector<void*>& grad_outs) override {
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
                 MPSGraphTensor* y = [g sigmoidWithTensor:x name:nil];
-                MPSDataType dt = y.dataType;
                 MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
                 MPSGraphTensor* one_m_y =
                     [g subtractionWithPrimaryTensor:one secondaryTensor:y name:nil];
@@ -78,8 +81,8 @@ public:
               const std::vector<void*>& grad_outs) override {
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
                 MPSGraphTensor* y = [g tanhWithTensor:x name:nil];
-                MPSDataType dt = y.dataType;
                 MPSGraphTensor* y_sq =
                     [g multiplicationWithPrimaryTensor:y secondaryTensor:y name:nil];
                 MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
@@ -102,7 +105,7 @@ public:
               const std::vector<void*>& grad_outs) override {
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
-                MPSDataType dt = x.dataType;
+                MPSDataType dt = go.dataType;
                 MPSGraphTensor* sig = [g sigmoidWithTensor:x name:nil];
                 MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
                 MPSGraphTensor* one_m_sig =
@@ -135,7 +138,7 @@ public:
               const std::vector<void*>& grad_outs) override {
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
-                MPSDataType dt = x.dataType;
+                MPSDataType dt = go.dataType;
                 MPSGraphTensor* k =
                     [g constantWithScalar:0.7978845608028654 dataType:dt];  // sqrt(2/π)
                 MPSGraphTensor* c044 =
@@ -193,6 +196,60 @@ public:
 };
 
 // ────────────────────────────────────────────────────────────────────
+// GELU (exact, erf-based):
+//   y = 0.5 * x * (1 + erf(x / sqrt(2))).
+// Derivative (chain rule):
+//   dy/dx = 0.5 * (1 + erf(x/√2))                 ≡ Φ(x)
+//         + x * exp(-x²/2) / sqrt(2π)              ≡ x · φ(x)
+// where Φ is the standard-normal CDF and φ the PDF.  We do NOT divide
+// y by x to recover Φ(x) — the x==0 singularity would blow up; recompute
+// erf cheaply instead.  Constants resolve from ``go.dataType`` so the
+// chain stays one dtype under autocast (see _VjpHelpers.h:207-230).
+// ────────────────────────────────────────────────────────────────────
+class GeluExactVjp final : public VjpEmitter {
+public:
+    std::string_view op_name() const override { return "gelu_exact"; }
+    bool emit(BackwardContext& bctx, const OpNode& node,
+              const std::vector<void*>& grad_outs) override {
+        return emit_unary_vjp(bctx, node, grad_outs,
+            [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
+                MPSDataType dt = go.dataType;
+                MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:dt];
+                MPSGraphTensor* one = [g constantWithScalar:1.0 dataType:dt];
+                MPSGraphTensor* neg_half =
+                    [g constantWithScalar:-0.5 dataType:dt];
+                MPSGraphTensor* inv_sqrt2 =
+                    [g constantWithScalar:0.7071067811865475 dataType:dt];  // 1/√2
+                MPSGraphTensor* inv_sqrt2pi =
+                    [g constantWithScalar:0.3989422804014327 dataType:dt];  // 1/√(2π)
+                // term1 = Φ(x) = 0.5 * (1 + erf(x/√2))
+                MPSGraphTensor* x_scaled =
+                    [g multiplicationWithPrimaryTensor:x secondaryTensor:inv_sqrt2 name:nil];
+                MPSGraphTensor* erf_t = [g erfWithTensor:x_scaled name:nil];
+                MPSGraphTensor* one_plus_erf =
+                    [g additionWithPrimaryTensor:one secondaryTensor:erf_t name:nil];
+                MPSGraphTensor* term1 =
+                    [g multiplicationWithPrimaryTensor:half secondaryTensor:one_plus_erf name:nil];
+                // term2 = x * φ(x) = x * exp(-x²/2) / √(2π)
+                MPSGraphTensor* x2 =
+                    [g multiplicationWithPrimaryTensor:x secondaryTensor:x name:nil];
+                MPSGraphTensor* neg_half_x2 =
+                    [g multiplicationWithPrimaryTensor:neg_half secondaryTensor:x2 name:nil];
+                MPSGraphTensor* exp_t = [g exponentWithTensor:neg_half_x2 name:nil];
+                MPSGraphTensor* pdf =
+                    [g multiplicationWithPrimaryTensor:inv_sqrt2pi secondaryTensor:exp_t name:nil];
+                MPSGraphTensor* term2 =
+                    [g multiplicationWithPrimaryTensor:x secondaryTensor:pdf name:nil];
+                MPSGraphTensor* deriv =
+                    [g additionWithPrimaryTensor:term1 secondaryTensor:term2 name:nil];
+                return [g multiplicationWithPrimaryTensor:go
+                                          secondaryTensor:deriv
+                                                     name:@"gelu_exact_vjp"];
+            });
+    }
+};
+
+// ────────────────────────────────────────────────────────────────────
 // astype (dtype cast): dx = cast(grad_out, x.dtype).  The forward
 // changes precision; the backward casts the grad back to the input's
 // precision so the chain stays self-consistent.  Identity-shape so
@@ -203,12 +260,15 @@ public:
     std::string_view op_name() const override { return "astype"; }
     bool emit(BackwardContext& bctx, const OpNode& node,
               const std::vector<void*>& grad_outs) override {
+        // ``cast_forward_to_grad=false`` — this VJP intentionally reads
+        // the original ``x`` dtype to cast the grad *back* to it.
         return emit_unary_vjp(bctx, node, grad_outs,
             [](MPSGraph* g, MPSGraphTensor* x, MPSGraphTensor* go) {
                 MPSDataType x_dt = x.dataType;
                 if (go.dataType == x_dt) return go;
                 return [g castTensor:go toType:x_dt name:@"astype_vjp"];
-            });
+            },
+            /*cast_forward_to_grad=*/false);
     }
 };
 

@@ -445,9 +445,7 @@ class _FusedStep:
                                 _autocast_prev_dtype is not None
                                 and _autocast_was_active
                             ):
-                                _restore = _C_engine.AutocastGuard(
-                                    _autocast_prev_dtype
-                                )
+                                _restore = _C_engine.AutocastGuard(_autocast_prev_dtype)
                                 _restore.__enter__()
         finally:
             _tls.active = False

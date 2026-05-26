@@ -56,6 +56,14 @@ public:
         MPSGraphTensor* W = as_tensor(bctx.forward(W_id));
         if (g == nil || grad == nil || x == nil || W == nil) return false;
 
+        // Mixed-dtype reconciliation (autocast): MPSGraph's matmul
+        // requires matching operand dtypes.  Cast forward x / W to
+        // grad's dtype so dx = grad @ W and dW = grad^T @ x both
+        // execute in one precision.
+        const MPSDataType chain_dt = grad.dataType;
+        x = cast_if_needed(g, x, chain_dt);
+        W = cast_if_needed(g, W, chain_dt);
+
         std::vector<std::int64_t> x_shape = shape_of_mps(x);
         std::vector<std::int64_t> W_shape = shape_of_mps(W);  // (out, in)
         if (x_shape.empty() || W_shape.size() != 2) return false;
@@ -134,6 +142,11 @@ public:
         MPSGraphTensor* a = as_tensor(bctx.forward(a_id));
         MPSGraphTensor* b = as_tensor(bctx.forward(b_id));
         if (g == nil || grad == nil || a == nil || b == nil) return false;
+
+        // Mixed-dtype reconciliation (autocast).
+        const MPSDataType chain_dt = grad.dataType;
+        a = cast_if_needed(g, a, chain_dt);
+        b = cast_if_needed(g, b, chain_dt);
 
         std::vector<std::int64_t> a_shape = shape_of_mps(a);
         std::vector<std::int64_t> b_shape = shape_of_mps(b);

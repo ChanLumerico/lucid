@@ -34,8 +34,9 @@ from lucid.compile import fused_step
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 
-def _train_eager(model: nn.Module, x: lucid.Tensor, t: lucid.Tensor,
-                 n_steps: int, lr: float) -> list[float]:
+def _train_eager(
+    model: nn.Module, x: lucid.Tensor, t: lucid.Tensor, n_steps: int, lr: float
+) -> list[float]:
     """Run eager training loop; return per-step loss values."""
     opt = optim.SGD(model.parameters(), lr=lr)
     losses: list[float] = []
@@ -51,8 +52,9 @@ def _train_eager(model: nn.Module, x: lucid.Tensor, t: lucid.Tensor,
     return losses
 
 
-def _train_fused(model: nn.Module, x: lucid.Tensor, t: lucid.Tensor,
-                 n_steps: int, lr: float) -> list[float]:
+def _train_fused(
+    model: nn.Module, x: lucid.Tensor, t: lucid.Tensor, n_steps: int, lr: float
+) -> list[float]:
     """Run fused_step training loop; return per-step loss values."""
     opt = optim.SGD(model.parameters(), lr=lr)
     step = fused_step(model, F.mse_loss, opt)

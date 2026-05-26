@@ -350,7 +350,8 @@ set(LUCID_VJP_EMITTERS
     compile/VjpEmitters/nn/Embedding.mm
     compile/VjpEmitters/nn/Norm.mm
     compile/VjpEmitters/nn/Conv.mm
-    compile/VjpEmitters/nn/Dropout.mm)
+    compile/VjpEmitters/nn/Dropout.mm
+    compile/VjpEmitters/nn/Pool.mm)
 
 lucid_object_library(
     lucid_compile
