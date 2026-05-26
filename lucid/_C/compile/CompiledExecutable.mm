@@ -309,33 +309,41 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
             [results addObject:td];
         }
 
-        // ``encodeToCommandBuffer:`` + async ``commit`` (no wait) —
-        // ~100-200μs cheaper per call on M-series than the
-        // synchronous ``runWithMTLCommandQueue:`` path.  Output
-        // dependency is enforced by MLX's tracker on the wrapped
-        // output arrays (line ~290 below) — every user-side read
-        // (``.item()`` / ``.numpy()`` / ``metal.synchronize()``)
-        // blocks via MLX's eval path until the GPU finishes.  Matches
-        // the async model MLX eager uses, so compile-mode now
-        // pipelines the same way.
+        // Default = **synchronous** ``runWithMTLCommandQueue:`` path.
+        //
+        // The async ``encodeToCommandBuffer:`` + ``commit`` path is
+        // ~100-200μs cheaper per call on M-series and was the prior
+        // default, but it is **CORRECTNESS-UNSAFE under many
+        // consecutive calls** — see
+        // ``obsidian/engine/engine-compile-output-buffer-pool-
+        // exhaustion-2026-05-26.md`` for the full reproducer.  After
+        // N consecutive ``cm(x)`` calls without intermediate
+        // materialisation (N≈14 for a GPT-2 transformer-block-sized
+        // output, ~50 for a CIFAR ResNet block, ~100 with periodic
+        // ``.sum().item()`` force-evals interleaved), the returned
+        // output's MTLBuffer is silently overwritten to zeros — the
+        // computation completed correctly but the buffer lifecycle
+        // got tangled in MLX's async tracker.
+        //
+        // The bug surfaced as a P0 priority while investigating the
+        // bench harness's parity divergence on gpt2_block @ BS=128.
+        // Switching to the sync path eliminates all reproductions
+        // (every N up to 100, every workload tested) at the cost of
+        // ~100-200μs per call — acceptable when the alternative is
+        // silent wrong outputs.
+        //
+        // ``LUCID_COMPILE_ASYNC=1`` opts back into the async path for
+        // users who (a) know their workload doesn't hit the
+        // threshold or (b) wrap every compile call with explicit
+        // ``.sum().item()`` materialisation.  The sync default
+        // protects the common case.
         MPSGraphExecutableExecutionDescriptor* desc =
             [[MPSGraphExecutableExecutionDescriptor alloc] init];
-        // EXPERIMENTAL ``LUCID_COMPILE_SYNC=1``: force the synchronous
-        // ``runWithMTLCommandQueue:`` path.  Used to diagnose hangs in
-        // the async commit path (notably for variable-bearing
-        // executables where assignVariable/readVariable scheduling
-        // behaves differently than placeholder outputs).
-        static const bool force_sync = []() {
-            const char* s = std::getenv("LUCID_COMPILE_SYNC");
+        static const bool force_async = []() {
+            const char* s = std::getenv("LUCID_COMPILE_ASYNC");
             return s && std::string(s) == "1";
         }();
-        if (force_sync) {
-            desc.waitUntilCompleted = YES;
-            (void)[exe->executable runWithMTLCommandQueue:queue
-                                              inputsArray:feeds
-                                             resultsArray:results
-                                      executionDescriptor:desc];
-        } else {
+        if (force_async) {
             desc.waitUntilCompleted = NO;
             MPSCommandBuffer* mps_cb =
                 [MPSCommandBuffer commandBufferFromCommandQueue:queue];
@@ -344,6 +352,12 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
                                             resultsArray:results
                                      executionDescriptor:desc];
             [mps_cb commit];
+        } else {
+            desc.waitUntilCompleted = YES;
+            (void)[exe->executable runWithMTLCommandQueue:queue
+                                              inputsArray:feeds
+                                             resultsArray:results
+                                      executionDescriptor:desc];
         }
 
         // Wrap each output MTLBuffer back into a GpuStorage-backed
