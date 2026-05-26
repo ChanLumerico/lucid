@@ -204,8 +204,9 @@ Storage gelu_forward(const Storage& x, const Shape& shape, Dtype dt) {
 //
 // The MPSGraph 9-op composite above produces no measurable speedup vs
 // MLX (both compile down to roughly the same multi-op kernel chain on
-// M-series).  Torch MPS reaches ~4× faster on (8, 1024, 3072) by
-// dispatching a single hand-tuned Metal kernel.  We match that with
+// M-series).  The reference framework's MPS path reaches ~4× faster
+// on (8, 1024, 3072) by dispatching a single hand-tuned Metal kernel.
+// We match that with
 // a one-pass MSL kernel below: read x once, evaluate GELU in registers,
 // write y once.  Threadgroup geometry tuned to 256 threads/group
 // (default M-series sweet spot for memory-bound elementwise ops).
@@ -763,8 +764,8 @@ Storage silu_metal_backward(const Storage& x, const Storage& grad,
 // The MPSGraph ``normalizationWithTensor:`` route (above, ~1500 LOC
 // down) was measured at noise level vs MLX on M4 Max
 // (perf-baseline-rebench-2026-05-25 dispatch audit).  This custom
-// kernel matches torch MPS's hand-tuned approach and reclaims a
-// fraction of the 2.5–2.8× gap.
+// kernel matches the reference framework's MPS hand-tuned approach
+// and reclaims a fraction of the 2.5–2.8× gap.
 
 namespace {
 
@@ -1615,7 +1616,8 @@ LayerNormBackwardOut layer_norm_backward(const Storage& x,
 //
 // MLX has no fused BN; we lean on MPSGraph's `normalizationWithTensor:...`
 // and the matching gradient ops.  Dispatched only for very large
-// activations (Phase 0 measurement: 5.5× torch on 32×64×112×112).
+// activations (Phase 0 measurement: 5.5× reference framework on
+// 32×64×112×112).
 
 namespace {
 
@@ -1981,9 +1983,10 @@ MPSGraphExecutable* softmax_bwd_executable(const Shape& shape,
 
         // MPSGraph's canonical softmax-gradient op.  The `sourceTensor`
         // parameter is the softmax OUTPUT (despite the misleading name);
-        // PyTorch MPS calls this exact API with saved-output, and the math
-        // produces  dx = z * (grad - sum(z*grad, axis))  which matches
-        // Lucid's saved-z convention.
+        // the reference framework's MPS path calls this exact API with
+        // saved-output, and the math produces
+        // ``dx = z * (grad - sum(z*grad, axis))`` which matches Lucid's
+        // saved-z convention.
         MPSGraphTensor* result =
             [graph softMaxGradientWithIncomingGradient:grad
                                           sourceTensor:z

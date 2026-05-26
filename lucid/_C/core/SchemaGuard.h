@@ -27,7 +27,7 @@
 //
 // :func:`check_schema_determinism` exposes the determinism gate as a
 // standalone function for callers (e.g. custom-function wrappers,
-// torch.compile-style trace builders) that need only the determinism
+// graph-capture-style trace builders) that need only the determinism
 // check without dtype resolution.
 //
 // See Also

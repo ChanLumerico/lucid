@@ -114,8 +114,8 @@ public:
         if (x.shape.count != 4) return false;
         bool align_corners = bool_attr(node, "align_corners", false);
         if (IS_BILINEAR) {
-            // Bilinear path: PyTorch-equivalent with centerResult=YES,
-            // alignCorners flag passed through.
+            // Bilinear path: matches the reference framework with
+            // centerResult=YES, alignCorners flag passed through.
             MPSShape* size_2 = @[[NSNumber numberWithLongLong:H_out],
                                   [NSNumber numberWithLongLong:W_out]];
             ctx.bind(node.outputs[0].id, (__bridge void*)([g resizeTensor:x
@@ -127,7 +127,8 @@ public:
                                               name:@"interp2d_bilinear"]));
         return true;
         }
-        // Nearest path: PyTorch ``F.interpolate(mode='nearest')`` uses
+        // Nearest path: the reference framework's
+        // ``F.interpolate(mode='nearest')`` uses
         // floor(dst * src_size / dst_size) → exact kron-style block
         // upsampling.  MPSGraph's plain ``resizeTensor:mode:nearest`` uses
         // ``RoundPreferCeil`` and gives a different mapping.  Use the

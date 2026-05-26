@@ -34,9 +34,10 @@
 // (``raw[:, :H]`` = i, ``raw[:, H:2H]`` = f, ``raw[:, 2H:3H]`` = g,
 // ``raw[:, 3H:4H]`` = o), so no gate reorder is needed.
 //
-// Bias handling: PyTorch splits the affine bias into two halves so the
-// state-dict round-trips with the reference framework's
-// ``LSTMCell`` layout.  MPSGraph wants a single (4H,) bias — we add
+// Bias handling: the reference framework splits the affine bias into
+// two halves so the state-dict round-trips with the reference
+// framework's ``LSTMCell`` layout.  MPSGraph wants a single (4H,) bias
+// — we add
 // the two halves before feeding the descriptor (matches the engine's
 // ``bias = b_ih + b_hh`` pre-compute).
 
@@ -132,8 +133,8 @@ public:
 
         // MPSGraph LSTM expects recurrent weight (4H, H) and input
         // weight (4H, I), with the leading axis grouping the four
-        // gates.  PyTorch / Lucid match this layout exactly, so feed
-        // straight through.
+        // gates.  The reference framework and Lucid both match this
+        // layout exactly, so feed straight through.
         MPSGraphLSTMDescriptor* d = [MPSGraphLSTMDescriptor descriptor];
         d.reverse = NO;
         d.bidirectional = NO;

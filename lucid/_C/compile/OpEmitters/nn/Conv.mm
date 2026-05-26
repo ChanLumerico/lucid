@@ -290,8 +290,9 @@ public:
         if (g == nil || x == nil || W == nil) return false;
         if (W.shape.count != 4) return false;
         // Lucid stores ConvTranspose weights as ``(in, out, kH, kW)`` —
-        // the same IOHW layout PyTorch uses, which also matches what
-        // MPSGraph's ``convolutionTranspose2D`` expects: it interprets
+        // the same IOHW layout the reference framework uses, which
+        // also matches what MPSGraph's ``convolutionTranspose2D``
+        // expects: it interprets
         // the weight as the *forward* conv's weight (OIHW where O is
         // the forward output = transpose input).  No permutation needed.
         MPSGraphConvolution2DOpDescriptor* d =
@@ -483,8 +484,9 @@ public:
         if (out_sh.count != 4) return false;
         // macOS 26 SDK regression: ``colToImWithSourceTensor:`` runtime
         // validator rejects the rank-3 ``(N, C*kH*kW, oH*oW)`` form
-        // Lucid (and PyTorch) use, with "invalid output shape for
-        // input & attributes" — see [[engine-mps26-colToIm-regression]].
+        // Lucid (and the reference framework) use, with "invalid output
+        // shape for input & attributes" — see
+        // [[engine-mps26-colToIm-regression]].
         // Until the layout contract is resolved (Apple FB or a working
         // rank-4 reshape recipe), drop to eager fallback for fold so
         // the compile path stays correct.  Fold is the conv-backward

@@ -63,8 +63,9 @@ bool should_dispatch_gelu(std::int64_t numel, Dtype dt) {
     // 3.83× on ffn_big, but the existing MPSGraph 9-op composite below
     // **doesn't help** (1.07× vs MLX = noise; 0.91× = mild regression
     // on fwd).  Route through ``should_dispatch_gelu_metal`` instead —
-    // the custom Metal kernel matches torch MPS.  Keep this predicate
-    // returning false so the MPSGraph build is no longer used by default.
+    // the custom Metal kernel matches the reference framework's MPS
+    // path.  Keep this predicate returning false so the MPSGraph build
+    // is no longer used by default.
     return false;
 }
 
@@ -107,9 +108,10 @@ bool should_dispatch_layer_norm_backward(std::int64_t outer,
     (void)normalized_size;
     (void)dt;
     // 2026-05-25 rebench: Lucid MLX LayerNorm fwd is 1.5× **faster**
-    // than torch MPS on llama-scale (perf-baseline-rebench-2026-05-25)
-    // and the bwd dispatch shows noise-level differences vs MLX
-    // (1.02×) per the dispatch audit.  Off by default; kept compilable.
+    // than the reference framework's MPS path on llama-scale
+    // (perf-baseline-rebench-2026-05-25) and the bwd dispatch shows
+    // noise-level differences vs MLX (1.02×) per the dispatch audit.
+    // Off by default; kept compilable.
     return false;
 }
 
@@ -151,8 +153,9 @@ bool should_dispatch_bn_train_metal(std::int64_t per_channel_numel,
 bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt) {
     (void)numel;
     (void)dt;
-    // 2026-05-25 rebench: silu_bwd 2.7× vs torch (real but mild); the
-    // existing dispatch shows 1.11× vs MLX (noise) per dispatch audit.
+    // 2026-05-25 rebench: silu_bwd 2.7× vs reference framework (real
+    // but mild); the existing dispatch shows 1.11× vs MLX (noise) per
+    // dispatch audit.
     // Off by default; pattern same as silu_fwd / gelu_fwd — needs
     // custom Metal kernel to close further, MPSGraph route is dead.
     return false;
@@ -182,13 +185,13 @@ bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt) {
     (void)dt;
     // Tried Phase 4 — disabled.  Measurement on dev box (4096, 50257) F32:
     //   MLX chain: 51 ms  MPSGraph canonical: 67 ms (0.76× slower)
-    //   MPSGraph hand-rolled: 64 ms (0.71× slower)  torch: 19 ms
+    //   MPSGraph hand-rolled: 64 ms (0.71× slower)  reference: 19 ms
     // MPSGraph framework overhead (executable lookup + 800 MB MTLBuffer
     // alloc + run) exceeds the per-call kernel saving for very large axes.
     // MLX's lazy chain is already memory-bandwidth-bound and competitive.
-    // Closing the residual 3× torch gap would need a custom Metal compute
-    // kernel — out of MPSGraph's wheelhouse.  Kernel kept (in MpsKernels)
-    // as reference for the canonical signature.
+    // Closing the residual 3× reference-framework gap would need a custom
+    // Metal compute kernel — out of MPSGraph's wheelhouse.  Kernel kept
+    // (in MpsKernels) as reference for the canonical signature.
     return false;
 }
 
@@ -210,10 +213,11 @@ bool should_dispatch_embedding_backward(std::int64_t M_total,
     //   large_emb (50K×1K) MLX 3.35 ms   MPSGraph 36.05 ms  (10.7× slower)
     //
     // The Phase 0 baseline (perf-mlx-op-baseline-2026-05.md) that
-    // reported MLX 28× slower than torch did NOT force grad eval, so
-    // MLX's lazy graph skipped the scatter entirely.  Once eval is
-    // forced the MLX path is already faster than torch MPS (ref 1.25 ms
-    // for gpt2-input).
+    // reported MLX 28× slower than the reference framework did NOT
+    // force grad eval, so MLX's lazy graph skipped the scatter
+    // entirely.  Once eval is forced the MLX path is already faster
+    // than the reference framework's MPS path (ref 1.25 ms for
+    // gpt2-input).
     //
     // Kernel kept in MpsKernels for two reasons: (a) opt-in
     // ``LUCID_MPS_EMBEDDING_BWD=1`` for future SDK regressions, (b)

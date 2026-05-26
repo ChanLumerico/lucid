@@ -51,7 +51,8 @@ Storage gelu_forward(const Storage& x, const Shape& shape, Dtype dt);
 //
 // Empirically the MPSGraph 9-op build above produces no measurable
 // speedup vs MLX (both fuse into ~the same multi-op chain on
-// M-series).  This kernel matches torch MPS's hand-tuned approach:
+// M-series).  This kernel matches the reference framework's MPS
+// hand-tuned approach:
 // read x once, evaluate the closed-form in registers, write y once.
 // Routed when ``should_dispatch_gelu_metal`` returns true.
 //

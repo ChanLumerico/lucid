@@ -535,7 +535,8 @@ public:
         //
         // 2026-05-25: custom Metal compute kernel is the primary fast path
         // — the MPSGraph 9-op composite produces no measurable speedup
-        // vs MLX, but a single-pass MSL kernel does (matches torch MPS).
+        // vs MLX, but a single-pass MSL kernel does (matches the
+        // reference framework's MPS path).
         // See perf-baseline-rebench-2026-05-25.md.
         std::int64_t numel = 1;
         for (std::int64_t d : shape) numel *= d;
@@ -1732,7 +1733,7 @@ public:
         // with MLX's fused ``fast::rms_norm`` for the main output, plus a
         // small standalone ``mean(square)`` + ``rsqrt`` for the saved rstd
         // tensor that the backward needs.  Llama-scale: Mac Studio fwd
-        // 1.5 ms (chain) → ~0.5 ms (target, matching torch).
+        // 1.5 ms (chain) → ~0.5 ms (target, matching the reference framework).
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
@@ -1826,7 +1827,8 @@ public:
         // → multiply → multiply+add) with MLX's fused ``fast::layer_norm`` for
         // the main output, plus a small ``mean`` + ``var`` reduction pair
         // for the saved-tensor rstd that the backward needs.  Llama-scale:
-        // Mac Studio fwd 2.4 ms (chain) → ~0.6 ms (target, matching torch).
+        // Mac Studio fwd 2.4 ms (chain) → ~0.6 ms (target, matching the
+        // reference framework).
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gb = std::get<GpuStorage>(beta);
@@ -4019,12 +4021,13 @@ public:
                                int padding_idx,
                                Dtype dt) override {
         // dW[idx[i], :] += grad_out[i, :], summed across duplicates.
-        // The natural primitive is torch-style scatter-add along axis 0.
-        // Lucid 3.3.0 used an onehot-matmul trick that allocates a
-        // `(M_total × N)` boolean tensor — 820 MB for GPT-2 vocab — and
-        // a full matmul.  Replacing with `mlx::core::scatter_add_axis` is
-        // asymptotically optimal and matches the engine's existing
-        // [[engine-mlx-scatter-axis-vs-multiaxis]] convention (torch
+        // The natural primitive is reference-framework-style scatter-add
+        // along axis 0.  Lucid 3.3.0 used an onehot-matmul trick that
+        // allocates a `(M_total × N)` boolean tensor — 820 MB for GPT-2
+        // vocab — and a full matmul.  Replacing with
+        // `mlx::core::scatter_add_axis` is asymptotically optimal and
+        // matches the engine's existing
+        // [[engine-mlx-scatter-axis-vs-multiaxis]] convention (reference
         // semantics → `scatter_add_axis`, not multi-axis `scatter_add`).
         const std::int64_t N = weight_shape[0];
         const std::int64_t D = weight_shape[1];

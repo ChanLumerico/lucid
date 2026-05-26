@@ -59,7 +59,7 @@ TensorImplPtr flatten_op(const TensorImplPtr& a, int start_axis, int end_axis) {
     Validator::input(a, "flatten.a").non_null();
     const int ndim = static_cast<int>(a->shape().size());
     // 0-D scalar input flattens to a 1-D length-1 tensor — matches the
-    // reference framework's ``torch.tensor(5.0).flatten() == tensor([5.])``
+    // reference framework's ``tensor(5.0).flatten() == tensor([5.])``
     // contract.  Without this short-circuit the default ``end_axis=-1``
     // would resolve to ``-1`` and trip the ``s > e`` guard below.
     if (ndim == 0)

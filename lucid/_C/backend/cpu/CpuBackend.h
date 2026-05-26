@@ -9879,9 +9879,10 @@ private:
                 // outer × inner × reduce_dim loop is straightforward.
                 // ``sum_op`` / ``prod_op`` promote bool / I8 / I16 / I32 to
                 // I64 via ``promote_int_for_reduce`` so all integral
-                // reductions land here; this preserves PyTorch's
-                // "int.sum() → int64" semantics without round-tripping
-                // through F64 (which would lose precision past 2^53).
+                // reductions land here; this preserves the reference
+                // framework's "int.sum() → int64" semantics without
+                // round-tripping through F64 (which would lose
+                // precision past 2^53).
                 const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
                 std::int64_t* outp = reinterpret_cast<std::int64_t*>(ptr.get());
                 for (std::size_t o = 0; o < outer; ++o) {
@@ -9908,11 +9909,12 @@ private:
                         outp[o * inner + i] = acc;
                     }
                 }
-                // Integer Mean: divide by rd and truncate toward zero.  This
-                // matches PyTorch's ``int_tensor.mean()`` which historically
-                // raises (deprecated in 2.x).  We instead floor-divide for
-                // compatibility; callers wanting float mean should promote
-                // their input to F32/F64 explicitly.
+                // Integer Mean: divide by rd and truncate toward zero.
+                // This matches the reference framework's
+                // ``int_tensor.mean()`` which historically raises
+                // (deprecated in 2.x).  We instead floor-divide for
+                // compatibility; callers wanting float mean should
+                // promote their input to F32/F64 explicitly.
                 if (op == ReduceOp::Mean) {
                     const std::int64_t divisor = static_cast<std::int64_t>(rd);
                     for (std::size_t i = 0; i < out_n; ++i)

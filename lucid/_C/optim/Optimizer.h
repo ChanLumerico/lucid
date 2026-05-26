@@ -146,7 +146,7 @@ LUCID_API void overwrite_state_storage(Storage& dst, const Storage& src);
 // ``"sgd_v1"``) baked into checkpoints so the Python loader can refuse
 // mismatched versions.  ``state_buffers()`` / ``load_state_buffers()``
 // expose the per-parameter mutable state as named ``TensorImpl`` lists
-// for ``torch.save``-style checkpointing — entries are clones, so the
+// for ``lucid.save``-style checkpointing — entries are clones, so the
 // caller is free to keep them after the optimizer is destroyed.
 //
 // Subclass responsibilities

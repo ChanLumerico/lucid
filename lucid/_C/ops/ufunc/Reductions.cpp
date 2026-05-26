@@ -149,7 +149,7 @@ Storage SumBackward::grad_formula(const Storage& grad_out) {
 
 namespace {
 
-// PyTorch-compatible promotion for integer/bool reductions.  ``bool / int8 /
+// Reference-framework-compatible promotion for integer/bool reductions.  ``bool / int8 /
 // int16 / int32`` all promote to ``int64`` before reducing — preserves
 // overflow headroom for sum/prod and matches the reference framework's
 // observable behaviour.  Floats / complex pass through unchanged.

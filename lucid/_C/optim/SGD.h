@@ -46,7 +46,8 @@ class TensorImpl;
 // which requires ``dampening = 0`` and ``momentum > 0``.
 //
 // L2 weight decay with coefficient $\lambda$ is applied to the gradient
-// *before* the momentum update (PyTorch-style coupled weight decay):
+// *before* the momentum update (coupled weight decay, as in the
+// reference framework):
 // $$
 //   g_t \leftarrow g_t + \lambda\, \theta_t.
 // $$

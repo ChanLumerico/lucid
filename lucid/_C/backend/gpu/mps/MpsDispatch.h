@@ -71,8 +71,8 @@ bool should_dispatch_gelu(std::int64_t numel, Dtype dt);
 // Dispatch the GELU (tanh approximation) through a custom Metal
 // compute kernel instead of the 9-op MPSGraph composite.  The
 // composite produces no measurable speedup vs MLX on M-series; a
-// single-pass MSL kernel matches torch MPS's ~4× win on
-// transformer-scale activations.
+// single-pass MSL kernel matches the reference framework's MPS path
+// (~4× win on transformer-scale activations).
 //
 // Parameters
 // ----------
@@ -177,8 +177,9 @@ bool should_dispatch_batch_norm_train(std::int64_t numel, Dtype dt);
 
 // Dispatch the BN training forward through a 2-pass custom Metal
 // kernel pair (reduce + normalize) instead of the MPSGraph
-// composite.  Targets the 2.5–2.8× gap to torch MPS on ImageNet-
-// scale activations (perf-baseline-rebench-2026-05-25).
+// composite.  Targets the 2.5–2.8× gap to the reference framework's
+// MPS path on ImageNet-scale activations
+// (perf-baseline-rebench-2026-05-25).
 //
 // Parameters
 // ----------
