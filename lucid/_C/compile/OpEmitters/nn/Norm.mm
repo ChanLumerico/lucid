@@ -218,7 +218,20 @@ public:
         if (x_t == nil || g_t == nil || b_t == nil || graph == nil)
             return false;
 
-        NSUInteger rank = x_t.shape.count;
+        // Source of truth for rank/shape: the trace IR's recorded
+        // output meta.  ``x_t.shape`` from MPSGraph is unreliable —
+        // ops like ``convolution2DWithSourceTensor:`` produce
+        // tensors whose ``shape`` property may be empty (MPSGraph
+        // populates shape lazily based on input shapes at
+        // compile-time, not at op-construction-time).  When such an
+        // unsized tensor flows into ``astype`` → BN, the BN emit
+        // previously gave up at the rank check.  The trace's
+        // ``node.outputs[0].shape`` always reflects the real shape
+        // since it's recorded at op-dispatch time in Lucid eager.
+        const auto& out_shape = node.outputs.empty()
+                                    ? std::vector<std::int64_t>{}
+                                    : node.outputs[0].shape;
+        const NSUInteger rank = static_cast<NSUInteger>(out_shape.size());
         if (rank < 2)
             return false;
 
@@ -231,11 +244,13 @@ public:
         MPSGraphTensor* mean = [graph meanOfTensor:x_t axes:reduce_axes name:nil];
         MPSGraphTensor* var = [graph varianceOfTensor:x_t axes:reduce_axes name:nil];
 
-        // Reshape gamma / beta (C,) → (1, C, 1, ...).
+        // Reshape gamma / beta (C,) → (1, C, 1, ...) — use the
+        // trace's recorded channel count, not ``x_t.shape[1]``
+        // which may be unavailable (see comment above).
         NSMutableArray<NSNumber*>* affine_shape = [NSMutableArray arrayWithCapacity:rank];
         for (NSUInteger i = 0; i < rank; ++i)
             [affine_shape addObject:[NSNumber numberWithLongLong:1]];
-        affine_shape[1] = x_t.shape[1];
+        affine_shape[1] = [NSNumber numberWithLongLong:out_shape[1]];
         MPSGraphTensor* gamma = [graph reshapeTensor:g_t withShape:affine_shape name:nil];
         MPSGraphTensor* beta = [graph reshapeTensor:b_t withShape:affine_shape name:nil];
 

@@ -168,6 +168,102 @@ def test_fused_step_autocast_layernorm_mlp_trains() -> None:
 # ── Forward-only ── `lucid.compile(model)` + autocast ──────────────
 
 
+class _BN1DMLP(nn.Module):
+    """BatchNorm1d-based MLP — exercises BN1d under autocast.
+
+    Tests the BN F16 fix: previously the BN emitter checked
+    ``x_t.shape.count`` which can be 0 for MPSGraph tensors
+    produced by ops like ``conv2d`` that don't populate the shape
+    attribute eagerly.  Switched to the trace's recorded
+    ``node.outputs[0].shape`` which is always accurate.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(8, 16)
+        self.bn = nn.BatchNorm1d(16)
+        self.fc2 = nn.Linear(16, 4)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.fc2(self.bn(self.fc1(x)))
+
+
+def test_fused_step_autocast_batchnorm1d_mlp_trains() -> None:
+    """BN1d-based MLP + fused_step + autocast(F16) — 3 SGD steps converge.
+
+    Previously broken: BN emit returned false on the trace produced
+    under autocast because the MPSGraph tensor's ``.shape`` attribute
+    was empty.  Fix in BN emitter (Norm.mm) reads
+    ``node.outputs[0].shape`` from trace IR instead.
+    """
+    lucid.manual_seed(0)
+    model = _BN1DMLP().to(COMPILE_DEVICE)
+    model.train()
+    opt = optim.SGD(model.parameters(), lr=1e-3)
+    step = fused_step(model, _loss_fn, opt)
+
+    x = lucid.randn(8, 8).to(COMPILE_DEVICE)
+    t = lucid.randn(8, 4).to(COMPILE_DEVICE)
+
+    losses: list[float] = []
+    for _ in range(3):
+        with amp.autocast(dtype=lucid.float16):
+            loss = step(x, t)
+        _ = float(loss.item())
+        metal.synchronize()
+        losses.append(float(loss.item()))
+
+    assert losses[0] > losses[-1], (
+        f"expected loss to decrease over 3 SGD steps with BN1d under "
+        f"autocast; got {losses}"
+    )
+
+
+class _BN2DConvMLP(nn.Module):
+    """Conv2d → BN2d → Linear — exercises the BN-after-Conv path
+    where MPSGraph's conv output may have empty shape attribute.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(3, 16, 3, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(16)
+        self.fc = nn.Linear(16 * 8 * 8, 4)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.fc(self.bn(self.conv(x)).reshape(x.shape[0], -1))
+
+
+def test_fused_step_autocast_batchnorm2d_conv_trains() -> None:
+    """Conv→BN2d→FC + fused_step + autocast(F16) — 3 SGD steps converge.
+
+    The BN F16 emit fix specifically targets this case (BN after Conv,
+    where the MPSGraph tensor produced by ``convolution2DWithSourceTensor:``
+    has empty ``.shape``).
+    """
+    lucid.manual_seed(0)
+    model = _BN2DConvMLP().to(COMPILE_DEVICE)
+    model.train()
+    opt = optim.SGD(model.parameters(), lr=1e-3)
+    step = fused_step(model, _loss_fn, opt)
+
+    x = lucid.randn(4, 3, 8, 8).to(COMPILE_DEVICE)
+    t = lucid.randn(4, 4).to(COMPILE_DEVICE)
+
+    losses: list[float] = []
+    for _ in range(3):
+        with amp.autocast(dtype=lucid.float16):
+            loss = step(x, t)
+        _ = float(loss.item())
+        metal.synchronize()
+        losses.append(float(loss.item()))
+
+    assert losses[0] > losses[-1], (
+        f"expected loss to decrease over 3 SGD steps with BN2d-after-Conv "
+        f"under autocast; got {losses}"
+    )
+
+
 def test_lucid_compile_forward_autocast_matches_eager() -> None:
     """lucid.compile(model) + autocast(F16) — output parity vs eager."""
     lucid.manual_seed(0)
