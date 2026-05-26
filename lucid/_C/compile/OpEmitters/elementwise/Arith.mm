@@ -32,6 +32,22 @@ namespace lucid::compile {
 
 namespace {
 
+// Map a Lucid Dtype to an MPSDataType (local helper to avoid a sister
+// header pull-in for the single dtype enum mapping we need below).
+inline MPSDataType lucid_dtype_to_mps_local(Dtype dt) {
+    switch (dt) {
+        case Dtype::F16:  return MPSDataTypeFloat16;
+        case Dtype::F32:  return MPSDataTypeFloat32;
+        case Dtype::F64:  return MPSDataTypeFloat32;  // MPS has no F64
+        case Dtype::I8:   return MPSDataTypeInt8;
+        case Dtype::I16:  return MPSDataTypeInt16;
+        case Dtype::I32:  return MPSDataTypeInt32;
+        case Dtype::I64:  return MPSDataTypeInt64;
+        case Dtype::Bool: return MPSDataTypeBool;
+        default:          return MPSDataTypeFloat32;
+    }
+}
+
 template <class BuilderBlock>
 inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 2 || node.outputs.empty())
@@ -45,6 +61,26 @@ inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock bu
     MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
     if (a_t == nil || b_t == nil || graph == nil)
         return false;
+
+    // **AMP/mixed-dtype reconciliation.**  Under autocast, Lucid's
+    // eager dispatch auto-downcasts F32+F16 binary ops to the lower
+    // (autocast-target) dtype, so the trace's recorded output dtype
+    // can disagree with what MPSGraph's binary builders produce
+    // (MPSGraph silently *upcasts* mixed-dtype inputs to the higher
+    // precision).  Reconcile by casting any operand whose dtype
+    // doesn't match the recorded output dtype before the binary op.
+    //
+    // When all dtypes match the output's, both casts are no-ops and
+    // this branch is free.
+    const MPSDataType target_dt =
+        lucid_dtype_to_mps_local(node.outputs[0].dtype);
+    if (a_t.dataType != target_dt) {
+        a_t = [graph castTensor:a_t toType:target_dt name:@"binop_cast_a"];
+    }
+    if (b_t.dataType != target_dt) {
+        b_t = [graph castTensor:b_t toType:target_dt name:@"binop_cast_b"];
+    }
+
     MPSGraphTensor* y = builder(graph, a_t, b_t);
     if (y == nil) return false;
     ctx.bind(node.outputs[0].id, (__bridge void*)y);

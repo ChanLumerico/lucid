@@ -254,6 +254,19 @@ public:
         MPSGraphTensor* gamma = [graph reshapeTensor:g_t withShape:affine_shape name:nil];
         MPSGraphTensor* beta = [graph reshapeTensor:b_t withShape:affine_shape name:nil];
 
+        // **AMP/mixed-dtype reconciliation** (mirror of the Arith
+        // emitters' fix).  Under autocast, ``x_t`` may be F16 (cast
+        // by the autocast SchemaGuard) while gamma/beta stay F32 as
+        // master weights.  MPSGraph's ``normalizationWithTensor:``
+        // internally multiplies these and requires matching dtypes
+        // — cast gamma/beta to match x BEFORE the normalization call.
+        if (gamma.dataType != x_t.dataType) {
+            gamma = [graph castTensor:gamma toType:x_t.dataType name:@"bn_gamma_cast"];
+        }
+        if (beta.dataType != x_t.dataType) {
+            beta = [graph castTensor:beta toType:x_t.dataType name:@"bn_beta_cast"];
+        }
+
         MPSGraphTensor* y =
             [graph normalizationWithTensor:x_t
                                 meanTensor:mean
