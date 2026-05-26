@@ -54,11 +54,10 @@ def _tiny_model() -> nn.Module:
 #     faithfully.  Comparing the two would flag a real eager-side bug
 #     that's outside the compile-parity scope.  Covered separately in
 #     ``test_compile_optimizer_nesterov_correctness`` below.
-#   * Compile-supported set is 8 optimizers (see ``compile_optimizer``
-#     in ``lucid/compile/_optim.py``): SGD, Adam, AdamW, RMSprop,
-#     Adagrad, Adadelta, Adamax, NAdam.  LBFGS / SparseAdam / Rprop /
-#     RAdam / ASGD raise NotImplementedError with reason at construct
-#     time — covered by ``test_compile_optimizer_rejects_unsupported``.
+#   * Compile-supported set is **all 13** optimizers (Y-series, 2026-05-27):
+#     SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax, NAdam
+#     (direct compile) plus SparseAdam, Rprop, ASGD, RAdam, LBFGS
+#     (per-step scalar + select-tree compile).  No optimizer is rejected.
 OPTIMIZER_FACTORIES = [
     pytest.param(lambda p: optim.SGD(p, lr=0.05), id="SGD"),
     pytest.param(lambda p: optim.SGD(p, lr=0.05, momentum=0.9), id="SGD_momentum"),
@@ -69,16 +68,34 @@ OPTIMIZER_FACTORIES = [
     pytest.param(lambda p: optim.Adadelta(p, lr=0.05), id="Adadelta"),
     pytest.param(lambda p: optim.Adamax(p, lr=0.05), id="Adamax"),
     pytest.param(lambda p: optim.NAdam(p, lr=0.05), id="NAdam"),
-]
-
-
-UNSUPPORTED_OPTIMIZERS = [
-    pytest.param(lambda p: optim.LBFGS(p, lr=0.05), id="LBFGS"),
     pytest.param(lambda p: optim.SparseAdam(p, lr=0.05), id="SparseAdam"),
     pytest.param(lambda p: optim.Rprop(p, lr=0.05), id="Rprop"),
-    pytest.param(lambda p: optim.RAdam(p, lr=0.05), id="RAdam"),
     pytest.param(lambda p: optim.ASGD(p, lr=0.05), id="ASGD"),
+    pytest.param(lambda p: optim.RAdam(p, lr=0.05), id="RAdam"),
+    pytest.param(
+        lambda p: optim.LBFGS(p, lr=0.05),
+        id="LBFGS",
+        marks=pytest.mark.xfail(
+            reason=(
+                "LBFGS compile path uses a per-element Barzilai-Borwein "
+                "direction (single-step, no closure) which intentionally "
+                "differs from the flat-vector L-BFGS + line search that "
+                "the eager LBFGS runs.  Convergence is verified by a "
+                "dedicated test below; bit-exact eager parity is out of "
+                "scope for the compile path."
+            ),
+            strict=True,
+        ),
+    ),
 ]
+
+
+# Y-series closed the previous rejection list — every Lucid optimizer
+# now compiles.  The few cases that retain caveats (LBFGS only without
+# closure / line search; SparseAdam runs dense Adam math without the
+# zero-grad-skip shortcut) are still listed in the supported set
+# because the fused-step usage doesn't exercise those caveats.
+UNSUPPORTED_OPTIMIZERS: list[object] = []
 
 
 def _clone_state(model: nn.Module) -> dict[str, lucid.Tensor]:
@@ -185,6 +202,35 @@ def test_compile_optimizer_rejects_unsupported(mk_opt: object) -> None:
     opt = mk_opt(list(model.parameters()))
     with pytest.raises(NotImplementedError, match="not supported"):
         compile_optimizer(opt)
+
+
+def test_compile_optimizer_lbfgs_convergence() -> None:
+    """LBFGS compile path converges on a tiny convex problem.
+
+    The compile-path LBFGS uses a per-element Barzilai-Borwein
+    direction (single-step, no closure) rather than the flat-vector
+    L-BFGS + line search of the eager class — so eager parity is
+    explicitly out of scope (see the xfail on
+    ``test_compile_optimizer_step_parity[LBFGS]``).  Instead, verify
+    that the compile path converges on a small problem: 5 SGD steps
+    + MSE loss should drop the loss meaningfully.
+    """
+    lucid.manual_seed(0)
+    model = _tiny_model()
+    opt = optim.LBFGS(list(model.parameters()), lr=0.05)
+    step = fused_step(model, F.mse_loss, opt)
+    x = metal_tensor(4, 8)
+    t = metal_tensor(4, 4)
+
+    losses: list[float] = []
+    for _ in range(5):
+        loss = step(x, t)
+        losses.append(float(loss.item()))
+
+    assert losses[-1] < losses[0], (
+        f"LBFGS compile path failed to converge over 5 steps; "
+        f"losses = {losses}"
+    )
 
 
 def test_compile_optimizer_nesterov_correctness() -> None:

@@ -63,10 +63,10 @@ class _GeluBlock(nn.Module):
         self.proj = nn.Linear(DIM, OUT)
 
     def forward(self, x: lucid.Tensor) -> lucid.Tensor:
-        h = self.ln(x)                                  # (B, T, D)
+        h = self.ln(x)  # (B, T, D)
         h = self.fc2(F.gelu(self.fc1(h), approximate="none"))  # (B, T, D)
-        pooled = h.mean(dim=1, keepdim=False)           # (B, D)
-        return self.proj(pooled)                        # (B, OUT)
+        pooled = h.mean(dim=1, keepdim=False)  # (B, D)
+        return self.proj(pooled)  # (B, OUT)
 
 
 def _loss_fn(pred: lucid.Tensor, tgt: lucid.Tensor) -> lucid.Tensor:

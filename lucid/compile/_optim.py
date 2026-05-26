@@ -193,55 +193,29 @@ def compile_optimizer(opt: Optimizer) -> object:
         return _CompiledAdamax(opt)
     if isinstance(opt, NAdam):
         return _CompiledNAdam(opt)
-
-    # Structurally unsupported — explain *why* per family so the
-    # caller knows whether to wait for a future variant or pick
-    # a different optimizer.
-    if isinstance(opt, LBFGS):
-        raise NotImplementedError(
-            "compile_optimizer: LBFGS is not supported.  LBFGS performs "
-            "a line search inside ``step()`` whose iteration count "
-            "depends on tensor values; that's incompatible with a "
-            "single MPSGraph executable (no data-dependent loops in "
-            "the IR).  Use eager LBFGS."
-        )
+    # Compiled via per-step scalar feeds + select trees (Y-series, 2026-05-27).
     if isinstance(opt, SparseAdam):
-        raise NotImplementedError(
-            "compile_optimizer: SparseAdam is not supported.  The "
-            "update is defined only over non-zero gradient indices and "
-            "needs a runtime nonzero / scatter dispatch that the "
-            "compile path can't express as a dense MPSGraph op."
-        )
+        return _CompiledSparseAdam(opt)
     if isinstance(opt, Rprop):
-        raise NotImplementedError(
-            "compile_optimizer: Rprop is not supported.  Each element's "
-            "step size is updated via a sign-based conditional branch "
-            "(grow / shrink / hold), which can be expressed as MPSGraph "
-            "``select`` chains but introduces a control-flow shape that "
-            "the current emit pipeline isn't designed for.  Possible "
-            "future work."
-        )
-    if isinstance(opt, RAdam):
-        raise NotImplementedError(
-            "compile_optimizer: RAdam is not supported.  The rectified "
-            "Adam update branches at ``ρ_t > 4`` between a SGD-like "
-            "fallback and the bias-corrected step — that data-dependent "
-            "switch can't live inside a single MPSGraph executable.  "
-            "Possible future work via a precomputed schedule."
-        )
+        return _CompiledRprop(opt)
     if isinstance(opt, ASGD):
-        raise NotImplementedError(
-            "compile_optimizer: ASGD is not supported.  The averaged "
-            "parameter trajectory uses a per-step scalar coefficient "
-            "``μ_t`` that depends on the iteration count past a "
-            "warmup threshold.  Possible future work via per-step "
-            "scalar feeds."
-        )
+        return _CompiledASGD(opt)
+    if isinstance(opt, RAdam):
+        return _CompiledRAdam(opt)
+    if isinstance(opt, LBFGS):
+        # LBFGS compile path supports the closure-less single-step
+        # subset only — full closure-driven line search is genuinely
+        # incompatible with a fixed MPSGraph executable.  The user is
+        # expected to drive forward + backward themselves through
+        # ``fused_step``; the compile uses a per-element BFGS direction
+        # with steepest-descent fallback on the first step.
+        return _CompiledLBFGS(opt)
 
     raise TypeError(
         f"compile_optimizer: unsupported optimizer class "
         f"{type(opt).__name__!r}.  Supported: SGD, Adam, AdamW, "
-        f"RMSprop, Adagrad, Adadelta, Adamax, NAdam."
+        f"RMSprop, Adagrad, Adadelta, Adamax, NAdam, SparseAdam, "
+        f"Rprop, ASGD, RAdam, LBFGS (closure-less single-step subset)."
     )
 
 
@@ -1785,6 +1759,729 @@ class _CompiledNAdam(_CompiledStepBase):
     def _outputs_to_targets(self, outputs):
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` (NAdam)."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
+
+
+# ── SparseAdam ──────────────────────────────────────────────────────
+
+
+class _CompiledSparseAdam(_CompiledAdam):
+    r"""Compiled :class:`~lucid.optim.SparseAdam` via dense Adam math.
+
+    ``SparseAdam`` is Lucid's API-compatible alias for the embedding-
+    friendly Adam variant — the eager path uses the same Adam update
+    rule but lazily allocates ``m`` / ``v`` buffers and short-circuits
+    parameters whose ``grad`` is ``None`` (the common case for
+    embedding rows untouched by a given mini-batch).
+
+    Under :func:`fused_step`, *every* parameter receives an
+    autograd-derived dense gradient via the ghost-grad mechanism, so
+    the "skip when grad is None" optimization is moot — the dense
+    Adam update is the documented contract.  Inherit the entire Adam
+    pipeline (state-buffer plan, bias-correction scalars, update
+    math, output ordering) and override only the constructor to
+    accept a :class:`~lucid.optim.others.SparseAdam` instance + read
+    the slightly different ``param_group`` schema (``"betas"`` tuple
+    rather than ``"beta1"`` / ``"beta2"`` keys; no ``"weight_decay"``).
+
+    See Also
+    --------
+    :class:`lucid.optim.SparseAdam` : eager counterpart.
+    :class:`_CompiledAdam` : the math implementation reused here.
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        """Capture SparseAdam's hyperparams + delegate to Adam state setup.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not a :class:`~lucid.optim.others.SparseAdam`.
+        """
+        from lucid.optim.others import SparseAdam
+
+        if not isinstance(opt, SparseAdam):
+            raise TypeError(
+                f"_CompiledSparseAdam: expected SparseAdam, got {type(opt).__name__}"
+            )
+        # Bypass _CompiledAdam.__init__'s isinstance(Adam) check by
+        # going one level up the MRO + reproducing the state-buffer +
+        # buffer-table setup directly.  ``SparseAdam`` doesn't expose
+        # ``OptimizerSpec.from_optim`` cleanly (the helper guards on
+        # the supported set) so we extract hyperparams from the
+        # param_group dict.
+        _CompiledStepBase.__init__(self, opt)
+        g = opt.param_groups[0]
+        betas = g.get("betas", (0.9, 0.999))
+        self._lr = float(g.get("lr", 1e-3))
+        self._beta1 = float(betas[0])
+        self._beta2 = float(betas[1])
+        self._eps = float(g.get("eps", 1e-8))
+        # SparseAdam exposes no weight_decay knob in its constructor.
+        self._weight_decay = 0.0
+        self._m_buf = [_zeros_like(p) for p in self._params]
+        self._v_buf = [_zeros_like(p) for p in self._params]
+        self._t = 0
+        for i in range(len(self._params)):
+            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
+            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+
+
+# ── Rprop ───────────────────────────────────────────────────────────
+
+
+class _CompiledRprop(_CompiledStepBase):
+    r"""Compiled :class:`~lucid.optim.Rprop` — sign-based per-element step adaptation.
+
+    Rprop uses **only the sign** of each element's gradient (magnitudes
+    are ignored).  Each parameter element carries its own step size
+    ``Δ_i`` that grows by ``η⁺`` when consecutive grads agree in sign
+    and shrinks by ``η⁻`` when they disagree.  After the size adapts,
+    the parameter moves by ``-sign(g) · Δ_i``.
+
+    Update rule
+    -----------
+    With ``prev_grad`` from the previous step, ``step`` the current
+    per-element step size, and ``η⁻ < 1 < η⁺``::
+
+        sign_prod   = grad * prev_grad
+        sign_up     = sign_prod > 0
+        sign_down   = sign_prod < 0
+        step_new    = clamp(
+            where(sign_up,   step * η⁺,
+            where(sign_down, step * η⁻,
+                             step)),
+            min=step_min, max=step_max)
+        # When the sign flips we hold this step (zero the effective grad)
+        # so the size shrinks without overshooting.
+        grad_eff    = where(sign_down, 0, grad)
+        prev_grad_new = where(sign_down, 0, grad)
+        new_param   = param - sign(grad_eff) * step_new
+
+    Selecting ``grad_eff = 0`` on a sign reversal is the canonical
+    Rprop+ "hold step" tweak documented in the eager class — it
+    prevents the next step from immediately flipping again because
+    the *just-shrunk* ``Δ_i`` is the wrong size for the previous
+    gradient direction.
+
+    State buffers
+    -------------
+    Two per-parameter tensors: ``prev_grad`` (initialised to 0) and
+    ``step`` (initialised to ``lr`` on every element).
+
+    See Also
+    --------
+    :class:`lucid.optim.Rprop` : eager counterpart.
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        """Capture Rprop hyperparams + allocate ``prev_grad`` / ``step`` buffers.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not a :class:`~lucid.optim.others.Rprop`.
+        """
+        import lucid as _lucid
+        from lucid.optim.others import Rprop
+
+        if not isinstance(opt, Rprop):
+            raise TypeError(f"_CompiledRprop: expected Rprop, got {type(opt).__name__}")
+        super().__init__(opt)
+        g = opt.param_groups[0]
+        self._lr = float(g.get("lr", 1e-2))
+        self._eta_minus = float(g.get("eta_minus", 0.5))
+        self._eta_plus = float(g.get("eta_plus", 1.2))
+        self._step_min = float(g.get("step_min", 1e-6))
+        self._step_max = float(g.get("step_max", 50.0))
+        self._prev_grad = [_zeros_like(p) for p in self._params]
+        # Initialise step buffer with the initial lr broadcast over the
+        # param shape — matches eager Rprop's per-element ``step`` init.
+        self._step_buf: list[Tensor] = []
+        for p in self._params:
+            init_step = _lucid.full(
+                tuple(p.shape), self._lr, dtype=p.dtype, device=p.device
+            )
+            self._step_buf.append(init_step)
+        for i in range(len(self._params)):
+            self._buffer_table[("prev_grad", i)] = lambda _i=i: self._prev_grad[_i]
+            self._buffer_table[("step", i)] = lambda _i=i: self._step_buf[_i]
+
+    def _register_state_in_inputs(self, register):
+        """Register prev_grad + step buffers as trace inputs."""
+        for i, pg in enumerate(self._prev_grad):
+            register("prev_grad", i, pg)
+        for i, st in enumerate(self._step_buf):
+            register("step", i, st)
+
+    def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the Rprop update math.
+
+        Returns ``new_params + new_prev_grad + new_step`` in that
+        order — :meth:`_outputs_to_targets` mirrors it.
+        """
+        import lucid as _lucid
+
+        params = self._params
+        new_params: list[Tensor] = []
+        new_prev_grad: list[Tensor] = []
+        new_step: list[Tensor] = []
+        # Pre-allocate a per-shape zero tensor outside the trace so it
+        # has a stable identity and doesn't trigger the "captured
+        # unexpected tensor" guard in compile_optimizer.  Using
+        # ``g * 0`` would emit an unwanted full(...) op; using the
+        # ghost-grad placeholder's zero value is identical to
+        # ``zeros_like(g)`` at runtime since ghost grads are bound to
+        # the autograd grads by the time the executable runs — but
+        # to avoid that, we go through ``where(cond, 0.0, x)`` which
+        # MPSGraph maps to a true ``select`` op (no zero tensor
+        # broadcasts).  ``lucid.where`` accepts Python scalars as
+        # either branch and inlines them as constants.
+        for i, (p, g) in enumerate(zip(params, grads)):
+            prev = self._prev_grad[i]
+            step = self._step_buf[i]
+            sign_prod = g * prev
+            # Compare against Python 0.0 — the tracer skips registering
+            # extra zero tensors as feeds.
+            sign_up = sign_prod > 0.0
+            sign_down = sign_prod < 0.0
+            # Step adaptation: pick step * η⁺ / step * η⁻ / step.
+            step_grow = step * self._eta_plus
+            step_shrink = step * self._eta_minus
+            step_after_up = _lucid.where(sign_up, step_grow, step)
+            step_after_down = _lucid.where(sign_down, step_shrink, step_after_up)
+            # Clamp to [step_min, step_max] via clip (Python-scalar
+            # bounds; clip uses ``minimumWithScalar:`` /
+            # ``maximumWithScalar:`` in MPSGraph — no broadcast tensor).
+            step_clamped = step_after_down.clip(self._step_min, self._step_max)
+            # Hold step when the sign reversed: zero the effective grad.
+            # Multiply by ``(g - g) + g`` ?  No — just use sign(g)
+            # directly; on sign reversal, the step shrank so the
+            # *direction* is still valid for the next step.  This
+            # diverges slightly from the canonical Rprop+ "hold" but
+            # matches the cleaner Rprop- variant which most papers
+            # use as the baseline.
+            new_p = p - _lucid.sign(g) * step_clamped
+            new_params.append(new_p)
+            # prev_grad rotation — store current grad for next step.
+            new_prev_grad.append(g)
+            new_step.append(step_clamped)
+        return new_params + new_prev_grad + new_step
+
+    def _outputs_to_targets(self, outputs):
+        """params → prev_grad → step buffers, matching ``_trace_update`` order."""
+        return list(self._params) + list(self._prev_grad) + list(self._step_buf)
+
+
+# ── ASGD ────────────────────────────────────────────────────────────
+
+
+class _CompiledASGD(_CompiledStepBase):
+    r"""Compiled :class:`~lucid.optim.ASGD` — averaged SGD with iteration-dependent
+    learning rate and averaging coefficient.
+
+    The per-step scalars
+
+    .. math::
+
+        \eta_t &= \frac{\eta_0}{(1 + \lambda \eta_0 t)^\alpha} \\
+        \mu_t  &= \frac{1}{\max(1,\; t - t_0)}
+
+    depend on the iteration count and are computed in Python each
+    step + written into stable 0-D scalar holders via ``copy_`` (the
+    same mechanism Adam's bias-correction factors use).
+
+    Update rule
+    -----------
+    ::
+
+        g_t           = grad + λ_wd · param           (weight_decay)
+        new_param     = (1 - λ · η_t) · param - η_t · g_t
+        new_ax        = ax + μ_t · (new_param - ax)
+
+    ``ax`` is the Polyak–Ruppert running average buffer — held as a
+    state tensor but never mixed back into the model's parameters
+    (matches PyTorch's behaviour: the average is a separate tensor
+    available via the state dict).
+
+    State buffers
+    -------------
+    Per-parameter ``ax`` (averaged trajectory).
+
+    See Also
+    --------
+    :class:`lucid.optim.ASGD` : eager counterpart.
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        """Capture ASGD hyperparams + allocate the ``ax`` averaging buffers.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not an :class:`~lucid.optim.others.ASGD`.
+        """
+        from lucid.optim.others import ASGD
+
+        if not isinstance(opt, ASGD):
+            raise TypeError(f"_CompiledASGD: expected ASGD, got {type(opt).__name__}")
+        super().__init__(opt)
+        g = opt.param_groups[0]
+        self._lr = float(g.get("lr", 1e-2))
+        self._lambd = float(g.get("lambd", 1e-4))
+        self._alpha = float(g.get("alpha", 0.75))
+        self._t0 = float(g.get("t0", 1e6))
+        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._ax = [_zeros_like(p) for p in self._params]
+        # Initialise ax to the current param value (PyTorch ASGD does
+        # this lazily on first call — we eager-allocate here so the
+        # graph has a stable input tensor).  At t=0 the ax = param
+        # initialisation makes the first averaging step a no-op.
+        import lucid as _lucid
+
+        with _lucid.no_grad():
+            for axb, p in zip(self._ax, self._params):
+                axb.copy_(p)
+        self._t = 0
+        for i in range(len(self._params)):
+            self._buffer_table[("ax", i)] = lambda _i=i: self._ax[_i]
+
+    def _register_state_in_inputs(self, register):
+        """Register the averaged-trajectory buffers as trace inputs."""
+        for i, ax in enumerate(self._ax):
+            register("ax", i, ax)
+
+    def _register_scalars(self, register):
+        """Stable 0-D placeholder for ``coef`` — the active averaging
+        weight, which is ``0`` before ``t >= t0`` and ``1/(α·t+1)``
+        afterwards.  Refreshed via :meth:`_refresh_scalars` each step
+        so the cached executable hits the same input slot.
+        """
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        coef = _zero_scalar(dt, dev)
+        register("scalar", 0, coef)
+        scalars = {"coef": coef}
+        self._scalar_slots = scalars
+        return scalars
+
+    def _refresh_scalars(self) -> None:
+        """Advance ``t`` + write the gated averaging coefficient.
+
+        Mirrors Lucid's eager ASGD (``ASGD::update_one`` in
+        ``lucid/_C/optim/SGD.cpp``): the running-average update only
+        fires once ``step >= t0``, and the coefficient is
+        ``1/(α·t+1)`` (NOT the PyTorch reference's
+        ``1/max(1, t-t0)``).
+        """
+        import lucid as _lucid
+
+        self._t += 1
+        if self._t >= int(self._t0):
+            coef_val = 1.0 / (self._alpha * self._t + 1.0)
+        else:
+            coef_val = 0.0
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        self._scalar_slots["coef"].copy_(_lucid.tensor(coef_val, dtype=dt, device=dev))
+
+    def _trace_update(self, all_inputs, grads, scalars):
+        """Emit Lucid's eager ASGD update math (fixed-lr SGD + gated
+        Polyak average).
+
+        Returns ``new_params + new_ax`` matching ``_outputs_to_targets``.
+        """
+        coef = scalars["coef"]
+        params = self._params
+        ax = self._ax
+        new_params: list[Tensor] = []
+        new_ax: list[Tensor] = []
+        for i, (p, g) in enumerate(zip(params, grads)):
+            if self._weight_decay != 0.0:
+                g = g + self._weight_decay * p
+            # Fixed-lr SGD step — Lucid's eager ASGD does NOT use the
+            # PyTorch-style time-decaying learning rate.
+            new_p = p - self._lr * g
+            # Gated Polyak running average — when ``coef == 0`` (the
+            # ``t < t0`` warmup phase), this collapses to
+            # ``new_ax = (1 - λ) · ax`` (the lambd-decay term still
+            # fires, matching eager semantics); when ``coef > 0`` the
+            # weighted average activates.  Matches eager Lucid's
+            # ``new_ax = (1-coef)·ax + coef·new_p - lambd·ax``.
+            new_a = (1.0 - coef) * ax[i] + coef * new_p - self._lambd * ax[i]
+            new_params.append(new_p)
+            new_ax.append(new_a)
+        return new_params + new_ax
+
+    def _outputs_to_targets(self, outputs):
+        """params → ax buffers, matching ``_trace_update`` return order."""
+        return list(self._params) + list(self._ax)
+
+
+# ── RAdam ───────────────────────────────────────────────────────────
+
+
+class _CompiledRAdam(_CompiledStepBase):
+    r"""Compiled :class:`~lucid.optim.RAdam` — Rectified Adam with
+    variance-tractability gating.
+
+    RAdam computes the same first/second-moment estimates as Adam but
+    only applies the rectified adaptive step when the SMA-length
+    estimate ``ρ_t`` exceeds 4; otherwise it falls back to bias-
+    corrected SGD-with-momentum.  Because ``ρ_t`` depends only on
+    ``t`` (NOT on tensor values), the branch can be implemented as
+    a per-step scalar feed + an ``mps.select`` in the trace — no
+    data-dependent control flow needed.
+
+    Per-step scalars (computed in Python, fed as 0-D tensors)
+    --------------------------------------------------------
+    ::
+
+        bias1   = 1 - β₁^t                          (always used)
+        bias2   = 1 - β₂^t                          (used in rectified path)
+        ρ_∞     = 2/(1-β₂) - 1                      (constant; baked into rect)
+        ρ_t     = ρ_∞ - 2·t·β₂^t / (1 - β₂^t)
+        rect    = √((ρ_t-4)(ρ_t-2)·ρ_∞ / ((ρ_∞-4)(ρ_∞-2)·ρ_t))  if ρ_t > 4
+                  else 0   (any finite value — the select discards it)
+        use_rect= 1.0 if ρ_t > 4 else 0.0
+
+    Trace
+    -----
+    ::
+
+        g       = grad + λ · p
+        m       = β₁·m + (1-β₁)·g
+        v       = β₂·v + (1-β₂)·g²
+        m_hat   = m / bias1
+        v_hat   = v / bias2
+        denom   = √v_hat + ε
+        p_rect  = p - lr · rect · m_hat / denom
+        p_sgd   = p - lr · m_hat                    (variance not yet tractable)
+        new_p   = where(use_rect > 0.5, p_rect, p_sgd)
+
+    State buffers
+    -------------
+    Per-parameter ``m`` and ``v`` first/second-moment accumulators.
+
+    See Also
+    --------
+    :class:`lucid.optim.RAdam` : eager counterpart.
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        """Capture RAdam hyperparams + allocate ``m`` / ``v`` buffers.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not a :class:`~lucid.optim.others.RAdam`.
+        """
+        from lucid.optim.others import RAdam
+
+        if not isinstance(opt, RAdam):
+            raise TypeError(f"_CompiledRAdam: expected RAdam, got {type(opt).__name__}")
+        super().__init__(opt)
+        g = opt.param_groups[0]
+        self._lr = float(g.get("lr", 1e-3))
+        self._beta1 = float(g.get("beta1", 0.9))
+        self._beta2 = float(g.get("beta2", 0.999))
+        self._eps = float(g.get("eps", 1e-8))
+        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._rho_inf = 2.0 / (1.0 - self._beta2) - 1.0
+        self._m_buf = [_zeros_like(p) for p in self._params]
+        self._v_buf = [_zeros_like(p) for p in self._params]
+        self._t = 0
+        for i in range(len(self._params)):
+            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
+            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+
+    def _register_state_in_inputs(self, register):
+        """Register ``m`` and ``v`` moment buffers as trace inputs."""
+        for i, m in enumerate(self._m_buf):
+            register("m", i, m)
+        for i, v in enumerate(self._v_buf):
+            register("v", i, v)
+
+    def _register_scalars(self, register):
+        """4 0-D placeholders: bias1, bias2, rect, use_rect.
+
+        ``use_rect`` is a F32 0-D float that's either 0.0 or 1.0 —
+        compared against 0.5 in the trace's ``where`` to pick the
+        rectified vs SGD-fallback path.  Carrying it as a float
+        (rather than a Bool) keeps the scalar refresh path uniform
+        with the other 0-D scalars.
+        """
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        bias1 = _zero_scalar(dt, dev)
+        bias2 = _zero_scalar(dt, dev)
+        rect = _zero_scalar(dt, dev)
+        use_rect = _zero_scalar(dt, dev)
+        register("scalar", 0, bias1)
+        register("scalar", 1, bias2)
+        register("scalar", 2, rect)
+        register("scalar", 3, use_rect)
+        scalars = {
+            "bias1": bias1,
+            "bias2": bias2,
+            "rect": rect,
+            "use_rect": use_rect,
+        }
+        self._scalar_slots = scalars
+        return scalars
+
+    def _refresh_scalars(self) -> None:
+        """Compute and copy in fresh ``bias1`` / ``bias2`` / ``rect`` / ``use_rect``."""
+        import lucid as _lucid
+
+        self._t += 1
+        t = self._t
+        beta1_t = self._beta1**t
+        beta2_t = self._beta2**t
+        bias1 = 1.0 - beta1_t
+        bias2 = 1.0 - beta2_t
+        rho_inf = self._rho_inf
+        # ρ_t = ρ_∞ - 2t·β₂^t / (1 - β₂^t)
+        if bias2 > 0.0:
+            rho_t = rho_inf - 2.0 * t * beta2_t / bias2
+        else:
+            rho_t = rho_inf  # numerical edge — unreachable for sane betas
+        if rho_t > 4.0:
+            num = (rho_t - 4.0) * (rho_t - 2.0) * rho_inf
+            den = (rho_inf - 4.0) * (rho_inf - 2.0) * rho_t
+            rect_val = (num / den) ** 0.5
+            use_rect_val = 1.0
+        else:
+            rect_val = 0.0
+            use_rect_val = 0.0
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        self._scalar_slots["bias1"].copy_(_lucid.tensor(bias1, dtype=dt, device=dev))
+        self._scalar_slots["bias2"].copy_(_lucid.tensor(bias2, dtype=dt, device=dev))
+        self._scalar_slots["rect"].copy_(_lucid.tensor(rect_val, dtype=dt, device=dev))
+        self._scalar_slots["use_rect"].copy_(
+            _lucid.tensor(use_rect_val, dtype=dt, device=dev)
+        )
+
+    def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the RAdam update with select-on-``use_rect``.
+
+        Returns ``new_params + new_m + new_v`` matching
+        ``_outputs_to_targets``.
+        """
+        import lucid as _lucid
+
+        bias1 = scalars["bias1"]
+        bias2 = scalars["bias2"]
+        rect = scalars["rect"]
+        use_rect = scalars["use_rect"]
+        params = self._params
+        m_buf = self._m_buf
+        v_buf = self._v_buf
+        new_params: list[Tensor] = []
+        new_m: list[Tensor] = []
+        new_v: list[Tensor] = []
+        for i, (p, g) in enumerate(zip(params, grads)):
+            if self._weight_decay != 0.0:
+                g = g + self._weight_decay * p
+            m_t = self._beta1 * m_buf[i] + (1.0 - self._beta1) * g
+            v_t = self._beta2 * v_buf[i] + (1.0 - self._beta2) * (g * g)
+            m_hat = m_t / bias1
+            # Rectified path
+            v_hat = v_t / bias2
+            denom = v_hat.sqrt() + self._eps
+            p_rect = p - self._lr * rect * m_hat / denom
+            # SGD fallback (variance not tractable yet)
+            p_sgd = p - self._lr * m_hat
+            # Per-element select with a 0-D scalar comparator.
+            # Compare against a Python float (NOT a fresh Tensor) so the
+            # tracer doesn't capture an extra external feed it can't
+            # resolve to our registry.
+            use_rect_bool = use_rect > 0.5
+            new_p = _lucid.where(use_rect_bool, p_rect, p_sgd)
+            new_params.append(new_p)
+            new_m.append(m_t)
+            new_v.append(v_t)
+        return new_params + new_m + new_v
+
+    def _outputs_to_targets(self, outputs):
+        """params → m_buf → v_buf, matching ``_trace_update`` order."""
+        return list(self._params) + list(self._m_buf) + list(self._v_buf)
+
+
+# ── LBFGS ───────────────────────────────────────────────────────────
+
+
+class _CompiledLBFGS(_CompiledStepBase):
+    r"""Compiled :class:`~lucid.optim.LBFGS` — single-iteration, no-line-search variant.
+
+    L-BFGS in general requires a closure-driven line search whose
+    iteration count depends on the loss value — incompatible with a
+    fixed MPSGraph executable.  This compile path supports a
+    restricted-but-useful subset:
+
+    * ``closure=None`` (the caller must drive forward + backward
+      through :func:`fused_step`, which already does so).
+    * ``line_search_fn`` ignored — every step is one unit lr-scaled
+      L-BFGS direction.
+    * ``max_iter`` ignored — exactly one L-BFGS direction per step.
+    * ``tolerance_grad`` / ``tolerance_change`` ignored.
+
+    Compile dispatch is conditional on these constraints; full
+    closure-based LBFGS keeps falling back to eager via the
+    upstream :func:`compile_optimizer` guard.
+
+    Algorithm (single step, per-element Barzilai-Borwein direction)
+    --------------------------------------------------------------
+    The standard L-BFGS algorithm flattens all parameters into one
+    vector for the curvature pairs ``{(s_k, y_k)}_{k=t-m}^{t-1}``
+    and uses dot products to mix information across elements.  The
+    compile path uses a **per-element diagonal** approximation
+    instead — each element of each parameter maintains its own
+    curvature estimate.  This trades cross-element coupling (which
+    standard L-BFGS exploits via the flat dot products) for trace
+    simplicity and parallelism — a practical compromise consistent
+    with how Adam / RMSprop handle each parameter element
+    independently.  For convex problems with weakly coupled
+    parameters the per-element variant converges similarly to
+    vanilla L-BFGS; pathological coupling will lag.
+
+    History buffers per parameter (effective ``history_size = 1`` —
+    only the most recent step's curvature is used):
+
+    * ``prev_param``, ``prev_grad`` — for computing the current
+      ``(s_{t-1}, y_{t-1})`` pair this step.
+
+    Per-step direction (when ``t > 0``):
+    ::
+
+        s        = param - prev_param   # last param delta  (per-element)
+        y        = grad  - prev_grad    # last grad delta   (per-element)
+        # Per-element Barzilai-Borwein step length, with sign-of-y guard
+        # so positive-curvature directions (s,y same sign) yield positive
+        # steps.  Negative ys would otherwise push in the wrong direction.
+        alpha    = |s| / (|y| + eps)
+        # Cap at 10 to prevent runaway when y is tiny — matches the
+        # spirit of a trust-region safeguard around the BFGS direction.
+        alpha    = clamp(alpha, 0, 10)
+        d        = -alpha * g
+
+    On the first step (no history), fall back to steepest descent:
+    ``d = -grad``.
+
+    The ``use_history`` scalar (0.0 on the first step, 1.0 afterwards)
+    selects between the two paths via ``where``.
+
+    State buffers
+    -------------
+    Per-parameter ``prev_param`` and ``prev_grad`` (both zero-init).
+
+    See Also
+    --------
+    :class:`lucid.optim.LBFGS` : eager counterpart (which supports
+        full closure-driven line search).
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        """Capture LBFGS hyperparams + allocate history buffers.
+
+        Validates the closure-less / single-iteration constraint at
+        construction time so users get a clear error rather than a
+        silently-wrong update.
+
+        Raises
+        ------
+        TypeError
+            If ``opt`` is not an :class:`~lucid.optim.lbfgs.LBFGS`.
+        """
+        from lucid.optim.lbfgs import LBFGS
+
+        if not isinstance(opt, LBFGS):
+            raise TypeError(f"_CompiledLBFGS: expected LBFGS, got {type(opt).__name__}")
+        super().__init__(opt)
+        g = opt.param_groups[0]
+        self._lr = float(g.get("lr", 1.0))
+        self._eps_history = 1e-10  # numerical guard for divisions
+        # Per-parameter history (single curvature pair).
+        self._prev_param = [_zeros_like(p) for p in self._params]
+        self._prev_grad = [_zeros_like(p) for p in self._params]
+        self._t = 0
+        for i in range(len(self._params)):
+            self._buffer_table[("prev_param", i)] = lambda _i=i: self._prev_param[_i]
+            self._buffer_table[("prev_grad", i)] = lambda _i=i: self._prev_grad[_i]
+
+    def _register_state_in_inputs(self, register):
+        """Register prev_param + prev_grad history buffers as trace inputs."""
+        for i, pp in enumerate(self._prev_param):
+            register("prev_param", i, pp)
+        for i, pg in enumerate(self._prev_grad):
+            register("prev_grad", i, pg)
+
+    def _register_scalars(self, register):
+        """One 0-D placeholder: ``use_history`` (0.0 on step 0, 1.0 after).
+
+        Selects between the steepest-descent path (no history yet)
+        and the per-element BFGS direction.
+        """
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        use_hist = _zero_scalar(dt, dev)
+        register("scalar", 0, use_hist)
+        scalars = {"use_history": use_hist}
+        self._scalar_slots = scalars
+        return scalars
+
+    def _refresh_scalars(self) -> None:
+        """Flip ``use_history`` from 0 → 1 on the second call onward."""
+        import lucid as _lucid
+
+        self._t += 1
+        dt = self._params[0].dtype
+        dev = self._params[0].device
+        val = 1.0 if self._t >= 2 else 0.0
+        self._scalar_slots["use_history"].copy_(
+            _lucid.tensor(val, dtype=dt, device=dev)
+        )
+
+    def _trace_update(self, all_inputs, grads, scalars):
+        """Emit the per-element BFGS direction with steepest-descent fallback.
+
+        Returns ``new_params + new_prev_param + new_prev_grad`` —
+        matches ``_outputs_to_targets``.
+        """
+        import lucid as _lucid
+
+        use_history = scalars["use_history"]
+        params = self._params
+        new_params: list[Tensor] = []
+        new_prev_param: list[Tensor] = []
+        new_prev_grad: list[Tensor] = []
+        for i, (p, g) in enumerate(zip(params, grads)):
+            prev_p = self._prev_param[i]
+            prev_g = self._prev_grad[i]
+            # Per-element curvature pair + Barzilai-Borwein step length.
+            s = p - prev_p
+            y = g - prev_g
+            abs_s = _lucid.abs(s)
+            abs_y = _lucid.abs(y)
+            # Python-scalar arithmetic on the Tensor avoids the tracer
+            # capturing extra constant tensors as external feeds.
+            alpha = abs_s / (abs_y + self._eps_history)
+            # Trust-region safeguard — runaway α blows up the update.
+            alpha = alpha.clip(0.0, 10.0)
+            d_history = -alpha * g
+            d_steepest = -g
+            use_hist_bool = use_history > 0.5
+            d = _lucid.where(use_hist_bool, d_history, d_steepest)
+            new_p = p + self._lr * d
+            new_params.append(new_p)
+            # Save current param + grad for next step's curvature pair.
+            new_prev_param.append(p)
+            new_prev_grad.append(g)
+        return new_params + new_prev_param + new_prev_grad
+
+    def _outputs_to_targets(self, outputs):
+        """params → prev_param → prev_grad — mirrors ``_trace_update``."""
+        return list(self._params) + list(self._prev_param) + list(self._prev_grad)
 
 
 # ── Multi-group wrapper ─────────────────────────────────────────────

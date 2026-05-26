@@ -32,9 +32,22 @@ The optimizer update math lives in the corresponding
 
 Supported optimizers
 --------------------
-Every optimizer that :func:`compile_optimizer` accepts: SGD, Adam,
-AdamW, RMSprop, Adagrad, Adadelta, Adamax, NAdam.  The same rejection
-messages apply for LBFGS / SparseAdam / Rprop / RAdam / ASGD.
+Every optimizer that :func:`compile_optimizer` accepts.  As of the
+Y-series sweep (2026-05-27) this is **all 13** of Lucid's eager
+optimizers:
+
+* Direct compile (8): SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta,
+  Adamax, NAdam.
+* Per-step scalar feed + select-tree compile (5): SparseAdam (delegates
+  to Adam math), Rprop (sign-based select), ASGD (μ_t scalar +
+  averaged buffer), RAdam (ρ_t scalar + rectified-vs-SGD select),
+  LBFGS (closure-less single-step Barzilai-Borwein direction).
+
+The last 5 were previously rejected as structurally incompatible; the
+Y-series implementations express each "data-dependent branch" as a
+combination of (i) per-step scalars computed in Python, (ii) ``where``
+selects against those scalars, and (iii) state buffers for any extra
+history.  Optimizer compile coverage is **13 / 13 = 100%**.
 
 Usage
 -----
@@ -113,9 +126,12 @@ def fused_step(
     single submission.  Subsequent calls reuse the cached executable.
 
     Delegates the optimizer math to the matching
-    :func:`compile_optimizer` subclass — so all 8 supported optimizers
-    (SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax, NAdam)
-    work in fused mode automatically.
+    :func:`compile_optimizer` subclass — so every Lucid eager optimizer
+    (all 13: SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax,
+    NAdam, SparseAdam, Rprop, ASGD, RAdam, LBFGS) compiles cleanly
+    into a fused step.  LBFGS is the closure-less single-step variant
+    (per-element Barzilai-Borwein direction); full closure-driven
+    line search remains eager-only.
 
     Parameters
     ----------
@@ -513,14 +529,14 @@ class _FusedStep:
         # their *values* are refreshed each step via ``copy_`` while
         # the underlying TensorImpl identity stays stable for the
         # executable cache.
-        scaler_enabled = (
-            self._grad_scaler is not None and self._grad_scaler._enabled
-        )
+        scaler_enabled = self._grad_scaler is not None and self._grad_scaler._enabled
         if scaler_enabled:
             import lucid as _lucid
 
             p0 = self._params[0]
-            self._scale_holder = _lucid.zeros((), dtype=_lucid.float32, device=p0.device)
+            self._scale_holder = _lucid.zeros(
+                (), dtype=_lucid.float32, device=p0.device
+            )
             self._inv_scale_holder = _lucid.zeros(
                 (), dtype=_lucid.float32, device=p0.device
             )
@@ -727,9 +743,7 @@ class _FusedStep:
         if scaler_enabled and found_inf_f32 is not None:
             found_inf_tid = tracer.lookup_id(_unwrap(found_inf_f32))
             if found_inf_tid is None:
-                raise RuntimeError(
-                    "fused_step: found_inf scalar missing from trace"
-                )
+                raise RuntimeError("fused_step: found_inf scalar missing from trace")
             output_target_ids.append(int(found_inf_tid))
 
         # Append every training-mode dropout's ``state_out`` id so the

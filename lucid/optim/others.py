@@ -674,14 +674,22 @@ class ASGD(Optimizer):
         super().__init__(params, defaults)
 
     def _append_engine_optim(self, group: dict[str, object]) -> None:
+        # The C++ ``ASGD`` pybind signature is
+        # ``(params, lr, momentum, weight_decay, alpha, t0, lambd)``
+        # (see ``lucid/_C/bindings/bind_optim.cpp``).  The previous
+        # call passed args in ``(lr, lambd, alpha, t0, weight_decay)``
+        # order which left ``momentum=lambd``, ``weight_decay=alpha``,
+        # ``alpha=t0``, ``t0=weight_decay`` — none of which match the
+        # documented spec.  Pass keyword args so the order can't drift.
         self._engine_optims.append(
             _C_engine.ASGD(
                 [_unwrap(p) for p in group["params"]],  # type: ignore[attr-defined]
-                cast(float, group["lr"]),
-                cast(float, group.get("lambd", 1e-4)),
-                cast(float, group.get("alpha", 0.75)),
-                cast(float, group.get("t0", 1e6)),
-                cast(float, group.get("weight_decay", 0.0)),
+                lr=cast(float, group["lr"]),
+                momentum=0.0,
+                weight_decay=cast(float, group.get("weight_decay", 0.0)),
+                alpha=cast(float, group.get("alpha", 0.75)),
+                t0=cast(float, group.get("t0", 1e6)),
+                lambd=cast(float, group.get("lambd", 1e-4)),
             )
         )
 

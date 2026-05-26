@@ -125,9 +125,9 @@ def test_grad_scaler_growth_schedule() -> None:
         actual_scales == expected_scales
     ), f"growth schedule wrong; expected {expected_scales}, got {actual_scales}"
     # Loss should decrease (the scaler isn't tripping any overflow path here).
-    assert losses[-1] < losses[0], (
-        f"loss should decrease over 5 SGD steps; got {losses}"
-    )
+    assert (
+        losses[-1] < losses[0]
+    ), f"loss should decrease over 5 SGD steps; got {losses}"
 
 
 def test_grad_scaler_overflow_skips_step_and_backs_off() -> None:

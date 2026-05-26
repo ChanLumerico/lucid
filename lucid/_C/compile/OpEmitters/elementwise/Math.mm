@@ -276,9 +276,17 @@ public:
         };
         std::optional<double> lo = have("min");
         std::optional<double> hi = have("max");
-        if (!lo && !hi)
+        if (!lo && !hi) {
+            // No bounds → clip is an identity; bind input verbatim
+            // (the early-return previously here was outside the
+            // braces, which silently skipped the maximum/minimum
+            // emission below and left output unbound when either
+            // bound was set — a latent bug that surfaced when the
+            // compiled Rprop / LBFGS optimizers started using
+            // ``Tensor.clip(lo, hi)`` with both ends).
             ctx.bind(node.outputs[0].id, (__bridge void*)(x_t));
-        return true;
+            return true;
+        }
         MPSGraphTensor* out = x_t;
         if (lo) {
             MPSGraphTensor* c =
