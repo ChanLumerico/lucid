@@ -201,7 +201,15 @@ def _check_parity(
 def _bench_forward_eager(
     w: Workload, bs: int, dtype: object, n_iter: int
 ) -> tuple[float, float, float, float, lucid.Tensor]:
-    """Eager forward.  Returns (cold_ms, warm_med, warm_p5, warm_p95, last_out)."""
+    """Eager forward.  Returns (cold_ms, warm_med, warm_p5, warm_p95, last_out).
+
+    Each timed call ends with ``out.sum().item()`` to force MLX to
+    fully evaluate the lazy forward graph — without it,
+    ``metal.synchronize()`` alone doesn't drain MLX's deferred ops
+    for tiny / submission-bound workloads, and the measured time
+    collapses to launch-overhead only.  See the docstring on
+    ``_bench_eager_train`` for the full history.
+    """
     lucid.manual_seed(0)
     model = w.mk_model().to(COMPILE_DEVICE)
     model.eval()
@@ -210,11 +218,13 @@ def _bench_forward_eager(
     inputs = _cast_inputs(tuple(t.to(COMPILE_DEVICE) for t in w.mk_input(bs)), dtype)
 
     def call() -> object:
-        return model(*inputs)
+        y = _unwrap(model(*inputs))
+        _ = float(y.sum().item())  # force eager lazy-graph eval
+        return y
 
     cold = _time_cold(call)
     med, p5, p95 = _time_warm(call, n_warmup=3, n_iter=n_iter)
-    out = _unwrap(call())
+    out = call()
     return cold, med, p5, p95, out
 
 
@@ -231,12 +241,18 @@ def _bench_forward_compile(
 
     cm = lucid.compile(model)
 
+    # Force lazy-eval drain after each call for measurement honesty
+    # (compile path's sync-default already blocks for GPU work, but
+    # ``.item()`` ensures the result tensor is actually materialised
+    # — matches the apples-to-apples convention of the other paths).
     def call() -> object:
-        return cm(*inputs)
+        y = _unwrap(cm(*inputs))
+        _ = float(y.sum().item())
+        return y
 
     cold = _time_cold(call)
     med, p5, p95 = _time_warm(call, n_warmup=3, n_iter=n_iter)
-    out = _unwrap(call())
+    out = call()
 
     # Detect eager fallback — compile cache empty means trace aborted.
     info = cm.cache_info()
@@ -271,8 +287,14 @@ def _bench_fused_step(
     opt = optim.SGD(list(model.parameters()), lr=1e-3)
     step = fused_step(model, w.loss_fn, opt)
 
+    # Force lazy-eval drain so the timing matches the eager_train
+    # baseline's honest cost.  fused_step's sync-default already
+    # blocks for GPU work, but explicit ``.item()`` keeps the
+    # apples-to-apples convention across all paths.
     def call() -> object:
-        return step(*inputs, target)
+        loss = step(*inputs, target)
+        _ = float(loss.item())
+        return loss
 
     cold = _time_cold(call)
     med, p5, p95 = _time_warm(call, n_warmup=3, n_iter=n_iter)
@@ -303,12 +325,25 @@ def _bench_eager_train(
     target = w.mk_target(bs).to(COMPILE_DEVICE)
     opt = optim.SGD(list(model.parameters()), lr=1e-3)
 
+    # Critical: end each timed step with ``loss.item()`` to force MLX
+    # to fully evaluate the lazy graph.  Without it, ``metal.synchronize()``
+    # alone only drains submitted GPU work — MLX defers backward + opt
+    # for tiny / "submission-bound" workloads (GPT-2 block, MLP), and
+    # the measured time collapses to ~0.2 ms regardless of batch.  This
+    # bit P0.5 of the parity diagnosis where the original sweep
+    # reported GPT-2 fused_step "30-440× slower" — the real eager_train
+    # cost is 27 ms @ BS=8 / 366 ms @ BS=128 (4× scaling, exactly
+    # matching what ``.item()`` reveals), and fused_step is actually
+    # **3.8-4× faster** than honest eager training.  See
+    # ``obsidian/perf/perf-compile-vs-eager-2026-05-26.md`` §"Open
+    # questions" §3 → resolved by this fix.
     def call() -> object:
         opt.zero_grad()
         out = _unwrap(model(*inputs))
         loss = w.loss_fn(out, target)
         loss.backward()
         opt.step()
+        _ = float(loss.item())  # force lazy-graph eval
         return loss
 
     cold = _time_cold(call)
