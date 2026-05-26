@@ -26,23 +26,24 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_unary_math(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+inline bool emit_unary_math(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 1)
-        return nullptr;
+        return false;
     TensorId x_id = node.inputs[0];
     if (x_id < 0)
-        return nullptr;
+        return false;
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
-        return nullptr;
-    return (__bridge void*)builder(graph, x_t);
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, x_t)));
+        return true;
 }
 
 class NegEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "neg"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g negativeWithTensor:x name:@"neg"];
         });
@@ -52,7 +53,7 @@ public:
 class AbsEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "abs"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g absoluteWithTensor:x name:@"abs"];
         });
@@ -62,7 +63,7 @@ public:
 class ExpEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "exp"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g exponentWithTensor:x name:@"exp"];
         });
@@ -72,7 +73,7 @@ public:
 class LogEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "log"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g logarithmWithTensor:x name:@"log"];
         });
@@ -82,7 +83,7 @@ public:
 class SqrtEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sqrt"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g squareRootWithTensor:x name:@"sqrt"];
         });
@@ -92,7 +93,7 @@ public:
 class SquareEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "square"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g squareWithTensor:x name:@"square"];
         });
@@ -102,7 +103,7 @@ public:
 class ReciprocalEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "reciprocal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g reciprocalWithTensor:x name:@"reciprocal"];
         });
@@ -112,7 +113,7 @@ public:
 class RsqrtEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "rsqrt"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g reciprocalSquareRootWithTensor:x name:@"rsqrt"];
         });
@@ -126,7 +127,7 @@ public:
 class ArccosEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "arccos"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g acosWithTensor:x name:@"arccos"];
         });
@@ -136,7 +137,7 @@ public:
 class ArcsinEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "arcsin"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g asinWithTensor:x name:@"arcsin"];
         });
@@ -146,7 +147,7 @@ public:
 class ArctanEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "arctan"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g atanWithTensor:x name:@"arctan"];
         });
@@ -156,7 +157,7 @@ public:
 class CeilEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "ceil"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g ceilWithTensor:x name:@"ceil"];
         });
@@ -166,7 +167,7 @@ public:
 class FloorEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "floor"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g floorWithTensor:x name:@"floor"];
         });
@@ -176,7 +177,7 @@ public:
 class RoundEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "round"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g roundWithTensor:x name:@"round"];
         });
@@ -186,7 +187,7 @@ public:
 class CubeEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cube"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             MPSGraphTensor* x2 = [g squareWithTensor:x name:@"cube_sq"];
             return [g multiplicationWithPrimaryTensor:x2
@@ -199,7 +200,7 @@ public:
 class CubeRootEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cube_root"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // Sign-preserving cbrt(x) = sign(x) · |x|^(1/3).
             MPSGraphTensor* a = [g absoluteWithTensor:x name:@"cbrt_abs"];
@@ -219,7 +220,7 @@ public:
 class Log2Emitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "log2"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g logarithmBase2WithTensor:x name:@"log2"];
         });
@@ -229,7 +230,7 @@ public:
 class SignEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sign"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g signWithTensor:x name:@"sign"];
         });
@@ -239,7 +240,7 @@ public:
 class ErfEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "erf"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary_math(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g erfWithTensor:x name:@"erf"];
         });
@@ -255,16 +256,16 @@ public:
 class ClipEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "clip"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         auto have = [&](const char* key) -> std::optional<double> {
             auto it = node.attrs.find(key);
@@ -276,7 +277,8 @@ public:
         std::optional<double> lo = have("min");
         std::optional<double> hi = have("max");
         if (!lo && !hi)
-            return (__bridge void*)x_t;
+            ctx.bind(node.outputs[0].id, (__bridge void*)(x_t));
+        return true;
         MPSGraphTensor* out = x_t;
         if (lo) {
             MPSGraphTensor* c =
@@ -292,7 +294,8 @@ public:
                                    secondaryTensor:c
                                               name:@"clip_hi"];
         }
-        return (__bridge void*)out;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(out));
+        return true;
     }
 };
 

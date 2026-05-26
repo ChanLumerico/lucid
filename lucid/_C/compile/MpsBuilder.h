@@ -26,8 +26,11 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "../api.h"
 #include "../core/fwd.h"   // TensorImplPtr
@@ -35,6 +38,8 @@
 #include "TraceIR.h"
 
 namespace lucid::compile {
+
+class BuilderContext;  // forward decl — defined in OpEmitters/OpEmitter.h
 
 // Lower ``graph`` into an MPSGraph executable.
 //
@@ -134,7 +139,31 @@ LUCID_API CompiledExecutable* compile_trace_with_backward(
 // feeds at run time so that one cached executable covers the whole
 // training loop without recompiles.
 struct LUCID_API OptimizerSpec {
-    enum class Kind { SGD = 0, ADAM = 1, ADAMW = 2 };
+    // Enum values intentionally mirror Python ``OptimizerKind`` in
+    // :file:`lucid/compile/_optim_spec.py` so the spec can be
+    // serialised across the binding boundary as a single int.
+    //
+    // SGD / ADAM / ADAMW are the kinds the C++
+    // :func:`compile_fused_training_step` currently emits via
+    // hardcoded ``emit_sgd_update`` / ``emit_adam_update`` helpers.
+    // The reserved values (RMSPROP / ADAGRAD / ADADELTA / ADAMAX /
+    // NADAM) are recognised so the Python spec can round-trip
+    // through the binding without losing information, but
+    // ``compile_fused_training_step`` currently rejects them — the
+    // production fused-step path uses :func:`compile_generic_fused_step`
+    // which traces the update math from Python and so supports all 8
+    // kinds today.  Adding C++ ``emit_<kind>_update`` helpers for the
+    // 5 reserved kinds is a tracked follow-up.
+    enum class Kind {
+        SGD = 0,
+        ADAM = 1,
+        ADAMW = 2,
+        RMSPROP = 3,
+        ADAGRAD = 4,
+        ADADELTA = 5,
+        ADAMAX = 6,
+        NADAM = 7,
+    };
     Kind kind = Kind::SGD;
     // SGD hyperparameters (also used as Adam-family wd / lr).
     double lr = 0.0;
@@ -315,5 +344,102 @@ LUCID_API CompiledExecutable* compile_generic_fused_step_with_vars(
     const std::vector<TensorId>& output_target_ids,
     const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
     std::string* error_msg = nullptr);
+
+// ────────────────────────────────────────────────────────────────────
+// Class-form facade (Phase B of the compile OOP refactor)
+// ────────────────────────────────────────────────────────────────────
+//
+// `MpsBuilder` is the OOP shape behind the 5 ``compile_*`` free
+// functions above.  Each free function above is now a thin
+// forwarder that constructs a transient :class:`MpsBuilder` and
+// dispatches to the matching method.  The free-function signatures
+// are preserved for binding stability — Python (and the cache) still
+// import them by name.
+//
+// **Lifetime.** One :class:`MpsBuilder` per compile call.  The class
+// owns:
+//   * Reference to the :class:`TraceGraph` and ``external_feeds`` map.
+//   * The in-progress ``MPSGraph*`` (held as ``void*`` in this pure-C++
+//     header; the ``.mm`` re-casts via ``__bridge``).
+//   * The :class:`BuilderContext` that emitters write into.
+//   * A scratch ``std::string* error_msg`` pointer for failure
+//     reporting; populated on failure return.
+//
+// **Construction.** The constructor takes the same three arguments
+// shared by every public method: ``graph``, ``external_feeds``, and
+// the optional ``error_msg``.  It does *not* do any MPSGraph work —
+// the MPSGraph is created lazily inside each ``compile_<mode>``
+// method.  This keeps construction lightweight (the free-function
+// forwarders create an instance even when validation rejects the
+// call) and avoids leaking an MPSGraph allocation on early-exit
+// paths.
+//
+// **Why a class rather than 5 free functions.**  The 5 functions
+// shared ~60% scaffolding expressed as copy-paste (device check,
+// emitter precheck, placeholder creation, emit loop, target
+// construction, MPSGraph compile).  Grouping them as methods on a
+// shared class lets future shared-scaffolding refactors land in one
+// place rather than in 5 lock-stepped diffs.  The 5 methods
+// intentionally remain as distinct entry points rather than virtual
+// dispatch — the divergence between forward-only / forward-bwd /
+// fused-step / generic-fused-step / variables is finite-state, not
+// hierarchical.
+class LUCID_API MpsBuilder {
+public:
+    MpsBuilder(const TraceGraph& graph,
+               const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+               std::string* error_msg = nullptr);
+    ~MpsBuilder();
+
+    MpsBuilder(const MpsBuilder&) = delete;
+    MpsBuilder& operator=(const MpsBuilder&) = delete;
+
+    // Forward-only compile.  See :func:`compile_trace` for semantics.
+    CompiledExecutable* compile_trace(
+        bool dynamic_batch = false,
+        const std::vector<TensorId>& param_ids = {},
+        const std::vector<TensorId>& explicit_outputs = {});
+
+    // Forward + backward.  See :func:`compile_trace_with_backward`.
+    CompiledExecutable* compile_trace_with_backward(
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        bool dynamic_batch = false);
+
+    // Forward + bwd + hardcoded SGD/Adam.  See
+    // :func:`compile_fused_training_step`.
+    CompiledExecutable* compile_fused_training_step(
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const OptimizerSpec& opt_spec,
+        const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+        const std::vector<TensorId>& scalar_input_ids);
+
+    // Forward + bwd + ghost-grad optimizer (any kind).  See
+    // :func:`compile_generic_fused_step`.
+    CompiledExecutable* compile_generic_fused_step(
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& ghost_grad_ids,
+        const std::vector<TensorId>& output_target_ids);
+
+    // As above + MPSGraph variables.  See
+    // :func:`compile_generic_fused_step_with_vars`.
+    CompiledExecutable* compile_generic_fused_step_with_vars(
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& ghost_grad_ids,
+        const std::vector<TensorId>& output_target_ids,
+        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs);
+
+private:
+    // Members.  ``graph_`` and ``external_feeds_`` are references —
+    // the caller owns them for the duration of the MpsBuilder
+    // lifetime (one compile call).  ``error_msg_`` is an out-param
+    // pointer also owned by the caller.
+    const TraceGraph& graph_;
+    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds_;
+    std::string* error_msg_;
+};
 
 }  // namespace lucid::compile

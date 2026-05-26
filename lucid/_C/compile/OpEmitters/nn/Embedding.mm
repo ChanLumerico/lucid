@@ -29,12 +29,12 @@ namespace {
 class OneHotEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "one_hot"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t depth = int_attr(node, "num_classes", 0);
-        if (depth <= 0) return nullptr;
+        if (depth <= 0) return false;
         MPSDataType out_mps;
         switch (node.outputs[0].dtype) {
             case Dtype::F32: out_mps = MPSDataTypeFloat32; break;
@@ -42,19 +42,20 @@ public:
             case Dtype::I32: out_mps = MPSDataTypeInt32; break;
             case Dtype::I64: out_mps = MPSDataTypeInt64; break;
             case Dtype::Bool: out_mps = MPSDataTypeBool; break;
-            default: return nullptr;
+            default: return false;
         }
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSUInteger axis = (NSUInteger)x.shape.count;  // append as last
-        return (__bridge void*)[g oneHotWithIndicesTensor:x
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g oneHotWithIndicesTensor:x
                                                     depth:(NSUInteger)depth
                                                      axis:axis
                                                  dataType:out_mps
                                                   onValue:1.0
                                                  offValue:0.0
-                                                     name:@"one_hot"];
+                                                     name:@"one_hot"]));
+        return true;
     }
 };
 
@@ -73,21 +74,21 @@ public:
 class RotaryPosEmbeddingEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "rotary_pos_embedding"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
-        if (bool_attr(node, "has_pos_ids", false)) return nullptr;
-        if (bool_attr(node, "interleaved", false)) return nullptr;
+        if (x_id < 0) return false;
+        if (bool_attr(node, "has_pos_ids", false)) return false;
+        if (bool_attr(node, "interleaved", false)) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
         NSUInteger nd = sh.count;
-        if (nd < 2) return nullptr;
+        if (nd < 2) return false;
         std::int64_t L = sh[nd - 2].longLongValue;
         std::int64_t D = sh[nd - 1].longLongValue;
-        if (D % 2 != 0) return nullptr;
+        if (D % 2 != 0) return false;
         std::int64_t half = D / 2;
         std::vector<float> cos_data(L * half), sin_data(L * half);
         for (std::int64_t i = 0; i < L; ++i) {
@@ -137,9 +138,10 @@ public:
             [g multiplicationWithPrimaryTensor:x2 secondaryTensor:cos_t name:nil];
         MPSGraphTensor* y2 =
             [g additionWithPrimaryTensor:t2a secondaryTensor:t2b name:nil];
-        return (__bridge void*)[g concatTensors:@[y1, y2]
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g concatTensors:@[y1, y2]
                                        dimension:(NSInteger)(nd - 1)
-                                            name:@"rope"];
+                                            name:@"rope"]));
+        return true;
     }
 };
 

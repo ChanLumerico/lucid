@@ -47,24 +47,24 @@ class Conv2dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conv2d"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // Inputs: x (N, C_in, H, W), W (C_out, C_in/groups, kH, kW),
         // bias (C_out,) — bias may be missing (id == -1).
         if (node.inputs.size() != 3)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         TensorId w_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
         if (x_id < 0 || w_id < 0)
-            return nullptr;
+            return false;
 
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         const auto* D = int_vec_attr(node, "dilation");
         if (S == nullptr || P == nullptr || D == nullptr)
-            return nullptr;
+            return false;
         if (S->size() != 2 || P->size() != 2 || D->size() != 2)
-            return nullptr;
+            return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
@@ -74,7 +74,7 @@ public:
         if (b_id >= 0)
             b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (x_t == nil || w_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         MPSGraphConvolution2DOpDescriptor* d =
             [MPSGraphConvolution2DOpDescriptor descriptorWithStrideInX:(NSUInteger)(*S)[1]
@@ -90,7 +90,7 @@ public:
                                                              dataLayout:MPSGraphTensorNamedDataLayoutNCHW
                                                           weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
         if (d == nil)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* conv =
             [graph convolution2DWithSourceTensor:x_t
@@ -114,8 +114,10 @@ public:
                 b_t = nil;
         }
 
-        if (b_t == nil)
-            return (__bridge void*)conv;
+        if (b_t == nil) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)conv);
+            return true;
+        }
 
         // Broadcast bias (C_out,) → (1, C_out, 1, 1) via reshape so the
         // addition lines up against the NCHW conv output channel.
@@ -128,7 +130,8 @@ public:
         MPSGraphTensor* b_reshape = [graph reshapeTensor:b_t withShape:b_shape name:nil];
         MPSGraphTensor* y =
             [graph additionWithPrimaryTensor:conv secondaryTensor:b_reshape name:@"conv2d_bias"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 
@@ -138,24 +141,24 @@ class Conv1dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conv1d"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 3) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 3) return false;
         TensorId x_id = node.inputs[0];
         TensorId w_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
-        if (x_id < 0 || w_id < 0) return nullptr;
+        if (x_id < 0 || w_id < 0) return false;
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         const auto* D = int_vec_attr(node, "dilation");
-        if (S == nullptr || P == nullptr || D == nullptr) return nullptr;
-        if (S->size() != 1 || P->size() != 1 || D->size() != 1) return nullptr;
+        if (S == nullptr || P == nullptr || D == nullptr) return false;
+        if (S->size() != 1 || P->size() != 1 || D->size() != 1) return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
-        if (g == nil || x == nil || W == nil) return nullptr;
-        if (x.shape.count != 3 || W.shape.count != 3) return nullptr;
+        if (g == nil || x == nil || W == nil) return false;
+        if (x.shape.count != 3 || W.shape.count != 3) return false;
         // x → (B, C, 1, L)
         NSArray<NSNumber*>* x4 = @[x.shape[0], x.shape[1], @1, x.shape[2]];
         MPSGraphTensor* x_r = [g reshapeTensor:x withShape:x4 name:nil];
@@ -176,7 +179,7 @@ public:
                            paddingStyle:MPSGraphPaddingStyleExplicit
                              dataLayout:MPSGraphTensorNamedDataLayoutNCHW
                           weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
-        if (d == nil) return nullptr;
+        if (d == nil) return false;
         MPSGraphTensor* conv4 = [g convolution2DWithSourceTensor:x_r
                                                     weightsTensor:W_r
                                                        descriptor:d
@@ -197,7 +200,8 @@ public:
         // Squeeze H=1 → output (B, Cout, L_out).
         NSArray<NSNumber*>* out_sh =
             @[conv4.shape[0], conv4.shape[1], conv4.shape[3]];
-        return (__bridge void*)[g reshapeTensor:conv4 withShape:out_sh name:@"conv1d"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:conv4 withShape:out_sh name:@"conv1d"]));
+        return true;
     }
 };
 
@@ -206,23 +210,23 @@ class Conv3dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conv3d"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 3) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 3) return false;
         TensorId x_id = node.inputs[0];
         TensorId w_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
-        if (x_id < 0 || w_id < 0) return nullptr;
+        if (x_id < 0 || w_id < 0) return false;
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         const auto* D = int_vec_attr(node, "dilation");
-        if (S == nullptr || P == nullptr || D == nullptr) return nullptr;
-        if (S->size() != 3 || P->size() != 3 || D->size() != 3) return nullptr;
+        if (S == nullptr || P == nullptr || D == nullptr) return false;
+        if (S->size() != 3 || P->size() != 3 || D->size() != 3) return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
-        if (g == nil || x == nil || W == nil) return nullptr;
+        if (g == nil || x == nil || W == nil) return false;
         MPSGraphConvolution3DOpDescriptor* d =
             [MPSGraphConvolution3DOpDescriptor
                 descriptorWithStrideInX:(NSUInteger)(*S)[2]
@@ -241,12 +245,12 @@ public:
                            paddingStyle:MPSGraphPaddingStyleExplicit
                              dataLayout:MPSGraphTensorNamedDataLayoutNCDHW
                           weightsLayout:MPSGraphTensorNamedDataLayoutOIDHW];
-        if (d == nil) return nullptr;
+        if (d == nil) return false;
         MPSGraphTensor* conv = [g convolution3DWithSourceTensor:x
                                                   weightsTensor:W
                                                      descriptor:d
                                                            name:@"conv3d"];
-        if (conv == nil) return nullptr;
+        if (conv == nil) return false;
         if (b != nil && b.shape.count == 1 &&
             b.shape[0].longLongValue == W.shape[0].longLongValue) {
             NSArray<NSNumber*>* b_sh = @[@1, b.shape[0], @1, @1, @1];
@@ -255,7 +259,8 @@ public:
                                  secondaryTensor:b_r
                                             name:nil];
         }
-        return (__bridge void*)conv;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(conv));
+        return true;
     }
 };
 
@@ -267,23 +272,23 @@ class ConvTranspose2dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conv_transpose2d"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 3) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 3) return false;
         TensorId x_id = node.inputs[0];
         TensorId w_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
-        if (x_id < 0 || w_id < 0) return nullptr;
+        if (x_id < 0 || w_id < 0) return false;
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
-        if (S == nullptr || P == nullptr) return nullptr;
-        if (S->size() != 2 || P->size() != 2) return nullptr;
+        if (S == nullptr || P == nullptr) return false;
+        if (S->size() != 2 || P->size() != 2) return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
-        if (g == nil || x == nil || W == nil) return nullptr;
-        if (W.shape.count != 4) return nullptr;
+        if (g == nil || x == nil || W == nil) return false;
+        if (W.shape.count != 4) return false;
         // Lucid stores ConvTranspose weights as ``(in, out, kH, kW)`` —
         // the same IOHW layout PyTorch uses, which also matches what
         // MPSGraph's ``convolutionTranspose2D`` expects: it interprets
@@ -302,26 +307,27 @@ public:
                                                            paddingStyle:MPSGraphPaddingStyleExplicit
                                                              dataLayout:MPSGraphTensorNamedDataLayoutNCHW
                                                           weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
-        if (d == nil) return nullptr;
+        if (d == nil) return false;
         // Output shape comes from the trace's output meta.
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];
-        if (out_sh.count != 4) return nullptr;
+        if (out_sh.count != 4) return false;
         MPSGraphTensor* y =
             [g convolutionTranspose2DWithSourceTensor:x
                                          weightsTensor:W
                                            outputShape:out_sh
                                             descriptor:d
                                                   name:@"conv_transpose2d"];
-        if (y == nil) return nullptr;
+        if (y == nil) return false;
         if (b != nil && b.shape.count == 1 &&
             b.shape[0].longLongValue == out_sh[1].longLongValue) {
             NSArray<NSNumber*>* b_sh = @[@1, b.shape[0], @1, @1];
             MPSGraphTensor* b_r = [g reshapeTensor:b withShape:b_sh name:nil];
             y = [g additionWithPrimaryTensor:y secondaryTensor:b_r name:nil];
         }
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -330,23 +336,23 @@ class ConvTranspose1dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conv_transpose1d"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 3) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 3) return false;
         TensorId x_id = node.inputs[0];
         TensorId w_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
-        if (x_id < 0 || w_id < 0) return nullptr;
+        if (x_id < 0 || w_id < 0) return false;
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
-        if (S == nullptr || P == nullptr) return nullptr;
-        if (S->size() != 1 || P->size() != 1) return nullptr;
+        if (S == nullptr || P == nullptr) return false;
+        if (S->size() != 1 || P->size() != 1) return false;
         const std::int64_t groups = int_attr(node, "groups", 1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         MPSGraphTensor* b = (b_id >= 0) ? (__bridge MPSGraphTensor*)ctx.resolve(b_id) : nil;
-        if (g == nil || x == nil || W == nil) return nullptr;
-        if (x.shape.count != 3 || W.shape.count != 3) return nullptr;
+        if (g == nil || x == nil || W == nil) return false;
+        if (x.shape.count != 3 || W.shape.count != 3) return false;
         NSArray<NSNumber*>* x4 = @[x.shape[0], x.shape[1], @1, x.shape[2]];
         MPSGraphTensor* x_r = [g reshapeTensor:x withShape:x4 name:nil];
         // ConvTranspose weight layout matches forward conv OIHW directly
@@ -366,10 +372,10 @@ public:
                                                            paddingStyle:MPSGraphPaddingStyleExplicit
                                                              dataLayout:MPSGraphTensorNamedDataLayoutNCHW
                                                           weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
-        if (d == nil) return nullptr;
+        if (d == nil) return false;
         // Reshape trace output (B, Cout, Lout) → (B, Cout, 1, Lout) for the 2D call.
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
-        if (node.outputs[0].shape.size() != 3) return nullptr;
+        if (node.outputs[0].shape.size() != 3) return false;
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];
         NSArray<NSNumber*>* out_sh_4d =
@@ -380,7 +386,7 @@ public:
                                            outputShape:out_sh_4d
                                             descriptor:d
                                                   name:@"conv_transpose1d_lifted"];
-        if (y4 == nil) return nullptr;
+        if (y4 == nil) return false;
         if (b != nil && b.shape.count == 1 &&
             b.shape[0].longLongValue == out_sh[1].longLongValue) {
             NSArray<NSNumber*>* b_sh = @[@1, b.shape[0], @1, @1];
@@ -388,7 +394,8 @@ public:
             y4 = [g additionWithPrimaryTensor:y4 secondaryTensor:b_r name:nil];
         }
         // Squeeze H=1 → (B, Cout, Lout)
-        return (__bridge void*)[g reshapeTensor:y4 withShape:out_sh name:@"conv_transpose1d"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:y4 withShape:out_sh name:@"conv_transpose1d"]));
+        return true;
     }
 };
 
@@ -399,23 +406,23 @@ public:
 class UnfoldEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "unfold"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         const auto* K = int_vec_attr(node, "kernel_size");
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         const auto* D = int_vec_attr(node, "dilation");
-        if (K == nullptr || S == nullptr || P == nullptr || D == nullptr) return nullptr;
+        if (K == nullptr || S == nullptr || P == nullptr || D == nullptr) return false;
         if (K->size() != 2 || S->size() != 2 || P->size() != 2 || D->size() != 2)
-            return nullptr;  // only 2D supported by MPSGraph imToCol
+            return false;  // only 2D supported by MPSGraph imToCol
         if (![[MPSGraph class] respondsToSelector:@selector(class)] ||
-            NSClassFromString(@"MPSGraphImToColOpDescriptor") == nil) return nullptr;
+            NSClassFromString(@"MPSGraphImToColOpDescriptor") == nil) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        if (x.shape.count != 4) return nullptr;
+        if (g == nil || x == nil) return false;
+        if (x.shape.count != 4) return false;
         MPSGraphImToColOpDescriptor* d =
             [MPSGraphImToColOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
                                                        kernelHeight:(NSUInteger)(*K)[0]
@@ -428,10 +435,11 @@ public:
                                                          paddingTop:(NSUInteger)(*P)[0]
                                                       paddingBottom:(NSUInteger)(*P)[0]
                                                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-        if (d == nil) return nullptr;
-        return (__bridge void*)[g imToColWithSourceTensor:x
+        if (d == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g imToColWithSourceTensor:x
                                                 descriptor:d
-                                                      name:@"unfold"];
+                                                      name:@"unfold"]));
+        return true;
     }
 };
 
@@ -439,22 +447,22 @@ public:
 class FoldEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "fold"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         const auto* OS = int_vec_attr(node, "output_size");
         const auto* K = int_vec_attr(node, "kernel_size");
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         const auto* D = int_vec_attr(node, "dilation");
         if (OS == nullptr || K == nullptr || S == nullptr || P == nullptr || D == nullptr)
-            return nullptr;
-        if (K->size() != 2) return nullptr;
-        if (NSClassFromString(@"MPSGraphImToColOpDescriptor") == nil) return nullptr;
+            return false;
+        if (K->size() != 2) return false;
+        if (NSClassFromString(@"MPSGraphImToColOpDescriptor") == nil) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         MPSGraphImToColOpDescriptor* d =
             [MPSGraphImToColOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
                                                        kernelHeight:(NSUInteger)(*K)[0]
@@ -467,12 +475,12 @@ public:
                                                          paddingTop:(NSUInteger)(*P)[0]
                                                       paddingBottom:(NSUInteger)(*P)[0]
                                                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-        if (d == nil) return nullptr;
+        if (d == nil) return false;
         // Output shape comes from trace meta: (N, C, outH, outW).
         NSMutableArray<NSNumber*>* out_sh = [NSMutableArray array];
         for (auto v : node.outputs[0].shape)
             [out_sh addObject:[NSNumber numberWithLongLong:v]];
-        if (out_sh.count != 4) return nullptr;
+        if (out_sh.count != 4) return false;
         // macOS 26 SDK regression: ``colToImWithSourceTensor:`` runtime
         // validator rejects the rank-3 ``(N, C*kH*kW, oH*oW)`` form
         // Lucid (and PyTorch) use, with "invalid output shape for
@@ -483,7 +491,7 @@ public:
         // shadow path, never the user-visible forward, so eager fold
         // here costs nothing in production.
         (void)out_sh;
-        return nullptr;
+        return false;
     }
 };
 

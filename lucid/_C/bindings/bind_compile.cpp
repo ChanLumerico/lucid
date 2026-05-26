@@ -31,9 +31,40 @@
 #include "../version.h"
 #include "../compile/OpEmitters/OpEmitter.h"
 #include "../compile/Tracer.h"
+#include "../compile/VjpEmitters/VjpEmitter.h"
 #include "../core/TensorImpl.h"
 
 namespace py = pybind11;
+
+// pybind11 type caster for :class:`lucid::compile::TraceId`.  Maps
+// Python ``int`` ⇆ ``TraceId{int64_t}`` at the boundary.  Without
+// this, ``std::vector<TraceId>`` / ``std::unordered_map<TraceId, …>``
+// cross the C++↔Python boundary as unregistered opaque types.
+namespace pybind11 { namespace detail {
+template <>
+struct type_caster<::lucid::compile::TraceId> {
+public:
+    PYBIND11_TYPE_CASTER(::lucid::compile::TraceId, _("int"));
+
+    bool load(handle src, bool /*convert*/) {
+        PyObject* obj = src.ptr();
+        if (obj == nullptr || !PyLong_Check(obj))
+            return false;
+        long long v = PyLong_AsLongLong(obj);
+        if (v == -1 && PyErr_Occurred()) {
+            PyErr_Clear();
+            return false;
+        }
+        value = ::lucid::compile::TraceId{static_cast<std::int64_t>(v)};
+        return true;
+    }
+
+    static handle cast(::lucid::compile::TraceId src,
+                       return_value_policy /*policy*/, handle /*parent*/) {
+        return PyLong_FromLongLong(static_cast<long long>(src.v));
+    }
+};
+}}  // namespace pybind11::detail
 
 namespace lucid::bindings {
 
@@ -639,6 +670,50 @@ void register_compile(py::module_& m) {
         "internally and flush the new value back into the Lucid Tensor's "
         "existing MTLBuffer (no per-call newBufferWithLength).  Empty "
         "variable_pairs is equivalent to compile_generic_fused_step.");
+
+    // ── Manual-VJP coverage diagnostics ─────────────────────────────
+    //
+    // The 3-state classification + per-op registration query that
+    // backs :func:`lucid.compile.diagnose`.  Pure introspection — no
+    // graph state is touched.
+    py::enum_<lucid::compile::VjpRegistration>(m, "VjpRegistration",
+        "Three-state classification of an op's manual-VJP coverage.  "
+        "``Registered`` = real backward (a :class:`VjpEmitter` exists); "
+        "``GradSink`` = the walker stops gradient flow here by design "
+        "(factories, integer casts, comparisons, arg-reduce); "
+        "``Missing`` = no emitter, not a sink — soft-fallback to "
+        "``gradientForPrimaryTensor:`` (or hard-fail under "
+        "``LUCID_MANUAL_VJP_REQUIRE=1``).")
+        .value("Registered", lucid::compile::VjpRegistration::Registered)
+        .value("GradSink", lucid::compile::VjpRegistration::GradSink)
+        .value("Missing", lucid::compile::VjpRegistration::Missing);
+
+    m.def("vjp_registration_status",
+          [](const std::string& op_name) {
+              return lucid::compile::vjp_registration_status(op_name);
+          },
+          py::arg("op_name"),
+          "Look up an op's manual-VJP coverage status.  Returns a "
+          ":class:`VjpRegistration` value.  Used by "
+          ":func:`lucid.compile.diagnose` to build per-trace coverage "
+          "reports without re-running the model.");
+
+    m.def("use_manual_vjp", &lucid::compile::use_manual_vjp,
+          "Return ``True`` if manual VJP is enabled "
+          "(``LUCID_MANUAL_VJP`` env var is unset or set to a truthy "
+          "value).  Production default: ON.");
+
+    m.def("use_manual_vjp_require", &lucid::compile::use_manual_vjp_require,
+          "Return ``True`` if hard-fail-on-gap is enabled "
+          "(``LUCID_MANUAL_VJP_REQUIRE=1``).  When ON, a coverage gap "
+          "raises ``RuntimeError`` instead of falling back to "
+          "``gradientForPrimaryTensor:``.");
+
+    m.def("use_manual_vjp_debug", &lucid::compile::use_manual_vjp_debug,
+          "Return ``True`` if structured stderr logging on coverage "
+          "gap is enabled (``LUCID_MANUAL_VJP_DEBUG=1``).  Off by "
+          "default; turn on to diagnose why a model falls back from "
+          "manual VJP to MPSGraph autograd.");
 }
 
 namespace {

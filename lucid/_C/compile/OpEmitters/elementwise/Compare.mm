@@ -24,25 +24,26 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_cmp(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+inline bool emit_cmp(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 2 || node.outputs.empty())
-        return nullptr;
+        return false;
     TensorId a_id = node.inputs[0];
     TensorId b_id = node.inputs[1];
     if (a_id < 0 || b_id < 0)
-        return nullptr;
+        return false;
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* a_t = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
     MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
     if (graph == nil || a_t == nil || b_t == nil)
-        return nullptr;
-    return (__bridge void*)builder(graph, a_t, b_t);
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, a_t, b_t)));
+        return true;
 }
 
 class EqualEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "equal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g equalWithPrimaryTensor:a secondaryTensor:b name:@"equal"];
         });
@@ -52,7 +53,7 @@ public:
 class NotEqualEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "not_equal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g notEqualWithPrimaryTensor:a secondaryTensor:b name:@"not_equal"];
         });
@@ -62,7 +63,7 @@ public:
 class GreaterEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "greater"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g greaterThanWithPrimaryTensor:a secondaryTensor:b name:@"greater"];
         });
@@ -72,7 +73,7 @@ public:
 class GreaterEqualEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "greater_equal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g greaterThanOrEqualToWithPrimaryTensor:a
                                             secondaryTensor:b
@@ -84,7 +85,7 @@ public:
 class LessEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "less"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g lessThanWithPrimaryTensor:a secondaryTensor:b name:@"less"];
         });
@@ -94,7 +95,7 @@ public:
 class LessEqualEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "less_equal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_cmp(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g lessThanOrEqualToWithPrimaryTensor:a
                                          secondaryTensor:b
@@ -107,17 +108,18 @@ public:
 class InvertEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "invert"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
-        return (__bridge void*)[graph bitwiseNOTWithTensor:x_t name:@"invert"];
+            return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph bitwiseNOTWithTensor:x_t name:@"invert"]));
+        return true;
     }
 };
 

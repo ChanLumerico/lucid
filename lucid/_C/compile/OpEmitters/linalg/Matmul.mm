@@ -22,21 +22,24 @@ namespace {
 class MatmulEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "matmul"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 2)
-            return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 2 || node.outputs.empty())
+            return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
         if (a_id < 0 || b_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* a_t = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (graph == nil || a_t == nil || b_t == nil)
-            return nullptr;
-        return (__bridge void*)[graph matrixMultiplicationWithPrimaryTensor:a_t
-                                                            secondaryTensor:b_t
-                                                                       name:@"matmul"];
+            return false;
+        MPSGraphTensor* y =
+            [graph matrixMultiplicationWithPrimaryTensor:a_t
+                                          secondaryTensor:b_t
+                                                     name:@"matmul"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 

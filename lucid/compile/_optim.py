@@ -167,6 +167,15 @@ def compile_optimizer(opt: Optimizer) -> object:
     )
     from lucid.optim.lbfgs import LBFGS
 
+    # Multi-group dispatch — wrap one _Compiled* per group, each
+    # backed by a synthetic single-group clone of the parent optimizer
+    # (so the per-group compile sees its own hyperparams).  The wrapper
+    # delegates lifecycle (zero_grad / param_groups / state_dict /
+    # load_state_dict) back to the parent.  Useful for backbone+head
+    # training recipes with distinct LRs per group.
+    if len(opt.param_groups) > 1:
+        return _MultiGroupCompiledOptimizer(opt)
+
     # Supported — elementwise update math, single-dispatch friendly.
     if isinstance(opt, SGD):
         return _CompiledSGD(opt)
@@ -406,10 +415,14 @@ class _CompiledStepBase:
         self._params = _flatten_params(opt)
         if not self._params:
             raise ValueError("compile_optimizer: optimizer has no trainable parameters")
+        # Multi-group dispatch is handled one level up in
+        # ``compile_optimizer()`` via ``_MultiGroupCompiledOptimizer``.
+        # By the time we reach a concrete ``_Compiled*`` subclass, the
+        # optimizer is guaranteed to have exactly one ``param_group``.
         if len(opt.param_groups) > 1:
             raise NotImplementedError(
-                "compile_optimizer: multi-group optimizers not yet supported.  "
-                "Use a single param_group."
+                "_CompiledStepBase: expected single-group optimizer "
+                "(multi-group should be wrapped by _MultiGroupCompiledOptimizer)."
             )
         # Filled by the concrete subclass before _build_executable().
         self._exe: object | None = None
@@ -765,11 +778,15 @@ class _CompiledSGD(_CompiledStepBase):
     def __init__(self, opt: Optimizer) -> None:
         """Capture SGD hyperparameters + allocate the velocity buffers.
 
-        The velocity buffer (one tensor per parameter) is allocated
-        only when ``momentum != 0`` — plain SGD therefore costs zero
-        extra memory.  Nesterov is implemented faithfully (the eager
-        SGD silently drops it; see ``test_optimizer.py``'s
-        nesterov-correctness test for the formula verification).
+        Hyperparameter extraction is delegated to
+        :func:`OptimizerSpec.from_optim` (see :file:`_optim_spec.py`)
+        which provides a single source of truth across this Python
+        path and the C++ ``OptimizerSpec`` struct.  The velocity
+        buffer (one tensor per parameter) is allocated only when
+        ``momentum != 0`` — plain SGD therefore costs zero extra
+        memory.  Nesterov is implemented faithfully (the eager SGD
+        silently drops it; see ``test_optimizer.py``'s
+        nesterov-correctness test).
 
         Raises
         ------
@@ -778,16 +795,18 @@ class _CompiledSGD(_CompiledStepBase):
             instance.
         """
         from lucid.optim.sgd import SGD
+        from lucid.compile._optim_spec import OptimizerSpec
 
         if not isinstance(opt, SGD):
             raise TypeError(f"_CompiledSGD: expected SGD, got {type(opt).__name__}")
         super().__init__(opt)
-        g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._momentum = float(g.get("momentum", 0.0))
-        self._dampening = float(g.get("dampening", 0.0))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
-        self._nesterov = bool(g.get("nesterov", False))
+        spec = OptimizerSpec.from_optim(opt)
+        self._spec = spec
+        self._lr = spec.lr
+        self._momentum = spec.momentum
+        self._dampening = spec.dampening
+        self._weight_decay = spec.weight_decay
+        self._nesterov = spec.nesterov
         if self._momentum != 0.0:
             self._momenta = [_zeros_like(p) for p in self._params]
         else:
@@ -907,19 +926,23 @@ class _CompiledAdam(_CompiledStepBase):
         """
         from lucid.optim.adam import Adam
 
+        from lucid.compile._optim_spec import OptimizerSpec
+
         if not isinstance(opt, Adam):
             raise TypeError(f"_CompiledAdam: expected Adam, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._beta1 = float(g.get("beta1", 0.9))
-        self._beta2 = float(g.get("beta2", 0.999))
-        self._eps = float(g.get("eps", 1e-8))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
         if g.get("amsgrad", False):
             raise NotImplementedError(
                 "compile_optimizer: AMSGrad variant not yet supported."
             )
+        spec = OptimizerSpec.from_optim(opt)
+        self._spec = spec
+        self._lr = spec.lr
+        self._beta1 = spec.beta1
+        self._beta2 = spec.beta2
+        self._eps = spec.eps
+        self._weight_decay = spec.weight_decay
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
@@ -1063,17 +1086,21 @@ class _CompiledAdamW(_CompiledAdam):
         :meth:`_CompiledStepBase.__init__`.
         """
         from lucid.optim.adam import AdamW
+        from lucid.compile._optim_spec import OptimizerSpec
 
         if not isinstance(opt, AdamW):
             raise TypeError(f"_CompiledAdamW: expected AdamW, got {type(opt).__name__}")
         # Skip _CompiledAdam.__init__ (it rejects AdamW); reach the
         # _CompiledStepBase init directly.
         _CompiledStepBase.__init__(self, opt)
+        spec = OptimizerSpec.from_optim(opt)
+        self._spec = spec
+        self._lr = spec.lr
+        self._beta1 = spec.beta1
+        self._beta2 = spec.beta2
+        self._eps = spec.eps
+        # AdamW default weight_decay is 0.01 (not 0); spec handles via param_group.
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._beta1 = float(g.get("beta1", 0.9))
-        self._beta2 = float(g.get("beta2", 0.999))
-        self._eps = float(g.get("eps", 1e-8))
         self._weight_decay = float(g.get("weight_decay", 0.01))
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
@@ -1758,3 +1785,100 @@ class _CompiledNAdam(_CompiledStepBase):
     def _outputs_to_targets(self, outputs):
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` (NAdam)."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
+
+
+# ── Multi-group wrapper ─────────────────────────────────────────────
+
+
+class _MultiGroupCompiledOptimizer:
+    """Drop-in compiled-optimizer wrapper for multi-``param_group`` setups.
+
+    Each parameter group becomes its own compiled-optimizer instance
+    (one MPSGraph executable per group), constructed from a synthetic
+    single-group clone of the parent optimizer that carries only that
+    group's parameters + hyperparameters.  At ``step()`` time we
+    iterate the per-group compiled wrappers in order — eager has the
+    same shape (eager's ``step()`` loops over engine optimizers, one
+    per group), so this preserves the user-visible contract.
+
+    Lifecycle delegation (``zero_grad`` / ``param_groups`` /
+    ``state_dict`` / ``load_state_dict``) routes back to the parent
+    optimizer; the per-group wrappers do not own optimizer state.
+
+    Motivation: backbone-vs-head training recipes use distinct LRs
+    per group (e.g. lr=1e-3 for the pretrained backbone, lr=1e-2 for
+    the freshly initialised classification head).  Without this
+    wrapper, ``compile_optimizer`` would reject such setups and the
+    user would fall back to eager training step.
+
+    See [[retro-3-5-phase-vjp-priorities-p1-p7]] for the design
+    rationale and the alternative "per-group LR baked into one
+    trace" approach that was rejected (would require dynamic indexing
+    into a per-parameter LR table which MPSGraph doesn't express
+    cleanly).
+    """
+
+    def __init__(self, opt: Optimizer) -> None:
+        self._opt = opt
+        self._per_group: list[object] = [
+            compile_optimizer(_clone_single_group(opt, i))
+            for i in range(len(opt.param_groups))
+        ]
+
+    # ── Drop-in API surface ──────────────────────────────────────
+
+    @property
+    def param_groups(self) -> list[dict[str, object]]:
+        return self._opt.param_groups
+
+    @property
+    def defaults(self) -> dict[str, object]:
+        return self._opt.defaults
+
+    @property
+    def state(self) -> dict[int, dict[str, object]]:
+        return self._opt.state
+
+    def zero_grad(self, set_to_none: bool = False) -> None:
+        self._opt.zero_grad(set_to_none=set_to_none)
+
+    def state_dict(self) -> dict[str, object]:
+        return self._opt.state_dict()
+
+    def load_state_dict(self, state: dict[str, object]) -> None:
+        self._opt.load_state_dict(state)
+        # Drop per-group caches so the next ``step()`` retraces with
+        # the freshly loaded buffers.
+        for cg in self._per_group:
+            if hasattr(cg, "load_state_dict"):
+                cg.load_state_dict(state)
+            elif hasattr(cg, "_exe"):
+                cg._exe = None
+
+    def step(self) -> None:
+        """Run each per-group compiled optimizer in turn."""
+        for cg in self._per_group:
+            cg.step()
+
+
+def _clone_single_group(opt: Optimizer, group_idx: int) -> Optimizer:
+    """Construct a synthetic single-group optimizer from a single group.
+
+    The clone is the same concrete class as ``opt`` (so
+    ``compile_optimizer`` dispatches to the same ``_Compiled*``
+    subclass), but carries only ``opt.param_groups[group_idx]``'s
+    parameters and hyperparameters.  The clone shares parameter
+    tensor identities with the original — no copies — so updates
+    written by the clone's ``step()`` flow back to the user's
+    parameters automatically.
+
+    Hyperparameter forwarding: the group dict's keys (excluding
+    ``"params"``) are passed as keyword arguments to the optimizer's
+    ``__init__``.  Each Lucid optimizer class accepts the standard
+    set (lr / momentum / betas / eps / etc.) by name, so this works
+    uniformly across SGD / Adam / RMSprop / etc.
+    """
+    group = opt.param_groups[group_idx]
+    params = list(group["params"])  # type: ignore[arg-type]
+    kwargs = {k: v for k, v in group.items() if k != "params"}
+    return type(opt)(params, **kwargs)

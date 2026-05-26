@@ -31,50 +31,52 @@ inline std::int64_t dim_attr(const OpNode& node) {
 class SoftmaxEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "softmax"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t dim = dim_attr(node);
         if (dim < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
         MPSGraphTensor* y =
             [graph softMaxWithTensor:x_t axis:static_cast<NSInteger>(dim) name:@"softmax"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
 class LogSoftmaxEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "log_softmax"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t dim = dim_attr(node);
         if (dim < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
         // log_softmax = log(softmax(x, axis)).  MPSGraph has no direct
         // builder, so compose; numerical-stability is handled inside
         // softMaxWithTensor.
         MPSGraphTensor* sm =
             [graph softMaxWithTensor:x_t axis:static_cast<NSInteger>(dim) name:@"log_softmax_sm"];
         MPSGraphTensor* y = [graph logarithmWithTensor:sm name:@"log_softmax"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 

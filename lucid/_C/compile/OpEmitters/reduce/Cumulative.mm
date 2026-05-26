@@ -19,30 +19,31 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_scan(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+inline bool emit_scan(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.empty() || node.outputs.empty())
-        return nullptr;
+        return false;
     TensorId x_id = node.inputs[0];
     if (x_id < 0)
-        return nullptr;
+        return false;
     auto it = node.attrs.find("axis");
     if (it == node.attrs.end())
-        return nullptr;
+        return false;
     const auto* axp = std::get_if<std::int64_t>(&it->second);
     if (axp == nullptr)
-        return nullptr;
+        return false;
 
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (graph == nil || x_t == nil)
-        return nullptr;
-    return (__bridge void*)builder(graph, x_t, (NSInteger)*axp);
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, x_t, (NSInteger)*axp)));
+        return true;
 }
 
 class CumsumEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cumsum"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_scan(ctx, node, [](MPSGraph* g, MPSGraphTensor* x, NSInteger ax) {
             return [g cumulativeSumWithTensor:x axis:ax name:@"cumsum"];
         });
@@ -52,7 +53,7 @@ public:
 class CumprodEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cumprod"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_scan(ctx, node, [](MPSGraph* g, MPSGraphTensor* x, NSInteger ax) {
             return [g cumulativeProductWithTensor:x axis:ax name:@"cumprod"];
         });
@@ -62,7 +63,7 @@ public:
 class CummaxEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cummax"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_scan(ctx, node, [](MPSGraph* g, MPSGraphTensor* x, NSInteger ax) {
             return [g cumulativeMaximumWithTensor:x axis:ax name:@"cummax"];
         });
@@ -72,7 +73,7 @@ public:
 class CumminEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cummin"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_scan(ctx, node, [](MPSGraph* g, MPSGraphTensor* x, NSInteger ax) {
             return [g cumulativeMinimumWithTensor:x axis:ax name:@"cummin"];
         });

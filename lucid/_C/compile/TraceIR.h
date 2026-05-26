@@ -41,10 +41,60 @@
 
 namespace lucid::compile {
 
-// Stable 64-bit id assigned by :class:`Tracer` to each distinct
-// :class:`TensorImpl` observed during a trace.  Unique within one
-// :class:`TraceGraph` only — never reused, never persisted.
-using TensorId = std::int64_t;
+// Stable named-int identifier minted by :class:`Tracer` for each
+// distinct :class:`TensorImpl` observed during a trace.  Unique
+// within one :class:`TraceGraph` only — never reused, never persisted.
+//
+// **Design.**  ``TraceId`` is a named ``std::int64_t`` rather than a
+// raw alias so that:
+//
+//   * The trace-id namespace is greppable as a type (e.g. find every
+//     function that takes a ``TraceId`` parameter).
+//   * Hash specialization is bound to this type (no accidental
+//     overload conflicts with other 64-bit identifiers).
+//   * Future strict-typing upgrades (e.g. removing implicit
+//     conversion to ``int64_t`` to prevent passing a raw int where
+//     a TraceId is expected) only require flipping the ``operator
+//     std::int64_t()`` conversion.  All call sites are already
+//     compile-time-verified to use the named type.
+//
+// **Implicit conversion.**  We deliberately preserve implicit
+// conversion to/from ``std::int64_t`` for the first pass — there are
+// ~400 call sites across the compile path that mix raw ints (Python
+// bindings, monotonic counter arithmetic, sentinel ``-1`` checks)
+// with TraceId.  Switching to ``explicit`` would force a parallel
+// migration we can do in a follow-up.  The named type still moves
+// the codebase forward and unblocks the audit-flagged improvement.
+//
+// **Sentinel.**  ``TraceId::external_feed()`` (== -1) signals "not
+// produced by any traced op" — i.e. an external feed (model
+// parameter or user input).  Use ``id == TraceId::external_feed()``
+// in new code; ``id.v < 0`` still works for backwards compat.
+struct LUCID_API TraceId {
+    std::int64_t v = -1;
+
+    constexpr TraceId() noexcept = default;
+    constexpr TraceId(std::int64_t x) noexcept : v(x) {}
+    constexpr operator std::int64_t() const noexcept { return v; }
+
+    TraceId& operator++() noexcept { ++v; return *this; }
+    TraceId operator++(int) noexcept { auto t = *this; ++v; return t; }
+
+    // No defaulted ``operator==`` / ``operator<=>`` here — they would
+    // conflict with the implicit conversion to ``int64_t`` and cause
+    // ambiguity at every ``tid < 0`` style site.  Equality between
+    // TraceIds (and comparisons like ``tid < 0``) go through the
+    // implicit conversion to ``int64_t`` and use the built-in ops.
+
+    // Sentinel value for "this input is an external feed, not the
+    // output of any traced op".  Used in :class:`OpNode::inputs`.
+    static constexpr TraceId external_feed() noexcept { return TraceId{-1}; }
+};
+
+// Backwards-compatible alias.  Existing code that uses ``TensorId``
+// (the original raw ``int64_t`` typedef) keeps working unchanged.
+// New code should prefer ``TraceId`` directly.
+using TensorId = TraceId;
 
 // Metadata snapshot of a tensor at the moment it appears in the trace.
 //
@@ -157,3 +207,16 @@ struct LUCID_API TraceGraph {
 };
 
 }  // namespace lucid::compile
+
+// Hash specialization for :class:`TraceId` so it can serve as a key
+// in ``std::unordered_map`` / ``std::unordered_set`` without explicit
+// hash arguments.  Delegates to ``std::hash<std::int64_t>`` on the
+// underlying ``.v`` value.
+namespace std {
+template <>
+struct hash<::lucid::compile::TraceId> {
+    std::size_t operator()(const ::lucid::compile::TraceId& t) const noexcept {
+        return std::hash<std::int64_t>{}(t.v);
+    }
+};
+}  // namespace std

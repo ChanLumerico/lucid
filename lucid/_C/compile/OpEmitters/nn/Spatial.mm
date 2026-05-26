@@ -33,19 +33,19 @@ namespace {
 class AffineGridEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "affine_grid"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId t_id = node.inputs[0];
-        if (t_id < 0) return nullptr;
+        if (t_id < 0) return false;
         std::int64_t H = int_attr(node, "H", 0);
         std::int64_t W = int_attr(node, "W", 0);
-        if (H <= 0 || W <= 0) return nullptr;
+        if (H <= 0 || W <= 0) return false;
         bool align_corners = bool_attr(node, "align_corners", false);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* theta = (__bridge MPSGraphTensor*)ctx.resolve(t_id);
-        if (g == nil || theta == nil) return nullptr;
+        if (g == nil || theta == nil) return false;
         if (theta.shape.count != 3 || theta.shape[1].longLongValue != 2 ||
-            theta.shape[2].longLongValue != 3) return nullptr;
+            theta.shape[2].longLongValue != 3) return false;
         std::vector<float> coords(static_cast<size_t>(H * W * 3));
         auto make_axis = [](std::int64_t n, bool ac) {
             std::vector<float> v(static_cast<size_t>(n));
@@ -88,9 +88,10 @@ public:
                                     [NSNumber numberWithLongLong:H],
                                     [NSNumber numberWithLongLong:W]];
         MPSGraphTensor* grid_nchw = [g reshapeTensor:grid_flat withShape:g4 name:nil];
-        return (__bridge void*)[g transposeTensor:grid_nchw
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g transposeTensor:grid_nchw
                                        permutation:@[@0, @2, @3, @1]
-                                              name:@"affine_grid"];
+                                              name:@"affine_grid"]));
+        return true;
     }
 };
 
@@ -100,30 +101,31 @@ class Interpolate2dEmitterT final : public OpEmitter {
 public:
     explicit Interpolate2dEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t H_out = int_attr(node, "H_out", 0);
         std::int64_t W_out = int_attr(node, "W_out", 0);
-        if (H_out <= 0 || W_out <= 0) return nullptr;
+        if (H_out <= 0 || W_out <= 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        if (x.shape.count != 4) return nullptr;
+        if (g == nil || x == nil) return false;
+        if (x.shape.count != 4) return false;
         bool align_corners = bool_attr(node, "align_corners", false);
         if (IS_BILINEAR) {
             // Bilinear path: PyTorch-equivalent with centerResult=YES,
             // alignCorners flag passed through.
             MPSShape* size_2 = @[[NSNumber numberWithLongLong:H_out],
                                   [NSNumber numberWithLongLong:W_out]];
-            return (__bridge void*)[g resizeTensor:x
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g resizeTensor:x
                                               size:size_2
                                               mode:MPSGraphResizeBilinear
                                       centerResult:YES
                                       alignCorners:align_corners ? YES : NO
                                             layout:MPSGraphTensorNamedDataLayoutNCHW
-                                              name:@"interp2d_bilinear"];
+                                              name:@"interp2d_bilinear"]));
+        return true;
         }
         // Nearest path: PyTorch ``F.interpolate(mode='nearest')`` uses
         // floor(dst * src_size / dst_size) → exact kron-style block
@@ -135,14 +137,14 @@ public:
         NSData* size_nsd = [NSData dataWithBytes:size_data length:sizeof(size_data)];
         MPSGraphTensor* size_t =
             [g constantWithData:size_nsd shape:@[@2] dataType:MPSDataTypeInt32];
-        return (__bridge void*)
-            [g resizeNearestWithTensor:x
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g resizeNearestWithTensor:x
                             sizeTensor:size_t
                    nearestRoundingMode:MPSGraphResizeNearestRoundingModeFloor
                           centerResult:NO
                           alignCorners:NO
                                 layout:MPSGraphTensorNamedDataLayoutNCHW
-                                  name:@"interp2d_nearest"];
+                                  name:@"interp2d_nearest"]));
+        return true;
     }
 
 private:
@@ -155,22 +157,22 @@ private:
 class UnfoldDimEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "unfold_dim"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t d = int_attr(node, "dim", 0);
         std::int64_t size = int_attr(node, "size", 0);
         std::int64_t step = int_attr(node, "step", 0);
-        if (size <= 0 || step <= 0) return nullptr;
+        if (size <= 0 || step <= 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSInteger nd = (NSInteger)x.shape.count;
-        if (d < 0 || d >= nd) return nullptr;
+        if (d < 0 || d >= nd) return false;
         std::int64_t dim_size = x.shape[(NSUInteger)d].longLongValue;
         std::int64_t L = (dim_size - size) / step + 1;
-        if (L <= 0) return nullptr;
+        if (L <= 0) return false;
         NSMutableArray<MPSGraphTensor*>* parts = [NSMutableArray array];
         for (std::int64_t l = 0; l < L; ++l) {
             MPSGraphTensor* s = [g sliceTensor:x
@@ -199,9 +201,10 @@ public:
             [perm addObject:[NSNumber numberWithLongLong:k]];
         }
         [perm addObject:[NSNumber numberWithLongLong:src_size_axis]];
-        return (__bridge void*)[g transposeTensor:stacked
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g transposeTensor:stacked
                                        permutation:perm
-                                              name:@"unfold_dim"];
+                                              name:@"unfold_dim"]));
+        return true;
     }
 };
 

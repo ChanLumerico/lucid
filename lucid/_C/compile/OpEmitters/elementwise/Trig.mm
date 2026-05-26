@@ -22,23 +22,24 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_unary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+inline bool emit_unary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 1)
-        return nullptr;
+        return false;
     TensorId x_id = node.inputs[0];
     if (x_id < 0)
-        return nullptr;
+        return false;
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
-        return nullptr;
-    return (__bridge void*)builder(graph, x_t);
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(builder(graph, x_t)));
+        return true;
 }
 
 class SinEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sin"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g sinWithTensor:x name:@"sin"];
         });
@@ -48,7 +49,7 @@ public:
 class CosEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cos"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g cosWithTensor:x name:@"cos"];
         });
@@ -58,7 +59,7 @@ public:
 class TanEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "tan"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g tanWithTensor:x name:@"tan"];
         });
@@ -68,7 +69,7 @@ public:
 class SinhEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sinh"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g sinhWithTensor:x name:@"sinh"];
         });
@@ -78,7 +79,7 @@ public:
 class CoshEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cosh"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g coshWithTensor:x name:@"cosh"];
         });

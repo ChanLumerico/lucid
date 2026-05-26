@@ -84,11 +84,41 @@ public:
         consumed_inputs_ = s;
     }
 
+    // Saved-state side-table.
+    //
+    // Used by ops whose backward needs an intermediate tensor computed
+    // during forward emission that ISN'T derivable from the inputs +
+    // attrs alone — most notably the RNG mask of training-mode
+    // dropout (the same random tensor must be referenced by both
+    // forward and backward subgraphs; recomputing would draw fresh
+    // random values).  The forward emitter stashes the tensor via
+    // ``stash_saved(out_id, name, t)``; the VJP emitter retrieves it
+    // via ``resolve_saved(out_id, name)`` and ties its backward
+    // subgraph to the same MPSGraph node — MPSGraph evaluates each
+    // node exactly once per dispatch, so the value is shared.
+    //
+    // Keyed on the forward op's primary output id + a short
+    // op-defined slot name ("mask", "y", "rstd", …).  ``nullptr``
+    // return signals "no slot found" — VJP must handle that fallback
+    // (typically by recomputing or returning false).
+    void stash_saved(TensorId out_id, const std::string& name, void* tensor) {
+        saved_[out_id][name] = tensor;
+    }
+    void* resolve_saved(TensorId out_id, const std::string& name) const {
+        auto it = saved_.find(out_id);
+        if (it == saved_.end()) return nullptr;
+        auto jt = it->second.find(name);
+        return jt == it->second.end() ? nullptr : jt->second;
+    }
+
 private:
     void* graph_;
     Device device_;
     std::unordered_map<TensorId, void*> tensors_;
     std::unordered_set<TensorId> consumed_inputs_;
+    // Saved tensors keyed by (forward output id, slot name).  Owned
+    // for the duration of this BuilderContext (== one compile call).
+    std::unordered_map<TensorId, std::unordered_map<std::string, void*>> saved_;
 };
 
 // Abstract emitter — one per op family.
@@ -96,6 +126,23 @@ private:
 // Concrete subclasses live in this directory (``Linear.mm``,
 // ``Conv.mm``, …).  Each subclass registers itself at process startup
 // via :func:`register_emitter`.
+//
+// Emitter contract
+// ----------------
+// ``OpEmitter::emit`` returns ``bool`` and is responsible for binding
+// each of its outputs explicitly via :func:`BuilderContext::bind`.
+// Single-output ops bind ``node.outputs[0].id``; multi-output ops
+// (``split``, ``topk``, ``lstm``, ...) bind every consumed slot
+// ``node.outputs[k].id``.  The builder does **not** auto-bind —
+// emitters own their output namespace.  ``true`` signals success;
+// ``false`` signals "unsupported under this configuration" and the
+// builder aborts the compile, marking the trace signature eager-only.
+//
+// This symmetric design matches :class:`VjpEmitter::emit` (which
+// writes input gradients via :func:`BackwardContext::accumulate_grad`
+// and also returns ``bool``).  A single mental model for both emitter
+// families: *resolve inputs from context, build subgraph, bind
+// outputs into context, return success*.
 class LUCID_API OpEmitter {
 public:
     // Virtual destructor — ensures derived per-op emitter destructors
@@ -120,13 +167,12 @@ public:
     //
     // Returns
     // -------
-    // void* (MPSGraphTensor*)
-    //     The op's output tensor inside the graph, or ``nullptr`` to
-    //     signal "unsupported under this configuration" — the builder
-    //     aborts and marks the trace signature as eager-only.  The
-    //     returned tensor is also bound into ``ctx`` automatically by
-    //     :class:`MpsBuilder` so the next op can consume it.
-    virtual void* emit(BuilderContext& ctx, const OpNode& node) = 0;
+    // bool
+    //     ``true`` on success — the emitter has bound each of its
+    //     outputs via :func:`BuilderContext::bind`.  ``false`` signals
+    //     "unsupported under this configuration"; the builder aborts
+    //     and marks the trace signature as eager-only.
+    virtual bool emit(BuilderContext& ctx, const OpNode& node) = 0;
 
     // Op name handled by this emitter — matched against ``OpNode::name``.
     virtual std::string_view op_name() const = 0;

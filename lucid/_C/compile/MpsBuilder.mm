@@ -21,6 +21,7 @@
 #include "../core/TensorImpl.h"
 #include "MpsBuilder.h"
 #include "OpEmitters/OpEmitter.h"
+#include "VjpEmitters/VjpEmitter.h"
 
 namespace lucid::compile {
 
@@ -125,13 +126,26 @@ public:
 
 namespace lucid::compile {
 
-CompiledExecutable* compile_trace(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-        std::string* error_msg,
+
+// ────────────────────────────────────────────────────────────────────
+// MpsBuilder lifecycle (Phase B of compile OOP refactor)
+// ────────────────────────────────────────────────────────────────────
+MpsBuilder::MpsBuilder(const TraceGraph& graph,
+                       const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                       std::string* error_msg)
+    : graph_(graph), external_feeds_(external_feeds), error_msg_(error_msg) {}
+
+MpsBuilder::~MpsBuilder() = default;
+
+CompiledExecutable* MpsBuilder::compile_trace(
         bool dynamic_batch,
         const std::vector<TensorId>& param_ids,
         const std::vector<TensorId>& explicit_outputs) {
+    auto& graph = graph_;
+    const auto& external_feeds = external_feeds_;
+    auto* error_msg = error_msg_;
+
+
     // ``dynamic_batch`` (Phase 1.6): leading dim of every non-parameter
     // feed becomes a symbolic placeholder (-1) so a single executable
     // handles variable batch size.  ``param_ids`` supplies which feed
@@ -317,31 +331,21 @@ CompiledExecutable* compile_trace(
                 fputs(")\n", stderr);
             }
 
-            void* result = emitter->emit(ctx, node);
-            if (result == nullptr)
+            if (!emitter->emit(ctx, node))
                 return fail("compile_trace: emitter for op '" + node.name +
-                            "' returned nullptr (unsupported variant)");
-            if (verbose) {
-                MPSGraphTensor* rt = (__bridge MPSGraphTensor*)result;
+                            "' returned false (unsupported variant)");
+            // Emitters bind their own outputs explicitly via
+            // ``ctx.bind(outputs[k].id, ...)`` — no auto-bind here.
+            if (verbose && !node.outputs.empty()) {
                 fprintf(stderr, "[compile]   → emitted (");
-                NSArray<NSNumber*>* sh = rt.shape;
-                for (NSUInteger k = 0; k < sh.count; ++k) {
+                const auto& sh = node.outputs[0].shape;
+                for (std::size_t k = 0; k < sh.size(); ++k) {
                     if (k) fputc(',', stderr);
-                    fprintf(stderr, "%lld", [sh[k] longLongValue]);
+                    fprintf(stderr, "%lld", (long long)sh[k]);
                 }
                 fputs(")\n", stderr);
                 fflush(stderr);
             }
-            // Auto-bind outputs[0] to the emit() return value for
-            // single-output ops.  Multi-output emitters (split /
-            // split_at / unbind / chunk / …) handle their own binding
-            // via :func:`BuilderContext::bind` because outputs[0] may
-            // be a dead piece the user didn't pick — auto-binding
-            // it would leak the dead tensor into the graph's output
-            // list.  They still return a non-null sentinel tensor to
-            // signal "emit succeeded".
-            if (!node.outputs.empty() && node.outputs.size() == 1)
-                ctx.bind(node.outputs[0].id, result);
             ++op_idx;
         }
 
@@ -478,13 +482,15 @@ CompiledExecutable* compile_trace(
 
 // ── Phase 1.3 ────────────────────────────────────────────────────────────────
 
-CompiledExecutable* compile_trace_with_backward(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
-        std::string* error_msg,
         bool dynamic_batch) {
+    auto& graph = graph_;
+    const auto& external_feeds = external_feeds_;
+    auto* error_msg = error_msg_;
+
+
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg)
             *error_msg = std::move(msg);
@@ -521,32 +527,30 @@ CompiledExecutable* compile_trace_with_backward(
         }
     }
 
-    // Phase 1.5 step 5.3 precheck: MPSGraph's ``gradientForPrimaryTensor:``
-    // abort-on-LLVM-level when fwd ops have heterogeneous floating
-    // dtypes (e.g. an AMP-autocast block leaves some ops in F16 and
-    // others in F32, and the auto-derived backward inserts an
-    // incompatible broadcast).  We can't catch that abort, so guard
-    // by refusing to compile a trace whose floating dtypes are mixed.
-    // Integral / Bool dtypes are exempt — they live in CE's gather /
-    // mask path and never feed into the backward graph.
-    {
-        Dtype floating_dtype = Dtype::F32;
-        bool seen_floating = false;
-        for (const auto& op : graph.ops) {
-            for (const auto& meta : op.outputs) {
-                if (meta.dtype != Dtype::F32 && meta.dtype != Dtype::F16)
-                    continue;
-                if (!seen_floating) {
-                    floating_dtype = meta.dtype;
-                    seen_floating = true;
-                } else if (meta.dtype != floating_dtype) {
-                    return fail(
-                        "compile_trace_with_backward: mixed floating dtypes in "
-                        "trace (AMP autocast not yet supported by the compile path)");
-                }
-            }
-        }
-    }
+    // AMP / mixed-dtype support (X4 of compile-completeness plan).
+    //
+    // The historical precheck rejected any trace whose floating
+    // dtypes mixed (e.g. F16 forward + F32 reductions) because
+    // MPSGraph's ``gradientForPrimaryTensor:`` would abort with an
+    // incompatible-broadcast error on the auto-derived backward.
+    //
+    // The manual VJP path (LUCID_MANUAL_VJP, defaulted ON in P7)
+    // doesn't use ``gradientForPrimaryTensor:`` for the ops it
+    // covers — it emits the bwd subgraph directly with explicit
+    // dtype handling per VJP.  Every VJP's ``constantWithScalar:``
+    // calls already use the input tensor's dtype, and the manual-VJP
+    // F16 smoke test (P7b) confirms dtype propagation works end-to-end.
+    //
+    // We therefore lift the mixed-dtype rejection.  When manual VJP
+    // is OFF and the trace falls back to ``gradientForPrimaryTensor:``
+    // on a heterogeneous-dtype trace, MPSGraph may still abort —
+    // that's the legacy behaviour and a known limitation of the
+    // autograd fallback path.  Documentation should steer AMP users
+    // toward the manual VJP path (which is the default).
+    //
+    // Integral / Bool dtypes are exempt from the AMP discussion —
+    // they live in CE's gather / mask paths and never feed into the
+    // backward graph.
 
     // Every param id must be an external feed (gradient is meaningful only
     // for trace inputs; intermediate-tensor gradients are not user state).
@@ -643,12 +647,10 @@ CompiledExecutable* compile_trace_with_backward(
                 return fail("compile_trace_with_backward: emitter vanished for op '" +
                             node.name + "'");
             }
-            void* result = emitter->emit(ctx, node);
-            if (result == nullptr)
+            if (!emitter->emit(ctx, node))
                 return fail("compile_trace_with_backward: emitter for op '" + node.name +
-                            "' returned nullptr");
-            if (!node.outputs.empty())
-                ctx.bind(node.outputs[0].id, result);
+                            "' returned false");
+            // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
         // Resolve the loss tensor.
@@ -677,32 +679,58 @@ CompiledExecutable* compile_trace_with_backward(
             [param_arr addObject:(__bridge MPSGraphTensor*)p_void];
         }
 
-        // Auto-derive gradients via MPSGraph.
-        NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
-            [graph_obj gradientForPrimaryTensor:loss_t
-                                    withTensors:param_arr
-                                           name:@"lucid_grads"];
-        if (grad_map == nil)
-            return fail("compile_trace_with_backward: gradientForPrimaryTensor returned nil");
-
-        // Look up the grad tensor per param (the map keys are the param
-        // placeholders we just passed in).
+        // Auto-derive gradients.  Manual VJP path opt-in via env var;
+        // falls through to MPSGraph autograd on coverage gap unless
+        // LUCID_MANUAL_VJP_REQUIRE=1.
         std::vector<MPSGraphTensor*> grad_tensors;
         std::vector<Shape> grad_shapes;
         std::vector<Dtype> grad_dtypes;
         grad_tensors.reserve(param_ids.size());
         grad_shapes.reserve(param_ids.size());
         grad_dtypes.reserve(param_ids.size());
-        for (std::size_t i = 0; i < param_ids.size(); ++i) {
-            MPSGraphTensor* g_t = grad_map[param_arr[i]];
-            if (g_t == nil)
-                return fail("compile_trace_with_backward: no gradient produced for param id " +
-                            std::to_string(param_ids[i]));
-            grad_tensors.push_back(g_t);
-            // The gradient shape always matches the param shape, dtype too.
-            const auto& p_impl = external_feeds.at(param_ids[i]);
-            grad_shapes.push_back(p_impl->shape());
-            grad_dtypes.push_back(p_impl->dtype());
+
+        bool grads_done = false;
+        {
+            std::vector<void*> grads_void;
+            std::string vjp_err;
+            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
+                                          loss_id, param_ids, grads_void, &vjp_err)) {
+                case ManualVjpStatus::Success:
+                    for (std::size_t i = 0; i < param_ids.size(); ++i) {
+                        grad_tensors.push_back((__bridge MPSGraphTensor*)grads_void[i]);
+                        const auto& p_impl = external_feeds.at(param_ids[i]);
+                        grad_shapes.push_back(p_impl->shape());
+                        grad_dtypes.push_back(p_impl->dtype());
+                    }
+                    grads_done = true;
+                    break;
+                case ManualVjpStatus::HardFail:
+                    return fail("compile_trace_with_backward: "
+                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err);
+                case ManualVjpStatus::FellBack:
+                case ManualVjpStatus::Disabled:
+                    break;  // → MPSGraph autograd below
+            }
+        }
+
+        if (!grads_done) {
+            NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
+                [graph_obj gradientForPrimaryTensor:loss_t
+                                        withTensors:param_arr
+                                               name:@"lucid_grads"];
+            if (grad_map == nil)
+                return fail("compile_trace_with_backward: gradientForPrimaryTensor returned nil");
+
+            for (std::size_t i = 0; i < param_ids.size(); ++i) {
+                MPSGraphTensor* g_t = grad_map[param_arr[i]];
+                if (g_t == nil)
+                    return fail("compile_trace_with_backward: no gradient produced for param id " +
+                                std::to_string(param_ids[i]));
+                grad_tensors.push_back(g_t);
+                const auto& p_impl = external_feeds.at(param_ids[i]);
+                grad_shapes.push_back(p_impl->shape());
+                grad_dtypes.push_back(p_impl->dtype());
+            }
         }
 
         // Targets = [loss] + grad tensors.
@@ -944,15 +972,17 @@ AdamOutputs emit_adam_update(MPSGraph* g,
 
 }  // namespace
 
-CompiledExecutable* compile_fused_training_step(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+CompiledExecutable* MpsBuilder::compile_fused_training_step(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
         const OptimizerSpec& opt_spec,
         const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
-        const std::vector<TensorId>& scalar_input_ids,
-        std::string* error_msg) {
+        const std::vector<TensorId>& scalar_input_ids) {
+    auto& graph = graph_;
+    const auto& external_feeds = external_feeds_;
+    auto* error_msg = error_msg_;
+
+
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg) *error_msg = std::move(msg);
         return nullptr;
@@ -1041,12 +1071,10 @@ CompiledExecutable* compile_fused_training_step(
                 return fail("compile_fused_training_step: emitter vanished "
                             "for op '" + node.name + "'");
             }
-            void* result = emitter->emit(ctx, node);
-            if (result == nullptr)
+            if (!emitter->emit(ctx, node))
                 return fail("compile_fused_training_step: emitter '" +
-                            node.name + "' returned nullptr");
-            if (!node.outputs.empty() && node.outputs.size() == 1)
-                ctx.bind(node.outputs[0].id, result);
+                            node.name + "' returned false");
+            // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
         // Resolve the loss tensor and param placeholders.
@@ -1071,14 +1099,40 @@ CompiledExecutable* compile_fused_training_step(
             param_dtypes.push_back(p_impl->dtype());
         }
 
-        // Auto-derive gradients.
-        NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
-            [graph_obj gradientForPrimaryTensor:loss_t
-                                    withTensors:param_arr
-                                           name:@"lucid_fused_grads"];
-        if (grad_map == nil)
-            return fail("compile_fused_training_step: gradientForPrimaryTensor "
-                        "returned nil");
+        // Auto-derive gradients.  Manual VJP opt-in via env var; fall
+        // through to MPSGraph autograd on coverage gap (or hard-fail
+        // under LUCID_MANUAL_VJP_REQUIRE=1).
+        std::vector<MPSGraphTensor*> param_grads(param_ids.size(), nil);
+        bool grads_done = false;
+        {
+            std::vector<void*> grads_void;
+            std::string vjp_err;
+            switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
+                                          loss_id, param_ids, grads_void, &vjp_err)) {
+                case ManualVjpStatus::Success:
+                    for (std::size_t i = 0; i < param_ids.size(); ++i)
+                        param_grads[i] = (__bridge MPSGraphTensor*)grads_void[i];
+                    grads_done = true;
+                    break;
+                case ManualVjpStatus::HardFail:
+                    return fail("compile_fused_training_step: "
+                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err);
+                case ManualVjpStatus::FellBack:
+                case ManualVjpStatus::Disabled:
+                    break;
+            }
+        }
+        if (!grads_done) {
+            NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
+                [graph_obj gradientForPrimaryTensor:loss_t
+                                        withTensors:param_arr
+                                               name:@"lucid_fused_grads"];
+            if (grad_map == nil)
+                return fail("compile_fused_training_step: gradientForPrimaryTensor "
+                            "returned nil");
+            for (std::size_t i = 0; i < param_ids.size(); ++i)
+                param_grads[i] = grad_map[param_arr[i]];
+        }
 
         // Resolve scalar inputs (bias1, bias2 for Adam).
         std::vector<MPSGraphTensor*> scalar_tensors;
@@ -1100,7 +1154,7 @@ CompiledExecutable* compile_fused_training_step(
 
         for (std::size_t i = 0; i < param_ids.size(); ++i) {
             MPSGraphTensor* p = param_arr[i];
-            MPSGraphTensor* grad = grad_map[p];
+            MPSGraphTensor* grad = param_grads[i];
             if (grad == nil)
                 return fail("compile_fused_training_step: no gradient for "
                             "param " + std::to_string(param_ids[i]));
@@ -1254,14 +1308,16 @@ CompiledExecutable* compile_fused_training_step(
 
 // ── Generic fused step (Phase 1.8) ──────────────────────────────────
 
-CompiledExecutable* compile_generic_fused_step(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+CompiledExecutable* MpsBuilder::compile_generic_fused_step(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
         const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids,
-        std::string* error_msg) {
+        const std::vector<TensorId>& output_target_ids) {
+    auto& graph = graph_;
+    const auto& external_feeds = external_feeds_;
+    auto* error_msg = error_msg_;
+
+
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg) *error_msg = std::move(msg);
         return nullptr;
@@ -1399,6 +1455,33 @@ CompiledExecutable* compile_generic_fused_step(
                 return false;
             }
             MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
+
+            // Manual VJP (LUCID_MANUAL_VJP=1): walk the trace in reverse
+            // and emit per-op backward subgraphs ourselves.  On VJP
+            // coverage gap we fall through to MPSGraph autograd, unless
+            // LUCID_MANUAL_VJP_REQUIRE=1.
+            {
+                std::vector<void*> grads;
+                std::string vjp_err;
+                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
+                                              loss_id, param_ids, grads, &vjp_err)) {
+                    case ManualVjpStatus::Success:
+                        for (std::size_t i = 0; i < param_ids.size(); ++i)
+                            ctx.bind(ghost_grad_ids[i], grads[i]);
+                        grads_derived = true;
+                        return true;
+                    case ManualVjpStatus::HardFail:
+                        if (error_msg)
+                            *error_msg =
+                                "compile_generic_fused_step: "
+                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err;
+                        return false;
+                    case ManualVjpStatus::FellBack:
+                    case ManualVjpStatus::Disabled:
+                        break;
+                }
+            }
+
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
                 [graph_obj gradientForPrimaryTensor:loss_t
                                         withTensors:param_arr
@@ -1446,14 +1529,10 @@ CompiledExecutable* compile_generic_fused_step(
                 return fail("compile_generic_fused_step: emitter vanished "
                             "for op '" + node.name + "'");
             }
-            void* result = emitter->emit(ctx, node);
-            if (result == nullptr)
+            if (!emitter->emit(ctx, node))
                 return fail("compile_generic_fused_step: emitter '" +
-                            node.name + "' returned nullptr");
-            // Auto-bind outputs[0] for single-output ops; multi-output
-            // emitters (split/topk/...) handle their own binding.
-            if (!node.outputs.empty() && node.outputs.size() == 1)
-                ctx.bind(node.outputs[0].id, result);
+                            node.name + "' returned false");
+            // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
 
         // If the trace doesn't actually have any op that consumes a
@@ -1589,15 +1668,17 @@ CompiledExecutable* compile_generic_fused_step(
 //      replaced by the readVariable's trace id in
 //      ``grad_output_ids`` (same slot index — caller is unaffected).
 // ─────────────────────────────────────────────────────────────────────
-CompiledExecutable* compile_generic_fused_step_with_vars(
-        const TraceGraph& graph,
-        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+CompiledExecutable* MpsBuilder::compile_generic_fused_step_with_vars(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
         const std::vector<TensorId>& ghost_grad_ids,
         const std::vector<TensorId>& output_target_ids,
-        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
-        std::string* error_msg) {
+        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs) {
+    auto& graph = graph_;
+    const auto& external_feeds = external_feeds_;
+    auto* error_msg = error_msg_;
+
+
     auto fail = [&](std::string msg) -> CompiledExecutable* {
         if (error_msg) *error_msg = std::move(msg);
         return nullptr;
@@ -1611,11 +1692,11 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
         return fail(
             "compile_generic_fused_step_with_vars: ghost_grad_ids size != param_ids size");
 
-    // If no variables requested, defer to the original path.
+    // If no variables requested, defer to the non-vars path on this
+    // same MpsBuilder instance — no need to reconstruct.
     if (variable_pairs.empty()) {
-        return compile_generic_fused_step(
-            graph, external_feeds, loss_id, param_ids, ghost_grad_ids,
-            output_target_ids, error_msg);
+        return this->compile_generic_fused_step(
+            loss_id, param_ids, ghost_grad_ids, output_target_ids);
     }
 
     const std::unordered_set<TensorId> ghost_set(
@@ -1792,6 +1873,31 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
                 return false;
             }
             MPSGraphTensor* loss_t = (__bridge MPSGraphTensor*)loss_void;
+
+            // Manual VJP path (LUCID_MANUAL_VJP=1) — mirror of the
+            // non-variables fused-step site above.
+            {
+                std::vector<void*> grads;
+                std::string vjp_err;
+                switch (try_manual_vjp_grads((__bridge void*)graph_obj, ctx, graph,
+                                              loss_id, param_ids, grads, &vjp_err)) {
+                    case ManualVjpStatus::Success:
+                        for (std::size_t i = 0; i < param_ids.size(); ++i)
+                            ctx.bind(ghost_grad_ids[i], grads[i]);
+                        grads_derived = true;
+                        return true;
+                    case ManualVjpStatus::HardFail:
+                        if (error_msg)
+                            *error_msg =
+                                "compile_generic_fused_step_with_vars: "
+                                "LUCID_MANUAL_VJP_REQUIRE=1 but manual VJP gap — " + vjp_err;
+                        return false;
+                    case ManualVjpStatus::FellBack:
+                    case ManualVjpStatus::Disabled:
+                        break;
+                }
+            }
+
             NSDictionary<MPSGraphTensor*, MPSGraphTensor*>* grad_map =
                 [graph_obj gradientForPrimaryTensor:loss_t
                                         withTensors:param_arr
@@ -1833,12 +1939,10 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
                 return fail("compile_generic_fused_step_with_vars: emitter vanished for op '" +
                             node.name + "'");
             }
-            void* result = emitter->emit(ctx, node);
-            if (result == nullptr)
+            if (!emitter->emit(ctx, node))
                 return fail("compile_generic_fused_step_with_vars: emitter '" +
-                            node.name + "' returned nullptr");
-            if (!node.outputs.empty() && node.outputs.size() == 1)
-                ctx.bind(node.outputs[0].id, result);
+                            node.name + "' returned false");
+            // Emitters bind their own outputs via ctx.bind() — no auto-bind here.
         }
         if (!grads_derived && !ghost_grad_ids.empty()) {
             if (!derive_grads_now()) return nullptr;
@@ -1995,6 +2099,78 @@ CompiledExecutable* compile_generic_fused_step_with_vars(
         exe->device = device;
         return exe;
     }
+}
+
+
+// ────────────────────────────────────────────────────────────────────
+// Free-function forwarders — preserve the pre-class API.
+// Every existing caller (Python bindings, ExecutableCache, tests)
+// imports these by name; they construct a transient :class:`MpsBuilder`
+// and delegate to the matching method.  See MpsBuilder.h for the
+// class design rationale.
+// ────────────────────────────────────────────────────────────────────
+
+CompiledExecutable* compile_trace(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        std::string* error_msg,
+        bool dynamic_batch,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& explicit_outputs) {
+    return MpsBuilder(graph, external_feeds, error_msg)
+        .compile_trace(dynamic_batch, param_ids, explicit_outputs);
+}
+
+CompiledExecutable* compile_trace_with_backward(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        std::string* error_msg,
+        bool dynamic_batch) {
+    return MpsBuilder(graph, external_feeds, error_msg)
+        .compile_trace_with_backward(loss_id, param_ids, dynamic_batch);
+}
+
+CompiledExecutable* compile_fused_training_step(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const OptimizerSpec& opt_spec,
+        const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+        const std::vector<TensorId>& scalar_input_ids,
+        std::string* error_msg) {
+    return MpsBuilder(graph, external_feeds, error_msg)
+        .compile_fused_training_step(loss_id, param_ids, opt_spec,
+                                     state_buf_ids_per_param, scalar_input_ids);
+}
+
+CompiledExecutable* compile_generic_fused_step(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& ghost_grad_ids,
+        const std::vector<TensorId>& output_target_ids,
+        std::string* error_msg) {
+    return MpsBuilder(graph, external_feeds, error_msg)
+        .compile_generic_fused_step(loss_id, param_ids, ghost_grad_ids,
+                                    output_target_ids);
+}
+
+CompiledExecutable* compile_generic_fused_step_with_vars(
+        const TraceGraph& graph,
+        const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        const std::vector<TensorId>& ghost_grad_ids,
+        const std::vector<TensorId>& output_target_ids,
+        const std::vector<std::pair<TensorId, TensorId>>& variable_pairs,
+        std::string* error_msg) {
+    return MpsBuilder(graph, external_feeds, error_msg)
+        .compile_generic_fused_step_with_vars(loss_id, param_ids, ghost_grad_ids,
+                                              output_target_ids, variable_pairs);
 }
 
 }  // namespace lucid::compile

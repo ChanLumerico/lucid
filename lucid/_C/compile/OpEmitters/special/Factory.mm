@@ -49,23 +49,23 @@ class FullEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "full"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // full takes no traced inputs — the trace records 0 input ids.
         if (!node.inputs.empty())
-            return nullptr;
+            return false;
         if (node.outputs.empty())
-            return nullptr;
+            return false;
 
         auto it = node.attrs.find("fill_value");
         if (it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* v = std::get_if<double>(&it->second);
         if (v == nullptr)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         if (graph == nil)
-            return nullptr;
+            return false;
 
         const TensorMeta& meta = node.outputs[0];
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
@@ -73,7 +73,8 @@ public:
         MPSGraphTensor* y = [graph constantWithScalar:*v
                                                  shape:ns_shape
                                               dataType:ns_dt];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -90,21 +91,22 @@ public:
     explicit FixedFillEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (!node.inputs.empty())
-            return nullptr;
+            return false;
         if (node.outputs.empty())
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         if (graph == nil)
-            return nullptr;
+            return false;
         const TensorMeta& meta = node.outputs[0];
         NSArray<NSNumber*>* ns_shape = shape_to_nsarray(meta.shape);
         MPSDataType ns_dt = to_mps_dtype_local(meta.dtype);
         MPSGraphTensor* y = [graph constantWithScalar:(double)FILL_VALUE
                                                  shape:ns_shape
                                               dataType:ns_dt];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 
 private:

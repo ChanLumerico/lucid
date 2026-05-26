@@ -29,30 +29,32 @@ namespace {
 class SortEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sort"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t ax = int_attr(node, "axis", -1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        return (__bridge void*)[g sortWithTensor:x axis:(NSInteger)ax name:@"sort"];
+        if (g == nil || x == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g sortWithTensor:x axis:(NSInteger)ax name:@"sort"]));
+        return true;
     }
 };
 
 class ArgsortEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "argsort"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t ax = int_attr(node, "axis", -1);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        return (__bridge void*)[g argSortWithTensor:x axis:(NSInteger)ax name:@"argsort"];
+        if (g == nil || x == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g argSortWithTensor:x axis:(NSInteger)ax name:@"argsort"]));
+        return true;
     }
 };
 
@@ -62,14 +64,14 @@ class ArgReduceEmitterT final : public OpEmitter {
 public:
     explicit ArgReduceEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t ax = int_attr(node, "axis", 0);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         MPSGraphTensor* r = IS_MAX
             ? [g reductionArgMaximumWithTensor:x axis:(NSInteger)ax name:@"argmax"]
             : [g reductionArgMinimumWithTensor:x axis:(NSInteger)ax name:@"argmin"];
@@ -83,7 +85,8 @@ public:
             }
             r = [g reshapeTensor:r withShape:new_shape name:nil];
         }
-        return (__bridge void*)r;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(r));
+        return true;
     }
 
 private:
@@ -96,21 +99,22 @@ class BoolReduceEmitterT final : public OpEmitter {
 public:
     explicit BoolReduceEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         MPSGraphTensor* x_bool = [g castTensor:x toType:MPSDataTypeBool name:nil];
         NSArray<NSNumber*>* in_shape = x.shape;
         NSMutableArray<NSNumber*>* all_axes = [NSMutableArray array];
         for (NSUInteger d = 0; d < in_shape.count; ++d)
             [all_axes addObject:[NSNumber numberWithLongLong:(long long)d]];
-        return (__bridge void*)(IS_AND
+        ctx.bind(node.outputs[0].id, (__bridge void*)((IS_AND
             ? [g reductionAndWithTensor:x_bool axes:all_axes name:@"all"]
-            : [g reductionOrWithTensor:x_bool axes:all_axes name:@"any"]);
+            : [g reductionOrWithTensor:x_bool axes:all_axes name:@"any"])));
+        return true;
     }
 
 private:

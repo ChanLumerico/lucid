@@ -46,7 +46,7 @@ class StubEmitter final : public OpEmitter {
 public:
     explicit StubEmitter(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext&, const OpNode&) override { return nullptr; }
+    bool emit(BuilderContext&, const OpNode&) override { return false; }
 
 private:
     std::string name_;

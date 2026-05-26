@@ -56,35 +56,36 @@ inline MPSGraphTensor* apply_reduction(MPSGraph* g, MPSGraphTensor* per_sample,
 class MseLossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mse_loss"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() < 2 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         if (in_id < 0 || tg_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
         MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
         if (g == nil || x == nil || t == nil)
-            return nullptr;
+            return false;
         MPSGraphTensor* diff =
             [g subtractionWithPrimaryTensor:x secondaryTensor:t name:nil];
         MPSGraphTensor* sq = [g squareWithTensor:diff name:nil];
-        return (__bridge void*)apply_reduction(g, sq, reduction_of(node));
+        ctx.bind(node.outputs[0].id, (__bridge void*)(apply_reduction(g, sq, reduction_of(node))));
+        return true;
     }
 };
 
 class HuberLossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "huber_loss"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() < 2 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         if (in_id < 0 || tg_id < 0)
-            return nullptr;
+            return false;
         double delta = 1.0;
         if (auto it = node.attrs.find("delta"); it != node.attrs.end()) {
             if (const auto* p = std::get_if<double>(&it->second)) delta = *p;
@@ -94,7 +95,7 @@ public:
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
         MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
         if (g == nil || x == nil || t == nil)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* diff =
             [g subtractionWithPrimaryTensor:x secondaryTensor:t name:nil];
@@ -121,22 +122,23 @@ public:
                      truePredicateTensor:sm
                     falsePredicateTensor:lg
                                     name:nil];
-        return (__bridge void*)apply_reduction(g, per_sample, reduction_of(node));
+        ctx.bind(node.outputs[0].id, (__bridge void*)(apply_reduction(g, per_sample, reduction_of(node))));
+        return true;
     }
 };
 
 class BCELossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "bce_loss"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // inputs: [input, target, weight].
         if (node.inputs.size() < 3 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         TensorId w_id = node.inputs[2];
         if (in_id < 0 || tg_id < 0 || w_id < 0)
-            return nullptr;
+            return false;
         double eps = 1e-12;
         if (auto it = node.attrs.find("eps"); it != node.attrs.end()) {
             if (const auto* p = std::get_if<double>(&it->second)) eps = *p;
@@ -147,7 +149,7 @@ public:
         MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
         MPSGraphTensor* w = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         if (g == nil || x == nil || t == nil || w == nil)
-            return nullptr;
+            return false;
 
         // Clamp x to [eps, 1-eps] to keep log finite.
         MPSGraphTensor* e_lo = [g constantWithScalar:eps dataType:x.dataType];
@@ -178,23 +180,24 @@ public:
         // multiply by per-sample weight.
         per_sample =
             [g multiplicationWithPrimaryTensor:per_sample secondaryTensor:w name:nil];
-        return (__bridge void*)apply_reduction(g, per_sample, reduction_of(node));
+        ctx.bind(node.outputs[0].id, (__bridge void*)(apply_reduction(g, per_sample, reduction_of(node))));
+        return true;
     }
 };
 
 class BCEWithLogitsLossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "bce_with_logits"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // inputs: [input, target, weight, pos_weight].
         if (node.inputs.size() < 4 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         TensorId w_id = node.inputs[2];
         TensorId pw_id = node.inputs[3];
         if (in_id < 0 || tg_id < 0 || w_id < 0 || pw_id < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
@@ -202,7 +205,7 @@ public:
         MPSGraphTensor* w = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
         MPSGraphTensor* pw = (__bridge MPSGraphTensor*)ctx.resolve(pw_id);
         if (g == nil || x == nil || t == nil || w == nil || pw == nil)
-            return nullptr;
+            return false;
 
         // Numerically stable BCE-with-logits when pos_weight=1 (the
         // ``pw`` tensor already encodes positional reweighting via the
@@ -245,7 +248,8 @@ public:
                                        name:nil];
         per_sample =
             [g multiplicationWithPrimaryTensor:per_sample secondaryTensor:w name:nil];
-        return (__bridge void*)apply_reduction(g, per_sample, reduction_of(node));
+        ctx.bind(node.outputs[0].id, (__bridge void*)(apply_reduction(g, per_sample, reduction_of(node))));
+        return true;
     }
 };
 
@@ -256,13 +260,13 @@ public:
 class NLLLossEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "nll_loss"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() < 2 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         if (in_id < 0 || tg_id < 0)
-            return nullptr;
+            return false;
         std::int64_t reduction = reduction_of(node);
         std::int64_t ignore_index = -100;
         if (auto it = node.attrs.find("ignore_index"); it != node.attrs.end()) {
@@ -273,7 +277,7 @@ public:
         MPSGraphTensor* log_p = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
         MPSGraphTensor* tgt = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
         if (g == nil || log_p == nil || tgt == nil)
-            return nullptr;
+            return false;
         MPSDataType ft = log_p.dataType;
 
         // Gather along axis 1: pick log_p[..., target, ...].
@@ -307,8 +311,10 @@ public:
                                         secondaryTensor:keep_f
                                                    name:nil];
 
-        if (reduction == 0)
-            return (__bridge void*)per_sample;
+        if (reduction == 0) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)per_sample);
+            return true;
+        }
         // sum across all axes — gives 1 scalar.
         NSArray<NSNumber*>* shape = per_sample.shape;
         NSMutableArray<NSNumber*>* axes =
@@ -317,14 +323,19 @@ public:
             [axes addObject:[NSNumber numberWithLongLong:(long long)d]];
         MPSGraphTensor* loss_sum =
             [g reductionSumWithTensor:per_sample axes:axes name:nil];
-        if (reduction == 2)
-            return (__bridge void*)loss_sum;
+        if (reduction == 2) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)loss_sum);
+            return true;
+        }
         // mean — divide by number of *kept* samples (sum of keep_f).
         MPSGraphTensor* denom =
             [g reductionSumWithTensor:keep_f axes:axes name:nil];
-        return (__bridge void*)[g divisionWithPrimaryTensor:loss_sum
-                                            secondaryTensor:denom
-                                                       name:@"nll_loss_mean"];
+        MPSGraphTensor* loss_mean =
+            [g divisionWithPrimaryTensor:loss_sum
+                          secondaryTensor:denom
+                                     name:@"nll_loss_mean"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)loss_mean);
+        return true;
     }
 };
 
@@ -333,13 +344,13 @@ public:
 class CrossEntropyEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "cross_entropy_loss"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() < 2 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId in_id = node.inputs[0];
         TensorId tg_id = node.inputs[1];
         if (in_id < 0 || tg_id < 0)
-            return nullptr;
+            return false;
         std::int64_t reduction = reduction_of(node);
         std::int64_t ignore_index = -100;
         if (auto it = node.attrs.find("ignore_index"); it != node.attrs.end()) {
@@ -350,7 +361,7 @@ public:
         MPSGraphTensor* logits = (__bridge MPSGraphTensor*)ctx.resolve(in_id);
         MPSGraphTensor* tgt = (__bridge MPSGraphTensor*)ctx.resolve(tg_id);
         if (g == nil || logits == nil || tgt == nil)
-            return nullptr;
+            return false;
         MPSDataType ft = logits.dataType;
 
         // log_softmax(logits, dim=1) = log(softmax(...)).
@@ -387,8 +398,10 @@ public:
                                         secondaryTensor:keep_f
                                                    name:nil];
 
-        if (reduction == 0)
-            return (__bridge void*)per_sample;
+        if (reduction == 0) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)per_sample);
+            return true;
+        }
         NSArray<NSNumber*>* shape = per_sample.shape;
         NSMutableArray<NSNumber*>* axes =
             [NSMutableArray arrayWithCapacity:shape.count];
@@ -396,13 +409,18 @@ public:
             [axes addObject:[NSNumber numberWithLongLong:(long long)d]];
         MPSGraphTensor* loss_sum =
             [g reductionSumWithTensor:per_sample axes:axes name:nil];
-        if (reduction == 2)
-            return (__bridge void*)loss_sum;
+        if (reduction == 2) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)loss_sum);
+            return true;
+        }
         MPSGraphTensor* denom =
             [g reductionSumWithTensor:keep_f axes:axes name:nil];
-        return (__bridge void*)[g divisionWithPrimaryTensor:loss_sum
-                                            secondaryTensor:denom
-                                                       name:@"ce_mean"];
+        MPSGraphTensor* loss_mean =
+            [g divisionWithPrimaryTensor:loss_sum
+                          secondaryTensor:denom
+                                     name:@"ce_mean"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)loss_mean);
+        return true;
     }
 };
 

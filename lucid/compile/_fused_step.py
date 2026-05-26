@@ -61,6 +61,7 @@ Limitations
 from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
+
 # Hot-path imports — hoisted out of ``_FusedStep._run`` so the
 # per-call ``from ... import _unwrap`` / ``import lucid as _lucid``
 # bookkeeping (≈ 30-50 μs on M-series) doesn't run every training
@@ -516,6 +517,7 @@ class _FusedStep:
         # semantic constants — no per-call updates happen on them
         # through the fused step.
         from lucid._tensor.tensor import Tensor as _TensorT  # noqa: PLC0415
+
         resolvers: list[Callable[[], Tensor]] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
@@ -527,7 +529,7 @@ class _FusedStep:
                 # grad, no autograd hook) and return it verbatim every
                 # call.
                 pinned_tensor = _TensorT(impl, requires_grad=False)
-                r = (lambda _t=pinned_tensor: _t)
+                r = lambda _t=pinned_tensor: _t
             resolvers.append(r)
         self._input_resolvers = resolvers
 
@@ -548,9 +550,8 @@ class _FusedStep:
         # ``_run``.  The list is rebuilt with a fresh loss_impl at
         # slot 0 each call (loss is the only non-stable target).
         from lucid._dispatch import _unwrap as _unwrap_hot
-        self._opt_target_impls = tuple(
-            _unwrap_hot(t) for t in self._output_targets
-        )
+
+        self._opt_target_impls = tuple(_unwrap_hot(t) for t in self._output_targets)
 
     def _run(self, args: tuple[Tensor, ...]) -> Tensor:
         """Bind feeds + targets and invoke the cached executable in-place.

@@ -725,9 +725,17 @@ bool save_executable(const CompiledExecutable* exe, const std::string& path) {
         write_pod<uint8_t>(meta, static_cast<uint8_t>(exe->device));
         write_pod<uint8_t>(meta, exe->dynamic_batch ? 1 : 0);
         write_pod<uint8_t>(meta, 0);  // padding
-        write_vec<std::int64_t>(meta, exe->input_ids);
-        write_vec<std::int64_t>(meta, exe->output_ids);
-        write_vec<std::int64_t>(meta, exe->grad_output_ids);
+        // input_ids/output_ids/grad_output_ids are vector<TraceId>;
+        // serialise the underlying int64 values.
+        auto to_int64 = [](const std::vector<TensorId>& v) {
+            std::vector<std::int64_t> out;
+            out.reserve(v.size());
+            for (const auto& id : v) out.push_back(id.v);
+            return out;
+        };
+        write_vec<std::int64_t>(meta, to_int64(exe->input_ids));
+        write_vec<std::int64_t>(meta, to_int64(exe->output_ids));
+        write_vec<std::int64_t>(meta, to_int64(exe->grad_output_ids));
         write_vec_vec_i64(meta, exe->input_shapes);
         write_vec_vec_i64(meta, exe->output_shapes);
         // Dtypes encoded as uint8 (matches the Dtype enum's
@@ -816,9 +824,17 @@ CompiledExecutable* load_executable(const std::string& path,
         result->executable = exec;
         result->device = static_cast<Device>(device_byte);
         result->dynamic_batch = (dynamic_byte != 0);
-        result->input_ids = std::move(input_ids);
-        result->output_ids = std::move(output_ids);
-        result->grad_output_ids = std::move(grad_output_ids);
+        // input_ids et al. are vector<int64_t> from the on-disk file;
+        // wrap each into the strong-typed TraceId.
+        auto wrap_ids = [](std::vector<std::int64_t>&& v) {
+            std::vector<TensorId> out;
+            out.reserve(v.size());
+            for (std::int64_t x : v) out.push_back(TensorId{x});
+            return out;
+        };
+        result->input_ids = wrap_ids(std::move(input_ids));
+        result->output_ids = wrap_ids(std::move(output_ids));
+        result->grad_output_ids = wrap_ids(std::move(grad_output_ids));
         result->input_shapes = std::move(input_shapes);
         result->output_shapes = std::move(output_shapes);
         result->input_dtypes.resize(input_dt_raw.size());

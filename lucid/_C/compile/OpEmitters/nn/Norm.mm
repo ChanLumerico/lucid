@@ -48,29 +48,29 @@ inline NSArray<NSNumber*>* trailing_axes(NSUInteger rank, NSUInteger K) {
 class LayerNormEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "layer_norm"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 3)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         TensorId g_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
         if (x_id < 0 || g_id < 0 || b_id < 0)
-            return nullptr;
+            return false;
         const double eps = eps_attr(node);
         if (eps < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* g_t = (__bridge MPSGraphTensor*)ctx.resolve(g_id);
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         if (x_t == nil || g_t == nil || b_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         NSUInteger x_rank = x_t.shape.count;
         NSUInteger g_rank = g_t.shape.count;
         if (g_rank == 0 || g_rank > x_rank)
-            return nullptr;
+            return false;
         NSArray<NSNumber*>* axes = trailing_axes(x_rank, g_rank);
 
         MPSGraphTensor* mean = [graph meanOfTensor:x_t axes:axes name:nil];
@@ -83,34 +83,35 @@ public:
                                 betaTensor:b_t
                                    epsilon:static_cast<float>(eps)
                                       name:@"layer_norm"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
 class RMSNormEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "rms_norm"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 2)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         TensorId g_id = node.inputs[1];
         if (x_id < 0 || g_id < 0)
-            return nullptr;
+            return false;
         const double eps = eps_attr(node);
         if (eps < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* g_t = (__bridge MPSGraphTensor*)ctx.resolve(g_id);
         if (x_t == nil || g_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         NSUInteger x_rank = x_t.shape.count;
         NSUInteger g_rank = g_t.shape.count;
         if (g_rank == 0 || g_rank > x_rank)
-            return nullptr;
+            return false;
         NSArray<NSNumber*>* axes = trailing_axes(x_rank, g_rank);
 
         MPSDataType dt = x_t.dataType;
@@ -131,7 +132,8 @@ public:
             [graph multiplicationWithPrimaryTensor:x_scaled
                                    secondaryTensor:g_t
                                               name:@"rms_norm"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -143,15 +145,15 @@ public:
 class BatchNormEvalEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "batch_norm_eval"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 5)
-            return nullptr;
+            return false;
         for (TensorId id : node.inputs)
             if (id < 0)
-                return nullptr;
+                return false;
         const double eps = eps_attr(node);
         if (eps < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
@@ -160,7 +162,7 @@ public:
         MPSGraphTensor* g_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[3]);
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[4]);
         if (x_t == nil || m_t == nil || v_t == nil || g_t == nil || b_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         // Reshape (C,) → (1, C, 1, …, 1) so the affine + normalisation
         // broadcast cleanly against an N-D NCHW input.  Channel-dim size
@@ -169,7 +171,7 @@ public:
         // arrive as (1, C) instead of (C,) after a cast or reshape op.
         NSUInteger rank = x_t.shape.count;
         if (rank < 2)
-            return nullptr;
+            return false;
         NSMutableArray<NSNumber*>* affine_shape = [NSMutableArray arrayWithCapacity:rank];
         for (NSUInteger i = 0; i < rank; ++i)
             [affine_shape addObject:[NSNumber numberWithLongLong:1]];
@@ -188,7 +190,8 @@ public:
                                 betaTensor:beta
                                    epsilon:static_cast<float>(eps)
                                       name:@"batch_norm_eval"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -198,26 +201,26 @@ class BatchNormTrainEmitter final : public OpEmitter {
 public:
     explicit BatchNormTrainEmitter(std::string_view n) : name_(n) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 3)
-            return nullptr;
+            return false;
         for (TensorId id : node.inputs)
             if (id < 0)
-                return nullptr;
+                return false;
         const double eps = eps_attr(node);
         if (eps < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
         MPSGraphTensor* g_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[1]);
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[2]);
         if (x_t == nil || g_t == nil || b_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         NSUInteger rank = x_t.shape.count;
         if (rank < 2)
-            return nullptr;
+            return false;
 
         // Reduction over all axes except channel dim 1.
         NSMutableArray<NSNumber*>* reduce_axes = [NSMutableArray array];
@@ -244,7 +247,8 @@ public:
                                 betaTensor:beta
                                    epsilon:static_cast<float>(eps)
                                       name:@"batch_norm"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 
 private:
@@ -260,21 +264,21 @@ class GroupNormEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "group_norm"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 3)
-            return nullptr;
+            return false;
         for (TensorId id : node.inputs)
             if (id < 0)
-                return nullptr;
+                return false;
         const double eps = eps_attr(node);
         if (eps < 0)
-            return nullptr;
+            return false;
         auto it = node.attrs.find("num_groups");
         if (it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* G_p = std::get_if<std::int64_t>(&it->second);
         if (G_p == nullptr || *G_p <= 0)
-            return nullptr;
+            return false;
         const NSInteger G = static_cast<NSInteger>(*G_p);
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
@@ -282,16 +286,16 @@ public:
         MPSGraphTensor* g_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[1]);
         MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[2]);
         if (x_t == nil || g_t == nil || b_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         NSArray<NSNumber*>* x_shape = x_t.shape;
         NSUInteger rank = x_shape.count;
         if (rank < 2)
-            return nullptr;
+            return false;
         const NSInteger N = [x_shape[0] integerValue];
         const NSInteger C = [x_shape[1] integerValue];
         if (C % G != 0)
-            return nullptr;
+            return false;
         const NSInteger C_per_G = C / G;
 
         // Reshape x from (N, C, *spatial) → (N, G, C/G, *spatial).
@@ -351,7 +355,8 @@ public:
             [graph additionWithPrimaryTensor:scaled
                               secondaryTensor:beta_r
                                          name:@"group_norm"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -360,20 +365,20 @@ public:
 class LpNormalizeEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "lp_normalize"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         double ord = double_attr(node, "ord", 2.0);
-        if (ord != 2.0) return nullptr;
+        if (ord != 2.0) return false;
         std::int64_t axis = int_attr(node, "axis", -1);
         double eps = double_attr(node, "eps", 1e-12);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSInteger nd = (NSInteger)x.shape.count;
         if (axis < 0) axis += nd;
-        if (axis < 0 || axis >= nd) return nullptr;
+        if (axis < 0 || axis >= nd) return false;
         MPSGraphTensor* x_sq = [g squareWithTensor:x name:nil];
         MPSGraphTensor* sum = [g reductionSumWithTensor:x_sq
                                                     axis:(NSInteger)axis
@@ -382,9 +387,10 @@ public:
         MPSGraphTensor* eps_c = [g constantWithScalar:eps dataType:norm.dataType];
         MPSGraphTensor* denom =
             [g maximumWithPrimaryTensor:norm secondaryTensor:eps_c name:nil];
-        return (__bridge void*)[g divisionWithPrimaryTensor:x
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g divisionWithPrimaryTensor:x
                                              secondaryTensor:denom
-                                                        name:@"lp_normalize"];
+                                                        name:@"lp_normalize"]));
+        return true;
     }
 };
 
@@ -399,20 +405,20 @@ public:
 class GlobalResponseNormEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "global_response_norm"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 3 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 3 || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
         TensorId g_id = node.inputs[1];
         TensorId b_id = node.inputs[2];
-        if (x_id < 0 || g_id < 0 || b_id < 0) return nullptr;
+        if (x_id < 0 || g_id < 0 || b_id < 0) return false;
         double eps = double_attr(node, "eps", 1e-6);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* gamma = (__bridge MPSGraphTensor*)ctx.resolve(g_id);
         MPSGraphTensor* beta = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-        if (g == nil || x == nil || gamma == nil || beta == nil) return nullptr;
+        if (g == nil || x == nil || gamma == nil || beta == nil) return false;
         NSArray<NSNumber*>* x_sh = x.shape;
-        if (x_sh.count != 4) return nullptr;
+        if (x_sh.count != 4) return false;
         NSNumber* C = x_sh[1];
         MPSGraphTensor* x_sq = [g squareWithTensor:x name:nil];
         MPSGraphTensor* sum_sp =
@@ -437,9 +443,10 @@ public:
             [g multiplicationWithPrimaryTensor:gamma_r secondaryTensor:Nx name:nil];
         MPSGraphTensor* scale =
             [g additionWithPrimaryTensor:term1 secondaryTensor:beta_r name:nil];
-        return (__bridge void*)[g multiplicationWithPrimaryTensor:x
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g multiplicationWithPrimaryTensor:x
                                                    secondaryTensor:scale
-                                                              name:@"grn"];
+                                                              name:@"grn"]));
+        return true;
     }
 };
 

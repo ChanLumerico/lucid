@@ -50,14 +50,15 @@ if TYPE_CHECKING:
     # annotation evaluation (PEP 649); we only need the import for the
     # static type checker.
     #
-    # The trailing five imports below mirror the names served by the
-    # runtime ``__getattr__`` lazy loader: they exist purely so static
-    # tools (type checkers, Griffe-based doc generation) see the full
+    # The trailing imports below mirror the names served by the runtime
+    # ``__getattr__`` lazy loader: they exist purely so static tools
+    # (type checkers, Griffe-based doc generation) see the full
     # ``__all__`` surface.  Runtime resolution still flows through
     # ``__getattr__`` to keep the heavy ``lucid.nn`` / ``lucid.autograd``
     # imports out of package init.
     from lucid._C.engine.compile import Tracer
     from lucid.compile._compiled_module import CompiledModule
+    from lucid.compile._diagnose import DiagnosisReport, OpInfo, diagnose
     from lucid.compile._function import compiled_step
     from lucid.compile._fused_step import fused_step
     from lucid.compile._optim import compile_optimizer
@@ -74,6 +75,9 @@ __all__ = [
     "make_step",
     "save_compiled",
     "load_compiled",
+    "diagnose",
+    "DiagnosisReport",
+    "OpInfo",
 ]
 
 
@@ -136,9 +140,7 @@ def save_compiled(cm: object, path: str) -> bool:
         )
     # Pick the most-recently-inserted entry (dict insertion order).
     entry = next(reversed(cm._cache.values()))
-    return bool(
-        _C_engine.compile.save_executable(entry.exe, path)
-    )
+    return bool(_C_engine.compile.save_executable(entry.exe, path))
 
 
 def load_compiled(path: str) -> object:
@@ -292,6 +294,18 @@ def __getattr__(name: str) -> object:
         from lucid.compile._fused_step import fused_step
 
         return fused_step
+    if name == "diagnose":
+        from lucid.compile._diagnose import diagnose
+
+        return diagnose
+    if name == "DiagnosisReport":
+        from lucid.compile._diagnose import DiagnosisReport
+
+        return DiagnosisReport
+    if name == "OpInfo":
+        from lucid.compile._diagnose import OpInfo
+
+        return OpInfo
     raise AttributeError(f"module 'lucid.compile' has no attribute {name!r}")
 
 

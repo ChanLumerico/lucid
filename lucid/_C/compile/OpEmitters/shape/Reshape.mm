@@ -45,19 +45,20 @@ public:
 
     std::string_view op_name() const override { return name_; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
         NSArray<NSNumber*>* new_shape = shape_to_nsarray(node.outputs[0].shape);
         MPSGraphTensor* y = [graph reshapeTensor:x_t withShape:new_shape name:nil];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 
 private:
@@ -67,25 +68,26 @@ private:
 class ContiguousEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "contiguous"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // MPSGraph tensors have no observable stride layout — every
         // intermediate is already "contiguous" from the graph's
         // perspective.  Emit a reshape-to-same-shape so the output
         // tensor gets its own MPSGraphTensor identity (matches eager
         // semantics where `contiguous()` returns a new TensorImpl).
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
         NSArray<NSNumber*>* same_shape = shape_to_nsarray(node.outputs[0].shape);
         MPSGraphTensor* y =
             [graph reshapeTensor:x_t withShape:same_shape name:@"contiguous"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -99,44 +101,45 @@ public:
 class BroadcastToEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "broadcast_to"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
         // Target shape is the recorded output shape on the OpNode.
         const auto& out_shape = node.outputs[0].shape;
         NSMutableArray<NSNumber*>* target =
             [NSMutableArray arrayWithCapacity:out_shape.size()];
         for (std::int64_t d : out_shape)
             [target addObject:[NSNumber numberWithLongLong:d]];
-        return (__bridge void*)[graph broadcastTensor:x_t
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph broadcastTensor:x_t
                                               toShape:target
-                                                 name:@"broadcast_to"];
+                                                 name:@"broadcast_to"]));
+        return true;
     }
 };
 
 class PadEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "pad"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         auto pads_it = node.attrs.find("pads");
         if (pads_it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* pads =
             std::get_if<std::vector<std::int64_t>>(&pads_it->second);
         if (pads == nullptr || pads->size() % 2 != 0)
-            return nullptr;
+            return false;
         double constant_value = 0.0;
         if (auto c_it = node.attrs.find("constant"); c_it != node.attrs.end()) {
             if (const auto* p = std::get_if<double>(&c_it->second)) constant_value = *p;
@@ -145,7 +148,7 @@ public:
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         const std::size_t ndim = pads->size() / 2;
         NSMutableArray<NSNumber*>* leading =
@@ -156,43 +159,45 @@ public:
             [leading addObject:[NSNumber numberWithLongLong:(*pads)[2 * d]]];
             [trailing addObject:[NSNumber numberWithLongLong:(*pads)[2 * d + 1]]];
         }
-        return (__bridge void*)[graph padTensor:x_t
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph padTensor:x_t
                             withPaddingMode:MPSGraphPaddingModeConstant
                                 leftPadding:leading
                                rightPadding:trailing
                               constantValue:constant_value
-                                       name:@"pad"];
+                                       name:@"pad"]));
+        return true;
     }
 };
 
 class TileEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "tile"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         auto it = node.attrs.find("reps");
         if (it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* reps = std::get_if<std::vector<std::int64_t>>(&it->second);
         if (reps == nullptr)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         NSMutableArray<NSNumber*>* mul =
             [NSMutableArray arrayWithCapacity:reps->size()];
         for (std::int64_t r : *reps)
             [mul addObject:[NSNumber numberWithLongLong:r]];
-        return (__bridge void*)[graph tileTensor:x_t
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph tileTensor:x_t
                                  withMultiplier:mul
-                                           name:@"tile"];
+                                           name:@"tile"]));
+        return true;
     }
 };
 
@@ -203,32 +208,32 @@ public:
 class RepeatEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "repeat"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         auto ax_it = node.attrs.find("axis");
         auto r_it = node.attrs.find("repeats");
         if (ax_it == node.attrs.end() || r_it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* axp = std::get_if<std::int64_t>(&ax_it->second);
         const auto* rp = std::get_if<std::int64_t>(&r_it->second);
         if (axp == nullptr || rp == nullptr)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         NSArray<NSNumber*>* in_shape = x_t.shape;
         NSUInteger ndim = in_shape.count;
         std::int64_t ax = *axp;
         if (ax < 0) ax += (std::int64_t)ndim;
         if (ax < 0 || ax >= (std::int64_t)ndim)
-            return nullptr;
+            return false;
         std::int64_t reps = *rp;
 
         // 1) insert a size-1 axis after ``ax``: shape (..., D, 1, ...).
@@ -258,9 +263,10 @@ public:
             else
                 [final_shape addObject:in_shape[d]];
         }
-        return (__bridge void*)[graph reshapeTensor:tiled
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph reshapeTensor:tiled
                                           withShape:final_shape
-                                               name:@"repeat"];
+                                               name:@"repeat"]));
+        return true;
     }
 };
 

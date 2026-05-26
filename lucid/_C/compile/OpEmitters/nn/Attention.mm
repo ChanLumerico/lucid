@@ -36,23 +36,23 @@ namespace {
 class SdpaEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "scaled_dot_product_attention"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 3 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 3 || node.outputs.empty()) return false;
         TensorId q_id = node.inputs[0];
         TensorId k_id = node.inputs[1];
         TensorId v_id = node.inputs[2];
-        if (q_id < 0 || k_id < 0 || v_id < 0) return nullptr;
+        if (q_id < 0 || k_id < 0 || v_id < 0) return false;
         const bool has_mask = bool_attr(node, "has_mask", false);
         const bool is_causal = bool_attr(node, "is_causal", false);
         const double scale = double_attr(node, "scale", 0.0);
-        if (is_causal) return nullptr;  // causal path defers to eager
+        if (is_causal) return false;  // causal path defers to eager
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* q = (__bridge MPSGraphTensor*)ctx.resolve(q_id);
         MPSGraphTensor* k = (__bridge MPSGraphTensor*)ctx.resolve(k_id);
         MPSGraphTensor* v = (__bridge MPSGraphTensor*)ctx.resolve(v_id);
-        if (g == nil || q == nil || k == nil || v == nil) return nullptr;
+        if (g == nil || q == nil || k == nil || v == nil) return false;
         NSUInteger nd_k = k.shape.count;
-        if (nd_k < 2) return nullptr;
+        if (nd_k < 2) return false;
         MPSGraphTensor* k_t = [g transposeTensor:k
                                        dimension:(NSInteger)(nd_k - 1)
                                    withDimension:(NSInteger)(nd_k - 2)
@@ -62,9 +62,9 @@ public:
         double scale_val = scale;
         if (scale_val == 0.0) {
             NSUInteger nd_q = q.shape.count;
-            if (nd_q < 1) return nullptr;
+            if (nd_q < 1) return false;
             double Dk = (double)q.shape[nd_q - 1].longLongValue;
-            if (Dk <= 0.0) return nullptr;
+            if (Dk <= 0.0) return false;
             scale_val = 1.0 / std::sqrt(Dk);
         }
         MPSGraphTensor* scale_c =
@@ -89,9 +89,10 @@ public:
         MPSGraphTensor* attn = [g softMaxWithTensor:scores
                                                 axis:(NSInteger)(nd_s - 1)
                                                 name:@"sdpa_softmax"];
-        return (__bridge void*)[g matrixMultiplicationWithPrimaryTensor:attn
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g matrixMultiplicationWithPrimaryTensor:attn
                                                         secondaryTensor:v
-                                                                   name:@"sdpa_av"];
+                                                                   name:@"sdpa_av"]));
+        return true;
     }
 };
 

@@ -30,28 +30,28 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_reduce(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+inline bool emit_reduce(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
     if (node.inputs.size() != 1 || node.outputs.empty())
-        return nullptr;
+        return false;
     TensorId x_id = node.inputs[0];
     if (x_id < 0)
-        return nullptr;
+        return false;
 
     // Required attrs.
     auto dims_it = node.attrs.find("dims");
     auto kd_it = node.attrs.find("keepdim");
     if (dims_it == node.attrs.end() || kd_it == node.attrs.end())
-        return nullptr;
+        return false;
     const auto* dims =
         std::get_if<std::vector<std::int64_t>>(&dims_it->second);
     const auto* keepdim = std::get_if<bool>(&kd_it->second);
     if (dims == nullptr || keepdim == nullptr)
-        return nullptr;
+        return false;
 
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
-        return nullptr;
+        return false;
 
     NSMutableArray<NSNumber*>* axes =
         [NSMutableArray arrayWithCapacity:dims->size()];
@@ -88,13 +88,14 @@ inline void* emit_reduce(BuilderContext& ctx, const OpNode& node, BuilderBlock b
             [target addObject:[NSNumber numberWithLongLong:d]];
         reduced = [graph reshapeTensor:reduced withShape:target name:@"reduce_squeeze"];
     }
-    return (__bridge void*)reduced;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(reduced));
+        return true;
 }
 
 class SumEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sum"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g reductionSumWithTensor:x axes:axes name:@"sum"];
@@ -105,7 +106,7 @@ public:
 class MeanEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mean"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g meanOfTensor:x axes:axes name:@"mean"];
@@ -116,7 +117,7 @@ public:
 class MaxReduceEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "max"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g reductionMaximumWithTensor:x axes:axes name:@"max"];
@@ -127,7 +128,7 @@ public:
 class MinReduceEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "min"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g reductionMinimumWithTensor:x axes:axes name:@"min"];
@@ -138,7 +139,7 @@ public:
 class ProdEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "prod"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g reductionProductWithTensor:x axes:axes name:@"prod"];
@@ -152,7 +153,7 @@ public:
 class VarEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "var"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_reduce(ctx, node, [](MPSGraph* g, MPSGraphTensor* x,
                                           NSArray<NSNumber*>* axes) {
             return [g varianceOfTensor:x axes:axes name:@"var"];

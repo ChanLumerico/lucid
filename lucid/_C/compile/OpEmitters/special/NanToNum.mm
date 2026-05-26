@@ -26,13 +26,13 @@ namespace {
 class NanToNumEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "nan_to_num"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         double nan_v = double_attr(node, "nan", 0.0);
         double pos_v = double_attr(node, "posinf", 0.0);
         double neg_v = double_attr(node, "neginf", 0.0);
@@ -59,10 +59,11 @@ public:
                      truePredicateTensor:pos_c
                     falsePredicateTensor:tmp1
                                     name:nil];
-        return (__bridge void*)[g selectWithPredicateTensor:is_ninf
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g selectWithPredicateTensor:is_ninf
                                         truePredicateTensor:neg_c
                                        falsePredicateTensor:tmp2
-                                                       name:@"nan_to_num"];
+                                                       name:@"nan_to_num"]));
+        return true;
     }
 };
 

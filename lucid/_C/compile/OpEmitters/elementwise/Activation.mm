@@ -24,26 +24,29 @@ namespace {
 
 // Helper: shared "resolve single input + dispatch one-call MPSGraph
 // builder" boilerplate.  Each concrete emitter just supplies the
-// builder block.
+// builder block; the helper handles input lookup, output binding,
+// and returns the new `bool` emit-contract value.
 template <class BuilderBlock>
-inline void* emit_unary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
-    if (node.inputs.size() != 1)
-        return nullptr;
+inline bool emit_unary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+    if (node.inputs.size() != 1 || node.outputs.empty())
+        return false;
     TensorId x_id = node.inputs[0];
     if (x_id < 0)
-        return nullptr;
+        return false;
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
     if (x_t == nil || graph == nil)
-        return nullptr;
+        return false;
     MPSGraphTensor* y = builder(graph, x_t);
-    return (__bridge void*)y;
+    if (y == nil) return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)y);
+    return true;
 }
 
 class ReluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "relu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g reLUWithTensor:x name:@"relu"];
         });
@@ -53,7 +56,7 @@ public:
 class SigmoidEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sigmoid"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g sigmoidWithTensor:x name:@"sigmoid"];
         });
@@ -63,7 +66,7 @@ public:
 class TanhEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "tanh"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             return [g tanhWithTensor:x name:@"tanh"];
         });
@@ -74,7 +77,7 @@ public:
 class SiluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "silu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             MPSGraphTensor* s = [g sigmoidWithTensor:x name:nil];
             return [g multiplicationWithPrimaryTensor:x secondaryTensor:s name:@"silu"];
@@ -88,7 +91,7 @@ public:
 class GeluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "gelu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             MPSDataType dt = x.dataType;
             MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:dt];
@@ -120,7 +123,7 @@ public:
 class GeluExactEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "gelu_exact"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             MPSDataType dt = x.dataType;
             MPSGraphTensor* half = [g constantWithScalar:0.5 dataType:dt];
@@ -148,7 +151,7 @@ public:
 class EluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "elu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [&](MPSGraph* g, MPSGraphTensor* x) {
             MPSDataType dt = x.dataType;
             double alpha = 1.0;
@@ -177,7 +180,7 @@ public:
 class LeakyReluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "leaky_relu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [&](MPSGraph* g, MPSGraphTensor* x) {
             MPSDataType dt = x.dataType;
             double slope = 0.01;
@@ -202,7 +205,7 @@ public:
 class SeluEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "selu"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // SELU: λ · (x > 0 ? x : α(exp(x) - 1))   with α≈1.6733, λ≈1.0507.
             MPSDataType dt = x.dataType;
@@ -234,7 +237,7 @@ public:
 class MishEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mish"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // mish(x) = x · tanh(softplus(x)) = x · tanh(log(1 + e^x)).
             MPSDataType dt = x.dataType;
@@ -254,7 +257,7 @@ public:
 class SoftplusEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "softplus"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // softplus(x) = log(1 + e^x) — beta=1 (Lucid only ships
             // the single-parameter form so no attr lookup needed).
@@ -271,7 +274,7 @@ public:
 class HardSigmoidEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "hard_sigmoid"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // hard_sigmoid(x) = clip((x + 3) / 6, 0, 1).
             MPSDataType dt = x.dataType;
@@ -295,7 +298,7 @@ public:
 class HardSwishEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "hard_swish"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             // hard_swish(x) = x · clip((x + 3) / 6, 0, 1).
             MPSDataType dt = x.dataType;
@@ -321,7 +324,7 @@ public:
 class Relu6Emitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "relu6"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_unary(ctx, node, [](MPSGraph* g, MPSGraphTensor* x) {
             MPSDataType dt = x.dataType;
             MPSGraphTensor* zero = [g constantWithScalar:0.0 dataType:dt];

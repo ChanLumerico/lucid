@@ -33,25 +33,28 @@ namespace lucid::compile {
 namespace {
 
 template <class BuilderBlock>
-inline void* emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
-    if (node.inputs.size() != 2)
-        return nullptr;
+inline bool emit_binary(BuilderContext& ctx, const OpNode& node, BuilderBlock builder) {
+    if (node.inputs.size() != 2 || node.outputs.empty())
+        return false;
     TensorId a_id = node.inputs[0];
     TensorId b_id = node.inputs[1];
     if (a_id < 0 || b_id < 0)
-        return nullptr;
+        return false;
     MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
     MPSGraphTensor* a_t = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
     MPSGraphTensor* b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
     if (a_t == nil || b_t == nil || graph == nil)
-        return nullptr;
-    return (__bridge void*)builder(graph, a_t, b_t);
+        return false;
+    MPSGraphTensor* y = builder(graph, a_t, b_t);
+    if (y == nil) return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)y);
+    return true;
 }
 
 class AddEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "add"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g additionWithPrimaryTensor:a secondaryTensor:b name:@"add"];
         });
@@ -61,7 +64,7 @@ public:
 class SubEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "sub"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g subtractionWithPrimaryTensor:a secondaryTensor:b name:@"sub"];
         });
@@ -71,7 +74,7 @@ public:
 class MulEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "mul"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:@"mul"];
         });
@@ -81,7 +84,7 @@ public:
 class DivEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "div"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g divisionWithPrimaryTensor:a secondaryTensor:b name:@"div"];
         });
@@ -91,7 +94,7 @@ public:
 class PowEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "pow"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g powerWithPrimaryTensor:a secondaryTensor:b name:@"pow"];
         });
@@ -105,7 +108,7 @@ public:
 class MaximumEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "maximum"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g maximumWithPrimaryTensor:a secondaryTensor:b name:@"maximum"];
         });
@@ -115,7 +118,7 @@ public:
 class MinimumEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "minimum"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             return [g minimumWithPrimaryTensor:a secondaryTensor:b name:@"minimum"];
         });
@@ -125,7 +128,7 @@ public:
 class FloordivEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "floordiv"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         return emit_binary(ctx, node, [](MPSGraph* g, MPSGraphTensor* a, MPSGraphTensor* b) {
             // floor(a/b) — uses native floor builder on the quotient.
             MPSGraphTensor* q =
@@ -138,7 +141,7 @@ public:
 class NextafterEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "nextafter"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // MPSGraph doesn't expose nextafter directly; the eager backend
         // implements it via a 1-ULP step.  Emit a 1-ULP approximation
         // using the spacing helper: nextafter(a, b) ≈ a + sign(b-a) * eps,
@@ -163,25 +166,27 @@ public:
 class PowScalarEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "pow_scalar"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 1)
-            return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 1 || node.outputs.empty())
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
         double exp_v = 1.0;
         auto it = node.attrs.find("exp");
         if (it != node.attrs.end()) {
             if (const auto* p = std::get_if<double>(&it->second)) exp_v = *p;
         }
         MPSGraphTensor* e = [graph constantWithScalar:exp_v dataType:x_t.dataType];
-        return (__bridge void*)[graph powerWithPrimaryTensor:x_t
-                                              secondaryTensor:e
-                                                         name:@"pow_scalar"];
+        MPSGraphTensor* y = [graph powerWithPrimaryTensor:x_t
+                                          secondaryTensor:e
+                                                     name:@"pow_scalar"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 
@@ -189,25 +194,27 @@ public:
 class RPowScalarEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "rpow_scalar"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 1)
-            return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 1 || node.outputs.empty())
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
         double base_v = std::exp(1.0);
         auto it = node.attrs.find("base");
         if (it != node.attrs.end()) {
             if (const auto* p = std::get_if<double>(&it->second)) base_v = *p;
         }
         MPSGraphTensor* b = [graph constantWithScalar:base_v dataType:x_t.dataType];
-        return (__bridge void*)[graph powerWithPrimaryTensor:b
-                                              secondaryTensor:x_t
-                                                         name:@"rpow_scalar"];
+        MPSGraphTensor* y = [graph powerWithPrimaryTensor:b
+                                          secondaryTensor:x_t
+                                                     name:@"rpow_scalar"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 

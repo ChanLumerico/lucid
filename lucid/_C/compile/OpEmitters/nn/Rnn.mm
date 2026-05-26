@@ -58,14 +58,14 @@ class LstmEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "lstm"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // Outside this envelope we bail to eager — matches the MLX
         // backend's ``lstm_metal_supported`` predicate.
         const std::int64_t num_layers = int_attr(node, "num_layers", 1);
         const std::int64_t proj_size = int_attr(node, "proj_size", 0);
         const bool bidirectional = bool_attr(node, "bidirectional", false);
         if (num_layers != 1 || proj_size != 0 || bidirectional)
-            return nullptr;
+            return false;
 
         // batch_first is a Python-side reshape: the engine always
         // receives (T, B, I) and emits (T, B, H).  Reject the
@@ -73,11 +73,11 @@ public:
         // (currently not possible — the eager wrapper transposes
         // before calling into C++).
         if (bool_attr(node, "batch_first", false))
-            return nullptr;
+            return false;
 
         // Need at least x, h0, c0, W_ih, W_hh, b_ih, b_hh (7 inputs).
         if (node.inputs.size() < 7)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         TensorId h0_id = node.inputs[1];
         TensorId c0_id = node.inputs[2];
@@ -87,14 +87,14 @@ public:
         TensorId bhh_id = node.inputs[6];
         if (x_id < 0 || h0_id < 0 || c0_id < 0 || wih_id < 0 || whh_id < 0 || bih_id < 0 ||
             bhh_id < 0)
-            return nullptr;
+            return false;
 
         if (node.outputs.size() != 3)
-            return nullptr;
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         if (g == nil)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* h0 = (__bridge MPSGraphTensor*)ctx.resolve(h0_id);
@@ -105,19 +105,19 @@ public:
         MPSGraphTensor* bhh = (__bridge MPSGraphTensor*)ctx.resolve(bhh_id);
         if (x == nil || h0 == nil || c0 == nil || Wih == nil || Whh == nil || bih == nil ||
             bhh == nil)
-            return nullptr;
+            return false;
 
         // h0 / c0 carry the (num_layers=1, B, H) shape the engine
         // returns.  MPSGraph expects (B, H); squeeze the leading dim.
         const TensorMeta& hn_meta = node.outputs[1];  // shape (1, B, Hrec)
         const TensorMeta& cn_meta = node.outputs[2];  // shape (1, B, H)
         if (hn_meta.shape.size() != 3 || cn_meta.shape.size() != 3)
-            return nullptr;
+            return false;
         const std::int64_t B = hn_meta.shape[1];
         const std::int64_t Hrec = hn_meta.shape[2];
         const std::int64_t H = cn_meta.shape[2];
         if (B <= 0 || H <= 0 || Hrec != H)
-            return nullptr;  // proj_size==0 ⇒ Hrec must equal H
+            return false;  // proj_size==0 ⇒ Hrec must equal H
 
         NSArray<NSNumber*>* twoD_shape = @[
             [NSNumber numberWithLongLong:B],
@@ -154,7 +154,7 @@ public:
                          descriptor:d
                                name:@"lstm"];
         if (outs == nil || outs.count < 3)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* Y_full = outs[0];      // (T, B, H) — every step's hidden
         MPSGraphTensor* C_full = outs[2];      // (T, B, H) — every step's cell
@@ -164,10 +164,10 @@ public:
         // the last step.
         const TensorMeta& out_meta = node.outputs[0];
         if (out_meta.shape.size() != 3)
-            return nullptr;
+            return false;
         const std::int64_t T = out_meta.shape[0];
         if (T <= 0)
-            return nullptr;
+            return false;
 
         auto slice_last_step = [&](MPSGraphTensor* full, NSString* nm) -> MPSGraphTensor* {
             MPSGraphTensor* last =
@@ -204,7 +204,8 @@ public:
             ctx.bind(cn_id, (__bridge void*)cn);
         }
 
-        return (__bridge void*)Y_full;
+        (void)(Y_full);
+        return true;
     }
 };
 

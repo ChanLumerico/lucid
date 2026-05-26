@@ -35,24 +35,24 @@ inline const std::vector<std::int64_t>* int_vec_attr(const OpNode& node, const c
 class MaxPool2dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "max_pool2d"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const auto* K = int_vec_attr(node, "kernel_size");
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         if (K == nullptr || S == nullptr || P == nullptr)
-            return nullptr;
+            return false;
         if (K->size() != 2 || S->size() != 2 || P->size() != 2)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         MPSGraphPooling2DOpDescriptor* d =
             [MPSGraphPooling2DOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
@@ -68,31 +68,32 @@ public:
 
         MPSGraphTensor* y =
             [graph maxPooling2DWithSourceTensor:x_t descriptor:d name:@"max_pool2d"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
 class AvgPool2dEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "avg_pool2d"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1)
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const auto* K = int_vec_attr(node, "kernel_size");
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
         if (K == nullptr || S == nullptr || P == nullptr)
-            return nullptr;
+            return false;
         if (K->size() != 2 || S->size() != 2 || P->size() != 2)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         MPSGraphPooling2DOpDescriptor* d =
             [MPSGraphPooling2DOpDescriptor descriptorWithKernelWidth:(NSUInteger)(*K)[1]
@@ -112,7 +113,8 @@ public:
 
         MPSGraphTensor* y =
             [graph avgPooling2DWithSourceTensor:x_t descriptor:d name:@"avg_pool2d"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -122,19 +124,19 @@ class Pool1dEmitterT final : public OpEmitter {
 public:
     explicit Pool1dEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 1) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 1) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         const auto* K = int_vec_attr(node, "kernel_size");
         const auto* S = int_vec_attr(node, "stride");
         const auto* P = int_vec_attr(node, "padding");
-        if (K == nullptr || S == nullptr || P == nullptr) return nullptr;
-        if (K->size() != 1 || S->size() != 1 || P->size() != 1) return nullptr;
+        if (K == nullptr || S == nullptr || P == nullptr) return false;
+        if (K->size() != 1 || S->size() != 1 || P->size() != 1) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        if (x.shape.count != 3) return nullptr;
+        if (g == nil || x == nil) return false;
+        if (x.shape.count != 3) return false;
         NSArray<NSNumber*>* x4 = @[x.shape[0], x.shape[1], @1, x.shape[2]];
         MPSGraphTensor* x_r = [g reshapeTensor:x withShape:x4 name:nil];
         MPSGraphPooling2DOpDescriptor* d =
@@ -157,7 +159,8 @@ public:
         }
         // Squeeze H=1.
         NSArray<NSNumber*>* out_sh = @[y4.shape[0], y4.shape[1], y4.shape[3]];
-        return (__bridge void*)[g reshapeTensor:y4 withShape:out_sh name:nil];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:y4 withShape:out_sh name:nil]));
+        return true;
     }
 
 private:

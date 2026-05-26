@@ -38,13 +38,13 @@ namespace {
 class NormEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "norm"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         double ord = double_attr(node, "ord", 2.0);
         bool keepdims = bool_attr(node, "keepdims", false);
         // Pull axis list — if absent or empty, reduce over all axes.
@@ -96,7 +96,8 @@ public:
             }
             r = [g reshapeTensor:r withShape:kept name:nil];
         }
-        return (__bridge void*)r;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(r));
+        return true;
     }
 };
 
@@ -104,27 +105,28 @@ public:
 class MatrixPowerEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "matrix_power"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         std::int64_t p = int_attr(node, "p", 1);
-        if (p < 0) return nullptr;  // negative power needs inv — fall back to eager
+        if (p < 0) return false;  // negative power needs inv — fall back to eager
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
-        if (sh.count != 2) return nullptr;
+        if (sh.count != 2) return false;
         std::int64_t N = sh[0].longLongValue;
-        if (sh[1].longLongValue != N) return nullptr;
+        if (sh[1].longLongValue != N) return false;
         if (p == 0) {
             // Identity I_N: broadcast ones, mask with bandPart(0, 0).
             MPSGraphTensor* ones_full = [g constantWithScalar:1.0 dataType:x.dataType];
             ones_full = [g broadcastTensor:ones_full toShape:@[sh[0], sh[1]] name:nil];
-            return (__bridge void*)[g bandPartWithTensor:ones_full
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g bandPartWithTensor:ones_full
                                                 numLower:0
                                                 numUpper:0
-                                                    name:@"matpow_eye"];
+                                                    name:@"matpow_eye"]));
+        return true;
         }
         MPSGraphTensor* result = nil;
         MPSGraphTensor* base = x;
@@ -144,7 +146,8 @@ public:
                                                              name:nil];
             }
         }
-        return (__bridge void*)result;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(result));
+        return true;
     }
 };
 
@@ -152,17 +155,17 @@ public:
 class DetEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "det"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
-        if (sh.count != 2) return nullptr;
+        if (sh.count != 2) return false;
         std::int64_t N = sh[0].longLongValue;
-        if (sh[1].longLongValue != N) return nullptr;
+        if (sh[1].longLongValue != N) return false;
         auto el = [&](NSInteger r, NSInteger c) -> MPSGraphTensor* {
             MPSGraphTensor* row =
                 [g sliceTensor:x dimension:0 start:r length:1 name:nil];
@@ -175,9 +178,10 @@ public:
             MPSGraphTensor* c = el(1, 0), *d = el(1, 1);
             MPSGraphTensor* ad = [g multiplicationWithPrimaryTensor:a secondaryTensor:d name:nil];
             MPSGraphTensor* bc = [g multiplicationWithPrimaryTensor:b secondaryTensor:c name:nil];
-            return (__bridge void*)[g subtractionWithPrimaryTensor:ad
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g subtractionWithPrimaryTensor:ad
                                                     secondaryTensor:bc
-                                                               name:@"det2"];
+                                                               name:@"det2"]));
+        return true;
         }
         if (N == 3) {
             MPSGraphTensor* a00 = el(0, 0), *a01 = el(0, 1), *a02 = el(0, 2);
@@ -201,11 +205,12 @@ public:
             MPSGraphTensor* t2 =
                 [g multiplicationWithPrimaryTensor:a02 secondaryTensor:cof2 name:nil];
             MPSGraphTensor* d01 = [g subtractionWithPrimaryTensor:t0 secondaryTensor:t1 name:nil];
-            return (__bridge void*)[g additionWithPrimaryTensor:d01
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g additionWithPrimaryTensor:d01
                                                   secondaryTensor:t2
-                                                             name:@"det3"];
+                                                             name:@"det3"]));
+        return true;
         }
-        return nullptr;  // N > 3 — fall back to eager LAPACK.
+        return false;  // N > 3 — fall back to eager LAPACK.
     }
 };
 
@@ -214,17 +219,17 @@ public:
 class InvEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "inv"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
-        if (sh.count != 2) return nullptr;
+        if (sh.count != 2) return false;
         std::int64_t N = sh[0].longLongValue;
-        if (sh[1].longLongValue != N || N != 2) return nullptr;
+        if (sh[1].longLongValue != N || N != 2) return false;
         auto el = [&](NSInteger r, NSInteger c) -> MPSGraphTensor* {
             MPSGraphTensor* row =
                 [g sliceTensor:x dimension:0 start:r length:1 name:nil];
@@ -251,9 +256,10 @@ public:
             [g concatTensors:@[row1_l, row1_r] dimension:1 name:nil];
         MPSGraphTensor* adj = [g concatTensors:@[row0, row1] dimension:0 name:nil];
         MPSGraphTensor* det_b = [g reshapeTensor:det withShape:one_one name:nil];
-        return (__bridge void*)[g divisionWithPrimaryTensor:adj
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g divisionWithPrimaryTensor:adj
                                              secondaryTensor:det_b
-                                                        name:@"inv2"];
+                                                        name:@"inv2"]));
+        return true;
     }
 };
 
@@ -261,26 +267,26 @@ public:
 class TensordotEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "tensordot"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.outputs.empty()) return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
-        if (a_id < 0 || b_id < 0) return nullptr;
+        if (a_id < 0 || b_id < 0) return false;
         std::vector<std::int64_t> ax_a, ax_b;
         if (const auto* v = int_vec_attr(node, "axes_a")) ax_a = *v;
         if (const auto* v = int_vec_attr(node, "axes_b")) ax_b = *v;
-        if (ax_a.size() != ax_b.size() || ax_a.empty()) return nullptr;
+        if (ax_a.size() != ax_b.size() || ax_a.empty()) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-        if (g == nil || a == nil || b == nil) return nullptr;
+        if (g == nil || a == nil || b == nil) return false;
         NSInteger na = (NSInteger)a.shape.count;
         NSInteger nb = (NSInteger)b.shape.count;
         std::vector<bool> a_is_c(na, false), b_is_c(nb, false);
         for (std::size_t i = 0; i < ax_a.size(); ++i) {
             std::int64_t p = ax_a[i]; if (p < 0) p += na;
             std::int64_t q = ax_b[i]; if (q < 0) q += nb;
-            if (p < 0 || p >= na || q < 0 || q >= nb) return nullptr;
+            if (p < 0 || p >= na || q < 0 || q >= nb) return false;
             a_is_c[p] = true; b_is_c[q] = true;
         }
         // A: free dims first, then contracted (in input order).
@@ -330,8 +336,10 @@ public:
         for (NSNumber* n : a_kept) [out_sh addObject:n];
         for (NSNumber* n : b_kept) [out_sh addObject:n];
         if (out_sh.count == 0)
-            return (__bridge void*)[g reshapeTensor:c withShape:@[] name:nil];
-        return (__bridge void*)[g reshapeTensor:c withShape:out_sh name:nil];
+            ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:c withShape:@[] name:nil]));
+        return true;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:c withShape:out_sh name:nil]));
+        return true;
     }
 };
 
@@ -339,20 +347,21 @@ public:
 class InnerEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "inner"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.outputs.empty()) return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
-        if (a_id < 0 || b_id < 0) return nullptr;
+        if (a_id < 0 || b_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-        if (g == nil || a == nil || b == nil) return nullptr;
+        if (g == nil || a == nil || b == nil) return false;
         MPSGraphTensor* prod =
             [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:nil];
         NSUInteger nd = a.shape.count;
         NSArray<NSNumber*>* last = @[[NSNumber numberWithLongLong:(long long)(nd - 1)]];
-        return (__bridge void*)[g reductionSumWithTensor:prod axes:last name:@"inner"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reductionSumWithTensor:prod axes:last name:@"inner"]));
+        return true;
     }
 };
 
@@ -360,21 +369,22 @@ public:
 class OuterEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "outer"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.outputs.empty()) return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
-        if (a_id < 0 || b_id < 0) return nullptr;
+        if (a_id < 0 || b_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-        if (g == nil || a == nil || b == nil) return nullptr;
-        if (a.shape.count != 1 || b.shape.count != 1) return nullptr;
+        if (g == nil || a == nil || b == nil) return false;
+        if (a.shape.count != 1 || b.shape.count != 1) return false;
         MPSGraphTensor* a2 = [g reshapeTensor:a withShape:@[a.shape[0], @1] name:nil];
         MPSGraphTensor* b2 = [g reshapeTensor:b withShape:@[@1, b.shape[0]] name:nil];
-        return (__bridge void*)[g multiplicationWithPrimaryTensor:a2
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g multiplicationWithPrimaryTensor:a2
                                                    secondaryTensor:b2
-                                                              name:@"outer"];
+                                                              name:@"outer"]));
+        return true;
     }
 };
 
@@ -382,22 +392,23 @@ public:
 class DotEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "dot"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.outputs.empty()) return false;
         TensorId a_id = node.inputs[0];
         TensorId b_id = node.inputs[1];
-        if (a_id < 0 || b_id < 0) return nullptr;
+        if (a_id < 0 || b_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* a = (__bridge MPSGraphTensor*)ctx.resolve(a_id);
         MPSGraphTensor* b = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
-        if (g == nil || a == nil || b == nil) return nullptr;
+        if (g == nil || a == nil || b == nil) return false;
         MPSGraphTensor* prod =
             [g multiplicationWithPrimaryTensor:a secondaryTensor:b name:nil];
         NSUInteger nd = a.shape.count;
         NSMutableArray<NSNumber*>* all_axes = [NSMutableArray arrayWithCapacity:nd];
         for (NSUInteger d = 0; d < nd; ++d)
             [all_axes addObject:[NSNumber numberWithLongLong:(long long)d]];
-        return (__bridge void*)[g reductionSumWithTensor:prod axes:all_axes name:@"dot"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reductionSumWithTensor:prod axes:all_axes name:@"dot"]));
+        return true;
     }
 };
 
@@ -405,19 +416,20 @@ public:
 class TraceEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "trace"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        if (x.shape.count != 2) return nullptr;
+        if (g == nil || x == nil) return false;
+        if (x.shape.count != 2) return false;
         MPSGraphTensor* band =
             [g bandPartWithTensor:x numLower:0 numUpper:0 name:nil];
-        return (__bridge void*)[g reductionSumWithTensor:band
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reductionSumWithTensor:band
                                                      axes:@[@0, @1]
-                                                     name:@"trace"];
+                                                     name:@"trace"]));
+        return true;
     }
 };
 
@@ -430,19 +442,19 @@ public:
 class BilinearLayerEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "bilinear_layer"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 3 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 3 || node.outputs.empty()) return false;
         TensorId x1_id = node.inputs[0];
         TensorId x2_id = node.inputs[1];
         TensorId w_id = node.inputs[2];
-        if (x1_id < 0 || x2_id < 0 || w_id < 0) return nullptr;
+        if (x1_id < 0 || x2_id < 0 || w_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x1 = (__bridge MPSGraphTensor*)ctx.resolve(x1_id);
         MPSGraphTensor* x2 = (__bridge MPSGraphTensor*)ctx.resolve(x2_id);
         MPSGraphTensor* W = (__bridge MPSGraphTensor*)ctx.resolve(w_id);
-        if (g == nil || x1 == nil || x2 == nil || W == nil) return nullptr;
+        if (g == nil || x1 == nil || x2 == nil || W == nil) return false;
         if (x1.shape.count != 2 || x2.shape.count != 2 || W.shape.count != 3)
-            return nullptr;
+            return false;
         NSNumber* B = x1.shape[0];
         NSNumber* D1 = x1.shape[1];
         NSNumber* D2 = x2.shape[1];
@@ -484,7 +496,8 @@ public:
                 }
             }
         }
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 

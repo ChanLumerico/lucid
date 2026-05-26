@@ -55,24 +55,24 @@ inline MPSGraphTensor* emit_slice(MPSGraph* g,
 class SplitEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "split"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t axis = int_attr(node, "axis", -1);
         const std::int64_t piece = int_attr(node, "piece", 0);
         const std::int64_t num_splits = int_attr(node, "num_splits", 0);
         if (axis < 0 || piece <= 0 || num_splits <= 0)
-            return nullptr;
+            return false;
         if ((std::int64_t)node.outputs.size() != num_splits)
-            return nullptr;
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil)
-            return nullptr;
+            return false;
 
         // Multi-output handling: builder skips auto-bind for ops with
         // outputs.size() > 1 — emit each consumed piece + explicitly
@@ -98,7 +98,8 @@ public:
             if (anchor == nil)
                 anchor = p;
         }
-        return (__bridge void*)anchor;
+        (void)(anchor);
+        return true;
     }
 };
 
@@ -108,34 +109,34 @@ public:
 class SplitAtEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "split_at"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         // See SplitEmitter for why inputs may be duplicated.  Read
         // inputs[0] and ignore the rest — all entries reference the
         // same source.
         if (node.inputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t axis = int_attr(node, "axis", -1);
         if (axis < 0)
-            return nullptr;
+            return false;
         const std::vector<std::int64_t>* indices_p = int_vec_attr(node, "indices");
         if (indices_p == nullptr || indices_p->empty())
-            return nullptr;
+            return false;
         const std::vector<std::int64_t>& indices = *indices_p;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil)
-            return nullptr;
+            return false;
         if ((NSInteger)axis >= (NSInteger)x.shape.count)
-            return nullptr;
+            return false;
         const std::int64_t axis_size = x.shape[(NSUInteger)axis].longLongValue;
 
         const std::size_t n_pieces = indices.size() + 1;
         if (node.outputs.size() != n_pieces)
-            return nullptr;
+            return false;
 
         // Multi-output: build only consumed pieces (or piece 0 as a
         // fallback success signal — see SplitEmitter for rationale).
@@ -146,7 +147,7 @@ public:
                 (i < indices.size()) ? indices[i] : axis_size;
             const std::int64_t length = next - prev;
             if (length <= 0)
-                return nullptr;
+                return false;
             const TensorId piece_id = node.outputs[i].id;
             const bool consumed = ctx.is_consumed(piece_id);
             if (!consumed && anchor != nil) {
@@ -162,7 +163,8 @@ public:
                 anchor = p;
             prev = next;
         }
-        return (__bridge void*)anchor;
+        (void)(anchor);
+        return true;
     }
 };
 
@@ -172,25 +174,25 @@ public:
 class UnbindEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "unbind"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t axis = int_attr(node, "axis", -1);
         if (axis < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil)
-            return nullptr;
+            return false;
         if ((NSInteger)axis >= (NSInteger)x.shape.count)
-            return nullptr;
+            return false;
         const std::int64_t n_pieces = x.shape[(NSUInteger)axis].longLongValue;
         if ((std::int64_t)node.outputs.size() != n_pieces)
-            return nullptr;
+            return false;
 
         // Build the squeezed shape (drop the axis dim) once — every piece
         // ends up with this shape.
@@ -219,7 +221,8 @@ public:
             if (anchor == nil)
                 anchor = squeezed;
         }
-        return (__bridge void*)anchor;
+        (void)(anchor);
+        return true;
     }
 };
 
@@ -228,24 +231,24 @@ public:
 class TopKEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "topk"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         const std::int64_t axis = int_attr(node, "axis", -1);
         const std::int64_t k = int_attr(node, "k", 0);
         if (axis < 0 || k <= 0)
-            return nullptr;
+            return false;
         // topk_op returns {values, indices} — exactly 2 outputs.
         if (node.outputs.size() != 2)
-            return nullptr;
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (g == nil || x == nil)
-            return nullptr;
+            return false;
 
         NSArray<MPSGraphTensor*>* res =
             [g topKWithSourceTensor:x
@@ -253,7 +256,7 @@ public:
                                   k:(NSUInteger)k
                                name:@"topk"];
         if (res == nil || res.count != 2)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* values = res[0];
         MPSGraphTensor* indices = res[1];
@@ -277,7 +280,8 @@ public:
         // Return a non-null sentinel (values is always a valid MPSGraph
         // tensor we built).  Builder's auto-bind is skipped because
         // outputs.size() > 1.
-        return (__bridge void*)values;
+        (void)(values);
+        return true;
     }
 };
 

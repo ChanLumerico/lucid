@@ -35,31 +35,32 @@ inline std::int64_t dim_attr(const OpNode& node) {
 class ConcatEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "concatenate"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty())
-            return nullptr;
+            return false;
         const std::int64_t dim = dim_attr(node);
         if (dim < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         if (graph == nil)
-            return nullptr;
+            return false;
 
         NSMutableArray<MPSGraphTensor*>* tensors =
             [NSMutableArray arrayWithCapacity:node.inputs.size()];
         for (TensorId iid : node.inputs) {
             if (iid < 0)
-                return nullptr;
+                return false;
             MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(iid);
             if (t == nil)
-                return nullptr;
+                return false;
             [tensors addObject:t];
         }
         MPSGraphTensor* y = [graph concatTensors:tensors
                                        dimension:(NSInteger)dim
                                             name:@"concatenate"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+        return true;
     }
 };
 
@@ -70,20 +71,20 @@ public:
 class StackEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "stack"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         auto ax_it = node.attrs.find("axis");
         if (ax_it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* axp = std::get_if<std::int64_t>(&ax_it->second);
         if (axp == nullptr)
-            return nullptr;
+            return false;
         const std::int64_t ax = *axp;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         if (graph == nil)
-            return nullptr;
+            return false;
 
         // Unsqueeze each input at ``ax`` so the new axis can be the
         // concat dimension.
@@ -91,10 +92,10 @@ public:
             [NSMutableArray arrayWithCapacity:node.inputs.size()];
         for (TensorId iid : node.inputs) {
             if (iid < 0)
-                return nullptr;
+                return false;
             MPSGraphTensor* t = (__bridge MPSGraphTensor*)ctx.resolve(iid);
             if (t == nil)
-                return nullptr;
+                return false;
             NSArray<NSNumber*>* src_shape = t.shape;
             NSMutableArray<NSNumber*>* new_shape =
                 [NSMutableArray arrayWithCapacity:src_shape.count + 1];
@@ -109,9 +110,10 @@ public:
                 [graph reshapeTensor:t withShape:new_shape name:nil];
             [expanded addObject:expanded_t];
         }
-        return (__bridge void*)[graph concatTensors:expanded
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph concatTensors:expanded
                                           dimension:(NSInteger)ax
-                                               name:@"stack"];
+                                               name:@"stack"]));
+        return true;
     }
 };
 

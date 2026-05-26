@@ -325,13 +325,41 @@ set(LUCID_OP_EMITTERS
     compile/OpEmitters/special/Factory.mm
     compile/OpEmitters/special/Random.mm
     compile/OpEmitters/special/Stubs.mm)
+
+# Manual VJP emitters (Phase 1-4): backward subgraph emission that
+# replaces MPSGraph's gradientForPrimaryTensor: when LUCID_MANUAL_VJP=1.
+# Mirrors LUCID_OP_EMITTERS layout — one bucket per op family.
+set(LUCID_VJP_EMITTERS
+    # framework
+    compile/VjpEmitters/VjpEmitter.mm
+    # elementwise
+    compile/VjpEmitters/elementwise/Arith.mm
+    compile/VjpEmitters/elementwise/Activation.mm
+    compile/VjpEmitters/elementwise/Softmax.mm
+    compile/VjpEmitters/elementwise/Math.mm
+    # linalg
+    compile/VjpEmitters/linalg/Linear.mm
+    # reduce
+    compile/VjpEmitters/reduce/Reduction.mm
+    # shape
+    compile/VjpEmitters/shape/Reshape.mm
+    compile/VjpEmitters/shape/Concat.mm
+    compile/VjpEmitters/shape/Stack.mm
+    # nn
+    compile/VjpEmitters/nn/Loss.mm
+    compile/VjpEmitters/nn/Embedding.mm
+    compile/VjpEmitters/nn/Norm.mm
+    compile/VjpEmitters/nn/Conv.mm
+    compile/VjpEmitters/nn/Dropout.mm)
+
 lucid_object_library(
     lucid_compile
     compile/Tracer.cpp
     compile/ExecutableCache.cpp
     compile/CompiledExecutable.mm
     compile/MpsBuilder.mm
-    ${LUCID_OP_EMITTERS})
+    ${LUCID_OP_EMITTERS}
+    ${LUCID_VJP_EMITTERS})
 # ObjC++ sources in the compile path need ARC, same as the other GPU
 # bridge ``.mm`` files.  Strip the framework ``.cpp`` from the ARC
 # list (it's pure C++) and apply to every emitter ``.mm``.
@@ -341,6 +369,7 @@ set_source_files_properties(
     compile/CompiledExecutable.mm
     compile/MpsBuilder.mm
     ${LUCID_OP_EMITTER_MM}
+    ${LUCID_VJP_EMITTERS}
     PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 
 lucid_object_library(

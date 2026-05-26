@@ -29,43 +29,46 @@ namespace {
 class ConjEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "conj"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        return (__bridge void*)[g reshapeTensor:x withShape:x.shape name:@"conj"];
+        if (g == nil || x == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:x withShape:x.shape name:@"conj"]));
+        return true;
     }
 };
 
 class RealEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "real"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
-        return (__bridge void*)[g reshapeTensor:x withShape:x.shape name:@"real"];
+        if (g == nil || x == nil) return false;
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:x withShape:x.shape name:@"real"]));
+        return true;
     }
 };
 
 class ImagEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "imag"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         MPSGraphTensor* z = [g constantWithScalar:0.0 dataType:x.dataType];
-        return (__bridge void*)[g broadcastTensor:z toShape:x.shape name:@"imag"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g broadcastTensor:z toShape:x.shape name:@"imag"]));
+        return true;
     }
 };
 

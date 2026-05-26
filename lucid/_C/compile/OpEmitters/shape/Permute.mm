@@ -23,27 +23,27 @@ class PermuteEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "permute"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 1)
-            return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() != 1 || node.outputs.empty())
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
 
         // Pull the permutation payload from attrs; abort on miss or
         // wrong variant alternative (signature → eager-only).
         auto it = node.attrs.find("permutation");
         if (it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* perm =
             std::get_if<std::vector<std::int64_t>>(&it->second);
         if (perm == nullptr)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (x_t == nil || graph == nil)
-            return nullptr;
+            return false;
 
         NSMutableArray<NSNumber*>* ns_perm =
             [NSMutableArray arrayWithCapacity:perm->size()];
@@ -53,7 +53,8 @@ public:
         MPSGraphTensor* y = [graph transposeTensor:x_t
                                        permutation:ns_perm
                                               name:@"permute"];
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 

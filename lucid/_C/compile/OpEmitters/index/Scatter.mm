@@ -26,35 +26,36 @@ class ScatterEmitterT final : public OpEmitter {
 public:
     explicit ScatterEmitterT(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 3 || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 3 || node.outputs.empty()) return false;
         TensorId b_id = node.inputs[0];
         TensorId i_id = node.inputs[1];
         TensorId s_id = node.inputs[2];
-        if (b_id < 0 || i_id < 0 || s_id < 0) return nullptr;
+        if (b_id < 0 || i_id < 0 || s_id < 0) return false;
         std::int64_t dim = int_attr(node, "dim", 0);
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* base = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
         MPSGraphTensor* idx = (__bridge MPSGraphTensor*)ctx.resolve(i_id);
         MPSGraphTensor* src = (__bridge MPSGraphTensor*)ctx.resolve(s_id);
-        if (g == nil || base == nil || idx == nil || src == nil) return nullptr;
+        if (g == nil || base == nil || idx == nil || src == nil) return false;
         MPSGraphScatterMode mode;
         switch (MODE) {
             case 0: mode = MPSGraphScatterModeAdd; break;
             case 1: mode = MPSGraphScatterModeMax; break;
             case 2: mode = MPSGraphScatterModeMin; break;
             case 3: mode = MPSGraphScatterModeMul; break;
-            default: return nullptr;
+            default: return false;
         }
         if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)]) {
-            return nullptr;
+            return false;
         }
-        return (__bridge void*)[g scatterAlongAxis:(NSInteger)dim
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g scatterAlongAxis:(NSInteger)dim
                                     withDataTensor:base
                                      updatesTensor:src
                                      indicesTensor:idx
                                               mode:mode
-                                              name:@"scatter_axis"];
+                                              name:@"scatter_axis"]));
+        return true;
     }
 
 private:

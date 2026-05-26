@@ -31,29 +31,30 @@ namespace {
 class FlipEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "flip"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         auto it = node.attrs.find("dims");
         if (it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* dims = std::get_if<std::vector<std::int64_t>>(&it->second);
         if (dims == nullptr)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         NSMutableArray<NSNumber*>* axes =
             [NSMutableArray arrayWithCapacity:dims->size()];
         for (std::int64_t d : *dims)
             [axes addObject:[NSNumber numberWithLongLong:d]];
-        return (__bridge void*)[graph reverseTensor:x_t axes:axes name:@"flip"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph reverseTensor:x_t axes:axes name:@"flip"]));
+        return true;
     }
 };
 
@@ -63,27 +64,27 @@ public:
 class RollEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "roll"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.empty() || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
         auto sh_it = node.attrs.find("shifts");
         auto ax_it = node.attrs.find("axes");
         if (sh_it == node.attrs.end() || ax_it == node.attrs.end())
-            return nullptr;
+            return false;
         const auto* shifts =
             std::get_if<std::vector<std::int64_t>>(&sh_it->second);
         const auto* axes =
             std::get_if<std::vector<std::int64_t>>(&ax_it->second);
         if (shifts == nullptr || axes == nullptr || shifts->size() != axes->size())
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         MPSGraphTensor* cur = x_t;
         NSUInteger ndim = cur.shape.count;
@@ -91,7 +92,7 @@ public:
             std::int64_t ax = (*axes)[i];
             if (ax < 0) ax += (std::int64_t)ndim;
             if (ax < 0 || ax >= (std::int64_t)ndim)
-                return nullptr;
+                return false;
             std::int64_t dim = cur.shape[(NSUInteger)ax].longLongValue;
             if (dim <= 0) continue;
             std::int64_t s = (*shifts)[i] % dim;
@@ -137,7 +138,8 @@ public:
                             dimension:(NSInteger)ax
                                  name:nil];
         }
-        return (__bridge void*)cur;
+        ctx.bind(node.outputs[0].id, (__bridge void*)(cur));
+        return true;
     }
 };
 
@@ -149,22 +151,23 @@ class TriEmitter final : public OpEmitter {
 public:
     explicit TriEmitter(std::string name) : name_(std::move(name)) {}
     std::string_view op_name() const override { return name_; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         std::int64_t k = int_attr(node, "k", 0);
         bool upper = bool_attr(node, "upper", name_ == "triu");
-        if (k != 0) return nullptr;  // k != 0 → eager
+        if (k != 0) return false;  // k != 0 → eager
         NSInteger nl = upper ? 0 : -1;
         NSInteger nu = upper ? -1 : 0;
-        return (__bridge void*)[g bandPartWithTensor:x
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g bandPartWithTensor:x
                                             numLower:nl
                                             numUpper:nu
-                                                name:@"tri"];
+                                                name:@"tri"]));
+        return true;
     }
 
 private:
@@ -175,17 +178,17 @@ private:
 class DiagonalEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "diagonal"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty()) return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.empty() || node.outputs.empty()) return false;
         std::int64_t offset = int_attr(node, "offset", 0);
-        if (offset != 0) return nullptr;  // only the main diagonal
+        if (offset != 0) return false;  // only the main diagonal
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return nullptr;
+        if (x_id < 0) return false;
         MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil) return nullptr;
+        if (g == nil || x == nil) return false;
         NSArray<NSNumber*>* sh = x.shape;
-        if (sh.count != 2) return nullptr;
+        if (sh.count != 2) return false;
         std::int64_t N = sh[0].longLongValue;
         std::int64_t M = sh[1].longLongValue;
         std::int64_t K = N < M ? N : M;
@@ -194,9 +197,10 @@ public:
         NSArray<NSNumber*>* reduce_axes = (N >= M) ? @[@0] : @[@1];
         MPSGraphTensor* r =
             [g reductionSumWithTensor:band axes:reduce_axes name:nil];
-        return (__bridge void*)[g reshapeTensor:r
+        ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:r
                                        withShape:@[[NSNumber numberWithLongLong:K]]
-                                            name:@"diagonal"];
+                                            name:@"diagonal"]));
+        return true;
     }
 };
 

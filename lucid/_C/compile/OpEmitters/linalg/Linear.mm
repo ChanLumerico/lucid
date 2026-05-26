@@ -33,20 +33,22 @@ class LinearEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "linear"; }
 
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() < 2 || node.inputs.size() > 3)
-            return nullptr;
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.inputs.size() > 3 || node.outputs.empty())
+            return false;
         TensorId x_id = node.inputs[0];
         TensorId W_id = node.inputs[1];
-        TensorId b_id = node.inputs.size() == 3 ? node.inputs[2] : -1;
+        TensorId b_id = node.inputs.size() == 3
+            ? node.inputs[2]
+            : TraceId::external_feed();
         if (x_id < 0 || W_id < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         MPSGraphTensor* W_t = (__bridge MPSGraphTensor*)ctx.resolve(W_id);
         if (x_t == nil || W_t == nil)
-            return nullptr;
+            return false;
         MPSGraphTensor* b_t = nil;
         if (b_id >= 0)
             b_t = (__bridge MPSGraphTensor*)ctx.resolve(b_id);
@@ -68,7 +70,8 @@ public:
                                          name:@"linear_out"]
             : xW;
 
-        return (__bridge void*)y;
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        return true;
     }
 };
 

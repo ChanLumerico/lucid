@@ -41,17 +41,17 @@ inline MPSDataType lucid_dtype_to_mps(Dtype dt) {
 class AstypeEmitter final : public OpEmitter {
 public:
     std::string_view op_name() const override { return "astype"; }
-    void* emit(BuilderContext& ctx, const OpNode& node) override {
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
         if (node.inputs.size() != 1 || node.outputs.empty())
-            return nullptr;
+            return false;
         TensorId x_id = node.inputs[0];
         if (x_id < 0)
-            return nullptr;
+            return false;
 
         MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
         MPSGraphTensor* x_t = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
         if (graph == nil || x_t == nil)
-            return nullptr;
+            return false;
 
         // Prefer the recorded ``dst_dtype`` attr; fall back to the
         // output meta's dtype (always set by the tracer).
@@ -63,7 +63,8 @@ public:
                 dst = lucid_dtype_to_mps(dt);
             }
         }
-        return (__bridge void*)[graph castTensor:x_t toType:dst name:@"astype"];
+        ctx.bind(node.outputs[0].id, (__bridge void*)([graph castTensor:x_t toType:dst name:@"astype"]));
+        return true;
     }
 };
 
