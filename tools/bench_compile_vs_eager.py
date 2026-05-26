@@ -169,11 +169,28 @@ def _time_warm(call: Callable[[], object], n_warmup: int, n_iter: int) -> tuple[
 def _check_parity(
     eager_out: lucid.Tensor, compile_out: lucid.Tensor, threshold: float = 1e-3
 ) -> tuple[float, bool]:
-    """Return (rel_diff, ok).  ok = rel_diff <= threshold."""
+    """Return (rel_diff, ok).  ok = rel_diff <= threshold.
+
+    **Critical**: explicit ``metal.synchronize()`` after each operand's
+    materialisation is required.  Without it, the ``eager_out -
+    compile_out`` subtraction sees lazy tensors that may not have
+    flushed through the MLX async dispatch queue yet — producing a
+    spurious all-zeros comparison for one of the operands and a 1.0
+    rel_diff false positive (which is what tripped the original
+    bench harness at BS ≥ 32 on Conv workloads; see
+    ``obsidian/perf/perf-compile-vs-eager-2026-05-26.md`` §"Open
+    questions" §1).  Force evaluation + sync before subtracting.
+    """
     if eager_out.shape != compile_out.shape:
         return float("inf"), False
+    # Force evaluation of both operands BEFORE the subtraction so MLX
+    # async dispatch can't leave one of them stale during the diff.
+    _ = float(eager_out.sum().item())
+    _ = float(compile_out.sum().item())
+    _metal.synchronize()
     abs_diff = float((eager_out - compile_out).abs().max().item())
     scale = float(eager_out.abs().max().item())
+    _metal.synchronize()
     rel_diff = abs_diff / max(scale, 1e-9)
     return rel_diff, rel_diff <= threshold
 
