@@ -374,6 +374,16 @@ set_source_files_properties(
     ${LUCID_VJP_EMITTERS}
     PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 
+# 3.5+ tokenizer family — Python ``lucid.utils.tokenizer`` mirror.
+# Each algorithm gets its own .cpp; the base ``Tokenizer.cpp`` carries
+# the default optional overrides (encode_batch / decode_batch / etc.).
+# New tokenizers (WordPiece / Unigram / ByteLevelBPE) plug in by
+# appending their .cpp to this list.
+lucid_object_library(
+    lucid_utils_tokenizer
+    utils/tokenizer/Tokenizer.cpp
+    utils/tokenizer/BPE.cpp)
+
 lucid_object_library(
     lucid_bindings
     bindings/bind_errors.cpp
@@ -395,6 +405,7 @@ lucid_object_library(
     bindings/bind_fft.cpp
     bindings/bind_complex.cpp
     bindings/bind_compile.cpp        # 3.5 Phase 1.1: lucid.compile() bindings
+    bindings/bind_tokenizer.cpp      # 3.5+ tokenizer surface (utils.tokenizer)
     bindings/bind.cpp)
 
 add_library(
@@ -408,6 +419,7 @@ add_library(
     $<TARGET_OBJECTS:lucid_random>
     $<TARGET_OBJECTS:lucid_optim>
     $<TARGET_OBJECTS:lucid_compile>     # 3.5 Phase 1.1: graph-capture tracer
+    $<TARGET_OBJECTS:lucid_utils_tokenizer>  # 3.5+ BPE / WordPiece / ...
     $<TARGET_OBJECTS:lucid_bindings>)
 
 target_link_libraries(

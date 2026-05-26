@@ -47,6 +47,10 @@ void register_einops(py::module_& m);
 void register_fft(py::module_& m);
 void register_complex(py::module_& m);
 void register_compile(py::module_& m);
+// 3.5+ tokenizer surface — lives under ``utils.tokenizer`` to mirror
+// the Python ``lucid.utils.tokenizer`` package.  Registered against the
+// ``utils`` sub-module after ``register_utils`` has built it.
+void register_tokenizer(py::module_& utils);
 }  // namespace lucid::bindings
 
 PYBIND11_MODULE(engine, m) {
@@ -104,6 +108,17 @@ PYBIND11_MODULE(engine, m) {
     auto compile_mod = m.def_submodule(
         "compile", "Graph-capture tracer and compiled executable cache.");
     lucid::bindings::register_compile(compile_mod);
+
+    // 3.5+ utils sub-module — exclusively for new packages whose Python
+    // mirror sits under ``lucid.utils.*`` (currently: tokenizer).  Note
+    // that ``register_utils`` (called earlier with ``m``) puts shape
+    // manipulation ops at the top level for backwards compatibility;
+    // this ``utils`` sub-module is a *separate* namespace dedicated to
+    // tokenization / future helpers that mirror ``lucid.utils.*``.
+    auto utils_mod = m.def_submodule(
+        "utils",
+        "Helper sub-packages mirroring lucid.utils.* (tokenizer, ...).");
+    lucid::bindings::register_tokenizer(utils_mod);
 
     // Fused kernel bindings that directly call IBackend dispatch and therefore
     // cannot be separated into their own translation units without exposing
