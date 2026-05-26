@@ -385,22 +385,70 @@ class _FusedStep:
         # thread-local flag so the dropout wrapper knows it can route
         # training-mode dispatch through ``dropout_stateful`` (we have
         # the variable-promotion machinery downstream).
+        #
+        # AMP scoping (X4.4): the user may wrap the entire
+        # ``step(x, t)`` call in ``with autocast()``.  Per the standard
+        # PyTorch convention, autocast applies only to forward + loss
+        # — backward and optimizer.step run on F32 master weights so
+        # the update math stays numerically stable.  We split the
+        # scope explicitly here: the captured ``with _tracing()``
+        # block respects the user's autocast for model + loss (so
+        # the trace records the right ``astype`` casts that the
+        # ``astype`` VJP from P1 cleanly differentiates), then
+        # temporarily installs a neutral ``AutocastGuard(F32)``
+        # before ``copt._trace_update`` to ensure the optimizer
+        # arithmetic runs in F32.  Without this split, the
+        # optimizer's reads of F32 master weights would get autocast
+        # to F16 → F16 ``new_param`` → ``run_executable_inplace``
+        # dtype mismatch with the F32 param buffer.
+        from lucid._C import engine as _C_engine
+
+        _autocast_was_active = _C_engine.amp_is_active()
+        _autocast_prev_dtype = _C_engine.amp_active_dtype()
+
         _tls.active = True
         try:
             with no_grad():
                 with _tracing() as tracer:
                     out = self._model(*args[:1])
                     loss = self._loss_fn(out, *args[1:])
-                    # Pass ghost grads as the "grad" inputs to the
-                    # optimizer math.  The subclass's _trace_update
-                    # emits Lucid tensor ops referencing them; those
-                    # become ghost-grad-consuming ops in the trace,
-                    # which C++ will handle in the second emit phase.
-                    opt_outputs = copt._trace_update(
-                        None,  # all_inputs unused by current _trace_update impls
-                        ghost_grads,
-                        scalars,
-                    )
+                    # Disable autocast for the optimizer math.  The
+                    # F32 guard is the canonical "off" sentinel — the
+                    # engine has no ``disable_amp()`` primitive, so
+                    # we install a guard that targets F32 (identity
+                    # for F32 weights, which is what we want).
+                    if _autocast_was_active:
+                        _opt_guard = _C_engine.AutocastGuard(_C_engine.F32)
+                        _opt_guard.__enter__()
+                    else:
+                        _opt_guard = None
+                    try:
+                        # Pass ghost grads as the "grad" inputs to the
+                        # optimizer math.  The subclass's _trace_update
+                        # emits Lucid tensor ops referencing them; those
+                        # become ghost-grad-consuming ops in the trace,
+                        # which C++ will handle in the second emit phase.
+                        opt_outputs = copt._trace_update(
+                            None,  # all_inputs unused by current _trace_update impls
+                            ghost_grads,
+                            scalars,
+                        )
+                    finally:
+                        if _opt_guard is not None:
+                            # Restore user's autocast dtype after the
+                            # opt scope.  AutocastGuard destructor
+                            # restores the prev_active state captured
+                            # at __enter__ time, but the Python wrapper
+                            # is RAII via context manager — replicate
+                            # that pattern.
+                            if (
+                                _autocast_prev_dtype is not None
+                                and _autocast_was_active
+                            ):
+                                _restore = _C_engine.AutocastGuard(
+                                    _autocast_prev_dtype
+                                )
+                                _restore.__enter__()
         finally:
             _tls.active = False
 
