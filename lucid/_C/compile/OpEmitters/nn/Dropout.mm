@@ -50,28 +50,21 @@ inline bool emit_identity(BuilderContext& ctx, const OpNode& node) {
 // Coverage:
 //   * training == false  OR  p == 0  → identity bind (zero-copy passthrough,
 //     applies to BERT / GPT / ViT in eval mode where dropout is a no-op).
-//   * training == true   AND p  > 0  → eager fallback (return false).
+//   * training == true   AND p  > 0  → emit identity (= eager fallback would
+//     pollute the trace, see :class:`DropoutPassthroughEmitterT::emit`).
 //
-// **Why training-mode dropout still falls back to eager.**  MPSGraph's
-// ``randomUniformTensorWithShape:`` is *dispatch-deterministic* — the
-// graph compiles a fixed random tensor handle whose values stay
-// identical across dispatches of the same executable.  Compiling
-// dropout this way would silently break the regularising effect: the
-// same mask applies every step, every batch.  The
-// ``test_dropout_training_produces_random_outputs`` test (which
-// compares two consecutive calls) caught this empirically when the
-// RNG mask path was prototyped (2026-05-26).
-//
-// The clean path requires either:
-//   (a) MPSGraph's stateful Philox RNG with a state tensor that's
-//       updated per dispatch — needs the saved-state side-table
-//       (now in :class:`BuilderContext`) plus a state-feed plumbing
-//       layer in :file:`_fused_step.py` that allocates the state and
-//       rotates it each call.
-//   (b) A dropout op that re-seeds via an external feed per call.
-// Both are tractable additions but each is its own ~150-line plan.
-// Until then, training-mode dropout falls back to eager; the dropout
-// VJP only runs on the identity / p==0 path where dx == grad.
+// **Why training-mode dropout falls back via this emitter rather than
+// running stateful Philox here.**  The standard ``"dropout"`` trace node
+// records a single input (``x``).  MPSGraph's stateful Philox API
+// requires a second tensor (the Philox state) as input + emits a second
+// output (the new state).  That schema is incompatible with the
+// single-in/single-out ``"dropout"`` op — so the Python wrapper in
+// :file:`lucid/nn/functional/dropout.py` routes training-mode dropout
+// through a **sibling op name ``"dropout_stateful"``** that carries the
+// 2-input/2-output schema and is handled by the
+// :class:`DropoutStatefulEmitter` below.  The plain ``"dropout"`` op
+// only sees inference / p==0 calls in the compile path; training-mode
+// dispatches go through ``dropout_stateful``.
 template <bool ALPHA>
 class DropoutPassthroughEmitterT final : public OpEmitter {
 public:
@@ -82,13 +75,127 @@ public:
         const double p = double_attr(node, "p", 0.5);
         if (!training || p == 0.0)
             return emit_identity(ctx, node);
-        // Training-mode + p > 0 → eager fallback (see header comment
-        // above for why MPSGraph's random op is unsuitable).
+        // Training-mode + p > 0 on the *plain* dropout op only reaches
+        // here when the Python wrapper missed the tracer-routing check
+        // (e.g. eager-only callers).  Fall back to eager — the dropout
+        // sibling ``"dropout_stateful"`` op handles the compile path.
         return false;
     }
 
 private:
     std::string name_;
+};
+
+// dropout_stateful — training-mode dropout with explicit Philox state I/O.
+// ─────────────────────────────────────────────────────────────────────────
+// Sibling of the plain ``"dropout"`` op designed exclusively for the
+// compile path's training-mode dispatch.  Two inputs (``x``,
+// ``state_in``) and two outputs (``y``, ``state_out``).  Uses MPSGraph's
+// 2-output stateful Philox API
+// ``randomTensorWithShape:descriptor:stateTensor:`` which returns
+// ``(uniform, new_state)`` — by feeding the new state back into the
+// state buffer between dispatches (either as an in/out feed pair or as
+// an MPSGraph variable via
+// :func:`compile_generic_fused_step_with_vars`) the executable
+// produces genuinely-per-dispatch varying masks instead of the
+// dispatch-deterministic ones the stateless seed-only path would give.
+//
+// Emit order:
+//   1. mask = (uniform > p) * (1 / (1 - p))   ← inverted-dropout scale
+//   2. y = x * mask                            ← bound to outputs[0]
+//   3. state_out bound to outputs[1]
+//   4. mask stashed via ``ctx.stash_saved(outputs[0].id, "mask", mask)``
+//      so the VJP can multiply through without recomputing random
+//      values (the same MPSGraph node is referenced by both
+//      forward and backward subgraphs).
+//
+// Inference / p==0 fast path: if the Python wrapper still routed
+// through this op for some reason in eval mode, fall back to the
+// identity bind (state_out becomes a clone of state_in via identity
+// pass-through — no randomness needed).
+class DropoutStatefulEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "dropout_stateful"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        if (node.inputs.size() < 2 || node.outputs.size() < 2)
+            return false;
+        const bool training = bool_attr(node, "training", true);
+        const double p = double_attr(node, "p", 0.5);
+
+        MPSGraph* graph = (__bridge MPSGraph*)ctx.graph();
+        if (graph == nil) return false;
+
+        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
+        MPSGraphTensor* state_in = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[1]);
+        if (x == nil || state_in == nil) return false;
+
+        // Inference / p==0 → identity bind (y = x; state_out = state_in).
+        // Avoids spurious RNG cost when this op gets dispatched eval-mode.
+        if (!training || p == 0.0) {
+            ctx.bind(node.outputs[0].id, (__bridge void*)x);
+            ctx.bind(node.outputs[1].id, (__bridge void*)state_in);
+            return true;
+        }
+
+        // Training: stateful Philox via 2-output random API.
+        const MPSDataType dtype = x.dataType;
+        MPSGraphRandomOpDescriptor* desc =
+            [MPSGraphRandomOpDescriptor descriptorWithDistribution:
+                                            MPSGraphRandomDistributionUniform
+                                                          dataType:dtype];
+        desc.min = 0.0f;
+        desc.max = 1.0f;
+
+        // ``randomTensorWithShape:descriptor:stateTensor:`` returns an
+        // NSArray<MPSGraphTensor*> of length 2: [uniform_values, new_state].
+        // The shape argument here is the *output* shape — same as ``x``.
+        NSArray<MPSGraphTensor*>* rng_pair =
+            [graph randomTensorWithShape:x.shape
+                              descriptor:desc
+                             stateTensor:state_in
+                                    name:@"dropout_stateful_rng"];
+        if (rng_pair == nil || rng_pair.count < 2) return false;
+
+        MPSGraphTensor* uniform = rng_pair[0];
+        MPSGraphTensor* state_out = rng_pair[1];
+
+        // mask = (uniform > p) * (1 / (1 - p)) — inverted-dropout scale.
+        // The boolean comparison gets cast back to the input dtype
+        // before the multiplicative scaling so MPSGraph's downstream
+        // ``multiplicationWithPrimaryTensor:`` sees matching dtypes.
+        MPSGraphTensor* p_const =
+            [graph constantWithScalar:p dataType:dtype];
+        MPSGraphTensor* keep_inv =
+            [graph constantWithScalar:(1.0 / (1.0 - p)) dataType:dtype];
+        MPSGraphTensor* keep_bool =
+            [graph greaterThanWithPrimaryTensor:uniform
+                                secondaryTensor:p_const
+                                           name:@"dropout_keep_bool"];
+        MPSGraphTensor* keep_f =
+            [graph castTensor:keep_bool toType:dtype name:@"dropout_keep_cast"];
+        MPSGraphTensor* mask =
+            [graph multiplicationWithPrimaryTensor:keep_f
+                                   secondaryTensor:keep_inv
+                                              name:@"dropout_mask"];
+
+        // y = x * mask.
+        MPSGraphTensor* y =
+            [graph multiplicationWithPrimaryTensor:x
+                                   secondaryTensor:mask
+                                              name:@"dropout_y"];
+
+        ctx.bind(node.outputs[0].id, (__bridge void*)y);
+        ctx.bind(node.outputs[1].id, (__bridge void*)state_out);
+
+        // Stash mask so the matching VJP (registered under
+        // ``"dropout_stateful"``) can multiply through without
+        // recomputing random values — MPSGraph evaluates each node
+        // exactly once per dispatch.
+        ctx.stash_saved(node.outputs[0].id, "mask", (__bridge void*)mask);
+
+        return true;
+    }
 };
 
 // drop_block / drop_path — no ``training`` parameter at the op level
@@ -117,6 +224,7 @@ struct DropoutEmitterRegistrar {
         register_emitter(std::make_unique<DropoutPassthroughEmitterT<true>>("alpha_dropout"));
         register_emitter(std::make_unique<DropMaskEmitter<kDropBlock>>());
         register_emitter(std::make_unique<DropMaskEmitter<kDropPath>>());
+        register_emitter(std::make_unique<DropoutStatefulEmitter>());
     }
 };
 

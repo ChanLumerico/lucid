@@ -63,12 +63,19 @@ public:
 constexpr char kDropout[] = "dropout";
 constexpr char kDropoutNd[] = "dropoutnd";
 constexpr char kAlphaDropout[] = "alpha_dropout";
+// Sibling 2-input/2-output op the compile path uses for training-mode
+// dropout.  Backward math is identical (``dx = grad * mask``); the
+// state_out output is purely a buffer rotation and never reaches a
+// loss, so its gradient demand is always nil and we don't emit
+// anything for it.
+constexpr char kDropoutStateful[] = "dropout_stateful";
 
 struct DropoutVjpRegistrar {
     DropoutVjpRegistrar() {
         register_vjp_emitter(std::make_unique<DropoutVjpT<kDropout>>());
         register_vjp_emitter(std::make_unique<DropoutVjpT<kDropoutNd>>());
         register_vjp_emitter(std::make_unique<DropoutVjpT<kAlphaDropout>>());
+        register_vjp_emitter(std::make_unique<DropoutVjpT<kDropoutStateful>>());
     }
 };
 

@@ -58,9 +58,26 @@ Limitations
   already run inside the executable).  ``loss.backward()`` is a no-op.
 """
 
+import threading
 from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
+
+# Thread-local flag flipped on while ``_FusedStep._build_executable``
+# is actively tracing.  ``lucid.nn.functional.dropout`` checks it to
+# decide whether to route training-mode dispatch through the
+# ``dropout_stateful`` engine op (which only works when the compile
+# path uses ``compile_generic_fused_step_with_vars`` to promote the
+# state buffer to an MPSGraph variable).  The forward-only
+# :class:`CompiledModule` path doesn't set this flag — its compile
+# entry (``compile_trace``) has no variable-promotion hook, so
+# training-mode dropout there continues to fall back to eager.
+_tls = threading.local()
+
+
+def _is_fused_step_tracing() -> bool:
+    """Return True while inside ``_FusedStep._build_executable``'s trace."""
+    return bool(getattr(_tls, "active", False))
 
 # Hot-path imports — hoisted out of ``_FusedStep._run`` so the
 # per-call ``from ... import _unwrap`` / ``import lucid as _lucid``
@@ -363,21 +380,28 @@ class _FusedStep:
         # portion of the graph.
         ghost_grads = [_zeros_like(p) for p in self._params]
 
-        # Trace forward + loss + opt update in one block.
-        with no_grad():
-            with _tracing() as tracer:
-                out = self._model(*args[:1])
-                loss = self._loss_fn(out, *args[1:])
-                # Pass ghost grads as the "grad" inputs to the
-                # optimizer math.  The subclass's _trace_update emits
-                # Lucid tensor ops referencing them; those become
-                # ghost-grad-consuming ops in the trace, which C++ will
-                # handle in the second emit phase.
-                opt_outputs = copt._trace_update(
-                    None,  # all_inputs unused by current _trace_update impls
-                    ghost_grads,
-                    scalars,
-                )
+        # Trace forward + loss + opt update in one block.  Flip the
+        # thread-local flag so the dropout wrapper knows it can route
+        # training-mode dispatch through ``dropout_stateful`` (we have
+        # the variable-promotion machinery downstream).
+        _tls.active = True
+        try:
+            with no_grad():
+                with _tracing() as tracer:
+                    out = self._model(*args[:1])
+                    loss = self._loss_fn(out, *args[1:])
+                    # Pass ghost grads as the "grad" inputs to the
+                    # optimizer math.  The subclass's _trace_update
+                    # emits Lucid tensor ops referencing them; those
+                    # become ghost-grad-consuming ops in the trace,
+                    # which C++ will handle in the second emit phase.
+                    opt_outputs = copt._trace_update(
+                        None,  # all_inputs unused by current _trace_update impls
+                        ghost_grads,
+                        scalars,
+                    )
+        finally:
+            _tls.active = False
 
         graph = tracer.graph
         ext = dict(tracer.external_feeds)
@@ -421,6 +445,26 @@ class _FusedStep:
                 )
             output_target_ids.append(int(tid))
 
+        # Append every training-mode dropout's ``state_out`` id so the
+        # ``compile_generic_fused_step_with_vars`` call below can pair
+        # them with their ``state_in`` feeds — required by that API
+        # because every ``write_id`` in ``variable_pairs`` must also
+        # appear in ``output_target_ids``.  The parallel Python-side
+        # target Tensor (the same buffer that was ``state_in``) is
+        # appended to ``self._output_targets`` further down so
+        # ``run_executable_inplace`` has somewhere to flush the
+        # readVariable output (harmless for dropout state since we
+        # never read it from Python — the buffer rotation is purely
+        # what advances the RNG sequence across dispatches).
+        dropout_state_target_pairs: list[tuple[int, int]] = []
+        for _node in graph.ops:
+            if _node.name == "dropout_stateful":
+                if len(_node.inputs) >= 2 and len(_node.outputs) >= 2:
+                    _sin = int(_node.inputs[1])
+                    _sout = int(_node.outputs[1].id)
+                    output_target_ids.append(_sout)
+                    dropout_state_target_pairs.append((_sin, _sout))
+
         # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
         # variables variant) is now functional after the source-graph
         # retention fix in CompiledExecutable.mm — previously the
@@ -436,7 +480,18 @@ class _FusedStep:
         # regression matrix continues to exercise the production code.
         import os as _os
 
-        _use_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in ("1", "true", "True")
+        # Force the ``_with_vars`` path whenever any training-mode
+        # dropout is present in the trace — every ``dropout_stateful``
+        # op must promote its ``(state_in, state_out)`` to an MPSGraph
+        # variable so per-dispatch RNG state advances correctly.
+        # Without variable promotion the state buffer would be
+        # re-initialised on every dispatch and every call would emit
+        # the same mask (the very regression the prior X2 prototype
+        # ran into — see ``test_dropout_training_produces_random_outputs``).
+        _use_vars = (
+            _os.environ.get("LUCID_COMPILE_VARS", "0") in ("1", "true", "True")
+            or bool(dropout_state_target_pairs)
+        )
         if _use_vars:
             # Build (feed_id, write_id) pairs: each parameter feed
             # becomes a variable, paired with the matching opt-output
@@ -459,9 +514,29 @@ class _FusedStep:
             # feed/output path.  See ``obsidian/perf/perf-state-vars-regression.md``
             # for the bench data.
             variable_pairs: list[tuple[int, int]] = []
-            for i, pid in enumerate(param_ids):
-                if i < len(output_target_ids):
-                    variable_pairs.append((pid, output_target_ids[i]))
+            # Param-tier promotion runs only when LUCID_COMPILE_VARS=1
+            # opts in.  When the only reason ``_use_vars`` flipped is
+            # dropout state plumbing, params stay on the in/out feed
+            # path (matches the perf measurement in
+            # ``obsidian/perf/perf-state-vars-regression.md`` that
+            # found promoting large state buffers to variables
+            # regressed 10-20 % per step).
+            _params_as_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in (
+                "1",
+                "true",
+                "True",
+            )
+            if _params_as_vars:
+                for i, pid in enumerate(param_ids):
+                    if i < len(output_target_ids):
+                        variable_pairs.append((pid, output_target_ids[i]))
+            # Dropout-train state ALWAYS goes through variable
+            # promotion when present.  These pairs are tiny
+            # (int32[7] per dropout site, 28 bytes) so the
+            # serialisation overhead documented for large optimizer
+            # state in ``perf-state-vars-regression.md`` doesn't
+            # materially apply.
+            variable_pairs.extend(dropout_state_target_pairs)
             exe = _C_engine.compile.compile_generic_fused_step_with_vars(
                 graph,
                 ext,
@@ -535,12 +610,32 @@ class _FusedStep:
 
         # Output targets: the compile_optimizer subclass already knows
         # which Tensors receive the opt outputs.  Same order as
-        # opt_outputs in _trace_update.
-        self._output_targets = copt._outputs_to_targets(opt_outputs)
+        # opt_outputs in _trace_update.  Then append one Tensor per
+        # dropout state_out_tid we added to ``output_target_ids`` —
+        # the readVariable target for each promoted variable.  We wrap
+        # the same TensorImpl that was the ``state_in`` feed so the
+        # buffer write-back lands in the same Python-side tensor
+        # (harmless overhead since we never read it; the actual RNG
+        # advancement happens inside the variable's internal storage).
+        self._output_targets = list(copt._outputs_to_targets(opt_outputs))
+        from lucid._tensor.tensor import Tensor as _TensorT_for_state
+
+        for _state_in_tid, _state_out_tid in dropout_state_target_pairs:
+            _impl = ext.get(_state_in_tid)
+            if _impl is None:
+                raise RuntimeError(
+                    "fused_step: dropout state feed id "
+                    f"{_state_in_tid} not in external_feeds"
+                )
+            self._output_targets.append(
+                _TensorT_for_state(_impl, requires_grad=False)
+            )
+
         if len(self._output_targets) != len(output_target_ids):
             raise RuntimeError(
-                "fused_step: optimizer subclass output_targets count "
-                "doesn't match _trace_update output count"
+                "fused_step: output_targets count "
+                f"({len(self._output_targets)}) doesn't match "
+                f"output_target_ids count ({len(output_target_ids)})"
             )
         self._exe = exe
         # Phase 1.10 per-call overhead reduction: pre-unwrap the

@@ -6,6 +6,7 @@ All implementations use the C++ engine ops; no numpy.
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._types import DeviceLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -14,6 +15,41 @@ if TYPE_CHECKING:
 _SELU_ALPHA = 1.6732632423543772
 _SELU_SCALE = 1.0507009873554805
 _ALPHA_PRIME = -_SELU_ALPHA * _SELU_SCALE  # ≈ -1.7580993408473766
+
+
+def _alloc_philox_state(device: DeviceLike) -> Tensor:
+    """Allocate a fresh MPSGraph Philox state tensor seeded from Lucid's RNG.
+
+    MPSGraph's stateful ``randomTensorWithShape:descriptor:stateTensor:``
+    API expects a ``int32[7]`` state — the Philox-4x32 internal layout.
+    We initialise it with 7 random ``int32`` values drawn from Lucid's
+    global :class:`Generator` so distinct dropout call sites
+    (potentially within the same model) start from uncorrelated
+    sequences.
+
+    Critically the allocation runs with the active :func:`_tracing`
+    tracer temporarily detached.  Without that, the inner
+    :func:`lucid.randint` call would record a ``"randint"`` op into the
+    trace and the resulting tensor would be the *output* of that op
+    rather than an external feed — making it ineligible for the
+    ``compile_generic_fused_step_with_vars`` variable promotion which
+    requires every ``feed_id`` in ``variable_pairs`` to be in
+    :attr:`Tracer.external_feeds`.  Suppressing the tracer keeps the
+    state buffer "outside" the captured DAG; when
+    :func:`_C_engine.nn.dropout_stateful` consumes it as input, the
+    tracer mints a fresh feed id and the variable promotion works.
+    """
+    import lucid as _lucid
+
+    saved_tracer = _C_engine.compile.current_tracer()
+    _C_engine.compile.set_current_tracer(None)
+    try:
+        # int32 max is 2**31 - 1.  Sample over the full positive range.
+        return _lucid.randint(
+            0, 2**31 - 1, (7,), dtype=_lucid.int32, device=device
+        )
+    finally:
+        _C_engine.compile.set_current_tracer(saved_tracer)
 
 
 def dropout(
@@ -61,6 +97,16 @@ def dropout(
     :func:`dropout2d` / :func:`dropout3d`, which drop whole feature
     maps and give stronger regularisation.
 
+    **Compile path routing.**  When called inside a
+    :func:`lucid.compile._tracing` context with ``training=True`` and
+    ``p > 0``, this wrapper allocates a Philox state buffer and routes
+    through the sibling engine op ``_C_engine.nn.dropout_stateful``.
+    The captured trace then carries the 2-input/2-output schema the
+    compile path needs to plumb MPSGraph's stateful Philox RNG —
+    giving genuinely-per-dispatch varying masks where the stateless
+    seed path produces dispatch-deterministic ones.  Eager-only
+    callers (no active tracer) keep using the standard ``nn.dropout``.
+
     Examples
     --------
     >>> import lucid
@@ -81,6 +127,33 @@ def dropout(
     .. [1] Srivastava et al., *Dropout: A Simple Way to Prevent Neural
        Networks from Overfitting*, JMLR 2014.
     """
+    if training and p > 0.0 and _C_engine.compile.current_tracer() is not None:
+        # Only route through the stateful sibling when we know the
+        # downstream compile path can promote the state buffer to an
+        # MPSGraph variable — i.e. inside :func:`fused_step`'s trace
+        # block.  The forward-only :func:`lucid.compile` path uses
+        # ``compile_trace``, which has no variable-promotion hook, so
+        # routing through ``dropout_stateful`` there would compile
+        # successfully but emit the *same* mask every dispatch (the
+        # very regression the prior X2 prototype hit).  Fall back to
+        # eager via the plain ``dropout`` op there instead — the
+        # ``CompiledModule`` cache will register the signature as
+        # eager-only and subsequent calls skip the recompile attempt.
+        from lucid.compile._fused_step import _is_fused_step_tracing
+
+        if _is_fused_step_tracing():
+            # Compile path: thread an explicit Philox state buffer so
+            # the MPSGraph emitter can use the stateful RNG API.  The
+            # state buffer's TensorImpl identity is captured as an
+            # external feed — ``_fused_step.py`` walks the trace for
+            # ``dropout_stateful`` ops, builds the matching
+            # ``(state_in_tid, state_out_tid)`` variable pairs, and
+            # routes the compile through
+            # ``compile_generic_fused_step_with_vars``.
+            xi = _unwrap(x)
+            state = _alloc_philox_state(xi.device)
+            y, _ = _C_engine.nn.dropout_stateful(xi, _unwrap(state), p, training)
+            return _wrap(y)
     return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
 
 

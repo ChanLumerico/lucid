@@ -5,20 +5,21 @@ Contract (matches the emitter logic in
 
   * **eval mode** or **p == 0** — identity passthrough.  Bit-exact with
     eager because both reduce to a clone.
-  * **training mode** with **p > 0** — emitter returns nullptr, the
-    builder aborts and the trace is marked eager-only.  The result
-    is still correct (it's just eager); the user's mental model of
-    "compile mode = compiled" is wrong for that signature.
-
-The policy is deliberate: the RNG path is deterministic-per-executable
-(see ``OpEmitters/special/Random.mm``).  If we ran dropout through
-that path the model would apply the *same* mask every step — silently
-breaking dropout's regularising effect.  Eager fallback preserves
-training correctness at the cost of compile-mode speedup for these
-signatures.
+  * **training mode** with **p > 0** — `lucid.compile` (forward-only
+    cache via :class:`CompiledModule`) still routes through the
+    standard ``dropout`` op which falls back to eager because the
+    forward path has no place to thread an MPSGraph state buffer.
+    The proper compile path for training-mode dropout lives in
+    :func:`fused_step` (Option-A Phase 1) — that surface uses the
+    sibling ``dropout_stateful`` engine op + MPSGraph's stateful
+    Philox RNG via ``compile_generic_fused_step_with_vars``, giving
+    genuinely-per-dispatch varying masks while the executable still
+    runs entirely on the GPU.
 
 Tests pin both halves of the contract — eval-mode dropout compiles
-cleanly, training-mode dropout falls back without losing the math.
+cleanly, training-mode dropout via :func:`lucid.compile` still falls
+back to eager, and training-mode dropout via :func:`fused_step`
+compiles cleanly + produces randomised outputs across calls.
 """
 
 import lucid
@@ -69,12 +70,20 @@ def test_dropout_zero_prob_compiles_clean() -> None:
     assert_compile_parity(model, x, atol=1e-4, rtol=1e-5)
 
 
-def test_dropout_training_falls_back_to_eager() -> None:
-    """``p > 0`` in training mode triggers eager fallback (RNG-driven mask).
+def test_dropout_training_lucid_compile_still_falls_back_to_eager() -> None:
+    """``lucid.compile()`` (forward-only) still falls back for training dropout.
 
-    The compiled cache should NOT carry a successful executable for
-    this signature — it should be in the eager-only set so future
-    calls skip the recompile attempt.
+    The forward-only :class:`CompiledModule` path uses
+    ``compile_trace`` which has no variable-promotion hook for RNG
+    state, so training-mode dropout there continues to take the eager
+    fallback to preserve mask randomisation across calls.  The
+    sibling ``dropout_stateful`` op exists for the
+    :func:`fused_step` path which DOES have variable promotion —
+    that case is covered by the dedicated test below.
+
+    The compiled cache should therefore NOT carry a successful
+    executable for this signature; it should be in the eager-only
+    set so future calls skip the recompile attempt.
     """
     model = _dropout_model(p=0.5)
     model.train()
@@ -83,11 +92,9 @@ def test_dropout_training_falls_back_to_eager() -> None:
     cm(x)
     cm(x)  # second call to ensure the fallback set is stable
     info = cm.cache_info()
-    # Either nothing was cached (trace aborted before producing a
-    # successful executable) or the signature was blacklisted as
-    # eager-only.  Both indicate correct fallback behaviour.
     assert info["entries"] == 0 or len(info["eager_only"]) > 0, (
-        f"expected eager fallback for training-mode dropout; " f"cache_info={info}"
+        f"expected eager fallback for training-mode dropout via "
+        f"lucid.compile(); cache_info={info}"
     )
 
 

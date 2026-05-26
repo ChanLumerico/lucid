@@ -18,12 +18,14 @@
 
 #include <cmath>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Generator.h"
@@ -115,6 +117,56 @@ std::vector<Storage> DropoutBackward::apply(Storage grad_out) {
 
 TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool training, Generator* gen) {
     return DropoutBackward::forward(a, p, training, gen);
+}
+
+std::pair<TensorImplPtr, TensorImplPtr> dropout_stateful_op(const TensorImplPtr& x,
+                                                            const TensorImplPtr& state_in,
+                                                            double p,
+                                                            bool training,
+                                                            Generator* gen) {
+    Validator::input(x, "dropout_stateful.x").non_null();
+    Validator::input(state_in, "dropout_stateful.state_in").non_null();
+    if (p < 0.0 || p >= 1.0)
+        ErrorBuilder("dropout_stateful").fail("p must be in [0, 1)");
+
+    OpScopeFull scope{"dropout_stateful", x->device(), x->dtype(), x->shape()};
+    scope.set_attr("training", training);
+    scope.set_attr("p", p);
+
+    // Suppress the nested ``dropout_op``'s OpScopeFull from polluting
+    // the trace.  Without this the captured graph would contain a
+    // ``"dropout"`` node nested under our ``"dropout_stateful"`` node
+    // — the MPSGraph emitter would see both, double-emit the mask,
+    // and the compile path would fail consistency checks.
+    auto* saved_tracer = ::lucid::compile::current_tracer();
+    ::lucid::compile::set_current_tracer(nullptr);
+    TensorImplPtr y = dropout_op(x, p, training, gen);
+    ::lucid::compile::set_current_tracer(saved_tracer);
+
+    // ``state_out`` in eager mode is a verbatim clone of ``state_in`` —
+    // Lucid's :class:`Generator` already advances per call, so the
+    // state buffer is purely a trace-recording placeholder.  The
+    // compile path is what mutates it in-place across dispatches via
+    // ``randomTensorWithShape:descriptor:stateTensor:``.
+    Storage cloned = clone_storage(state_in->storage(),
+                                   state_in->numel(),
+                                   state_in->dtype(),
+                                   state_in->device());
+    auto state_out = std::make_shared<TensorImpl>(std::move(cloned),
+                                                  state_in->shape(),
+                                                  state_in->dtype(),
+                                                  state_in->device(),
+                                                  /*requires_grad=*/false);
+
+    // Wire 2 inputs + 2 outputs onto the just-recorded node.
+    // The Tracer's repeat-call multi-output protocol (see Tracer.cpp:
+    // 142-167) handles this — second call appends a fresh TensorMeta.
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({x, state_in}, y);
+        trc->on_op_io({x, state_in}, state_out);
+    }
+
+    return {y, state_out};
 }
 
 LUCID_REGISTER_OP(DropoutBackward)

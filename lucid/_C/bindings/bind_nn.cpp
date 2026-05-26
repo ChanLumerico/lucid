@@ -117,6 +117,39 @@ void register_nn(py::module_& m) {
         "Inverted dropout. Training: y = x · Bernoulli(1-p) / (1-p). "
         "Inference: identity. `generator=None` uses default_generator().");
 
+    // Stateful sibling of :func:`dropout` for the lucid.compile() path.
+    // Takes an explicit Philox-state input and returns (y, new_state) so
+    // the MPSGraph emitter can plumb the stateful Philox RNG via
+    // ``randomTensorWithShape:descriptor:stateTensor:`` — giving
+    // genuinely-per-dispatch varying masks where the stateless seed
+    // path produces dispatch-deterministic ones.
+    //
+    // In eager mode this delegates to the standard ``dropout`` for the
+    // masking math (so distributions match exactly) and returns a clone
+    // of ``state_in`` as the state-out tensor.  Suppresses any nested
+    // tracer recording so the captured graph contains exactly one
+    // ``"dropout_stateful"`` op node.
+    //
+    // The Python wrapper in :file:`lucid/nn/functional/dropout.py` only
+    // routes through this entry when an active tracer is installed and
+    // ``training==True``; eager calls go through :func:`dropout`.
+    m.def(
+        "dropout_stateful",
+        [](const TensorImplPtr& x, const TensorImplPtr& state_in, double p, bool training,
+           py::object gen_obj) {
+            Generator* gen = nullptr;
+            if (!gen_obj.is_none()) {
+                gen = gen_obj.cast<Generator*>();
+            }
+            return dropout_stateful_op(x, state_in, p, training, gen);
+        },
+        py::arg("x"), py::arg("state_in"), py::arg("p"),
+        py::arg("training") = true, py::arg("generator") = py::none(),
+        "Stateful Philox-RNG dropout for the compile path.  Returns "
+        "(y, state_out).  Eager-mode behaviour is identical to "
+        "``dropout`` — the state tensor is a placeholder for trace "
+        "recording.  Use ``dropout`` for eager-only code.");
+
     // dropoutnd zeroes entire channels rather than individual elements;
     // suitable for convolutional feature maps where spatial correlation would
     // make element-wise dropout ineffective.

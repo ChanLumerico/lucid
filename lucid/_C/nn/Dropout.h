@@ -35,6 +35,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "../api.h"
 #include "../autograd/FuncOp.h"
 #include "../core/AmpPolicy.h"
@@ -383,6 +385,63 @@ public:
 // TensorImplPtr
 //     Output tensor of the same shape as ``a``.
 LUCID_API TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool training, Generator* gen);
+
+// Stateful inverted dropout for the compile path — sibling of
+// :func:`dropout_op` that explicitly threads an MPSGraph-Philox state
+// tensor as a second input and returns ``(y, state_out)``.
+//
+// In **eager mode** the function delegates to :func:`dropout_op` for
+// the actual masking (so the result distribution matches the standard
+// dropout op identically) and returns a clone of ``state_in`` as the
+// state-out tensor — Lucid's eager :class:`Generator` already
+// advances per call, so the state buffer is purely a placeholder
+// that exists for the trace recording.  Suppresses any nested tracer
+// recording from the inner ``dropout_op`` call so the trace contains
+// exactly one ``"dropout_stateful"`` op node (not a nested ``"dropout"``
+// underneath it).
+//
+// In the **compile path** the matching MPSGraph emitter consumes the
+// captured op node by calling
+// ``randomTensorWithShape:descriptor:stateTensor:`` — the 2-output
+// stateful Philox API — using ``state_in`` to seed the RNG and binding
+// the new state to ``state_out``.  Across dispatches the state buffer
+// is rotated by the executable (either as an in/out feed pair or
+// promoted to an MPSGraph variable via
+// :func:`compile_generic_fused_step_with_vars`), giving genuinely
+// per-dispatch varying masks where the stateless seed-only path
+// produces dispatch-deterministic ones.
+//
+// Parameters
+// ----------
+// x : TensorImplPtr
+//     Input activations of any shape.
+// state_in : TensorImplPtr
+//     Philox-4x32 state tensor (``int32[7]``).  Initial values are
+//     derived from Lucid's :class:`Generator` on the Python side
+//     (one fresh state per dropout call site at trace time); the
+//     compile path mutates the buffer in-place across dispatches.
+// p : double
+//     Drop probability in $[0, 1)$.
+// training : bool
+//     When ``false``, the eager forward is a pass-through identity
+//     (the trace still records the op so the compile path can decide
+//     whether to emit the masked or identity branch).
+// gen : Generator*
+//     Optional explicit RNG used by the eager fallback; ``nullptr``
+//     selects ``default_generator()``.  Ignored by the compile path.
+//
+// Returns
+// -------
+// std::pair<TensorImplPtr, TensorImplPtr>
+//     ``(y, state_out)`` — masked output of the same shape and dtype
+//     as ``x``; ``state_out`` is the same shape/dtype as ``state_in``
+//     and (in eager mode) carries a verbatim clone of its contents.
+LUCID_API std::pair<TensorImplPtr, TensorImplPtr> dropout_stateful_op(
+    const TensorImplPtr& x,
+    const TensorImplPtr& state_in,
+    double p,
+    bool training,
+    Generator* gen);
 
 // Channel-wise dropout — free-function entry point.
 //
