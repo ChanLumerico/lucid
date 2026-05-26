@@ -288,6 +288,7 @@ set(LUCID_OP_EMITTERS
     compile/OpEmitters/elementwise/Compare.mm
     compile/OpEmitters/elementwise/DtypeCast.mm
     compile/OpEmitters/elementwise/Math.mm
+    compile/OpEmitters/elementwise/Predicate.mm
     compile/OpEmitters/elementwise/Softmax.mm
     compile/OpEmitters/elementwise/Trig.mm
     # reduce/ — collapse one or more axes

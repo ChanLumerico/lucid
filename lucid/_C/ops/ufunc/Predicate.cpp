@@ -22,7 +22,11 @@ namespace {
 
 TensorImplPtr predicate_dispatch(const TensorImplPtr& a, const char* name, int op) {
     Validator::input(a, std::string(name) + ".a").non_null();
-    OpScopeFull scope{name, a->device(), a->dtype(), a->shape()};
+    // OpScopeFull records the output dtype as Bool — not a->dtype() —
+    // so the tracer attaches the correct dtype meta to the emitted
+    // OpNode (otherwise downstream consumers misread the predicate
+    // result as the input's float dtype).
+    OpScopeFull scope{name, a->device(), Dtype::Bool, a->shape()};
     auto& be = backend::Dispatcher::for_device(a->device());
     Storage out;
     if (op == 0)
@@ -31,7 +35,17 @@ TensorImplPtr predicate_dispatch(const TensorImplPtr& a, const char* name, int o
         out = be.isnan(a->storage(), a->shape(), a->dtype());
     else
         out = be.isfinite(a->storage(), a->shape(), a->dtype());
-    return fresh(std::move(out), a->shape(), Dtype::Bool, a->device());
+    auto out_impl = fresh(std::move(out), a->shape(), Dtype::Bool, a->device());
+    // 3.5 Phase 1.3: trace hook — without this, the OpNode lands in
+    // the trace with ``inputs=[]`` and the compile path treats it as
+    // a dead-code header (skipping it entirely).  Downstream
+    // consumers (cast / sum / etc.) then look up a never-bound output
+    // id and silently misbehave (notably: GradScaler's found_inf
+    // detection always reads 0, so overflow steps don't skip update).
+    if (auto* trc = ::lucid::compile::current_tracer()) {
+        trc->on_op_io({a}, out_impl);
+    }
+    return out_impl;
 }
 
 }  // namespace
