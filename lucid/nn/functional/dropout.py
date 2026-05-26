@@ -45,9 +45,7 @@ def _alloc_philox_state(device: DeviceLike) -> Tensor:
     _C_engine.compile.set_current_tracer(None)
     try:
         # int32 max is 2**31 - 1.  Sample over the full positive range.
-        return _lucid.randint(
-            0, 2**31 - 1, (7,), dtype=_lucid.int32, device=device
-        )
+        return _lucid.randint(0, 2**31 - 1, (7,), dtype=_lucid.int32, device=device)
     finally:
         _C_engine.compile.set_current_tracer(saved_tracer)
 

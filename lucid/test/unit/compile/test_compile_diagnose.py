@@ -24,7 +24,6 @@ from lucid.compile import DiagnosisReport, OpInfo, diagnose
 
 from lucid.test.unit.compile._helpers import COMPILE_DEVICE, metal_tensor
 
-
 # ── DiagnosisReport shape ───────────────────────────────────────────
 
 
@@ -109,9 +108,7 @@ def test_diagnose_var_is_uncovered_with_sample_shape() -> None:
 
     rpt = diagnose(fn, x)
     uncov_names = {i.name for i in rpt.uncovered}
-    assert "var" in uncov_names, (
-        f"var should appear in uncovered; got {uncov_names}"
-    )
+    assert "var" in uncov_names, f"var should appear in uncovered; got {uncov_names}"
     # Recommendation mentions both the op name and the LUCID_MANUAL_VJP_*
     # env-var pointers the user should try next.
     assert "var" in rpt.recommendation
@@ -205,6 +202,4 @@ def test_debug_env_var_emits_structured_stderr_on_gap() -> None:
             f"expected the bracketed marker [lucid.compile manual_vjp] in "
             f"stderr but got:\n{err}"
         )
-        assert "verdict:" in err, (
-            f"expected fallback verdict line; got:\n{err}"
-        )
+        assert "verdict:" in err, f"expected fallback verdict line; got:\n{err}"

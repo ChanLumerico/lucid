@@ -79,6 +79,7 @@ def _is_fused_step_tracing() -> bool:
     """Return True while inside ``_FusedStep._build_executable``'s trace."""
     return bool(getattr(_tls, "active", False))
 
+
 # Hot-path imports — hoisted out of ``_FusedStep._run`` so the
 # per-call ``from ... import _unwrap`` / ``import lucid as _lucid``
 # bookkeeping (≈ 30-50 μs on M-series) doesn't run every training
@@ -488,10 +489,11 @@ class _FusedStep:
         # re-initialised on every dispatch and every call would emit
         # the same mask (the very regression the prior X2 prototype
         # ran into — see ``test_dropout_training_produces_random_outputs``).
-        _use_vars = (
-            _os.environ.get("LUCID_COMPILE_VARS", "0") in ("1", "true", "True")
-            or bool(dropout_state_target_pairs)
-        )
+        _use_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in (
+            "1",
+            "true",
+            "True",
+        ) or bool(dropout_state_target_pairs)
         if _use_vars:
             # Build (feed_id, write_id) pairs: each parameter feed
             # becomes a variable, paired with the matching opt-output
@@ -627,9 +629,7 @@ class _FusedStep:
                     "fused_step: dropout state feed id "
                     f"{_state_in_tid} not in external_feeds"
                 )
-            self._output_targets.append(
-                _TensorT_for_state(_impl, requires_grad=False)
-            )
+            self._output_targets.append(_TensorT_for_state(_impl, requires_grad=False))
 
         if len(self._output_targets) != len(output_target_ids):
             raise RuntimeError(

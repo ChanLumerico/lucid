@@ -48,8 +48,9 @@ def _build_optimizer(model: nn.Module) -> optim.SGD:
     )
 
 
-def _trajectory(model: nn.Module, opt_factory, x: lucid.Tensor, t: lucid.Tensor,
-                 steps: int) -> list[float]:
+def _trajectory(
+    model: nn.Module, opt_factory, x: lucid.Tensor, t: lucid.Tensor, steps: int
+) -> list[float]:
     opt = opt_factory(model)
     losses: list[float] = []
     for _ in range(steps):
@@ -61,8 +62,9 @@ def _trajectory(model: nn.Module, opt_factory, x: lucid.Tensor, t: lucid.Tensor,
     return losses
 
 
-def _trajectory_compiled(model: nn.Module, opt_factory, x: lucid.Tensor,
-                          t: lucid.Tensor, steps: int) -> list[float]:
+def _trajectory_compiled(
+    model: nn.Module, opt_factory, x: lucid.Tensor, t: lucid.Tensor, steps: int
+) -> list[float]:
     opt = opt_factory(model)
     copt = compile_optimizer(opt)
     losses: list[float] = []
