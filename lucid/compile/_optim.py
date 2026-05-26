@@ -2000,8 +2000,8 @@ class _CompiledASGD(_CompiledStepBase):
 
     ``ax`` is the Polyak–Ruppert running average buffer — held as a
     state tensor but never mixed back into the model's parameters
-    (matches PyTorch's behaviour: the average is a separate tensor
-    available via the state dict).
+    (matches the reference framework's behaviour: the average is a
+    separate tensor available via the state dict).
 
     State buffers
     -------------
@@ -2032,10 +2032,11 @@ class _CompiledASGD(_CompiledStepBase):
         self._t0 = float(g.get("t0", 1e6))
         self._weight_decay = float(g.get("weight_decay", 0.0))
         self._ax = [_zeros_like(p) for p in self._params]
-        # Initialise ax to the current param value (PyTorch ASGD does
-        # this lazily on first call — we eager-allocate here so the
-        # graph has a stable input tensor).  At t=0 the ax = param
-        # initialisation makes the first averaging step a no-op.
+        # Initialise ax to the current param value (the reference
+        # framework's ASGD does this lazily on first call — we
+        # eager-allocate here so the graph has a stable input tensor).
+        # At t=0 the ax = param initialisation makes the first
+        # averaging step a no-op.
         import lucid as _lucid
 
         with _lucid.no_grad():
@@ -2070,7 +2071,7 @@ class _CompiledASGD(_CompiledStepBase):
         Mirrors Lucid's eager ASGD (``ASGD::update_one`` in
         ``lucid/_C/optim/SGD.cpp``): the running-average update only
         fires once ``step >= t0``, and the coefficient is
-        ``1/(α·t+1)`` (NOT the PyTorch reference's
+        ``1/(α·t+1)`` (NOT the reference framework's
         ``1/max(1, t-t0)``).
         """
         import lucid as _lucid
@@ -2098,8 +2099,8 @@ class _CompiledASGD(_CompiledStepBase):
         for i, (p, g) in enumerate(zip(params, grads)):
             if self._weight_decay != 0.0:
                 g = g + self._weight_decay * p
-            # Fixed-lr SGD step — Lucid's eager ASGD does NOT use the
-            # PyTorch-style time-decaying learning rate.
+            # Fixed-lr SGD step — Lucid's eager ASGD does NOT use
+            # the reference framework's time-decaying learning rate.
             new_p = p - self._lr * g
             # Gated Polyak running average — when ``coef == 0`` (the
             # ``t < t0`` warmup phase), this collapses to

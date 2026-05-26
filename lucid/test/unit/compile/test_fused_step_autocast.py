@@ -23,11 +23,12 @@ items 1-3 above were already in place from prior phases.
 Known limitations (documented for follow-up):
 - BatchNorm under autocast in fused_step fails (`emitter
   'batch_norm' returned false`).  The BN op's AmpPolicy is
-  ``KeepInput`` (vs ForceFP32 in PyTorch) which casts BN inputs
-  to F16 — the compile-path BN emitter doesn't support F16
-  inputs.  Worked around in production by using LayerNorm
-  (transformer pattern) or by manually disabling autocast around
-  BN modules.  Tracked as a separate AMP coverage gap.
+  ``KeepInput`` (vs ``ForceFP32`` in the reference framework)
+  which casts BN inputs to F16 — the compile-path BN emitter
+  doesn't support F16 inputs.  Worked around in production by
+  using LayerNorm (transformer pattern) or by manually disabling
+  autocast around BN modules.  Tracked as a separate AMP
+  coverage gap.
 - GradScaler (X4.3) — not integrated; the basic mixed-dtype
   fused_step is numerically stable for many models without it,
   but production AMP training typically needs it for F16

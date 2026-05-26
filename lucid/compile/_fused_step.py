@@ -505,10 +505,11 @@ class _FusedStep:
         # the variable-promotion machinery downstream).
         #
         # AMP scoping (X4.4): the user may wrap the entire
-        # ``step(x, t)`` call in ``with autocast()``.  Per the standard
-        # PyTorch convention, autocast applies only to forward + loss
-        # — backward and optimizer.step run on F32 master weights so
-        # the update math stays numerically stable.  We split the
+        # ``step(x, t)`` call in ``with autocast()``.  Per the
+        # canonical AMP convention, autocast applies only to
+        # forward + loss — backward and optimizer.step run on F32
+        # master weights so the update math stays numerically
+        # stable.  We split the
         # scope explicitly here: the captured ``with _tracing()``
         # block respects the user's autocast for model + loss (so
         # the trace records the right ``astype`` casts that the

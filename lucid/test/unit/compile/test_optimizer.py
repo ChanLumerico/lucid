@@ -228,8 +228,7 @@ def test_compile_optimizer_lbfgs_convergence() -> None:
         losses.append(float(loss.item()))
 
     assert losses[-1] < losses[0], (
-        f"LBFGS compile path failed to converge over 5 steps; "
-        f"losses = {losses}"
+        f"LBFGS compile path failed to converge over 5 steps; " f"losses = {losses}"
     )
 
 

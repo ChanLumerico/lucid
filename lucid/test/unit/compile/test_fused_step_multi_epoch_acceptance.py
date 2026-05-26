@@ -1,11 +1,11 @@
 """Multi-epoch end-to-end acceptance for fused_step (P4 closure).
 
 Acceptance gate for the "compile path produces correct training
-dynamics over many steps" claim from
-[[arch-compile-parity-vs-torch-mps]] §6 P4.  Per-op tests pin
-correctness of individual VJPs at single-step level; this test
-chains 100 SGD steps and asserts that the compiled training
-trajectory matches eager within tolerance.
+dynamics over many steps" claim from the compile-parity
+architecture note (§6 P4 — see ``obsidian/architecture/``).
+Per-op tests pin correctness of individual VJPs at single-step
+level; this test chains 100 SGD steps and asserts that the
+compiled training trajectory matches eager within tolerance.
 
 Two workloads covered:
 1. MLP (3-layer Linear+ReLU) — guaranteed-supported path
