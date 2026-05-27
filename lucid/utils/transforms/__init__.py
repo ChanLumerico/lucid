@@ -50,13 +50,25 @@ from lucid.utils.transforms._geometric import (
     SmallestMaxSize,
     VerticalFlip,
 )
+from lucid.utils.transforms._crop import (
+    Crop,
+    CropAndPad,
+    PadIfNeeded,
+    RandomSizedCrop,
+)
 from lucid.utils.transforms._distortion import (
     ElasticTransform,
     GridDistortion,
     OpticalDistortion,
 )
+from lucid.utils.transforms._dropout import CoarseDropout, GridDropout
 from lucid.utils.transforms._interpolation import Interpolation
-from lucid.utils.transforms._photometric import ColorJitter, Normalize
+from lucid.utils.transforms._photometric import (
+    ColorJitter,
+    FromFloat,
+    Normalize,
+    ToFloat,
+)
 from lucid.utils.transforms._presets import ImageClassification
 from lucid.utils.transforms._spatial import (
     Affine,
@@ -103,7 +115,17 @@ __all__ = [
     "ElasticTransform",
     "GridDistortion",
     "OpticalDistortion",
-    # Photometric
+    # Geometric — crop / pad
+    "Crop",
+    "PadIfNeeded",
+    "RandomSizedCrop",
+    "CropAndPad",
+    # Dropout / occlusion
+    "CoarseDropout",
+    "GridDropout",
+    # Photometric — value scaling
+    "ToFloat",
+    "FromFloat",
     "Normalize",
     "ColorJitter",
     # Presets

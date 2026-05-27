@@ -34,6 +34,56 @@ class ColorJitterParams:
 # ── deterministic ───────────────────────────────────────────────────
 
 
+class ToFloat(_NoParams, PhotometricTransform[Empty]):
+    r"""Scale an integer-range image to ``[0, 1]`` (Albumentations ``ToFloat``).
+
+    Parameters
+    ----------
+    max_value : float, optional, default=255.0
+        Value the image is divided by.
+    p : float, optional, default=1.0
+    """
+
+    def __init__(self, max_value: float = 255.0, p: float = 1.0) -> None:
+        super().__init__(p=p)
+        self.max_value = max_value
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        return img / self.max_value
+
+    def __repr__(self) -> str:
+        return f"ToFloat(max_value={self.max_value}, p={self.p})"
+
+
+class FromFloat(_NoParams, PhotometricTransform[Empty]):
+    r"""Scale a ``[0, 1]`` image back up by ``max_value`` (Albumentations ``FromFloat``).
+
+    Parameters
+    ----------
+    max_value : float, optional, default=255.0
+    p : float, optional, default=1.0
+
+    Notes
+    -----
+    Stays in floating point (Lucid keeps a float tensor); the Albu
+    ``dtype`` argument is accepted for signature parity but the result
+    is not re-quantized.
+    """
+
+    def __init__(
+        self, max_value: float = 255.0, dtype: str = "uint8", p: float = 1.0
+    ) -> None:
+        super().__init__(p=p)
+        self.max_value = max_value
+        self.dtype = dtype
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        return img * self.max_value
+
+    def __repr__(self) -> str:
+        return f"FromFloat(max_value={self.max_value}, p={self.p})"
+
+
 class Normalize(_NoParams, PhotometricTransform[Empty]):
     r"""Normalize an image (Albumentations ``Normalize``).
 
