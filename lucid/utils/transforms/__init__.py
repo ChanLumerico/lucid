@@ -50,6 +50,16 @@ from lucid.utils.transforms._geometric import (
     SmallestMaxSize,
     VerticalFlip,
 )
+from lucid.utils.transforms._blur import (
+    Blur,
+    Downscale,
+    GaussianBlur,
+    GaussNoise,
+    ISONoise,
+    MedianBlur,
+    MotionBlur,
+    MultiplicativeNoise,
+)
 from lucid.utils.transforms._color import (
     CLAHE,
     ChannelDropout,
@@ -163,6 +173,15 @@ __all__ = [
     "Sharpen",
     "Emboss",
     "RandomToneCurve",
+    # Blur / noise
+    "Blur",
+    "MedianBlur",
+    "MotionBlur",
+    "GaussianBlur",
+    "GaussNoise",
+    "MultiplicativeNoise",
+    "ISONoise",
+    "Downscale",
     # Presets
     "ImageClassification",
     # Functional submodule
