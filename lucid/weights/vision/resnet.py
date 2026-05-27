@@ -13,12 +13,6 @@ from lucid.weights._transforms import ImageClassification
 
 _HUB = "https://huggingface.co/lucid-dl"
 
-# NOTE(weights-upload): ``sha256`` is filled in once the converted
-# checkpoint is uploaded to the Hub (see ``tools/convert_weights``).
-# Until then the enum structure + resolution work, but a live
-# ``pretrained=True`` download will fail SHA verification by design.
-_PENDING_SHA = ""
-
 
 @register_weights("resnet_18")
 class ResNet18Weights(WeightsEnum):
@@ -26,17 +20,15 @@ class ResNet18Weights(WeightsEnum):
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{_HUB}/resnet-18/resolve/main/IMAGENET1K_V1/model.safetensors",
-        sha256=_PENDING_SHA,
+        sha256="bb7eab3083c24be6364e32f1d37844a00c5e500fa48a83a91f750a7621d152cb",
         num_classes=1000,
         transforms=ImageClassification(crop_size=224, resize_size=256),
         meta={
             "tag": "IMAGENET1K_V1",
             "source": "torchvision/ResNet18_Weights.IMAGENET1K_V1",
             "license": "bsd-3-clause",
-            "recipe": (
-                "https://github.com/pytorch/vision/tree/main/"
-                "references/classification#resnet"
-            ),
+            # Full provenance (training recipe URL etc.) lives in the
+            # Hub config.json; kept out of runtime source per H5.
             "num_params": 11_689_512,
             "gflops": 1.814,
             "file_size_mb": 44.7,
