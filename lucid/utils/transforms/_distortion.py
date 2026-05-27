@@ -244,3 +244,49 @@ class OpticalDistortion(_DisplacementTransform):
             f"OpticalDistortion(distort_limit={self.distort_limit}, "
             f"shift_limit={self.shift_limit}, p={self.p})"
         )
+
+
+class GridElasticDeform(_DisplacementTransform):
+    r"""Grid-based elastic deformation (Albumentations ``GridElasticDeform``).
+
+    Displaces a coarse ``num_grid_xy`` control grid by up to ``magnitude``
+    pixels and upsamples it to a smooth displacement field.
+
+    Parameters
+    ----------
+    num_grid_xy : (int, int), optional, default=(4, 4)
+        Control-grid resolution (x, y).
+    magnitude : int, optional, default=10
+        Max control-point displacement in pixels.
+    interpolation : int or str or Interpolation, optional, default=1
+    p : float, optional, default=0.5
+    """
+
+    def __init__(
+        self,
+        num_grid_xy: tuple[int, int] = (4, 4),
+        magnitude: int = 10,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.num_grid_xy = num_grid_xy
+        self.magnitude = magnitude
+        self.interpolation = as_interpolation(interpolation)
+
+    def make_params(self, img: Tensor) -> DispParams:
+        from lucid.nn.functional import interpolate
+
+        h, w = F._spatial_hw(img)
+        gx, gy = self.num_grid_xy[0] + 1, self.num_grid_xy[1] + 1
+        cdx = [[_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)] for _ in range(gy)]
+        cdy = [[_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)] for _ in range(gy)]
+        dx = interpolate(lucid.tensor(cdx).reshape(1, 1, gy, gx), size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        dy = interpolate(lucid.tensor(cdy).reshape(1, 1, gy, gx), size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        return DispParams(dx=dx, dy=dy, out_hw=(h, w))
+
+    def __repr__(self) -> str:
+        return (
+            f"GridElasticDeform(num_grid_xy={self.num_grid_xy}, "
+            f"magnitude={self.magnitude}, p={self.p})"
+        )

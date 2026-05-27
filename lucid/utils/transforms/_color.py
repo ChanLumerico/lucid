@@ -299,7 +299,9 @@ class Solarize(PhotometricTransform[ScalarParams]):
         self, threshold: float | tuple[float, float] = 128, p: float = 0.5
     ) -> None:
         super().__init__(p=p)
-        self.threshold = (threshold, threshold) if isinstance(threshold, (int, float)) else threshold
+        self.threshold = (
+            (threshold, threshold) if isinstance(threshold, (int, float)) else threshold
+        )
 
     def make_params(self, img: Tensor) -> ScalarParams:
         return ScalarParams(value=_random.uniform(*self.threshold) / 255.0)
@@ -324,7 +326,7 @@ class Posterize(PhotometricTransform[Empty]):
         return NO_PARAMS
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        levels = float(2 ** self.num_bits)
+        levels = float(2**self.num_bits)
         return lucid.floor(lucid.clip(img, 0.0, 1.0) * levels) / levels
 
     def __repr__(self) -> str:
@@ -467,3 +469,220 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
 
     def __repr__(self) -> str:
         return f"RandomToneCurve(scale={self.scale}, p={self.p})"
+
+
+# ── B8: additional colour / pixel transforms ────────────────────────
+
+
+class RandomBrightness(PhotometricTransform[ScalarParams]):
+    r"""Random brightness only (Albumentations ``RandomBrightness``)."""
+
+    def __init__(self, limit: float | tuple[float, float] = 0.2, p: float = 0.5) -> None:
+        super().__init__(p=p)
+        self.limit = _rng(limit)
+
+    def make_params(self, img: Tensor) -> ScalarParams:
+        return ScalarParams(value=_random.uniform(*self.limit))
+
+    def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
+        return lucid.clip(img + params.value, 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"RandomBrightness(limit={self.limit}, p={self.p})"
+
+
+class RandomContrast(PhotometricTransform[ScalarParams]):
+    r"""Random contrast only (Albumentations ``RandomContrast``)."""
+
+    def __init__(self, limit: float | tuple[float, float] = 0.2, p: float = 0.5) -> None:
+        super().__init__(p=p)
+        self.limit = _rng(limit)
+
+    def make_params(self, img: Tensor) -> ScalarParams:
+        return ScalarParams(value=_random.uniform(*self.limit))
+
+    def _apply_image(self, img: Tensor, params: ScalarParams) -> Tensor:
+        return lucid.clip(img * (1.0 + params.value), 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"RandomContrast(limit={self.limit}, p={self.p})"
+
+
+class UnsharpMask(PhotometricTransform[TripletParams]):
+    r"""Unsharp masking — sharpen via ``img + alpha*(img - blur)`` (Albu ``UnsharpMask``)."""
+
+    def __init__(
+        self,
+        blur_limit: tuple[int, int] = (3, 7),
+        sigma_limit: float | tuple[float, float] = 0.0,
+        alpha: tuple[float, float] = (0.2, 0.5),
+        threshold: float = 10.0,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.blur_limit = blur_limit
+        self.sigma_limit = (0.0, sigma_limit) if isinstance(sigma_limit, (int, float)) else sigma_limit
+        self.alpha = alpha
+        self.threshold = threshold
+
+    def make_params(self, img: Tensor) -> TripletParams:
+        from lucid.utils.transforms._blur import _odd
+
+        k = _odd(_random.randint(self.blur_limit[0], self.blur_limit[1] + 1))
+        sigma = _random.uniform(self.sigma_limit[0], self.sigma_limit[1])
+        if sigma <= 0.0:
+            sigma = 0.3 * ((k - 1) * 0.5 - 1.0) + 0.8
+        return TripletParams(a=_random.uniform(*self.alpha), b=float(k), c=sigma)
+
+    def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
+        blur = F.gaussian_blur(img, params.c, ksize=int(params.b))
+        return lucid.clip(img + params.a * (img - blur), 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"UnsharpMask(blur_limit={self.blur_limit}, alpha={self.alpha}, p={self.p})"
+
+
+class RingingOvershoot(PhotometricTransform[Empty]):
+    r"""Ringing overshoot via a high-pass kernel blend (Albu ``RingingOvershoot``)."""
+
+    def __init__(
+        self, blur_limit: tuple[int, int] = (7, 15), p: float = 0.5
+    ) -> None:
+        super().__init__(p=p)
+        self.blur_limit = blur_limit
+
+    def make_params(self, img: Tensor) -> Empty:
+        from lucid.utils.transforms._base import NO_PARAMS
+
+        return NO_PARAMS
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        # Approximate ringing with a sharpening (high-pass) kernel.
+        kernel = [[0.0, -0.25, 0.0], [-0.25, 2.0, -0.25], [0.0, -0.25, 0.0]]
+        return lucid.clip(F.depthwise_conv2d(img, kernel), 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"RingingOvershoot(blur_limit={self.blur_limit}, p={self.p})"
+
+
+class FancyPCA(PhotometricTransform[Empty]):
+    r"""AlexNet-style PCA colour augmentation (Albumentations ``FancyPCA``)."""
+
+    def __init__(self, alpha: float = 0.1, p: float = 0.5) -> None:
+        super().__init__(p=p)
+        self.alpha = alpha
+
+    def make_params(self, img: Tensor) -> Empty:
+        from lucid.utils.transforms._base import NO_PARAMS
+
+        return NO_PARAMS
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        self._require_channels(img, 3)
+        c = 3
+        flat = img.reshape(c, -1)  # (3, N)
+        mean = lucid.mean(flat, dim=[1], keepdim=True)
+        centered = flat - mean
+        cov = lucid.matmul(centered, lucid.swapaxes(centered, 0, 1)) / float(flat.shape[1])  # type: ignore[arg-type]
+        evals, evecs = lucid.linalg.eigh(cov)
+        alphas = [self.alpha * _random.uniform(-1.0, 1.0) for _ in range(c)]
+        scaled = lucid.tensor([alphas[i] for i in range(c)], dtype=img.dtype).reshape(c, 1) * evals.reshape(c, 1)
+        delta = lucid.matmul(evecs, scaled).reshape(c, 1, 1)  # (3,1,1)
+        if img.ndim == 4:
+            delta = delta[None]
+        return lucid.clip(img + delta, 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"FancyPCA(alpha={self.alpha}, p={self.p})"
+
+
+@dataclass(frozen=True)
+class PixelMaskParams:
+    mask: Tensor
+
+
+class PixelDropout(PhotometricTransform[PixelMaskParams]):
+    r"""Randomly set pixels to ``drop_value`` (Albumentations ``PixelDropout``)."""
+
+    def __init__(
+        self,
+        dropout_prob: float = 0.01,
+        per_channel: bool = False,
+        drop_value: float = 0.0,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.dropout_prob = dropout_prob
+        self.per_channel = per_channel
+        self.drop_value = drop_value
+
+    def make_params(self, img: Tensor) -> PixelMaskParams:
+        c, h, w = int(img.shape[-3]), *F._spatial_hw(img)
+        shape = (c, h, w) if self.per_channel else (1, h, w)
+        keep = (lucid.rand(*shape) >= self.dropout_prob).to(img.dtype)
+        return PixelMaskParams(mask=keep)
+
+    def _apply_image(self, img: Tensor, params: PixelMaskParams) -> Tensor:
+        keep = params.mask[None] if img.ndim == 4 else params.mask
+        return img * keep + self.drop_value * (1.0 - keep)
+
+    def __repr__(self) -> str:
+        return f"PixelDropout(dropout_prob={self.dropout_prob}, p={self.p})"
+
+
+@dataclass(frozen=True)
+class BandParams:
+    rows: tuple[tuple[int, int], ...]
+    cols: tuple[tuple[int, int], ...]
+
+
+class XYMasking(PhotometricTransform[BandParams]):
+    r"""Mask random horizontal + vertical bands (Albumentations ``XYMasking``)."""
+
+    def __init__(
+        self,
+        num_masks_x: int = 0,
+        num_masks_y: int = 0,
+        mask_x_length: int = 10,
+        mask_y_length: int = 10,
+        fill_value: float = 0.0,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.num_masks_x = num_masks_x
+        self.num_masks_y = num_masks_y
+        self.mask_x_length = mask_x_length
+        self.mask_y_length = mask_y_length
+        self.fill_value = fill_value
+
+    def make_params(self, img: Tensor) -> BandParams:
+        h, w = F._spatial_hw(img)
+        cols = tuple(
+            (lambda s: (s, min(s + self.mask_x_length, w)))(_random.randint(0, max(w - 1, 1)))
+            for _ in range(self.num_masks_x)
+        )
+        rows = tuple(
+            (lambda s: (s, min(s + self.mask_y_length, h)))(_random.randint(0, max(h - 1, 1)))
+            for _ in range(self.num_masks_y)
+        )
+        return BandParams(rows=rows, cols=cols)
+
+    def _apply_image(self, img: Tensor, params: BandParams) -> Tensor:
+        h, w = F._spatial_hw(img)
+        keep = lucid.ones(1, h, w, dtype=img.dtype)
+        for r0, r1 in params.rows:
+            band = F.pad(lucid.zeros(1, r1 - r0, w, dtype=img.dtype),
+                         (0, 0, r0, h - r1), value=1.0)
+            keep = keep * band
+        for c0, c1 in params.cols:
+            band = F.pad(lucid.zeros(1, h, c1 - c0, dtype=img.dtype),
+                         (c0, w - c1, 0, 0), value=1.0)
+            keep = keep * band
+        keep_b = keep[None] if img.ndim == 4 else keep
+        return img * keep_b + self.fill_value * (1.0 - keep_b)
+
+    def __repr__(self) -> str:
+        return (
+            f"XYMasking(num_masks_x={self.num_masks_x}, "
+            f"num_masks_y={self.num_masks_y}, p={self.p})"
+        )

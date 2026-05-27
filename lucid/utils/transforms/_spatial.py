@@ -392,3 +392,210 @@ class Perspective(_WarpTransform):
 
     def __repr__(self) -> str:
         return f"Perspective(scale={self.scale}, p={self.p})"
+
+
+# ── B8: additional spatial transforms ───────────────────────────────
+
+
+@dataclass(frozen=True)
+class ScaleParam:
+    new_h: int
+    new_w: int
+
+
+class RandomScale(GeometricTransform[ScaleParam]):
+    r"""Resize by a random factor, aspect preserved (Albumentations ``RandomScale``)."""
+
+    def __init__(
+        self,
+        scale_limit: float | tuple[float, float] = 0.1,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.scale_limit = _to_range(scale_limit)
+        self.interpolation = as_interpolation(interpolation)
+
+    def make_params(self, img: Tensor) -> ScaleParam:
+        h, w = F._spatial_hw(img)
+        f = 1.0 + _random.uniform(self.scale_limit[0], self.scale_limit[1])
+        return ScaleParam(new_h=max(int(round(h * f)), 1), new_w=max(int(round(w * f)), 1))
+
+    def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
+        return F.resize(img, (params.new_h, params.new_w), interpolation=self.interpolation)
+
+    def _apply_mask(self, mask: Tensor, params: ScaleParam) -> Tensor:
+        return F.resize(mask, (params.new_h, params.new_w), interpolation=Interpolation.NEAREST)
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: ScaleParam) -> BoundingBoxes:
+        from lucid.utils.transforms._datatypes import resize_boxes
+
+        return resize_boxes(boxes, params.new_h, params.new_w)
+
+    def _apply_keypoints(self, kps: Keypoints, params: ScaleParam) -> Keypoints:
+        from lucid.utils.transforms._datatypes import resize_keypoints
+
+        return resize_keypoints(kps, params.new_h, params.new_w)
+
+    def __repr__(self) -> str:
+        return f"RandomScale(scale_limit={self.scale_limit}, p={self.p})"
+
+
+@dataclass(frozen=True)
+class D4Param:
+    k: int  # number of 90° rotations
+    flip: bool  # then horizontal flip
+
+
+class D4(GeometricTransform[D4Param]):
+    r"""Random element of the dihedral group D4 (Albumentations ``D4``).
+
+    The 8 symmetries of a square = ``rot90^k`` (k∈0..3) optionally
+    followed by a horizontal flip.
+    """
+
+    def __init__(self, p: float = 1.0) -> None:
+        super().__init__(p=p)
+
+    def make_params(self, img: Tensor) -> D4Param:
+        g = _random.randint(0, 8)
+        return D4Param(k=g % 4, flip=g >= 4)
+
+    def _apply_image(self, img: Tensor, params: D4Param) -> Tensor:
+        out = lucid.rot90(img, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        return F.hflip(out) if params.flip else out
+
+    def _apply_mask(self, mask: Tensor, params: D4Param) -> Tensor:
+        out = lucid.rot90(mask, params.k, dims=(-2, -1))  # type: ignore[arg-type]
+        return F.hflip(out) if params.flip else out
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: D4Param) -> BoundingBoxes:
+        from lucid.utils.transforms._datatypes import flip_boxes
+
+        out = rot90_boxes(boxes, params.k)
+        return flip_boxes(out, horizontal=True) if params.flip else out
+
+    def _apply_keypoints(self, kps: Keypoints, params: D4Param) -> Keypoints:
+        from lucid.utils.transforms._datatypes import flip_keypoints
+
+        out = rot90_keypoints(kps, params.k)
+        return flip_keypoints(out, horizontal=True) if params.flip else out
+
+    def __repr__(self) -> str:
+        return f"D4(p={self.p})"
+
+
+class SafeRotate(_WarpTransform):
+    r"""Rotate by a random angle, expanding the canvas to keep all content.
+
+    Albumentations ``SafeRotate``.
+    """
+
+    def __init__(
+        self,
+        limit: float | tuple[float, float] = 90,
+        interpolation: int | str | Interpolation = 1,
+        border_mode: int = 4,
+        value: float = 0.0,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.limit = _to_range(limit)
+        self.interpolation = as_interpolation(interpolation)
+        self.border_mode = border_mode
+        self.value = value
+
+    def make_params(self, img: Tensor) -> WarpParams:
+        import math
+
+        h, w = F._spatial_hw(img)
+        angle = _random.uniform(self.limit[0], self.limit[1])
+        rad = abs(math.radians(angle))
+        cos, sin = abs(math.cos(rad)), abs(math.sin(rad))
+        new_w = int(round(w * cos + h * sin))
+        new_h = int(round(w * sin + h * cos))
+        # Rotate about the old center, then translate into the new canvas.
+        rot = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
+        shift = F.affine_matrix(
+            cx=0.0, cy=0.0,
+            translate_x=(new_w - w) / 2.0, translate_y=(new_h - h) / 2.0,
+        )
+        matrix = lucid.matmul(shift, rot)
+        return WarpParams(matrix=matrix, out_hw=(new_h, new_w))
+
+    def __repr__(self) -> str:
+        return f"SafeRotate(limit={self.limit}, p={self.p})"
+
+
+@dataclass(frozen=True)
+class ShuffleParam:
+    perm: tuple[int, ...]
+    grid: tuple[int, int]
+
+
+class RandomGridShuffle(GeometricTransform[ShuffleParam]):
+    r"""Split into a grid and shuffle the cells (Albumentations ``RandomGridShuffle``).
+
+    Parameters
+    ----------
+    grid : (int, int), optional, default=(3, 3)
+        Number of cells (rows, cols).
+    p : float, optional, default=0.5
+    """
+
+    def __init__(self, grid: tuple[int, int] = (3, 3), p: float = 0.5) -> None:
+        super().__init__(p=p)
+        self.grid = grid
+
+    def make_params(self, img: Tensor) -> ShuffleParam:
+        n = self.grid[0] * self.grid[1]
+        perm = list(range(n))
+        for i in range(n - 1, 0, -1):
+            j = _random.randint(0, i + 1)
+            perm[i], perm[j] = perm[j], perm[i]
+        return ShuffleParam(perm=tuple(perm), grid=self.grid)
+
+    def _bounds(self, n: int, total: int) -> list[tuple[int, int]]:
+        step = total // n
+        edges = [i * step for i in range(n)] + [total]
+        return [(edges[i], edges[i + 1]) for i in range(n)]
+
+    def _shuffle(self, x: Tensor, params: ShuffleParam) -> Tensor:
+        gh, gw = params.grid
+        h, w = F._spatial_hw(x)
+        rb = self._bounds(gh, h)
+        cb = self._bounds(gw, w)
+        # Source cells in row-major order.
+        cells = [(r, c) for r in range(gh) for c in range(gw)]
+        rows_out = []
+        for r in range(gh):
+            row_imgs = []
+            for c in range(gw):
+                dst = r * gw + c
+                src = params.perm[dst]
+                sr, sc = cells[src]
+                (s0, s1), (t0, t1) = rb[sr], cb[sc]
+                patch = x[..., s0:s1, t0:t1]
+                # resize patch to the destination cell's size
+                d_h = rb[r][1] - rb[r][0]
+                d_w = cb[c][1] - cb[c][0]
+                if (s1 - s0, t1 - t0) != (d_h, d_w):
+                    patch = F.resize(patch, (d_h, d_w), interpolation="nearest")
+                row_imgs.append(patch)
+            rows_out.append(F._cat(row_imgs, -1))
+        return F._cat(rows_out, -2)
+
+    def _apply_image(self, img: Tensor, params: ShuffleParam) -> Tensor:
+        return self._shuffle(img, params)
+
+    def _apply_mask(self, mask: Tensor, params: ShuffleParam) -> Tensor:
+        return self._shuffle(mask, params)
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: ShuffleParam) -> BoundingBoxes:
+        return boxes  # box semantics under cell-shuffle are ill-defined
+
+    def _apply_keypoints(self, kps: Keypoints, params: ShuffleParam) -> Keypoints:
+        return kps
+
+    def __repr__(self) -> str:
+        return f"RandomGridShuffle(grid={self.grid}, p={self.p})"

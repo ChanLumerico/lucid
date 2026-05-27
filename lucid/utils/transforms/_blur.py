@@ -279,3 +279,75 @@ class Downscale(PhotometricTransform[ScaleParam]):
             f"Downscale(scale_min={self.scale_min}, scale_max={self.scale_max}, "
             f"p={self.p})"
         )
+
+
+# ── B8: defocus / zoom blur ─────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RadiusParam:
+    radius: int
+
+
+class Defocus(PhotometricTransform[RadiusParam]):
+    r"""Disk-kernel (out-of-focus) blur (Albumentations ``Defocus``)."""
+
+    def __init__(
+        self, radius: tuple[int, int] = (3, 10), p: float = 0.5
+    ) -> None:
+        super().__init__(p=p)
+        self.radius = radius
+
+    def make_params(self, img: Tensor) -> RadiusParam:
+        return RadiusParam(radius=_random.randint(self.radius[0], self.radius[1] + 1))
+
+    def _apply_image(self, img: Tensor, params: RadiusParam) -> Tensor:
+        r = params.radius
+        k = 2 * r + 1
+        disk = [
+            [1.0 if (i - r) ** 2 + (j - r) ** 2 <= r * r else 0.0 for j in range(k)]
+            for i in range(k)
+        ]
+        total = sum(sum(row) for row in disk) or 1.0
+        disk = [[v / total for v in row] for row in disk]
+        return F.depthwise_conv2d(img, disk)
+
+    def __repr__(self) -> str:
+        return f"Defocus(radius={self.radius}, p={self.p})"
+
+
+@dataclass(frozen=True)
+class ZoomParam:
+    factor: float
+
+
+class ZoomBlur(PhotometricTransform[ZoomParam]):
+    r"""Zoom blur — average of progressively zoomed copies (Albu ``ZoomBlur``)."""
+
+    def __init__(
+        self,
+        max_factor: float = 1.31,
+        step_factor: tuple[float, float] = (0.01, 0.03),
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.max_factor = max_factor
+        self.step_factor = step_factor
+
+    def make_params(self, img: Tensor) -> ZoomParam:
+        return ZoomParam(factor=_random.uniform(1.0, self.max_factor))
+
+    def _apply_image(self, img: Tensor, params: ZoomParam) -> Tensor:
+        h, w = F._spatial_hw(img)
+        n = 5
+        acc = img
+        for i in range(1, n + 1):
+            f = 1.0 + (params.factor - 1.0) * i / n
+            ch, cw = max(int(round(h / f)), 1), max(int(round(w / f)), 1)
+            top, left = (h - ch) // 2, (w - cw) // 2
+            zoomed = F.resize(F.crop(img, top, left, ch, cw), (h, w), interpolation="bilinear")
+            acc = acc + zoomed
+        return lucid.clip(acc / (n + 1), 0.0, 1.0)
+
+    def __repr__(self) -> str:
+        return f"ZoomBlur(max_factor={self.max_factor}, p={self.p})"

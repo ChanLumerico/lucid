@@ -52,6 +52,7 @@ from lucid.utils.transforms._geometric import (
 )
 from lucid.utils.transforms._blur import (
     Blur,
+    Defocus,
     Downscale,
     GaussianBlur,
     GaussNoise,
@@ -59,12 +60,21 @@ from lucid.utils.transforms._blur import (
     MedianBlur,
     MotionBlur,
     MultiplicativeNoise,
+    ZoomBlur,
 )
 from lucid.utils.transforms._composition import (
     OneOf,
     OneOrOther,
+    ReplayCompose,
     Sequential,
     SomeOf,
+)
+from lucid.utils.transforms._misc import (
+    BBoxSafeRandomCrop,
+    Lambda,
+    MaskDropout,
+    RandomCropNearBBox,
+    RandomSizedBBoxSafeCrop,
 )
 from lucid.utils.transforms._color import (
     CLAHE,
@@ -72,17 +82,24 @@ from lucid.utils.transforms._color import (
     ChannelShuffle,
     Emboss,
     Equalize,
+    FancyPCA,
     HueSaturationValue,
     InvertImg,
+    PixelDropout,
     Posterize,
+    RandomBrightness,
     RandomBrightnessContrast,
+    RandomContrast,
     RandomGamma,
     RandomToneCurve,
     RGBShift,
+    RingingOvershoot,
     Sharpen,
     Solarize,
     ToGray,
     ToSepia,
+    UnsharpMask,
+    XYMasking,
 )
 from lucid.utils.transforms._crop import (
     Crop,
@@ -93,6 +110,7 @@ from lucid.utils.transforms._crop import (
 from lucid.utils.transforms._distortion import (
     ElasticTransform,
     GridDistortion,
+    GridElasticDeform,
     OpticalDistortion,
 )
 from lucid.utils.transforms._dropout import CoarseDropout, GridDropout
@@ -106,10 +124,14 @@ from lucid.utils.transforms._photometric import (
 from lucid.utils.transforms._presets import ImageClassification
 from lucid.utils.transforms._spatial import (
     Affine,
+    D4,
     Flip,
     Perspective,
+    RandomGridShuffle,
     RandomRotate90,
+    RandomScale,
     Rotate,
+    SafeRotate,
     ShiftScaleRotate,
     Transpose,
 )
@@ -140,8 +162,11 @@ __all__ = [
     "Flip",
     "Transpose",
     "RandomRotate90",
+    "RandomScale",
+    "D4",
     # Geometric — affine warps
     "Rotate",
+    "SafeRotate",
     "ShiftScaleRotate",
     "Affine",
     "Perspective",
@@ -149,14 +174,22 @@ __all__ = [
     "ElasticTransform",
     "GridDistortion",
     "OpticalDistortion",
+    "GridElasticDeform",
+    "RandomGridShuffle",
     # Geometric — crop / pad
     "Crop",
     "PadIfNeeded",
     "RandomSizedCrop",
     "CropAndPad",
+    "BBoxSafeRandomCrop",
+    "RandomSizedBBoxSafeCrop",
+    "RandomCropNearBBox",
     # Dropout / occlusion
     "CoarseDropout",
     "GridDropout",
+    "MaskDropout",
+    "PixelDropout",
+    "XYMasking",
     # Photometric — value scaling
     "ToFloat",
     "FromFloat",
@@ -179,6 +212,11 @@ __all__ = [
     "Sharpen",
     "Emboss",
     "RandomToneCurve",
+    "RandomBrightness",
+    "RandomContrast",
+    "UnsharpMask",
+    "RingingOvershoot",
+    "FancyPCA",
     # Blur / noise
     "Blur",
     "MedianBlur",
@@ -188,11 +226,16 @@ __all__ = [
     "MultiplicativeNoise",
     "ISONoise",
     "Downscale",
+    "Defocus",
+    "ZoomBlur",
     # Composition
     "OneOf",
     "SomeOf",
     "Sequential",
     "OneOrOther",
+    "ReplayCompose",
+    # Utility
+    "Lambda",
     # Presets
     "ImageClassification",
     # Functional submodule

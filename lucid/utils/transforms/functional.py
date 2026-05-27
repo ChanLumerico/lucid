@@ -520,7 +520,9 @@ def equalize(img: Tensor, clip_limit: float | None = None) -> Tensor:
     b, c, h, w = (int(d) for d in x.shape)
     imgs = []
     for bi in range(b):
-        chans = [_equalize_channel(x[bi, ci], clip_limit).reshape(1, h, w) for ci in range(c)]
+        chans = [
+            _equalize_channel(x[bi, ci], clip_limit).reshape(1, h, w) for ci in range(c)
+        ]
         imgs.append(_cat(chans, 0).reshape(1, c, h, w))
     out = _cat(imgs, 0)
     return out[0] if unbatched else out

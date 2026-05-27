@@ -139,3 +139,53 @@ class OneOrOther(_Container):
 
     def __repr__(self) -> str:
         return f"OneOrOther(p={self.switch})"
+
+
+class ReplayCompose(_Container):
+    r"""Compose that records applied params for deterministic replay.
+
+    After a call, ``replay_data`` holds ``(transform, params, applied)``
+    per child; :meth:`replay` re-applies the *same* params to a new
+    sample (e.g. to apply an identical augmentation to a paired input).
+    """
+
+    def __init__(self, transforms: list[TransformLike], p: float = 1.0) -> None:
+        super().__init__(transforms, p=p)
+        self.replay_data: list[tuple[TransformLike, object, bool]] = []
+
+    def __call__(self, inputs: object) -> object:
+        from lucid.utils.transforms._base import _find_reference
+
+        self.replay_data = []
+        if not self._gate_or_pass(inputs):
+            return inputs
+        out = inputs
+        for tf in self.transforms:
+            if isinstance(tf, Transform):
+                if tf.p < 1.0 and _random.rand() >= tf.p:
+                    self.replay_data.append((tf, None, False))
+                    continue
+                ref = _find_reference(out)
+                params = tf.make_params(ref) if ref is not None else None
+                out = tf._dispatch(out, params) if params is not None else out
+                self.replay_data.append((tf, params, True))
+            else:
+                out = tf(out)
+                self.replay_data.append((tf, None, True))
+        return out
+
+    def replay(
+        self, saved: list[tuple[TransformLike, object, bool]], inputs: object
+    ) -> object:
+        out = inputs
+        for tf, params, applied in saved:
+            if not applied:
+                continue
+            if isinstance(tf, Transform) and params is not None:
+                out = tf._dispatch(out, params)
+            else:
+                out = tf(out)
+        return out
+
+    def __repr__(self) -> str:
+        return f"ReplayCompose({self.transforms}, p={self.p})"
