@@ -419,3 +419,66 @@ def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor
     return lucid.tensor(
         [[hl[0], hl[1], hl[2]], [hl[3], hl[4], hl[5]], [hl[6], hl[7], 1.0]]
     )
+
+
+# ── blur + displacement-field warps ─────────────────────────────────
+
+
+def gaussian_blur(img: Tensor, sigma: float, ksize: int | None = None) -> Tensor:
+    """Separable Gaussian blur (depthwise conv). ``sigma`` in pixels."""
+    if ksize is None:
+        ksize = int(2 * round(3.0 * sigma) + 1)
+    if ksize % 2 == 0:
+        ksize += 1
+    half = ksize // 2
+    w1 = [math.exp(-((i - half) ** 2) / (2.0 * sigma * sigma)) for i in range(ksize)]
+    s = sum(w1)
+    w1 = [v / s for v in w1]
+
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    c = int(x.shape[1])
+    kx = _cat([lucid.tensor(w1).reshape(1, 1, 1, ksize)] * c, 0)
+    ky = _cat([lucid.tensor(w1).reshape(1, 1, ksize, 1)] * c, 0)
+    x = F.conv2d(x, kx, padding=(0, half), groups=c)
+    x = F.conv2d(x, ky, padding=(half, 0), groups=c)
+    return x[0] if unbatched else x
+
+
+def _pixel_grid(h: int, w: int) -> tuple[Tensor, Tensor]:
+    """Return ``(yy, xx)`` float pixel-coordinate grids of shape ``(H, W)``."""
+    yy, xx = lucid.meshgrid(
+        lucid.arange(0, h, dtype=lucid.float32),
+        lucid.arange(0, w, dtype=lucid.float32),
+        indexing="ij",
+    )
+    return yy, xx
+
+
+def remap(img: Tensor, dx: Tensor, dy: Tensor, *, mode: str = "bilinear") -> Tensor:
+    """Backward warp: ``out(y, x) = img(x + dx, y + dy)`` via ``grid_sample``."""
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    b, _, h, w = (int(d) for d in x.shape)
+    yy, xx = _pixel_grid(h, w)
+    gx = 2.0 * (xx + dx) / (w - 1) - 1.0
+    gy = 2.0 * (yy + dy) / (h - 1) - 1.0
+    grid = lucid.stack([gx, gy], dim=-1)[None]  # (1, H, W, 2)
+    if b > 1:
+        grid = _cat([grid] * b, 0)
+    gmode = "nearest" if mode == "nearest" else "bilinear"
+    y = F.grid_sample(x, grid, mode=gmode, padding_mode="reflection", align_corners=True)
+    return y[0] if unbatched else y
+
+
+def sample_field_at_points(field: Tensor, pts: Tensor, canvas_hw: tuple[int, int]) -> Tensor:
+    """Bilinearly sample a ``(H, W)`` field at ``(N, 2)`` ``(x, y)`` points → ``(N, 1)``."""
+    h, w = canvas_hw
+    n = int(pts.shape[0])
+    gx = 2.0 * pts[:, 0:1] / (w - 1) - 1.0
+    gy = 2.0 * pts[:, 1:2] / (h - 1) - 1.0
+    grid = _cat([gx, gy], 1).reshape(1, n, 1, 2)
+    samp = F.grid_sample(
+        field.reshape(1, 1, h, w), grid, mode="bilinear", align_corners=True
+    )
+    return samp.reshape(n, 1)

@@ -1,0 +1,228 @@
+"""Displacement-field distortions — Elastic / Grid / Optical.
+
+Albumentations-compatible non-rigid warps.  Each samples a per-pixel
+displacement field ``(dx, dy)``; images/masks are remapped through
+``grid_sample`` (exact), while boxes/keypoints are displaced by sampling
+the field at their coordinates — an approximation that matches
+Albumentations' own handling of these transforms.
+"""
+
+from dataclasses import dataclass
+
+import lucid
+from lucid._tensor import Tensor
+from lucid.utils.transforms import _random
+from lucid.utils.transforms import functional as F
+from lucid.utils.transforms._base import GeometricTransform
+from lucid.utils.transforms._datatypes import (
+    BoundingBoxes,
+    Keypoints,
+    _kp_xy_rest,
+    _rebuild,
+    to_xyxy,
+)
+from lucid.utils.transforms._interpolation import Interpolation, as_interpolation
+
+
+@dataclass
+class DispParams:
+    """A sampled displacement field for one call (pixel units)."""
+
+    dx: Tensor
+    dy: Tensor
+    out_hw: tuple[int, int]
+
+
+def _displace_points(pts: Tensor, params: DispParams) -> Tensor:
+    """Forward-displace ``(N, 2)`` points (≈ ``pt - field(pt)``)."""
+    h, w = params.out_hw
+    sx = F.sample_field_at_points(params.dx, pts, (h, w))
+    sy = F.sample_field_at_points(params.dy, pts, (h, w))
+    return pts - F._cat([sx, sy], 1)
+
+
+class _DisplacementTransform(GeometricTransform[DispParams]):
+    """Shared image/mask/box/keypoint application for displacement warps."""
+
+    interpolation: Interpolation
+
+    def _img_mode(self) -> str:
+        return "nearest" if self.interpolation == Interpolation.NEAREST else "bilinear"
+
+    def _apply_image(self, img: Tensor, params: DispParams) -> Tensor:
+        return F.remap(img, params.dx, params.dy, mode=self._img_mode())
+
+    def _apply_mask(self, mask: Tensor, params: DispParams) -> Tensor:
+        return F.remap(mask, params.dx, params.dy, mode="nearest")
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: DispParams) -> BoundingBoxes:
+        xy = to_xyxy(boxes)
+        x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
+        corners = F._cat(
+            [
+                F._cat([x1, y1], 1),
+                F._cat([x2, y1], 1),
+                F._cat([x2, y2], 1),
+                F._cat([x1, y2], 1),
+            ],
+            0,
+        )
+        moved = _displace_points(corners, params)
+        n = int(xy.shape[0])
+        mx = moved[:, 0:1].reshape(4, n)
+        my = moved[:, 1:2].reshape(4, n)
+        h, w = params.out_hw
+        nx1 = lucid.clip(lucid.min(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w))
+        nx2 = lucid.clip(lucid.max(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w))
+        ny1 = lucid.clip(lucid.min(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h))
+        ny2 = lucid.clip(lucid.max(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h))
+        return _rebuild(boxes, F._cat([nx1, ny1, nx2, ny2], 1), (h, w))
+
+    def _apply_keypoints(self, kps: Keypoints, params: DispParams) -> Keypoints:
+        x, y, rest = _kp_xy_rest(kps)
+        moved = _displace_points(F._cat([x, y], 1), params)
+        cols = [moved[:, 0:1], moved[:, 1:2]]
+        if rest is not None:
+            cols.append(rest)
+        return Keypoints(F._cat(cols, 1), params.out_hw)
+
+
+class ElasticTransform(_DisplacementTransform):
+    r"""Elastic deformation (Simard 2003; Albumentations ``ElasticTransform``).
+
+    Random fields smoothed by a Gaussian then scaled by ``alpha``.
+
+    Parameters
+    ----------
+    alpha : float, optional, default=1.0
+        Displacement magnitude.
+    sigma : float, optional, default=50.0
+        Gaussian smoothing of the displacement field (pixels).
+    interpolation : int or str or Interpolation, optional, default=1
+    p : float, optional, default=0.5
+    """
+
+    def __init__(
+        self,
+        alpha: float = 1.0,
+        sigma: float = 50.0,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.alpha = alpha
+        self.sigma = sigma
+        self.interpolation = as_interpolation(interpolation)
+
+    def make_params(self, img: Tensor) -> DispParams:
+        h, w = F._spatial_hw(img)
+        rx = (lucid.rand(1, 1, h, w) * 2.0 - 1.0)
+        ry = (lucid.rand(1, 1, h, w) * 2.0 - 1.0)
+        dx = F.gaussian_blur(rx, self.sigma)[0, 0] * self.alpha
+        dy = F.gaussian_blur(ry, self.sigma)[0, 0] * self.alpha
+        return DispParams(dx=dx, dy=dy, out_hw=(h, w))
+
+    def __repr__(self) -> str:
+        return f"ElasticTransform(alpha={self.alpha}, sigma={self.sigma}, p={self.p})"
+
+
+class GridDistortion(_DisplacementTransform):
+    r"""Grid distortion (Albumentations ``GridDistortion``).
+
+    Perturbs a coarse ``num_steps`` x ``num_steps`` control grid by
+    ``distort_limit`` and upsamples it to a smooth displacement field.
+
+    Parameters
+    ----------
+    num_steps : int, optional, default=5
+    distort_limit : float or (float, float), optional, default=0.3
+    interpolation : int or str or Interpolation, optional, default=1
+    p : float, optional, default=0.5
+    """
+
+    def __init__(
+        self,
+        num_steps: int = 5,
+        distort_limit: float | tuple[float, float] = 0.3,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        self.num_steps = num_steps
+        lim = distort_limit
+        self.distort_limit = (-lim, lim) if isinstance(lim, (int, float)) else lim
+        self.interpolation = as_interpolation(interpolation)
+
+    def make_params(self, img: Tensor) -> DispParams:
+        h, w = F._spatial_hw(img)
+        n = self.num_steps + 1
+        cdx = [
+            [_random.uniform(self.distort_limit[0], self.distort_limit[1]) for _ in range(n)]
+            for _ in range(n)
+        ]
+        cdy = [
+            [_random.uniform(self.distort_limit[0], self.distort_limit[1]) for _ in range(n)]
+            for _ in range(n)
+        ]
+        coarse_dx = lucid.tensor(cdx).reshape(1, 1, n, n) * (w / self.num_steps)
+        coarse_dy = lucid.tensor(cdy).reshape(1, 1, n, n) * (h / self.num_steps)
+        from lucid.nn.functional import interpolate
+
+        dx = interpolate(coarse_dx, size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        dy = interpolate(coarse_dy, size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        return DispParams(dx=dx, dy=dy, out_hw=(h, w))
+
+    def __repr__(self) -> str:
+        return (
+            f"GridDistortion(num_steps={self.num_steps}, "
+            f"distort_limit={self.distort_limit}, p={self.p})"
+        )
+
+
+class OpticalDistortion(_DisplacementTransform):
+    r"""Radial (barrel / pincushion) distortion (Albumentations ``OpticalDistortion``).
+
+    Parameters
+    ----------
+    distort_limit : float or (float, float), optional, default=0.05
+        Radial coefficient range.
+    shift_limit : float or (float, float), optional, default=0.05
+        Optical-center shift range (fraction of size).
+    interpolation : int or str or Interpolation, optional, default=1
+    p : float, optional, default=0.5
+    """
+
+    def __init__(
+        self,
+        distort_limit: float | tuple[float, float] = 0.05,
+        shift_limit: float | tuple[float, float] = 0.05,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 0.5,
+    ) -> None:
+        super().__init__(p=p)
+        dl = distort_limit
+        sl = shift_limit
+        self.distort_limit = (-dl, dl) if isinstance(dl, (int, float)) else dl
+        self.shift_limit = (-sl, sl) if isinstance(sl, (int, float)) else sl
+        self.interpolation = as_interpolation(interpolation)
+
+    def make_params(self, img: Tensor) -> DispParams:
+        h, w = F._spatial_hw(img)
+        k = _random.uniform(self.distort_limit[0], self.distort_limit[1])
+        cx = w / 2.0 + _random.uniform(self.shift_limit[0], self.shift_limit[1]) * w
+        cy = h / 2.0 + _random.uniform(self.shift_limit[0], self.shift_limit[1]) * h
+        yy, xx = F._pixel_grid(h, w)
+        nx = (xx - cx) / (w / 2.0)
+        ny = (yy - cy) / (h / 2.0)
+        r2 = nx * nx + ny * ny
+        factor = 1.0 + k * r2
+        # Backward map: sampling coordinate = center + (p - center) * factor.
+        dx = (xx - cx) * factor + cx - xx
+        dy = (yy - cy) * factor + cy - yy
+        return DispParams(dx=dx, dy=dy, out_hw=(h, w))
+
+    def __repr__(self) -> str:
+        return (
+            f"OpticalDistortion(distort_limit={self.distort_limit}, "
+            f"shift_limit={self.shift_limit}, p={self.p})"
+        )

@@ -50,6 +50,11 @@ from lucid.utils.transforms._geometric import (
     SmallestMaxSize,
     VerticalFlip,
 )
+from lucid.utils.transforms._distortion import (
+    ElasticTransform,
+    GridDistortion,
+    OpticalDistortion,
+)
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
 from lucid.utils.transforms._presets import ImageClassification
@@ -94,6 +99,10 @@ __all__ = [
     "ShiftScaleRotate",
     "Affine",
     "Perspective",
+    # Geometric — distortion
+    "ElasticTransform",
+    "GridDistortion",
+    "OpticalDistortion",
     # Photometric
     "Normalize",
     "ColorJitter",
