@@ -18,7 +18,6 @@ from lucid.utils.transforms import ImageClassification
 from lucid.weights import WeightEntry, WeightsEnum
 from lucid.models.vision.resnet import ResNet18Weights
 
-
 # ── WeightsEnum structure ───────────────────────────────────────────
 
 
@@ -102,9 +101,7 @@ class TestResolveWeights:
 
     def test_explicit_weights_wins(self) -> None:
         # weights= takes precedence over pretrained.
-        out = W.resolve_weights(
-            ResNet18Weights, False, ResNet18Weights.IMAGENET1K_V1
-        )
+        out = W.resolve_weights(ResNet18Weights, False, ResNet18Weights.IMAGENET1K_V1)
         assert out is ResNet18Weights.IMAGENET1K_V1
 
     def test_unknown_string_tag_raises(self) -> None:
@@ -114,7 +111,9 @@ class TestResolveWeights:
     def test_wrong_enum_member_raises(self) -> None:
         class OtherWeights(WeightsEnum):
             X = WeightEntry(
-                url="http://x", sha256="", num_classes=1,
+                url="http://x",
+                sha256="",
+                num_classes=1,
                 transforms=ImageClassification(crop_size=1),
             )
 

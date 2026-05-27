@@ -30,7 +30,6 @@ from lucid.utils.tokenizer._byte_bpe import (
 )
 from lucid.utils.tokenizer._normalizers import Normalizer
 
-
 # Canonical GPT-2 end-of-text marker.  Shared across bos / eos / unk
 # in :class:`GPT2Tokenizer` defaults.
 GPT2_EOS = "<|endoftext|>"

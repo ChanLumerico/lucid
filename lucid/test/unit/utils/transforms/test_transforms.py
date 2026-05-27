@@ -40,7 +40,11 @@ class TestResizeFamily:
 
     def test_smallest_max_size(self) -> None:
         # shorter side (100) -> 64; 120 -> 77
-        assert tuple(T.SmallestMaxSize(64)(lucid.rand(3, 100, 120)).shape) == (3, 64, 77)
+        assert tuple(T.SmallestMaxSize(64)(lucid.rand(3, 100, 120)).shape) == (
+            3,
+            64,
+            77,
+        )
 
     def test_longest_max_size(self) -> None:
         # longer side (120) -> 60; 100 -> 50
@@ -84,7 +88,9 @@ class TestCompose:
 
 class TestImageClassificationPreset:
     def test_unbatched(self) -> None:
-        out = T.ImageClassification(crop_size=224, resize_size=256)(lucid.rand(3, 300, 400))
+        out = T.ImageClassification(crop_size=224, resize_size=256)(
+            lucid.rand(3, 300, 400)
+        )
         assert tuple(out.shape) == (3, 224, 224)
 
     def test_default_imagenet_stats(self) -> None:

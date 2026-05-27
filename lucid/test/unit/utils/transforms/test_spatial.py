@@ -15,7 +15,9 @@ def _box_sample(h: int = 40, w: int = 40) -> dict[str, object]:
     return {
         "image": T.Image(lucid.rand(3, h, w)),
         "mask": T.Mask(lucid.rand(1, h, w)),
-        "boxes": T.BoundingBoxes(lucid.tensor([[5.0, 5.0, 35.0, 35.0]]), "xyxy", (h, w)),
+        "boxes": T.BoundingBoxes(
+            lucid.tensor([[5.0, 5.0, 35.0, 35.0]]), "xyxy", (h, w)
+        ),
         "kp": T.Keypoints(lucid.tensor([[20.0, 5.0]]), (h, w)),
     }
 
