@@ -22,12 +22,12 @@ from lucid.models import (
     ModelOutput,
     PretrainedModel,
     create_model,
-    download,
     is_model,
     list_models,
     register_model,
 )
 from lucid.models import _registry as _reg_mod
+from lucid.weights import download
 
 
 @dataclass(frozen=True)

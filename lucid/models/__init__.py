@@ -14,7 +14,6 @@ from lucid.models._auto import (
     AutoModelForTokenClassification,
 )
 from lucid.models._base   import ModelConfig, PretrainedModel
-from lucid.models._hub    import PretrainedEntry, download, load_from_pretrained_entry
 from lucid.models._mixins import (
     BackboneMixin, ClassificationHeadMixin, DiffusionMixin,
     FeatureInfo, GenerationMixin, MaskedLMMixin,
@@ -397,7 +396,6 @@ from lucid.models.vision.yolo import (
 __all__ = [
     # ── Infrastructure ────────────────────────────────────────────────────────
     "ModelConfig", "PretrainedModel",
-    "PretrainedEntry", "download", "load_from_pretrained_entry",
     "BackboneMixin", "ClassificationHeadMixin", "DiffusionMixin",
     "FeatureInfo", "GenerationMixin", "MaskedLMMixin",
     "LanguageModelConfig", "TextActivation",

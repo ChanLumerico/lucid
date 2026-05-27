@@ -3,7 +3,9 @@
 Sizes follow Devlin et al. (base / large) and Turc et al. 2019
 ("Well-Read Students Learn Better") for the four pre-distilled sizes
 (tiny / mini / small / medium).  No pretrained weight URLs are registered yet
-— follow-up PRs can wire HuggingFace ckpts through ``PretrainedEntry``.
+— follow-up work wires Hugging Face checkpoints through
+:mod:`lucid.weights` (a ``BertBaseWeights`` enum + ``weights=`` /
+``pretrained=`` on the factories, mirroring the ResNet wiring).
 """
 
 from lucid.models._registry import register_model

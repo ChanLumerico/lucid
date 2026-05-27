@@ -224,7 +224,7 @@ __all__ = [
     # ── subpackages ───────────────────────────────────────────────────────
     "nn", "optim", "autograd", "func", "linalg", "fft", "signal", "special",
     "utils", "amp", "profiler", "einops", "compile",
-    "metal", "backends", "test",
+    "metal", "backends", "test", "weights",
     # ── public type aliases ───────────────────────────────────────────────
     "Scalar", "TensorLike", "DeviceLike", "DTypeLike", "ShapeLike",
     "StateDict", "TensorOrScalar",
@@ -315,7 +315,7 @@ _SUBPKG_NAMES: frozenset[str] = frozenset([
     "linalg", "fft", "signal", "special", "distributions",
     # ── infra / tooling ───────────────────────────────────────────────────
     "utils", "amp", "profiler", "einops", "compile",
-    "metal", "backends", "test",
+    "metal", "backends", "test", "weights",
 ])
 
 _METHOD_ALIASES: frozenset[str] = frozenset(["lerp", "diff"])

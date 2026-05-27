@@ -1,8 +1,10 @@
 """Registry factories for all ResNet variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnet._config import ResNetConfig
 from lucid.models.vision.resnet._model import ResNet, ResNetForImageClassification
+from lucid.weights.vision.resnet import ResNet18Weights
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -328,7 +330,10 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_18,
 )
 def resnet_18_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNet18Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""ResNet-18 image classifier (backbone + GAP + linear head).
 
@@ -341,24 +346,38 @@ def resnet_18_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNet18Weights.IMAGENET1K_V1`);
+        a tag string (e.g. ``"IMAGENET1K_V1"``) → that specific
+        checkpoint.  Mutually exclusive with ``weights`` (which wins if
+        both are given).
+    weights : ResNet18Weights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``ResNet18Weights.IMAGENET1K_V1``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`
         (typically ``num_classes`` to retarget the classifier or
         ``dropout`` to inject regularisation before the linear head).
+        Note: overriding ``num_classes`` away from the checkpoint's
+        class count makes pretrained loading fail the strict key/shape
+        check — load with a matching head, then call
+        :meth:`reset_classifier`.
 
     Returns
     -------
     ResNetForImageClassification
         Classifier with the ResNet-18 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
-    CVPR 2016 (arXiv:1512.03385), Table 1.
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
+    converted from torchvision's ``ResNet18_Weights`` and hosted on the
+    Hugging Face Hub under ``lucid-dl/resnet-18``.
 
     Examples
     --------
@@ -369,9 +388,19 @@ def resnet_18_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = resnet_18_cls(pretrained=True)            # DEFAULT tag
+    >>> from lucid.models.vision.resnet import ResNet18Weights
+    >>> model = resnet_18_cls(weights=ResNet18Weights.IMAGENET1K_V1)
     """
+    entry = weights_mod.resolve_weights(ResNet18Weights, pretrained, weights)
     cfg = ResNetConfig(**{**_CFG_18.__dict__, **overrides}) if overrides else _CFG_18
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnet_18_cls")
+    return model
 
 
 @register_model(
