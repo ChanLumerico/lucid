@@ -60,6 +60,12 @@ from lucid.utils.transforms._blur import (
     MotionBlur,
     MultiplicativeNoise,
 )
+from lucid.utils.transforms._composition import (
+    OneOf,
+    OneOrOther,
+    Sequential,
+    SomeOf,
+)
 from lucid.utils.transforms._color import (
     CLAHE,
     ChannelDropout,
@@ -182,6 +188,11 @@ __all__ = [
     "MultiplicativeNoise",
     "ISONoise",
     "Downscale",
+    # Composition
+    "OneOf",
+    "SomeOf",
+    "Sequential",
+    "OneOrOther",
     # Presets
     "ImageClassification",
     # Functional submodule
