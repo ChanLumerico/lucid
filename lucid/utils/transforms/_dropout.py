@@ -16,7 +16,9 @@ from lucid.utils.transforms._base import PhotometricTransform
 
 @dataclass
 class HoleParams:
-    holes: list[tuple[int, int, int, int]] = field(default_factory=list)  # (top,left,h,w)
+    holes: list[tuple[int, int, int, int]] = field(
+        default_factory=list
+    )  # (top,left,h,w)
 
 
 def _apply_holes(

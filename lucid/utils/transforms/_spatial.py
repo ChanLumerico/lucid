@@ -174,7 +174,10 @@ class _WarpTransform(GeometricTransform[WarpParams]):
 
     def _apply_image(self, img: Tensor, params: WarpParams) -> Tensor:
         return F.warp_affine(
-            img, params.matrix, params.out_hw, mode=self._img_mode(),
+            img,
+            params.matrix,
+            params.out_hw,
+            mode=self._img_mode(),
             fill=0.0 if _pad_mode(self.border_mode) == "zeros" else 0.0,
         )
 
@@ -267,8 +270,12 @@ class ShiftScaleRotate(_WarpTransform):
         dx = _random.uniform(self.shift_limit[0], self.shift_limit[1]) * w
         dy = _random.uniform(self.shift_limit[0], self.shift_limit[1]) * h
         matrix = F.affine_matrix(
-            cx=(w - 1) / 2.0, cy=(h - 1) / 2.0, scale=scale, angle_deg=angle,
-            translate_x=dx, translate_y=dy,
+            cx=(w - 1) / 2.0,
+            cy=(h - 1) / 2.0,
+            scale=scale,
+            angle_deg=angle,
+            translate_x=dx,
+            translate_y=dy,
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
@@ -325,8 +332,13 @@ class Affine(_WarpTransform):
         dx = _random.uniform(self.translate_percent[0], self.translate_percent[1]) * w
         dy = _random.uniform(self.translate_percent[0], self.translate_percent[1]) * h
         matrix = F.affine_matrix(
-            cx=(w - 1) / 2.0, cy=(h - 1) / 2.0, scale=s, angle_deg=angle,
-            shear_x_deg=shear, translate_x=dx, translate_y=dy,
+            cx=(w - 1) / 2.0,
+            cy=(h - 1) / 2.0,
+            scale=s,
+            angle_deg=angle,
+            shear_x_deg=shear,
+            translate_x=dx,
+            translate_y=dy,
         )
         return WarpParams(matrix=matrix, out_hw=(h, w))
 
@@ -368,8 +380,10 @@ class Perspective(_WarpTransform):
         frac = _random.uniform(self.scale[0], self.scale[1])
         src = [[0.0, 0.0], [w - 1.0, 0.0], [w - 1.0, h - 1.0], [0.0, h - 1.0]]
         dst = [
-            [_random.uniform(-frac, frac) * w + sx,
-             _random.uniform(-frac, frac) * h + sy]
+            [
+                _random.uniform(-frac, frac) * w + sx,
+                _random.uniform(-frac, frac) * h + sy,
+            ]
             for sx, sy in src
         ]
         # Homography mapping the perturbed corners back to the canvas.

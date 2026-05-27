@@ -231,7 +231,9 @@ def pad_keypoints(
 # ── affine / transpose / rot90 (boxes + keypoints) ──────────────────
 
 
-def _clip_xyxy(x1: Tensor, y1: Tensor, x2: Tensor, y2: Tensor, h: int, w: int) -> Tensor:
+def _clip_xyxy(
+    x1: Tensor, y1: Tensor, x2: Tensor, y2: Tensor, h: int, w: int
+) -> Tensor:
     return _cat(
         [
             lucid.clip(x1, 0.0, float(w)),

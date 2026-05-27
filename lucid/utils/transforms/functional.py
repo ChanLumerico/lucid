@@ -298,7 +298,6 @@ def adjust_hue(img: Tensor, factor: float) -> Tensor:
 # keypoints apply M to their coordinates directly.
 
 
-
 def _norm_to_pixel(h: int, w: int) -> Tensor:
     """3x3 matrix mapping ``align_corners=True`` normalized coords → pixels.
 
@@ -360,7 +359,9 @@ def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
     return out[:, :2] / out[:, 2:3]  # perspective divide (no-op for affine)
 
 
-def rotation_matrix(angle_deg: float, cx: float, cy: float, scale: float = 1.0) -> Tensor:
+def rotation_matrix(
+    angle_deg: float, cx: float, cy: float, scale: float = 1.0
+) -> Tensor:
     """OpenCV ``getRotationMatrix2D`` forward matrix (CCW degrees)."""
     rad = math.radians(angle_deg)
     alpha = scale * math.cos(rad)
@@ -467,11 +468,15 @@ def remap(img: Tensor, dx: Tensor, dy: Tensor, *, mode: str = "bilinear") -> Ten
     if b > 1:
         grid = _cat([grid] * b, 0)
     gmode = "nearest" if mode == "nearest" else "bilinear"
-    y = F.grid_sample(x, grid, mode=gmode, padding_mode="reflection", align_corners=True)
+    y = F.grid_sample(
+        x, grid, mode=gmode, padding_mode="reflection", align_corners=True
+    )
     return y[0] if unbatched else y
 
 
-def sample_field_at_points(field: Tensor, pts: Tensor, canvas_hw: tuple[int, int]) -> Tensor:
+def sample_field_at_points(
+    field: Tensor, pts: Tensor, canvas_hw: tuple[int, int]
+) -> Tensor:
     """Bilinearly sample a ``(H, W)`` field at ``(N, 2)`` ``(x, y)`` points → ``(N, 1)``."""
     h, w = canvas_hw
     n = int(pts.shape[0])
@@ -482,3 +487,52 @@ def sample_field_at_points(field: Tensor, pts: Tensor, canvas_hw: tuple[int, int
         field.reshape(1, 1, h, w), grid, mode="bilinear", align_corners=True
     )
     return samp.reshape(n, 1)
+
+
+# ── histogram + kernel helpers (colour batch) ───────────────────────
+
+
+def _equalize_channel(ch: Tensor, clip_limit: float | None = None) -> Tensor:
+    """Histogram-equalize a single ``(H, W)`` channel in ``[0, 1]``."""
+    h, w = int(ch.shape[0]), int(ch.shape[1])
+    idx = lucid.clip(lucid.round(ch * 255.0), 0.0, 255.0).long().reshape(-1)
+    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)  # type: ignore[arg-type]
+    if clip_limit is not None:
+        cap = clip_limit * (h * w) / 256.0
+        clipped = lucid.clip(hist, 0.0, cap)
+        excess = (hist - clipped).sum() / 256.0
+        hist = clipped + excess
+    cdf = lucid.cumsum(hist)
+    big = lucid.ones(256, dtype=lucid.float32) * float(h * w + 1)
+    cdf_min = lucid.min(lucid.where(cdf > 0.0, cdf, big))
+    total = cdf[255]
+    denom = float(total.item()) - float(cdf_min.item())
+    if denom <= 0.0:  # flat channel — leave unchanged
+        return ch
+    lut = (cdf - cdf_min) / denom * 255.0
+    return lucid.take(lut, idx).reshape(h, w) / 255.0
+
+
+def equalize(img: Tensor, clip_limit: float | None = None) -> Tensor:
+    """Per-channel histogram equalization of a ``[0, 1]`` image."""
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    b, c, h, w = (int(d) for d in x.shape)
+    imgs = []
+    for bi in range(b):
+        chans = [_equalize_channel(x[bi, ci], clip_limit).reshape(1, h, w) for ci in range(c)]
+        imgs.append(_cat(chans, 0).reshape(1, c, h, w))
+    out = _cat(imgs, 0)
+    return out[0] if unbatched else out
+
+
+def depthwise_conv2d(img: Tensor, kernel2d: list[list[float]]) -> Tensor:
+    """Apply a 2-D kernel to every channel independently (same padding)."""
+    kh, kw = len(kernel2d), len(kernel2d[0])
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    c = int(x.shape[1])
+    k = lucid.tensor(kernel2d).reshape(1, 1, kh, kw)
+    weight = _cat([k] * c, 0)
+    y = F.conv2d(x, weight, padding=(kh // 2, kw // 2), groups=c)
+    return y[0] if unbatched else y

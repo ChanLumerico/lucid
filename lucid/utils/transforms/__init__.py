@@ -50,6 +50,24 @@ from lucid.utils.transforms._geometric import (
     SmallestMaxSize,
     VerticalFlip,
 )
+from lucid.utils.transforms._color import (
+    CLAHE,
+    ChannelDropout,
+    ChannelShuffle,
+    Emboss,
+    Equalize,
+    HueSaturationValue,
+    InvertImg,
+    Posterize,
+    RandomBrightnessContrast,
+    RandomGamma,
+    RandomToneCurve,
+    RGBShift,
+    Sharpen,
+    Solarize,
+    ToGray,
+    ToSepia,
+)
 from lucid.utils.transforms._crop import (
     Crop,
     CropAndPad,
@@ -128,6 +146,23 @@ __all__ = [
     "FromFloat",
     "Normalize",
     "ColorJitter",
+    # Photometric — colour / pixel
+    "RandomBrightnessContrast",
+    "RandomGamma",
+    "HueSaturationValue",
+    "RGBShift",
+    "ChannelShuffle",
+    "ChannelDropout",
+    "Equalize",
+    "CLAHE",
+    "Solarize",
+    "Posterize",
+    "InvertImg",
+    "ToGray",
+    "ToSepia",
+    "Sharpen",
+    "Emboss",
+    "RandomToneCurve",
     # Presets
     "ImageClassification",
     # Functional submodule

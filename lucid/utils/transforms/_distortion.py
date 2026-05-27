@@ -72,10 +72,18 @@ class _DisplacementTransform(GeometricTransform[DispParams]):
         mx = moved[:, 0:1].reshape(4, n)
         my = moved[:, 1:2].reshape(4, n)
         h, w = params.out_hw
-        nx1 = lucid.clip(lucid.min(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w))
-        nx2 = lucid.clip(lucid.max(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w))
-        ny1 = lucid.clip(lucid.min(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h))
-        ny2 = lucid.clip(lucid.max(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h))
+        nx1 = lucid.clip(
+            lucid.min(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w)
+        )
+        nx2 = lucid.clip(
+            lucid.max(mx, dim=0, keepdim=True).reshape(n, 1), 0.0, float(w)
+        )
+        ny1 = lucid.clip(
+            lucid.min(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h)
+        )
+        ny2 = lucid.clip(
+            lucid.max(my, dim=0, keepdim=True).reshape(n, 1), 0.0, float(h)
+        )
         return _rebuild(boxes, F._cat([nx1, ny1, nx2, ny2], 1), (h, w))
 
     def _apply_keypoints(self, kps: Keypoints, params: DispParams) -> Keypoints:
@@ -116,8 +124,8 @@ class ElasticTransform(_DisplacementTransform):
 
     def make_params(self, img: Tensor) -> DispParams:
         h, w = F._spatial_hw(img)
-        rx = (lucid.rand(1, 1, h, w) * 2.0 - 1.0)
-        ry = (lucid.rand(1, 1, h, w) * 2.0 - 1.0)
+        rx = lucid.rand(1, 1, h, w) * 2.0 - 1.0
+        ry = lucid.rand(1, 1, h, w) * 2.0 - 1.0
         dx = F.gaussian_blur(rx, self.sigma)[0, 0] * self.alpha
         dy = F.gaussian_blur(ry, self.sigma)[0, 0] * self.alpha
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
@@ -157,19 +165,29 @@ class GridDistortion(_DisplacementTransform):
         h, w = F._spatial_hw(img)
         n = self.num_steps + 1
         cdx = [
-            [_random.uniform(self.distort_limit[0], self.distort_limit[1]) for _ in range(n)]
+            [
+                _random.uniform(self.distort_limit[0], self.distort_limit[1])
+                for _ in range(n)
+            ]
             for _ in range(n)
         ]
         cdy = [
-            [_random.uniform(self.distort_limit[0], self.distort_limit[1]) for _ in range(n)]
+            [
+                _random.uniform(self.distort_limit[0], self.distort_limit[1])
+                for _ in range(n)
+            ]
             for _ in range(n)
         ]
         coarse_dx = lucid.tensor(cdx).reshape(1, 1, n, n) * (w / self.num_steps)
         coarse_dy = lucid.tensor(cdy).reshape(1, 1, n, n) * (h / self.num_steps)
         from lucid.nn.functional import interpolate
 
-        dx = interpolate(coarse_dx, size=(h, w), mode="bilinear", align_corners=True)[0, 0]
-        dy = interpolate(coarse_dy, size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        dx = interpolate(coarse_dx, size=(h, w), mode="bilinear", align_corners=True)[
+            0, 0
+        ]
+        dy = interpolate(coarse_dy, size=(h, w), mode="bilinear", align_corners=True)[
+            0, 0
+        ]
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
     def __repr__(self) -> str:

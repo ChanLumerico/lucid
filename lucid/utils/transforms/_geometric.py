@@ -29,7 +29,6 @@ from lucid.utils.transforms._datatypes import (
 )
 from lucid.utils.transforms._interpolation import Interpolation, as_interpolation
 
-
 # ── parameter types ─────────────────────────────────────────────────
 
 
@@ -71,10 +70,14 @@ class Resize(_NoParams, GeometricTransform[Empty]):
         self.interpolation = as_interpolation(interpolation)
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.resize(img, (self.height, self.width), interpolation=self.interpolation)
+        return F.resize(
+            img, (self.height, self.width), interpolation=self.interpolation
+        )
 
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return F.resize(mask, (self.height, self.width), interpolation=Interpolation.NEAREST)
+        return F.resize(
+            mask, (self.height, self.width), interpolation=Interpolation.NEAREST
+        )
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
         return resize_boxes(boxes, self.height, self.width)
@@ -260,18 +263,30 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
 
     def _apply_image(self, img: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
-            img, params.top, params.left, params.height, params.width,
-            (self.height, self.width), interpolation=self.interpolation,
+            img,
+            params.top,
+            params.left,
+            params.height,
+            params.width,
+            (self.height, self.width),
+            interpolation=self.interpolation,
         )
 
     def _apply_mask(self, mask: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
-            mask, params.top, params.left, params.height, params.width,
-            (self.height, self.width), interpolation=Interpolation.NEAREST,
+            mask,
+            params.top,
+            params.left,
+            params.height,
+            params.width,
+            (self.height, self.width),
+            interpolation=Interpolation.NEAREST,
         )
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: CropBox) -> BoundingBoxes:
-        cropped = crop_boxes(boxes, params.top, params.left, params.height, params.width)
+        cropped = crop_boxes(
+            boxes, params.top, params.left, params.height, params.width
+        )
         return resize_boxes(cropped, self.height, self.width)
 
     def _apply_keypoints(self, kps: Keypoints, params: CropBox) -> Keypoints:

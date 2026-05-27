@@ -16,7 +16,6 @@ from lucid.utils.transforms import _random
 from lucid.utils.transforms import functional as F
 from lucid.utils.transforms._base import Empty, PhotometricTransform, _NoParams
 
-
 # ── parameter types ─────────────────────────────────────────────────
 
 
