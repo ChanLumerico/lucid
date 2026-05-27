@@ -54,8 +54,14 @@ inline double logsumexp_(double a, double b) {
 
 }  // namespace
 
+// Default constructor — empty piece table.  Population happens via
+// ``train`` or by re-constructing with explicit pieces.
 Unigram::Unigram() = default;
 
+// Construct from explicit ``(piece, log_prob)`` table.  Order is
+// load-bearing: entry index becomes the token id, so the input order
+// is preserved verbatim and ``rebuild_tables_`` derives every cached
+// lookup from it.
 Unigram::Unigram(std::vector<std::pair<std::string, double>> pieces,
                  std::string unk_token,
                  double unk_log_prob)
@@ -65,6 +71,10 @@ Unigram::Unigram(std::vector<std::pair<std::string, double>> pieces,
     rebuild_tables_();
 }
 
+// Rebuild every cached table (``piece_to_id_``, ``max_piece_bytes_``,
+// ``unk_id_``) from the canonical ``pieces_`` vector.  Invariant: must
+// be called after ANY mutation of ``pieces_`` — Viterbi/forward-backward
+// read the cached tables directly and would otherwise see stale data.
 void Unigram::rebuild_tables_() {
     piece_to_id_.clear();
     piece_to_id_.reserve(pieces_.size());
@@ -78,15 +88,28 @@ void Unigram::rebuild_tables_() {
     unk_id_ = (it == piece_to_id_.end()) ? -1 : it->second;
 }
 
+// Return a copy of the piece→id table for external consumers
+// (serialisation / Python-side introspection).
 std::unordered_map<std::string, TokenId> Unigram::get_vocab() const {
     return piece_to_id_;
 }
 
+// O(1) reverse lookup via the dense ``pieces_`` array.  Empty string
+// for out-of-range ids (matches the SentencePiece convention rather
+// than throwing — callers detect via ``vocab_size()``).
 std::string Unigram::id_to_token(TokenId id) const {
     if (id < 0 || static_cast<std::size_t>(id) >= pieces_.size()) return "";
     return pieces_[static_cast<std::size_t>(id)].first;
 }
 
+// Viterbi DP over piece boundaries — finds the segmentation that
+// maximises Σ log p(piece).  ``dp[i]`` is the best log-score for the
+// prefix ending at byte i; ``back[i]`` carries the (start, piece-id)
+// pair to reconstruct the segmentation.  Boundaries are constrained
+// to UTF-8 codepoint starts so we never split mid-character.  UNK is
+// only allowed for single-codepoint gaps — matches SentencePiece's
+// "char fallback" semantics.  Returns empty if the chunk is fully
+// unreachable (no UNK + no covering pieces).
 IdSequence Unigram::viterbi_encode_(const std::string& chunk) const {
     const std::size_t N = chunk.size();
     if (N == 0) return {};
@@ -144,6 +167,9 @@ IdSequence Unigram::viterbi_encode_(const std::string& chunk) const {
     return ids;
 }
 
+// Public encode entry point.  The Python wrapper applies
+// normalisation + pre-tokenisation before calling here; when invoked
+// directly on a multi-word string we Viterbi-segment the whole input.
 IdSequence Unigram::encode(const std::string& text) const {
     // The Python wrapper does normalisation + pre-tokenisation BEFORE
     // calling encode.  When called directly on a multi-word string we
@@ -151,6 +177,9 @@ IdSequence Unigram::encode(const std::string& text) const {
     return viterbi_encode_(text);
 }
 
+// Decode by concatenating each id's surface form.  Out-of-range ids
+// are skipped silently; special-token suppression is the Python
+// wrapper's responsibility.
 std::string Unigram::decode(const IdSequence& ids) const {
     std::string out;
     for (TokenId id : ids) {
@@ -160,6 +189,15 @@ std::string Unigram::decode(const IdSequence& ids) const {
     return out;
 }
 
+// Forward-backward DP to accumulate expected piece-occurrence counts
+// for one training word, weighted by its corpus frequency.  Drives
+// the E-step of EM training: ``alpha`` carries log-prob mass flowing
+// forward from byte 0, ``beta`` carries log-prob mass flowing back
+// from byte N, and the posterior of each (j, i) edge being on the
+// chosen path is ``exp(alpha[j] + log_p(piece) + beta[i] - Z)``.
+// Numerically stable via log-sum-exp; unreachable words (Z = -inf)
+// contribute nothing.  Mutates ``expected_counts`` in place — caller
+// owns the buffer (one entry per piece id).
 void Unigram::forward_backward_accumulate_(
     const std::string& chunk,
     std::uint64_t weight,
@@ -230,6 +268,9 @@ void Unigram::forward_backward_accumulate_(
     }
 }
 
+// Public training entry point — delegates to ``train_with_options``
+// with SentencePiece-compatible defaults (2 EM passes, 0.75 shrink
+// factor, 16-byte max piece length, 10x initial-vocab multiplier).
 void Unigram::train(const std::vector<std::string>& corpus,
                     std::size_t target_vocab_size) {
     train_with_options(corpus, target_vocab_size,
@@ -239,6 +280,13 @@ void Unigram::train(const std::vector<std::string>& corpus,
                        /*initial_vocab_multiplier=*/10);
 }
 
+// Full EM training pipeline.  Five phases — (1) word-freq tally,
+// (2) seed substring enumeration on codepoint boundaries, (3) keep
+// top ``initial_vocab_multiplier × target`` seeds plus every
+// single-codepoint piece, (4) initialise log-probs from frequencies,
+// (5) EM-refit-then-prune loop until vocab shrinks to target.  The
+// single-codepoint guarantee is what makes encode always terminate.
+// NOT thread-safe — mutates ``pieces_`` / cached tables in place.
 void Unigram::train_with_options(
     const std::vector<std::string>& corpus,
     std::size_t target_vocab_size,

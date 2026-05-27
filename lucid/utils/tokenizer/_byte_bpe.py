@@ -43,13 +43,16 @@ class _ByteLevelDecodeMixin:
     """Shared decode override for both BBPE flavours.
 
     Joins token surface forms, runs them through
-    :meth:`ByteLevel.decode_bytes` to undo the GPT-2 byte mapping,
-    then UTF-8 decodes back to ``str``.
+    :meth:`ByteLevel.decode_bytes` to undo the GPT-2 byte-to-unicode
+    mapping, then UTF-8-decodes back to ``str``.  Without this
+    reverse-mapping step the decoded output would look like
+    ``"Ġworld"`` instead of ``" world"``.
     """
 
     _id_to_token: dict[int, str]
 
     def _decode_one(self, ids: list[int]) -> str:
+        """Reverse the byte-mapping and UTF-8 decode joined tokens."""
         # 1. Join the byte-mapped tokens.
         text = "".join(self._id_to_token[i] for i in ids if i in self._id_to_token)
         # 2. Reverse the byte-to-unicode mapping → raw UTF-8 bytes.
@@ -71,20 +74,54 @@ class _ByteLevelDecodeMixin:
 class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
     r"""Pure-Python byte-level BPE (GPT-2 / RoBERTa convention).
 
+    Subclasses :class:`BPETokenizer` and swaps in a
+    :class:`~lucid.utils.tokenizer._pre_tokenizers.ByteLevel`
+    pre-tokenizer so the underlying BPE algorithm sees a printable
+    Unicode alphabet of size 256 instead of raw bytes.  The GPT-2
+    byte-to-unicode mapping shifts the unprintable bytes
+    (``0x00``–``0x20``, ``0x7F``–``0xA0``) into a safe Unicode block
+    so every byte sequence is representable and **no UNK token is
+    needed**.
+
+    The merge table + training loop are inherited unchanged; the
+    only differences are the pre-tokenizer (encode side) and the
+    byte-mapping reversal in :meth:`~ByteLevelBPETokenizer.decode`
+    (decode side).
+
+    For production / latency-sensitive use, prefer
+    :class:`ByteLevelBPETokenizerFast`.
+
     Parameters
     ----------
     vocab : dict[str, int]
-        Token-string → id map.  Tokens are the byte-mapped Unicode
-        strings (e.g. ``"Ġworld"`` for `` world``), NOT raw bytes.
+        Token-string → id map.  Tokens are the GPT-2 byte-mapped
+        Unicode strings (e.g. ``"Ġworld"`` for `` world``), **not**
+        raw bytes.
     merges : list[tuple[str, str]]
-        BPE merges, same format as plain BPE.
+        Ordered BPE merge pairs — index = rank (lower = higher
+        priority).  Same format as plain BPE.
     add_prefix_space : bool, default False
-        Whether to prepend a space to the input before pre-tokenizing
-        (so the first word also gets a ``Ġ`` prefix).  GPT-2 default
-        is ``False``; RoBERTa default is ``True``.
+        Whether to prepend a space to the input before
+        pre-tokenizing (so the first word also gets a ``Ġ`` prefix).
+        GPT-2 default is ``False``; RoBERTa default is ``True``.
     normalizer : Normalizer, optional
-        Default :class:`NFC` (matches GPT-2).
+        Pre-encode normalisation chain.  Default
+        :class:`~lucid.utils.tokenizer._normalizers.NFC` (matches
+        GPT-2).
     special_tokens : SpecialTokens, optional
+        Special-token registry — see
+        :class:`lucid.utils.tokenizer.SpecialTokens`.
+
+    Notes
+    -----
+    Any published Hugging Face GPT-2 / RoBERTa / BART / distilGPT
+    checkpoint loads without modification via
+    :meth:`~ByteLevelBPETokenizer.from_pretrained`.
+
+    See Also
+    --------
+    ByteLevelBPETokenizerFast : C++-backed equivalent with the same API.
+    BPETokenizer : Classical (non byte-level) BPE base.
     """
 
     def __init__(
@@ -110,6 +147,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         return "byte_bpe"
 
     def _save_extras(self) -> dict[str, object]:
+        """Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "ByteLevelBPE",
@@ -128,11 +166,34 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "ByteLevelBPETokenizer":
-        """Load from HF-compatible directory.
+        """Load from a Hugging Face-compatible directory.
 
-        Same on-disk format as :class:`BPETokenizer`: either
-        ``vocab.json`` + ``merges.txt`` legacy pair OR unified
-        ``tokenizer.json``.
+        Same on-disk format as :class:`BPETokenizer`: either the
+        legacy ``vocab.json`` + ``merges.txt`` pair OR the unified
+        ``tokenizer.json``.  When the unified file is present, it
+        wins and its ``model.add_prefix_space`` overrides the
+        ``add_prefix_space`` argument.
+
+        Parameters
+        ----------
+        directory : str
+            Path to the tokenizer directory.
+        add_prefix_space : bool, default False
+            Fallback value when not specified in the on-disk config.
+        normalizer, special_tokens
+            See class docstring.  ``special_tokens`` falls back to
+            the on-disk ``special_tokens_map.json`` when omitted.
+
+        Returns
+        -------
+        ByteLevelBPETokenizer
+            A new tokenizer populated from disk.
+
+        Raises
+        ------
+        FileNotFoundError
+            If neither ``tokenizer.json`` nor the legacy pair exists
+            in ``directory``.
         """
         import json
 
@@ -178,12 +239,22 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         *,
         vocab_size: int = 50_000,
     ) -> None:
-        """Train via the parent :meth:`BPETokenizer.train`.
+        """Re-train this tokenizer from scratch on ``corpus``.
 
-        The configured :class:`ByteLevel` pre-tokenizer means the
+        Delegates to the parent :meth:`BPETokenizer.train`.  The
+        configured :class:`ByteLevel` pre-tokenizer means the
         algorithm sees byte-mapped chunks throughout training, so
         the resulting vocab + merges are in GPT-2 byte-mapped form
-        (compatible with HF GPT-2 / RoBERTa export).
+        (compatible with Hugging Face GPT-2 / RoBERTa export).
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Each item is one document.  Generators are consumed
+            exactly once.
+        vocab_size : int, default 50 000
+            Target total vocab size.  GPT-2's published vocab is
+            50 257; RoBERTa's is 50 265.
         """
         super().train(corpus, vocab_size=vocab_size)
 
@@ -192,10 +263,23 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
 
 
 class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
-    """C++-backed BBPE.  Identical configuration semantics to
+    r"""C++-backed byte-level BPE tokenizer.
+
+    Identical configuration semantics to
     :class:`ByteLevelBPETokenizer`; uses
     :class:`lucid._C.engine.utils.tokenizer.BPE` for the merge hot
-    loop and the same ByteLevel pre-tokenizer in Python."""
+    loop and the same :class:`ByteLevel` pre-tokenizer in Python.
+    Encode outputs are bit-identical to the pure-Python flavour for
+    the same vocab + same merges.
+
+    Parameters
+    ----------
+    Same as :class:`ByteLevelBPETokenizer`.
+
+    See Also
+    --------
+    ByteLevelBPETokenizer : Pure-Python reference; same vocab format.
+    """
 
     def __init__(
         self,
@@ -220,6 +304,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         return "byte_bpe"
 
     def _save_extras(self) -> dict[str, object]:
+        """Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "ByteLevelBPE",
@@ -238,6 +323,24 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "ByteLevelBPETokenizerFast":
+        """Identical loader to :meth:`ByteLevelBPETokenizer.from_file`;
+        the only difference is the returned class (and hence the
+        encode backend).
+
+        Parameters
+        ----------
+        See :meth:`ByteLevelBPETokenizer.from_file`.
+
+        Returns
+        -------
+        ByteLevelBPETokenizerFast
+            A new C++-backed tokenizer populated from disk.
+
+        Raises
+        ------
+        FileNotFoundError
+            If neither ``tokenizer.json`` nor the legacy pair exists.
+        """
         import json
 
         unified = os.path.join(directory, "tokenizer.json")
@@ -281,19 +384,26 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         *,
         vocab_size: int = 50_000,
     ) -> None:
-        """Train via the parent :meth:`BPETokenizerFast.train` (which
-        delegates to the C++ BPE algorithm).
+        """Re-train in C++ via the parent
+        :meth:`BPETokenizerFast.train`.
 
         The ByteLevel pre-tokenizer normalizes every byte to its
-        printable form before the corpus reaches the C++ training
-        loop, so the resulting vocab is in byte-mapped form (HF
-        GPT-2 compatible).
+        printable form **before** the corpus reaches the C++
+        training loop, so the resulting vocab is in byte-mapped form
+        (Hugging Face GPT-2 compatible).
 
         Note: the C++ ``BPE::train`` does its OWN whitespace split
         on the raw input, so we pre-encode the corpus through the
-        ByteLevel pre-tokenizer here in Python before handing off
-        — otherwise the training would learn merges on raw bytes
+        ByteLevel pre-tokenizer here in Python before handing off —
+        otherwise the training would learn merges on raw bytes
         rather than byte-mapped codepoints.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Each item is one document.
+        vocab_size : int, default 50 000
+            Target total vocab size.
         """
         encoded_corpus: list[str] = []
         for doc in corpus:

@@ -47,7 +47,14 @@ from lucid.utils.tokenizer._pre_tokenizers import (
 
 
 class _WordPieceCommonMixin:
-    """Shared algorithm + post-processing for both WordPiece flavours."""
+    """Shared algorithm + post-processing for both WordPiece flavours.
+
+    Holds the normalizer + pre-tokenizer chain and the BERT-style
+    decode join logic used by both :class:`WordPieceTokenizer` and
+    :class:`WordPieceTokenizerFast`.  The encode hot-path lives in
+    each subclass (Python loop vs C++ call), but the surrounding
+    text preparation + token-to-string rendering are identical.
+    """
 
     _normalizer: Normalizer | None
     _pre_tokenizer: PreTokenizer
@@ -60,8 +67,7 @@ class _WordPieceCommonMixin:
         return [chunk for chunk, _ in self._pre_tokenizer(text)]
 
     def _decode_join(self, ids: list[int], id_to_token: dict[int, str]) -> str:
-        """Standard BERT-style decode: join tokens; strip ``##`` from
-        continuation pieces; emit a space before each non-continuation."""
+        """BERT-style decode join (strip ``##`` continuations, insert spaces)."""
         out: list[str] = []
         first = True
         for i in ids:
@@ -84,26 +90,64 @@ class _WordPieceCommonMixin:
 class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
     r"""Reference (pure-Python) WordPiece tokenizer.
 
+    Implements BERT's WordPiece algorithm in pure Python.  Each
+    pre-tokenized word is split via **greedy longest-match**: the
+    longest vocab prefix is emitted, then the algorithm recurses on
+    the remainder with the continuation prefix (``"##"`` by default)
+    prepended.  If no prefix matches at any position, the whole word
+    becomes a single UNK token.
+
+    Easy to read, easy to step through, no C++ build required.  For
+    production / latency-sensitive use, prefer
+    :class:`WordPieceTokenizerFast` — same algorithm, same vocab
+    format, bit-identical encode outputs, but the hot loop runs in
+    C++.
+
     Parameters
     ----------
     vocab : dict[str, int]
-        BERT-style vocab.  Continuation tokens prefixed with ``##``.
-    unk_token : str, default "[UNK]"
+        BERT-style vocab — token-string → id map.  Continuation
+        tokens are prefixed with ``##``; ``id = line index`` when
+        loaded from ``vocab.txt``.
+    unk_token : str, default ``"[UNK]"``
         Token emitted when no valid longest-match prefix can be
         found.  Must be present in ``vocab`` for it to actually
-        emit an id (otherwise emits silently nothing).
-    continuing_prefix : str, default "##"
-        Prefix for non-initial subwords.
+        emit an id (otherwise nothing is emitted for that word).
+    continuing_prefix : str, default ``"##"``
+        Prefix used to distinguish non-initial subwords from initial
+        ones.  Almost never overridden outside of WordPiece variants.
     max_chars_per_word : int, default 100
-        Words longer than this are immediately emitted as UNK
-        (matches BERT's ``BasicTokenizer`` cap).
+        Words longer than this are short-circuited to UNK without
+        running longest-match (matches BERT's ``BasicTokenizer`` cap
+        and bounds worst-case encode cost).
     normalizer : Normalizer, optional
-        Default :class:`BertNormalizer`.
+        Pre-encode normalisation chain.  Default
+        :class:`~lucid.utils.tokenizer._normalizers.BertNormalizer`.
     pre_tokenizer : PreTokenizer, optional
-        Default :class:`WhitespacePunctuationSplit`.
+        Chunk-splitter run before WordPiece.  Default
+        :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespacePunctuationSplit`.
     special_tokens : SpecialTokens, optional
-        Defaults to a registry with ``unk=unk_token`` so the
-        tokenizer behaves correctly out of the box.
+        Special-token registry.  Defaults to ``SpecialTokens(unk=unk_token)``
+        so the tokenizer behaves correctly out of the box.
+
+    Notes
+    -----
+    The greedy longest-match is O(W^2) per word in the worst case
+    (where W = word length), but typical English words have W < 20,
+    so the Python interpreter overhead dominates.
+    :class:`WordPieceTokenizerFast` recovers an order of magnitude
+    on long-document encoding.
+
+    Examples
+    --------
+    >>> tok = WordPieceTokenizer.from_pretrained("bert-base-uncased-dir")
+    >>> ids = tok.encode("hello world")
+    >>> tok.decode(ids)
+    'hello world'
+
+    See Also
+    --------
+    WordPieceTokenizerFast : C++-backed equivalent with the same API.
     """
 
     def __init__(
@@ -147,7 +191,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         return self._id_to_token.get(token_id)
 
     def _encode_word(self, word: str) -> list[int]:
-        """Apply greedy longest-match to one pre-tokenized word."""
+        """Greedy longest-match split of one pre-tokenized word into ids."""
         # Whole-word shortcut.
         if word in self._vocab:
             return [self._vocab[word]]
@@ -192,14 +236,30 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
-        """Greedy frequency-based WordPiece training (BPE-like).
+        """Re-train this tokenizer from scratch on ``corpus``.
 
-        For each iteration, count adjacent symbol-pair frequencies
-        across all words + merge the most frequent.  Same
-        deterministic tie-break (lexicographic key order) as BPE.
+        Greedy frequency-based WordPiece training (matches Hugging
+        Face's ``WordPieceTrainer`` semantics; faster than the full
+        log-likelihood training in the original paper).  For each
+        iteration, counts adjacent symbol-pair frequencies across
+        all words and merges the most frequent pair, growing the
+        vocab by 1 each step until ``vocab_size`` is reached or no
+        pair appears more than once.
 
-        The result is a BERT-compatible vocab with ``##``
-        continuation markers and the configured UNK token.
+        Replaces :attr:`_vocab` in place; previous contents are
+        discarded.  The result is a BERT-compatible vocab with
+        ``##`` continuation markers and the configured UNK token
+        reserved at id 0.  Tie-break is lexicographic key order for
+        determinism (same convention as BPE).
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Each item is one document (or chunk thereof).  Generators
+            are consumed exactly once.
+        vocab_size : int, default 30 000
+            Target total vocab size (chars + merges).  Stops early
+            if no more pair-merges occur.
         """
         # Pre-tokenize + count word frequencies.
         word_freq: dict[str, int] = {}
@@ -264,11 +324,24 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         self._refresh_special_ids()
 
     def save(self, directory: str) -> None:
+        """Persist as a BERT-style directory (``vocab.txt`` +
+        unified ``tokenizer.json`` + ``special_tokens_map.json``).
+
+        Writing both legacy and unified formats means the resulting
+        directory loads back via :meth:`from_pretrained` regardless
+        of which format the caller looks for first.
+
+        Parameters
+        ----------
+        directory : str
+            Output directory; created if missing.
+        """
         os.makedirs(directory, exist_ok=True)
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "WordPiece",
@@ -291,7 +364,29 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "WordPieceTokenizer":
-        """Load from a BERT-style directory containing ``vocab.txt``."""
+        """Load from a BERT-style directory containing ``vocab.txt``.
+
+        Parameters
+        ----------
+        directory : str
+            Directory containing ``vocab.txt`` and optionally
+            ``special_tokens_map.json``.
+        unk_token, continuing_prefix, max_chars_per_word
+            See class docstring.  Defaults match BERT.
+        normalizer, pre_tokenizer, special_tokens
+            See class docstring.  ``special_tokens`` falls back to
+            the on-disk ``special_tokens_map.json`` when omitted.
+
+        Returns
+        -------
+        WordPieceTokenizer
+            A new tokenizer populated from disk.
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``vocab.txt`` is missing.
+        """
         vocab_path = os.path.join(directory, "vocab.txt")
         if not os.path.isfile(vocab_path):
             raise FileNotFoundError(
@@ -316,12 +411,27 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
 
 
 class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
-    """C++-backed WordPiece tokenizer.  See :class:`WordPieceTokenizer`.
+    r"""C++-backed WordPiece tokenizer.
 
-    The greedy longest-match encode + training loop run in C++ via
-    :class:`lucid._C.engine.utils.tokenizer.WordPiece`.  The Python
-    side handles normalisation + pre-tokenization (so the same
-    pre-processing chain works for both flavours).
+    Identical algorithm + vocab format to :class:`WordPieceTokenizer`;
+    the hot loops (greedy longest-match encode + training) run in
+    C++ via :class:`lucid._C.engine.utils.tokenizer.WordPiece`.
+    Encode outputs are bit-identical for the same vocab + same
+    normalizer + same pre-tokenizer.
+
+    The Python side still handles normalisation + pre-tokenization
+    (so user-defined Python normalizers compose with the C++
+    backend) and the BERT-style decode join.
+
+    Parameters
+    ----------
+    Same as :class:`WordPieceTokenizer`.  The C++ backend is
+    constructed transparently in ``__init__`` and held as
+    :attr:`_cpp`.
+
+    See Also
+    --------
+    WordPieceTokenizer : Pure-Python reference; same vocab format.
     """
 
     def __init__(
@@ -384,12 +494,22 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
-        """Train in C++ via :meth:`WordPiece.train`.
+        """Re-train in C++ via :meth:`WordPiece.train`.
 
-        Pre-encode the corpus through the configured normalizer +
+        Pre-encodes the corpus through the configured normalizer +
         pre-tokenizer in Python so the C++ training loop sees
         already-normalized, whitespace-separated words (its internal
         splitter is also whitespace, so this composes correctly).
+        After training, the Python-side vocab cache is refreshed
+        from the C++ side so subsequent encodes see the new state.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Each item is one document.  Materialised to a list
+            before the C++ binding call.
+        vocab_size : int, default 30 000
+            Target total vocab size.
         """
         encoded_corpus: list[str] = []
         for doc in corpus:
@@ -401,11 +521,13 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         self._refresh_special_ids()
 
     def save(self, directory: str) -> None:
+        """Same format as :meth:`WordPieceTokenizer.save`."""
         os.makedirs(directory, exist_ok=True)
         _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
         return {
             "model": {
                 "type": "WordPiece",
@@ -428,6 +550,24 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "WordPieceTokenizerFast":
+        """Identical loader to :meth:`WordPieceTokenizer.from_file`;
+        the only difference is the returned class (and hence the
+        encode backend).
+
+        Parameters
+        ----------
+        See :meth:`WordPieceTokenizer.from_file`.
+
+        Returns
+        -------
+        WordPieceTokenizerFast
+            A new C++-backed tokenizer populated from disk.
+
+        Raises
+        ------
+        FileNotFoundError
+            If ``vocab.txt`` is missing.
+        """
         vocab_path = os.path.join(directory, "vocab.txt")
         if not os.path.isfile(vocab_path):
             raise FileNotFoundError(

@@ -744,6 +744,99 @@ class _einops_namespace:
 
 einops: _einops_namespace
 
+# ── _C_engine.utils.tokenizer sub-namespace ──────────────────────────────────
+# Mirrors lucid/_C/bindings/bind_tokenizer.cpp.  Every class here is wrapped
+# by the matching lucid.utils.tokenizer.*Tokenizer{Fast} Python class.
+class SpecialTokens:
+    """7-slot canonical special-token registry + free-form ``extra`` map."""
+    pad: str
+    unk: str
+    bos: str
+    eos: str
+    mask: str
+    sep: str
+    cls: str
+    extra: dict[str, str]
+    def __init__(self) -> None: ...
+
+class Tokenizer:
+    """Abstract base.  Concrete subclasses: BPE / WordPiece / Unigram /
+    LookupTokenizer (+ its 5 derivatives)."""
+    special_tokens: SpecialTokens
+    def encode(self, text: str) -> list[int]: ...
+    def decode(self, ids: Sequence[SupportsInt]) -> str: ...
+    def encode_batch(self, texts: Sequence[str]) -> list[list[int]]: ...
+    def decode_batch(self, batch: Sequence[Sequence[SupportsInt]]) -> list[str]: ...
+    def vocab_size(self) -> int: ...
+    def algo(self) -> str: ...
+    def get_vocab(self) -> dict[str, int]: ...
+    def id_to_token(self, id: SupportsInt) -> str: ...
+    def train(self, corpus: Sequence[str], target_vocab_size: SupportsInt) -> None: ...
+
+class BPE(Tokenizer):
+    """Byte-Pair Encoding (Sennrich et al. 2016)."""
+    def __init__(self, vocab: dict[str, int] = ..., merges: list[tuple[str, str]] = ...) -> None: ...
+    def merges(self) -> list[tuple[str, str]]: ...
+
+class LookupTokenizer(Tokenizer):
+    """Common base for the 5 primitive lookup tokenizers."""
+    ...
+
+class ByteTokenizer(LookupTokenizer):
+    """Fixed 256-id byte vocab (no training)."""
+    def __init__(self) -> None: ...
+
+class CharTokenizer(LookupTokenizer):
+    """Per-codepoint vocab built from a corpus."""
+    def __init__(self, vocab: dict[str, int] = ...) -> None: ...
+
+class WhitespaceTokenizer(LookupTokenizer):
+    """Whitespace-split vocab; OOV silently dropped."""
+    def __init__(self, vocab: dict[str, int] = ...) -> None: ...
+
+class WordTokenizer(LookupTokenizer):
+    """Whitespace-split vocab; OOV → UNK or ValueError."""
+    def __init__(self, vocab: dict[str, int] = ...) -> None: ...
+
+class RegexTokenizer(LookupTokenizer):
+    """User-supplied ECMAScript regex defines token boundaries."""
+    def __init__(self, pattern: str, vocab: dict[str, int] = ...) -> None: ...
+    def pattern(self) -> str: ...
+
+class WordPiece(Tokenizer):
+    """WordPiece (Schuster & Nakajima 2012; BERT / DistilBERT / RoFormer)."""
+    def __init__(self, vocab: dict[str, int] = ..., unk_token: str = ..., continuing_prefix: str = ..., max_chars_per_word: SupportsInt = ...) -> None: ...
+    def unk_token(self) -> str: ...
+    def continuing_prefix(self) -> str: ...
+
+class Unigram(Tokenizer):
+    """Unigram LM (Kudo 2018; SentencePiece — T5 / mBART / LLaMA)."""
+    def __init__(self, pieces: list[tuple[str, float]] = ..., unk_token: str = ..., unk_log_prob: float = ...) -> None: ...
+    def pieces(self) -> list[tuple[str, float]]: ...
+    def unk_token(self) -> str: ...
+    def unk_log_prob(self) -> float: ...
+    def train_with_options(self, corpus: Sequence[str], target_vocab_size: SupportsInt, num_iterations: SupportsInt = ..., shrink_factor: float = ..., max_piece_length: SupportsInt = ..., initial_vocab_multiplier: SupportsInt = ...) -> None: ...
+
+class _utils_tokenizer_namespace:
+    """Stub for ``_C_engine.utils.tokenizer.*`` — see classes above."""
+    SpecialTokens = SpecialTokens
+    Tokenizer = Tokenizer
+    BPE = BPE
+    LookupTokenizer = LookupTokenizer
+    ByteTokenizer = ByteTokenizer
+    CharTokenizer = CharTokenizer
+    WhitespaceTokenizer = WhitespaceTokenizer
+    WordTokenizer = WordTokenizer
+    RegexTokenizer = RegexTokenizer
+    WordPiece = WordPiece
+    Unigram = Unigram
+
+class _utils_namespace:
+    """Stub for ``_C_engine.utils`` — currently only ``tokenizer``."""
+    tokenizer: _utils_tokenizer_namespace
+
+utils: _utils_namespace
+
 # ── Fused kernels & Metal runner ─────────────────────────────────────────────
 
 def _fused_linear_relu(x: TensorImpl, weight: TensorImpl, bias: TensorImpl | None) -> TensorImpl: ...

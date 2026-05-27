@@ -59,8 +59,16 @@
 
 namespace lucid::utils::tokenizer {
 
+// Unigram language model tokenizer.  Owns an ordered ``(piece, log_prob)``
+// table — entry index doubles as the token id, so the order is part of
+// the on-disk contract and must be preserved across save/load.  All
+// encode paths are Viterbi-optimal; the UNK piece is always at a known
+// id so feasibility of segmentation is guaranteed post-train.  Matches
+// the Python ``lucid.utils.tokenizer.UnigramTokenizer`` wrapper exactly.
 class Unigram final : public Tokenizer {
 public:
+    // Default-construct an empty model; populate via ``train`` or by
+    // re-constructing with explicit pieces from a loaded checkpoint.
     Unigram();
 
     // Construct from explicit (piece, log_prob) pairs.  The order

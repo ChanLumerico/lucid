@@ -1,6 +1,27 @@
 // lucid/_C/utils/tokenizer/WordPiece.cpp
 //
-// WordPiece algorithm implementation.  See WordPiece.h for API.
+// WordPiece algorithm implementation.  See WordPiece.h for the API
+// contract + algorithm summary.  This file is the canonical encode /
+// decode / train surface for every WordPiece-based checkpoint Lucid
+// loads — the Python ``WordPieceTokenizer`` wrapper holds a
+// ``std::unique_ptr<WordPiece>`` and forwards directly through the
+// v-table.
+//
+// Implementation notes
+// --------------------
+// * Encode is greedy longest-match per word with an O(W^2) inner
+//   cost (W = word length in codepoints).  Acceptable because BERT
+//   capped word length at 100; we honour the same cap via
+//   ``max_chars_per_word_``.
+// * Train uses simple whitespace pre-tokenization + greedy frequency
+//   pair-merging — a BPE-style approximation of the full likelihood
+//   objective, matching the HF ``tokenizers`` crate's
+//   ``WordPieceTrainer``.
+// * UTF-8 codepoints are honoured during both encode and train so
+//   multi-byte characters are never split.
+// * Continuation pieces carry the ``##`` prefix as a literal vocab
+//   key — encode prepends it on non-leading segments and decode
+//   strips it back off.
 
 #include "WordPiece.h"
 
@@ -9,8 +30,14 @@
 
 namespace lucid::utils::tokenizer {
 
+// Default constructor — empty vocab.  Populate via ``train`` or by
+// re-constructing with an explicit vocab from ``vocab.txt``.
 WordPiece::WordPiece() = default;
 
+// Construct from explicit ``vocab.txt``-style mapping plus the BERT
+// knobs (UNK token, ``##`` continuation prefix, max chars per word).
+// ``rebuild_tables_`` then populates the dense reverse table and
+// caches ``unk_id_`` so the encode hot path skips a hash lookup.
 WordPiece::WordPiece(std::unordered_map<std::string, TokenId> vocab,
                       std::string unk_token,
                       std::string continuing_prefix,
@@ -22,6 +49,10 @@ WordPiece::WordPiece(std::unordered_map<std::string, TokenId> vocab,
     rebuild_tables_();
 }
 
+// Re-derive every cached table (``id_to_token_``, ``unk_id_``) from
+// the canonical ``vocab_`` map.  Invariant: must be called after ANY
+// mutation of ``vocab_`` — encode/decode read the cached tables
+// directly and would otherwise see stale data.
 void WordPiece::rebuild_tables_() {
     TokenId max_id = -1;
     for (const auto& [tok, id] : vocab_)
@@ -35,12 +66,23 @@ void WordPiece::rebuild_tables_() {
     unk_id_ = (it == vocab_.end()) ? -1 : it->second;
 }
 
+// O(1) reverse lookup via the dense ``id_to_token_`` array.  Empty
+// string for out-of-range ids (matches the BERT-tokenizers convention
+// rather than throwing).
 std::string WordPiece::id_to_token(TokenId id) const {
     if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
         return "";
     return id_to_token_[static_cast<std::size_t>(id)];
 }
 
+// Greedy longest-match WordPiece for ONE pre-tokenized word.  Three
+// stages — (1) whole-word fast path, (2) BERT's max-length guard
+// (default 100 chars → UNK), (3) left-to-right scan that picks the
+// longest vocab-resident prefix at each position, applying the ``##``
+// continuation prefix to every non-leading segment.  If no valid
+// prefix exists at any position the whole word collapses to a single
+// UNK (BERT semantics).  All segmentation seeks UTF-8 codepoint
+// boundaries so multi-byte characters survive intact.
 IdSequence WordPiece::encode_word_(const std::string& word) const {
     // 1. Whole-word match shortcut.
     if (auto it = vocab_.find(word); it != vocab_.end())
@@ -100,6 +142,9 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
     return ids;
 }
 
+// Public encode entry point.  Splits on whitespace as a fallback when
+// called directly; the Python wrapper normally pre-tokenizes via the
+// BertNormalizer + WhitespacePunctuationSplit chain before invoking.
 IdSequence WordPiece::encode(const std::string& text) const {
     // The Python wrapper splits the input into pre-tokenized words
     // before calling encode (via the configured WordPieceNormalizer
@@ -124,6 +169,10 @@ IdSequence WordPiece::encode(const std::string& text) const {
     return out;
 }
 
+// Decode by stitching surface forms back together.  Continuation
+// pieces (``##`` prefix) glue onto the previous token without a
+// space; every non-continuation token gets a leading space (except
+// the very first).  Out-of-range ids are skipped silently.
 std::string WordPiece::decode(const IdSequence& ids) const {
     // Join tokens; strip leading "##" from continuation pieces and
     // emit a space before each non-continuation token.
@@ -175,6 +224,14 @@ struct WordState {
 
 }  // namespace
 
+// Public training entry point.  Three-phase pipeline — (1) tally
+// word frequencies via whitespace pre-tokenization, (2) seed vocab
+// with every codepoint (plain + ``##`` continuation) and the UNK,
+// (3) greedy bigram-frequency merging until ``target_vocab_size`` is
+// reached or no further pair occurs more than once.  Merged surface
+// forms strip the right half's ``##`` prefix (keeping the left's, if
+// any) so the resulting vocab matches BERT layout byte-for-byte.
+// NOT thread-safe — mutates ``vocab_`` / cached tables in place.
 void WordPiece::train(const std::vector<std::string>& corpus,
                        std::size_t target_vocab_size) {
     // 1. Word frequencies.

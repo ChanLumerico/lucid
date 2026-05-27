@@ -42,8 +42,16 @@
 
 namespace lucid::utils::tokenizer {
 
+// WordPiece tokenizer.  Owns a string→id vocab + dense reverse table.
+// Continuation pieces are stored with the ``##`` prefix already baked
+// into the vocab key (BERT convention) — encode/decode are responsible
+// for adding/stripping the prefix at segment boundaries.  ``unk_id_``
+// is cached so the encode hot path never has to hash the UNK string.
+// Matches the Python ``lucid.utils.tokenizer.WordPieceTokenizer``.
 class WordPiece final : public Tokenizer {
 public:
+    // Default-construct an empty model; populate via ``train`` or by
+    // re-constructing with an explicit vocab from a loaded checkpoint.
     WordPiece();
 
     // Construct from a HF-compatible ``vocab.txt`` mapping

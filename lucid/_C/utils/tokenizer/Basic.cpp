@@ -1,7 +1,13 @@
 // lucid/_C/utils/tokenizer/Basic.cpp
 //
 // Implementations for the 5 Basic-tier tokenizers.  See Basic.h for
-// the API contract.
+// the API contract + the family overview.
+//
+// All concrete classes share the ``LookupTokenizer`` base — encode is
+// always "split → vocab.find for each chunk → emit id (or UNK)" and
+// decode is "id → token string concat".  Subclasses differ ONLY in
+// the ``split_to_chunks_`` rule, so the per-class implementations
+// below are intentionally short.
 
 #include "Basic.h"
 
@@ -20,6 +26,9 @@ LookupTokenizer::LookupTokenizer(
     rebuild_id_to_token_();
 }
 
+// Re-derive the dense id → token reverse table from ``vocab_``.
+// Invariant: must be called after any mutation of ``vocab_`` so that
+// ``decode`` / ``id_to_token`` see consistent state.
 void LookupTokenizer::rebuild_id_to_token_() {
     TokenId max_id = -1;
     for (const auto& [tok, id] : vocab_)
@@ -37,6 +46,10 @@ std::string LookupTokenizer::id_to_token(TokenId id) const {
     return id_to_token_[static_cast<std::size_t>(id)];
 }
 
+// Shared encode hot path — pre-tokenize via the subclass's
+// ``split_to_chunks_`` then map each chunk through the vocab.  Misses
+// fall back to UNK if one is configured, otherwise are silently
+// dropped (matches HF behaviour for vocab-less Whitespace).
 IdSequence LookupTokenizer::encode(const std::string& text) const {
     auto chunks = split_to_chunks_(text);
     IdSequence ids;
@@ -53,6 +66,9 @@ IdSequence LookupTokenizer::encode(const std::string& text) const {
     return ids;
 }
 
+// Shared decode — concatenate each id's surface form.  Subclasses
+// that need delimiter insertion (Whitespace / Word / Regex) override
+// to emit spaces between tokens.
 std::string LookupTokenizer::decode(const IdSequence& ids) const {
     std::string out;
     for (TokenId id : ids) {
@@ -63,6 +79,12 @@ std::string LookupTokenizer::decode(const IdSequence& ids) const {
     return out;
 }
 
+// Shared training — walk the corpus through the subclass's
+// pre-tokenizer and insert each new chunk in encounter order, capped
+// at ``target_vocab_size``.  Special tokens are deliberately NOT
+// auto-seeded here (they're configuration, not corpus-derived); the
+// Python wrapper is responsible for pre-seeding or post-adding them.
+// Hard Rule H13 (no unstructured jumps) is satisfied via a sentinel flag.
 void LookupTokenizer::train(
     const std::vector<std::string>& corpus,
     std::size_t target_vocab_size) {
@@ -86,7 +108,7 @@ void LookupTokenizer::train(
     add_special(special_.pad, "pad");
     add_special(special_.unk, "unk");
 
-    // Per Hard Rule H13 (no ``goto``), early-exit on vocab-full uses
+    // Per Hard Rule H13 (no unstructured jumps), early-exit on vocab-full uses
     // a sentinel flag the outer loop checks each iteration.
     bool full = false;
     for (const auto& doc : corpus) {
@@ -118,6 +140,8 @@ ByteTokenizer::ByteTokenizer() {
     rebuild_id_to_token_();
 }
 
+// Split rule: one chunk per raw byte (no UTF-8 awareness — that's the
+// whole point of byte-level tokenization).
 std::vector<std::string> ByteTokenizer::split_to_chunks_(
     const std::string& text) const {
     std::vector<std::string> out;
@@ -136,6 +160,9 @@ CharTokenizer::CharTokenizer(
     std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
+// Split rule: one chunk per UTF-8 codepoint.  Lead-byte inspection
+// derives the codepoint length; invalid lead bytes are treated as
+// single-byte chunks so the function never throws on malformed input.
 std::vector<std::string> CharTokenizer::split_to_chunks_(
     const std::string& text) const {
     std::vector<std::string> out;
@@ -163,6 +190,8 @@ WhitespaceTokenizer::WhitespaceTokenizer(
     std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
+// Split rule: emit each whitespace-delimited run as a chunk; the
+// whitespace itself is discarded (decode rebuilds it as single spaces).
 std::vector<std::string> WhitespaceTokenizer::split_to_chunks_(
     const std::string& text) const {
     std::vector<std::string> out;
@@ -206,6 +235,9 @@ WordTokenizer::WordTokenizer(
     std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
+// Split rule: identical to Whitespace.  The semantic difference is
+// purely encode-time — Word expects ``special_.unk`` to be configured
+// so OOV words become UNK instead of being dropped.
 std::vector<std::string> WordTokenizer::split_to_chunks_(
     const std::string& text) const {
     // Same split rule as Whitespace.  The semantic difference (UNK

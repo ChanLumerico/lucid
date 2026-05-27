@@ -1,6 +1,23 @@
 // lucid/_C/utils/tokenizer/BPE.cpp
 //
-// BPE algorithm implementation.  See BPE.h for the API contract.
+// BPE algorithm implementation.  See BPE.h for the API contract +
+// the algorithm summary.  This file is the canonical encode / decode
+// / train surface for every BPE-based checkpoint Lucid loads — the
+// Python ``BPETokenizerFast`` wrapper holds a ``std::unique_ptr<BPE>``
+// and forwards directly through the v-table.
+//
+// Implementation notes
+// --------------------
+// * Encode is a greedy lowest-rank-first merge loop with an O(N · M)
+//   inner cost (N = chunk length, M = remaining merges).  Acceptable
+//   for production: post-pre-tokenization chunks average ~10 ids.
+// * Train uses simple whitespace pre-tokenization + greedy frequency
+//   merging — the same algorithm as Sennrich 2016 (no log-likelihood
+//   heuristic).  Callers wanting richer training should use the slow
+//   Python ``BPETokenizer.train`` which exposes a full normaliser +
+//   pre-tokeniser chain.
+// * UTF-8 codepoints are honoured during chunk seeding so multi-byte
+//   characters aren't split mid-encoding.
 
 #include "BPE.h"
 
@@ -15,14 +32,27 @@
 
 namespace lucid::utils::tokenizer {
 
+// Default constructor — empty vocab + merge table.  The Python
+// ``from_pretrained`` factory populates state by calling ``train`` or
+// by injecting via the explicit-vocab constructor below.
 BPE::BPE() = default;
 
+// Construct from explicit vocab + ordered merge list.  Both inputs
+// are moved in; ``rebuild_tables_`` then compiles the textual merges
+// into the id-indexed merge map used by the encode hot loop.
 BPE::BPE(std::unordered_map<std::string, TokenId> vocab,
          std::vector<std::pair<std::string, std::string>> merges)
     : vocab_(std::move(vocab)), merges_str_(std::move(merges)) {
     rebuild_tables_();
 }
 
+// Re-derive every cached table from the canonical ``vocab_`` +
+// ``merges_str_`` state.  Invariant: must be called after ANY
+// mutation of either field (construction / train / external setters)
+// — encode/decode read the cached tables directly and would otherwise
+// see stale data.  Malformed merges (missing halves or missing
+// merged form in the vocab) are silently skipped so partially-broken
+// HF dumps still load.
 void BPE::rebuild_tables_() {
     // Build reverse id→string table.
     TokenId max_id = -1;
@@ -56,12 +86,23 @@ void BPE::rebuild_tables_() {
     }
 }
 
+// O(1) reverse lookup via the dense ``id_to_token_`` array.  Returns
+// the empty string for out-of-range ids (matches HF behaviour rather
+// than throwing — callers can detect by checking ``vocab_size()``).
 std::string BPE::id_to_token(TokenId id) const {
     if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
         return "";
     return id_to_token_[static_cast<std::size_t>(id)];
 }
 
+// Encode a single pre-tokenized chunk to its BPE id sequence.
+// Two phases:
+//   1. Seed: split the chunk into UTF-8 codepoints + look each up in
+//      the vocab (UNK fallback if configured; silently dropped if not,
+//      matching HF semantics).
+//   2. Greedy merge: repeatedly pick the lowest-rank applicable pair
+//      and merge in place.  Naive O(N · M) but the constant factor is
+//      tiny because pre-tokenization keeps chunks short (~10 ids).
 IdSequence BPE::encode_chunk_(const std::string& chunk) const {
     // Initial id sequence: one entry per UTF-8 codepoint (the Python
     // side has already done byte-level escaping for byte-level BPE; for
@@ -128,6 +169,10 @@ IdSequence BPE::encode_chunk_(const std::string& chunk) const {
     return ids;
 }
 
+// Public encode entry point.  Treats the entire input as one chunk;
+// callers that need pre-tokenization (split on whitespace + punct,
+// byte-level remap, etc.) handle that in the Python wrapper before
+// invoking ``encode``.
 IdSequence BPE::encode(const std::string& text) const {
     // The Python wrapper does pre-tokenization (split on whitespace +
     // punctuation per the configured pre-tokenizer) BEFORE calling
@@ -139,6 +184,10 @@ IdSequence BPE::encode(const std::string& text) const {
     return encode_chunk_(text);
 }
 
+// Decode by concatenating each id's surface form.  Out-of-range ids
+// are skipped silently; special-token suppression is the Python
+// wrapper's responsibility (it knows the ``skip_special_tokens``
+// flag and the byte-level un-mapping for byte-level BPE).
 std::string BPE::decode(const IdSequence& ids) const {
     std::string out;
     out.reserve(ids.size() * 2);
@@ -169,6 +218,12 @@ struct WordState {
 
 }  // namespace
 
+// Public training entry point.  Drives the four-phase classical BPE
+// pipeline (word-count → seed-vocab → greedy-merge → rebuild-tables)
+// in-place on ``vocab_`` / ``merges_str_``.  Throws on degenerate
+// target sizes; otherwise always succeeds (possibly with a smaller
+// vocab if the corpus runs out of distinct merges before the target
+// is reached).  NOT thread-safe — mutates internal tables.
 void BPE::train(const std::vector<std::string>& corpus,
                 std::size_t target_vocab_size) {
     if (target_vocab_size < 1)

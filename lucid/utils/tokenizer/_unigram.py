@@ -1,22 +1,37 @@
-"""UnigramTokenizer — SentencePiece-flavor subword tokenizer.
+"""UnigramTokenizer — SentencePiece-flavour subword tokenizer (Kudo 2018).
 
-The algorithm used by T5 / mBART / ALBERT / XLNet / LLaMA / Mistral
-(via SentencePiece).  Two flavours:
+The Unigram Language Model tokenizer powers T5 / mBART / ALBERT /
+XLNet / LLaMA / Mistral (all via SentencePiece).  Unlike BPE — which
+builds a deterministic merge sequence — Unigram maintains a *fixed*
+vocabulary of sub-word pieces, each with an associated
+log-probability, and at encode time picks the segmentation that
+maximises the product of piece probabilities (Viterbi over the
+piece-with-max-log-probability lattice).
 
-* :class:`UnigramTokenizer` — pure-Python reference (Viterbi + EM).
+This file holds **both flavours**:
+
+* :class:`UnigramTokenizer` — pure-Python reference implementation.
+  Viterbi decode runs in Python (slow but easy to step through);
+  training delegates to C++ because EM with vocab pruning is a tight
+  numerical loop and a Python rewrite would be 100-1000x slower for
+  any non-trivial corpus.
+
 * :class:`UnigramTokenizerFast` — C++-backed via
-  :class:`lucid._C.engine.utils.tokenizer.Unigram`.
+  :class:`lucid._C.engine.utils.tokenizer.Unigram`.  Same on-disk
+  format, bit-identical encode output, used in production.
 
-Both share the same on-disk format (``tokenizer.json`` with
-``model.vocab = [[piece, log_prob], ...]``).  Encode is Viterbi
-over the piece-with-max-log-probability segmentation; training is
-EM with vocab pruning (Kudo 2018).
+**On-disk format.** A single unified ``tokenizer.json`` with
+``model.vocab = [[piece, log_prob], ...]`` (matching the Hugging
+Face Fast-tokenizers / Rust ``tokenizers`` schema).  Loaded
+verbatim by :meth:`UnigramTokenizer.from_file` /
+:meth:`UnigramTokenizerFast.from_file`.
 
-SentencePiece convention: words are typically prefixed with the
-"▁" (U+2581) character to mark word starts — this lets decode
-recover spaces without ambiguity.  The default
-:class:`SentencePiecePreTokenizer` handles this; pass a different
-:class:`PreTokenizer` to disable (matches plain Unigram behaviour).
+**SentencePiece convention.** Words are prefixed with ``▁``
+(U+2581, LOWER ONE EIGHTH BLOCK) to mark word starts so that decode
+can perfectly reconstruct the original whitespace without
+ambiguity.  The default :class:`SentencePiecePreTokenizer`
+applies this remapping; pass a different :class:`PreTokenizer` to
+disable (matches plain "non-SentencePiece" Unigram behaviour).
 """
 
 import json
@@ -35,15 +50,25 @@ from lucid.utils.tokenizer._pre_tokenizers import PreTokenizer
 
 
 class SentencePiecePreTokenizer(PreTokenizer):
-    """SentencePiece pre-tokenization: replace whitespace runs with
-    a single ``▁`` (U+2581) prefix on each word so decode can
-    perfectly reconstruct the original spacing.
+    """SentencePiece pre-tokenization.
+
+    Replaces every whitespace run with a single ``▁`` (U+2581)
+    prefix on each word so decode can perfectly reconstruct the
+    original spacing.  This is the canonical pre-tokenizer for any
+    Unigram / SentencePiece checkpoint (T5, LLaMA, mBART, ...).
 
     Parameters
     ----------
     add_dummy_prefix : bool, default True
         Prepend ``▁`` to the very first word (matches the canonical
-        SentencePiece behaviour).
+        SentencePiece behaviour).  Set ``False`` for plain Unigram
+        without the SentencePiece word-start marker.
+
+    Notes
+    -----
+    Each emitted chunk keeps the leading ``▁`` so that decode is a
+    simple ``"".join(pieces).replace("▁", " ")`` — see
+    :meth:`UnigramTokenizer._decode_one`.
     """
 
     SP_SPACE = "▁"  # ▁
@@ -52,6 +77,7 @@ class SentencePiecePreTokenizer(PreTokenizer):
         self._add_dummy_prefix = add_dummy_prefix
 
     def pre_tokenize(self, text: str) -> list[tuple[str, tuple[int, int]]]:
+        """Replace whitespace with ``▁`` and split on ``▁`` boundaries."""
         # Replace every whitespace run with SP_SPACE.  Optionally
         # prepend SP_SPACE so the first word also carries the
         # word-start marker.
@@ -124,12 +150,17 @@ def _save_unigram_pieces_json(
 
 
 class _UnigramCommonMixin:
-    """Shared normalizer + pre-tokenizer chain for both flavours."""
+    """Shared normalizer + pre-tokenizer chain for both flavours.
+
+    Subclasses still implement their own ``_encode_one`` (Python
+    Viterbi vs C++ call) but the surface preprocessing is shared.
+    """
 
     _normalizer: Normalizer | None
     _pre_tokenizer: PreTokenizer
 
     def _prepare_chunks(self, text: str) -> list[str]:
+        """Apply normalizer + pre-tokenizer, return chunk strings."""
         if self._normalizer is not None:
             text = self._normalizer(text)
         return [chunk for chunk, _ in self._pre_tokenizer(text)]
@@ -141,22 +172,61 @@ class _UnigramCommonMixin:
 class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
     r"""Reference (pure-Python) Unigram tokenizer.
 
+    Encodes via Viterbi over the lattice of all candidate
+    sub-piece segmentations: for each chunk we build a DP table
+    ``dp[i]`` = best (highest log-prob) path ending at byte offset
+    ``i``, with single-codepoint UNK fallback when no piece spans
+    a region.  Decode is a trivial ``"".join(pieces).replace("▁", " ")``.
+
+    Training is delegated to C++ (see :meth:`train` for the
+    rationale) — even this "pure-Python" flavour does not implement
+    EM in Python because the runtime would be unusable on any
+    real corpus.
+
+    For production / latency-sensitive use, prefer
+    :class:`UnigramTokenizerFast` — same vocab format, bit-identical
+    encode output, but the Viterbi hot loop runs in C++.
+
     Parameters
     ----------
     pieces : list of (str, float)
-        ``(piece_str, log_prob)`` ordered list; index = token id.
-    unk_token : str, default "<unk>"
-        Fallback piece string.  Must appear in ``pieces`` for the
-        UNK id to be defined.
-    unk_log_prob : float, default -100.0
-        Log probability for the UNK piece.
+        Ordered ``(piece_str, log_prob)`` list; index = token id.
+        Larger (less-negative) log-probs are preferred during
+        Viterbi decode.
+    unk_token : str, default ``"<unk>"``
+        Fallback piece string used when no entry in ``pieces``
+        spans a region of the input.  Must appear in ``pieces`` for
+        the UNK id to be defined; otherwise encode silently drops
+        unmatchable codepoints.
+    unk_log_prob : float, default ``-100.0``
+        Log probability assigned to UNK substitutions in the
+        Viterbi recurrence.  Very negative so any non-UNK path
+        dominates when available.
     normalizer : Normalizer, optional
-        Default :class:`NFKC` (matches LLaMA / Mistral).
+        Pre-encode text normalisation chain.  Defaults to
+        :class:`~lucid.utils.tokenizer._normalizers.NFKC` (matches
+        LLaMA / Mistral / T5).
     pre_tokenizer : PreTokenizer, optional
-        Default :class:`SentencePiecePreTokenizer` for canonical
-        SentencePiece behaviour.
+        Chunk-splitter applied after normalisation.  Defaults to
+        :class:`SentencePiecePreTokenizer` for canonical
+        SentencePiece behaviour with ``▁`` word-start markers.
     special_tokens : SpecialTokens, optional
-        Defaults to ``SpecialTokens(unk=unk_token)``.
+        Special-token registry — see
+        :class:`lucid.utils.tokenizer.SpecialTokens`.  Defaults to
+        ``SpecialTokens(unk=unk_token)``.
+
+    Notes
+    -----
+    The Viterbi DP runs in :math:`O(N \cdot M)` per chunk, where
+    ``N`` is the chunk byte length and ``M`` is the max piece byte
+    length.  UTF-8 boundary masking ensures sub-piece offsets only
+    land on codepoint boundaries (no mid-codepoint cuts), which
+    matches the C++ flavour bit-for-bit.
+
+    See Also
+    --------
+    UnigramTokenizerFast : C++-backed flavour with identical
+        encode output and a much faster :meth:`~UnigramTokenizerFast.encode`.
     """
 
     def __init__(
@@ -187,6 +257,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         super().__init__(special_tokens=special_tokens)
 
     def _rebuild_tables(self) -> None:
+        """Recompute piece-to-id maps + max-piece byte cache."""
         self._piece_to_id = {p: i for i, (p, _) in enumerate(self._pieces)}
         self._id_to_piece = {i: p for i, (p, _) in enumerate(self._pieces)}
         self._max_piece_bytes = max(
@@ -296,12 +367,14 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         return ids
 
     def _encode_one(self, text: str) -> list[int]:
+        """Normalize + pre-tokenize + per-chunk Viterbi encode."""
         out: list[int] = []
         for chunk in self._prepare_chunks(text):
             out.extend(self._viterbi_encode_chunk(chunk))
         return out
 
     def _decode_one(self, ids: list[int]) -> str:
+        """Concatenate pieces and convert ``▁`` markers back to spaces."""
         # Standard SentencePiece decode: join surface forms, replace
         # the ▁ marker with a space.
         raw = "".join(
@@ -315,12 +388,32 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
-        """Train via the C++ Unigram for speed — even the "pure
-        Python" UnigramTokenizer delegates training to C++ because
-        EM is a tight numerical loop and a Python implementation
-        would be 100-1000× slower for any non-trivial corpus.  After
-        training we pull the resulting (piece, log_prob) list back
-        into the Python state.
+        """Re-train this tokenizer from scratch on ``corpus``.
+
+        Implements the Kudo-2018 EM-with-pruning training loop:
+
+        1. Pre-tokenize each document (using the configured
+           pre-tokenizer chain) into chunks.
+        2. Seed a large candidate vocab from all sub-strings, then
+           iteratively run EM to estimate per-piece probabilities
+           and prune the lowest-contribution pieces until the target
+           vocab size is reached.
+        3. Re-load the resulting ``(piece, log_prob)`` list into
+           Python state.
+
+        Even this "pure-Python" flavour delegates the inner loop to
+        C++ — EM is a tight numerical loop and a Python rewrite
+        would be 100-1000x slower for any non-trivial corpus.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Each item is one document (or chunk thereof).  Generators
+            are consumed exactly once and materialised into a list
+            before handing off to the C++ trainer.
+        vocab_size : int, default 30 000
+            Target total vocab size (pieces).  The trainer stops
+            pruning when this is reached.
         """
         prepared: list[str] = []
         for doc in corpus:
@@ -335,6 +428,15 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         self._refresh_special_ids()
 
     def save(self, directory: str) -> None:
+        """Persist as unified ``tokenizer.json`` + ``special_tokens_map.json``.
+
+        Parameters
+        ----------
+        directory : str
+            Output directory (created if missing).  Contents are
+            HF-compatible: any other library that reads the unified
+            Fast-tokenizers format will load them back unchanged.
+        """
         os.makedirs(directory, exist_ok=True)
         _save_unigram_pieces_json(
             self._pieces,
@@ -346,6 +448,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        """Add the ``model`` block to the unified ``tokenizer.json``."""
         return {
             "model": {
                 "type": "Unigram",
@@ -364,6 +467,24 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "UnigramTokenizer":
+        """Load from a directory containing ``tokenizer.json``.
+
+        Parameters
+        ----------
+        directory : str
+            Directory holding the unified ``tokenizer.json`` (and
+            optionally ``special_tokens_map.json``).
+        normalizer, pre_tokenizer, special_tokens
+            Optional overrides — if omitted, ``NFKC`` /
+            :class:`SentencePiecePreTokenizer` defaults are used and
+            special tokens are read from ``special_tokens_map.json``
+            when present.
+
+        Returns
+        -------
+        UnigramTokenizer
+            Freshly-constructed instance ready for encode / decode.
+        """
         path = os.path.join(directory, "tokenizer.json")
         if not os.path.isfile(path):
             raise FileNotFoundError(
@@ -399,7 +520,29 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
 
 
 class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
-    """C++-backed Unigram tokenizer.  See :class:`UnigramTokenizer`."""
+    r"""C++-backed Unigram tokenizer.
+
+    Identical algorithm + on-disk format to
+    :class:`UnigramTokenizer`; the per-chunk Viterbi loop runs in
+    C++ via :class:`lucid._C.engine.utils.tokenizer.Unigram`.
+    Encode outputs are bit-identical for the same pieces + same
+    normalizer + same pre-tokenizer.
+
+    Use this in production training / inference.  Use
+    :class:`UnigramTokenizer` for debugging / extending the
+    algorithm with custom Python-only normalizers without touching
+    C++.
+
+    Parameters
+    ----------
+    Same as :class:`UnigramTokenizer`.  The C++ backend is
+    constructed transparently in ``__init__`` and held as
+    :attr:`_cpp`.
+
+    See Also
+    --------
+    UnigramTokenizer : Pure-Python reference flavour.
+    """
 
     def __init__(
         self,
@@ -449,12 +592,14 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         return list(self._pieces)
 
     def _encode_one(self, text: str) -> list[int]:
+        """Normalize + pre-tokenize in Python, per-chunk Viterbi in C++."""
         out: list[int] = []
         for chunk in self._prepare_chunks(text):
             out.extend(self._cpp.encode(chunk))
         return out
 
     def _decode_one(self, ids: list[int]) -> str:
+        """C++ decode + ``▁`` → space replacement for parity."""
         raw = self._cpp.decode(list(ids))
         return raw.replace(SentencePiecePreTokenizer.SP_SPACE, " ")
 
@@ -464,6 +609,21 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
+        """Re-train in C++ (EM with vocab pruning, Kudo 2018).
+
+        Materialises ``corpus`` into a list before handing off (the
+        C++ binding takes ``std::vector<std::string>``); for very
+        large corpora the caller is responsible for chunking.  After
+        training, the Python-side pieces cache is refreshed from the
+        C++ side so subsequent encodes see the new state.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Documents to train on.
+        vocab_size : int, default 30 000
+            Target piece count after EM pruning.
+        """
         prepared: list[str] = []
         for doc in corpus:
             chunks = self._prepare_chunks(doc)
@@ -474,6 +634,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         self._refresh_special_ids()
 
     def save(self, directory: str) -> None:
+        """Same format as :meth:`UnigramTokenizer.save`."""
         os.makedirs(directory, exist_ok=True)
         _save_unigram_pieces_json(
             self._pieces,
@@ -484,6 +645,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         super().save(directory)
 
     def _save_extras(self) -> dict[str, object]:
+        """Add the ``model`` block to the unified ``tokenizer.json``."""
         return {
             "model": {
                 "type": "Unigram",
@@ -502,6 +664,11 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> "UnigramTokenizerFast":
+        """Identical loader to :meth:`UnigramTokenizer.from_file`.
+
+        The only difference is the returned class (and hence the
+        encode backend — C++ instead of Python Viterbi).
+        """
         path = os.path.join(directory, "tokenizer.json")
         if not os.path.isfile(path):
             raise FileNotFoundError(
