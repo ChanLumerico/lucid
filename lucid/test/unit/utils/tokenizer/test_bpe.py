@@ -31,7 +31,6 @@ from lucid.utils.tokenizer._pre_tokenizers import (
     WhitespaceSplit,
 )
 
-
 # ── Shared fixtures ─────────────────────────────────────────────────
 
 
@@ -128,7 +127,8 @@ def test_bpe_python_fast_parity_with_specials() -> None:
     on the shared base class, so both should agree)."""
     slow = _train_tiny(BPETokenizer)
     fast = BPETokenizerFast(
-        vocab=slow.get_vocab(), merges=slow._merges,
+        vocab=slow.get_vocab(),
+        merges=slow._merges,
     )
     bos_tok = "<bos>"
     eos_tok = "<eos>"
@@ -144,6 +144,7 @@ def test_bpe_python_fast_parity_with_specials() -> None:
             # Fast: must reconstruct the C++ side because the new
             # vocab entries aren't in its internal tables.
             from lucid._C import engine as _C_engine
+
             tok._cpp = _C_engine.utils.tokenizer.BPE(tok._vocab, tok._merges)
             tok._id_to_token = {v: k for k, v in tok._vocab.items()}
         tok._special = SpecialTokens(bos=bos_tok, eos=eos_tok)
@@ -162,11 +163,13 @@ def test_bpe_python_fast_parity_batched() -> None:
     """Batched encode parity."""
     slow = _train_tiny(BPETokenizer)
     fast = BPETokenizerFast(
-        vocab=slow.get_vocab(), merges=slow._merges,
+        vocab=slow.get_vocab(),
+        merges=slow._merges,
     )
     batch = ["the dog", "the lazy dog", "fox"]
-    assert slow.encode_batch(batch, add_special_tokens=False) == \
-           fast.encode_batch(batch, add_special_tokens=False)
+    assert slow.encode_batch(batch, add_special_tokens=False) == fast.encode_batch(
+        batch, add_special_tokens=False
+    )
 
 
 # ── HF format round-trip ────────────────────────────────────────────
@@ -223,8 +226,9 @@ def test_bpe_fast_load_same_as_slow() -> None:
         slow_loaded = BPETokenizer.from_file(d)
         fast_loaded = BPETokenizerFast.from_file(d)
     text = "the quick brown fox"
-    assert slow_loaded.encode(text, add_special_tokens=False) == \
-           fast_loaded.encode(text, add_special_tokens=False)
+    assert slow_loaded.encode(text, add_special_tokens=False) == fast_loaded.encode(
+        text, add_special_tokens=False
+    )
 
 
 # ── HF-style __call__ ───────────────────────────────────────────────
@@ -306,6 +310,7 @@ def test_call_truncation_respects_max_length() -> None:
 def test_call_padding_without_pad_token_raises() -> None:
     """Padding requested without a pad token should error helpfully."""
     import pytest
+
     tok = _train_tiny(BPETokenizer)
     # No pad token defined.
     assert tok.pad_token_id is None
@@ -322,8 +327,9 @@ def test_bpe_with_custom_normalizer() -> None:
     norm = Sequence([NFC(), Lowercase()])
     tok = BPETokenizer(vocab={}, merges=[], normalizer=norm)
     tok.train(["hello hello hello world world"], vocab_size=20)
-    assert tok.encode("HELLO", add_special_tokens=False) == \
-           tok.encode("hello", add_special_tokens=False)
+    assert tok.encode("HELLO", add_special_tokens=False) == tok.encode(
+        "hello", add_special_tokens=False
+    )
 
 
 def test_bpe_with_byte_level_pre_tokenizer() -> None:
@@ -342,9 +348,7 @@ def test_bpe_with_byte_level_pre_tokenizer() -> None:
 def test_bpe_punctuation_split_pretokenizer() -> None:
     """The WordPiece-style pre-tokenizer (used by BERT) splits
     punctuation as its own token even without algorithm support."""
-    tok = BPETokenizer(
-        vocab={}, merges=[], pre_tokenizer=WhitespacePunctuationSplit()
-    )
+    tok = BPETokenizer(vocab={}, merges=[], pre_tokenizer=WhitespacePunctuationSplit())
     tok.train(["hello , world ! hello , world"], vocab_size=20)
     # 'hello, world!' (no space before punct) should still produce
     # separate tokens for ',', '!'

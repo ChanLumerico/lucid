@@ -377,12 +377,14 @@ set_source_files_properties(
 # 3.5+ tokenizer family — Python ``lucid.utils.tokenizer`` mirror.
 # Each algorithm gets its own .cpp; the base ``Tokenizer.cpp`` carries
 # the default optional overrides (encode_batch / decode_batch / etc.).
-# New tokenizers (WordPiece / Unigram / ByteLevelBPE) plug in by
-# appending their .cpp to this list.
+# Future tokenizers (Unigram / ByteLevelBPE-distinct-from-BPE) plug
+# in by appending their .cpp to this list.
 lucid_object_library(
     lucid_utils_tokenizer
     utils/tokenizer/Tokenizer.cpp
-    utils/tokenizer/BPE.cpp)
+    utils/tokenizer/BPE.cpp
+    utils/tokenizer/Basic.cpp        # Byte / Char / Whitespace / Word / Regex
+    utils/tokenizer/WordPiece.cpp)   # BERT-family greedy longest-match
 
 lucid_object_library(
     lucid_bindings

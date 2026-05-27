@@ -18,7 +18,9 @@
 #include <pybind11/stl.h>
 
 #include "../utils/tokenizer/BPE.h"
+#include "../utils/tokenizer/Basic.h"
 #include "../utils/tokenizer/Tokenizer.h"
+#include "../utils/tokenizer/WordPiece.h"
 
 namespace py = pybind11;
 
@@ -76,6 +78,55 @@ void register_tokenizer(py::module_& parent) {
              py::arg("merges"))
         .def("merges", &tk::BPE::merges,
              "Ordered list of (left, right) merge pairs — rank ascending.");
+
+    // ── Basic lookup family ────────────────────────────────────────
+    //
+    // All 5 derive from ``LookupTokenizer`` (which itself derives
+    // from ``Tokenizer``).  We expose ``LookupTokenizer`` as the
+    // pybind base so the ``isinstance(_, LookupTokenizer)`` test
+    // also works on the Python side.
+    py::class_<tk::LookupTokenizer, tk::Tokenizer>(m, "LookupTokenizer");
+
+    py::class_<tk::ByteTokenizer, tk::LookupTokenizer>(m, "ByteTokenizer")
+        .def(py::init<>());
+
+    py::class_<tk::CharTokenizer, tk::LookupTokenizer>(m, "CharTokenizer")
+        .def(py::init<>())
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
+             py::arg("vocab"));
+
+    py::class_<tk::WhitespaceTokenizer, tk::LookupTokenizer>(
+        m, "WhitespaceTokenizer")
+        .def(py::init<>())
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
+             py::arg("vocab"));
+
+    py::class_<tk::WordTokenizer, tk::LookupTokenizer>(m, "WordTokenizer")
+        .def(py::init<>())
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
+             py::arg("vocab"));
+
+    py::class_<tk::RegexTokenizer, tk::LookupTokenizer>(m, "RegexTokenizer")
+        .def(py::init<std::string,
+                      std::unordered_map<std::string, tk::TokenId>>(),
+             py::arg("pattern"),
+             py::arg("vocab") = std::unordered_map<std::string, tk::TokenId>{})
+        .def("pattern", &tk::RegexTokenizer::pattern,
+             py::return_value_policy::reference_internal);
+
+    // ── WordPiece ──────────────────────────────────────────────────
+    py::class_<tk::WordPiece, tk::Tokenizer>(m, "WordPiece")
+        .def(py::init<>())
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>,
+                      std::string, std::string, std::size_t>(),
+             py::arg("vocab"),
+             py::arg("unk_token") = "[UNK]",
+             py::arg("continuing_prefix") = "##",
+             py::arg("max_chars_per_word") = 100)
+        .def("unk_token", &tk::WordPiece::unk_token,
+             py::return_value_policy::reference_internal)
+        .def("continuing_prefix", &tk::WordPiece::continuing_prefix,
+             py::return_value_policy::reference_internal);
 }
 
 }  // namespace lucid::bindings

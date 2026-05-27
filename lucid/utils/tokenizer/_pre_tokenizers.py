@@ -27,7 +27,6 @@ tasks (NER, QA).
 from abc import ABC, abstractmethod
 import unicodedata
 
-
 # Public type alias for pre-tokenizer outputs.
 Chunk = tuple[str, tuple[int, int]]
 
@@ -223,11 +222,6 @@ def _is_punctuation(ch: str) -> bool:
     """Mirror BERT's ``_is_punctuation``: ASCII punctuation + every
     Unicode ``P*`` category."""
     cp = ord(ch)
-    if (
-        (33 <= cp <= 47)
-        or (58 <= cp <= 64)
-        or (91 <= cp <= 96)
-        or (123 <= cp <= 126)
-    ):
+    if (33 <= cp <= 47) or (58 <= cp <= 64) or (91 <= cp <= 96) or (123 <= cp <= 126):
         return True
     return unicodedata.category(ch).startswith("P")

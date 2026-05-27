@@ -88,8 +88,7 @@ def _load_merges_txt(path: str) -> list[tuple[str, str]]:
                 idx = line.rfind(" ")
                 if idx <= 0:
                     raise ValueError(
-                        f"_load_merges_txt: malformed line {line!r} "
-                        f"at {path}"
+                        f"_load_merges_txt: malformed line {line!r} " f"at {path}"
                     )
                 parts = [line[:idx], line[idx + 1 :]]
             merges.append((parts[0], parts[1]))
@@ -234,9 +233,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         Called after construction and after :meth:`train`; subclasses
         adding mutating operations must call this themselves.
         """
-        self._id_to_token: dict[int, str] = {
-            v: k for k, v in self._vocab.items()
-        }
+        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         self._pair_to_merge = {}
         for rank, (left, right) in enumerate(self._merges):
             la = self._vocab.get(left)
@@ -397,11 +394,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
                 out: list[str] = []
                 k = 0
                 while k < len(syms):
-                    if (
-                        k + 1 < len(syms)
-                        and syms[k] == left
-                        and syms[k + 1] == right
-                    ):
+                    if k + 1 < len(syms) and syms[k] == left and syms[k + 1] == right:
                         out.append(merged)
                         k += 2
                     else:
@@ -568,9 +561,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         # Reverse lookup table for decode (the C++ side also has one,
         # but Python-side access avoids a binding round-trip for the
         # decode hot path).
-        self._id_to_token: dict[int, str] = {
-            v: k for k, v in self._vocab.items()
-        }
+        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
         super().__init__(special_tokens=special_tokens)
         self._sync_special_tokens_to_cpp()
 
@@ -585,7 +576,8 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
             if tid is not None:
                 setattr(st_cpp, name, tid)
         st_cpp.extra = {
-            k: v for k, v in self._special_ids.items()
+            k: v
+            for k, v in self._special_ids.items()
             if k not in ("pad", "unk", "bos", "eos", "mask", "sep", "cls")
         }
         self._cpp.special_tokens = st_cpp

@@ -172,9 +172,7 @@ class Tokenizer(ABC):
                 return tok
         return None
 
-    def convert_tokens_to_ids(
-        self, tokens: str | Iterable[str]
-    ) -> int | list[int]:
+    def convert_tokens_to_ids(self, tokens: str | Iterable[str]) -> int | list[int]:
         """Map one or many token strings to their ids.
 
         Unknown tokens raise :class:`KeyError` (callers wanting an
@@ -186,9 +184,7 @@ class Tokenizer(ABC):
             return vocab[tokens]
         return [vocab[t] for t in tokens]
 
-    def convert_ids_to_tokens(
-        self, ids: int | Iterable[int]
-    ) -> str | list[str]:
+    def convert_ids_to_tokens(self, ids: int | Iterable[int]) -> str | list[str]:
         """Inverse of :meth:`convert_tokens_to_ids`."""
         if isinstance(ids, int):
             t = self.id_to_token(ids)
@@ -465,9 +461,7 @@ class Tokenizer(ABC):
 
         # Special-tokens mask — 1 where the id is a special token.
         specials = set(self.all_special_ids)
-        sp_masks = [
-            [1 if i in specials else 0 for i in ids] for ids in encoded
-        ]
+        sp_masks = [[1 if i in specials else 0 for i in ids] for ids in encoded]
 
         out: dict[str, object] = {
             "input_ids": encoded,
@@ -539,9 +533,7 @@ class Tokenizer(ABC):
 # ── Tensor-wrap helper (module-level so other tokenizers can reuse) ──
 
 
-def _wrap_lucid_tensors(
-    out: dict[str, object], is_batched: bool
-) -> dict[str, object]:
+def _wrap_lucid_tensors(out: dict[str, object], is_batched: bool) -> dict[str, object]:
     """Convert plain int lists in ``out`` to :class:`lucid.Tensor` (I32).
 
     Single-string outputs become 1-D ``(seq_len,)`` tensors; batched

@@ -37,14 +37,49 @@ matching that family (e.g. ``BertTokenizer`` ←
 
 from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
 from lucid.utils.tokenizer._bpe import BPETokenizer, BPETokenizerFast
+from lucid.utils.tokenizer._byte import ByteTokenizer, ByteTokenizerFast
+from lucid.utils.tokenizer._byte_bpe import (
+    ByteLevelBPETokenizer,
+    ByteLevelBPETokenizerFast,
+)
+from lucid.utils.tokenizer._char import CharTokenizer, CharTokenizerFast
+from lucid.utils.tokenizer._regex import RegexTokenizer, RegexTokenizerFast
+from lucid.utils.tokenizer._whitespace import (
+    WhitespaceTokenizer,
+    WhitespaceTokenizerFast,
+)
+from lucid.utils.tokenizer._word import WordTokenizer, WordTokenizerFast
+from lucid.utils.tokenizer._wordpiece import (
+    WordPieceTokenizer,
+    WordPieceTokenizerFast,
+)
 from lucid.utils.tokenizer import _normalizers as normalizers
 from lucid.utils.tokenizer import _pre_tokenizers as pre_tokenizers
 
 __all__ = [
+    # Base
     "Tokenizer",
     "SpecialTokens",
+    # Tier 0 — primitive / no-vocab
+    "ByteTokenizer",
+    "ByteTokenizerFast",
+    "CharTokenizer",
+    "CharTokenizerFast",
+    # Tier 1 — rule-based / vocab-lookup
+    "WhitespaceTokenizer",
+    "WhitespaceTokenizerFast",
+    "WordTokenizer",
+    "WordTokenizerFast",
+    "RegexTokenizer",
+    "RegexTokenizerFast",
+    # Tier 2 — subword
     "BPETokenizer",
     "BPETokenizerFast",
+    "ByteLevelBPETokenizer",
+    "ByteLevelBPETokenizerFast",
+    "WordPieceTokenizer",
+    "WordPieceTokenizerFast",
+    # Sub-modules
     "normalizers",
     "pre_tokenizers",
 ]

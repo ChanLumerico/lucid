@@ -113,9 +113,7 @@ class StripAccents(Normalizer):
     """
 
     def normalize(self, text: str) -> str:
-        return "".join(
-            c for c in text if not unicodedata.combining(c)
-        )
+        return "".join(c for c in text if not unicodedata.combining(c))
 
 
 class Strip(Normalizer):
@@ -201,9 +199,7 @@ class BertNormalizer(Normalizer):
             text = self._do_handle_chinese_chars(text)
         text = unicodedata.normalize("NFD", text)
         if self._strip_accents:
-            text = "".join(
-                c for c in text if not unicodedata.combining(c)
-            )
+            text = "".join(c for c in text if not unicodedata.combining(c))
         if self._lowercase:
             text = text.lower()
         return text
@@ -256,12 +252,12 @@ def _is_control(ch: str) -> bool:
 def _is_cjk(cp: int) -> bool:
     """CJK Unicode ranges per BERT's ``_is_chinese_char``."""
     return (
-        (0x4E00 <= cp <= 0x9FFF) or
-        (0x3400 <= cp <= 0x4DBF) or
-        (0x20000 <= cp <= 0x2A6DF) or
-        (0x2A700 <= cp <= 0x2B73F) or
-        (0x2B740 <= cp <= 0x2B81F) or
-        (0x2B820 <= cp <= 0x2CEAF) or
-        (0xF900 <= cp <= 0xFAFF) or
-        (0x2F800 <= cp <= 0x2FA1F)
+        (0x4E00 <= cp <= 0x9FFF)
+        or (0x3400 <= cp <= 0x4DBF)
+        or (0x20000 <= cp <= 0x2A6DF)
+        or (0x2A700 <= cp <= 0x2B73F)
+        or (0x2B740 <= cp <= 0x2B81F)
+        or (0x2B820 <= cp <= 0x2CEAF)
+        or (0xF900 <= cp <= 0xFAFF)
+        or (0x2F800 <= cp <= 0x2FA1F)
     )
