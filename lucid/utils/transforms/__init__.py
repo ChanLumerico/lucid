@@ -27,8 +27,14 @@ way (see :mod:`lucid.weights`).
 """
 
 from lucid.utils.transforms import functional
-from lucid.utils.transforms._base import Compose, Transform
+from lucid.utils.transforms._base import (
+    Compose,
+    GeometricTransform,
+    PhotometricTransform,
+    Transform,
+)
 from lucid.utils.transforms._datatypes import BoundingBoxes, Image, Mask
+from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._geometric import (
     CenterCrop,
     Pad,
@@ -47,9 +53,13 @@ from lucid.utils.transforms._photometric import (
 from lucid.utils.transforms._presets import ImageClassification
 
 __all__ = [
-    # Base
+    # Base hierarchy
     "Transform",
+    "GeometricTransform",
+    "PhotometricTransform",
     "Compose",
+    # Interpolation
+    "Interpolation",
     # Typed targets (multi-target dispatch)
     "Image",
     "Mask",

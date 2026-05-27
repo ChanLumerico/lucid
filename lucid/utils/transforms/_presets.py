@@ -2,51 +2,42 @@
 
 Presets bundle the canonical inference pipeline for a task so pretrained
 weights can ship their exact preprocessing.  :class:`ImageClassification`
-is the ImageNet-style preset consumed by
-``lucid.models.*._weights`` (via :class:`~lucid.weights.WeightEntry`).
+is the ImageNet-style preset consumed by ``lucid.models.*._weights``
+(via :class:`~lucid.weights.WeightEntry`).
 """
 
 from typing import cast
 
 from lucid._tensor import Tensor
-from lucid.utils.transforms._base import Compose, Transform
+from lucid.utils.transforms._base import Compose, Empty, Transform, _NoParams
 from lucid.utils.transforms._geometric import CenterCrop, Resize
+from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import Normalize
 
 
-class ImageClassification(Transform):
+class ImageClassification(_NoParams, Transform[Empty]):
     r"""Standard ImageNet classification preprocessing preset.
 
-    Equivalent to torchvision's ``ImageClassification`` preset:
     ``Resize(resize_size)`` (shorter side) → ``CenterCrop(crop_size)`` →
-    ``Normalize(mean, std)``.
+    ``Normalize(mean, std)``, packaged as one callable.  Delegates to an
+    internal :class:`~lucid.utils.transforms.Compose`, so it also
+    threads multi-target samples through its (geometric) inner stages.
 
     Parameters
     ----------
     crop_size : int
-        Side length of the square center crop fed to the model.
+        Square center-crop side fed to the model.
     resize_size : int, optional, default=256
         Shorter-side length before cropping.
-    mean : tuple of float, optional
-        Per-channel mean; defaults to ImageNet ``(0.485, 0.456, 0.406)``.
-    std : tuple of float, optional
-        Per-channel std; defaults to ImageNet ``(0.229, 0.224, 0.225)``.
-    interpolation : str, optional, default="bilinear"
+    mean, std : tuple of float, optional
+        Per-channel normalization stats; default ImageNet.
+    interpolation : str or Interpolation, optional, default="bilinear"
         Resize interpolation mode.
 
     Notes
     -----
-    Input is assumed to be a float :class:`lucid.Tensor` already scaled
-    to ``[0, 1]`` (prepend :class:`~lucid.utils.transforms.Rescale` when
-    starting from uint8).  Accepts ``(C, H, W)`` or ``(B, C, H, W)`` and
-    preserves the input rank.
-
-    Examples
-    --------
-    >>> from lucid.utils.transforms import ImageClassification
-    >>> tf = ImageClassification(crop_size=224, resize_size=256)
-    >>> tf(image).shape
-    (3, 224, 224)
+    Input is assumed already scaled to ``[0, 1]`` (prepend
+    :class:`~lucid.utils.transforms.Rescale` for uint8).
     """
 
     _IMAGENET_MEAN: tuple[float, float, float] = (0.485, 0.456, 0.406)
@@ -59,7 +50,7 @@ class ImageClassification(Transform):
         resize_size: int = 256,
         mean: tuple[float, ...] | None = None,
         std: tuple[float, ...] | None = None,
-        interpolation: str = "bilinear",
+        interpolation: str | Interpolation = Interpolation.BILINEAR,
     ) -> None:
         self.crop_size = crop_size
         self.resize_size = resize_size
@@ -74,13 +65,17 @@ class ImageClassification(Transform):
             ]
         )
 
-    def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
-        # The preset is image-only, so the Compose returns a Tensor.
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         return cast(Tensor, self._pipeline(img))
+
+    def __call__(self, inputs: object) -> object:
+        # Delegate wholesale so multi-target samples thread through the
+        # inner (geometric) stages correctly.
+        return self._pipeline(inputs)
 
     def __repr__(self) -> str:
         return (
             f"ImageClassification(crop_size={self.crop_size}, "
             f"resize_size={self.resize_size}, mean={self.mean}, "
-            f"std={self.std}, interpolation={self.interpolation!r})"
+            f"std={self.std}, interpolation={self.interpolation})"
         )
