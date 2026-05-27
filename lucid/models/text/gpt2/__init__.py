@@ -8,6 +8,7 @@ from lucid.models.text.gpt2._model import (
     GPT2LMHeadModel,
     GPT2Model,
 )
+from lucid.models.text.gpt2._tokenizer import GPT2Tokenizer, GPT2TokenizerFast
 from lucid.models.text.gpt2._pretrained import (
     gpt2_large,
     gpt2_large_lm,
@@ -36,4 +37,6 @@ __all__ = [
     "gpt2_large_lm",
     "gpt2_xlarge_lm",
     "gpt2_small_cls",
+    "GPT2Tokenizer",
+    "GPT2TokenizerFast",
 ]

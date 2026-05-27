@@ -20,6 +20,7 @@
 #include "../utils/tokenizer/BPE.h"
 #include "../utils/tokenizer/Basic.h"
 #include "../utils/tokenizer/Tokenizer.h"
+#include "../utils/tokenizer/Unigram.h"
 #include "../utils/tokenizer/WordPiece.h"
 
 namespace py = pybind11;
@@ -127,6 +128,29 @@ void register_tokenizer(py::module_& parent) {
              py::return_value_policy::reference_internal)
         .def("continuing_prefix", &tk::WordPiece::continuing_prefix,
              py::return_value_policy::reference_internal);
+
+    // ── Unigram ────────────────────────────────────────────────────
+    py::class_<tk::Unigram, tk::Tokenizer>(m, "Unigram")
+        .def(py::init<>())
+        .def(py::init<std::vector<std::pair<std::string, double>>,
+                      std::string, double>(),
+             py::arg("pieces"),
+             py::arg("unk_token") = "<unk>",
+             py::arg("unk_log_prob") = -100.0)
+        .def("pieces", &tk::Unigram::pieces,
+             py::return_value_policy::reference_internal,
+             "Ordered list of (piece_str, log_prob) — index = id.")
+        .def("unk_token", &tk::Unigram::unk_token,
+             py::return_value_policy::reference_internal)
+        .def("unk_log_prob", &tk::Unigram::unk_log_prob)
+        .def("train_with_options",
+             &tk::Unigram::train_with_options,
+             py::arg("corpus"),
+             py::arg("target_vocab_size"),
+             py::arg("num_iterations") = 2,
+             py::arg("shrink_factor") = 0.75,
+             py::arg("max_piece_length") = 16,
+             py::arg("initial_vocab_multiplier") = 10);
 }
 
 }  // namespace lucid::bindings

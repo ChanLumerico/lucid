@@ -384,7 +384,8 @@ lucid_object_library(
     utils/tokenizer/Tokenizer.cpp
     utils/tokenizer/BPE.cpp
     utils/tokenizer/Basic.cpp        # Byte / Char / Whitespace / Word / Regex
-    utils/tokenizer/WordPiece.cpp)   # BERT-family greedy longest-match
+    utils/tokenizer/WordPiece.cpp    # BERT-family greedy longest-match
+    utils/tokenizer/Unigram.cpp)     # SentencePiece-flavor Viterbi + EM
 
 lucid_object_library(
     lucid_bindings

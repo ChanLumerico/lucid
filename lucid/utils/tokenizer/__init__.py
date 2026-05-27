@@ -44,6 +44,10 @@ from lucid.utils.tokenizer._byte_bpe import (
 )
 from lucid.utils.tokenizer._char import CharTokenizer, CharTokenizerFast
 from lucid.utils.tokenizer._regex import RegexTokenizer, RegexTokenizerFast
+from lucid.utils.tokenizer._unigram import (
+    UnigramTokenizer,
+    UnigramTokenizerFast,
+)
 from lucid.utils.tokenizer._whitespace import (
     WhitespaceTokenizer,
     WhitespaceTokenizerFast,
@@ -79,6 +83,8 @@ __all__ = [
     "ByteLevelBPETokenizerFast",
     "WordPieceTokenizer",
     "WordPieceTokenizerFast",
+    "UnigramTokenizer",
+    "UnigramTokenizerFast",
     # Sub-modules
     "normalizers",
     "pre_tokenizers",

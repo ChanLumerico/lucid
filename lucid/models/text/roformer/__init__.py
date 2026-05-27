@@ -9,6 +9,10 @@ from lucid.models.text.roformer._model import (
     RoFormerForTokenClassification,
     RoFormerModel,
 )
+from lucid.models.text.roformer._tokenizer import (
+    RoFormerTokenizer,
+    RoFormerTokenizerFast,
+)
 from lucid.models.text.roformer._pretrained import (
     roformer,
     roformer_cls,
@@ -28,4 +32,6 @@ __all__ = [
     "roformer_mlm",
     "roformer_cls",
     "roformer_token_cls",
+    "RoFormerTokenizer",
+    "RoFormerTokenizerFast",
 ]

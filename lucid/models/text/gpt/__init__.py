@@ -8,6 +8,7 @@ from lucid.models.text.gpt._model import (
     GPTLMHeadModel,
     GPTModel,
 )
+from lucid.models.text.gpt._tokenizer import GPTTokenizer, GPTTokenizerFast
 from lucid.models.text.gpt._pretrained import (
     gpt,
     gpt_cls,
@@ -24,4 +25,6 @@ __all__ = [
     "gpt",
     "gpt_lm",
     "gpt_cls",
+    "GPTTokenizer",
+    "GPTTokenizerFast",
 ]

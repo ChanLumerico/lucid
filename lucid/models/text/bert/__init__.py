@@ -12,6 +12,7 @@ from lucid.models.text.bert._model import (
     BertForTokenClassification,
     BertModel,
 )
+from lucid.models.text.bert._tokenizer import BertTokenizer, BertTokenizerFast
 from lucid.models.text.bert._pretrained import (
     bert_base,
     bert_base_cls,
@@ -50,4 +51,6 @@ __all__ = [
     "bert_large_cls",
     "bert_base_token_cls",
     "bert_base_qa",
+    "BertTokenizer",
+    "BertTokenizerFast",
 ]
