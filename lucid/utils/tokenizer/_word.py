@@ -200,7 +200,7 @@ class WordTokenizer(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WordTokenizer":
+    ) -> WordTokenizer:
         """Load from a directory previously written by :meth:`save`.
 
         Parameters
@@ -370,7 +370,7 @@ class WordTokenizerFast(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WordTokenizerFast":
+    ) -> WordTokenizerFast:
         """Identical loader to :meth:`WordTokenizer.from_file`.
 
         The only difference is the returned class (and hence the

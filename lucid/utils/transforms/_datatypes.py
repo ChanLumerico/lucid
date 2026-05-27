@@ -246,8 +246,8 @@ def _clip_xyxy(
 
 
 def affine_boxes(
-    boxes: "BoundingBoxes", matrix: Tensor, out_hw: tuple[int, int]
-) -> "BoundingBoxes":
+    boxes: BoundingBoxes, matrix: Tensor, out_hw: tuple[int, int]
+) -> BoundingBoxes:
     """Warp boxes by a forward matrix; return the enclosing axis-aligned box."""
     from lucid.utils.transforms import functional as _F
 
@@ -276,8 +276,8 @@ def affine_boxes(
 
 
 def affine_keypoints(
-    kps: "Keypoints", matrix: Tensor, out_hw: tuple[int, int]
-) -> "Keypoints":
+    kps: Keypoints, matrix: Tensor, out_hw: tuple[int, int]
+) -> Keypoints:
     """Warp keypoint coordinates by a forward matrix."""
     from lucid.utils.transforms import functional as _F
 
@@ -286,7 +286,7 @@ def affine_keypoints(
     return _kp_rebuild(xy[:, 0:1], xy[:, 1:2], rest, out_hw)
 
 
-def transpose_boxes(boxes: "BoundingBoxes") -> "BoundingBoxes":
+def transpose_boxes(boxes: BoundingBoxes) -> BoundingBoxes:
     """Swap x/y axes (image transpose); canvas (H, W) -> (W, H)."""
     h, w = boxes.canvas_size
     xy = to_xyxy(boxes)
@@ -295,14 +295,14 @@ def transpose_boxes(boxes: "BoundingBoxes") -> "BoundingBoxes":
     return _rebuild(boxes, new, (w, h))
 
 
-def transpose_keypoints(kps: "Keypoints") -> "Keypoints":
+def transpose_keypoints(kps: Keypoints) -> Keypoints:
     """Swap x/y of keypoints; canvas (H, W) -> (W, H)."""
     h, w = kps.canvas_size
     x, y, rest = _kp_xy_rest(kps)
     return _kp_rebuild(y, x, rest, (w, h))
 
 
-def rot90_boxes(boxes: "BoundingBoxes", k: int) -> "BoundingBoxes":
+def rot90_boxes(boxes: BoundingBoxes, k: int) -> BoundingBoxes:
     """Rotate boxes by ``k`` CCW quarter-turns (matching ``rot90``)."""
     out = boxes
     for _ in range(k % 4):
@@ -318,7 +318,7 @@ def rot90_boxes(boxes: "BoundingBoxes", k: int) -> "BoundingBoxes":
     return out
 
 
-def rot90_keypoints(kps: "Keypoints", k: int) -> "Keypoints":
+def rot90_keypoints(kps: Keypoints, k: int) -> Keypoints:
     """Rotate keypoints by ``k`` CCW quarter-turns."""
     out = kps
     for _ in range(k % 4):

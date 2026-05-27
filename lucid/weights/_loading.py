@@ -76,8 +76,8 @@ def resolve_weights(
 
 
 def load_weight_entry(
-    model: "Module",
-    weights: "WeightsEnum | WeightEntry",
+    model: Module,
+    weights: WeightsEnum | WeightEntry,
     *,
     name: str,
     strict: bool = True,

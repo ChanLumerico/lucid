@@ -443,7 +443,7 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "BPETokenizer":
+    ) -> BPETokenizer:
         """Load from a directory containing either
         ``tokenizer.json`` or the legacy
         ``vocab.json`` + ``merges.txt`` pair.
@@ -575,8 +575,11 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
             tid = self._special_ids.get(name)
             if tid is not None:
                 setattr(st_cpp, name, tid)
+        # The engine ``SpecialTokens.extra`` binding maps name → token id;
+        # its generated stub annotates the value as str, so silence the
+        # int-value mismatch here.
         st_cpp.extra = {
-            k: v
+            k: v  # type: ignore[misc]
             for k, v in self._special_ids.items()
             if k not in ("pad", "unk", "bos", "eos", "mask", "sep", "cls")
         }
@@ -665,7 +668,7 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "BPETokenizerFast":
+    ) -> BPETokenizerFast:
         """Identical loader to :meth:`BPETokenizer.from_file`; the
         only difference is the returned class (and hence the encode
         backend).

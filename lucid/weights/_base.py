@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from lucid.utils.transforms import Transform
+    from lucid.utils.transforms._base import TransformLike as Transform
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,7 @@ class WeightEntry:
     url: str
     sha256: str
     num_classes: int
-    transforms: "Transform"
+    transforms: Transform
     meta: dict[str, object] = field(default_factory=dict)
 
 
@@ -151,7 +151,7 @@ class WeightsEnum(enum.Enum):
         """Provenance + metrics dict (see :attr:`WeightEntry.meta`)."""
         return self.entry.meta
 
-    def transforms(self) -> "Transform":
+    def transforms(self) -> Transform:
         """Return the preprocessing pipeline the weights expect.
 
         Returns

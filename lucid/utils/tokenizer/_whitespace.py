@@ -143,7 +143,7 @@ class WhitespaceTokenizer(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WhitespaceTokenizer":
+    ) -> WhitespaceTokenizer:
         """Load from a directory containing ``vocab.txt``.
 
         Parameters
@@ -244,7 +244,7 @@ class WhitespaceTokenizerFast(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WhitespaceTokenizerFast":
+    ) -> WhitespaceTokenizerFast:
         vocab_path = os.path.join(directory, "vocab.txt")
         if not os.path.isfile(vocab_path):
             raise FileNotFoundError(

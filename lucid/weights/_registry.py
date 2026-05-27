@@ -111,9 +111,7 @@ def get_weight(name: str) -> WeightsEnum:
     """
     enum_name, sep, tag = name.partition(".")
     if not sep or not tag:
-        raise ValueError(
-            f"get_weight: expected 'EnumName.TAG', got {name!r}"
-        )
+        raise ValueError(f"get_weight: expected 'EnumName.TAG', got {name!r}")
     cls = _WEIGHTS_BY_ENUM.get(enum_name)
     if cls is None:
         raise ValueError(

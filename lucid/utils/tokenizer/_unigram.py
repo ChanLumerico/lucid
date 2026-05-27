@@ -45,7 +45,6 @@ from lucid.utils.tokenizer._bpe import _special_tokens_from_map
 from lucid.utils.tokenizer._normalizers import NFKC, Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import PreTokenizer
 
-
 # ── SentencePiece-style pre-tokenizer ──────────────────────────────
 
 
@@ -244,9 +243,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         self._unk_log_prob = unk_log_prob
         self._normalizer = normalizer if normalizer is not None else NFKC()
         self._pre_tokenizer = (
-            pre_tokenizer
-            if pre_tokenizer is not None
-            else SentencePiecePreTokenizer()
+            pre_tokenizer if pre_tokenizer is not None else SentencePiecePreTokenizer()
         )
         self._piece_to_id: dict[str, int] = {}
         self._id_to_piece: dict[int, str] = {}
@@ -377,9 +374,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         """Concatenate pieces and convert ``▁`` markers back to spaces."""
         # Standard SentencePiece decode: join surface forms, replace
         # the ▁ marker with a space.
-        raw = "".join(
-            self._id_to_piece[i] for i in ids if i in self._id_to_piece
-        )
+        raw = "".join(self._id_to_piece[i] for i in ids if i in self._id_to_piece)
         return raw.replace(SentencePiecePreTokenizer.SP_SPACE, " ")
 
     def train(
@@ -419,9 +414,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         for doc in corpus:
             chunks = self._prepare_chunks(doc)
             prepared.append(" ".join(chunks))
-        cpp = _C_engine.utils.tokenizer.Unigram(
-            [], self._unk_token, self._unk_log_prob
-        )
+        cpp = _C_engine.utils.tokenizer.Unigram([], self._unk_token, self._unk_log_prob)
         cpp.train(prepared, vocab_size)
         self._pieces = [(p, lp) for p, lp in cpp.pieces()]
         self._rebuild_tables()
@@ -466,7 +459,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "UnigramTokenizer":
+    ) -> UnigramTokenizer:
         """Load from a directory containing ``tokenizer.json``.
 
         Parameters
@@ -565,9 +558,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         }
         self._normalizer = normalizer if normalizer is not None else NFKC()
         self._pre_tokenizer = (
-            pre_tokenizer
-            if pre_tokenizer is not None
-            else SentencePiecePreTokenizer()
+            pre_tokenizer if pre_tokenizer is not None else SentencePiecePreTokenizer()
         )
         if special_tokens is None:
             special_tokens = SpecialTokens(unk=unk_token)
@@ -663,7 +654,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "UnigramTokenizerFast":
+    ) -> UnigramTokenizerFast:
         """Identical loader to :meth:`UnigramTokenizer.from_file`.
 
         The only difference is the returned class (and hence the

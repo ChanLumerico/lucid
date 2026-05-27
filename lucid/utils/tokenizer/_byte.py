@@ -123,7 +123,7 @@ class ByteTokenizer(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "ByteTokenizer":
+    ) -> ByteTokenizer:
         """Load from a directory containing ``special_tokens_map.json``.
 
         The vocab itself is not read from disk (always the canonical
@@ -238,7 +238,7 @@ class ByteTokenizerFast(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "ByteTokenizerFast":
+    ) -> ByteTokenizerFast:
         """Load from ``directory`` (only the special-token map is read).
 
         Parameters

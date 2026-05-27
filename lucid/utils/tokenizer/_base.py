@@ -26,10 +26,7 @@ one-line code change with bit-identical encode outputs.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Iterable
-
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
+from typing import Callable, Iterable
 
 
 # Canonical special-token slot names.  Every algorithm honours this
@@ -395,7 +392,7 @@ class Tokenizer(ABC):
         # list-of-strings inputs uniformly internally; un-batch the
         # output at the very end if the user passed a single string.
         is_batched = isinstance(text, list)
-        texts = text if is_batched else [text]
+        texts = text if isinstance(text, list) else [text]
         if not is_batched and not isinstance(text, str):
             raise TypeError(
                 f"Tokenizer.__call__: ``text`` must be str or list[str], "
@@ -548,7 +545,7 @@ def _wrap_lucid_tensors(out: dict[str, object], is_batched: bool) -> dict[str, o
             # v is list[list[int]] — rectangular if padding was applied.
             # If not padded, raise (Lucid tensors must be rectangular).
             assert isinstance(v, list)
-            lens = {len(row) for row in v}  # type: ignore[arg-type]
+            lens = {len(row) for row in v}
             if len(lens) > 1:
                 raise ValueError(
                     f"Tokenizer.__call__: return_tensors='lucid' requires "

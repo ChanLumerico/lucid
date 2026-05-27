@@ -158,14 +158,14 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         }
 
     @classmethod
-    def from_file(
+    def from_file(  # type: ignore[override]
         cls,
         directory: str,
         *,
         add_prefix_space: bool = False,
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "ByteLevelBPETokenizer":
+    ) -> ByteLevelBPETokenizer:
         """Load from a Hugging Face-compatible directory.
 
         Same on-disk format as :class:`BPETokenizer`: either the
@@ -231,7 +231,7 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
             special_tokens=st,
         )
 
-    from_pretrained = from_file
+    from_pretrained = from_file  # type: ignore[assignment]
 
     def train(
         self,
@@ -315,14 +315,14 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         }
 
     @classmethod
-    def from_file(
+    def from_file(  # type: ignore[override]
         cls,
         directory: str,
         *,
         add_prefix_space: bool = False,
         normalizer: Normalizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "ByteLevelBPETokenizerFast":
+    ) -> ByteLevelBPETokenizerFast:
         """Identical loader to :meth:`ByteLevelBPETokenizer.from_file`;
         the only difference is the returned class (and hence the
         encode backend).
@@ -376,7 +376,7 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
             special_tokens=st,
         )
 
-    from_pretrained = from_file
+    from_pretrained = from_file  # type: ignore[assignment]
 
     def train(
         self,

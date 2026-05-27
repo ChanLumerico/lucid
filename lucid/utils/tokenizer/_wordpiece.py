@@ -363,7 +363,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WordPieceTokenizer":
+    ) -> WordPieceTokenizer:
         """Load from a BERT-style directory containing ``vocab.txt``.
 
         Parameters
@@ -549,7 +549,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         normalizer: Normalizer | None = None,
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
-    ) -> "WordPieceTokenizerFast":
+    ) -> WordPieceTokenizerFast:
         """Identical loader to :meth:`WordPieceTokenizer.from_file`;
         the only difference is the returned class (and hence the
         encode backend).

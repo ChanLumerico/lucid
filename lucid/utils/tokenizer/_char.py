@@ -149,7 +149,7 @@ class CharTokenizer(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "CharTokenizer":
+    ) -> CharTokenizer:
         """Load from a directory containing ``vocab.txt``.
 
         Parameters
@@ -268,7 +268,7 @@ class CharTokenizerFast(Tokenizer):
         directory: str,
         *,
         special_tokens: SpecialTokens | None = None,
-    ) -> "CharTokenizerFast":
+    ) -> CharTokenizerFast:
         """Load from a directory containing ``vocab.txt``.
 
         Parameters
