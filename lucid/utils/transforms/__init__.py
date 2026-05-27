@@ -53,6 +53,15 @@ from lucid.utils.transforms._geometric import (
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
 from lucid.utils.transforms._presets import ImageClassification
+from lucid.utils.transforms._spatial import (
+    Affine,
+    Flip,
+    Perspective,
+    RandomRotate90,
+    Rotate,
+    ShiftScaleRotate,
+    Transpose,
+)
 
 __all__ = [
     # Base hierarchy
@@ -74,9 +83,17 @@ __all__ = [
     "CenterCrop",
     "RandomCrop",
     "RandomResizedCrop",
-    # Geometric — flips
+    # Geometric — flips / transpose / rot90
     "HorizontalFlip",
     "VerticalFlip",
+    "Flip",
+    "Transpose",
+    "RandomRotate90",
+    # Geometric — affine warps
+    "Rotate",
+    "ShiftScaleRotate",
+    "Affine",
+    "Perspective",
     # Photometric
     "Normalize",
     "ColorJitter",

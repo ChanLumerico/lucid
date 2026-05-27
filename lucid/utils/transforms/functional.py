@@ -8,11 +8,24 @@ return a transformed tensor.  The class-based transforms in
 All operations are Lucid-native (engine ops only) — no numpy / PIL.
 """
 
+import math
+from typing import cast
+
 import lucid
 import lucid.nn.functional as F
 from lucid._tensor import Tensor
 
 _RESIZE_ALIGN_MODES = frozenset({"bilinear", "bicubic", "linear", "trilinear"})
+
+
+def _cat(tensors: list[Tensor], dim: int) -> Tensor:
+    """``lucid.concat`` wrapper (absorbs the int32-typed ``dim`` stub)."""
+    return lucid.concat(tensors, dim=dim)  # type: ignore[arg-type]
+
+
+def _inv(x: Tensor) -> Tensor:
+    """``lucid.linalg.inv`` wrapper with a precise return type."""
+    return cast(Tensor, lucid.linalg.inv(x))
 
 
 def _spatial_hw(img: Tensor) -> tuple[int, int]:
@@ -182,7 +195,7 @@ def rgb_to_grayscale(img: Tensor, *, keep_channels: bool = True) -> Tensor:
     b = img[..., 2:3, :, :]
     gray = 0.299 * r + 0.587 * g + 0.114 * b
     if keep_channels:
-        return lucid.concat([gray, gray, gray], dim=-3)  # type: ignore[arg-type]
+        return _cat([gray, gray, gray], -3)
     return gray
 
 
@@ -269,8 +282,140 @@ def adjust_hue(img: Tensor, factor: float) -> Tensor:
     new_r = _sel(v, q, p, p, t, v)
     new_g = _sel(t, v, v, q, p, p)
     new_b = _sel(p, p, t, v, v, q)
-    rgb = lucid.concat([new_r, new_g, new_b], dim=-3)  # type: ignore[arg-type]
+    rgb = _cat([new_r, new_g, new_b], -3)
     # Achromatic pixels stay unchanged.  lucid.where needs a same-shape
     # condition, so broadcast the per-pixel delta mask across channels.
-    achromatic = lucid.concat([delta < eps, delta < eps, delta < eps], dim=-3)  # type: ignore[arg-type]
+    achromatic = _cat([delta < eps, delta < eps, delta < eps], -3)
     return lucid.clip(lucid.where(achromatic, img, rgb), 0.0, 1.0)
+
+
+# ── affine / perspective warps ──────────────────────────────────────
+#
+# Coordinate convention matches OpenCV (so Albumentations-style matrices
+# transfer directly): a forward 3x3 matrix ``M`` maps an *input* pixel
+# ``[x, y, 1]`` to an *output* pixel.  Images are sampled by inverting M
+# into ``affine_grid``'s normalized output→input ``theta``; boxes and
+# keypoints apply M to their coordinates directly.
+
+
+
+def _norm_to_pixel(h: int, w: int) -> Tensor:
+    """3x3 matrix mapping ``align_corners=True`` normalized coords → pixels.
+
+    With ``align_corners=True`` the corner pixels map to ``-1`` / ``+1``:
+    ``px = (nx + 1) * (W - 1) / 2``.  (Lucid's ``align_corners=False``
+    grid path does not reproduce an identity ``theta``, so the warp path
+    standardises on ``align_corners=True``.)
+    """
+    return lucid.tensor(
+        [
+            [(w - 1) / 2.0, 0.0, (w - 1) / 2.0],
+            [0.0, (h - 1) / 2.0, (h - 1) / 2.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+
+def affine_theta(
+    matrix: Tensor, in_hw: tuple[int, int], out_hw: tuple[int, int]
+) -> Tensor:
+    """Convert a forward pixel matrix ``M`` to ``affine_grid`` ``theta`` (1,2,3)."""
+    ih, iw = in_hw
+    oh, ow = out_hw
+    no = _norm_to_pixel(oh, ow)
+    ni_inv = _inv(_norm_to_pixel(ih, iw))
+    m_inv = _inv(matrix)
+    theta = lucid.matmul(lucid.matmul(ni_inv, m_inv), no)  # norm_out → norm_in
+    return theta[:2].reshape(1, 2, 3)
+
+
+def warp_affine(
+    img: Tensor,
+    matrix: Tensor,
+    out_hw: tuple[int, int],
+    *,
+    mode: str = "bilinear",
+    fill: float = 0.0,
+) -> Tensor:
+    """Warp ``img`` by forward pixel matrix ``matrix`` (affine or homography)."""
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    b, c, ih, iw = (int(d) for d in x.shape)
+    theta = affine_theta(matrix, (ih, iw), out_hw)
+    if b > 1:
+        theta = _cat([theta] * b, 0)
+    grid = F.affine_grid(theta, [b, c, out_hw[0], out_hw[1]], align_corners=True)
+    gmode = "nearest" if mode == "nearest" else "bilinear"
+    pad = "zeros" if fill == 0.0 else "border"
+    y = F.grid_sample(x, grid, mode=gmode, padding_mode=pad, align_corners=True)
+    return y[0] if unbatched else y
+
+
+def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
+    """Apply a forward 3x3 ``matrix`` to ``(N, 2)`` ``(x, y)`` points."""
+    n = int(pts.shape[0])
+    ones = lucid.ones(n, 1, dtype=pts.dtype)
+    hom = _cat([pts, ones], 1)  # (N, 3)
+    out = lucid.matmul(hom, lucid.swapaxes(matrix, 0, 1))  # type: ignore[arg-type]  # (N, 3)
+    return out[:, :2] / out[:, 2:3]  # perspective divide (no-op for affine)
+
+
+def rotation_matrix(angle_deg: float, cx: float, cy: float, scale: float = 1.0) -> Tensor:
+    """OpenCV ``getRotationMatrix2D`` forward matrix (CCW degrees)."""
+    rad = math.radians(angle_deg)
+    alpha = scale * math.cos(rad)
+    beta = scale * math.sin(rad)
+    return lucid.tensor(
+        [
+            [alpha, beta, (1.0 - alpha) * cx - beta * cy],
+            [-beta, alpha, beta * cx + (1.0 - alpha) * cy],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+
+def affine_matrix(
+    *,
+    cx: float,
+    cy: float,
+    scale: float = 1.0,
+    angle_deg: float = 0.0,
+    shear_x_deg: float = 0.0,
+    shear_y_deg: float = 0.0,
+    translate_x: float = 0.0,
+    translate_y: float = 0.0,
+) -> Tensor:
+    """Compose a forward affine matrix about ``(cx, cy)`` then translate."""
+    rad = math.radians(angle_deg)
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    shx, shy = math.tan(math.radians(shear_x_deg)), math.tan(math.radians(shear_y_deg))
+    # Rotate ∘ shear ∘ scale (about origin).
+    a = scale * (cos_a - sin_a * shy)
+    bb = scale * (cos_a * shx - sin_a)
+    cc = scale * (sin_a + cos_a * shy)
+    dd = scale * (sin_a * shx + cos_a)
+    # Translate so the center maps to itself, then add the requested shift.
+    e = cx - a * cx - bb * cy + translate_x
+    f = cy - cc * cx - dd * cy + translate_y
+    return lucid.tensor([[a, bb, e], [cc, dd, f], [0.0, 0.0, 1.0]])
+
+
+def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor:
+    """Forward homography mapping the 4 ``src`` corners to ``dst`` (xy each).
+
+    Solves the 8-DoF system for the 3x3 matrix (``h33 = 1``).
+    """
+    rows: list[list[float]] = []
+    rhs: list[float] = []
+    for (sx, sy), (dx, dy) in zip(src, dst):
+        rows.append([sx, sy, 1.0, 0.0, 0.0, 0.0, -dx * sx, -dx * sy])
+        rhs.append(dx)
+        rows.append([0.0, 0.0, 0.0, sx, sy, 1.0, -dy * sx, -dy * sy])
+        rhs.append(dy)
+    a: Tensor = lucid.tensor(rows)
+    b: Tensor = lucid.tensor([[v] for v in rhs])
+    h = lucid.matmul(_inv(a), b).reshape(-1)
+    hl = h.numpy().tolist()
+    return lucid.tensor(
+        [[hl[0], hl[1], hl[2]], [hl[3], hl[4], hl[5]], [hl[6], hl[7], 1.0]]
+    )
