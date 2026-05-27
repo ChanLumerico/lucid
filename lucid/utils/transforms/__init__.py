@@ -29,6 +29,7 @@ inference pipeline; pretrained weights ship preprocessing this way.
 
 from lucid.utils.transforms import functional
 from lucid.utils.transforms._base import (
+    BboxParams,
     Compose,
     GeometricTransform,
     PhotometricTransform,
@@ -142,6 +143,7 @@ __all__ = [
     "GeometricTransform",
     "PhotometricTransform",
     "Compose",
+    "BboxParams",
     # Interpolation
     "Interpolation",
     # Typed targets

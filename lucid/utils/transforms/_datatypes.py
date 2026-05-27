@@ -24,7 +24,19 @@ import lucid
 from lucid._tensor import Tensor
 
 # Supported bounding-box coordinate formats.
-_BOX_FORMATS = frozenset({"xyxy", "xywh", "cxcywh"})
+#   xyxy / xywh / cxcywh — absolute pixel coordinates.
+#   albumentations       — normalized xyxy (x1,y1,x2,y2 in [0, 1]).
+#   yolo                 — normalized cxcywh (cx,cy,w,h in [0, 1]).
+# Albumentations names map: pascal_voc→xyxy, coco→xywh.
+_BOX_FORMATS = frozenset({"xyxy", "xywh", "cxcywh", "albumentations", "yolo"})
+
+# Albumentations format-name aliases → internal names.
+_ALBU_FORMAT_ALIASES = {"pascal_voc": "xyxy", "coco": "xywh"}
+
+
+def normalize_box_format(fmt: str) -> str:
+    """Map an Albumentations format alias to the internal name."""
+    return _ALBU_FORMAT_ALIASES.get(fmt, fmt)
 
 
 def _cat(tensors: list[Tensor], dim: int) -> Tensor:
@@ -84,50 +96,61 @@ class BoundingBoxes:
     data: Tensor
     format: str
     canvas_size: tuple[int, int]
+    labels: Tensor | None = None
 
     def __post_init__(self) -> None:
+        self.format = normalize_box_format(self.format)
         if self.format not in _BOX_FORMATS:
             raise ValueError(
                 f"BoundingBoxes: unknown format {self.format!r}; "
-                f"expected one of {sorted(_BOX_FORMATS)}"
+                f"expected one of {sorted(_BOX_FORMATS)} (or pascal_voc/coco)"
             )
 
 
 def to_xyxy(boxes: BoundingBoxes) -> Tensor:
-    """Return the box coordinates as ``(N, 4)`` xyxy regardless of format."""
+    """Return the box coordinates as ``(N, 4)`` absolute-pixel xyxy."""
     d = boxes.data
-    if boxes.format == "xyxy":
+    h, w = boxes.canvas_size
+    fmt = boxes.format
+    if fmt == "xyxy":
         return d
-    a = d[:, 0:1]
-    b = d[:, 1:2]
-    c = d[:, 2:3]
-    e = d[:, 3:4]
-    if boxes.format == "xywh":
-        # (x, y, w, h) -> (x, y, x+w, y+h)
+    a, b, c, e = d[:, 0:1], d[:, 1:2], d[:, 2:3], d[:, 3:4]
+    if fmt == "xywh":
         return _cat([a, b, a + c, b + e], 1)
-    # cxcywh: (cx, cy, w, h) -> corners
-    return _cat([a - c / 2, b - e / 2, a + c / 2, b + e / 2], 1)
+    if fmt == "cxcywh":
+        return _cat([a - c / 2, b - e / 2, a + c / 2, b + e / 2], 1)
+    if fmt == "albumentations":  # normalized xyxy
+        return _cat([a * w, b * h, c * w, e * h], 1)
+    # yolo: normalized cxcywh
+    cx, cy, bw, bh = a * w, b * h, c * w, e * h
+    return _cat([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2], 1)
 
 
-def from_xyxy(xyxy: Tensor, fmt: str) -> Tensor:
-    """Convert ``(N, 4)`` xyxy coordinates back to ``fmt``."""
+def from_xyxy(xyxy: Tensor, fmt: str, canvas: tuple[int, int]) -> Tensor:
+    """Convert absolute ``(N, 4)`` xyxy coordinates back to ``fmt``."""
+    h, w = canvas
+    x1, y1, x2, y2 = xyxy[:, 0:1], xyxy[:, 1:2], xyxy[:, 2:3], xyxy[:, 3:4]
     if fmt == "xyxy":
         return xyxy
-    x1 = xyxy[:, 0:1]
-    y1 = xyxy[:, 1:2]
-    x2 = xyxy[:, 2:3]
-    y2 = xyxy[:, 3:4]
     if fmt == "xywh":
         return _cat([x1, y1, x2 - x1, y2 - y1], 1)
-    # cxcywh
-    return _cat([(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], 1)
+    if fmt == "cxcywh":
+        return _cat([(x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1], 1)
+    if fmt == "albumentations":
+        return _cat([x1 / w, y1 / h, x2 / w, y2 / h], 1)
+    # yolo
+    return _cat(
+        [(x1 + x2) / 2 / w, (y1 + y2) / 2 / h, (x2 - x1) / w, (y2 - y1) / h], 1
+    )
 
 
 def _rebuild(
     boxes: BoundingBoxes, xyxy: Tensor, canvas: tuple[int, int]
 ) -> BoundingBoxes:
-    """Re-wrap transformed xyxy coords back into the original format."""
-    return BoundingBoxes(from_xyxy(xyxy, boxes.format), boxes.format, canvas)
+    """Re-wrap transformed xyxy coords back into the original format + labels."""
+    return BoundingBoxes(
+        from_xyxy(xyxy, boxes.format, canvas), boxes.format, canvas, boxes.labels
+    )
 
 
 def flip_boxes(boxes: BoundingBoxes, *, horizontal: bool) -> BoundingBoxes:
@@ -326,3 +349,56 @@ def rot90_keypoints(kps: Keypoints, k: int) -> Keypoints:
         x, y, rest = _kp_xy_rest(out)
         out = _kp_rebuild(y, (w - 1) - x, rest, (w, h))
     return out
+
+
+# ── bounding-box area + filtering (detection pipelines) ─────────────
+
+
+def box_areas(boxes: BoundingBoxes) -> list[float]:
+    """Absolute pixel areas of each box (clamped at 0), as Python floats."""
+    xy = to_xyxy(boxes)
+    n = int(xy.shape[0])
+    w = xy[:, 2] - xy[:, 0]
+    h = xy[:, 3] - xy[:, 1]
+    area = w * h
+    return [max(float(area[i].item()), 0.0) for i in range(n)]
+
+
+def filter_boxes(
+    boxes: BoundingBoxes,
+    *,
+    orig_areas: list[float] | None = None,
+    min_area: float = 0.0,
+    min_visibility: float = 0.0,
+) -> BoundingBoxes:
+    """Drop degenerate / too-small / too-occluded boxes (+ their labels).
+
+    A box is dropped when its post-transform area is non-positive, below
+    ``min_area`` (absolute pixels), or — when ``orig_areas`` is given —
+    its visible fraction ``area / orig_area`` is below ``min_visibility``.
+    """
+    cur = box_areas(boxes)
+    keep: list[int] = []
+    for i, area in enumerate(cur):
+        if area <= 0.0 or area < min_area:
+            continue
+        if (
+            orig_areas is not None
+            and i < len(orig_areas)
+            and orig_areas[i] > 0.0
+            and (area / orig_areas[i]) < min_visibility
+        ):
+            continue
+        keep.append(i)
+
+    if not keep:
+        empty_lbl = boxes.labels[:0] if boxes.labels is not None else None
+        return BoundingBoxes(boxes.data[:0], boxes.format, boxes.canvas_size, empty_lbl)
+
+    data = _cat([boxes.data[i : i + 1] for i in keep], 0)
+    labels = (
+        _cat([boxes.labels[i : i + 1] for i in keep], 0)
+        if boxes.labels is not None
+        else None
+    )
+    return BoundingBoxes(data, boxes.format, boxes.canvas_size, labels)

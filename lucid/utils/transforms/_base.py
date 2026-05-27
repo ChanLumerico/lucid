@@ -195,6 +195,77 @@ class _NoParams:
         return NO_PARAMS
 
 
+@dataclass
+class BboxParams:
+    """Bounding-box handling policy for :class:`Compose` (Albumentations-style).
+
+    Parameters
+    ----------
+    format : str, optional, default="pascal_voc"
+        Albumentations format name (informational; each
+        :class:`BoundingBoxes` already carries its own ``format``).
+    min_area : float, optional, default=0.0
+        Drop post-transform boxes whose absolute pixel area is below this.
+    min_visibility : float, optional, default=0.0
+        Drop boxes whose visible fraction (area / original area) falls
+        below this.
+    label_fields : tuple of str, optional
+        Reserved for API parity; labels travel on
+        :attr:`BoundingBoxes.labels`.
+    """
+
+    format: str = "pascal_voc"
+    min_area: float = 0.0
+    min_visibility: float = 0.0
+    label_fields: tuple[str, ...] = ()
+
+
+def _iter_boxes(obj: object) -> list[BoundingBoxes]:
+    """Collect every :class:`BoundingBoxes` in a sample (traversal order)."""
+    found: list[BoundingBoxes] = []
+
+    def _walk(o: object) -> None:
+        if isinstance(o, BoundingBoxes):
+            found.append(o)
+        elif isinstance(o, dict):
+            for v in o.values():
+                _walk(v)
+        elif isinstance(o, (list, tuple)):
+            for v in o:
+                _walk(v)
+
+    _walk(obj)
+    return found
+
+
+def _filter_boxes_in_sample(
+    obj: object, orig_areas: list[list[float]], params: BboxParams, counter: list[int]
+) -> object:
+    """Replace each :class:`BoundingBoxes` with its filtered version."""
+    from lucid.utils.transforms._datatypes import filter_boxes
+
+    if isinstance(obj, BoundingBoxes):
+        idx = counter[0]
+        counter[0] += 1
+        areas = orig_areas[idx] if idx < len(orig_areas) else None
+        return filter_boxes(
+            obj,
+            orig_areas=areas,
+            min_area=params.min_area,
+            min_visibility=params.min_visibility,
+        )
+    if isinstance(obj, dict):
+        return {
+            k: _filter_boxes_in_sample(v, orig_areas, params, counter)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, (list, tuple)):
+        return type(obj)(
+            _filter_boxes_in_sample(v, orig_areas, params, counter) for v in obj
+        )
+    return obj
+
+
 class Compose(_NoParams, Transform[Empty]):
     """Chain transforms into one callable (works on tensors or samples).
 
@@ -202,6 +273,10 @@ class Compose(_NoParams, Transform[Empty]):
     ----------
     transforms : list of Transform
         Applied left-to-right; each transform's output feeds the next.
+    bbox_params : BboxParams, optional
+        When given, bounding boxes are filtered after the pipeline by
+        ``min_area`` / ``min_visibility`` (degenerate boxes that left the
+        frame are dropped, along with their labels).
 
     Examples
     --------
@@ -215,9 +290,12 @@ class Compose(_NoParams, Transform[Empty]):
     >>> y = tf(image)
     """
 
-    def __init__(self, transforms: list[TransformLike]) -> None:
+    def __init__(
+        self, transforms: list[TransformLike], bbox_params: BboxParams | None = None
+    ) -> None:
         super().__init__(p=1.0)
         self.transforms = list(transforms)
+        self.bbox_params = bbox_params
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
         out: object = img
@@ -226,8 +304,15 @@ class Compose(_NoParams, Transform[Empty]):
         return out  # type: ignore[return-value]
 
     def __call__(self, inputs: object) -> object:
+        from lucid.utils.transforms._datatypes import box_areas
+
+        orig_areas: list[list[float]] = []
+        if self.bbox_params is not None:
+            orig_areas = [box_areas(b) for b in _iter_boxes(inputs)]
         for tf in self.transforms:
             inputs = tf(inputs)
+        if self.bbox_params is not None:
+            inputs = _filter_boxes_in_sample(inputs, orig_areas, self.bbox_params, [0])
         return inputs
 
     def __repr__(self) -> str:
