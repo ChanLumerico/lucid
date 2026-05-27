@@ -14,6 +14,7 @@ import pytest
 
 import lucid
 import lucid.weights as W
+from lucid.utils.transforms import ImageClassification
 from lucid.weights import WeightEntry, WeightsEnum
 from lucid.models.vision.resnet import ResNet18Weights
 
@@ -40,7 +41,7 @@ class TestWeightsEnum:
 
     def test_transforms_returns_callable(self) -> None:
         tf = ResNet18Weights.IMAGENET1K_V1.transforms()
-        assert isinstance(tf, W.ImageClassification)
+        assert isinstance(tf, ImageClassification)
 
     def test_iteration_skips_default_alias(self) -> None:
         # Enum iteration yields canonical members only.
@@ -114,7 +115,7 @@ class TestResolveWeights:
         class OtherWeights(WeightsEnum):
             X = WeightEntry(
                 url="http://x", sha256="", num_classes=1,
-                transforms=W.ImageClassification(crop_size=1),
+                transforms=ImageClassification(crop_size=1),
             )
 
         with pytest.raises(TypeError, match="not a member"):
@@ -130,24 +131,24 @@ class TestResolveWeights:
 
 class TestImageClassification:
     def test_unbatched_shape(self) -> None:
-        tf = W.ImageClassification(crop_size=224, resize_size=256)
+        tf = ImageClassification(crop_size=224, resize_size=256)
         out = tf(lucid.rand(3, 300, 400))
         assert tuple(out.shape) == (3, 224, 224)
 
     def test_batched_shape(self) -> None:
-        tf = W.ImageClassification(crop_size=224, resize_size=256)
+        tf = ImageClassification(crop_size=224, resize_size=256)
         out = tf(lucid.rand(2, 3, 300, 400))
         assert tuple(out.shape) == (2, 3, 224, 224)
 
     def test_normalization_applied(self) -> None:
         # A constant image equal to the mean normalizes to ~0.
-        tf = W.ImageClassification(crop_size=4, resize_size=4, mean=(0.5,), std=(0.5,))
+        tf = ImageClassification(crop_size=4, resize_size=4, mean=(0.5,), std=(0.5,))
         x = lucid.ones(1, 8, 8) * 0.5
         out = tf(x)
         assert abs(float(out.mean().item())) < 1e-5
 
     def test_square_crop(self) -> None:
-        tf = W.ImageClassification(crop_size=128, resize_size=160)
+        tf = ImageClassification(crop_size=128, resize_size=160)
         out = tf(lucid.rand(3, 200, 200))
         assert tuple(out.shape) == (3, 128, 128)
 

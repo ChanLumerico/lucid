@@ -15,12 +15,8 @@ These declarations are pure metadata — they pull only from
 one-directional (``models`` → ``weights``).
 """
 
-from lucid.weights import (
-    ImageClassification,
-    WeightEntry,
-    WeightsEnum,
-    register_weights,
-)
+from lucid.utils.transforms import ImageClassification
+from lucid.weights import WeightEntry, WeightsEnum, register_weights
 
 _HUB = "https://huggingface.co/lucid-dl"
 

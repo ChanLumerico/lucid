@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from lucid.weights._transforms import Transform
+    from lucid.utils.transforms import Transform
 
 
 @dataclass(frozen=True)
@@ -59,7 +59,8 @@ class WeightEntry:
     transforms : Transform
         Preprocessing pipeline the weights were trained with — applied
         to inputs at inference time so ``resnet_18(pretrained=True)``
-        "just works".  See :mod:`lucid.weights._transforms`.
+        "just works".  A :mod:`lucid.utils.transforms` transform (e.g.
+        :class:`~lucid.utils.transforms.ImageClassification`).
     meta : dict
         Free-form provenance + metrics.  Conventional keys: ``source``
         (e.g. ``"torchvision/ResNet18_Weights.IMAGENET1K_V1"``),

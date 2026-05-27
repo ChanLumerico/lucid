@@ -2,8 +2,9 @@
 
 A standalone package (sibling to :mod:`lucid.models`) that provides the
 *infrastructure* for pretrained checkpoints: the tagged-variant enum
-base, preprocessing transforms, hub download + SHA verification,
-loading, and a discovery registry.
+base, hub download + SHA verification, loading, and a discovery
+registry.  Preprocessing lives in :mod:`lucid.utils.transforms`; a
+checkpoint's :class:`WeightEntry` carries one of those transforms.
 
 It deliberately contains **no architecture-specific weight
 declarations**.  Each model family declares its own checkpoints in a
@@ -56,15 +57,11 @@ from lucid.weights._registry import (
     register_weights,
     weights_for,
 )
-from lucid.weights._transforms import ImageClassification, Transform
 
 __all__ = [
     # Core types
     "WeightsEnum",
     "WeightEntry",
-    # Transforms
-    "Transform",
-    "ImageClassification",
     # Discovery
     "get_weight",
     "list_pretrained",
