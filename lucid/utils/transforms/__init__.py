@@ -28,20 +28,42 @@ way (see :mod:`lucid.weights`).
 
 from lucid.utils.transforms import functional
 from lucid.utils.transforms._base import Compose, Transform
-from lucid.utils.transforms._geometric import CenterCrop, Resize
-from lucid.utils.transforms._photometric import Normalize, Rescale
+from lucid.utils.transforms._geometric import (
+    CenterCrop,
+    Pad,
+    RandomCrop,
+    RandomHorizontalFlip,
+    RandomResizedCrop,
+    RandomVerticalFlip,
+    Resize,
+)
+from lucid.utils.transforms._photometric import (
+    ColorJitter,
+    Normalize,
+    RandomErasing,
+    Rescale,
+)
 from lucid.utils.transforms._presets import ImageClassification
 
 __all__ = [
     # Base
     "Transform",
     "Compose",
-    # Geometric
+    # Geometric — deterministic
     "Resize",
     "CenterCrop",
-    # Photometric
+    "Pad",
+    # Geometric — random
+    "RandomCrop",
+    "RandomResizedCrop",
+    "RandomHorizontalFlip",
+    "RandomVerticalFlip",
+    # Photometric — deterministic
     "Normalize",
     "Rescale",
+    # Photometric — random
+    "ColorJitter",
+    "RandomErasing",
     # Presets
     "ImageClassification",
     # Functional submodule

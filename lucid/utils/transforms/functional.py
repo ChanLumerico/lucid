@@ -138,3 +138,130 @@ def normalize(
 def rescale(img: Tensor, scale: float = 1.0 / 255.0) -> Tensor:
     """Multiply pixel values by ``scale`` (e.g. uint8 ``[0,255]`` → ``[0,1]``)."""
     return img * scale
+
+
+def resized_crop(
+    img: Tensor,
+    top: int,
+    left: int,
+    height: int,
+    width: int,
+    size: int | tuple[int, int],
+    *,
+    interpolation: str = "bilinear",
+) -> Tensor:
+    """Crop ``(top, left, height, width)`` then resize to ``size``."""
+    return resize(crop(img, top, left, height, width), size, interpolation=interpolation)
+
+
+def rgb_to_grayscale(img: Tensor, *, keep_channels: bool = True) -> Tensor:
+    r"""Convert an RGB image to luminance (ITU-R 601-2 weights).
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image with 3 channels.
+    keep_channels : bool, optional, default=True
+        If ``True`` the single luma channel is broadcast back to 3
+        channels (handy for ``saturation`` blending); else a 1-channel
+        result is returned.
+    """
+    c = int(img.shape[-3])
+    if c != 3:
+        raise ValueError(f"rgb_to_grayscale expects 3 channels, got {c}")
+    r = img[..., 0:1, :, :]
+    g = img[..., 1:2, :, :]
+    b = img[..., 2:3, :, :]
+    gray = 0.299 * r + 0.587 * g + 0.114 * b
+    if keep_channels:
+        return lucid.concat([gray, gray, gray], dim=-3)  # type: ignore[arg-type]
+    return gray
+
+
+def _blend(img1: Tensor, img2: Tensor, ratio: float) -> Tensor:
+    """``ratio * img1 + (1 - ratio) * img2``, clipped to ``[0, 1]``."""
+    return lucid.clip(ratio * img1 + (1.0 - ratio) * img2, 0.0, 1.0)
+
+
+def adjust_brightness(img: Tensor, factor: float) -> Tensor:
+    """Scale brightness (blend toward black). ``factor=1`` is a no-op."""
+    return _blend(img, img * 0.0, factor)
+
+
+def adjust_contrast(img: Tensor, factor: float) -> Tensor:
+    """Adjust contrast (blend toward the per-image mean gray)."""
+    gray = rgb_to_grayscale(img, keep_channels=False)
+    mean = lucid.mean(gray, dim=[-1, -2, -3], keepdim=True)
+    return _blend(img, mean, factor)
+
+
+def adjust_saturation(img: Tensor, factor: float) -> Tensor:
+    """Adjust saturation (blend toward grayscale). ``factor=1`` is a no-op."""
+    return _blend(img, rgb_to_grayscale(img, keep_channels=True), factor)
+
+
+def adjust_hue(img: Tensor, factor: float) -> Tensor:
+    r"""Shift hue by ``factor`` (in ``[-0.5, 0.5]``) via an HSV round-trip.
+
+    ``factor`` is added to the hue channel (wrapped mod 1.0); ``0`` is a
+    no-op.  Implemented with Lucid tensor ops only (no colour-space
+    library).
+    """
+    if factor == 0.0:
+        return img
+    r = img[..., 0:1, :, :]
+    g = img[..., 1:2, :, :]
+    b = img[..., 2:3, :, :]
+
+    maxc = lucid.max(img, dim=-3, keepdim=True)
+    minc = lucid.min(img, dim=-3, keepdim=True)
+    delta = maxc - minc
+    eps = 1e-10
+
+    # Hue (in [0, 1)), following the standard piecewise definition.
+    rc = (maxc - r) / (delta + eps)
+    gc = (maxc - g) / (delta + eps)
+    bc = (maxc - b) / (delta + eps)
+    h_r = bc - gc
+    h_g = 2.0 + rc - bc
+    h_b = 4.0 + gc - rc
+    hue = lucid.where(
+        maxc == r, h_r, lucid.where(maxc == g, h_g, h_b)
+    )
+    def _frac1(z: Tensor) -> Tensor:
+        # z mod 1.0 via z - floor(z) (Tensor has no % operator).
+        return z - lucid.floor(z)
+
+    hue = _frac1(hue / 6.0)
+    # Achromatic pixels (delta == 0) have undefined hue → set 0.
+    hue = lucid.where(delta < eps, hue * 0.0, hue)
+
+    hue = _frac1(hue + factor)
+
+    # HSV → RGB with S, V recovered from max/min.
+    s = delta / (maxc + eps)
+    v = maxc
+    i = lucid.floor(hue * 6.0)
+    f = hue * 6.0 - i
+    p = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    i_mod = i - 6.0 * lucid.floor(i / 6.0)
+
+    def _sel(c0: Tensor, c1: Tensor, c2: Tensor, c3: Tensor, c4: Tensor, c5: Tensor) -> Tensor:
+        out = lucid.where(i_mod == 0, c0, c1)
+        out = lucid.where(i_mod == 2, c2, out)
+        out = lucid.where(i_mod == 3, c3, out)
+        out = lucid.where(i_mod == 4, c4, out)
+        out = lucid.where(i_mod == 5, c5, out)
+        out = lucid.where(i_mod == 1, c1, out)
+        return out
+
+    new_r = _sel(v, q, p, p, t, v)
+    new_g = _sel(t, v, v, q, p, p)
+    new_b = _sel(p, p, t, v, v, q)
+    rgb = lucid.concat([new_r, new_g, new_b], dim=-3)  # type: ignore[arg-type]
+    # Achromatic pixels stay unchanged.  lucid.where needs a same-shape
+    # condition, so broadcast the per-pixel delta mask across channels.
+    achromatic = lucid.concat([delta < eps, delta < eps, delta < eps], dim=-3)  # type: ignore[arg-type]
+    return lucid.clip(lucid.where(achromatic, img, rgb), 0.0, 1.0)
