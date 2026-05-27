@@ -292,9 +292,7 @@ class RadiusParam:
 class Defocus(PhotometricTransform[RadiusParam]):
     r"""Disk-kernel (out-of-focus) blur (Albumentations ``Defocus``)."""
 
-    def __init__(
-        self, radius: tuple[int, int] = (3, 10), p: float = 0.5
-    ) -> None:
+    def __init__(self, radius: tuple[int, int] = (3, 10), p: float = 0.5) -> None:
         super().__init__(p=p)
         self.radius = radius
 
@@ -345,7 +343,9 @@ class ZoomBlur(PhotometricTransform[ZoomParam]):
             f = 1.0 + (params.factor - 1.0) * i / n
             ch, cw = max(int(round(h / f)), 1), max(int(round(w / f)), 1)
             top, left = (h - ch) // 2, (w - cw) // 2
-            zoomed = F.resize(F.crop(img, top, left, ch, cw), (h, w), interpolation="bilinear")
+            zoomed = F.resize(
+                F.crop(img, top, left, ch, cw), (h, w), interpolation="bilinear"
+            )
             acc = acc + zoomed
         return lucid.clip(acc / (n + 1), 0.0, 1.0)
 

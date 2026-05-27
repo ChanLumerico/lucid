@@ -221,48 +221,43 @@ def adjust_saturation(img: Tensor, factor: float) -> Tensor:
     return _blend(img, rgb_to_grayscale(img, keep_channels=True), factor)
 
 
-def adjust_hue(img: Tensor, factor: float) -> Tensor:
-    r"""Shift hue by ``factor`` (in ``[-0.5, 0.5]``) via an HSV round-trip.
+def _frac1(z: Tensor) -> Tensor:
+    """``z mod 1.0`` via ``z - floor(z)`` (Tensor has no ``%`` operator)."""
+    return z - lucid.floor(z)
 
-    ``factor`` is added to the hue channel (wrapped mod 1.0); ``0`` is a
-    no-op.  Implemented with Lucid tensor ops only (no colour-space
-    library).
+
+def rgb_to_hsv(img: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    r"""Convert an RGB image (``[0, 1]``) to HSV channels, each ``(…, 1, H, W)``.
+
+    Hue is returned in ``[0, 1)`` (achromatic pixels → 0); saturation and
+    value in ``[0, 1]``.  Matches the standard hexcone HSV definition.
     """
-    if factor == 0.0:
-        return img
     r = img[..., 0:1, :, :]
     g = img[..., 1:2, :, :]
     b = img[..., 2:3, :, :]
-
     maxc = lucid.max(img, dim=-3, keepdim=True)
     minc = lucid.min(img, dim=-3, keepdim=True)
     delta = maxc - minc
     eps = 1e-10
 
-    # Hue (in [0, 1)), following the standard piecewise definition.
     rc = (maxc - r) / (delta + eps)
     gc = (maxc - g) / (delta + eps)
     bc = (maxc - b) / (delta + eps)
-    h_r = bc - gc
-    h_g = 2.0 + rc - bc
-    h_b = 4.0 + gc - rc
-    hue = lucid.where(maxc == r, h_r, lucid.where(maxc == g, h_g, h_b))
-
-    def _frac1(z: Tensor) -> Tensor:
-        # z mod 1.0 via z - floor(z) (Tensor has no % operator).
-        return z - lucid.floor(z)
-
+    hue = lucid.where(
+        maxc == r, bc - gc, lucid.where(maxc == g, 2.0 + rc - bc, 4.0 + gc - rc)
+    )
     hue = _frac1(hue / 6.0)
-    # Achromatic pixels (delta == 0) have undefined hue → set 0.
     hue = lucid.where(delta < eps, hue * 0.0, hue)
 
-    hue = _frac1(hue + factor)
-
-    # HSV → RGB with S, V recovered from max/min.
     s = delta / (maxc + eps)
     v = maxc
-    i = lucid.floor(hue * 6.0)
-    f = hue * 6.0 - i
+    return hue, s, v
+
+
+def hsv_to_rgb(h: Tensor, s: Tensor, v: Tensor) -> Tensor:
+    r"""Convert HSV channels (each ``(…, 1, H, W)``) back to an RGB image."""
+    i = lucid.floor(h * 6.0)
+    f = h * 6.0 - i
     p = v * (1.0 - s)
     q = v * (1.0 - s * f)
     t = v * (1.0 - s * (1.0 - f))
@@ -282,11 +277,31 @@ def adjust_hue(img: Tensor, factor: float) -> Tensor:
     new_r = _sel(v, q, p, p, t, v)
     new_g = _sel(t, v, v, q, p, p)
     new_b = _sel(p, p, t, v, v, q)
-    rgb = _cat([new_r, new_g, new_b], -3)
-    # Achromatic pixels stay unchanged.  lucid.where needs a same-shape
-    # condition, so broadcast the per-pixel delta mask across channels.
-    achromatic = _cat([delta < eps, delta < eps, delta < eps], -3)
-    return lucid.clip(lucid.where(achromatic, img, rgb), 0.0, 1.0)
+    return lucid.clip(_cat([new_r, new_g, new_b], -3), 0.0, 1.0)
+
+
+def adjust_hue(img: Tensor, factor: float) -> Tensor:
+    r"""Shift hue by ``factor`` (in ``[-0.5, 0.5]``) via an exact HSV round-trip."""
+    if factor == 0.0:
+        return img
+    h, s, v = rgb_to_hsv(img)
+    return hsv_to_rgb(_frac1(h + factor), s, v)
+
+
+def adjust_hsv(
+    img: Tensor, hue_shift: float, sat_shift: float, val_shift: float
+) -> Tensor:
+    r"""Additive HSV shift (cv2 / Albumentations ``HueSaturationValue`` semantics).
+
+    ``hue_shift`` is on the OpenCV ``[0, 179]`` hue scale; ``sat_shift`` /
+    ``val_shift`` on the ``[0, 255]`` scale — converted to the ``[0, 1]``
+    internal HSV and added (hue wraps, S/V clip).
+    """
+    h, s, v = rgb_to_hsv(img)
+    h = _frac1(h + hue_shift / 180.0)
+    s = lucid.clip(s + sat_shift / 255.0, 0.0, 1.0)
+    v = lucid.clip(v + val_shift / 255.0, 0.0, 1.0)
+    return hsv_to_rgb(h, s, v)
 
 
 # ── affine / perspective warps ──────────────────────────────────────
@@ -525,6 +540,98 @@ def equalize(img: Tensor, clip_limit: float | None = None) -> Tensor:
         ]
         imgs.append(_cat(chans, 0).reshape(1, c, h, w))
     out = _cat(imgs, 0)
+    return out[0] if unbatched else out
+
+
+def _clahe_lut(tile: Tensor, clip_limit: float) -> Tensor:
+    """Build a 256-entry CLAHE mapping LUT (values in ``[0, 1]``) for one tile.
+
+    Clips the histogram at ``clip_limit * area / 256`` and redistributes the
+    excess uniformly (cv2 ``createCLAHE`` contrast limiting), then maps the
+    CDF onto ``[0, 255]`` with scale ``255 / area``.
+    """
+    n = int(tile.shape[0]) * int(tile.shape[1])
+    idx = lucid.clip(lucid.round(tile * 255.0), 0.0, 255.0).long().reshape(-1)
+    hist = lucid.bincount(idx, minlength=256).to(lucid.float32)  # type: ignore[arg-type]
+    if clip_limit > 0.0:
+        cap = max(1.0, clip_limit * float(n) / 256.0)
+        clipped = lucid.clip(hist, 0.0, cap)
+        excess = float((hist - clipped).sum().item())
+        hist = clipped + excess / 256.0
+    cdf = lucid.cumsum(hist)
+    lut = lucid.clip(cdf * (255.0 / float(n)), 0.0, 255.0) / 255.0
+    return lut.reshape(1, 256)
+
+
+def _clahe_channel(
+    ch: Tensor, clip_limit: float, grid_h: int, grid_w: int
+) -> Tensor:
+    """Contrast-limited adaptive equalization of a single ``(H, W)`` channel.
+
+    Computes a clipped-histogram LUT per tile, then bilinearly interpolates
+    each pixel's mapped value between the four nearest tile centres (the
+    defining step that separates CLAHE from a global clip-limited equalize).
+    """
+    h, w = int(ch.shape[0]), int(ch.shape[1])
+    luts = []
+    for ty in range(grid_h):
+        r0, r1 = ty * h // grid_h, (ty + 1) * h // grid_h
+        for tx in range(grid_w):
+            c0, c1 = tx * w // grid_w, (tx + 1) * w // grid_w
+            luts.append(_clahe_lut(ch[r0:r1, c0:c1], clip_limit))
+    lut_flat = _cat(luts, 0).reshape(-1)  # (grid_h * grid_w * 256,)
+
+    v_idx = lucid.clip(lucid.round(ch * 255.0), 0.0, 255.0).long()  # (H, W)
+
+    rows = lucid.arange(0, h).reshape(h, 1)
+    cols = lucid.arange(0, w).reshape(1, w)
+    fy = lucid.clip((rows + 0.5) * (grid_h / h) - 0.5, 0.0, float(grid_h - 1))
+    fx = lucid.clip((cols + 0.5) * (grid_w / w) - 0.5, 0.0, float(grid_w - 1))
+    ty0f, tx0f = lucid.floor(fy), lucid.floor(fx)
+    wy, wx = fy - ty0f, fx - tx0f  # (H,1), (1,W)
+    ty0 = ty0f.long()
+    tx0 = tx0f.long()
+    ty1 = lucid.clip(ty0f + 1.0, 0.0, float(grid_h - 1)).long()
+    tx1 = lucid.clip(tx0f + 1.0, 0.0, float(grid_w - 1)).long()
+
+    def _gather(ty: Tensor, tx: Tensor) -> Tensor:
+        idx = (ty * grid_w + tx) * 256 + v_idx  # (H, W) via broadcast
+        return lucid.take(lut_flat, idx.reshape(-1)).reshape(h, w)
+
+    g00, g01 = _gather(ty0, tx0), _gather(ty0, tx1)
+    g10, g11 = _gather(ty1, tx0), _gather(ty1, tx1)
+    top = g00 * (1.0 - wx) + g01 * wx
+    bot = g10 * (1.0 - wx) + g11 * wx
+    return top * (1.0 - wy) + bot * wy
+
+
+def clahe(
+    img: Tensor, clip_limit: float = 4.0, tile_grid_size: tuple[int, int] = (8, 8)
+) -> Tensor:
+    """Contrast-limited adaptive histogram equalization (cv2 ``CLAHE``).
+
+    A single-channel image is equalized directly; an RGB image is converted
+    to HSV and CLAHE is applied to the value channel (so hue / saturation are
+    preserved), mirroring Albumentations' "equalize luminance only" behaviour
+    without leaving tensor space.
+    """
+    grid_h, grid_w = tile_grid_size
+    unbatched = img.ndim == 3
+    x = img[None] if unbatched else img
+    b, c = int(x.shape[0]), int(x.shape[1])
+
+    out_batch = []
+    for bi in range(b):
+        if c == 1:
+            eq = _clahe_channel(x[bi, 0], clip_limit, grid_h, grid_w)
+            out_batch.append(eq.reshape(1, 1, *eq.shape))
+        else:
+            hh, ss, vv = rgb_to_hsv(x[bi : bi + 1])  # each (1,1,H,W)
+            h2, w2 = int(vv.shape[-2]), int(vv.shape[-1])
+            v_eq = _clahe_channel(vv.reshape(h2, w2), clip_limit, grid_h, grid_w)
+            rgb = hsv_to_rgb(hh, ss, v_eq.reshape(1, 1, h2, w2))
+            out_batch.append(rgb)
+    out = _cat(out_batch, 0)
     return out[0] if unbatched else out
 
 

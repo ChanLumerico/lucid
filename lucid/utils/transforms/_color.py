@@ -109,8 +109,11 @@ class RandomGamma(PhotometricTransform[ScalarParams]):
 class HueSaturationValue(PhotometricTransform[TripletParams]):
     r"""Shift hue / saturation / value (Albumentations ``HueSaturationValue``).
 
-    ``hue_shift_limit`` is in degrees (mapped to a fractional hue shift);
-    saturation / value shifts are applied as multiplicative-ish blends.
+    Matches cv2 / Albumentations semantics exactly: ``hue_shift_limit`` is
+    on the OpenCV hue scale ``[0, 179]`` and ``sat_shift_limit`` /
+    ``val_shift_limit`` on ``[0, 255]``; shifts are *additive* in HSV
+    (hue wraps, S / V clip) via a single :func:`functional.adjust_hsv`
+    round-trip.
     """
 
     def __init__(
@@ -133,10 +136,8 @@ class HueSaturationValue(PhotometricTransform[TripletParams]):
         )
 
     def _apply_image(self, img: Tensor, params: TripletParams) -> Tensor:
-        out = F.adjust_hue(img, params.a / 360.0)
-        out = F.adjust_saturation(out, 1.0 + params.b / 100.0)
-        out = F.adjust_brightness(out, 1.0 + params.c / 100.0)
-        return out
+        self._require_channels(img, 3)
+        return F.adjust_hsv(img, params.a, params.b, params.c)
 
     def __repr__(self) -> str:
         return (
@@ -257,18 +258,19 @@ class Equalize(_NoParams, PhotometricTransform[Empty]):
 
 
 class CLAHE(_NoParams, PhotometricTransform[Empty]):
-    r"""Contrast-limited histogram equalization (Albumentations ``CLAHE``).
+    r"""Contrast-limited adaptive histogram equalization (Albumentations ``CLAHE``).
 
-    Note
-    ----
-    Implemented as a *global* clip-limited equalization (the contrast
-    clipping of CLAHE without per-tile adaptivity).
+    True tiled CLAHE: a clipped-histogram LUT is built per tile and each
+    pixel's mapped value is bilinearly interpolated between the four nearest
+    tile centres.  RGB images are equalized on the HSV value channel so hue
+    and saturation are preserved.
 
     Parameters
     ----------
     clip_limit : float, optional, default=4.0
+        Contrast-clip threshold (histogram cap = ``clip_limit * area / 256``).
     tile_grid_size : (int, int), optional, default=(8, 8)
-        Accepted for signature parity (unused in the global variant).
+        Number of tiles ``(rows, cols)`` the image is divided into.
     p : float, optional, default=0.5
     """
 
@@ -283,10 +285,13 @@ class CLAHE(_NoParams, PhotometricTransform[Empty]):
         self.tile_grid_size = tile_grid_size
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.equalize(img, clip_limit=self.clip_limit)
+        return F.clahe(img, self.clip_limit, self.tile_grid_size)
 
     def __repr__(self) -> str:
-        return f"CLAHE(clip_limit={self.clip_limit}, p={self.p})"
+        return (
+            f"CLAHE(clip_limit={self.clip_limit}, "
+            f"tile_grid_size={self.tile_grid_size}, p={self.p})"
+        )
 
 
 # ── tone / inversion ────────────────────────────────────────────────
@@ -477,7 +482,9 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
 class RandomBrightness(PhotometricTransform[ScalarParams]):
     r"""Random brightness only (Albumentations ``RandomBrightness``)."""
 
-    def __init__(self, limit: float | tuple[float, float] = 0.2, p: float = 0.5) -> None:
+    def __init__(
+        self, limit: float | tuple[float, float] = 0.2, p: float = 0.5
+    ) -> None:
         super().__init__(p=p)
         self.limit = _rng(limit)
 
@@ -494,7 +501,9 @@ class RandomBrightness(PhotometricTransform[ScalarParams]):
 class RandomContrast(PhotometricTransform[ScalarParams]):
     r"""Random contrast only (Albumentations ``RandomContrast``)."""
 
-    def __init__(self, limit: float | tuple[float, float] = 0.2, p: float = 0.5) -> None:
+    def __init__(
+        self, limit: float | tuple[float, float] = 0.2, p: float = 0.5
+    ) -> None:
         super().__init__(p=p)
         self.limit = _rng(limit)
 
@@ -521,7 +530,9 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
     ) -> None:
         super().__init__(p=p)
         self.blur_limit = blur_limit
-        self.sigma_limit = (0.0, sigma_limit) if isinstance(sigma_limit, (int, float)) else sigma_limit
+        self.sigma_limit = (
+            (0.0, sigma_limit) if isinstance(sigma_limit, (int, float)) else sigma_limit
+        )
         self.alpha = alpha
         self.threshold = threshold
 
@@ -539,15 +550,15 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
         return lucid.clip(img + params.a * (img - blur), 0.0, 1.0)
 
     def __repr__(self) -> str:
-        return f"UnsharpMask(blur_limit={self.blur_limit}, alpha={self.alpha}, p={self.p})"
+        return (
+            f"UnsharpMask(blur_limit={self.blur_limit}, alpha={self.alpha}, p={self.p})"
+        )
 
 
 class RingingOvershoot(PhotometricTransform[Empty]):
     r"""Ringing overshoot via a high-pass kernel blend (Albu ``RingingOvershoot``)."""
 
-    def __init__(
-        self, blur_limit: tuple[int, int] = (7, 15), p: float = 0.5
-    ) -> None:
+    def __init__(self, blur_limit: tuple[int, int] = (7, 15), p: float = 0.5) -> None:
         super().__init__(p=p)
         self.blur_limit = blur_limit
 
@@ -586,7 +597,9 @@ class FancyPCA(PhotometricTransform[Empty]):
         cov = lucid.matmul(centered, lucid.swapaxes(centered, 0, 1)) / float(flat.shape[1])  # type: ignore[arg-type]
         evals, evecs = lucid.linalg.eigh(cov)
         alphas = [self.alpha * _random.uniform(-1.0, 1.0) for _ in range(c)]
-        scaled = lucid.tensor([alphas[i] for i in range(c)], dtype=img.dtype).reshape(c, 1) * evals.reshape(c, 1)
+        scaled = lucid.tensor([alphas[i] for i in range(c)], dtype=img.dtype).reshape(
+            c, 1
+        ) * evals.reshape(c, 1)
         delta = lucid.matmul(evecs, scaled).reshape(c, 1, 1)  # (3,1,1)
         if img.ndim == 4:
             delta = delta[None]
@@ -658,11 +671,15 @@ class XYMasking(PhotometricTransform[BandParams]):
     def make_params(self, img: Tensor) -> BandParams:
         h, w = F._spatial_hw(img)
         cols = tuple(
-            (lambda s: (s, min(s + self.mask_x_length, w)))(_random.randint(0, max(w - 1, 1)))
+            (lambda s: (s, min(s + self.mask_x_length, w)))(
+                _random.randint(0, max(w - 1, 1))
+            )
             for _ in range(self.num_masks_x)
         )
         rows = tuple(
-            (lambda s: (s, min(s + self.mask_y_length, h)))(_random.randint(0, max(h - 1, 1)))
+            (lambda s: (s, min(s + self.mask_y_length, h)))(
+                _random.randint(0, max(h - 1, 1))
+            )
             for _ in range(self.num_masks_y)
         )
         return BandParams(rows=rows, cols=cols)
@@ -671,12 +688,18 @@ class XYMasking(PhotometricTransform[BandParams]):
         h, w = F._spatial_hw(img)
         keep = lucid.ones(1, h, w, dtype=img.dtype)
         for r0, r1 in params.rows:
-            band = F.pad(lucid.zeros(1, r1 - r0, w, dtype=img.dtype),
-                         (0, 0, r0, h - r1), value=1.0)
+            band = F.pad(
+                lucid.zeros(1, r1 - r0, w, dtype=img.dtype),
+                (0, 0, r0, h - r1),
+                value=1.0,
+            )
             keep = keep * band
         for c0, c1 in params.cols:
-            band = F.pad(lucid.zeros(1, h, c1 - c0, dtype=img.dtype),
-                         (c0, w - c1, 0, 0), value=1.0)
+            band = F.pad(
+                lucid.zeros(1, h, c1 - c0, dtype=img.dtype),
+                (c0, w - c1, 0, 0),
+                value=1.0,
+            )
             keep = keep * band
         keep_b = keep[None] if img.ndim == 4 else keep
         return img * keep_b + self.fill_value * (1.0 - keep_b)

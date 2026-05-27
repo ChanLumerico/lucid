@@ -6,7 +6,6 @@ import lucid
 import lucid.utils.transforms as T
 from lucid.utils.transforms._datatypes import to_xyxy
 
-
 # ── single-image (size-preserving) ──────────────────────────────────
 
 _FIXED = [
@@ -68,7 +67,9 @@ def _det_sample() -> dict[str, object]:
     return {
         "image": T.Image(lucid.rand(3, 40, 40)),
         "mask": T.Mask((lucid.rand(1, 40, 40) * 3).long().to(lucid.float32)),
-        "boxes": T.BoundingBoxes(lucid.tensor([[10.0, 10.0, 30.0, 30.0]]), "xyxy", (40, 40)),
+        "boxes": T.BoundingBoxes(
+            lucid.tensor([[10.0, 10.0, 30.0, 30.0]]), "xyxy", (40, 40)
+        ),
     }
 
 

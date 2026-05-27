@@ -419,13 +419,19 @@ class RandomScale(GeometricTransform[ScaleParam]):
     def make_params(self, img: Tensor) -> ScaleParam:
         h, w = F._spatial_hw(img)
         f = 1.0 + _random.uniform(self.scale_limit[0], self.scale_limit[1])
-        return ScaleParam(new_h=max(int(round(h * f)), 1), new_w=max(int(round(w * f)), 1))
+        return ScaleParam(
+            new_h=max(int(round(h * f)), 1), new_w=max(int(round(w * f)), 1)
+        )
 
     def _apply_image(self, img: Tensor, params: ScaleParam) -> Tensor:
-        return F.resize(img, (params.new_h, params.new_w), interpolation=self.interpolation)
+        return F.resize(
+            img, (params.new_h, params.new_w), interpolation=self.interpolation
+        )
 
     def _apply_mask(self, mask: Tensor, params: ScaleParam) -> Tensor:
-        return F.resize(mask, (params.new_h, params.new_w), interpolation=Interpolation.NEAREST)
+        return F.resize(
+            mask, (params.new_h, params.new_w), interpolation=Interpolation.NEAREST
+        )
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: ScaleParam) -> BoundingBoxes:
         from lucid.utils.transforms._datatypes import resize_boxes
@@ -517,8 +523,10 @@ class SafeRotate(_WarpTransform):
         # Rotate about the old center, then translate into the new canvas.
         rot = F.rotation_matrix(angle, (w - 1) / 2.0, (h - 1) / 2.0)
         shift = F.affine_matrix(
-            cx=0.0, cy=0.0,
-            translate_x=(new_w - w) / 2.0, translate_y=(new_h - h) / 2.0,
+            cx=0.0,
+            cy=0.0,
+            translate_x=(new_w - w) / 2.0,
+            translate_y=(new_h - h) / 2.0,
         )
         matrix = lucid.matmul(shift, rot)
         return WarpParams(matrix=matrix, out_hw=(new_h, new_w))

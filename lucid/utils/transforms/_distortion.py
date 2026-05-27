@@ -279,10 +279,26 @@ class GridElasticDeform(_DisplacementTransform):
 
         h, w = F._spatial_hw(img)
         gx, gy = self.num_grid_xy[0] + 1, self.num_grid_xy[1] + 1
-        cdx = [[_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)] for _ in range(gy)]
-        cdy = [[_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)] for _ in range(gy)]
-        dx = interpolate(lucid.tensor(cdx).reshape(1, 1, gy, gx), size=(h, w), mode="bilinear", align_corners=True)[0, 0]
-        dy = interpolate(lucid.tensor(cdy).reshape(1, 1, gy, gx), size=(h, w), mode="bilinear", align_corners=True)[0, 0]
+        cdx = [
+            [_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)]
+            for _ in range(gy)
+        ]
+        cdy = [
+            [_random.uniform(-self.magnitude, self.magnitude) for _ in range(gx)]
+            for _ in range(gy)
+        ]
+        dx = interpolate(
+            lucid.tensor(cdx).reshape(1, 1, gy, gx),
+            size=(h, w),
+            mode="bilinear",
+            align_corners=True,
+        )[0, 0]
+        dy = interpolate(
+            lucid.tensor(cdy).reshape(1, 1, gy, gx),
+            size=(h, w),
+            mode="bilinear",
+            align_corners=True,
+        )[0, 0]
         return DispParams(dx=dx, dy=dy, out_hw=(h, w))
 
     def __repr__(self) -> str:

@@ -88,9 +88,7 @@ class _BBoxAwareCrop:
                     return v
         return None
 
-    def _safe_window(
-        self, boxes: BoundingBoxes
-    ) -> tuple[int, int, int, int]:
+    def _safe_window(self, boxes: BoundingBoxes) -> tuple[int, int, int, int]:
         h, w = boxes.canvas_size
         x1, y1, x2, y2 = _union_xyxy(boxes)
         # Erode the must-contain region toward its center.
@@ -167,7 +165,9 @@ class RandomSizedBBoxSafeCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
         else:
             window = self._safe_window(boxes)
         cropped = Crop(*window, p=1.0)(inputs)
-        return Resize(self.height, self.width, interpolation=self.interpolation, p=1.0)(cropped)
+        return Resize(self.height, self.width, interpolation=self.interpolation, p=1.0)(
+            cropped
+        )
 
     def __repr__(self) -> str:
         return (
@@ -258,7 +258,9 @@ class MaskDropout(_NoParams, Transform[Empty]):
         if mask_obj is None:
             return inputs
 
-        labels = sorted({int(round(v)) for v in mask_obj.data.reshape(-1).numpy().tolist()})
+        labels = sorted(
+            {int(round(v)) for v in mask_obj.data.reshape(-1).numpy().tolist()}
+        )
         labels = [v for v in labels if v != 0]
         if not labels:
             return inputs
@@ -281,9 +283,7 @@ class MaskDropout(_NoParams, Transform[Empty]):
             elif v is img_obj and img_obj is not None:
                 c = int(img_obj.data.shape[-3])
                 kc = F._cat([keep] * c, 0) if keep.ndim == 3 else keep
-                out[key] = Image(
-                    img_obj.data * kc + self.image_fill_value * (1.0 - kc)
-                )
+                out[key] = Image(img_obj.data * kc + self.image_fill_value * (1.0 - kc))
         return out
 
     def __repr__(self) -> str:

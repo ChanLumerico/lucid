@@ -139,9 +139,7 @@ def from_xyxy(xyxy: Tensor, fmt: str, canvas: tuple[int, int]) -> Tensor:
     if fmt == "albumentations":
         return _cat([x1 / w, y1 / h, x2 / w, y2 / h], 1)
     # yolo
-    return _cat(
-        [(x1 + x2) / 2 / w, (y1 + y2) / 2 / h, (x2 - x1) / w, (y2 - y1) / h], 1
-    )
+    return _cat([(x1 + x2) / 2 / w, (y1 + y2) / 2 / h, (x2 - x1) / w, (y2 - y1) / h], 1)
 
 
 def _rebuild(
