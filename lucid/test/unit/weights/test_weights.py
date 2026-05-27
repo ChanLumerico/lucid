@@ -15,7 +15,7 @@ import pytest
 import lucid
 import lucid.weights as W
 from lucid.weights import WeightEntry, WeightsEnum
-from lucid.weights.vision.resnet import ResNet18Weights
+from lucid.models.vision.resnet import ResNet18Weights
 
 
 # ── WeightsEnum structure ───────────────────────────────────────────

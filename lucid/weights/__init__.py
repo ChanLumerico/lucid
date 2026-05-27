@@ -1,10 +1,17 @@
 """``lucid.weights`` — pretrained-weight system for the model zoo.
 
-A standalone package (sibling to :mod:`lucid.models`) that owns
-everything about *pretrained checkpoints*: where they live, how to
-fetch + verify them, the preprocessing they expect, and the tagged
-variant system used to select among multiple checkpoints for one
-architecture.
+A standalone package (sibling to :mod:`lucid.models`) that provides the
+*infrastructure* for pretrained checkpoints: the tagged-variant enum
+base, preprocessing transforms, hub download + SHA verification,
+loading, and a discovery registry.
+
+It deliberately contains **no architecture-specific weight
+declarations**.  Each model family declares its own checkpoints in a
+``_weights.py`` module *inside the model package* (e.g.
+``lucid.models.vision.resnet._weights.ResNet18Weights``), importing the
+primitives below.  This keeps :mod:`lucid.weights` a pure porting
+substrate and the dependency one-directional (``models`` → ``weights``,
+never the reverse).
 
 Design
 ------
@@ -21,10 +28,11 @@ familiar::
     model = models.resnet_18(pretrained=True)
 
     # explicit tag — enum or string
-    model = models.resnet_18(weights=weights.vision.ResNet18Weights.IMAGENET1K_V1)
-    model = models.resnet_18(pretrained="IMAGENET1K_V1")
+    from lucid.models.vision.resnet import ResNet18Weights
+    model = models.resnet_18_cls(weights=ResNet18Weights.IMAGENET1K_V1)
+    model = models.resnet_18_cls(pretrained="IMAGENET1K_V1")
 
-    # discover + preprocess
+    # discover + preprocess (after the model package is imported)
     weights.list_pretrained("resnet_18")        # ['IMAGENET1K_V1']
     w = weights.get_weight("ResNet18Weights.IMAGENET1K_V1")
     x = w.transforms()(image)
@@ -39,7 +47,6 @@ org, converted from torchvision / timm / transformers sources by the
 offline ``tools/convert_weights`` pipeline.
 """
 
-from lucid.weights import vision
 from lucid.weights._base import WeightEntry, WeightsEnum
 from lucid.weights._hub import download
 from lucid.weights._loading import load_weight_entry, resolve_weights
@@ -67,6 +74,4 @@ __all__ = [
     "download",
     "load_weight_entry",
     "resolve_weights",
-    # Sub-packages
-    "vision",
 ]

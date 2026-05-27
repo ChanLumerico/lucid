@@ -19,7 +19,7 @@ writing a config by hand.
 
 from lucid.models.vision.resnet._config import ResNetConfig
 from lucid.models.vision.resnet._model import ResNet, ResNetForImageClassification
-from lucid.weights.vision.resnet import ResNet18Weights
+from lucid.models.vision.resnet._weights import ResNet18Weights
 from lucid.models.vision.resnet._pretrained import (
     resnet_18,
     resnet_18_cls,
