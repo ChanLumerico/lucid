@@ -1,25 +1,20 @@
 """Photometric transforms — per-pixel value adjustment.
 
-Deterministic inference transforms (:class:`Normalize`,
-:class:`Rescale`) and stochastic augmentations (:class:`ColorJitter`,
-:class:`RandomErasing`).  All are
+Albumentations-compatible colour / intensity transforms.  All are
 :class:`~lucid.utils.transforms._base.PhotometricTransform` — they act
-only on the image and leave masks / boxes untouched.
+only on the image and leave masks / boxes / keypoints untouched.
+
+This module currently holds :class:`Normalize` and :class:`ColorJitter`;
+the wider Albumentations colour set (brightness/contrast, gamma, HSV,
+channel ops, CLAHE, …) lands in later batches.
 """
 
-import math
 from dataclasses import dataclass
 
-import lucid
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
 from lucid.utils.transforms import functional as F
-from lucid.utils.transforms._base import (
-    Empty,
-    PhotometricTransform,
-    _NoParams,
-    _ProbabilityGate,
-)
+from lucid.utils.transforms._base import Empty, PhotometricTransform, _NoParams
 
 
 # ── parameter types ─────────────────────────────────────────────────
@@ -36,45 +31,47 @@ class ColorJitterParams:
     hue: float | None
 
 
-@dataclass(frozen=True)
-class EraseParams:
-    """Whether to erase this call, and (if so) the region to blank."""
-
-    apply: bool
-    top: int = 0
-    left: int = 0
-    height: int = 0
-    width: int = 0
-
-
 # ── deterministic ───────────────────────────────────────────────────
 
 
 class Normalize(_NoParams, PhotometricTransform[Empty]):
-    r"""Normalize an image per channel: ``(img - mean) / std``."""
+    r"""Normalize an image (Albumentations ``Normalize``).
 
-    def __init__(self, mean: tuple[float, ...], std: tuple[float, ...]) -> None:
+    Computes ``(img - mean * max_pixel_value) / (std * max_pixel_value)``
+    — i.e. scales by ``max_pixel_value`` then standardizes per channel.
+
+    Parameters
+    ----------
+    mean, std : tuple of float
+        Per-channel statistics.
+    max_pixel_value : float, optional, default=255.0
+        Value the inputs are divided by (``1.0`` for ``[0, 1]`` inputs).
+    p : float, optional, default=1.0
+    """
+
+    def __init__(
+        self,
+        mean: tuple[float, ...],
+        std: tuple[float, ...],
+        max_pixel_value: float = 255.0,
+        p: float = 1.0,
+    ) -> None:
+        super().__init__(p=p)
         self.mean = tuple(mean)
         self.std = tuple(std)
+        self.max_pixel_value = max_pixel_value
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.normalize(img, self.mean, self.std)
+        mv = self.max_pixel_value
+        eff_mean = tuple(m * mv for m in self.mean)
+        eff_std = tuple(s * mv for s in self.std)
+        return F.normalize(img, eff_mean, eff_std)
 
     def __repr__(self) -> str:
-        return f"Normalize(mean={self.mean}, std={self.std})"
-
-
-class Rescale(_NoParams, PhotometricTransform[Empty]):
-    r"""Scale pixel values by a constant (e.g. uint8 ``[0,255]`` → ``[0,1]``)."""
-
-    def __init__(self, scale: float = 1.0 / 255.0) -> None:
-        self.scale = scale
-
-    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.rescale(img, self.scale)
-
-    def __repr__(self) -> str:
-        return f"Rescale(scale={self.scale})"
+        return (
+            f"Normalize(mean={self.mean}, std={self.std}, "
+            f"max_pixel_value={self.max_pixel_value}, p={self.p})"
+        )
 
 
 # ── randomized ──────────────────────────────────────────────────────
@@ -86,11 +83,7 @@ def _jitter_range(
     center: float,
     floor: float | None = None,
 ) -> tuple[float, float] | None:
-    """Normalize a ColorJitter arg to a ``(min, max)`` range, or ``None``.
-
-    A scalar ``v`` → ``[center - v, center + v]`` (clamped at ``floor``);
-    a 2-tuple is used directly; ``0`` → ``None`` (factor skipped).
-    """
+    """Normalize a ColorJitter arg to a ``(min, max)`` range, or ``None``."""
     if isinstance(value, (int, float)):
         if value == 0:
             return None
@@ -103,18 +96,18 @@ def _jitter_range(
 
 
 class ColorJitter(PhotometricTransform[ColorJitterParams]):
-    r"""Randomly jitter brightness, contrast, saturation, and hue.
+    r"""Randomly jitter brightness/contrast/saturation/hue.
 
-    Each factor is sampled uniformly from its range and the four
-    adjustments are applied in a random order (matching torchvision).
+    Albumentations ``ColorJitter`` — each factor is sampled uniformly
+    from its range and the four adjustments are applied in random order.
 
     Parameters
     ----------
-    brightness, contrast, saturation : float or (float, float), optional
-        Scalar ``v`` → range ``[max(0, 1-v), 1+v]``; tuple used directly;
-        ``0`` disables.
-    hue : float or (float, float), optional
-        Scalar ``v`` → ``[-v, v]`` (``v`` ≤ 0.5); ``0`` disables.
+    brightness, contrast, saturation : float or (float, float), optional, default=0.2
+        Scalar ``v`` → range ``[max(0, 1-v), 1+v]``; tuple used directly.
+    hue : float or (float, float), optional, default=0.2
+        Scalar ``v`` → ``[-v, v]`` (``v`` ≤ 0.5).
+    p : float, optional, default=0.5
     """
 
     _ADJUST = (
@@ -126,11 +119,13 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
 
     def __init__(
         self,
-        brightness: float | tuple[float, float] = 0.0,
-        contrast: float | tuple[float, float] = 0.0,
-        saturation: float | tuple[float, float] = 0.0,
-        hue: float | tuple[float, float] = 0.0,
+        brightness: float | tuple[float, float] = 0.2,
+        contrast: float | tuple[float, float] = 0.2,
+        saturation: float | tuple[float, float] = 0.2,
+        hue: float | tuple[float, float] = 0.2,
+        p: float = 0.5,
     ) -> None:
+        super().__init__(p=p)
         self._ranges = (
             _jitter_range(brightness, center=1.0, floor=0.0),
             _jitter_range(contrast, center=1.0, floor=0.0),
@@ -156,12 +151,7 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
         )
 
     def _apply_image(self, img: Tensor, params: ColorJitterParams) -> Tensor:
-        factors = (
-            params.brightness,
-            params.contrast,
-            params.saturation,
-            params.hue,
-        )
+        factors = (params.brightness, params.contrast, params.saturation, params.hue)
         for idx in params.order:
             factor = factors[idx]
             if factor is not None:
@@ -170,89 +160,7 @@ class ColorJitter(PhotometricTransform[ColorJitterParams]):
 
     def __repr__(self) -> str:
         b, c, s, h = self._ranges
-        return f"ColorJitter(brightness={b}, contrast={c}, saturation={s}, hue={h})"
-
-
-class RandomErasing(_ProbabilityGate, PhotometricTransform[EraseParams]):
-    r"""Randomly erase a rectangular region (Zhong et al., 2017).
-
-    With probability ``p`` a region covering ``scale`` of the area with
-    aspect ratio in ``ratio`` is filled with ``value``.
-
-    Parameters
-    ----------
-    p : float, optional, default=0.5
-        Erase probability.
-    scale : (float, float), optional, default=(0.02, 0.33)
-        Range of erased-area fraction.
-    ratio : (float, float), optional, default=(0.3, 3.3)
-        Range of erased-region aspect ratios.
-    value : float, optional, default=0.0
-        Fill value.
-
-    Notes
-    -----
-    Implemented as a multiplicative keep-mask (no in-place assignment).
-    """
-
-    def __init__(
-        self,
-        p: float = 0.5,
-        *,
-        scale: tuple[float, float] = (0.02, 0.33),
-        ratio: tuple[float, float] = (0.3, 3.3),
-        value: float = 0.0,
-    ) -> None:
-        super().__init__(p)
-        self.scale = scale
-        self.ratio = ratio
-        self.value = value
-
-    def make_params(self, img: Tensor) -> EraseParams:
-        if not self._gate():
-            return EraseParams(apply=False)
-        h, w = F._spatial_hw(img)
-        area = float(h * w)
-        log_ratio = (math.log(self.ratio[0]), math.log(self.ratio[1]))
-        for _ in range(10):
-            target_area = _random.uniform(self.scale[0], self.scale[1]) * area
-            aspect = math.exp(_random.uniform(log_ratio[0], log_ratio[1]))
-            eh = int(round(math.sqrt(target_area / aspect)))
-            ew = int(round(math.sqrt(target_area * aspect)))
-            if 0 < eh <= h and 0 < ew <= w:
-                return EraseParams(
-                    apply=True,
-                    top=_random.randint(0, h - eh + 1),
-                    left=_random.randint(0, w - ew + 1),
-                    height=eh,
-                    width=ew,
-                )
-        return EraseParams(apply=False)
-
-    def _apply_image(self, img: Tensor, params: EraseParams) -> Tensor:
-        if not params.apply:
-            return img
-        h, w = F._spatial_hw(img)
-        c = int(img.shape[-3])
-        inner = lucid.zeros(1, params.height, params.width, dtype=img.dtype)
-        keep = F.pad(
-            inner,
-            (
-                params.left,
-                w - params.left - params.width,
-                params.top,
-                h - params.top - params.height,
-            ),
-            mode="constant",
-            value=1.0,
-        )
-        keep = lucid.concat([keep] * c, dim=-3)  # type: ignore[arg-type]
-        if img.ndim == 4:
-            keep = keep[None]
-        return img * keep + self.value * (1.0 - keep)
-
-    def __repr__(self) -> str:
         return (
-            f"RandomErasing(p={self.p}, scale={self.scale}, ratio={self.ratio}, "
-            f"value={self.value})"
+            f"ColorJitter(brightness={b}, contrast={c}, saturation={s}, "
+            f"hue={h}, p={self.p})"
         )

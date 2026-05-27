@@ -5,27 +5,25 @@ Design
 Every transform is generic over a **parameter type** ``P`` (a frozen
 dataclass).  :meth:`Transform.make_params` samples ``P`` once per call
 (from the sample's image); the typed ``_apply_*`` hooks receive it
-without casts.  This is what keeps randomized transforms reproducible
-*and* statically type-checked.
+without casts.  Every transform also carries a probability ``p``: the
+*whole* transform is applied with probability ``p`` and is the identity
+otherwise (Albumentations semantics).
 
 Class hierarchy::
 
-    Transform[P]                 (ABC) make_params + _apply_{image,mask,boxes} + dispatch
-    ├─ GeometricTransform[P]     (ABC) spatial — _apply_mask / _apply_boxes are *required*
-    └─ PhotometricTransform[P]   (ABC) colour — mask/boxes left untouched (identity)
+    Transform[P]                 (ABC) p-gate + make_params + _apply_* + dispatch
+    ├─ GeometricTransform[P]     (ABC) spatial — mask / boxes / keypoints required
+    └─ PhotometricTransform[P]   (ABC) colour — non-image targets pass through
 
-Mixins compose orthogonal behaviour:
-
-    _NoParams       make_params → NO_PARAMS         (deterministic transforms)
-    _ProbabilityGate  p + _gate()                   (Bernoulli-applied transforms)
+Mixin: ``_NoParams`` (deterministic transforms → ``NO_PARAMS``).
 
 A transform may be called on a single image tensor *or* a structured
 **sample** mixing :class:`~lucid.utils.transforms.Image` /
 :class:`~lucid.utils.transforms.Mask` /
-:class:`~lucid.utils.transforms.BoundingBoxes` nested in dict / list /
+:class:`~lucid.utils.transforms.BoundingBoxes` /
+:class:`~lucid.utils.transforms.Keypoints` nested in dict / list /
 tuple — every target is routed to its typed hook with the *same*
-``params`` so an image, its mask, and its boxes move together.  A bare
-:class:`lucid.Tensor` is treated as an image and returned as a tensor.
+``params``.  A bare :class:`lucid.Tensor` is treated as an image.
 """
 
 import abc
@@ -34,7 +32,12 @@ from typing import Generic, Protocol, TypeVar, runtime_checkable
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms import _random
-from lucid.utils.transforms._datatypes import BoundingBoxes, Image, Mask
+from lucid.utils.transforms._datatypes import (
+    BoundingBoxes,
+    Image,
+    Keypoints,
+    Mask,
+)
 
 
 @dataclass(frozen=True)
@@ -61,11 +64,9 @@ class TransformLike(Protocol):
 
 def _find_reference(obj: object) -> Tensor | None:
     """Find the image-like tensor in a sample, to size random params."""
-    if isinstance(obj, Image):
+    if isinstance(obj, (Image, Mask)):
         return obj.data
-    if isinstance(obj, Mask):
-        return obj.data
-    if isinstance(obj, BoundingBoxes):
+    if isinstance(obj, (BoundingBoxes, Keypoints)):
         return None
     if isinstance(obj, dict):
         for value in obj.values():
@@ -87,10 +88,17 @@ def _find_reference(obj: object) -> Tensor | None:
 class Transform(Generic[P], abc.ABC):
     """Abstract base for a transform parameterized by its sample-params ``P``.
 
-    Subclasses implement :meth:`make_params` (the per-call parameter
-    draw) and :meth:`_apply_image`.  Mask / box handling defaults to
-    identity here; :class:`GeometricTransform` makes them required.
+    Parameters
+    ----------
+    p : float, optional, default=1.0
+        Probability of applying the transform; otherwise the input
+        passes through unchanged.
     """
+
+    def __init__(self, p: float = 1.0) -> None:
+        if not 0.0 <= p <= 1.0:
+            raise ValueError(f"probability p must be in [0, 1], got {p}")
+        self.p = p
 
     @abc.abstractmethod
     def make_params(self, img: Tensor) -> P:
@@ -110,6 +118,10 @@ class Transform(Generic[P], abc.ABC):
         """Apply to boxes (default identity; overridden by geometric)."""
         return boxes
 
+    def _apply_keypoints(self, kps: Keypoints, params: P) -> Keypoints:
+        """Apply to keypoints (default identity; overridden by geometric)."""
+        return kps
+
     def _dispatch(self, obj: object, params: P) -> object:
         if isinstance(obj, Image):
             return Image(self._apply_image(obj.data, params))
@@ -117,6 +129,8 @@ class Transform(Generic[P], abc.ABC):
             return Mask(self._apply_mask(obj.data, params))
         if isinstance(obj, BoundingBoxes):
             return self._apply_boxes(obj, params)
+        if isinstance(obj, Keypoints):
+            return self._apply_keypoints(obj, params)
         if isinstance(obj, dict):
             return {key: self._dispatch(val, params) for key, val in obj.items()}
         if isinstance(obj, (list, tuple)):
@@ -133,16 +147,18 @@ class Transform(Generic[P], abc.ABC):
                 f"{type(self).__name__}: no image / mask in the sample to derive "
                 "transform parameters from"
             )
+        if self.p < 1.0 and _random.rand() >= self.p:
+            return inputs
         return self._dispatch(inputs, self.make_params(ref))
 
 
 class GeometricTransform(Transform[P], abc.ABC):
-    """Spatial transform — *must* move masks and boxes with the image.
+    """Spatial transform — *must* move masks, boxes, and keypoints.
 
-    Re-declaring the mask / box hooks as abstract turns "a geometric
-    transform handles all three target types" into a contract the type
-    checker enforces, preventing the silent bug where a new geometric
-    transform forgets to resample its mask or shift its boxes.
+    Re-declaring the companion hooks as abstract turns "a geometric
+    transform handles every target type" into a contract mypy enforces,
+    preventing the silent bug where a new geometric transform forgets to
+    move one of them.
     """
 
     @abc.abstractmethod
@@ -153,13 +169,16 @@ class GeometricTransform(Transform[P], abc.ABC):
     def _apply_boxes(self, boxes: BoundingBoxes, params: P) -> BoundingBoxes:
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def _apply_keypoints(self, kps: Keypoints, params: P) -> Keypoints:
+        raise NotImplementedError
+
 
 class PhotometricTransform(Transform[P], abc.ABC):
-    """Colour / intensity transform — masks and boxes pass through.
+    """Colour / intensity transform — non-image targets pass through.
 
-    Inherits the identity ``_apply_mask`` / ``_apply_boxes`` from
-    :class:`Transform`; the class exists to state intent and to host
-    shared photometric helpers.
+    Inherits the identity companion hooks from :class:`Transform`; the
+    class states intent and hosts shared photometric helpers.
     """
 
     @staticmethod
@@ -176,18 +195,6 @@ class _NoParams:
         return NO_PARAMS
 
 
-class _ProbabilityGate:
-    """Mixin: Bernoulli gate (apply with probability ``p``)."""
-
-    def __init__(self, p: float) -> None:
-        if not 0.0 <= p <= 1.0:
-            raise ValueError(f"probability p must be in [0, 1], got {p}")
-        self.p = p
-
-    def _gate(self) -> bool:
-        return _random.rand() < self.p
-
-
 class Compose(_NoParams, Transform[Empty]):
     """Chain transforms into one callable (works on tensors or samples).
 
@@ -200,14 +207,16 @@ class Compose(_NoParams, Transform[Empty]):
     --------
     >>> from lucid.utils.transforms import Compose, Resize, CenterCrop, Normalize
     >>> tf = Compose([
-    ...     Resize(256),
-    ...     CenterCrop(224),
-    ...     Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+    ...     Resize(256, 256),
+    ...     CenterCrop(224, 224),
+    ...     Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225),
+    ...               max_pixel_value=1.0),
     ... ])
     >>> y = tf(image)
     """
 
     def __init__(self, transforms: list[TransformLike]) -> None:
+        super().__init__(p=1.0)
         self.transforms = list(transforms)
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:

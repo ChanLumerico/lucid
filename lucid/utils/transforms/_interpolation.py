@@ -38,10 +38,30 @@ _ALIGN_CORNERS_MODES = frozenset(
 )
 
 
-def as_interpolation(mode: "str | Interpolation") -> Interpolation:
-    """Coerce a string or enum to an :class:`Interpolation` (validating)."""
+# OpenCV ``INTER_*`` codes → Lucid modes, so Albumentations-style
+# ``interpolation=cv2.INTER_LINEAR`` (an int) is accepted verbatim.
+_CV2_CODES = {
+    0: Interpolation.NEAREST,  # INTER_NEAREST
+    1: Interpolation.BILINEAR,  # INTER_LINEAR
+    2: Interpolation.AREA,  # INTER_AREA
+    3: Interpolation.BICUBIC,  # INTER_CUBIC
+    4: Interpolation.BICUBIC,  # INTER_LANCZOS4 → nearest available
+}
+
+
+def as_interpolation(mode: "str | int | Interpolation") -> Interpolation:
+    """Coerce a string, OpenCV int code, or enum to an :class:`Interpolation`."""
     if isinstance(mode, Interpolation):
         return mode
+    if isinstance(mode, bool):  # guard: bool is an int subclass
+        raise ValueError(f"invalid interpolation {mode!r}")
+    if isinstance(mode, int):
+        if mode not in _CV2_CODES:
+            raise ValueError(
+                f"unknown OpenCV interpolation code {mode}; "
+                f"expected one of {sorted(_CV2_CODES)}"
+            )
+        return _CV2_CODES[mode]
     try:
         return Interpolation(mode)
     except ValueError:

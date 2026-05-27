@@ -1,29 +1,30 @@
 """``lucid.utils.transforms`` — image transform library.
 
-A Lucid-native take on ``torchvision.transforms`` v2: a composable
-pipeline of transforms that operate on :class:`lucid.Tensor` images
-(``(C, H, W)`` or ``(B, C, H, W)``).  Because ``lucid/`` may not import
-numpy / PIL (H4), transforms are tensor-in / tensor-out; image decoding
-(file → tensor) lives outside this package.
+An Albumentations-compatible transform library (matching class names +
+constructor signatures) built tensor-native on Lucid (no numpy / PIL,
+per H4).  Transforms consume / produce :class:`lucid.Tensor` images
+``(C, H, W)`` or ``(B, C, H, W)``; image *decoding* (file → tensor)
+lives outside this package.
 
 Two entry points:
 
 * **Class transforms** — :class:`Compose` a list of :class:`Transform`
-  objects (:class:`Resize`, :class:`CenterCrop`, :class:`Normalize`,
-  :class:`Rescale`, …).
+  objects.  Each is applied with probability ``p`` and moves every
+  typed target (:class:`Image` / :class:`Mask` / :class:`BoundingBoxes`
+  / :class:`Keypoints`) consistently.
 * **Functional** — stateless ops under
-  :mod:`lucid.utils.transforms.functional` (``F.resize`` / ``F.normalize``
-  / …) that the classes wrap.
+  :mod:`lucid.utils.transforms.functional`.
 
 Presets (:class:`ImageClassification`) bundle a task's canonical
-inference pipeline; pretrained weights ship their preprocessing this
-way (see :mod:`lucid.weights`).
+inference pipeline; pretrained weights ship preprocessing this way.
 
 >>> import lucid.utils.transforms as T
->>> tf = T.Compose([T.Resize(256), T.CenterCrop(224),
-...                 T.Normalize(mean=(0.485, 0.456, 0.406),
-...                             std=(0.229, 0.224, 0.225))])
->>> y = tf(image)        # image: lucid.Tensor (3, H, W) in [0, 1]
+>>> tf = T.Compose([
+...     T.SmallestMaxSize(256),
+...     T.CenterCrop(224, 224),
+...     T.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+... ])
+>>> y = tf(image)
 """
 
 from lucid.utils.transforms import functional
@@ -33,23 +34,24 @@ from lucid.utils.transforms._base import (
     PhotometricTransform,
     Transform,
 )
-from lucid.utils.transforms._datatypes import BoundingBoxes, Image, Mask
-from lucid.utils.transforms._interpolation import Interpolation
+from lucid.utils.transforms._datatypes import (
+    BoundingBoxes,
+    Image,
+    Keypoints,
+    Mask,
+)
 from lucid.utils.transforms._geometric import (
     CenterCrop,
-    Pad,
+    HorizontalFlip,
+    LongestMaxSize,
     RandomCrop,
-    RandomHorizontalFlip,
     RandomResizedCrop,
-    RandomVerticalFlip,
     Resize,
+    SmallestMaxSize,
+    VerticalFlip,
 )
-from lucid.utils.transforms._photometric import (
-    ColorJitter,
-    Normalize,
-    RandomErasing,
-    Rescale,
-)
+from lucid.utils.transforms._interpolation import Interpolation
+from lucid.utils.transforms._photometric import ColorJitter, Normalize
 from lucid.utils.transforms._presets import ImageClassification
 
 __all__ = [
@@ -60,25 +62,24 @@ __all__ = [
     "Compose",
     # Interpolation
     "Interpolation",
-    # Typed targets (multi-target dispatch)
+    # Typed targets
     "Image",
     "Mask",
     "BoundingBoxes",
-    # Geometric — deterministic
+    "Keypoints",
+    # Geometric — resize / crop
     "Resize",
+    "SmallestMaxSize",
+    "LongestMaxSize",
     "CenterCrop",
-    "Pad",
-    # Geometric — random
     "RandomCrop",
     "RandomResizedCrop",
-    "RandomHorizontalFlip",
-    "RandomVerticalFlip",
-    # Photometric — deterministic
+    # Geometric — flips
+    "HorizontalFlip",
+    "VerticalFlip",
+    # Photometric
     "Normalize",
-    "Rescale",
-    # Photometric — random
     "ColorJitter",
-    "RandomErasing",
     # Presets
     "ImageClassification",
     # Functional submodule

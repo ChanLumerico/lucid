@@ -1,12 +1,9 @@
 """Geometric transforms — spatial resampling / cropping / flipping.
 
-Deterministic inference transforms (:class:`Resize`, :class:`CenterCrop`,
-:class:`Pad`) and randomized augmentations (:class:`RandomCrop`,
-:class:`RandomResizedCrop`, :class:`RandomHorizontalFlip`,
-:class:`RandomVerticalFlip`).  Every transform here is a
-:class:`~lucid.utils.transforms._base.GeometricTransform`, so it moves
-masks (nearest resampling) and bounding boxes (coordinate transform)
-consistently with the image.
+Albumentations-compatible class names + constructor signatures, built on
+Lucid's typed multi-target :class:`~lucid.utils.transforms._base.
+GeometricTransform`: every transform here moves the image, its mask
+(nearest resampling), bounding boxes, and keypoints consistently.
 """
 
 import math
@@ -19,32 +16,21 @@ from lucid.utils.transforms._base import (
     Empty,
     GeometricTransform,
     _NoParams,
-    _ProbabilityGate,
 )
 from lucid.utils.transforms._datatypes import (
     BoundingBoxes,
+    Keypoints,
     crop_boxes,
+    crop_keypoints,
     flip_boxes,
-    pad_boxes,
+    flip_keypoints,
     resize_boxes,
+    resize_keypoints,
 )
 from lucid.utils.transforms._interpolation import Interpolation, as_interpolation
 
 
-def _as_hw(size: int | tuple[int, int]) -> tuple[int, int]:
-    """Normalize a size arg to ``(h, w)`` (square when an int)."""
-    return (size, size) if isinstance(size, int) else (size[0], size[1])
-
-
 # ── parameter types ─────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class Offset:
-    """Top-left crop offset (crop size is fixed on the transform)."""
-
-    top: int
-    left: int
 
 
 @dataclass(frozen=True)
@@ -57,263 +43,192 @@ class CropBox:
     width: int
 
 
-@dataclass(frozen=True)
-class FlipParams:
-    """Whether this call flips."""
-
-    apply: bool
-
-
-# ── deterministic ───────────────────────────────────────────────────
+# ── resize family ───────────────────────────────────────────────────
 
 
 class Resize(_NoParams, GeometricTransform[Empty]):
-    r"""Resize an image (and resample mask / scale boxes).
+    r"""Resize to an exact ``height`` x ``width`` (Albumentations ``Resize``).
 
     Parameters
     ----------
-    size : int or (int, int)
-        ``int`` scales the shorter side (aspect preserved); ``(h, w)``
-        resizes exactly.
-    interpolation : str or Interpolation, optional, default="bilinear"
-        Image resampling mode.  Masks always use nearest.
+    height, width : int
+        Target spatial size.
+    interpolation : int or str or Interpolation, optional, default=1
+        Image resampling mode (OpenCV codes accepted; masks use nearest).
+    p : float, optional, default=1.0
     """
 
     def __init__(
         self,
-        size: int | tuple[int, int],
-        *,
-        interpolation: str | Interpolation = Interpolation.BILINEAR,
+        height: int,
+        width: int,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 1.0,
     ) -> None:
-        self.size = size
+        super().__init__(p=p)
+        self.height = height
+        self.width = width
         self.interpolation = as_interpolation(interpolation)
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.resize(img, self.size, interpolation=self.interpolation)
+        return F.resize(img, (self.height, self.width), interpolation=self.interpolation)
 
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return F.resize(mask, self.size, interpolation=Interpolation.NEAREST)
+        return F.resize(mask, (self.height, self.width), interpolation=Interpolation.NEAREST)
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
-        h, w = boxes.canvas_size
-        new_h, new_w = F.resize_target(h, w, self.size)
-        return resize_boxes(boxes, new_h, new_w)
+        return resize_boxes(boxes, self.height, self.width)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        return resize_keypoints(kps, self.height, self.width)
 
     def __repr__(self) -> str:
-        return f"Resize(size={self.size}, interpolation={self.interpolation})"
+        return f"Resize(height={self.height}, width={self.width}, p={self.p})"
+
+
+class _MaxSizeResize(_NoParams, GeometricTransform[Empty]):
+    """Shared base for SmallestMaxSize / LongestMaxSize."""
+
+    def __init__(
+        self,
+        max_size: int,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 1.0,
+    ) -> None:
+        super().__init__(p=p)
+        self.max_size = max_size
+        self.interpolation = as_interpolation(interpolation)
+
+    def _target(self, h: int, w: int) -> tuple[int, int]:
+        raise NotImplementedError
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        h, w = F._spatial_hw(img)
+        return F.resize(img, self._target(h, w), interpolation=self.interpolation)
+
+    def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
+        h, w = F._spatial_hw(mask)
+        return F.resize(mask, self._target(h, w), interpolation=Interpolation.NEAREST)
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
+        new_h, new_w = self._target(*boxes.canvas_size)
+        return resize_boxes(boxes, new_h, new_w)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        new_h, new_w = self._target(*kps.canvas_size)
+        return resize_keypoints(kps, new_h, new_w)
+
+
+class SmallestMaxSize(_MaxSizeResize):
+    r"""Scale so the **shorter** side equals ``max_size`` (aspect kept)."""
+
+    def _target(self, h: int, w: int) -> tuple[int, int]:
+        scale = self.max_size / min(h, w)
+        return int(round(h * scale)), int(round(w * scale))
+
+    def __repr__(self) -> str:
+        return f"SmallestMaxSize(max_size={self.max_size}, p={self.p})"
+
+
+class LongestMaxSize(_MaxSizeResize):
+    r"""Scale so the **longer** side equals ``max_size`` (aspect kept)."""
+
+    def _target(self, h: int, w: int) -> tuple[int, int]:
+        scale = self.max_size / max(h, w)
+        return int(round(h * scale)), int(round(w * scale))
+
+    def __repr__(self) -> str:
+        return f"LongestMaxSize(max_size={self.max_size}, p={self.p})"
+
+
+# ── crop family ─────────────────────────────────────────────────────
 
 
 class CenterCrop(_NoParams, GeometricTransform[Empty]):
-    r"""Crop a centered ``size`` window (square when an int)."""
+    r"""Crop a centered ``height`` x ``width`` window (Albumentations ``CenterCrop``)."""
 
-    def __init__(self, size: int | tuple[int, int]) -> None:
-        self.size = size
-
-    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.center_crop(img, self.size)
-
-    def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return F.center_crop(mask, self.size)
-
-    def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
-        h, w = boxes.canvas_size
-        th, tw = _as_hw(self.size)
-        top = max((h - th) // 2, 0)
-        left = max((w - tw) // 2, 0)
-        return crop_boxes(boxes, top, left, th, tw)
-
-    def __repr__(self) -> str:
-        return f"CenterCrop(size={self.size})"
-
-
-class Pad(_NoParams, GeometricTransform[Empty]):
-    r"""Pad spatial borders by a fixed amount.
-
-    Parameters
-    ----------
-    padding : int or (left, right, top, bottom)
-        Border widths (a single int pads all four sides).
-    fill : float, optional, default=0.0
-        Constant fill value (``"constant"`` mode).
-    mode : str, optional, default="constant"
-        Padding mode.
-    """
-
-    def __init__(
-        self,
-        padding: int | tuple[int, int, int, int],
-        *,
-        fill: float = 0.0,
-        mode: str = "constant",
-    ) -> None:
-        self.padding = padding
-        self.fill = fill
-        self.mode = mode
-
-    def _lrtb(self) -> tuple[int, int, int, int]:
-        if isinstance(self.padding, int):
-            return self.padding, self.padding, self.padding, self.padding
-        return self.padding
+    def __init__(self, height: int, width: int, p: float = 1.0) -> None:
+        super().__init__(p=p)
+        self.height = height
+        self.width = width
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        return F.pad(img, self.padding, mode=self.mode, value=self.fill)
+        return F.center_crop(img, (self.height, self.width))
 
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
-        return F.pad(mask, self.padding, mode=self.mode, value=self.fill)
+        return F.center_crop(mask, (self.height, self.width))
+
+    def _offsets(self, canvas: tuple[int, int]) -> tuple[int, int]:
+        h, w = canvas
+        return max((h - self.height) // 2, 0), max((w - self.width) // 2, 0)
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
-        left, right, top, bottom = self._lrtb()
-        h, w = boxes.canvas_size
-        return pad_boxes(boxes, left, top, h + top + bottom, w + left + right)
+        top, left = self._offsets(boxes.canvas_size)
+        return crop_boxes(boxes, top, left, self.height, self.width)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        top, left = self._offsets(kps.canvas_size)
+        return crop_keypoints(kps, top, left, self.height, self.width)
 
     def __repr__(self) -> str:
-        return f"Pad(padding={self.padding}, fill={self.fill}, mode={self.mode!r})"
+        return f"CenterCrop(height={self.height}, width={self.width}, p={self.p})"
 
 
-# ── randomized ──────────────────────────────────────────────────────
-
-
-class RandomHorizontalFlip(_ProbabilityGate, GeometricTransform[FlipParams]):
-    r"""Horizontally flip with probability ``p`` (mirrors mask + boxes)."""
-
-    def __init__(self, p: float = 0.5) -> None:
-        super().__init__(p)
-
-    def make_params(self, img: Tensor) -> FlipParams:
-        return FlipParams(apply=self._gate())
-
-    def _apply_image(self, img: Tensor, params: FlipParams) -> Tensor:
-        return F.hflip(img) if params.apply else img
-
-    def _apply_mask(self, mask: Tensor, params: FlipParams) -> Tensor:
-        return F.hflip(mask) if params.apply else mask
-
-    def _apply_boxes(self, boxes: BoundingBoxes, params: FlipParams) -> BoundingBoxes:
-        return flip_boxes(boxes, horizontal=True) if params.apply else boxes
-
-    def __repr__(self) -> str:
-        return f"RandomHorizontalFlip(p={self.p})"
-
-
-class RandomVerticalFlip(_ProbabilityGate, GeometricTransform[FlipParams]):
-    r"""Vertically flip with probability ``p`` (mirrors mask + boxes)."""
-
-    def __init__(self, p: float = 0.5) -> None:
-        super().__init__(p)
-
-    def make_params(self, img: Tensor) -> FlipParams:
-        return FlipParams(apply=self._gate())
-
-    def _apply_image(self, img: Tensor, params: FlipParams) -> Tensor:
-        return F.vflip(img) if params.apply else img
-
-    def _apply_mask(self, mask: Tensor, params: FlipParams) -> Tensor:
-        return F.vflip(mask) if params.apply else mask
-
-    def _apply_boxes(self, boxes: BoundingBoxes, params: FlipParams) -> BoundingBoxes:
-        return flip_boxes(boxes, horizontal=False) if params.apply else boxes
-
-    def __repr__(self) -> str:
-        return f"RandomVerticalFlip(p={self.p})"
+@dataclass(frozen=True)
+class Offset:
+    top: int
+    left: int
 
 
 class RandomCrop(GeometricTransform[Offset]):
-    r"""Crop a random ``size`` window (optionally padding first).
+    r"""Crop a random ``height`` x ``width`` window (Albumentations ``RandomCrop``)."""
 
-    Parameters
-    ----------
-    size : int or (int, int)
-        Output crop size (square when an int).
-    padding : int or (left, right, top, bottom), optional
-        Pad before cropping (e.g. CIFAR ``RandomCrop(32, padding=4)``).
-    fill : float, optional, default=0.0
-        Pad fill value.
-    padding_mode : str, optional, default="constant"
-        Pad mode.
-    """
-
-    def __init__(
-        self,
-        size: int | tuple[int, int],
-        *,
-        padding: int | tuple[int, int, int, int] | None = None,
-        fill: float = 0.0,
-        padding_mode: str = "constant",
-    ) -> None:
-        self.size = size
-        self.padding = padding
-        self.fill = fill
-        self.padding_mode = padding_mode
-
-    def _padded_hw(self, h: int, w: int) -> tuple[int, int]:
-        if self.padding is None:
-            return h, w
-        if isinstance(self.padding, int):
-            return h + 2 * self.padding, w + 2 * self.padding
-        left, right, top, bottom = self.padding
-        return h + top + bottom, w + left + right
+    def __init__(self, height: int, width: int, p: float = 1.0) -> None:
+        super().__init__(p=p)
+        self.height = height
+        self.width = width
 
     def make_params(self, img: Tensor) -> Offset:
-        h, w = self._padded_hw(*F._spatial_hw(img))
-        th, tw = _as_hw(self.size)
+        h, w = F._spatial_hw(img)
         return Offset(
-            top=_random.randint(0, h - th + 1),
-            left=_random.randint(0, w - tw + 1),
+            top=_random.randint(0, h - self.height + 1),
+            left=_random.randint(0, w - self.width + 1),
         )
 
-    def _crop_image_like(self, x: Tensor, params: Offset) -> Tensor:
-        if self.padding is not None:
-            x = F.pad(x, self.padding, mode=self.padding_mode, value=self.fill)
-        th, tw = _as_hw(self.size)
-        return F.crop(x, params.top, params.left, th, tw)
-
     def _apply_image(self, img: Tensor, params: Offset) -> Tensor:
-        return self._crop_image_like(img, params)
+        return F.crop(img, params.top, params.left, self.height, self.width)
 
     def _apply_mask(self, mask: Tensor, params: Offset) -> Tensor:
-        return self._crop_image_like(mask, params)
+        return F.crop(mask, params.top, params.left, self.height, self.width)
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: Offset) -> BoundingBoxes:
-        if self.padding is not None:
-            if isinstance(self.padding, int):
-                left = top = right = bottom = self.padding
-            else:
-                left, right, top, bottom = self.padding
-            h, w = boxes.canvas_size
-            boxes = pad_boxes(boxes, left, top, h + top + bottom, w + left + right)
-        th, tw = _as_hw(self.size)
-        return crop_boxes(boxes, params.top, params.left, th, tw)
+        return crop_boxes(boxes, params.top, params.left, self.height, self.width)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Offset) -> Keypoints:
+        return crop_keypoints(kps, params.top, params.left, self.height, self.width)
 
     def __repr__(self) -> str:
-        return f"RandomCrop(size={self.size}, padding={self.padding})"
+        return f"RandomCrop(height={self.height}, width={self.width}, p={self.p})"
 
 
 class RandomResizedCrop(GeometricTransform[CropBox]):
-    r"""Crop a random area/aspect region, then resize to ``size``.
+    r"""Crop a random area/aspect region then resize to ``height`` x ``width``.
 
-    The canonical ImageNet training augmentation (Inception-style).
-
-    Parameters
-    ----------
-    size : int or (int, int)
-        Output size; an ``int`` means a **square** output.
-    scale : (float, float), optional, default=(0.08, 1.0)
-        Range of cropped-area fraction.
-    ratio : (float, float), optional, default=(3/4, 4/3)
-        Range of aspect ratios (width / height).
-    interpolation : str or Interpolation, optional, default="bilinear"
-        Image resampling mode (masks use nearest).
+    Albumentations ``RandomResizedCrop``.
     """
 
     def __init__(
         self,
-        size: int | tuple[int, int],
-        *,
+        height: int,
+        width: int,
         scale: tuple[float, float] = (0.08, 1.0),
         ratio: tuple[float, float] = (3.0 / 4.0, 4.0 / 3.0),
-        interpolation: str | Interpolation = Interpolation.BILINEAR,
+        interpolation: int | str | Interpolation = 1,
+        p: float = 1.0,
     ) -> None:
-        self.size = size
+        super().__init__(p=p)
+        self.height = height
+        self.width = width
         self.scale = scale
         self.ratio = ratio
         self.interpolation = as_interpolation(interpolation)
@@ -334,7 +249,6 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
                     height=ch,
                     width=cw,
                 )
-        # Fallback: largest center region fitting the aspect range.
         in_ratio = w / h
         if in_ratio < self.ratio[0]:
             cw, ch = w, int(round(w / self.ratio[0]))
@@ -346,35 +260,75 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
 
     def _apply_image(self, img: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
-            img,
-            params.top,
-            params.left,
-            params.height,
-            params.width,
-            _as_hw(self.size),
-            interpolation=self.interpolation,
+            img, params.top, params.left, params.height, params.width,
+            (self.height, self.width), interpolation=self.interpolation,
         )
 
     def _apply_mask(self, mask: Tensor, params: CropBox) -> Tensor:
         return F.resized_crop(
-            mask,
-            params.top,
-            params.left,
-            params.height,
-            params.width,
-            _as_hw(self.size),
-            interpolation=Interpolation.NEAREST,
+            mask, params.top, params.left, params.height, params.width,
+            (self.height, self.width), interpolation=Interpolation.NEAREST,
         )
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: CropBox) -> BoundingBoxes:
-        cropped = crop_boxes(
-            boxes, params.top, params.left, params.height, params.width
+        cropped = crop_boxes(boxes, params.top, params.left, params.height, params.width)
+        return resize_boxes(cropped, self.height, self.width)
+
+    def _apply_keypoints(self, kps: Keypoints, params: CropBox) -> Keypoints:
+        cropped = crop_keypoints(
+            kps, params.top, params.left, params.height, params.width
         )
-        out_h, out_w = _as_hw(self.size)
-        return resize_boxes(cropped, out_h, out_w)
+        return resize_keypoints(cropped, self.height, self.width)
 
     def __repr__(self) -> str:
         return (
-            f"RandomResizedCrop(size={self.size}, scale={self.scale}, "
-            f"ratio={self.ratio})"
+            f"RandomResizedCrop(height={self.height}, width={self.width}, "
+            f"scale={self.scale}, ratio={self.ratio}, p={self.p})"
         )
+
+
+# ── flips ───────────────────────────────────────────────────────────
+
+
+class HorizontalFlip(_NoParams, GeometricTransform[Empty]):
+    r"""Flip left-right with probability ``p`` (Albumentations ``HorizontalFlip``)."""
+
+    def __init__(self, p: float = 0.5) -> None:
+        super().__init__(p=p)
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        return F.hflip(img)
+
+    def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
+        return F.hflip(mask)
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
+        return flip_boxes(boxes, horizontal=True)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        return flip_keypoints(kps, horizontal=True)
+
+    def __repr__(self) -> str:
+        return f"HorizontalFlip(p={self.p})"
+
+
+class VerticalFlip(_NoParams, GeometricTransform[Empty]):
+    r"""Flip top-bottom with probability ``p`` (Albumentations ``VerticalFlip``)."""
+
+    def __init__(self, p: float = 0.5) -> None:
+        super().__init__(p=p)
+
+    def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        return F.vflip(img)
+
+    def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
+        return F.vflip(mask)
+
+    def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
+        return flip_boxes(boxes, horizontal=False)
+
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        return flip_keypoints(kps, horizontal=False)
+
+    def __repr__(self) -> str:
+        return f"VerticalFlip(p={self.p})"

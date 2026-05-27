@@ -10,7 +10,7 @@ from typing import cast
 
 from lucid._tensor import Tensor
 from lucid.utils.transforms._base import Compose, Empty, Transform, _NoParams
-from lucid.utils.transforms._geometric import CenterCrop, Resize
+from lucid.utils.transforms._geometric import CenterCrop, SmallestMaxSize
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import Normalize
 
@@ -59,9 +59,9 @@ class ImageClassification(_NoParams, Transform[Empty]):
         self.interpolation = interpolation
         self._pipeline = Compose(
             [
-                Resize(resize_size, interpolation=interpolation),
-                CenterCrop(crop_size),
-                Normalize(self.mean, self.std),
+                SmallestMaxSize(resize_size, interpolation=interpolation),
+                CenterCrop(crop_size, crop_size),
+                Normalize(self.mean, self.std, max_pixel_value=1.0),
             ]
         )
 

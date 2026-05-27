@@ -42,6 +42,25 @@ class Mask:
 
 
 @dataclass
+class Keypoints:
+    """Wraps ``(N, D)`` keypoints (``D >= 2``; first two columns ``x, y``).
+
+    Extra columns (e.g. visibility / angle / scale) are carried through
+    geometric transforms unchanged; only the ``x, y`` coordinates move.
+
+    Parameters
+    ----------
+    data : Tensor
+        ``(N, D)`` with ``D >= 2``; columns 0 and 1 are ``x`` and ``y``.
+    canvas_size : (int, int)
+        ``(H, W)`` of the image the points index into.
+    """
+
+    data: Tensor
+    canvas_size: tuple[int, int]
+
+
+@dataclass
 class BoundingBoxes:
     """Wraps ``(N, 4)`` bounding boxes with a format + canvas size.
 
@@ -103,11 +122,11 @@ def from_xyxy(xyxy: Tensor, fmt: str) -> Tensor:
     )
 
 
-def _rebuild(boxes: BoundingBoxes, xyxy: Tensor, canvas: tuple[int, int]) -> BoundingBoxes:
+def _rebuild(
+    boxes: BoundingBoxes, xyxy: Tensor, canvas: tuple[int, int]
+) -> BoundingBoxes:
     """Re-wrap transformed xyxy coords back into the original format."""
-    return BoundingBoxes(
-        from_xyxy(xyxy, boxes.format), boxes.format, canvas
-    )
+    return BoundingBoxes(from_xyxy(xyxy, boxes.format), boxes.format, canvas)
 
 
 def flip_boxes(boxes: BoundingBoxes, *, horizontal: bool) -> BoundingBoxes:
@@ -153,3 +172,56 @@ def pad_boxes(
     x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
     new = lucid.concat([x1 + left, y1 + top, x2 + left, y2 + top], dim=1)  # type: ignore[arg-type]
     return _rebuild(boxes, new, (new_h, new_w))
+
+
+# ── keypoints ───────────────────────────────────────────────────────
+
+
+def _kp_xy_rest(kps: Keypoints) -> tuple[Tensor, Tensor, Tensor | None]:
+    """Split keypoint data into ``x``, ``y``, and any trailing columns."""
+    d = kps.data
+    x = d[:, 0:1]
+    y = d[:, 1:2]
+    rest = d[:, 2:] if int(d.shape[1]) > 2 else None
+    return x, y, rest
+
+
+def _kp_rebuild(
+    x: Tensor, y: Tensor, rest: Tensor | None, canvas: tuple[int, int]
+) -> Keypoints:
+    cols = [x, y] if rest is None else [x, y, rest]
+    return Keypoints(lucid.concat(cols, dim=1), canvas)  # type: ignore[arg-type]
+
+
+def flip_keypoints(kps: Keypoints, *, horizontal: bool) -> Keypoints:
+    """Mirror keypoints within the canvas."""
+    h, w = kps.canvas_size
+    x, y, rest = _kp_xy_rest(kps)
+    if horizontal:
+        x = w - x
+    else:
+        y = h - y
+    return _kp_rebuild(x, y, rest, kps.canvas_size)
+
+
+def resize_keypoints(kps: Keypoints, new_h: int, new_w: int) -> Keypoints:
+    """Scale keypoint coordinates to a new canvas size."""
+    h, w = kps.canvas_size
+    x, y, rest = _kp_xy_rest(kps)
+    return _kp_rebuild(x * (new_w / w), y * (new_h / h), rest, (new_h, new_w))
+
+
+def crop_keypoints(
+    kps: Keypoints, top: int, left: int, height: int, width: int
+) -> Keypoints:
+    """Translate keypoints into a crop window (canvas → crop size)."""
+    x, y, rest = _kp_xy_rest(kps)
+    return _kp_rebuild(x - left, y - top, rest, (height, width))
+
+
+def pad_keypoints(
+    kps: Keypoints, left: int, top: int, new_h: int, new_w: int
+) -> Keypoints:
+    """Shift keypoints by a pad offset onto a larger canvas."""
+    x, y, rest = _kp_xy_rest(kps)
+    return _kp_rebuild(x + left, y + top, rest, (new_h, new_w))
