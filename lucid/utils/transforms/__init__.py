@@ -28,6 +28,7 @@ way (see :mod:`lucid.weights`).
 
 from lucid.utils.transforms import functional
 from lucid.utils.transforms._base import Compose, Transform
+from lucid.utils.transforms._datatypes import BoundingBoxes, Image, Mask
 from lucid.utils.transforms._geometric import (
     CenterCrop,
     Pad,
@@ -49,6 +50,10 @@ __all__ = [
     # Base
     "Transform",
     "Compose",
+    # Typed targets (multi-target dispatch)
+    "Image",
+    "Mask",
+    "BoundingBoxes",
     # Geometric — deterministic
     "Resize",
     "CenterCrop",

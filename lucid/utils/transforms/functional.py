@@ -24,6 +24,19 @@ def _spatial_hw(img: Tensor) -> tuple[int, int]:
     return int(img.shape[-2]), int(img.shape[-1])
 
 
+def resize_target(h: int, w: int, size: int | tuple[int, int]) -> tuple[int, int]:
+    """Compute :func:`resize`'s output ``(H, W)`` for input ``(h, w)``.
+
+    Shared by :func:`resize` and the mask / bounding-box paths so they
+    stay consistent (shorter-side rule for an int ``size``).
+    """
+    if isinstance(size, int):
+        if h <= w:
+            return size, int(round(w * size / h))
+        return int(round(h * size / w)), size
+    return int(size[0]), int(size[1])
+
+
 def resize(
     img: Tensor,
     size: int | tuple[int, int],
@@ -51,14 +64,7 @@ def resize(
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     h, w = _spatial_hw(x)
-
-    if isinstance(size, int):
-        if h <= w:
-            new_h, new_w = size, int(round(w * size / h))
-        else:
-            new_h, new_w = int(round(h * size / w)), size
-    else:
-        new_h, new_w = int(size[0]), int(size[1])
+    new_h, new_w = resize_target(h, w, size)
 
     align = False if interpolation in _RESIZE_ALIGN_MODES else None
     x = F.interpolate(x, size=(new_h, new_w), mode=interpolation, align_corners=align)
@@ -151,7 +157,9 @@ def resized_crop(
     interpolation: str = "bilinear",
 ) -> Tensor:
     """Crop ``(top, left, height, width)`` then resize to ``size``."""
-    return resize(crop(img, top, left, height, width), size, interpolation=interpolation)
+    return resize(
+        crop(img, top, left, height, width), size, interpolation=interpolation
+    )
 
 
 def rgb_to_grayscale(img: Tensor, *, keep_channels: bool = True) -> Tensor:
@@ -225,9 +233,8 @@ def adjust_hue(img: Tensor, factor: float) -> Tensor:
     h_r = bc - gc
     h_g = 2.0 + rc - bc
     h_b = 4.0 + gc - rc
-    hue = lucid.where(
-        maxc == r, h_r, lucid.where(maxc == g, h_g, h_b)
-    )
+    hue = lucid.where(maxc == r, h_r, lucid.where(maxc == g, h_g, h_b))
+
     def _frac1(z: Tensor) -> Tensor:
         # z mod 1.0 via z - floor(z) (Tensor has no % operator).
         return z - lucid.floor(z)
@@ -248,7 +255,9 @@ def adjust_hue(img: Tensor, factor: float) -> Tensor:
     t = v * (1.0 - s * (1.0 - f))
     i_mod = i - 6.0 * lucid.floor(i / 6.0)
 
-    def _sel(c0: Tensor, c1: Tensor, c2: Tensor, c3: Tensor, c4: Tensor, c5: Tensor) -> Tensor:
+    def _sel(
+        c0: Tensor, c1: Tensor, c2: Tensor, c3: Tensor, c4: Tensor, c5: Tensor
+    ) -> Tensor:
         out = lucid.where(i_mod == 0, c0, c1)
         out = lucid.where(i_mod == 2, c2, out)
         out = lucid.where(i_mod == 3, c3, out)

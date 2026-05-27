@@ -6,6 +6,8 @@ is the ImageNet-style preset consumed by
 ``lucid.models.*._weights`` (via :class:`~lucid.weights.WeightEntry`).
 """
 
+from typing import cast
+
 from lucid._tensor import Tensor
 from lucid.utils.transforms._base import Compose, Transform
 from lucid.utils.transforms._geometric import CenterCrop, Resize
@@ -73,7 +75,8 @@ class ImageClassification(Transform):
         )
 
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
-        return self._pipeline(img)
+        # The preset is image-only, so the Compose returns a Tensor.
+        return cast(Tensor, self._pipeline(img))
 
     def __repr__(self) -> str:
         return (

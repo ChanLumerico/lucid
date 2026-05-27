@@ -15,6 +15,13 @@ from lucid._tensor import Tensor
 from lucid.utils.transforms import functional as F
 from lucid.utils.transforms import _random
 from lucid.utils.transforms._base import Transform
+from lucid.utils.transforms._datatypes import (
+    BoundingBoxes,
+    crop_boxes,
+    flip_boxes,
+    pad_boxes,
+    resize_boxes,
+)
 
 
 class Resize(Transform):
@@ -46,6 +53,16 @@ class Resize(Transform):
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         return F.resize(img, self.size, interpolation=self.interpolation)
 
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.resize(mask, self.size, interpolation="nearest")
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        h, w = boxes.canvas_size
+        new_h, new_w = F.resize_target(h, w, self.size)
+        return resize_boxes(boxes, new_h, new_w)
+
     def __repr__(self) -> str:
         return f"Resize(size={self.size}, interpolation={self.interpolation!r})"
 
@@ -69,6 +86,18 @@ class CenterCrop(Transform):
 
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         return F.center_crop(img, self.size)
+
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.center_crop(mask, self.size)
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        h, w = boxes.canvas_size
+        th, tw = _as_hw(self.size)
+        top = max((h - th) // 2, 0)
+        left = max((w - tw) // 2, 0)
+        return crop_boxes(boxes, top, left, th, tw)
 
     def __repr__(self) -> str:
         return f"CenterCrop(size={self.size})"
@@ -102,8 +131,23 @@ class Pad(Transform):
         self.fill = fill
         self.mode = mode
 
+    def _lrtb(self) -> tuple[int, int, int, int]:
+        if isinstance(self.padding, int):
+            return self.padding, self.padding, self.padding, self.padding
+        return self.padding
+
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         return F.pad(img, self.padding, mode=self.mode, value=self.fill)
+
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.pad(mask, self.padding, mode=self.mode, value=self.fill)
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        left, right, top, bottom = self._lrtb()
+        h, w = boxes.canvas_size
+        return pad_boxes(boxes, left, top, h + top + bottom, w + left + right)
 
     def __repr__(self) -> str:
         return f"Pad(padding={self.padding}, fill={self.fill}, mode={self.mode!r})"
@@ -127,6 +171,14 @@ class RandomHorizontalFlip(Transform):
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         return F.hflip(img) if params["flip"] else img
 
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.hflip(mask) if params["flip"] else mask
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        return flip_boxes(boxes, horizontal=True) if params["flip"] else boxes
+
     def __repr__(self) -> str:
         return f"RandomHorizontalFlip(p={self.p})"
 
@@ -142,6 +194,14 @@ class RandomVerticalFlip(Transform):
 
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         return F.vflip(img) if params["flip"] else img
+
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.vflip(mask) if params["flip"] else mask
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        return flip_boxes(boxes, horizontal=False) if params["flip"] else boxes
 
     def __repr__(self) -> str:
         return f"RandomVerticalFlip(p={self.p})"
@@ -192,13 +252,33 @@ class RandomCrop(Transform):
         left = _random.randint(0, w - tw + 1)
         return {"top": top, "left": left}
 
-    def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
+    def _crop_then(self, x: Tensor, params: dict[str, object]) -> Tensor:
         if self.padding is not None:
-            img = F.pad(img, self.padding, mode=self.padding_mode, value=self.fill)
+            x = F.pad(x, self.padding, mode=self.padding_mode, value=self.fill)
         th, tw = _as_hw(self.size)
-        top = cast(int, params["top"])
-        left = cast(int, params["left"])
-        return F.crop(img, top, left, th, tw)
+        return F.crop(x, cast(int, params["top"]), cast(int, params["left"]), th, tw)
+
+    def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
+        return self._crop_then(img, params)
+
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return self._crop_then(mask, params)
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        if self.padding is not None:
+            if isinstance(self.padding, int):
+                left = top = self.padding
+                right = bottom = self.padding
+            else:
+                left, right, top, bottom = self.padding
+            h, w = boxes.canvas_size
+            boxes = pad_boxes(boxes, left, top, h + top + bottom, w + left + right)
+        th, tw = _as_hw(self.size)
+        return crop_boxes(
+            boxes, cast(int, params["top"]), cast(int, params["left"]), th, tw
+        )
 
     def __repr__(self) -> str:
         return f"RandomCrop(size={self.size}, padding={self.padding})"
@@ -264,16 +344,37 @@ class RandomResizedCrop(Transform):
     def _apply_image(self, img: Tensor, params: dict[str, object]) -> Tensor:
         # RandomResizedCrop's int ``size`` means a *square* output
         # (unlike Resize(int), which scales the shorter side).
-        out_size = _as_hw(self.size)
         return F.resized_crop(
             img,
             cast(int, params["top"]),
             cast(int, params["left"]),
             cast(int, params["height"]),
             cast(int, params["width"]),
-            out_size,
+            _as_hw(self.size),
             interpolation=self.interpolation,
         )
+
+    def _apply_mask(self, mask: Tensor, params: dict[str, object]) -> Tensor:
+        return F.resized_crop(
+            mask,
+            cast(int, params["top"]),
+            cast(int, params["left"]),
+            cast(int, params["height"]),
+            cast(int, params["width"]),
+            _as_hw(self.size),
+            interpolation="nearest",
+        )
+
+    def _apply_boxes(
+        self, boxes: BoundingBoxes, params: dict[str, object]
+    ) -> BoundingBoxes:
+        ch = cast(int, params["height"])
+        cw = cast(int, params["width"])
+        cropped = crop_boxes(
+            boxes, cast(int, params["top"]), cast(int, params["left"]), ch, cw
+        )
+        out_h, out_w = _as_hw(self.size)
+        return resize_boxes(cropped, out_h, out_w)
 
     def __repr__(self) -> str:
         return (
