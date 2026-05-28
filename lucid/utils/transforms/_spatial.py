@@ -307,7 +307,12 @@ class ShiftScaleRotate(_WarpTransform):
             cx=(w - 1) / 2.0,
             cy=(h - 1) / 2.0,
             scale=scale,
-            angle_deg=angle,
+            # Negate to match reference-framework image-convention (positive
+            # → clockwise).  ``F.affine_matrix`` uses math-convention CCW;
+            # ``F.rotation_matrix`` (used by :class:`Rotate`) uses cv2's CW
+            # convention.  Negating here aligns ShiftScaleRotate with
+            # Rotate / Albumentations.
+            angle_deg=-angle,
             translate_x=dx,
             translate_y=dy,
         )
@@ -369,7 +374,12 @@ class Affine(_WarpTransform):
             cx=(w - 1) / 2.0,
             cy=(h - 1) / 2.0,
             scale=s,
-            angle_deg=angle,
+            # Negate to match reference-framework image-convention (positive
+            # → clockwise).  ``F.affine_matrix`` uses math-convention CCW;
+            # ``F.rotation_matrix`` (used by :class:`Rotate`) uses cv2's CW
+            # convention.  Negating here aligns Affine with Rotate /
+            # Albumentations.
+            angle_deg=-angle,
             shear_x_deg=shear,
             translate_x=dx,
             translate_y=dy,
