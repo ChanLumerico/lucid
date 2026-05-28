@@ -4,7 +4,6 @@ Shared building blocks for classification architectures that do not
 belong in any single model family's private namespace.
 """
 
-from typing import cast
 
 import lucid
 import lucid.nn as nn

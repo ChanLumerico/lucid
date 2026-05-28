@@ -39,6 +39,7 @@ from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
 from lucid._dtype import dtype as _dtype_cls
 from lucid._tensor.tensor import Tensor
+from lucid.compile._optim_spec import _hp
 
 if TYPE_CHECKING:
     from lucid.optim.optimizer import Optimizer
@@ -175,7 +176,12 @@ def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
     # load_state_dict) back to the parent.  Useful for backbone+head
     # training recipes with distinct LRs per group.
     if len(opt.param_groups) > 1:
-        return _MultiGroupCompiledOptimizer(opt)
+        # _MultiGroupCompiledOptimizer duck-types the _CompiledStepBase
+        # public surface (step / zero_grad / param_groups / state_dict /
+        # load_state_dict) by delegating to a list of per-group concrete
+        # _CompiledStepBase instances; it doesn't itself host the trace-
+        # build / hook machinery, so it doesn't inherit the base.
+        return cast(_CompiledStepBase, _MultiGroupCompiledOptimizer(opt))
 
     # Supported — elementwise update math, single-dispatch friendly.
     if isinstance(opt, SGD):
@@ -252,6 +258,21 @@ def _flatten_params(opt: Optimizer) -> list[Tensor]:
         for p in params:
             out.append(p)
     return out
+
+
+def _list_getter(buf: list[Tensor], idx: int) -> Callable[[], Tensor]:
+    """Build a zero-arg getter that returns ``buf[idx]`` at call time.
+
+    Used by the per-optimizer ``_buffer_table`` registrations: the
+    closure captures the list (by identity) and the index so a later
+    swap of the list contents (e.g. via ``load_state_dict``) is still
+    seen through the same callable.
+    """
+
+    def _get() -> Tensor:
+        return buf[idx]
+
+    return _get
 
 
 def _zero_scalar(dt: _dtype_cls, dev: _device_cls) -> Tensor:
@@ -408,7 +429,7 @@ class _CompiledStepBase:
         # "scalar".  Concrete subclasses extend the table with their
         # own state-buffer kinds (e.g. "m"/"v" for Adam,
         # "square_avg"/"acc_delta" for Adadelta).
-        self._input_plan: list[tuple] = []
+        self._input_plan: list[tuple[str, object]] = []
         # Output targets in trace return order; built once after compile.
         self._output_targets: list[Tensor] = []
         # Per-step scratch (re-bound in step()).
@@ -470,7 +491,7 @@ class _CompiledStepBase:
 
     # ── Internals ────────────────────────────────────────────────
 
-    def _resolve_input(self, plan_entry: tuple) -> Tensor:
+    def _resolve_input(self, plan_entry: tuple[str, object]) -> Tensor:
         """Map one ``(kind, index)`` plan slot to its live tensor.
 
         Built-in ``kind`` values: ``"param"`` (parameter slot),
@@ -482,9 +503,9 @@ class _CompiledStepBase:
         """
         kind = plan_entry[0]
         if kind == "param":
-            return self._params[plan_entry[1]]
+            return self._params[cast(int, plan_entry[1])]
         if kind == "grad":
-            return self._current_grads[plan_entry[1]]
+            return self._current_grads[cast(int, plan_entry[1])]
         if kind == "scalar":
             # plan_entry[1] is the scalar name (or integer index for
             # older Adam path); look up via subclass-populated dict.
@@ -494,7 +515,7 @@ class _CompiledStepBase:
             return self._scalar_slots[key]
         # Anything else is a subclass-defined state buffer kind.  Look
         # it up in the buffer table; callable returns the live tensor.
-        getter = self._buffer_table.get((kind, plan_entry[1]))
+        getter = self._buffer_table.get((kind, cast(int, plan_entry[1])))
         if getter is None:
             raise RuntimeError(
                 f"_resolve_input: unknown plan slot ({kind!r}, "
@@ -551,7 +572,7 @@ class _CompiledStepBase:
         ext = tracer.external_feeds
 
         # Map each known tensor to its trace id.
-        impl_to_kind: dict[int, tuple] = {}
+        impl_to_kind: dict[int, tuple[str, object]] = {}
         for kind, idx, t in inputs_registry:
             impl_to_kind[id(_unwrap(t))] = (kind, idx)
 
@@ -581,7 +602,7 @@ class _CompiledStepBase:
             )
 
         # Now resolve exe.input_ids → input_plan entries.
-        input_plan: list[tuple] = []
+        input_plan: list[tuple[str, object]] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
             if impl is None:
@@ -786,14 +807,21 @@ class _CompiledSGD(_CompiledStepBase):
         else:
             self._momenta = []
         for i in range(len(self._momenta)):
-            self._buffer_table[("mom", i)] = lambda _i=i: self._momenta[_i]
+            self._buffer_table[("mom", i)] = _list_getter(self._momenta, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the velocity buffers (``"mom"`` kind) as trace inputs."""
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the SGD update math under the active tracer.
 
         Implements the classical Polyak-momentum / Nesterov-lookahead
@@ -824,7 +852,7 @@ class _CompiledSGD(_CompiledStepBase):
             new_params.append(new_p)
         return new_params + new_momenta
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map executable outputs to ``params`` (first N) then ``momenta`` (next N)."""
         # First N outputs → self._params, next N → self._momenta.
         len(self._params)
@@ -921,17 +949,21 @@ class _CompiledAdam(_CompiledStepBase):
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the ``m`` and ``v`` running-moment buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """Register stable 0-D placeholders for the bias-correction factors.
 
         Returns a ``{"bias1", "bias2"}`` dict that the trace body
@@ -951,7 +983,12 @@ class _CompiledAdam(_CompiledStepBase):
         self._scalar_slots = scalars
         return scalars
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the Adam update math (coupled weight decay; bias-corrected moments).
 
         Returns ``new_params + new_m + new_v`` in that order;
@@ -984,7 +1021,7 @@ class _CompiledAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` in order."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
 
@@ -1075,15 +1112,20 @@ class _CompiledAdamW(_CompiledAdam):
         self._eps = spec.eps
         # AdamW default weight_decay is 0.01 (not 0); spec handles via param_group.
         g = opt.param_groups[0]
-        self._weight_decay = float(g.get("weight_decay", 0.01))
+        self._weight_decay = _hp(g, "weight_decay", 0.01)
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the AdamW update — decoupled weight decay variant.
 
         Same moment + bias-correction math as Adam, but weight decay
@@ -1182,11 +1224,11 @@ class _CompiledRMSprop(_CompiledStepBase):
                 "flag too; we surface it as a compile-time error so "
                 "callers know to switch to centered=False."
             )
-        self._lr = float(g["lr"])
-        self._alpha = float(g.get("alpha", 0.99))
-        self._eps = float(g.get("eps", 1e-8))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
-        self._momentum = float(g.get("momentum", 0.0))
+        self._lr = _hp(g, "lr", 0.0)
+        self._alpha = _hp(g, "alpha", 0.99)
+        self._eps = _hp(g, "eps", 1e-8)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
+        self._momentum = _hp(g, "momentum", 0.0)
         # State: square_avg (always); momentum buffer when momentum != 0.
         self._square_avg = [_zeros_like(p) for p in self._params]
         if self._momentum != 0.0:
@@ -1194,18 +1236,25 @@ class _CompiledRMSprop(_CompiledStepBase):
         else:
             self._momenta = []
         for i in range(len(self._params)):
-            self._buffer_table[("square_avg", i)] = lambda _i=i: self._square_avg[_i]
+            self._buffer_table[("square_avg", i)] = _list_getter(self._square_avg, i)
         for i in range(len(self._momenta)):
-            self._buffer_table[("mom", i)] = lambda _i=i: self._momenta[_i]
+            self._buffer_table[("mom", i)] = _list_getter(self._momenta, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the ``square_avg`` (and optional ``mom``) buffers as trace inputs."""
         for i, sa in enumerate(self._square_avg):
             register("square_avg", i, sa)
         for i, m in enumerate(self._momenta):
             register("mom", i, m)
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the RMSprop update — exponentially smoothed squared gradient.
 
         When ``momentum != 0`` a Polyak-momentum buffer is also
@@ -1238,7 +1287,7 @@ class _CompiledRMSprop(_CompiledStepBase):
             new_params.append(new_p)
         return new_params + new_sq + new_mom
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``square_avg`` then (optional) ``momenta``."""
         return list(self._params) + list(self._square_avg) + list(self._momenta)
 
@@ -1296,21 +1345,25 @@ class _CompiledAdagrad(_CompiledStepBase):
             )
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._lr_decay = float(g.get("lr_decay", 0.0))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
-        self._eps = float(g.get("eps", 1e-10))
+        self._lr = _hp(g, "lr", 0.0)
+        self._lr_decay = _hp(g, "lr_decay", 0.0)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
+        self._eps = _hp(g, "eps", 1e-10)
         self._state_sum = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("state_sum", i)] = lambda _i=i: self._state_sum[_i]
+            self._buffer_table[("state_sum", i)] = _list_getter(self._state_sum, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the ``state_sum`` accumulators as trace inputs."""
         for i, s in enumerate(self._state_sum):
             register("state_sum", i, s)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """Register the effective-LR scalar placeholder (refreshed each step)."""
         # Effective LR: ``lr / (1 + (t-1)*lr_decay)`` — t-dependent, so
         # passed as a 0-D feed and refreshed each step.
@@ -1332,7 +1385,12 @@ class _CompiledAdagrad(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the Adagrad update — running sum of squared gradients normalises LR."""
         eff_lr = scalars["eff_lr"]
         params = self._params
@@ -1351,7 +1409,7 @@ class _CompiledAdagrad(_CompiledStepBase):
             new_state.append(new_s)
         return new_params + new_state
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``state_sum``."""
         return list(self._params) + list(self._state_sum)
 
@@ -1410,24 +1468,31 @@ class _CompiledAdadelta(_CompiledStepBase):
             )
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._rho = float(g.get("rho", 0.9))
-        self._eps = float(g.get("eps", 1e-6))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._lr = _hp(g, "lr", 0.0)
+        self._rho = _hp(g, "rho", 0.9)
+        self._eps = _hp(g, "eps", 1e-6)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._square_avg = [_zeros_like(p) for p in self._params]
         self._acc_delta = [_zeros_like(p) for p in self._params]
         for i in range(len(self._params)):
-            self._buffer_table[("square_avg", i)] = lambda _i=i: self._square_avg[_i]
-            self._buffer_table[("acc_delta", i)] = lambda _i=i: self._acc_delta[_i]
+            self._buffer_table[("square_avg", i)] = _list_getter(self._square_avg, i)
+            self._buffer_table[("acc_delta", i)] = _list_getter(self._acc_delta, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the ``square_avg`` and ``acc_delta`` running buffers as trace inputs."""
         for i, sa in enumerate(self._square_avg):
             register("square_avg", i, sa)
         for i, ad in enumerate(self._acc_delta):
             register("acc_delta", i, ad)
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the Adadelta update — RMS(delta) / RMS(grad) as adaptive step size."""
         params = self._params
         sq = self._square_avg
@@ -1451,7 +1516,7 @@ class _CompiledAdadelta(_CompiledStepBase):
             new_ad.append(new_d)
         return new_params + new_sq + new_ad
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``square_avg`` then ``acc_delta``."""
         return list(self._params) + list(self._square_avg) + list(self._acc_delta)
 
@@ -1514,26 +1579,30 @@ class _CompiledAdamax(_CompiledStepBase):
             )
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._beta1 = float(g.get("beta1", 0.9))
-        self._beta2 = float(g.get("beta2", 0.999))
-        self._eps = float(g.get("eps", 1e-8))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._lr = _hp(g, "lr", 0.0)
+        self._beta1 = _hp(g, "beta1", 0.9)
+        self._beta2 = _hp(g, "beta2", 0.999)
+        self._eps = _hp(g, "eps", 1e-8)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._u_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("u", i)] = lambda _i=i: self._u_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("u", i)] = _list_getter(self._u_buf, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the ``m`` (first-moment) and ``u`` (L∞-norm) buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, u in enumerate(self._u_buf):
             register("u", i, u)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """Register the bias-corrected effective-LR scalar placeholder."""
         # ``eff_lr = lr / (1 - beta1^t)`` — refreshed each step.
         dt = self._params[0].dtype
@@ -1554,7 +1623,12 @@ class _CompiledAdamax(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["eff_lr"].copy_(_lucid.tensor(eff, dtype=dt, device=dev))
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the Adamax update — L∞-norm running max replaces Adam's L² moment."""
         import lucid as _lucid
 
@@ -1580,7 +1654,7 @@ class _CompiledAdamax(_CompiledStepBase):
             new_u.append(u_t)
         return new_params + new_m + new_u
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``u_buf`` (Adamax)."""
         return list(self._params) + list(self._m_buf) + list(self._u_buf)
 
@@ -1659,11 +1733,11 @@ class _CompiledNAdam(_CompiledStepBase):
             raise TypeError(f"_CompiledNAdam: expected NAdam, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g["lr"])
-        self._beta1 = float(g.get("beta1", 0.9))
-        self._beta2 = float(g.get("beta2", 0.999))
-        self._eps = float(g.get("eps", 1e-8))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._lr = _hp(g, "lr", 0.0)
+        self._beta1 = _hp(g, "beta1", 0.9)
+        self._beta2 = _hp(g, "beta2", 0.999)
+        self._eps = _hp(g, "eps", 1e-8)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         # mu_product accumulator — shared across params because each
@@ -1672,17 +1746,21 @@ class _CompiledNAdam(_CompiledStepBase):
         self._mu_product: float = 1.0
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the NAdam ``m`` and ``v`` running-moment buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """Register the three NAdam coefficient scalars (``c1``, ``c2``, ``inv_bc2``)."""
         dt = self._params[0].dtype
         dev = self._params[0].device
@@ -1723,7 +1801,12 @@ class _CompiledNAdam(_CompiledStepBase):
             _lucid.tensor(inv_bc2, dtype=dt, device=dev)
         )
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the NAdam update — Nesterov lookahead applied to Adam's bias-corrected step.
 
         Uses the three pre-computed scalar coefficients (``c1`` /
@@ -1756,7 +1839,7 @@ class _CompiledNAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """Map outputs to ``params`` then ``m_buf`` then ``v_buf`` (NAdam)."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
 
@@ -1812,18 +1895,18 @@ class _CompiledSparseAdam(_CompiledAdam):
         _CompiledStepBase.__init__(self, opt)
         g = opt.param_groups[0]
         betas = g.get("betas", (0.9, 0.999))
-        self._lr = float(g.get("lr", 1e-3))
+        self._lr = _hp(g, "lr", 1e-3)
         self._beta1 = float(betas[0])
         self._beta2 = float(betas[1])
-        self._eps = float(g.get("eps", 1e-8))
+        self._eps = _hp(g, "eps", 1e-8)
         # SparseAdam exposes no weight_decay knob in its constructor.
         self._weight_decay = 0.0
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
 
 # ── Rprop ───────────────────────────────────────────────────────────
@@ -1888,11 +1971,11 @@ class _CompiledRprop(_CompiledStepBase):
             raise TypeError(f"_CompiledRprop: expected Rprop, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g.get("lr", 1e-2))
-        self._eta_minus = float(g.get("eta_minus", 0.5))
-        self._eta_plus = float(g.get("eta_plus", 1.2))
-        self._step_min = float(g.get("step_min", 1e-6))
-        self._step_max = float(g.get("step_max", 50.0))
+        self._lr = _hp(g, "lr", 1e-2)
+        self._eta_minus = _hp(g, "eta_minus", 0.5)
+        self._eta_plus = _hp(g, "eta_plus", 1.2)
+        self._step_min = _hp(g, "step_min", 1e-6)
+        self._step_max = _hp(g, "step_max", 50.0)
         self._prev_grad = [_zeros_like(p) for p in self._params]
         # Initialise step buffer with the initial lr broadcast over the
         # param shape — matches eager Rprop's per-element ``step`` init.
@@ -1903,17 +1986,24 @@ class _CompiledRprop(_CompiledStepBase):
             )
             self._step_buf.append(init_step)
         for i in range(len(self._params)):
-            self._buffer_table[("prev_grad", i)] = lambda _i=i: self._prev_grad[_i]
-            self._buffer_table[("step", i)] = lambda _i=i: self._step_buf[_i]
+            self._buffer_table[("prev_grad", i)] = _list_getter(self._prev_grad, i)
+            self._buffer_table[("step", i)] = _list_getter(self._step_buf, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register prev_grad + step buffers as trace inputs."""
         for i, pg in enumerate(self._prev_grad):
             register("prev_grad", i, pg)
         for i, st in enumerate(self._step_buf):
             register("step", i, st)
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the Rprop update math.
 
         Returns ``new_params + new_prev_grad + new_step`` in that
@@ -1967,7 +2057,7 @@ class _CompiledRprop(_CompiledStepBase):
             new_step.append(step_clamped)
         return new_params + new_prev_grad + new_step
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → prev_grad → step buffers, matching ``_trace_update`` order."""
         return list(self._params) + list(self._prev_grad) + list(self._step_buf)
 
@@ -2026,11 +2116,11 @@ class _CompiledASGD(_CompiledStepBase):
             raise TypeError(f"_CompiledASGD: expected ASGD, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g.get("lr", 1e-2))
-        self._lambd = float(g.get("lambd", 1e-4))
-        self._alpha = float(g.get("alpha", 0.75))
-        self._t0 = float(g.get("t0", 1e6))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._lr = _hp(g, "lr", 1e-2)
+        self._lambd = _hp(g, "lambd", 1e-4)
+        self._alpha = _hp(g, "alpha", 0.75)
+        self._t0 = _hp(g, "t0", 1e6)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._ax = [_zeros_like(p) for p in self._params]
         # Initialise ax to the current param value (the reference
         # framework's ASGD does this lazily on first call — we
@@ -2044,14 +2134,18 @@ class _CompiledASGD(_CompiledStepBase):
                 axb.copy_(p)
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("ax", i)] = lambda _i=i: self._ax[_i]
+            self._buffer_table[("ax", i)] = _list_getter(self._ax, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register the averaged-trajectory buffers as trace inputs."""
         for i, ax in enumerate(self._ax):
             register("ax", i, ax)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """Stable 0-D placeholder for ``coef`` — the active averaging
         weight, which is ``0`` before ``t >= t0`` and ``1/(α·t+1)``
         afterwards.  Refreshed via :meth:`_refresh_scalars` each step
@@ -2085,7 +2179,12 @@ class _CompiledASGD(_CompiledStepBase):
         dev = self._params[0].device
         self._scalar_slots["coef"].copy_(_lucid.tensor(coef_val, dtype=dt, device=dev))
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit Lucid's eager ASGD update math (fixed-lr SGD + gated
         Polyak average).
 
@@ -2113,7 +2212,7 @@ class _CompiledASGD(_CompiledStepBase):
             new_ax.append(new_a)
         return new_params + new_ax
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → ax buffers, matching ``_trace_update`` return order."""
         return list(self._params) + list(self._ax)
 
@@ -2182,27 +2281,31 @@ class _CompiledRAdam(_CompiledStepBase):
             raise TypeError(f"_CompiledRAdam: expected RAdam, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g.get("lr", 1e-3))
-        self._beta1 = float(g.get("beta1", 0.9))
-        self._beta2 = float(g.get("beta2", 0.999))
-        self._eps = float(g.get("eps", 1e-8))
-        self._weight_decay = float(g.get("weight_decay", 0.0))
+        self._lr = _hp(g, "lr", 1e-3)
+        self._beta1 = _hp(g, "beta1", 0.9)
+        self._beta2 = _hp(g, "beta2", 0.999)
+        self._eps = _hp(g, "eps", 1e-8)
+        self._weight_decay = _hp(g, "weight_decay", 0.0)
         self._rho_inf = 2.0 / (1.0 - self._beta2) - 1.0
         self._m_buf = [_zeros_like(p) for p in self._params]
         self._v_buf = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("m", i)] = lambda _i=i: self._m_buf[_i]
-            self._buffer_table[("v", i)] = lambda _i=i: self._v_buf[_i]
+            self._buffer_table[("m", i)] = _list_getter(self._m_buf, i)
+            self._buffer_table[("v", i)] = _list_getter(self._v_buf, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register ``m`` and ``v`` moment buffers as trace inputs."""
         for i, m in enumerate(self._m_buf):
             register("m", i, m)
         for i, v in enumerate(self._v_buf):
             register("v", i, v)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """4 0-D placeholders: bias1, bias2, rect, use_rect.
 
         ``use_rect`` is a F32 0-D float that's either 0.0 or 1.0 —
@@ -2263,7 +2366,12 @@ class _CompiledRAdam(_CompiledStepBase):
             _lucid.tensor(use_rect_val, dtype=dt, device=dev)
         )
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the RAdam update with select-on-``use_rect``.
 
         Returns ``new_params + new_m + new_v`` matching
@@ -2304,7 +2412,7 @@ class _CompiledRAdam(_CompiledStepBase):
             new_v.append(v_t)
         return new_params + new_m + new_v
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → m_buf → v_buf, matching ``_trace_update`` order."""
         return list(self._params) + list(self._m_buf) + list(self._v_buf)
 
@@ -2400,24 +2508,28 @@ class _CompiledLBFGS(_CompiledStepBase):
             raise TypeError(f"_CompiledLBFGS: expected LBFGS, got {type(opt).__name__}")
         super().__init__(opt)
         g = opt.param_groups[0]
-        self._lr = float(g.get("lr", 1.0))
+        self._lr = _hp(g, "lr", 1.0)
         self._eps_history = 1e-10  # numerical guard for divisions
         # Per-parameter history (single curvature pair).
         self._prev_param = [_zeros_like(p) for p in self._params]
         self._prev_grad = [_zeros_like(p) for p in self._params]
         self._t = 0
         for i in range(len(self._params)):
-            self._buffer_table[("prev_param", i)] = lambda _i=i: self._prev_param[_i]
-            self._buffer_table[("prev_grad", i)] = lambda _i=i: self._prev_grad[_i]
+            self._buffer_table[("prev_param", i)] = _list_getter(self._prev_param, i)
+            self._buffer_table[("prev_grad", i)] = _list_getter(self._prev_grad, i)
 
-    def _register_state_in_inputs(self, register):
+    def _register_state_in_inputs(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> None:
         """Register prev_param + prev_grad history buffers as trace inputs."""
         for i, pp in enumerate(self._prev_param):
             register("prev_param", i, pp)
         for i, pg in enumerate(self._prev_grad):
             register("prev_grad", i, pg)
 
-    def _register_scalars(self, register):
+    def _register_scalars(
+        self, register: Callable[[str, int, Tensor], None]
+    ) -> dict[str, Tensor]:
         """One 0-D placeholder: ``use_history`` (0.0 on step 0, 1.0 after).
 
         Selects between the steepest-descent path (no history yet)
@@ -2443,7 +2555,12 @@ class _CompiledLBFGS(_CompiledStepBase):
             _lucid.tensor(val, dtype=dt, device=dev)
         )
 
-    def _trace_update(self, all_inputs, grads, scalars):
+    def _trace_update(
+        self,
+        all_inputs: Sequence[Tensor] | None,
+        grads: Sequence[Tensor],
+        scalars: dict[str, Tensor],
+    ) -> list[Tensor]:
         """Emit the per-element BFGS direction with steepest-descent fallback.
 
         Returns ``new_params + new_prev_param + new_prev_grad`` —
@@ -2480,7 +2597,7 @@ class _CompiledLBFGS(_CompiledStepBase):
             new_prev_grad.append(g)
         return new_params + new_prev_param + new_prev_grad
 
-    def _outputs_to_targets(self, outputs):
+    def _outputs_to_targets(self, outputs: list[Tensor]) -> list[Tensor]:
         """params → prev_param → prev_grad — mirrors ``_trace_update``."""
         return list(self._params) + list(self._prev_param) + list(self._prev_grad)
 
@@ -2518,7 +2635,7 @@ class _MultiGroupCompiledOptimizer:
 
     def __init__(self, opt: Optimizer) -> None:
         self._opt = opt
-        self._per_group: list[object] = [
+        self._per_group: list[_CompiledStepBase] = [
             compile_optimizer(_clone_single_group(opt, i))
             for i in range(len(opt.param_groups))
         ]
@@ -2548,10 +2665,7 @@ class _MultiGroupCompiledOptimizer:
         # Drop per-group caches so the next ``step()`` retraces with
         # the freshly loaded buffers.
         for cg in self._per_group:
-            if hasattr(cg, "load_state_dict"):
-                cg.load_state_dict(state)
-            elif hasattr(cg, "_exe"):
-                cg._exe = None
+            cg.load_state_dict(state)
 
     def step(self) -> None:
         """Run each per-group compiled optimizer in turn."""
@@ -2577,6 +2691,11 @@ def _clone_single_group(opt: Optimizer, group_idx: int) -> Optimizer:
     uniformly across SGD / Adam / RMSprop / etc.
     """
     group = opt.param_groups[group_idx]
-    params = list(group["params"])  # type: ignore[arg-type]
-    kwargs = {k: v for k, v in group.items() if k != "params"}
-    return type(opt)(params, **kwargs)
+    params = cast(list[Tensor], group["params"])
+    kwargs: dict[str, object] = {k: v for k, v in group.items() if k != "params"}
+    # ``type(opt)`` erases to abstract ``Optimizer`` for mypy, but every
+    # concrete subclass's ``__init__`` accepts ``(params, **hyperparams)``
+    # with its own typed kwarg surface (lr / momentum / betas / …).
+    # The ignore is the documented hand-off; a runtime TypeError would
+    # surface a real signature mismatch loudly.
+    return type(opt)(params, **kwargs)  # type: ignore[arg-type]  # reason: see above.
