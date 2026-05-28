@@ -23,7 +23,14 @@ _HUB = "https://huggingface.co/lucid-dl"
 
 @register_weights("resnet_18")
 class ResNet18Weights(WeightsEnum):
-    """Pretrained weights for :func:`lucid.models.resnet_18_cls`."""
+    r"""Pretrained weight tags for :func:`lucid.models.resnet_18_cls`.
+
+    Currently ships a single ImageNet-1k checkpoint
+    (:attr:`IMAGENET1K_V1`) — the canonical V1 weights distributed
+    by the reference-framework model zoo, re-hosted under
+    ``huggingface.co/lucid-dl/resnet-18`` with the official
+    ``acc@1=69.758 / acc@5=89.078`` validation metrics.
+    """
 
     IMAGENET1K_V1 = WeightEntry(
         url=f"{_HUB}/resnet-18/resolve/main/IMAGENET1K_V1/model.safetensors",

@@ -59,17 +59,18 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     if (x_eff->device() == Device::CPU &&
         (!x_eff->is_contiguous() || !gamma_eff->is_contiguous() || !beta_eff->is_contiguous()))
         if (x_eff->shape().size() < 2)
-            throw ShapeMismatch(x_eff->shape(), Shape{}, "group_norm: x must be at least (B, C, ...)");
+            throw ShapeMismatch(x_eff->shape(), Shape{},
+                                "group_norm: x must be at least (B, C, ...)");
     if (gamma_eff->shape().size() != 1 || beta_eff->shape().size() != 1)
-        throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(),
-                            "group_norm: γ, β must be 1-D");
+        throw ShapeMismatch(gamma_eff->shape(), beta_eff->shape(), "group_norm: γ, β must be 1-D");
 
     const int B = static_cast<int>(x_eff->shape()[0]);
     const int C = static_cast<int>(x_eff->shape()[1]);
     if (C % G != 0)
         ErrorBuilder("group_norm").fail("C must be divisible by num_groups");
     if (gamma_eff->shape()[0] != C || beta_eff->shape()[0] != C)
-        throw ShapeMismatch(gamma_eff->shape(), x_eff->shape(), "group_norm: γ/β must have length C");
+        throw ShapeMismatch(gamma_eff->shape(), x_eff->shape(),
+                            "group_norm: γ/β must have length C");
 
     const int N_spatial = static_cast<int>(x_eff->shape().size()) - 2;
     std::vector<int> S(N_spatial);
@@ -84,10 +85,10 @@ TensorImplPtr GroupNormBackward::forward(const TensorImplPtr& x,
     scope.set_attr("num_groups", static_cast<std::int64_t>(G));
 
     // group_norm_forward returns [y, mean, rstd].
-    auto forward = backend::Dispatcher::for_device(x_eff->device())
-                       .group_norm_forward(x_eff->storage(), gamma_eff->storage(),
-                                           beta_eff->storage(), B, C, spatial_total, G, S, eps,
-                                           x_eff->shape(), eff_dt);
+    auto forward =
+        backend::Dispatcher::for_device(x_eff->device())
+            .group_norm_forward(x_eff->storage(), gamma_eff->storage(), beta_eff->storage(), B, C,
+                                spatial_total, G, S, eps, x_eff->shape(), eff_dt);
 
     auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x_eff->shape(), eff_dt,
                                             x_eff->device(), false);

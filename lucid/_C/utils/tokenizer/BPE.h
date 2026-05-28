@@ -76,20 +76,18 @@ public:
     std::size_t vocab_size() const override { return vocab_.size(); }
     std::string algo() const override { return "bpe"; }
 
-    void train(const std::vector<std::string>& corpus,
-               std::size_t target_vocab_size) override;
+    void train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) override;
 
-    std::unordered_map<std::string, TokenId> get_vocab() const override {
-        return vocab_;
-    }
+    std::unordered_map<std::string, TokenId> get_vocab() const override { return vocab_; }
     std::string id_to_token(TokenId id) const override;
 
     // ── BPE-specific accessors ─────────────────────────────────────
 
     // Ordered merge list (rank ascending) — exposed for serialisation
     // to ``merges.txt`` on the Python side.
-    const std::vector<std::pair<std::string, std::string>>& merges() const
-        noexcept { return merges_str_; }
+    const std::vector<std::pair<std::string, std::string>>& merges() const noexcept {
+        return merges_str_;
+    }
 
 protected:
     // Vocab + reverse table.  ``id_to_token_`` rebuilds whenever
@@ -99,8 +97,7 @@ protected:
 
     // Compiled merge table: pair-of-ids → (result-id, rank).  Built
     // from ``merges_str_`` whenever ``train`` / construction completes.
-    std::unordered_map<std::pair<TokenId, TokenId>, BPEMerge, PairHash>
-        pair_to_merge_;
+    std::unordered_map<std::pair<TokenId, TokenId>, BPEMerge, PairHash> pair_to_merge_;
 
     // Original textual merges in order — kept for save/round-trip
     // and for ``merges()`` accessor.

@@ -4,6 +4,7 @@ from lucid.utils.data.dataset import Dataset
 Sampler classes for DataLoader.
 """
 
+import math
 from typing import Iterator
 import random
 
@@ -561,3 +562,125 @@ class DistributedSampler(Sampler):
     def __len__(self) -> int:
         """Return per-replica sample count — same on every rank."""
         return self.num_samples
+
+
+class RASampler(Sampler):
+    r"""Repeated-augmentation sampler (Hoffer et al., 2020 — arXiv:1901.09335).
+
+    Each dataset sample appears ``num_repeats`` times consecutively in
+    the index stream, so that — when combined with a stochastic
+    augmentation pipeline — the model sees several different augmented
+    views of the same image inside each batch.  Empirically lifts
+    ImageNet accuracy at no extra labelled-data cost.
+
+    The sampler is also distributed-aware (single-process here, but
+    sharding by ``rank`` is preserved for parity with the reference
+    framework — see :class:`DistributedSampler`).  Per-epoch shuffling
+    is deterministic given ``seed`` + the epoch counter
+    (:meth:`set_epoch`).
+
+    Parameters
+    ----------
+    dataset : Dataset
+        Dataset whose ``__len__`` defines the unique-index range.
+    num_replicas : int, optional, default=1
+        Number of distributed replicas.  ``1`` is the single-process
+        case (the default Lucid context).
+    rank : int, optional, default=0
+        Replica id in ``[0, num_replicas)``.
+    shuffle : bool, optional, default=True
+        If ``True``, the unique indices are shuffled before being
+        repeated.  Identical seeds reproduce the same epoch order.
+    seed : int, optional, default=0
+        Base seed for the per-epoch RNG (combined with the epoch
+        counter via :meth:`set_epoch`).
+    num_repeats : int, optional, default=3
+        How many consecutive copies of each index to emit.  The
+        original paper recommends ``3`` for ImageNet.
+
+    Notes
+    -----
+    Two derived sizes (matching the reference-framework convention):
+
+    * ``num_samples = ceil(len(dataset) * num_repeats / num_replicas)``
+      — number of indices this replica's slab contains *before*
+      truncation.  Used as ``total_size = num_samples * num_replicas``
+      for the full repeated-and-padded index list.
+    * ``num_selected_samples = floor(len(dataset) / num_replicas)``
+      — number of indices this replica actually *yields* per epoch.
+      Iteration truncates the slab to this length so the effective
+      epoch size (per rank) matches an un-repeated pass — repetition
+      diversifies *within* the epoch rather than extending it.
+
+    Examples
+    --------
+    >>> from lucid.utils.data import RASampler, DataLoader
+    >>> sampler = RASampler(dataset, num_repeats=3, shuffle=True, seed=0)
+    >>> loader = DataLoader(dataset, batch_size=64, sampler=sampler)
+    >>> for x, y in loader:                      # each batch may contain
+    ...     ...                                  # ≤3 augmented views of
+    ...     # ...train step...                   # the same underlying image
+    """
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        num_replicas: int = 1,
+        rank: int = 0,
+        shuffle: bool = True,
+        seed: int = 0,
+        num_repeats: int = 3,
+    ) -> None:
+        if num_replicas < 1:
+            raise ValueError(f"num_replicas must be >= 1, got {num_replicas}")
+        if not 0 <= rank < num_replicas:
+            raise ValueError(
+                f"rank must be in [0, {num_replicas}), got {rank}"
+            )
+        if num_repeats < 1:
+            raise ValueError(f"num_repeats must be >= 1, got {num_repeats}")
+        self.dataset: Dataset = dataset
+        self.num_replicas: int = num_replicas
+        self.rank: int = rank
+        self.shuffle: bool = shuffle
+        self.seed: int = seed
+        self.num_repeats: int = num_repeats
+        self.epoch: int = 0
+
+        n: int = len(dataset)
+        # Full repeated-and-padded index list size, split evenly across replicas.
+        self.num_samples: int = int(math.ceil(n * num_repeats / num_replicas))
+        self.total_size: int = self.num_samples * num_replicas
+        # Effective per-epoch length per rank — matches an un-repeated pass.
+        self.num_selected_samples: int = int(math.floor(n / num_replicas))
+
+    def set_epoch(self, epoch: int) -> None:
+        """Set the epoch — affects the shuffling RNG seed."""
+        self.epoch = int(epoch)
+
+    def __iter__(self) -> Iterator[int]:
+        n: int = len(self.dataset)
+        indices: list[int] = list(range(n))
+        if self.shuffle:
+            rng = random.Random(self.seed + self.epoch)
+            rng.shuffle(indices)
+        # Repeat each unique index ``num_repeats`` times in-place — the
+        # consecutive repeats are the whole point.
+        repeated: list[int] = [
+            idx for idx in indices for _ in range(self.num_repeats)
+        ]
+        # Wrap-pad to ``total_size`` so the replica slabs divide evenly.
+        if len(repeated) < self.total_size:
+            repeated = repeated + repeated[: self.total_size - len(repeated)]
+        else:
+            repeated = repeated[: self.total_size]
+        # Replica's slab.
+        slab = repeated[
+            self.rank * self.num_samples : (self.rank + 1) * self.num_samples
+        ]
+        # Truncate so the epoch size per rank matches an un-repeated pass.
+        return iter(slab[: self.num_selected_samples])
+
+    def __len__(self) -> int:
+        """Return per-replica yield count — ``floor(len(dataset) / num_replicas)``."""
+        return self.num_selected_samples

@@ -45,8 +45,8 @@ const OpSchema ReluBackward::schema_v1{"relu", 1, AmpPolicy::KeepInput, true};
 Storage ReluBackward::grad_formula(const Storage& g) {
     const std::size_t n = shape_numel(out_shape_);
     Shape flat{static_cast<std::int64_t>(n)};
-    return backend::Dispatcher::for_device(device_).relu_backward(g, saved_inputs_[0],
-                                                                  flat, dtype_);
+    return backend::Dispatcher::for_device(device_).relu_backward(g, saved_inputs_[0], flat,
+                                                                  dtype_);
 }
 
 TensorImplPtr ReluBackward::grad_formula_impl(const TensorImplPtr& g,
@@ -97,8 +97,8 @@ const OpSchema SiluBackward::schema_v1{"silu", 1, AmpPolicy::Promote, true};
 // GPU can dispatch to a single fused kernel (MLX expression or MPSGraph)
 // rather than the prior 7-op storage-primitive composition.
 Storage SiluBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_).silu_backward(
-        saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).silu_backward(saved_inputs_[0], g, out_shape_,
+                                                                  dtype_);
 }
 
 TensorImplPtr silu_op(const TensorImplPtr& a) {
@@ -127,8 +127,8 @@ LUCID_REGISTER_OP(GeluBackward)
 const OpSchema GeluExactBackward::schema_v1{"gelu_exact", 1, AmpPolicy::ForceFP32, true};
 
 Storage GeluExactBackward::grad_formula(const Storage& g) {
-    return backend::Dispatcher::for_device(device_).gelu_exact_backward(
-        saved_inputs_[0], g, out_shape_, dtype_);
+    return backend::Dispatcher::for_device(device_).gelu_exact_backward(saved_inputs_[0], g,
+                                                                        out_shape_, dtype_);
 }
 
 TensorImplPtr gelu_exact_op(const TensorImplPtr& a) {

@@ -42,6 +42,22 @@ def resize_target(h: int, w: int, size: int | tuple[int, int]) -> tuple[int, int
 
     Shared by :func:`resize` and the mask / bounding-box paths so they
     stay consistent (shorter-side rule for an int ``size``).
+
+    Parameters
+    ----------
+    h : int
+        Input image height in pixels.
+    w : int
+        Input image width in pixels.
+    size : int or (int, int)
+        If an ``int``, the **shorter** side is scaled to ``size`` with
+        the aspect ratio preserved.  If ``(h, w)``, the output shape is
+        returned verbatim.
+
+    Returns
+    -------
+    (int, int)
+        Output ``(height, width)`` after applying the resize rule.
     """
     if isinstance(size, int):
         if h <= w:
@@ -85,12 +101,51 @@ def resize(
 
 
 def crop(img: Tensor, top: int, left: int, height: int, width: int) -> Tensor:
-    """Crop a ``height`` × ``width`` window with top-left at ``(top, left)``."""
+    """Crop a ``height`` × ``width`` window with top-left at ``(top, left)``.
+
+    Pure slicing — no copy on the contiguous case.  The crop window is
+    expressed in pixel coordinates relative to the top-left origin.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    top : int
+        Row index of the crop's top edge (inclusive).
+    left : int
+        Column index of the crop's left edge (inclusive).
+    height : int
+        Number of rows in the crop.
+    width : int
+        Number of columns in the crop.
+
+    Returns
+    -------
+    Tensor
+        Cropped image with spatial shape ``(height, width)``.
+    """
     return img[..., top : top + height, left : left + width]
 
 
 def center_crop(img: Tensor, size: int | tuple[int, int]) -> Tensor:
-    r"""Crop a centered window of ``size`` (square if ``size`` is an int)."""
+    r"""Crop a centered window of ``size`` (square if ``size`` is an int).
+
+    The crop window is centered on the input; if the requested ``size``
+    exceeds the input, the offsets clamp to ``0`` and the crop returns
+    the available pixels (no padding).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    size : int or (int, int)
+        Output ``(height, width)``.  An ``int`` selects a square window.
+
+    Returns
+    -------
+    Tensor
+        Cropped image centered on the input.
+    """
     crop_h, crop_w = (size, size) if isinstance(size, int) else (size[0], size[1])
     h, w = _spatial_hw(img)
     top = max((h - crop_h) // 2, 0)
@@ -99,13 +154,35 @@ def center_crop(img: Tensor, size: int | tuple[int, int]) -> Tensor:
 
 
 def hflip(img: Tensor) -> Tensor:
-    """Horizontally flip (mirror along the width axis)."""
+    """Horizontally flip (mirror along the width axis); leaves channels untouched.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+
+    Returns
+    -------
+    Tensor
+        Image flipped left-right; same shape and dtype as ``img``.
+    """
     # lucid.flip's stub types dims as int32; a plain int works at runtime.
     return lucid.flip(img, dims=-1)  # type: ignore[arg-type]
 
 
 def vflip(img: Tensor) -> Tensor:
-    """Vertically flip (mirror along the height axis)."""
+    """Vertically flip (mirror along the height axis); leaves channels untouched.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+
+    Returns
+    -------
+    Tensor
+        Image flipped top-bottom; same shape and dtype as ``img``.
+    """
     return lucid.flip(img, dims=-2)  # type: ignore[arg-type]
 
 
@@ -144,6 +221,20 @@ def normalize(
     r"""Normalize per channel: ``(img - mean) / std``.
 
     ``mean`` / ``std`` are broadcast over the channel axis.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in floating dtype.
+    mean : tuple of float
+        Per-channel mean, one entry per channel (length must equal ``C``).
+    std : tuple of float
+        Per-channel standard deviation; same length as ``mean``.
+
+    Returns
+    -------
+    Tensor
+        Normalized image with the same shape and dtype as ``img``.
     """
     c = int(img.shape[-3])
     mean_t = lucid.tensor(list(mean), dtype=img.dtype).reshape(1, c, 1, 1)
@@ -155,7 +246,21 @@ def normalize(
 
 
 def rescale(img: Tensor, scale: float = 1.0 / 255.0) -> Tensor:
-    """Multiply pixel values by ``scale`` (e.g. uint8 ``[0,255]`` → ``[0,1]``)."""
+    """Multiply pixel values by ``scale`` (e.g. uint8 ``[0,255]`` → ``[0,1]``).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image of any shape; usually integer-typed when used for
+        normalisation into the unit interval.
+    scale : float, optional, default=1/255
+        Multiplicative factor applied element-wise.
+
+    Returns
+    -------
+    Tensor
+        ``img * scale`` with the same shape as ``img``.
+    """
     return img * scale
 
 
@@ -169,7 +274,30 @@ def resized_crop(
     *,
     interpolation: str = "bilinear",
 ) -> Tensor:
-    """Crop ``(top, left, height, width)`` then resize to ``size``."""
+    """Crop ``(top, left, height, width)`` then resize to ``size``.
+
+    Composes :func:`crop` followed by :func:`resize`; this is the
+    canonical building block for ``RandomResizedCrop``.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    top, left : int
+        Top-left corner of the crop window.
+    height, width : int
+        Size of the crop window in pixels.
+    size : int or (int, int)
+        Final output size, with the same shorter-side semantics as
+        :func:`resize`.
+    interpolation : str, optional, default="bilinear"
+        Interpolation mode forwarded to :func:`resize`.
+
+    Returns
+    -------
+    Tensor
+        Cropped-then-resized image.
+    """
     return resize(
         crop(img, top, left, height, width), size, interpolation=interpolation
     )
@@ -205,19 +333,72 @@ def _blend(img1: Tensor, img2: Tensor, ratio: float) -> Tensor:
 
 
 def adjust_brightness(img: Tensor, factor: float) -> Tensor:
-    """Scale brightness (blend toward black). ``factor=1`` is a no-op."""
+    """Scale brightness by blending toward black; ``factor=1`` is a no-op.
+
+    Equivalent to PIL ``ImageEnhance.Brightness``: ``factor=0`` returns
+    a fully black image, ``factor=1`` returns the input, ``factor>1``
+    over-brightens (extrapolated away from black, then clipped).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    factor : float
+        Non-negative brightness multiplier.
+
+    Returns
+    -------
+    Tensor
+        Brightened image, same shape and dtype as ``img``, clipped to ``[0, 1]``.
+    """
     return _blend(img, img * 0.0, factor)
 
 
 def adjust_contrast(img: Tensor, factor: float) -> Tensor:
-    """Adjust contrast (blend toward the per-image mean gray)."""
+    """Adjust contrast by blending toward the per-image mean gray.
+
+    Equivalent to PIL ``ImageEnhance.Contrast``: ``factor=0`` returns a
+    flat gray (the input's average luminance), ``factor=1`` is the
+    identity, ``factor>1`` boosts contrast.
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image ``(3, H, W)`` or ``(B, 3, H, W)`` in ``[0, 1]``.
+    factor : float
+        Non-negative contrast multiplier.
+
+    Returns
+    -------
+    Tensor
+        Contrast-adjusted image, same shape and dtype as ``img``,
+        clipped to ``[0, 1]``.
+    """
     gray = rgb_to_grayscale(img, keep_channels=False)
     mean = lucid.mean(gray, dim=[-1, -2, -3], keepdim=True)
     return _blend(img, mean, factor)
 
 
 def adjust_saturation(img: Tensor, factor: float) -> Tensor:
-    """Adjust saturation (blend toward grayscale). ``factor=1`` is a no-op."""
+    """Adjust saturation by blending toward grayscale; ``factor=1`` is a no-op.
+
+    Equivalent to PIL ``ImageEnhance.Color``: ``factor=0`` returns a
+    grayscale image broadcast back to 3 channels, ``factor>1`` boosts
+    saturation (extrapolated away from gray, then clipped).
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image ``(3, H, W)`` or ``(B, 3, H, W)`` in ``[0, 1]``.
+    factor : float
+        Non-negative saturation multiplier.
+
+    Returns
+    -------
+    Tensor
+        Saturation-adjusted image, same shape and dtype as ``img``,
+        clipped to ``[0, 1]``.
+    """
     return _blend(img, rgb_to_grayscale(img, keep_channels=True), factor)
 
 
@@ -349,7 +530,24 @@ def hsv_to_rgb(h: Tensor, s: Tensor, v: Tensor) -> Tensor:
 
 
 def adjust_hue(img: Tensor, factor: float) -> Tensor:
-    r"""Shift hue by ``factor`` (in ``[-0.5, 0.5]``) via an exact HSV round-trip."""
+    r"""Shift hue by ``factor`` (in ``[-0.5, 0.5]``) via an exact HSV round-trip.
+
+    Round-trips through :func:`rgb_to_hsv` / :func:`hsv_to_rgb` so the
+    transform is differentiable.  Hue wraps modulo 1 — ``factor=0.5``
+    and ``factor=-0.5`` are equivalent (the chromatic antipode).
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image ``(3, H, W)`` or ``(B, 3, H, W)`` in ``[0, 1]``.
+    factor : float
+        Hue offset in ``[-0.5, 0.5]`` (fraction of a full rotation).
+
+    Returns
+    -------
+    Tensor
+        Hue-shifted image, same shape and dtype as ``img``.
+    """
     if factor == 0.0:
         return img
     h, s, v = rgb_to_hsv(img)
@@ -441,7 +639,26 @@ def _norm_to_pixel(h: int, w: int) -> Tensor:
 def affine_theta(
     matrix: Tensor, in_hw: tuple[int, int], out_hw: tuple[int, int]
 ) -> Tensor:
-    """Convert a forward pixel matrix ``M`` to ``affine_grid`` ``theta`` (1,2,3)."""
+    """Convert a forward pixel matrix ``M`` to ``affine_grid`` ``theta`` (1,2,3).
+
+    Composes the normalisation transforms on either side of ``M`` so
+    the result can be fed directly to :func:`lucid.nn.functional.affine_grid`
+    (which uses ``align_corners=True`` normalised coordinates).
+
+    Parameters
+    ----------
+    matrix : Tensor
+        Forward 3x3 pixel matrix mapping input → output pixels.
+    in_hw : (int, int)
+        Input image ``(height, width)``.
+    out_hw : (int, int)
+        Output image ``(height, width)``.
+
+    Returns
+    -------
+    Tensor
+        Theta tensor of shape ``(1, 2, 3)`` suitable for ``affine_grid``.
+    """
     ih, iw = in_hw
     oh, ow = out_hw
     no = _norm_to_pixel(oh, ow)
@@ -459,7 +676,32 @@ def warp_affine(
     mode: str = "bilinear",
     fill: float = 0.0,
 ) -> Tensor:
-    """Warp ``img`` by forward pixel matrix ``matrix`` (affine or homography)."""
+    """Warp ``img`` by forward pixel matrix ``matrix`` (affine or homography).
+
+    Backward-warps ``img`` via :func:`affine_theta` + ``affine_grid`` +
+    ``grid_sample``.  The matrix may be a full 3x3 homography — the
+    perspective divide is handled by ``affine_grid`` implicitly when
+    the bottom row is non-degenerate.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    matrix : Tensor
+        Forward 3x3 pixel matrix mapping input → output coordinates.
+    out_hw : (int, int)
+        Output ``(height, width)``.
+    mode : str, optional, default="bilinear"
+        Sampling mode; ``"nearest"`` falls back to nearest-neighbour.
+    fill : float, optional, default=0.0
+        Border fill value; ``0.0`` uses zero padding, any other value
+        switches to border (edge-replicate) sampling.
+
+    Returns
+    -------
+    Tensor
+        Warped image with spatial shape ``out_hw``.
+    """
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     b, c, ih, iw = (int(d) for d in x.shape)
@@ -474,7 +716,24 @@ def warp_affine(
 
 
 def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
-    """Apply a forward 3x3 ``matrix`` to ``(N, 2)`` ``(x, y)`` points."""
+    """Apply a forward 3x3 ``matrix`` to ``(N, 2)`` ``(x, y)`` points.
+
+    Promotes the points to homogeneous ``(x, y, 1)`` rows, multiplies by
+    ``matrix^T``, and divides by the homogeneous coordinate — so this
+    works for both affine and full-homography matrices.
+
+    Parameters
+    ----------
+    pts : Tensor
+        Point set of shape ``(N, 2)`` in pixel coordinates (``x``, ``y``).
+    matrix : Tensor
+        Forward 3x3 transform matrix.
+
+    Returns
+    -------
+    Tensor
+        Transformed points of shape ``(N, 2)``.
+    """
     n = int(pts.shape[0])
     ones = lucid.ones(n, 1, dtype=pts.dtype)
     hom = _cat([pts, ones], 1)  # (N, 3)
@@ -485,7 +744,27 @@ def affine_points(pts: Tensor, matrix: Tensor) -> Tensor:
 def rotation_matrix(
     angle_deg: float, cx: float, cy: float, scale: float = 1.0
 ) -> Tensor:
-    """OpenCV ``getRotationMatrix2D`` forward matrix (CCW degrees)."""
+    """OpenCV ``getRotationMatrix2D`` forward matrix (CCW degrees) about ``(cx, cy)``.
+
+    Matches cv2's pixel coordinate convention so matrices transfer
+    directly between Lucid and OpenCV / Albumentations pipelines.
+
+    Parameters
+    ----------
+    angle_deg : float
+        Rotation angle in degrees, counter-clockwise positive.
+    cx : float
+        x-coordinate of the rotation center (pixel).
+    cy : float
+        y-coordinate of the rotation center (pixel).
+    scale : float, optional, default=1.0
+        Uniform scale factor applied alongside the rotation.
+
+    Returns
+    -------
+    Tensor
+        Forward 3x3 matrix mapping input pixel → output pixel.
+    """
     rad = math.radians(angle_deg)
     alpha = scale * math.cos(rad)
     beta = scale * math.sin(rad)
@@ -509,7 +788,31 @@ def affine_matrix(
     translate_x: float = 0.0,
     translate_y: float = 0.0,
 ) -> Tensor:
-    """Compose a forward affine matrix about ``(cx, cy)`` then translate."""
+    """Compose a forward affine matrix about ``(cx, cy)`` then translate.
+
+    Composition order is ``rotate ∘ shear ∘ scale`` (about the origin),
+    followed by a re-centering so ``(cx, cy)`` stays fixed and then the
+    explicit translation.  This matches torchvision / Albumentations
+    ``Affine`` semantics so matrices transfer directly.
+
+    Parameters
+    ----------
+    cx, cy : float
+        Pivot point in pixel coordinates.
+    scale : float, optional, default=1.0
+        Uniform scale factor.
+    angle_deg : float, optional, default=0.0
+        Rotation angle in degrees (CCW positive).
+    shear_x_deg, shear_y_deg : float, optional, default=0.0
+        Shear angles in degrees along each axis.
+    translate_x, translate_y : float, optional, default=0.0
+        Post-transform translation in pixels.
+
+    Returns
+    -------
+    Tensor
+        Forward 3x3 pixel matrix.
+    """
     rad = math.radians(angle_deg)
     cos_a, sin_a = math.cos(rad), math.sin(rad)
     shx, shy = math.tan(math.radians(shear_x_deg)), math.tan(math.radians(shear_y_deg))
@@ -528,6 +831,18 @@ def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor
     """Forward homography mapping the 4 ``src`` corners to ``dst`` (xy each).
 
     Solves the 8-DoF system for the 3x3 matrix (``h33 = 1``).
+
+    Parameters
+    ----------
+    src : list of [float, float]
+        Four source ``(x, y)`` corner points (pixel coords).
+    dst : list of [float, float]
+        Four destination ``(x, y)`` corner points; same order as ``src``.
+
+    Returns
+    -------
+    Tensor
+        Forward 3x3 homography mapping ``src[i] → dst[i]`` exactly.
     """
     rows: list[list[float]] = []
     rhs: list[float] = []
@@ -549,7 +864,28 @@ def perspective_matrix(src: list[list[float]], dst: list[list[float]]) -> Tensor
 
 
 def gaussian_blur(img: Tensor, sigma: float, ksize: int | None = None) -> Tensor:
-    """Separable Gaussian blur (depthwise conv). ``sigma`` in pixels."""
+    """Separable Gaussian blur (depthwise conv). ``sigma`` in pixels.
+
+    Builds a 1-D Gaussian of width ``ksize`` (auto-derived as
+    ``2 * round(3 * sigma) + 1`` when not supplied) and applies it twice
+    — once along width, once along height — so the cost is ``O(C · k · H · W)``
+    rather than ``O(C · k^2 · H · W)``.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    sigma : float
+        Standard deviation of the Gaussian, in pixels.
+    ksize : int, optional
+        Odd kernel size; default ``2 * round(3 * sigma) + 1``.  Even
+        values are rounded up to the next odd integer.
+
+    Returns
+    -------
+    Tensor
+        Blurred image, same shape and dtype as ``img``.
+    """
     if ksize is None:
         ksize = int(2 * round(3.0 * sigma) + 1)
     if ksize % 2 == 0:
@@ -580,7 +916,28 @@ def _pixel_grid(h: int, w: int) -> tuple[Tensor, Tensor]:
 
 
 def remap(img: Tensor, dx: Tensor, dy: Tensor, *, mode: str = "bilinear") -> Tensor:
-    """Backward warp: ``out(y, x) = img(x + dx, y + dy)`` via ``grid_sample``."""
+    """Backward warp: ``out(y, x) = img(x + dx, y + dy)`` via ``grid_sample``.
+
+    Equivalent to OpenCV ``cv2.remap`` with a displacement field; the
+    sampling grid is built from the pixel index plus the displacement,
+    then normalised to the ``[-1, 1]`` range ``grid_sample`` expects.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    dx, dy : Tensor
+        Displacement fields of shape ``(H, W)`` (in pixels) added to the
+        x / y sampling coordinates.
+    mode : str, optional, default="bilinear"
+        Sampling mode; ``"nearest"`` falls back to nearest-neighbour.
+
+    Returns
+    -------
+    Tensor
+        Warped image with the same shape and dtype as ``img``.  Border
+        pixels sample with reflection padding.
+    """
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     b, _, h, w = (int(d) for d in x.shape)
@@ -637,7 +994,26 @@ def _equalize_channel(ch: Tensor, clip_limit: float | None = None) -> Tensor:
 
 
 def equalize(img: Tensor, clip_limit: float | None = None) -> Tensor:
-    """Per-channel histogram equalization of a ``[0, 1]`` image."""
+    """Per-channel histogram equalization of a ``[0, 1]`` image.
+
+    Computes a 256-bin histogram for each channel, builds the CDF, and
+    remaps pixel intensities so the resulting histogram is roughly
+    uniform.  Optional contrast limiting clips bins above
+    ``clip_limit * pixels / 256`` and redistributes the excess.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    clip_limit : float, optional
+        Contrast-clip threshold; when ``None`` the standard non-clipped
+        equalize is performed.
+
+    Returns
+    -------
+    Tensor
+        Equalized image, same shape and dtype as ``img``.
+    """
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
     b, c, h, w = (int(d) for d in x.shape)
@@ -822,7 +1198,26 @@ def clahe(
 
 
 def depthwise_conv2d(img: Tensor, kernel2d: list[list[float]]) -> Tensor:
-    """Apply a 2-D kernel to every channel independently (same padding)."""
+    """Apply a 2-D kernel to every channel independently (same padding).
+
+    Replicates the kernel ``C`` times along the output-channel axis and
+    runs a grouped conv2d so each input channel is filtered by its own
+    copy of ``kernel2d``.  Padding is set so the spatial shape is
+    preserved (``same`` padding).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)``.
+    kernel2d : list of list of float
+        2-D kernel of shape ``(kh, kw)``; applied identically to each
+        channel.
+
+    Returns
+    -------
+    Tensor
+        Filtered image, same shape and dtype as ``img``.
+    """
     kh, kw = len(kernel2d), len(kernel2d[0])
     unbatched = img.ndim == 3
     x = img[None] if unbatched else img
@@ -831,3 +1226,156 @@ def depthwise_conv2d(img: Tensor, kernel2d: list[list[float]]) -> Tensor:
     weight = _cat([k] * c, 0)
     y = F.conv2d(x, weight, padding=(kh // 2, kw // 2), groups=c)
     return y[0] if unbatched else y
+
+
+# ── AutoAugment family — single-image functional ops ────────────────
+
+
+def adjust_sharpness(img: Tensor, factor: float) -> Tensor:
+    r"""Adjust sharpness by blending with a smoothed copy.
+
+    Reference-framework compatible smoothing kernel (PIL ``ImageFilter.SMOOTH``)::
+
+        [[1, 1, 1],
+         [1, 5, 1],
+         [1, 1, 1]] / 13
+
+    ``factor == 0`` returns the blurred image, ``factor == 1`` is the
+    identity, ``factor > 1`` sharpens (extrapolates away from blur).
+
+    PIL convention is honoured for border pixels: the SMOOTH kernel
+    has no valid neighbourhood on a 1-pixel border so those pixels
+    pass through unchanged (preventing the zero-padded ``conv2d``
+    bleed into the result that would otherwise diverge from
+    reference-framework parity).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    factor : float
+        Non-negative interpolation factor.
+
+    Returns
+    -------
+    Tensor
+        Adjusted image, same shape and dtype as ``img``, clipped to ``[0, 1]``.
+    """
+    if factor < 0.0:
+        raise ValueError(f"factor must be non-negative, got {factor}")
+    if factor == 1.0:
+        return img
+    inv13 = 1.0 / 13.0
+    kernel = [
+        [inv13, inv13, inv13],
+        [inv13, 5.0 * inv13, inv13],
+        [inv13, inv13, inv13],
+    ]
+    blurred = depthwise_conv2d(img, kernel)
+    h, w = _spatial_hw(img)
+    if h <= 2 or w <= 2:
+        # No valid interior — kernel can't be applied; return identity.
+        return img
+    # Build a ``(1, H, W)`` interior mask: 1 in interior, 0 on the
+    # 1-pixel border.  Broadcast-friendly: works for both ``(C, H, W)``
+    # and ``(B, C, H, W)`` ``blurred``.
+    inner_ones = lucid.ones(1, h - 2, w - 2, dtype=img.dtype)
+    interior_mask = F.pad(inner_ones, (1, 1, 1, 1), value=0.0)
+    border_mask = 1.0 - interior_mask
+    smoothed = blurred * interior_mask + img * border_mask
+    return _blend(img, smoothed, factor)
+
+
+def autocontrast(img: Tensor) -> Tensor:
+    r"""Per-channel min-max stretch to ``[0, 1]`` (PIL ``ImageOps.autocontrast``).
+
+    Each channel's intensities are rescaled so its minimum maps to
+    ``0`` and its maximum maps to ``1``.  A flat channel (``max ==
+    min``) passes through unchanged.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        Contrast-stretched image, same shape and dtype as ``img``.
+    """
+    # min/max per channel over the spatial axes — both shape (..., C, 1, 1).
+    minv = lucid.min(lucid.min(img, dim=-1, keepdim=True), dim=-2, keepdim=True)
+    maxv = lucid.max(lucid.max(img, dim=-1, keepdim=True), dim=-2, keepdim=True)
+    span = maxv - minv  # (..., C, 1, 1)
+    # Multiplicative mask avoids the lucid.where shape constraint (which
+    # requires cond + branches all the same shape, no broadcast).  The
+    # mask is (..., C, 1, 1) and broadcasts over the spatial axes in
+    # subsequent arithmetic.
+    has_span = (span > 0.0).to(img.dtype)
+    safe_span = has_span * span + (1.0 - has_span)  # 1 where flat → safe div
+    stretched = (img - minv) / safe_span
+    return has_span * stretched + (1.0 - has_span) * img
+
+
+def posterize(img: Tensor, num_bits: int) -> Tensor:
+    r"""Reduce bits per channel, bit-exact PIL ``ImageOps.posterize``.
+
+    Round-trips through ``uint8`` and applies the bit mask
+    ``~((1 << (8 - num_bits)) - 1)``, then divides by ``255``.  Output
+    has ``2**num_bits`` distinct levels per channel.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    num_bits : int
+        Number of bits to keep per channel; must be in ``[1, 8]``.
+
+    Returns
+    -------
+    Tensor
+        Quantised image, same shape and dtype as ``img``.
+    """
+    if not 1 <= num_bits <= 8:
+        raise ValueError(f"num_bits must be in [1, 8], got {num_bits}")
+    if num_bits == 8:
+        return img
+    mask_int = (~((1 << (8 - num_bits)) - 1)) & 0xFF
+    u8 = lucid.clip(lucid.round(img * 255.0), 0.0, 255.0).long()
+    masked = u8 & mask_int
+    return masked.to(img.dtype) / 255.0
+
+
+def solarize(img: Tensor, threshold: float) -> Tensor:
+    r"""Invert pixels at or above ``threshold`` (PIL ``ImageOps.solarize``).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    threshold : float
+        Cut-off in ``[0, 1]``; pixels ``>= threshold`` become
+        ``1 - pixel``.
+
+    Returns
+    -------
+    Tensor
+        Solarised image, same shape and dtype as ``img``.
+    """
+    return lucid.where(img >= threshold, 1.0 - img, img)
+
+
+def invert(img: Tensor) -> Tensor:
+    r"""Invert intensities (PIL ``ImageOps.invert``): ``1 - img``.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        Inverted image, same shape and dtype as ``img``.
+    """
+    return 1.0 - img

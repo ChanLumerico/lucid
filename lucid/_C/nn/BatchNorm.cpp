@@ -115,10 +115,10 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     scope.set_attr("eps", eps);
 
     // batch_norm_forward returns [y, mean, rstd].
-    auto forward = backend::Dispatcher::for_device(x_eff->device())
-                       .batch_norm_forward(x_eff->storage(), gamma_eff->storage(),
-                                           beta_eff->storage(), B, C, spatial_total, N, eps,
-                                           x_eff->shape(), eff_dt);
+    auto forward =
+        backend::Dispatcher::for_device(x_eff->device())
+            .batch_norm_forward(x_eff->storage(), gamma_eff->storage(), beta_eff->storage(), B, C,
+                                spatial_total, N, eps, x_eff->shape(), eff_dt);
 
     auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x_eff->shape(), eff_dt,
                                             x_eff->device(), false);
@@ -150,10 +150,10 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     // ops on a (C,) tensor.
     if (running_mean) {
         int n_total = B;
-        for (int i = 0; i < N; ++i) n_total *= S[i];
+        for (int i = 0; i < N; ++i)
+            n_total *= S[i];
         const double m = momentum;
-        const double unbiased_factor =
-            (n_total > 1) ? double(n_total) / double(n_total - 1) : 1.0;
+        const double unbiased_factor = (n_total > 1) ? double(n_total) / double(n_total - 1) : 1.0;
 
         const Dtype buf_dt = running_mean->dtype();
         backend::IBackend& be = backend::Dispatcher::for_device(x_eff->device());
@@ -164,46 +164,50 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         kept_shape.reserve(2 + N);
         kept_shape.push_back(1);
         kept_shape.push_back(C);
-        for (int i = 0; i < N; ++i) kept_shape.push_back(1);
+        for (int i = 0; i < N; ++i)
+            kept_shape.push_back(1);
         Shape stat_shape{static_cast<std::int64_t>(C)};
 
         Storage saved_mean_C = be.reshape(bwd->saved_mean_, kept_shape, stat_shape, eff_dt);
         Storage saved_rstd_C = be.reshape(bwd->saved_rstd_, kept_shape, stat_shape, eff_dt);
 
         // var = 1 / rstd^2 - eps
-        Storage rstd_sq    = be.square(saved_rstd_C, stat_shape, buf_dt);
+        Storage rstd_sq = be.square(saved_rstd_C, stat_shape, buf_dt);
         Storage inv_rstd_sq = be.reciprocal(rstd_sq, stat_shape, buf_dt);
-        Storage var        = be.add_scalar(inv_rstd_sq, stat_shape, buf_dt, -eps);
+        Storage var = be.add_scalar(inv_rstd_sq, stat_shape, buf_dt, -eps);
 
         // new_rm = (1-m) * running_mean + m * mean
-        Storage rm_scaled  = be.mul_scalar(running_mean->storage(), stat_shape, buf_dt, 1.0 - m);
-        Storage bm_scaled  = be.mul_scalar(saved_mean_C, stat_shape, buf_dt, m);
-        Storage new_rm     = be.add(rm_scaled, bm_scaled, stat_shape, buf_dt);
+        Storage rm_scaled = be.mul_scalar(running_mean->storage(), stat_shape, buf_dt, 1.0 - m);
+        Storage bm_scaled = be.mul_scalar(saved_mean_C, stat_shape, buf_dt, m);
+        Storage new_rm = be.add(rm_scaled, bm_scaled, stat_shape, buf_dt);
 
         // new_rv = (1-m) * running_var + (m * n/(n-1)) * var
-        Storage rv_scaled  = be.mul_scalar(running_var->storage(), stat_shape, buf_dt, 1.0 - m);
-        Storage bv_scaled  = be.mul_scalar(var, stat_shape, buf_dt, m * unbiased_factor);
-        Storage new_rv     = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
+        Storage rv_scaled = be.mul_scalar(running_var->storage(), stat_shape, buf_dt, 1.0 - m);
+        Storage bv_scaled = be.mul_scalar(var, stat_shape, buf_dt, m * unbiased_factor);
+        Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
 
         running_mean->mutable_storage() = std::move(new_rm);
-        running_var->mutable_storage()  = std::move(new_rv);
+        running_var->mutable_storage() = std::move(new_rv);
 
         if (x_eff->device() == Device::GPU) {
             std::vector<mlx::core::array> arrs;
             arrs.reserve(2);
             if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
-                if (gs->arr) arrs.push_back(*gs->arr);
+                if (gs->arr)
+                    arrs.push_back(*gs->arr);
             }
             if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
-                if (gs->arr) arrs.push_back(*gs->arr);
+                if (gs->arr)
+                    arrs.push_back(*gs->arr);
             }
-            if (!arrs.empty()) mlx::core::async_eval(arrs);
+            if (!arrs.empty())
+                mlx::core::async_eval(arrs);
         }
     }
 
     // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
-    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(
-        std::move(bwd), {x_eff, gamma_eff, beta_eff}, out);
+    kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(std::move(bwd),
+                                                                 {x_eff, gamma_eff, beta_eff}, out);
     return out;
 }
 
@@ -308,8 +312,7 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     int n_total = 1;
     for (int d : reduce_axes) {
         if (d < 0 || d >= static_cast<int>(x_shape.size())) {
-            ErrorBuilder("batch_norm_update_running_stats")
-                .fail("reduce axis out of range");
+            ErrorBuilder("batch_norm_update_running_stats").fail("reduce axis out of range");
         }
         n_total *= static_cast<int>(x_shape[d]);
     }
@@ -337,29 +340,29 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     Shape stat_shape{static_cast<std::int64_t>(x_shape[1])};
 
     Storage batch_mean = be.reduce_mean(x_eff, x_shape, opts, buf_dt);
-    Storage batch_var  = be.variance(x_eff, x_shape, opts, buf_dt);
+    Storage batch_var = be.variance(x_eff, x_shape, opts, buf_dt);
 
     const double eff = momentum;
     const double unbiased_factor =
         (unbiased_var && n_total > 1) ? double(n_total) / double(n_total - 1) : 1.0;
 
     // new_rm = (1-eff) * running_mean + eff * batch_mean
-    Storage rm_scaled = be.mul_scalar(running_mean->storage(),
-                                      running_mean->shape(), buf_dt, 1.0 - eff);
+    Storage rm_scaled =
+        be.mul_scalar(running_mean->storage(), running_mean->shape(), buf_dt, 1.0 - eff);
     Storage bm_scaled = be.mul_scalar(batch_mean, stat_shape, buf_dt, eff);
-    Storage new_rm    = be.add(rm_scaled, bm_scaled, stat_shape, buf_dt);
+    Storage new_rm = be.add(rm_scaled, bm_scaled, stat_shape, buf_dt);
 
     // new_rv = (1-eff) * running_var + (eff * unbiased_factor) * batch_var
-    Storage rv_scaled = be.mul_scalar(running_var->storage(),
-                                      running_var->shape(), buf_dt, 1.0 - eff);
+    Storage rv_scaled =
+        be.mul_scalar(running_var->storage(), running_var->shape(), buf_dt, 1.0 - eff);
     Storage bv_scaled = be.mul_scalar(batch_var, stat_shape, buf_dt, eff * unbiased_factor);
-    Storage new_rv    = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
+    Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
 
     // In-place storage replacement.  Matches the Python pattern
     // ``self._buffers["running_mean"] = new_rm`` — the TensorImpl identity
     // is preserved; only its underlying storage is swapped.
     running_mean->mutable_storage() = std::move(new_rm);
-    running_var->mutable_storage()  = std::move(new_rv);
+    running_var->mutable_storage() = std::move(new_rv);
 
     // GPU: break the MLX lazy expression chain so subsequent training steps
     // don't carry an ever-growing parent graph through running_mean's lineage.
@@ -370,12 +373,15 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
         std::vector<mlx::core::array> arrs;
         arrs.reserve(2);
         if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
-            if (gs->arr) arrs.push_back(*gs->arr);
+            if (gs->arr)
+                arrs.push_back(*gs->arr);
         }
         if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
-            if (gs->arr) arrs.push_back(*gs->arr);
+            if (gs->arr)
+                arrs.push_back(*gs->arr);
         }
-        if (!arrs.empty()) mlx::core::async_eval(arrs);
+        if (!arrs.empty())
+            mlx::core::async_eval(arrs);
     }
 }
 

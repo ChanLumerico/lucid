@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "../api.h"
-#include "../core/fwd.h"   // TensorImplPtr
+#include "../core/fwd.h"  // TensorImplPtr
 #include "CompiledExecutable.h"
 #include "TraceIR.h"
 
@@ -71,20 +71,20 @@ class BuilderContext;  // forward decl — defined in OpEmitters/OpEmitter.h
 // registry; everything else returns ``nullptr`` cleanly.  The op gap
 // protocol (per-op spike → expand coverage incrementally) is the
 // canonical way new families come online.
-LUCID_API CompiledExecutable* compile_trace(
-    const TraceGraph& graph,
-    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-    std::string* error_msg = nullptr,
-    bool dynamic_batch = false,
-    const std::vector<TensorId>& param_ids = {},
-    // Explicit graph output ids.  When non-empty, the builder uses
-    // these as the target tensors instead of auto-detecting unconsumed
-    // outputs.  Lets the Python compile harness pass exactly the
-    // user's return-value tensors so that Python-discarded
-    // intermediates (e.g. RNN's ``h_n`` when user does
-    // ``out, _ = rnn(x)``) don't leak into the executable's output
-    // list.  Empty (default) preserves the auto-detect behaviour.
-    const std::vector<TensorId>& explicit_outputs = {});
+LUCID_API CompiledExecutable*
+compile_trace(const TraceGraph& graph,
+              const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+              std::string* error_msg = nullptr,
+              bool dynamic_batch = false,
+              const std::vector<TensorId>& param_ids = {},
+              // Explicit graph output ids.  When non-empty, the builder uses
+              // these as the target tensors instead of auto-detecting unconsumed
+              // outputs.  Lets the Python compile harness pass exactly the
+              // user's return-value tensors so that Python-discarded
+              // intermediates (e.g. RNN's ``h_n`` when user does
+              // ``out, _ = rnn(x)``) don't leak into the executable's output
+              // list.  Empty (default) preserves the auto-detect behaviour.
+              const std::vector<TensorId>& explicit_outputs = {});
 
 // Phase 1.3: forward + backward in one executable.
 //
@@ -120,13 +120,13 @@ LUCID_API CompiledExecutable* compile_trace(
 //     followed by per-gradient meta (matches the layout the runtime
 //     uses when binding output buffers).  Returns ``nullptr`` on
 //     abort.
-LUCID_API CompiledExecutable* compile_trace_with_backward(
-    const TraceGraph& graph,
-    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-    TensorId loss_id,
-    const std::vector<TensorId>& param_ids,
-    std::string* error_msg = nullptr,
-    bool dynamic_batch = false);
+LUCID_API CompiledExecutable*
+compile_trace_with_backward(const TraceGraph& graph,
+                            const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                            TensorId loss_id,
+                            const std::vector<TensorId>& param_ids,
+                            std::string* error_msg = nullptr,
+                            bool dynamic_batch = false);
 
 // ── Fused training step compile (Phase 1.7) ─────────────────────────
 
@@ -228,15 +228,15 @@ struct LUCID_API OptimizerSpec {
 //     Owns the compiled executable.  ``output_ids`` = ``{loss_id}``;
 //     ``grad_output_ids`` carries one id per (new_param, new_state)
 //     output in the order described above.  Returns nullptr on abort.
-LUCID_API CompiledExecutable* compile_fused_training_step(
-    const TraceGraph& graph,
-    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-    TensorId loss_id,
-    const std::vector<TensorId>& param_ids,
-    const OptimizerSpec& opt_spec,
-    const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
-    const std::vector<TensorId>& scalar_input_ids,
-    std::string* error_msg = nullptr);
+LUCID_API CompiledExecutable*
+compile_fused_training_step(const TraceGraph& graph,
+                            const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                            TensorId loss_id,
+                            const std::vector<TensorId>& param_ids,
+                            const OptimizerSpec& opt_spec,
+                            const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+                            const std::vector<TensorId>& scalar_input_ids,
+                            std::string* error_msg = nullptr);
 
 // ── Generic fused step (Phase 1.8) ──────────────────────────────────
 
@@ -266,14 +266,14 @@ LUCID_API CompiledExecutable* compile_fused_training_step(
 // At run time, callers use :func:`run_executable_inplace` with
 // output_targets = [loss_scratch, param_0, param_1, ...,
 // state_buf_0_0, state_buf_0_1, ...].
-LUCID_API CompiledExecutable* compile_generic_fused_step(
-    const TraceGraph& graph,
-    const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
-    TensorId loss_id,
-    const std::vector<TensorId>& param_ids,
-    const std::vector<TensorId>& ghost_grad_ids,
-    const std::vector<TensorId>& output_target_ids,
-    std::string* error_msg = nullptr);
+LUCID_API CompiledExecutable*
+compile_generic_fused_step(const TraceGraph& graph,
+                           const std::unordered_map<TensorId, TensorImplPtr>& external_feeds,
+                           TensorId loss_id,
+                           const std::vector<TensorId>& param_ids,
+                           const std::vector<TensorId>& ghost_grad_ids,
+                           const std::vector<TensorId>& output_target_ids,
+                           std::string* error_msg = nullptr);
 
 // ── Stateful-variables variant of compile_generic_fused_step ────────
 //
@@ -395,33 +395,30 @@ public:
     MpsBuilder& operator=(const MpsBuilder&) = delete;
 
     // Forward-only compile.  See :func:`compile_trace` for semantics.
-    CompiledExecutable* compile_trace(
-        bool dynamic_batch = false,
-        const std::vector<TensorId>& param_ids = {},
-        const std::vector<TensorId>& explicit_outputs = {});
+    CompiledExecutable* compile_trace(bool dynamic_batch = false,
+                                      const std::vector<TensorId>& param_ids = {},
+                                      const std::vector<TensorId>& explicit_outputs = {});
 
     // Forward + backward.  See :func:`compile_trace_with_backward`.
-    CompiledExecutable* compile_trace_with_backward(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        bool dynamic_batch = false);
+    CompiledExecutable* compile_trace_with_backward(TensorId loss_id,
+                                                    const std::vector<TensorId>& param_ids,
+                                                    bool dynamic_batch = false);
 
     // Forward + bwd + hardcoded SGD/Adam.  See
     // :func:`compile_fused_training_step`.
-    CompiledExecutable* compile_fused_training_step(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const OptimizerSpec& opt_spec,
-        const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
-        const std::vector<TensorId>& scalar_input_ids);
+    CompiledExecutable*
+    compile_fused_training_step(TensorId loss_id,
+                                const std::vector<TensorId>& param_ids,
+                                const OptimizerSpec& opt_spec,
+                                const std::vector<std::vector<TensorId>>& state_buf_ids_per_param,
+                                const std::vector<TensorId>& scalar_input_ids);
 
     // Forward + bwd + ghost-grad optimizer (any kind).  See
     // :func:`compile_generic_fused_step`.
-    CompiledExecutable* compile_generic_fused_step(
-        TensorId loss_id,
-        const std::vector<TensorId>& param_ids,
-        const std::vector<TensorId>& ghost_grad_ids,
-        const std::vector<TensorId>& output_target_ids);
+    CompiledExecutable* compile_generic_fused_step(TensorId loss_id,
+                                                   const std::vector<TensorId>& param_ids,
+                                                   const std::vector<TensorId>& ghost_grad_ids,
+                                                   const std::vector<TensorId>& output_target_ids);
 
     // As above + MPSGraph variables.  See
     // :func:`compile_generic_fused_step_with_vars`.

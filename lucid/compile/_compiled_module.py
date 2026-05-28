@@ -450,6 +450,29 @@ class CompiledModule:
         replaces parameter storage in-place); clearing the cache is
         the safe default so the next call traces against the new
         state.
+
+        Parameters
+        ----------
+        state_dict : dict[str, Tensor]
+            Mapping from parameter / buffer name to weight tensor —
+            passed straight through to the wrapped model's
+            ``load_state_dict``.
+        strict : bool, optional, default=True
+            When ``True``, mismatched keys raise; when ``False``,
+            missing / unexpected entries are silently ignored
+            (matches the underlying module's contract).
+        assign : bool, optional, default=False
+            When ``True``, replace parameter storage by reference
+            instead of copying into the existing tensors.  Useful for
+            checkpoint loading where the new tensors are already on
+            the correct device.
+
+        Returns
+        -------
+        object
+            The wrapped model's ``load_state_dict`` return value
+            (typically a ``NamedTuple`` of missing / unexpected
+            keys).
         """
         # Loading new weights doesn't invalidate the graph itself —
         # only its captured constants would — but the safe default is

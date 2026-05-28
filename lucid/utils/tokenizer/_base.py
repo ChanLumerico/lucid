@@ -274,6 +274,27 @@ class Tokenizer(ABC):
         injected around the algorithm output — subclasses with
         non-standard wrapping (e.g. T5's ``</s>`` only at the end)
         override :meth:`_build_inputs_with_special_tokens`.
+
+        Parameters
+        ----------
+        text : str
+            Input text to tokenise.  Normalisation + pre-tokenisation
+            are applied internally by the algorithm-specific
+            :meth:`_encode_one` hook before the BPE / WordPiece /
+            Unigram merge loop runs.
+        add_special_tokens : bool, optional, keyword-only, default=True
+            When ``True``, prepend / append the algorithm's special
+            tokens (BOS/EOS for autoregressive families, CLS/SEP for
+            BERT-style) via
+            :meth:`_build_inputs_with_special_tokens`.  Pass ``False``
+            to return the raw merge-loop output untouched (useful for
+            offline analysis, alignment, or batching pipelines that
+            inject specials elsewhere).
+
+        Returns
+        -------
+        list of int
+            Token ids for ``text`` in left-to-right order.
         """
         ids = self._encode_one(text)
         if add_special_tokens:
@@ -291,6 +312,23 @@ class Tokenizer(ABC):
         When ``skip_special_tokens=True`` every id in
         :attr:`all_special_ids` is dropped before the
         algorithm-specific :meth:`_decode_one` runs.
+
+        Parameters
+        ----------
+        ids : iterable of int
+            Token ids to decode (typically a model's argmax / sample
+            output).  Consumed exactly once when an iterator is passed.
+        skip_special_tokens : bool, optional, keyword-only, default=True
+            When ``True``, every id in :attr:`all_special_ids`
+            (BOS/EOS/PAD/CLS/SEP/MASK + any extras) is filtered out
+            before :meth:`_decode_one` reassembles the surface string.
+
+        Returns
+        -------
+        str
+            Reconstructed text — exact reverse of :meth:`encode` for
+            lossless algorithms (Unigram / byte-BPE); lossy for
+            normalising flavours (NFC + Lowercase).
         """
         ids_list = list(ids)
         if skip_special_tokens:
@@ -308,6 +346,21 @@ class Tokenizer(ABC):
 
         Default loops through :meth:`encode`; subclasses with a true
         batched fast path (the C++ Fast tokenizers) override.
+
+        Parameters
+        ----------
+        texts : iterable of str
+            Input strings — one entry per sequence to encode.  An
+            iterable is consumed exactly once.
+        add_special_tokens : bool, optional, keyword-only, default=True
+            Forwarded to :meth:`encode` for each item — when ``True``,
+            every sequence is wrapped with its canonical BOS/EOS or
+            CLS/SEP markers.
+
+        Returns
+        -------
+        list of list of int
+            One id sequence per input string, same order as ``texts``.
         """
         return [self.encode(t, add_special_tokens=add_special_tokens) for t in texts]
 

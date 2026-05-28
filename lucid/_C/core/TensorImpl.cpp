@@ -539,8 +539,8 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
 // intermediate ``py::bytes`` round-trip — the contiguous-snapshot vector
 // is reused directly as the new CpuStorage backing, so the data moves
 // exactly once between source and destination storage.
-std::shared_ptr<TensorImpl>
-TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
+std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
+                                                           bool requires_grad) const {
     auto build_cpu_from_view = [&](const CpuStorage& src) {
         auto snap = contig_snapshot_cpu(src, meta_.shape, meta_.stride, offset_);
         const std::size_t total = snap.size();
@@ -560,11 +560,11 @@ TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
                 CpuStorage cpu = build_cpu_from_view(s);
                 if (target == Device::GPU) {
                     return std::make_shared<TensorImpl>(
-                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
-                        meta_.shape, meta_.dtype, target, requires_grad);
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)}, meta_.shape, meta_.dtype,
+                        target, requires_grad);
                 }
-                return std::make_shared<TensorImpl>(
-                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+                return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, meta_.shape,
+                                                    meta_.dtype, target, requires_grad);
             },
             [&](const GpuStorage& g) -> std::shared_ptr<TensorImpl> {
                 CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
@@ -572,11 +572,11 @@ TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
                     // GPU → GPU: rare path; round-trip through CPU rather than
                     // adding an MLX-level array clone helper just for this.
                     return std::make_shared<TensorImpl>(
-                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
-                        meta_.shape, meta_.dtype, target, requires_grad);
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)}, meta_.shape, meta_.dtype,
+                        target, requires_grad);
                 }
-                return std::make_shared<TensorImpl>(
-                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+                return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, meta_.shape,
+                                                    meta_.dtype, target, requires_grad);
             },
             [&](const SharedStorage& sh) -> std::shared_ptr<TensorImpl> {
                 // _to.py routes is_metal_shared tensors through transfer_storage()
@@ -585,11 +585,11 @@ TensorImpl::transfer_to_device(Device target, bool requires_grad) const {
                 CpuStorage cpu = build_cpu_from_view(sh.cpu_view());
                 if (target == Device::GPU) {
                     return std::make_shared<TensorImpl>(
-                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)},
-                        meta_.shape, meta_.dtype, target, requires_grad);
+                        Storage{gpu::upload_cpu_to_gpu(cpu, meta_.shape)}, meta_.shape, meta_.dtype,
+                        target, requires_grad);
                 }
-                return std::make_shared<TensorImpl>(
-                    Storage{std::move(cpu)}, meta_.shape, meta_.dtype, target, requires_grad);
+                return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, meta_.shape,
+                                                    meta_.dtype, target, requires_grad);
             },
         },
         storage_);
@@ -633,12 +633,11 @@ inline float decode_f16(std::uint16_t bits) {
 // are Python scalars produced by ``scalar``.  ``elem_size`` is the byte
 // stride of one element in ``raw``.
 template <typename ScalarFn>
-py::object emit_nested(
-    const char* raw,
-    const Shape& shape,
-    std::size_t depth,
-    std::size_t elem_size,
-    const ScalarFn& scalar) {
+py::object emit_nested(const char* raw,
+                       const Shape& shape,
+                       std::size_t depth,
+                       std::size_t elem_size,
+                       const ScalarFn& scalar) {
     if (depth == shape.size()) {
         return scalar(raw);
     }
@@ -652,8 +651,8 @@ py::object emit_nested(
     }
     py::list out;
     for (std::int64_t i = 0; i < dim; ++i) {
-        out.append(emit_nested(raw + static_cast<std::size_t>(i) * stride,
-                               shape, depth + 1, elem_size, scalar));
+        out.append(emit_nested(raw + static_cast<std::size_t>(i) * stride, shape, depth + 1,
+                               elem_size, scalar));
     }
     return out;
 }
@@ -742,8 +741,7 @@ py::object TensorImpl::tolist() const {
             float re, im;
             std::memcpy(&re, p, sizeof(re));
             std::memcpy(&im, p + sizeof(re), sizeof(im));
-            return py::cast(std::complex<double>(static_cast<double>(re),
-                                                 static_cast<double>(im)));
+            return py::cast(std::complex<double>(static_cast<double>(re), static_cast<double>(im)));
         });
     }
     ErrorBuilder("tolist").fail("unsupported dtype");
@@ -832,7 +830,6 @@ static py::object decode_scalar(const char* raw, Dtype dt) {
     ErrorBuilder("item").fail("unsupported dtype");
     return py::none();
 }
-
 
 py::object TensorImpl::item() const {
     if (numel() != 1) {

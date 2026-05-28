@@ -80,9 +80,7 @@ public:
     bool is_consumed(TensorId id) const {
         return consumed_inputs_.find(id) != consumed_inputs_.end();
     }
-    void set_consumed_inputs(const std::unordered_set<TensorId>& s) {
-        consumed_inputs_ = s;
-    }
+    void set_consumed_inputs(const std::unordered_set<TensorId>& s) { consumed_inputs_ = s; }
 
     // Saved-state side-table.
     //
@@ -106,7 +104,8 @@ public:
     }
     void* resolve_saved(TensorId out_id, const std::string& name) const {
         auto it = saved_.find(out_id);
-        if (it == saved_.end()) return nullptr;
+        if (it == saved_.end())
+            return nullptr;
         auto jt = it->second.find(name);
         return jt == it->second.end() ? nullptr : jt->second;
     }

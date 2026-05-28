@@ -149,9 +149,8 @@ public:
     //     combination); the walker aborts and the caller falls through
     //     to MPSGraph autograd (or hard-fails under
     //     ``LUCID_MANUAL_VJP_REQUIRE``).
-    virtual bool emit(BackwardContext& bctx,
-                      const OpNode& fwd_node,
-                      const std::vector<void*>& grad_outs) = 0;
+    virtual bool
+    emit(BackwardContext& bctx, const OpNode& fwd_node, const std::vector<void*>& grad_outs) = 0;
 };
 
 // Register ``vjp`` under its :func:`op_name`.  Process-global state;
@@ -170,9 +169,7 @@ LUCID_API VjpEmitter* find_vjp_emitter(std::string_view op_name);
 // per compile.  No state survives the compile call.
 class LUCID_API BackwardWalker {
 public:
-    BackwardWalker(void* graph_void,
-                   BuilderContext& fwd,
-                   const TraceGraph& trace);
+    BackwardWalker(void* graph_void, BuilderContext& fwd, const TraceGraph& trace);
 
     // Compute gradients of ``param_ids`` w.r.t. ``loss_id``.
     //
@@ -255,13 +252,12 @@ enum class ManualVjpStatus { Disabled, Success, FellBack, HardFail };
 //
 // Parameters mirror :func:`BackwardWalker::compute_grads` — see there
 // for semantics.
-LUCID_API ManualVjpStatus try_manual_vjp_grads(
-    void* graph_void,
-    BuilderContext& fwd,
-    const TraceGraph& trace,
-    TensorId loss_id,
-    const std::vector<TensorId>& param_ids,
-    std::vector<void*>& out_grads,
-    std::string* error_msg);
+LUCID_API ManualVjpStatus try_manual_vjp_grads(void* graph_void,
+                                               BuilderContext& fwd,
+                                               const TraceGraph& trace,
+                                               TensorId loss_id,
+                                               const std::vector<TensorId>& param_ids,
+                                               std::vector<void*>& out_grads,
+                                               std::string* error_msg);
 
 }  // namespace lucid::compile

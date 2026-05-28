@@ -34,9 +34,8 @@ void register_tokenizer(py::module_& parent) {
     // ``tokenizer`` as a child so the dotted path mirrors the Python
     // package (``lucid._C.engine.utils.tokenizer``).
     auto m = parent.def_submodule(
-        "tokenizer",
-        "Tokenization primitives (BPE / WordPiece / Unigram / ByteLevelBPE).  "
-        "Wrapped by lucid.utils.tokenizer.*TokenizerFast.");
+        "tokenizer", "Tokenization primitives (BPE / WordPiece / Unigram / ByteLevelBPE).  "
+                     "Wrapped by lucid.utils.tokenizer.*TokenizerFast.");
 
     // ── SpecialTokens ──────────────────────────────────────────────
     py::class_<tk::SpecialTokens>(m, "SpecialTokens")
@@ -62,12 +61,8 @@ void register_tokenizer(py::module_& parent) {
         .def("decode_batch", &tk::Tokenizer::decode_batch, py::arg("batch"))
         .def("get_vocab", &tk::Tokenizer::get_vocab)
         .def("id_to_token", &tk::Tokenizer::id_to_token, py::arg("id"))
-        .def("train",
-             &tk::Tokenizer::train,
-             py::arg("corpus"),
-             py::arg("target_vocab_size"))
-        .def_property("special_tokens",
-                      &tk::Tokenizer::special_tokens,
+        .def("train", &tk::Tokenizer::train, py::arg("corpus"), py::arg("target_vocab_size"))
+        .def_property("special_tokens", &tk::Tokenizer::special_tokens,
                       &tk::Tokenizer::set_special_tokens);
 
     // ── BPE ────────────────────────────────────────────────────────
@@ -75,8 +70,7 @@ void register_tokenizer(py::module_& parent) {
         .def(py::init<>())
         .def(py::init<std::unordered_map<std::string, tk::TokenId>,
                       std::vector<std::pair<std::string, std::string>>>(),
-             py::arg("vocab"),
-             py::arg("merges"))
+             py::arg("vocab"), py::arg("merges"))
         .def("merges", &tk::BPE::merges,
              "Ordered list of (left, right) merge pairs — rank ascending.");
 
@@ -88,68 +82,48 @@ void register_tokenizer(py::module_& parent) {
     // also works on the Python side.
     py::class_<tk::LookupTokenizer, tk::Tokenizer>(m, "LookupTokenizer");
 
-    py::class_<tk::ByteTokenizer, tk::LookupTokenizer>(m, "ByteTokenizer")
-        .def(py::init<>());
+    py::class_<tk::ByteTokenizer, tk::LookupTokenizer>(m, "ByteTokenizer").def(py::init<>());
 
     py::class_<tk::CharTokenizer, tk::LookupTokenizer>(m, "CharTokenizer")
         .def(py::init<>())
-        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
-             py::arg("vocab"));
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(), py::arg("vocab"));
 
-    py::class_<tk::WhitespaceTokenizer, tk::LookupTokenizer>(
-        m, "WhitespaceTokenizer")
+    py::class_<tk::WhitespaceTokenizer, tk::LookupTokenizer>(m, "WhitespaceTokenizer")
         .def(py::init<>())
-        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
-             py::arg("vocab"));
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(), py::arg("vocab"));
 
     py::class_<tk::WordTokenizer, tk::LookupTokenizer>(m, "WordTokenizer")
         .def(py::init<>())
-        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(),
-             py::arg("vocab"));
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>>(), py::arg("vocab"));
 
     py::class_<tk::RegexTokenizer, tk::LookupTokenizer>(m, "RegexTokenizer")
-        .def(py::init<std::string,
-                      std::unordered_map<std::string, tk::TokenId>>(),
-             py::arg("pattern"),
-             py::arg("vocab") = std::unordered_map<std::string, tk::TokenId>{})
-        .def("pattern", &tk::RegexTokenizer::pattern,
-             py::return_value_policy::reference_internal);
+        .def(py::init<std::string, std::unordered_map<std::string, tk::TokenId>>(),
+             py::arg("pattern"), py::arg("vocab") = std::unordered_map<std::string, tk::TokenId>{})
+        .def("pattern", &tk::RegexTokenizer::pattern, py::return_value_policy::reference_internal);
 
     // ── WordPiece ──────────────────────────────────────────────────
     py::class_<tk::WordPiece, tk::Tokenizer>(m, "WordPiece")
         .def(py::init<>())
-        .def(py::init<std::unordered_map<std::string, tk::TokenId>,
-                      std::string, std::string, std::size_t>(),
-             py::arg("vocab"),
-             py::arg("unk_token") = "[UNK]",
-             py::arg("continuing_prefix") = "##",
+        .def(py::init<std::unordered_map<std::string, tk::TokenId>, std::string, std::string,
+                      std::size_t>(),
+             py::arg("vocab"), py::arg("unk_token") = "[UNK]", py::arg("continuing_prefix") = "##",
              py::arg("max_chars_per_word") = 100)
-        .def("unk_token", &tk::WordPiece::unk_token,
-             py::return_value_policy::reference_internal)
+        .def("unk_token", &tk::WordPiece::unk_token, py::return_value_policy::reference_internal)
         .def("continuing_prefix", &tk::WordPiece::continuing_prefix,
              py::return_value_policy::reference_internal);
 
     // ── Unigram ────────────────────────────────────────────────────
     py::class_<tk::Unigram, tk::Tokenizer>(m, "Unigram")
         .def(py::init<>())
-        .def(py::init<std::vector<std::pair<std::string, double>>,
-                      std::string, double>(),
-             py::arg("pieces"),
-             py::arg("unk_token") = "<unk>",
-             py::arg("unk_log_prob") = -100.0)
-        .def("pieces", &tk::Unigram::pieces,
-             py::return_value_policy::reference_internal,
+        .def(py::init<std::vector<std::pair<std::string, double>>, std::string, double>(),
+             py::arg("pieces"), py::arg("unk_token") = "<unk>", py::arg("unk_log_prob") = -100.0)
+        .def("pieces", &tk::Unigram::pieces, py::return_value_policy::reference_internal,
              "Ordered list of (piece_str, log_prob) — index = id.")
-        .def("unk_token", &tk::Unigram::unk_token,
-             py::return_value_policy::reference_internal)
+        .def("unk_token", &tk::Unigram::unk_token, py::return_value_policy::reference_internal)
         .def("unk_log_prob", &tk::Unigram::unk_log_prob)
-        .def("train_with_options",
-             &tk::Unigram::train_with_options,
-             py::arg("corpus"),
-             py::arg("target_vocab_size"),
-             py::arg("num_iterations") = 2,
-             py::arg("shrink_factor") = 0.75,
-             py::arg("max_piece_length") = 16,
+        .def("train_with_options", &tk::Unigram::train_with_options, py::arg("corpus"),
+             py::arg("target_vocab_size"), py::arg("num_iterations") = 2,
+             py::arg("shrink_factor") = 0.75, py::arg("max_piece_length") = 16,
              py::arg("initial_vocab_multiplier") = 10);
 }
 

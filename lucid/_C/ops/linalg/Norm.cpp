@@ -166,7 +166,8 @@ TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis,
     {
         std::vector<std::int64_t> ax_v;
         ax_v.reserve(axis.size());
-        for (int v : axis) ax_v.push_back(static_cast<std::int64_t>(v));
+        for (int v : axis)
+            ax_v.push_back(static_cast<std::int64_t>(v));
         scope.set_attr("axis_list", std::move(ax_v));
     }
     scope.set_attr("keepdims", keepdims);

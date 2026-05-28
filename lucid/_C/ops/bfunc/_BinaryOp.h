@@ -77,4 +77,4 @@ namespace lucid {
 template <class Derived>
 using BinaryOp = BinaryKernel<Derived>;
 
-}
+}  // namespace lucid

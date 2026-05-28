@@ -64,8 +64,8 @@ inline bool bool_attr(const OpNode& node, const char* key, bool def) {
 // kernel_size / axis_list).  Returns ``nullptr`` if absent or the
 // stored alternative isn't a vector — caller decides whether to
 // fall back to a default or bail out.
-[[maybe_unused]] inline const std::vector<std::int64_t>*
-int_vec_attr(const OpNode& node, const char* key) {
+[[maybe_unused]] inline const std::vector<std::int64_t>* int_vec_attr(const OpNode& node,
+                                                                      const char* key) {
     auto it = node.attrs.find(key);
     if (it == node.attrs.end())
         return nullptr;

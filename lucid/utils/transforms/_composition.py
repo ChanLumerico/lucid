@@ -106,7 +106,24 @@ class SomeOf(_Container):
 
 
 class Sequential(_Container):
-    r"""Apply all children in order, gated by ``p`` (Albumentations ``Sequential``)."""
+    r"""Apply all children in order, gated by ``p`` (Albumentations ``Sequential``).
+
+    The container's ``p`` controls whether the whole block runs at
+    all on a given call — when the gate fails, every child is
+    skipped and the input passes through unchanged.  When the gate
+    passes, each child is invoked left-to-right with its *own*
+    probability gate honoured (unlike :class:`OneOf` / :class:`SomeOf`
+    which bypass the child gate).
+
+    Parameters
+    ----------
+    transforms : list of TransformLike
+        Children to chain — each receives the previous child's
+        output.
+    p : float, optional, default=1.0
+        Block-level probability — when below 1, the chain is a
+        no-op on ``1 - p`` of calls.
+    """
 
     def __init__(self, transforms: list[TransformLike], p: float = 1.0) -> None:
         super().__init__(transforms, p=p)

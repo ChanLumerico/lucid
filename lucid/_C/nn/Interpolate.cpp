@@ -153,7 +153,7 @@ TensorImplPtr interpolate_nearest_2d_op(const TensorImplPtr& input, int H_out, i
     Storage out_storage = be.interpolate_nearest_2d_forward(input->storage(), input->shape(), H_out,
                                                             W_out, input->dtype());
     auto result = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, input->dtype(),
-                                                input->device(), false);
+                                               input->device(), false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({input}, result);
     }

@@ -180,9 +180,11 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
             Path to the tokenizer directory.
         add_prefix_space : bool, default False
             Fallback value when not specified in the on-disk config.
-        normalizer, special_tokens
-            See class docstring.  ``special_tokens`` falls back to
-            the on-disk ``special_tokens_map.json`` when omitted.
+        normalizer : Normalizer or None, optional, keyword-only
+            See class docstring.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            See class docstring.  Falls back to the on-disk
+            ``special_tokens_map.json`` when omitted.
 
         Returns
         -------
@@ -329,7 +331,14 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
 
         Parameters
         ----------
-        See :meth:`ByteLevelBPETokenizer.from_file`.
+        directory : str
+            Path to the tokenizer directory.
+        add_prefix_space : bool, default False
+            Fallback value when not specified in the on-disk config.
+        normalizer : Normalizer or None, optional, keyword-only
+            See :meth:`ByteLevelBPETokenizer.from_file`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            See :meth:`ByteLevelBPETokenizer.from_file`.
 
         Returns
         -------

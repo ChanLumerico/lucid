@@ -39,14 +39,22 @@ namespace lucid::compile {
 // practice since the forward emit would already have rejected it.
 [[maybe_unused]] inline MPSDataType to_mps_dt_h(Dtype dt) {
     switch (dt) {
-        case Dtype::F16:  return MPSDataTypeFloat16;
-        case Dtype::I8:   return MPSDataTypeInt8;
-        case Dtype::I16:  return MPSDataTypeInt16;
-        case Dtype::I32:  return MPSDataTypeInt32;
-        case Dtype::I64:  return MPSDataTypeInt64;
-        case Dtype::Bool: return MPSDataTypeBool;
-        case Dtype::F32:  return MPSDataTypeFloat32;
-        default:          return MPSDataTypeFloat32;
+    case Dtype::F16:
+        return MPSDataTypeFloat16;
+    case Dtype::I8:
+        return MPSDataTypeInt8;
+    case Dtype::I16:
+        return MPSDataTypeInt16;
+    case Dtype::I32:
+        return MPSDataTypeInt32;
+    case Dtype::I64:
+        return MPSDataTypeInt64;
+    case Dtype::Bool:
+        return MPSDataTypeBool;
+    case Dtype::F32:
+        return MPSDataTypeFloat32;
+    default:
+        return MPSDataTypeFloat32;
     }
 }
 
@@ -70,10 +78,12 @@ namespace lucid::compile {
 // grad's dtype determines the downstream chain's dtype — we minimize
 // per-VJP casts by aligning to the side that's already in the right
 // precision for whatever comes next in the backward walk.
-[[maybe_unused]] inline MPSGraphTensor* cast_if_needed(
-    MPSGraph* g, MPSGraphTensor* t, MPSDataType target) {
-    if (t == nil || g == nil) return t;
-    if (t.dataType == target) return t;
+[[maybe_unused]] inline MPSGraphTensor*
+cast_if_needed(MPSGraph* g, MPSGraphTensor* t, MPSDataType target) {
+    if (t == nil || g == nil)
+        return t;
+    if (t.dataType == target)
+        return t;
     return [g castTensor:t toType:target name:@"vjp_dtype_cast"];
 }
 
@@ -92,11 +102,9 @@ namespace lucid::compile {
 // w/ ``reduction='none'``) seeds correctly; using
 // ``constantWithScalar:dataType:`` (0-D) would broadcast on the first
 // VJP and confuse the unreduce.
-[[maybe_unused]] inline MPSGraphTensor* ones_like_loss(
-    MPSGraph* graph, const std::vector<std::int64_t>& loss_shape, Dtype dtype) {
-    return [graph constantWithScalar:1.0
-                               shape:shape_to_ns(loss_shape)
-                            dataType:to_mps_dt_h(dtype)];
+[[maybe_unused]] inline MPSGraphTensor*
+ones_like_loss(MPSGraph* graph, const std::vector<std::int64_t>& loss_shape, Dtype dtype) {
+    return [graph constantWithScalar:1.0 shape:shape_to_ns(loss_shape) dataType:to_mps_dt_h(dtype)];
 }
 
 // Compute the axes that need to be reduce-summed in order to go from
@@ -128,17 +136,16 @@ axes_for_unreduce(const std::vector<std::int64_t>& broadcast,
 //
 // If ``broadcast == target`` (no broadcast happened) this returns
 // ``grad`` unchanged.
-[[maybe_unused]] inline MPSGraphTensor* unreduce_impl(
-    MPSGraph* graph, MPSGraphTensor* grad,
-    const std::vector<std::int64_t>& broadcast,
-    const std::vector<std::int64_t>& target) {
+[[maybe_unused]] inline MPSGraphTensor* unreduce_impl(MPSGraph* graph,
+                                                      MPSGraphTensor* grad,
+                                                      const std::vector<std::int64_t>& broadcast,
+                                                      const std::vector<std::int64_t>& target) {
     if (broadcast == target)
         return grad;
     std::vector<std::int64_t> axes = axes_for_unreduce(broadcast, target);
     MPSGraphTensor* reduced = grad;
     if (!axes.empty()) {
-        NSMutableArray<NSNumber*>* axes_ns =
-            [NSMutableArray arrayWithCapacity:axes.size()];
+        NSMutableArray<NSNumber*>* axes_ns = [NSMutableArray arrayWithCapacity:axes.size()];
         for (std::int64_t a : axes)
             [axes_ns addObject:[NSNumber numberWithLongLong:a]];
         reduced = [graph reductionSumWithTensor:reduced axes:axes_ns name:nil];
@@ -157,8 +164,8 @@ axes_for_unreduce(const std::vector<std::int64_t>& broadcast,
 // ``tid``.  Returns an empty Shape if ``tid`` is an external feed (not
 // produced by any node) — callers must handle that fallback (typically
 // by looking at the forward tensor's ``.shape`` directly).
-[[maybe_unused]] inline std::vector<std::int64_t> shape_of_tid(
-    const TraceGraph& trace, TensorId tid) {
+[[maybe_unused]] inline std::vector<std::int64_t> shape_of_tid(const TraceGraph& trace,
+                                                               TensorId tid) {
     for (const auto& node : trace.ops) {
         for (const auto& out : node.outputs) {
             if (out.id == tid)
@@ -184,7 +191,8 @@ axes_for_unreduce(const std::vector<std::int64_t>& broadcast,
 // MPSGraph shape is available (e.g. forward-feed placeholders).
 [[maybe_unused]] inline std::vector<std::int64_t> shape_of_mps(MPSGraphTensor* t) {
     std::vector<std::int64_t> out;
-    if (t == nil || t.shape == nil) return out;
+    if (t == nil || t.shape == nil)
+        return out;
     out.reserve(t.shape.count);
     for (NSNumber* n in t.shape)
         out.push_back((std::int64_t)n.longLongValue);
@@ -213,21 +221,26 @@ axes_for_unreduce(const std::vector<std::int64_t>& broadcast,
 // grad *back* to the input dtype) opt out by passing
 // ``cast_forward_to_grad=false``.
 template <class Body>
-inline bool emit_unary_vjp(BackwardContext& bctx, const OpNode& node,
-                           const std::vector<void*>& grad_outs, Body body,
+inline bool emit_unary_vjp(BackwardContext& bctx,
+                           const OpNode& node,
+                           const std::vector<void*>& grad_outs,
+                           Body body,
                            bool cast_forward_to_grad = true) {
     if (node.inputs.size() != 1 || grad_outs.empty() || grad_outs[0] == nullptr)
         return false;
     TensorId x_id = node.inputs[0];
-    if (x_id < 0) return false;
+    if (x_id < 0)
+        return false;
     MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
     MPSGraphTensor* go = as_tensor(grad_outs[0]);
     MPSGraphTensor* x = as_tensor(bctx.forward(x_id));
-    if (g == nil || x == nil || go == nil) return false;
+    if (g == nil || x == nil || go == nil)
+        return false;
     if (cast_forward_to_grad)
         x = cast_if_needed(g, x, go.dataType);
     MPSGraphTensor* dx = body(g, x, go);
-    if (dx == nil) return false;
+    if (dx == nil)
+        return false;
     bctx.accumulate_grad(x_id, from_tensor(dx));
     return true;
 }
@@ -238,9 +251,9 @@ inline bool emit_unary_vjp(BackwardContext& bctx, const OpNode& node,
 // (post-broadcast) output shape so unreduce can be applied per input.
 struct BinaryVjpCtx {
     MPSGraph* g = nil;
-    MPSGraphTensor* go = nil;   // incoming grad
-    MPSGraphTensor* a = nil;    // forward a
-    MPSGraphTensor* b = nil;    // forward b
+    MPSGraphTensor* go = nil;  // incoming grad
+    MPSGraphTensor* a = nil;   // forward a
+    MPSGraphTensor* b = nil;   // forward b
     TensorId a_id = -1;
     TensorId b_id = -1;
     std::vector<std::int64_t> a_shape;
@@ -252,19 +265,21 @@ struct BinaryVjpCtx {
 // Resolve a two-input single-output VJP node and return a populated
 // :class:`BinaryVjpCtx`.  ``ok == false`` signals any guard failure
 // (wrong arity, missing forward binding, etc.).
-inline BinaryVjpCtx unpack_binary_vjp(BackwardContext& bctx, const OpNode& node,
-                                      const std::vector<void*>& grad_outs) {
+inline BinaryVjpCtx
+unpack_binary_vjp(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) {
     BinaryVjpCtx c;
     if (node.inputs.size() != 2 || grad_outs.empty() || grad_outs[0] == nullptr)
         return c;
     c.a_id = node.inputs[0];
     c.b_id = node.inputs[1];
-    if (c.a_id < 0 || c.b_id < 0) return c;
+    if (c.a_id < 0 || c.b_id < 0)
+        return c;
     c.g = (__bridge MPSGraph*)bctx.graph();
     c.go = as_tensor(grad_outs[0]);
     c.a = as_tensor(bctx.forward(c.a_id));
     c.b = as_tensor(bctx.forward(c.b_id));
-    if (c.g == nil || c.go == nil || c.a == nil || c.b == nil) return c;
+    if (c.g == nil || c.go == nil || c.a == nil || c.b == nil)
+        return c;
     c.a_shape = shape_of_mps(c.a);
     c.b_shape = shape_of_mps(c.b);
     if (!node.outputs.empty())

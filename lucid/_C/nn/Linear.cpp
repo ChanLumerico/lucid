@@ -99,11 +99,9 @@ LinearBackward::forward(const TensorImplPtr& x, const TensorImplPtr& W, const Te
     const std::size_t N = static_cast<std::size_t>(W_eff->shape()[0]);
 
     if (W_eff->shape()[1] != static_cast<std::int64_t>(K))
-        throw ShapeMismatch(W_eff->shape(), x_eff->shape(),
-                            "linear: W.shape[1] != x.last_dim");
+        throw ShapeMismatch(W_eff->shape(), x_eff->shape(), "linear: W.shape[1] != x.last_dim");
     if (b_eff->shape()[0] != static_cast<std::int64_t>(N))
-        throw ShapeMismatch(b_eff->shape(), W_eff->shape(),
-                            "linear: b.shape[0] != W.shape[0]");
+        throw ShapeMismatch(b_eff->shape(), W_eff->shape(), "linear: b.shape[0] != W.shape[0]");
 
     // Output shape mirrors x but with the last dim replaced by N (out features).
     Shape out_shape = x_eff->shape();
@@ -117,8 +115,8 @@ LinearBackward::forward(const TensorImplPtr& x, const TensorImplPtr& W, const Te
                               .linear(x_eff->storage(), W_eff->storage(), b_eff->storage(),
                                       x_eff->shape(), W_eff->shape(), out_shape, eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            eff_dt, x_eff->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
+                                            x_eff->device(), false);
 
     // Wire the backward node; saved_inputs_ holds {x, W, b} at the
     // effective (cast) dtype so apply() can do the matmul transposes

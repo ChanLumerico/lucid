@@ -3,12 +3,13 @@
 // Plain-C++ policy layer.  No Obj-C; safe to include from anywhere.
 
 #include "MpsDispatch.h"
-#include "MpsBridge.h"
 
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+
+#include "MpsBridge.h"
 
 namespace lucid::gpu::mps {
 
@@ -16,12 +17,17 @@ namespace {
 
 bool env_truthy(const char* name) {
     const char* v = std::getenv(name);
-    if (!v || !*v) return false;
+    if (!v || !*v)
+        return false;
     // Treat "0" / "false" / "off" / "no" as false; anything else as true.
-    if (std::strcmp(v, "0") == 0) return false;
-    if (std::strcmp(v, "false") == 0 || std::strcmp(v, "FALSE") == 0) return false;
-    if (std::strcmp(v, "off") == 0 || std::strcmp(v, "OFF") == 0) return false;
-    if (std::strcmp(v, "no") == 0 || std::strcmp(v, "NO") == 0) return false;
+    if (std::strcmp(v, "0") == 0)
+        return false;
+    if (std::strcmp(v, "false") == 0 || std::strcmp(v, "FALSE") == 0)
+        return false;
+    if (std::strcmp(v, "off") == 0 || std::strcmp(v, "OFF") == 0)
+        return false;
+    if (std::strcmp(v, "no") == 0 || std::strcmp(v, "NO") == 0)
+        return false;
     return true;
 }
 
@@ -31,8 +37,10 @@ bool g_debug = false;
 
 void init_once() {
     std::call_once(g_init_once, []() {
-        if (env_truthy("LUCID_MPS_DISABLE")) g_enabled = false;
-        if (env_truthy("LUCID_MPS_DEBUG")) g_debug = true;
+        if (env_truthy("LUCID_MPS_DISABLE"))
+            g_enabled = false;
+        if (env_truthy("LUCID_MPS_DEBUG"))
+            g_debug = true;
     });
 }
 
@@ -40,7 +48,8 @@ void init_once() {
 
 bool enabled() {
     init_once();
-    if (!g_enabled) return false;
+    if (!g_enabled)
+        return false;
     // Defer to bridge_available so any device-init failure cleanly disables
     // dispatch without requiring callers to check separately.
     return bridge_available();
@@ -70,8 +79,10 @@ bool should_dispatch_gelu(std::int64_t numel, Dtype dt) {
 }
 
 bool should_dispatch_gelu_metal(std::int64_t numel, Dtype dt) {
-    if (!enabled()) return false;
-    if (dt != Dtype::F32) return false;
+    if (!enabled())
+        return false;
+    if (dt != Dtype::F32)
+        return false;
     // Small inputs: the compute-pass setup cost dominates the per-element
     // gain.  Threshold at 128K elements (≈ 1 transformer head's
     // sequence on a small model) — below this the MLX composite is
@@ -126,11 +137,11 @@ bool should_dispatch_batch_norm_train(std::int64_t numel, Dtype dt) {
     return false;
 }
 
-bool should_dispatch_bn_train_metal(std::int64_t per_channel_numel,
-                                    Dtype dt) {
+bool should_dispatch_bn_train_metal(std::int64_t per_channel_numel, Dtype dt) {
     (void)per_channel_numel;
     (void)dt;
-    if (!enabled()) return false;
+    if (!enabled())
+        return false;
     // Measurement note (2026-05-25, M4 Max F32):
     //
     //   shape            custom Metal   MLX-only   verdict
@@ -164,7 +175,8 @@ bool should_dispatch_silu_backward(std::int64_t numel, Dtype dt) {
 bool should_dispatch_silu_metal(std::int64_t numel, Dtype dt) {
     (void)numel;
     (void)dt;
-    if (!enabled()) return false;
+    if (!enabled())
+        return false;
     // Measurement (2026-05-25, M4 Max F32 ffn-scale):
     //   (8,1024,768)   fwd  Custom 1.82 ms  MLX 1.14 ms  (1.6× slower)
     //   (8,1024,3072)  fwd  Custom 6.84 ms  MLX 3.67 ms  (1.9× slower)
@@ -195,13 +207,12 @@ bool should_dispatch_softmax_backward(std::int64_t axis_size, Dtype dt) {
     return false;
 }
 
-bool should_dispatch_embedding_backward(std::int64_t M_total,
-                                        std::int64_t D,
-                                        Dtype dt) {
+bool should_dispatch_embedding_backward(std::int64_t M_total, std::int64_t D, Dtype dt) {
     (void)M_total;
     (void)D;
     (void)dt;
-    if (!enabled()) return false;
+    if (!enabled())
+        return false;
     // Phase 4 fresh measurement (2026-05-25, M4 Max, gpt2-input
     // 8×1024×768) found the MPSGraph ``scatterWithDataTensor:`` path
     // 3–10× **slower** than MLX's ``scatter_add_axis`` once the

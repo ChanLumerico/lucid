@@ -50,7 +50,34 @@ _CV2_CODES = {
 
 
 def as_interpolation(mode: "str | int | Interpolation") -> Interpolation:
-    """Coerce a string, OpenCV int code, or enum to an :class:`Interpolation`."""
+    r"""Coerce a string, OpenCV ``INTER_*`` int code, or enum member
+    to an :class:`Interpolation` value.
+
+    Accepts the three forms callers naturally reach for:
+
+    * an :class:`Interpolation` member — returned unchanged;
+    * a string (``"bilinear"`` / ``"nearest"`` / ...) — parsed via
+      the enum's value lookup;
+    * an OpenCV ``cv2.INTER_*`` int code — looked up in the
+      built-in mapping for Albumentations parity.
+
+    Parameters
+    ----------
+    mode : str or int or Interpolation
+        Mode to coerce.  ``bool`` is rejected because it would
+        otherwise satisfy ``isinstance(..., int)``.
+
+    Returns
+    -------
+    Interpolation
+        Canonical enum value usable with
+        :func:`lucid.nn.functional.interpolate`.
+
+    Raises
+    ------
+    ValueError
+        Unknown string, unknown OpenCV code, or ``bool`` input.
+    """
     if isinstance(mode, Interpolation):
         return mode
     if isinstance(mode, bool):  # guard: bool is an int subclass

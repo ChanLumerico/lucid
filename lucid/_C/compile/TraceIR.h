@@ -77,8 +77,15 @@ struct LUCID_API TraceId {
     constexpr TraceId(std::int64_t x) noexcept : v(x) {}
     constexpr operator std::int64_t() const noexcept { return v; }
 
-    TraceId& operator++() noexcept { ++v; return *this; }
-    TraceId operator++(int) noexcept { auto t = *this; ++v; return t; }
+    TraceId& operator++() noexcept {
+        ++v;
+        return *this;
+    }
+    TraceId operator++(int) noexcept {
+        auto t = *this;
+        ++v;
+        return t;
+    }
 
     // No defaulted ``operator==`` / ``operator<=>`` here — they would
     // conflict with the implicit conversion to ``int64_t`` and cause
@@ -140,11 +147,8 @@ struct LUCID_API TensorMeta {
 // a payload that doesn't fit, encode it as a vector<int64_t> or a
 // short string first; promote to a dedicated alternative only after
 // at least two ops share the encoding.
-using AttributeValue = std::variant<std::int64_t,
-                                    std::vector<std::int64_t>,
-                                    double,
-                                    bool,
-                                    std::string>;
+using AttributeValue =
+    std::variant<std::int64_t, std::vector<std::int64_t>, double, bool, std::string>;
 
 // One recorded op in the trace.
 //

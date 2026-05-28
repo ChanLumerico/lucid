@@ -43,6 +43,11 @@ import abc
 from typing import ClassVar, cast
 
 from lucid._tensor import Tensor
+from lucid.utils.transforms._autoaugment import (
+    AutoAugment,
+    RandAugment,
+    TrivialAugmentWide,
+)
 from lucid.utils.transforms._base import (
     BboxParams,
     Compose,
@@ -51,6 +56,7 @@ from lucid.utils.transforms._base import (
     TransformLike,
     _NoParams,
 )
+from lucid.utils.transforms._erasing import RandomErasing
 from lucid.utils.transforms._geometric import (
     CenterCrop,
     HorizontalFlip,
@@ -61,7 +67,6 @@ from lucid.utils.transforms._geometric import (
 from lucid.utils.transforms._crop import PadIfNeeded
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import ColorJitter, Normalize
-
 
 # ── registry + auto-resolver ────────────────────────────────────────
 
@@ -303,14 +308,66 @@ class ImageClassification(TransformsPreset):
         }
 
 
+def _parse_auto_augment(spec: str) -> TransformLike:
+    r"""Resolve a timm-style ``auto_augment`` spec to a Transform instance.
+
+    Accepted forms::
+
+        "ta_wide"                       → TrivialAugmentWide()
+        "ta"                            → TrivialAugmentWide(num_magnitude_bins=10)
+        "ra"                            → RandAugment()  (defaults: n=2, m=9)
+        "ra-mM"                         → RandAugment(magnitude=M)
+        "ra-nN"                         → RandAugment(num_ops=N)
+        "ra-mM-nN" / "ra-nN-mM"         → RandAugment(num_ops=N, magnitude=M)
+        "aa_imagenet" / "aa_cifar10"    → AutoAugment(policy=...)
+        "aa_svhn"
+
+    Mirrors the reference-framework convention so user code that
+    already supplies ``"ra-m9"`` etc. works without translation.
+    """
+    if spec == "ta_wide":
+        return TrivialAugmentWide(p=1.0)
+    if spec == "ta":
+        return TrivialAugmentWide(num_magnitude_bins=10, p=1.0)
+    if spec.startswith("ra"):
+        parts = spec.split("-")
+        m, n = 9, 2
+        for part in parts[1:]:
+            if part.startswith("m"):
+                m = int(part[1:])
+            elif part.startswith("n"):
+                n = int(part[1:])
+            else:
+                raise ValueError(
+                    f"unrecognised RandAugment fragment {part!r} in spec {spec!r}"
+                )
+        return RandAugment(num_ops=n, magnitude=m, p=1.0)
+    if spec.startswith("aa_"):
+        policy = spec[3:]
+        return AutoAugment(policy=policy, p=1.0)
+    raise ValueError(
+        f"unknown auto_augment spec {spec!r}; expected one of "
+        '"ta", "ta_wide", "ra[-mM][-nN]", "aa_imagenet", "aa_cifar10", "aa_svhn"'
+    )
+
+
 @_register_preset
 class ImageClassificationAugment(TransformsPreset):
     r"""Standard ImageNet classification *training* preset (augmentation).
 
-    Pipeline: ``RandomResizedCrop(crop_size)`` → ``HorizontalFlip(p=0.5)``
-    → optional ``ColorJitter`` → ``Normalize(mean, std)``.  Mirrors
-    the torchvision / timm training recipe shipped with most
-    classification models.
+    Pipeline (stages 4–7 conditional, all share the same Normalize stats)::
+
+        1. RandomResizedCrop(crop_size, scale, ratio)
+        2. HorizontalFlip(p=hflip_prob)            — skipped if hflip_prob = 0
+        3. AutoAugment / RandAugment / TAW         — skipped if auto_augment = None
+        4. ColorJitter(brightness=contrast=...)    — skipped if color_jitter = 0
+        5. Normalize(mean, std, max_pixel_value=1)
+        6. RandomErasing(p=random_erasing)         — skipped if random_erasing = 0
+
+    Mirrors the reference-framework training recipe shipped with most
+    classification models.  Setting ``auto_augment`` and/or
+    ``random_erasing`` reaches the strong-augmentation recipe used by
+    timm / torchvision references.
 
     Parameters
     ----------
@@ -325,6 +382,14 @@ class ImageClassificationAugment(TransformsPreset):
         disables ``ColorJitter`` entirely.
     hflip_prob : float, optional, default=0.5
         Horizontal-flip probability.  Zero disables the flip.
+    auto_augment : str or None, optional, default=None
+        AutoAugment-family policy.  See :func:`_parse_auto_augment`
+        for accepted spec strings.  ``None`` disables this stage —
+        recommended unless you already have a tuned recipe.
+    random_erasing : float, optional, default=0.0
+        :class:`~lucid.utils.transforms.RandomErasing` probability
+        applied *after* :class:`Normalize` (mirrors reference
+        ordering).  ``0.0`` disables the stage.
     mean, std : tuple of float, optional
         Per-channel normalization stats; default ImageNet.
     interpolation : str or Interpolation, optional, default="bilinear"
@@ -340,15 +405,23 @@ class ImageClassificationAugment(TransformsPreset):
         ratio: tuple[float, float] = (0.75, 1.3333333333333333),
         color_jitter: float = 0.4,
         hflip_prob: float = 0.5,
+        auto_augment: str | None = None,
+        random_erasing: float = 0.0,
         mean: tuple[float, ...] | None = None,
         std: tuple[float, ...] | None = None,
         interpolation: str | Interpolation = Interpolation.BILINEAR,
     ) -> None:
+        if not 0.0 <= random_erasing <= 1.0:
+            raise ValueError(
+                f"random_erasing must be in [0, 1], got {random_erasing}"
+            )
         self.crop_size = crop_size
         self.scale = scale
         self.ratio = ratio
         self.color_jitter = color_jitter
         self.hflip_prob = hflip_prob
+        self.auto_augment = auto_augment
+        self.random_erasing = random_erasing
         self.mean = mean if mean is not None else _IMAGENET_MEAN
         self.std = std if std is not None else _IMAGENET_STD
         self.interpolation = interpolation
@@ -365,6 +438,8 @@ class ImageClassificationAugment(TransformsPreset):
         ]
         if hflip_prob > 0.0:
             stages.append(HorizontalFlip(p=hflip_prob))
+        if auto_augment is not None:
+            stages.append(_parse_auto_augment(auto_augment))
         if color_jitter > 0.0:
             stages.append(
                 ColorJitter(
@@ -376,6 +451,8 @@ class ImageClassificationAugment(TransformsPreset):
                 )
             )
         stages.append(Normalize(self.mean, self.std, max_pixel_value=1.0))
+        if random_erasing > 0.0:
+            stages.append(RandomErasing(p=random_erasing))
         self._pipeline = Compose(stages)
 
     def _init_kwargs(self) -> dict[str, object]:
@@ -386,6 +463,8 @@ class ImageClassificationAugment(TransformsPreset):
             "ratio": list(self.ratio),
             "color_jitter": self.color_jitter,
             "hflip_prob": self.hflip_prob,
+            "auto_augment": self.auto_augment,
+            "random_erasing": self.random_erasing,
             "mean": list(self.mean),
             "std": list(self.std),
             "interpolation": (
@@ -445,9 +524,7 @@ class Detection(TransformsPreset):
                 PadIfNeeded(max_size, max_size, value=0.0),
                 Normalize(self.mean, self.std, max_pixel_value=1.0),
             ],
-            bbox_params=BboxParams(
-                min_area=min_area, min_visibility=min_visibility
-            ),
+            bbox_params=BboxParams(min_area=min_area, min_visibility=min_visibility),
         )
 
     def _init_kwargs(self) -> dict[str, object]:

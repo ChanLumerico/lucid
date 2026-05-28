@@ -84,9 +84,8 @@ LUCID_API void destroy_executable(CompiledExecutable* exe);
 // -----
 // Implementation lives in :file:`CompiledExecutable.mm` (Objective-C++)
 // so all MPSGraph types stay in one translation unit.
-LUCID_API std::vector<TensorImplPtr> run_executable(
-    CompiledExecutable* exe,
-    const std::vector<TensorImplPtr>& input_feeds);
+LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
+                                                    const std::vector<TensorImplPtr>& input_feeds);
 
 // In-place variant: instead of allocating fresh MTLBuffers per output
 // and returning new TensorImpls, write each output directly into the
@@ -116,10 +115,9 @@ LUCID_API std::vector<TensorImplPtr> run_executable(
 // update.  The target's MLX array reference is replaced with a
 // fresh one wrapping the same buffer to invalidate any cached MLX
 // dependency state.
-LUCID_API void run_executable_inplace(
-    CompiledExecutable* exe,
-    const std::vector<TensorImplPtr>& input_feeds,
-    const std::vector<TensorImplPtr>& output_targets);
+LUCID_API void run_executable_inplace(CompiledExecutable* exe,
+                                      const std::vector<TensorImplPtr>& input_feeds,
+                                      const std::vector<TensorImplPtr>& output_targets);
 
 // ── Disk cache (Tier 1-A) ───────────────────────────────────────────
 //
@@ -155,8 +153,7 @@ LUCID_API void run_executable_inplace(
 // Serialise ``exe`` to ``<path>.mpsgraphpackage`` + ``<path>.meta``.
 // Returns ``true`` on success, ``false`` on any failure (filesystem
 // error, MPSGraph serialise failure, null exe).
-LUCID_API bool save_executable(const CompiledExecutable* exe,
-                               const std::string& path);
+LUCID_API bool save_executable(const CompiledExecutable* exe, const std::string& path);
 
 // Reload an executable previously saved via :func:`save_executable`.
 // Returns a fresh ``CompiledExecutable*`` (caller owns) on success,

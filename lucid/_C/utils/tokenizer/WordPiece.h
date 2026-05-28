@@ -68,9 +68,7 @@ public:
     std::string decode(const IdSequence& ids) const override;
     std::size_t vocab_size() const override { return vocab_.size(); }
     std::string algo() const override { return "wordpiece"; }
-    std::unordered_map<std::string, TokenId> get_vocab() const override {
-        return vocab_;
-    }
+    std::unordered_map<std::string, TokenId> get_vocab() const override { return vocab_; }
     std::string id_to_token(TokenId id) const override;
 
     // Train on a list of pre-tokenized words (the Python wrapper does
@@ -79,15 +77,12 @@ public:
     // to ``target_vocab_size`` by greedy frequency merging — close
     // to HF's ``WordPieceTrainer`` behaviour without the full
     // log-likelihood objective.
-    void train(const std::vector<std::string>& corpus,
-               std::size_t target_vocab_size) override;
+    void train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) override;
 
     // ── WordPiece-specific accessors ───────────────────────────────
 
     const std::string& unk_token() const noexcept { return unk_token_; }
-    const std::string& continuing_prefix() const noexcept {
-        return continuing_prefix_;
-    }
+    const std::string& continuing_prefix() const noexcept { return continuing_prefix_; }
 
 private:
     // Apply greedy longest-match to ONE pre-tokenized word.  Returns

@@ -48,23 +48,19 @@ public:
     IdSequence encode(const std::string& text) const override;
     std::string decode(const IdSequence& ids) const override;
     std::size_t vocab_size() const override { return vocab_.size(); }
-    std::unordered_map<std::string, TokenId> get_vocab() const override {
-        return vocab_;
-    }
+    std::unordered_map<std::string, TokenId> get_vocab() const override { return vocab_; }
     std::string id_to_token(TokenId id) const override;
 
     // Default training: pre-tokenize via subclass's
     // ``split_to_chunks_`` + insert each unique chunk into vocab in
     // insertion order until ``target_vocab_size`` is reached.
     // ``ByteTokenizer`` overrides with a no-op (its vocab is fixed).
-    void train(const std::vector<std::string>& corpus,
-               std::size_t target_vocab_size) override;
+    void train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) override;
 
 protected:
     // Algorithm-specific pre-tokenization — chop ``text`` into the
     // list of chunks that the lookup step then turns into ids.
-    virtual std::vector<std::string>
-    split_to_chunks_(const std::string& text) const = 0;
+    virtual std::vector<std::string> split_to_chunks_(const std::string& text) const = 0;
 
     // Rebuild reverse table after vocab mutation.
     void rebuild_id_to_token_();
@@ -88,8 +84,7 @@ public:
                std::size_t /*target_vocab_size*/) override {}
 
 protected:
-    std::vector<std::string> split_to_chunks_(
-        const std::string& text) const override;
+    std::vector<std::string> split_to_chunks_(const std::string& text) const override;
 };
 
 // ── CharTokenizer ───────────────────────────────────────────────────
@@ -104,8 +99,7 @@ public:
     std::string algo() const override { return "char"; }
 
 protected:
-    std::vector<std::string> split_to_chunks_(
-        const std::string& text) const override;
+    std::vector<std::string> split_to_chunks_(const std::string& text) const override;
 };
 
 // ── WhitespaceTokenizer ─────────────────────────────────────────────
@@ -115,14 +109,12 @@ protected:
 class WhitespaceTokenizer final : public LookupTokenizer {
 public:
     WhitespaceTokenizer();
-    explicit WhitespaceTokenizer(
-        std::unordered_map<std::string, TokenId> vocab);
+    explicit WhitespaceTokenizer(std::unordered_map<std::string, TokenId> vocab);
     std::string algo() const override { return "whitespace"; }
     std::string decode(const IdSequence& ids) const override;
 
 protected:
-    std::vector<std::string> split_to_chunks_(
-        const std::string& text) const override;
+    std::vector<std::string> split_to_chunks_(const std::string& text) const override;
 };
 
 // ── WordTokenizer ───────────────────────────────────────────────────
@@ -139,8 +131,7 @@ public:
     std::string decode(const IdSequence& ids) const override;
 
 protected:
-    std::vector<std::string> split_to_chunks_(
-        const std::string& text) const override;
+    std::vector<std::string> split_to_chunks_(const std::string& text) const override;
 };
 
 // ── RegexTokenizer ──────────────────────────────────────────────────
@@ -152,14 +143,13 @@ protected:
 class RegexTokenizer final : public LookupTokenizer {
 public:
     explicit RegexTokenizer(const std::string& pattern,
-                             std::unordered_map<std::string, TokenId> vocab = {});
+                            std::unordered_map<std::string, TokenId> vocab = {});
     std::string algo() const override { return "regex"; }
     std::string decode(const IdSequence& ids) const override;
     const std::string& pattern() const noexcept { return pattern_str_; }
 
 protected:
-    std::vector<std::string> split_to_chunks_(
-        const std::string& text) const override;
+    std::vector<std::string> split_to_chunks_(const std::string& text) const override;
 
 private:
     std::string pattern_str_;

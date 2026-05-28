@@ -173,8 +173,7 @@ void adam_step_gpu_cached(GpuStorage& param_g,
     // and saves the two ``m_hat`` / ``v_hat`` materialisations (2 full-
     // tensor multiplies) per parameter.
     auto denom = ::mlx::core::add(::mlx::core::sqrt(v_new), *cache.eps_eff_a);
-    auto step_arr =
-        ::mlx::core::multiply(*cache.lr_eff_a, ::mlx::core::divide(m_new, denom));
+    auto step_arr = ::mlx::core::multiply(*cache.lr_eff_a, ::mlx::core::divide(m_new, denom));
     auto new_param = ::mlx::core::subtract(*param_g.arr, step_arr);
     param_g.arr = gpu::wrap_mlx_array(std::move(new_param), dt).arr;
 }

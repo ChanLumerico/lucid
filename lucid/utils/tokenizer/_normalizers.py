@@ -91,14 +91,41 @@ class NFKC(Normalizer):
 
 
 class NFKD(Normalizer):
-    """Unicode NFKD (Compatibility Decomposition)."""
+    r"""Unicode NFKD (Compatibility Decomposition) — splits composed
+    characters AND folds compatibility forms.
+
+    Like :class:`NFD`, but additionally decomposes compatibility
+    characters (ligatures, super-/sub-scripts, fullwidth digits, …)
+    into their canonical components.  Commonly chained before
+    :class:`StripAccents` for the most aggressive normalisation
+    pipelines.
+
+    Notes
+    -----
+    NFKD is the most lossy normalisation form — ``½`` becomes
+    ``1⁄2``, ``ﬁ`` becomes ``f + i``, fullwidth digits collapse to
+    ASCII, etc.  Use :class:`NFD` instead if you only want canonical
+    decomposition without the compatibility fold.
+    """
 
     def normalize(self, text: str) -> str:
         return unicodedata.normalize("NFKD", text)
 
 
 class Lowercase(Normalizer):
-    """Lowercase every character.  Used by ``bert-base-uncased``."""
+    r"""Lowercase every character via :meth:`str.lower`.
+
+    Used by ``bert-base-uncased`` and any other uncased checkpoint;
+    typically chained after :class:`NFD` + :class:`StripAccents` so
+    accented uppercase letters fold to their unaccented lowercase
+    forms in one pass.
+
+    Notes
+    -----
+    Locale-independent — uses Python's default Unicode case folding,
+    which matches HF's reference implementation but differs from
+    locale-specific folds (e.g. Turkish dotless-I).
+    """
 
     def normalize(self, text: str) -> str:
         return text.lower()

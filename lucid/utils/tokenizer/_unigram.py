@@ -467,11 +467,18 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         directory : str
             Directory holding the unified ``tokenizer.json`` (and
             optionally ``special_tokens_map.json``).
-        normalizer, pre_tokenizer, special_tokens
-            Optional overrides — if omitted, ``NFKC`` /
-            :class:`SentencePiecePreTokenizer` defaults are used and
-            special tokens are read from ``special_tokens_map.json``
-            when present.
+        normalizer : Normalizer, optional, keyword-only
+            Override the encode-time normalisation chain.  Defaults
+            to :class:`~lucid.utils.tokenizer._normalizers.NFKC`
+            when omitted (matches LLaMA / Mistral / T5).
+        pre_tokenizer : PreTokenizer, optional, keyword-only
+            Override the chunk splitter applied after normalisation.
+            Defaults to :class:`SentencePiecePreTokenizer` for
+            canonical SentencePiece behaviour.
+        special_tokens : SpecialTokens, optional, keyword-only
+            Override the special-token registry.  When ``None`` (the
+            default), parsed from ``special_tokens_map.json`` if
+            present.
 
         Returns
         -------
@@ -659,6 +666,28 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
 
         The only difference is the returned class (and hence the
         encode backend — C++ instead of Python Viterbi).
+
+        Parameters
+        ----------
+        directory : str
+            Directory holding the unified ``tokenizer.json`` (and
+            optionally ``special_tokens_map.json``).
+        normalizer : Normalizer, optional, keyword-only
+            Override the encode-time normalisation chain.  Defaults
+            to :class:`~lucid.utils.tokenizer._normalizers.NFKC`.
+        pre_tokenizer : PreTokenizer, optional, keyword-only
+            Override the chunk splitter applied after normalisation.
+            Defaults to :class:`SentencePiecePreTokenizer`.
+        special_tokens : SpecialTokens, optional, keyword-only
+            Override the special-token registry.  When ``None`` (the
+            default), parsed from ``special_tokens_map.json`` if
+            present.
+
+        Returns
+        -------
+        UnigramTokenizerFast
+            Freshly-constructed C++-backed instance ready for
+            encode / decode.
         """
         path = os.path.join(directory, "tokenizer.json")
         if not os.path.isfile(path):

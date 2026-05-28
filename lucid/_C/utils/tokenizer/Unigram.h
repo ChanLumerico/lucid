@@ -96,23 +96,20 @@ public:
     //   * ``max_piece_length`` — cap on seed substring length.
     //   * ``initial_vocab_multiplier`` — seed vocab is sized at
     //     ``multiplier × target_vocab_size`` before pruning starts.
-    void train(const std::vector<std::string>& corpus,
-               std::size_t target_vocab_size) override;
+    void train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) override;
 
     // Extended train with all knobs exposed.
-    void train_with_options(
-        const std::vector<std::string>& corpus,
-        std::size_t target_vocab_size,
-        std::size_t num_iterations,
-        double shrink_factor,
-        std::size_t max_piece_length,
-        std::size_t initial_vocab_multiplier);
+    void train_with_options(const std::vector<std::string>& corpus,
+                            std::size_t target_vocab_size,
+                            std::size_t num_iterations,
+                            double shrink_factor,
+                            std::size_t max_piece_length,
+                            std::size_t initial_vocab_multiplier);
 
     // ── Unigram-specific accessors ─────────────────────────────────
 
     // Vocab as (piece, log_prob) pairs — exposed for save / inspection.
-    const std::vector<std::pair<std::string, double>>& pieces() const
-        noexcept { return pieces_; }
+    const std::vector<std::pair<std::string, double>>& pieces() const noexcept { return pieces_; }
 
     const std::string& unk_token() const noexcept { return unk_token_; }
     double unk_log_prob() const noexcept { return unk_log_prob_; }
@@ -127,10 +124,9 @@ private:
     // Forward-backward to get expected piece counts for one chunk
     // under the current probability model.  Used by EM training.
     // Adds to ``expected_counts`` (indexed by piece id).
-    void forward_backward_accumulate_(
-        const std::string& chunk,
-        std::uint64_t weight,
-        std::vector<double>& expected_counts) const;
+    void forward_backward_accumulate_(const std::string& chunk,
+                                      std::uint64_t weight,
+                                      std::vector<double>& expected_counts) const;
 
     std::vector<std::pair<std::string, double>> pieces_;
     std::unordered_map<std::string, TokenId> piece_to_id_;

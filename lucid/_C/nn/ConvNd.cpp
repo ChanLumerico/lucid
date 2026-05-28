@@ -137,8 +137,7 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
             ErrorBuilder("conv").fail("dilation must be >= 1");
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], dilation[i]);
         if (O[i] <= 0)
-            throw ShapeMismatch(x_eff->shape(), W_eff->shape(),
-                                "conv: output shape non-positive");
+            throw ShapeMismatch(x_eff->shape(), W_eff->shape(), "conv: output shape non-positive");
     }
 
     Shape out_shape;
@@ -198,8 +197,8 @@ TensorImplPtr ConvNdBackward<N>::forward(const TensorImplPtr& x,
     bwd->groups_ = groups;
     // saved_inputs_[0..2] hold the *cast* (effective-dtype) {x, W, b} so
     // the backward conv_general dispatches at eff_dt to match the forward.
-    kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd),
-                                                            {x_eff, W_eff, b_eff}, out);
+    kernel::NaryKernel<ConvNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x_eff, W_eff, b_eff},
+                                                            out);
     return out;
 }
 
@@ -419,7 +418,8 @@ TensorImplPtr fold_op(const TensorImplPtr& x,
     auto& be = backend::Dispatcher::for_device(x->device());
     Storage out = be.nn_fold(x->storage(), x->shape(), out_shape, kernel_size, stride, padding,
                              dilation, x->dtype());
-    auto result = std::make_shared<TensorImpl>(std::move(out), out_shape, x->dtype(), x->device(), false);
+    auto result =
+        std::make_shared<TensorImpl>(std::move(out), out_shape, x->dtype(), x->device(), false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({x}, result);
     }

@@ -20,8 +20,7 @@ namespace lucid::utils::tokenizer {
 
 LookupTokenizer::LookupTokenizer() = default;
 
-LookupTokenizer::LookupTokenizer(
-    std::unordered_map<std::string, TokenId> vocab)
+LookupTokenizer::LookupTokenizer(std::unordered_map<std::string, TokenId> vocab)
     : vocab_(std::move(vocab)) {
     rebuild_id_to_token_();
 }
@@ -32,7 +31,8 @@ LookupTokenizer::LookupTokenizer(
 void LookupTokenizer::rebuild_id_to_token_() {
     TokenId max_id = -1;
     for (const auto& [tok, id] : vocab_)
-        if (id > max_id) max_id = id;
+        if (id > max_id)
+            max_id = id;
     id_to_token_.assign(static_cast<std::size_t>(max_id + 1), std::string{});
     for (const auto& [tok, id] : vocab_) {
         if (id >= 0 && static_cast<std::size_t>(id) < id_to_token_.size())
@@ -85,9 +85,7 @@ std::string LookupTokenizer::decode(const IdSequence& ids) const {
 // auto-seeded here (they're configuration, not corpus-derived); the
 // Python wrapper is responsible for pre-seeding or post-adding them.
 // Hard Rule H13 (no unstructured jumps) is satisfied via a sentinel flag.
-void LookupTokenizer::train(
-    const std::vector<std::string>& corpus,
-    std::size_t target_vocab_size) {
+void LookupTokenizer::train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) {
     // Wipe existing vocab + start fresh.  Preserve any special-token
     // ids the user has already configured (they live at the LOW ids).
     vocab_.clear();
@@ -96,8 +94,7 @@ void LookupTokenizer::train(
     // Reserve low ids for special tokens — they must appear in the
     // vocab so encode can resolve them later.  Walk the canonical
     // optional slots + extras in a deterministic order.
-    auto add_special = [&](const std::optional<TokenId>& slot_id,
-                            const std::string& slot_name) {
+    auto add_special = [&](const std::optional<TokenId>& slot_id, const std::string& slot_name) {
         (void)slot_id;
         (void)slot_name;
         // Specials are NOT auto-added by train (they're config, not
@@ -112,7 +109,8 @@ void LookupTokenizer::train(
     // a sentinel flag the outer loop checks each iteration.
     bool full = false;
     for (const auto& doc : corpus) {
-        if (full) break;
+        if (full)
+            break;
         auto chunks = split_to_chunks_(doc);
         for (const auto& chunk : chunks) {
             if (vocab_.size() >= target_vocab_size) {
@@ -142,8 +140,7 @@ ByteTokenizer::ByteTokenizer() {
 
 // Split rule: one chunk per raw byte (no UTF-8 awareness — that's the
 // whole point of byte-level tokenization).
-std::vector<std::string> ByteTokenizer::split_to_chunks_(
-    const std::string& text) const {
+std::vector<std::string> ByteTokenizer::split_to_chunks_(const std::string& text) const {
     std::vector<std::string> out;
     out.reserve(text.size());
     for (unsigned char c : text) {
@@ -156,26 +153,30 @@ std::vector<std::string> ByteTokenizer::split_to_chunks_(
 
 CharTokenizer::CharTokenizer() = default;
 
-CharTokenizer::CharTokenizer(
-    std::unordered_map<std::string, TokenId> vocab)
+CharTokenizer::CharTokenizer(std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
 // Split rule: one chunk per UTF-8 codepoint.  Lead-byte inspection
 // derives the codepoint length; invalid lead bytes are treated as
 // single-byte chunks so the function never throws on malformed input.
-std::vector<std::string> CharTokenizer::split_to_chunks_(
-    const std::string& text) const {
+std::vector<std::string> CharTokenizer::split_to_chunks_(const std::string& text) const {
     std::vector<std::string> out;
     std::size_t i = 0;
     while (i < text.size()) {
         unsigned char c0 = static_cast<unsigned char>(text[i]);
         std::size_t cp_len;
-        if (c0 < 0x80) cp_len = 1;
-        else if ((c0 >> 5) == 0b110) cp_len = 2;
-        else if ((c0 >> 4) == 0b1110) cp_len = 3;
-        else if ((c0 >> 3) == 0b11110) cp_len = 4;
-        else cp_len = 1;  // invalid lead — fall through as single byte
-        if (i + cp_len > text.size()) cp_len = text.size() - i;
+        if (c0 < 0x80)
+            cp_len = 1;
+        else if ((c0 >> 5) == 0b110)
+            cp_len = 2;
+        else if ((c0 >> 4) == 0b1110)
+            cp_len = 3;
+        else if ((c0 >> 3) == 0b11110)
+            cp_len = 4;
+        else
+            cp_len = 1;  // invalid lead — fall through as single byte
+        if (i + cp_len > text.size())
+            cp_len = text.size() - i;
         out.emplace_back(text.substr(i, cp_len));
         i += cp_len;
     }
@@ -186,25 +187,23 @@ std::vector<std::string> CharTokenizer::split_to_chunks_(
 
 WhitespaceTokenizer::WhitespaceTokenizer() = default;
 
-WhitespaceTokenizer::WhitespaceTokenizer(
-    std::unordered_map<std::string, TokenId> vocab)
+WhitespaceTokenizer::WhitespaceTokenizer(std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
 // Split rule: emit each whitespace-delimited run as a chunk; the
 // whitespace itself is discarded (decode rebuilds it as single spaces).
-std::vector<std::string> WhitespaceTokenizer::split_to_chunks_(
-    const std::string& text) const {
+std::vector<std::string> WhitespaceTokenizer::split_to_chunks_(const std::string& text) const {
     std::vector<std::string> out;
     std::size_t i = 0;
     while (i < text.size()) {
         while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' ||
-                text[i] == '\r'))
+               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
-        if (i >= text.size()) break;
+        if (i >= text.size())
+            break;
         std::size_t start = i;
-        while (i < text.size() && !(text[i] == ' ' || text[i] == '\t' ||
-                                    text[i] == '\n' || text[i] == '\r'))
+        while (i < text.size() &&
+               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
         out.emplace_back(text.substr(start, i - start));
     }
@@ -220,7 +219,8 @@ std::string WhitespaceTokenizer::decode(const IdSequence& ids) const {
     for (TokenId id : ids) {
         if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
             continue;
-        if (!first) out += ' ';
+        if (!first)
+            out += ' ';
         out += id_to_token_[static_cast<std::size_t>(id)];
         first = false;
     }
@@ -231,15 +231,13 @@ std::string WhitespaceTokenizer::decode(const IdSequence& ids) const {
 
 WordTokenizer::WordTokenizer() = default;
 
-WordTokenizer::WordTokenizer(
-    std::unordered_map<std::string, TokenId> vocab)
+WordTokenizer::WordTokenizer(std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)) {}
 
 // Split rule: identical to Whitespace.  The semantic difference is
 // purely encode-time — Word expects ``special_.unk`` to be configured
 // so OOV words become UNK instead of being dropped.
-std::vector<std::string> WordTokenizer::split_to_chunks_(
-    const std::string& text) const {
+std::vector<std::string> WordTokenizer::split_to_chunks_(const std::string& text) const {
     // Same split rule as Whitespace.  The semantic difference (UNK
     // fallback on OOV instead of drop) is enforced by the base
     // ``encode`` plus a configured ``special_.unk``.
@@ -247,13 +245,13 @@ std::vector<std::string> WordTokenizer::split_to_chunks_(
     std::size_t i = 0;
     while (i < text.size()) {
         while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' ||
-                text[i] == '\r'))
+               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
-        if (i >= text.size()) break;
+        if (i >= text.size())
+            break;
         std::size_t start = i;
-        while (i < text.size() && !(text[i] == ' ' || text[i] == '\t' ||
-                                    text[i] == '\n' || text[i] == '\r'))
+        while (i < text.size() &&
+               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
         out.emplace_back(text.substr(start, i - start));
     }
@@ -266,7 +264,8 @@ std::string WordTokenizer::decode(const IdSequence& ids) const {
     for (TokenId id : ids) {
         if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
             continue;
-        if (!first) out += ' ';
+        if (!first)
+            out += ' ';
         out += id_to_token_[static_cast<std::size_t>(id)];
         first = false;
     }
@@ -275,15 +274,13 @@ std::string WordTokenizer::decode(const IdSequence& ids) const {
 
 // ── RegexTokenizer ──────────────────────────────────────────────────
 
-RegexTokenizer::RegexTokenizer(
-    const std::string& pattern,
-    std::unordered_map<std::string, TokenId> vocab)
+RegexTokenizer::RegexTokenizer(const std::string& pattern,
+                               std::unordered_map<std::string, TokenId> vocab)
     : LookupTokenizer(std::move(vocab)),
       pattern_str_(pattern),
       pattern_(pattern, std::regex::ECMAScript) {}
 
-std::vector<std::string> RegexTokenizer::split_to_chunks_(
-    const std::string& text) const {
+std::vector<std::string> RegexTokenizer::split_to_chunks_(const std::string& text) const {
     std::vector<std::string> out;
     auto begin = std::sregex_iterator(text.begin(), text.end(), pattern_);
     auto end = std::sregex_iterator();
@@ -302,7 +299,8 @@ std::string RegexTokenizer::decode(const IdSequence& ids) const {
     for (TokenId id : ids) {
         if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
             continue;
-        if (!first) out += ' ';
+        if (!first)
+            out += ' ';
         out += id_to_token_[static_cast<std::size_t>(id)];
         first = false;
     }

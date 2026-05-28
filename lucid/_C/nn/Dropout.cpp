@@ -148,14 +148,10 @@ std::pair<TensorImplPtr, TensorImplPtr> dropout_stateful_op(const TensorImplPtr&
     // state buffer is purely a trace-recording placeholder.  The
     // compile path is what mutates it in-place across dispatches via
     // ``randomTensorWithShape:descriptor:stateTensor:``.
-    Storage cloned = clone_storage(state_in->storage(),
-                                   state_in->numel(),
-                                   state_in->dtype(),
+    Storage cloned = clone_storage(state_in->storage(), state_in->numel(), state_in->dtype(),
                                    state_in->device());
-    auto state_out = std::make_shared<TensorImpl>(std::move(cloned),
-                                                  state_in->shape(),
-                                                  state_in->dtype(),
-                                                  state_in->device(),
+    auto state_out = std::make_shared<TensorImpl>(std::move(cloned), state_in->shape(),
+                                                  state_in->dtype(), state_in->device(),
                                                   /*requires_grad=*/false);
 
     // Wire 2 inputs + 2 outputs onto the just-recorded node.

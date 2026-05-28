@@ -13,12 +13,11 @@
 
 #include "ConvTransposeNd.h"
 
-#include "../compile/Tracer.h"
-
 #include <vector>
 
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"

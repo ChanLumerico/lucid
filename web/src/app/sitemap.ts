@@ -3,6 +3,11 @@ import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
 import { getAllDocSlugs } from "@/lib/mdx-compile";
 
+// ``output: export`` (in next.config.ts) needs every route to be
+// explicitly static; pin ``dynamic = "force-static"`` so the static
+// export collector treats sitemap.xml as a build-time artifact.
+export const dynamic = "force-static";
+
 /** Site identity for the sitemap.  Lives in the build-meta hint when set
  *  (e.g. ``LUCID_DOCS_ORIGIN=https://lucid.docs.example.com``); falls
  *  back to a sensible default that crawlers can still discover via the

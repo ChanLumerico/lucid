@@ -42,7 +42,15 @@ from lucid.utils.transforms._datatypes import (
 
 @dataclass(frozen=True)
 class Empty:
-    """Parameter type for deterministic transforms (no per-call state)."""
+    r"""Parameter type for deterministic transforms (no per-call state).
+
+    Used by transforms whose behaviour is fully determined at
+    construction time — :class:`Crop`, :class:`Normalize`,
+    :class:`Compose`, etc.  The single shared instance
+    :data:`NO_PARAMS` is returned by every such transform's
+    :meth:`make_params` so the dispatch hooks can stay generic over
+    ``P`` without allocating per call.
+    """
 
 
 NO_PARAMS = Empty()

@@ -114,7 +114,13 @@ from lucid.utils.transforms._distortion import (
     GridElasticDeform,
     OpticalDistortion,
 )
+from lucid.utils.transforms._autoaugment import (
+    AutoAugment,
+    RandAugment,
+    TrivialAugmentWide,
+)
 from lucid.utils.transforms._dropout import CoarseDropout, GridDropout
+from lucid.utils.transforms._erasing import RandomErasing
 from lucid.utils.transforms._interpolation import Interpolation
 from lucid.utils.transforms._photometric import (
     ColorJitter,
@@ -194,11 +200,12 @@ __all__ = [
     "BBoxSafeRandomCrop",
     "RandomSizedBBoxSafeCrop",
     "RandomCropNearBBox",
-    # Dropout / occlusion
+    # Dropout / occlusion / erasing
     "CoarseDropout",
     "GridDropout",
     "MaskDropout",
     "PixelDropout",
+    "RandomErasing",
     "XYMasking",
     # Photometric — value scaling
     "ToFloat",
@@ -246,6 +253,10 @@ __all__ = [
     "ReplayCompose",
     # Utility
     "Lambda",
+    # AutoAugment family
+    "AutoAugment",
+    "RandAugment",
+    "TrivialAugmentWide",
     # Presets — pretrained preprocessing contract
     "TransformsPreset",
     "AutoTransformsPreset",

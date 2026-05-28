@@ -437,11 +437,7 @@ LUCID_API TensorImplPtr dropout_op(const TensorImplPtr& a, double p, bool traini
 //     as ``x``; ``state_out`` is the same shape/dtype as ``state_in``
 //     and (in eager mode) carries a verbatim clone of its contents.
 LUCID_API std::pair<TensorImplPtr, TensorImplPtr> dropout_stateful_op(
-    const TensorImplPtr& x,
-    const TensorImplPtr& state_in,
-    double p,
-    bool training,
-    Generator* gen);
+    const TensorImplPtr& x, const TensorImplPtr& state_in, double p, bool training, Generator* gen);
 
 // Channel-wise dropout — free-function entry point.
 //

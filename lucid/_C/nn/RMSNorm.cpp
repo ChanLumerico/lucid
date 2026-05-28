@@ -53,8 +53,7 @@ RMSNormBackward::forward(const TensorImplPtr& x, const TensorImplPtr& gamma, dou
 
     // Validate that gamma's shape matches the trailing dims of x.
     if (gamma_eff->shape().size() > x_eff->shape().size())
-        throw ShapeMismatch(x_eff->shape(), gamma_eff->shape(),
-                            "rms_norm: γ has more dims than x");
+        throw ShapeMismatch(x_eff->shape(), gamma_eff->shape(), "rms_norm: γ has more dims than x");
     const std::size_t Dn = gamma_eff->shape().size();
     const std::size_t lead = x_eff->shape().size() - Dn;
     for (std::size_t i = 0; i < Dn; ++i) {

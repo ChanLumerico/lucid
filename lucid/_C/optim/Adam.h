@@ -71,7 +71,7 @@ struct AdamScalarCache {
     std::unique_ptr<mlx::core::array> omb2;
     std::unique_ptr<mlx::core::array> eps_a;
     std::unique_ptr<mlx::core::array> lr_a;
-    std::unique_ptr<mlx::core::array> wd_a;       // present iff weight_decay != 0
+    std::unique_ptr<mlx::core::array> wd_a;  // present iff weight_decay != 0
     std::unique_ptr<mlx::core::array> inv_bc1;
     std::unique_ptr<mlx::core::array> inv_bc2;
     std::unique_ptr<mlx::core::array> wd_factor;  // (1 - lr*wd) for AdamW

@@ -47,7 +47,20 @@ def _pad_mode(border_mode: int) -> str:
 
 @dataclass
 class WarpParams:
-    """A sampled forward pixel matrix + output size for one call."""
+    r"""Sampled forward pixel matrix + output canvas size for one warp call.
+
+    Carried by :class:`Rotate`, :class:`ShiftScaleRotate`, :class:`Affine`,
+    :class:`Perspective`, and :class:`SafeRotate` from :meth:`make_params`
+    into the shared :class:`_WarpTransform` apply path so image, mask,
+    boxes, and keypoints all use the same transform.
+
+    Attributes
+    ----------
+    matrix : Tensor
+        ``(3, 3)`` forward pixel-coordinate transform (homogeneous).
+    out_hw : (int, int)
+        Output canvas size ``(height, width)`` after the warp.
+    """
 
     matrix: Tensor
     out_hw: tuple[int, int]
@@ -67,7 +80,17 @@ class Rot90Param:
 
 
 class Transpose(_NoParams, GeometricTransform[Empty]):
-    r"""Swap the H and W axes with probability ``p`` (Albumentations ``Transpose``)."""
+    r"""Swap the H and W axes with probability ``p`` (Albumentations ``Transpose``).
+
+    Exchanges the last two dimensions of the image and mask, and swaps
+    ``(x, y)`` coordinates for bounding boxes and keypoints so every
+    target sits in the new ``(W, H)`` canvas consistently.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transpose.
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -136,7 +159,18 @@ class Flip(GeometricTransform[FlipAxis]):
 
 
 class RandomRotate90(GeometricTransform[Rot90Param]):
-    r"""Rotate by a random multiple of 90° (Albumentations ``RandomRotate90``)."""
+    r"""Rotate by a random multiple of 90° (Albumentations ``RandomRotate90``).
+
+    Samples ``k`` uniformly from ``{0, 1, 2, 3}`` and applies
+    :func:`lucid.rot90` with that ``k`` to image / mask, plus the
+    matching coordinate transform to boxes / keypoints.  Exact (no
+    interpolation), so it's a free augmentation for square inputs.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the rotation.
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -404,7 +438,23 @@ class ScaleParam:
 
 
 class RandomScale(GeometricTransform[ScaleParam]):
-    r"""Resize by a random factor, aspect preserved (Albumentations ``RandomScale``)."""
+    r"""Resize by a random factor, aspect preserved (Albumentations ``RandomScale``).
+
+    Samples ``s`` uniformly from ``scale_limit`` and resizes the image
+    to ``(round(H * (1 + s)), round(W * (1 + s)))``.  Image uses the
+    requested ``interpolation``, masks use nearest, boxes and
+    keypoints scale exactly.
+
+    Parameters
+    ----------
+    scale_limit : float or (float, float), optional, default=0.1
+        Scale-delta range; a scalar ``v`` expands to ``(-v, v)`` so
+        the effective scale lies in ``[1 - v, 1 + v]``.
+    interpolation : int or str or Interpolation, optional, default=1
+        Image resampling mode (OpenCV codes accepted).
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(
         self,
