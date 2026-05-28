@@ -61,6 +61,13 @@ class ConversionSpec:
     """Optional paper link rendered in the card header."""
     categories: list[str] = field(default_factory=list)
     """Class label names (e.g. ImageNet-1k), used to build id2label."""
+    datasets: list[str] = field(default_factory=list)
+    """Dataset slugs used during training (e.g. ``["imagenet-22k",
+    "imagenet-1k"]`` for an in22k → in1k finetune).  Emitted into the
+    Hub model-card's YAML ``datasets:`` frontmatter so HF dataset
+    discovery picks up every dataset the checkpoint touched, not just
+    the evaluation set.  Empty list = fall back to the metrics' first
+    key (backward-compat for the simple single-dataset case)."""
     meta: dict[str, object] = field(default_factory=dict)
     """Metrics + recipe + flops, merged into config.json + card."""
 

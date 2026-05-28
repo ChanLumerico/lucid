@@ -97,9 +97,13 @@ def render_model_card(spec: "ConversionSpec") -> str:
     snippet + conversion provenance + license + citation.
     """
     metrics = spec.meta.get("metrics", {})
-    dataset_name = ""
-    if isinstance(metrics, dict) and metrics:
-        dataset_name = str(next(iter(metrics))).lower().replace(" ", "-")
+    # spec.datasets wins (lets a converter list every dataset the checkpoint
+    # touched — e.g. ``["imagenet-22k", "imagenet-1k"]`` for an in22k → in1k
+    # finetune); empty falls back to the metrics' first key for the simple
+    # single-dataset case.
+    dataset_names: list[str] = list(spec.datasets)
+    if not dataset_names and isinstance(metrics, dict) and metrics:
+        dataset_names = [str(next(iter(metrics))).lower().replace(" ", "-")]
 
     enum_name = "".join(p.capitalize() for p in spec.architecture.split("_")) + "Weights"
     paper_line = (
@@ -115,8 +119,9 @@ def render_model_card(spec: "ConversionSpec") -> str:
         f"  - {spec.architecture.split('_')[0]}",
         "  - lucid",
     ]
-    if dataset_name:
-        frontmatter += ["datasets:", f"  - {dataset_name}"]
+    if dataset_names:
+        frontmatter.append("datasets:")
+        frontmatter += [f"  - {d}" for d in dataset_names]
     frontmatter += [f"pipeline_tag: {spec.task}"]
     mi = _model_index(spec)
     if mi:

@@ -364,6 +364,7 @@ class ConvNeXtTimmArch(Architecture):
             paper_url="Liu et al., 2022 — *A ConvNet for the 2020s* "
             "(arXiv:2201.03545)",
             categories=[],
+            datasets=_datasets_from_timm_tag(self.tag),
             meta=meta,
         )
 
@@ -375,6 +376,33 @@ _TIMM_VARIANTS: dict[str, tuple[str, str, str]] = {
         "ConvNeXt-XLarge",
     ),
 }
+
+
+def _datasets_from_timm_tag(tag: str) -> list[str]:
+    """Map a timm tag string to the list of datasets it touched.
+
+    Order matters — the YAML frontmatter lists pretrain first then
+    finetune.  ``fb_in22k_ft_in1k`` resolves to
+    ``["imagenet-22k", "imagenet-1k"]``; a plain ``fb_in22k`` to
+    ``["imagenet-22k"]``; a plain ``in1k`` to ``["imagenet-1k"]``.
+    Other unknown tokens (``laion2b``, ``clip_*``, …) are added best-
+    effort.
+    """
+    t = tag.lower()
+    ds: list[str] = []
+    if "in22k" in t:
+        ds.append("imagenet-22k")
+    elif "in12k" in t:
+        ds.append("imagenet-12k")
+    if "laion2b" in t:
+        ds.append("laion-2b")
+    elif "laion" in t:
+        ds.append("laion")
+    # An "ft_in1k" or "in1k" token in a tag means the final evaluation
+    # set is ImageNet-1k — whether or not there was a preceding pretrain.
+    if "in1k" in t:
+        ds.append("imagenet-1k")
+    return ds
 
 
 @register_arch("convnext_xlarge")
