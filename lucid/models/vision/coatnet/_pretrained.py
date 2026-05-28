@@ -69,6 +69,33 @@ _CFG_5 = CoAtNetConfig(
     head_hidden_size=2048,
 )
 
+# CoAtNet-6 / CoAtNet-7 from paper §A.2 / Table 12 — "we move 2/3 of the
+# MBConv blocks of S2 into S3 and double its hidden dimension".  S3 becomes
+# a *mixed-block* stage (MBConv L=8 then channel-expand to a wider width
+# then Transformer L=42); the `mixed_s3` field on CoAtNetConfig spells this
+# out.  `blocks_per_stage[2]` is set to L_mb + L_attn = 50 for invariance,
+# but the actual stage 3 block layout is fully governed by `mixed_s3`.
+_CFG_6 = CoAtNetConfig(
+    variant="coatnet_6",
+    blocks_per_stage=(2, 4, 50, 2),
+    dims=(192, 384, 768, 2048),
+    stem_width=192,
+    attn_heads=(48, 64),  # S3-Attn D=1536 → 48 heads; S4 D=2048 → 64 heads
+    mbconv_expand=4,
+    head_hidden_size=2048,
+    mixed_s3=(8, 42, 1536),
+)
+_CFG_7 = CoAtNetConfig(
+    variant="coatnet_7",
+    blocks_per_stage=(2, 4, 50, 2),
+    dims=(256, 512, 1024, 3072),
+    stem_width=192,
+    attn_heads=(64, 96),  # S3-Attn D=2048 → 64 heads; S4 D=3072 → 96 heads
+    mbconv_expand=4,
+    head_hidden_size=3072,
+    mixed_s3=(8, 42, 2048),
+)
+
 # ---------------------------------------------------------------------------
 # Backbone registrations (task="base")
 # ---------------------------------------------------------------------------
@@ -430,4 +457,115 @@ def coatnet_5_cls(
     85.8% ImageNet-1k top-1 at 224x224 (Table 5).
     """
     cfg = CoAtNetConfig(**{**_CFG_5.__dict__, **overrides}) if overrides else _CFG_5
+    return CoAtNetForImageClassification(cfg)
+
+
+# ---------------------------------------------------------------------------
+# CoAtNet-6 (Dai et al., 2021, §A.2 / Table 12) — ~1.5B params
+# ---------------------------------------------------------------------------
+
+
+@register_model(
+    task="base",
+    family="coatnet",
+    model_type="coatnet",
+    model_class=CoAtNet,
+    default_config=_CFG_6,
+    params=1_470_000_000,
+)
+def coatnet_6(pretrained: bool = False, **overrides: object) -> CoAtNet:
+    r"""CoAtNet-6 backbone (Dai et al., 2021).
+
+    Mixed-stage variant: S3 carries an MBConv sub-stage *and* a
+    transformer sub-stage at a wider dimension.  Spec from paper §A.2 /
+    Table 12:
+
+    - S0 conv stem: D=192, L=2 (handled by ``stem_width``)
+    - S1 MBConv: L=2, D=192
+    - S2 MBConv: L=4, D=384
+    - S3 *mixed*: MBConv L=8 D=768  →  expand→1536  →  TFMRel L=42 D=1536
+    - S4 TFMRel: L=2, D=2048
+
+    Approximately **1.5B parameters** — only meaningful with very large
+    pretraining (the paper's headline 88.4-89.0% ImageNet numbers come
+    from JFT-3B pretraining + 512×512 finetune).
+
+    Notes
+    -----
+    Footprint at default ``image_size=224`` exceeds what a 16 GB host
+    can comfortably instantiate (≈ 6 GB of params alone before
+    activations); use a larger GPU.  Building this variant is
+    reserved for inference on dedicated hardware.
+    """
+    cfg = CoAtNetConfig(**{**_CFG_6.__dict__, **overrides}) if overrides else _CFG_6
+    return CoAtNet(cfg)
+
+
+@register_model(
+    task="image-classification",
+    family="coatnet",
+    model_type="coatnet",
+    model_class=CoAtNetForImageClassification,
+    default_config=_CFG_6,
+    params=1_470_000_000,
+)
+def coatnet_6_cls(
+    pretrained: bool = False, **overrides: object
+) -> CoAtNetForImageClassification:
+    r"""CoAtNet-6 image classifier (Dai et al., 2021).
+
+    Mixed-S3 variant.  Approximately **1.5B parameters**.
+    """
+    cfg = CoAtNetConfig(**{**_CFG_6.__dict__, **overrides}) if overrides else _CFG_6
+    return CoAtNetForImageClassification(cfg)
+
+
+# ---------------------------------------------------------------------------
+# CoAtNet-7 (Dai et al., 2021, §A.2 / Table 12) — ~2.4B params
+# ---------------------------------------------------------------------------
+
+
+@register_model(
+    task="base",
+    family="coatnet",
+    model_type="coatnet",
+    model_class=CoAtNet,
+    default_config=_CFG_7,
+    params=2_440_000_000,
+)
+def coatnet_7(pretrained: bool = False, **overrides: object) -> CoAtNet:
+    r"""CoAtNet-7 backbone (Dai et al., 2021).
+
+    Widest mixed-stage variant.  Spec from paper §A.2 / Table 12:
+
+    - S0 conv stem: D=192, L=2
+    - S1 MBConv: L=2, D=256
+    - S2 MBConv: L=4, D=512
+    - S3 *mixed*: MBConv L=8 D=1024  →  expand→2048  →  TFMRel L=42 D=2048
+    - S4 TFMRel: L=2, D=3072
+
+    Approximately **2.4B parameters** — paper's strongest published
+    CoAtNet, only usable with JFT-3B pretraining.  Not buildable on a
+    16 GB host (param footprint alone is ≈ 9.7 GB before activations).
+    """
+    cfg = CoAtNetConfig(**{**_CFG_7.__dict__, **overrides}) if overrides else _CFG_7
+    return CoAtNet(cfg)
+
+
+@register_model(
+    task="image-classification",
+    family="coatnet",
+    model_type="coatnet",
+    model_class=CoAtNetForImageClassification,
+    default_config=_CFG_7,
+    params=2_440_000_000,
+)
+def coatnet_7_cls(
+    pretrained: bool = False, **overrides: object
+) -> CoAtNetForImageClassification:
+    r"""CoAtNet-7 image classifier (Dai et al., 2021).
+
+    Widest mixed-S3 variant.  Approximately **2.4B parameters**.
+    """
+    cfg = CoAtNetConfig(**{**_CFG_7.__dict__, **overrides}) if overrides else _CFG_7
     return CoAtNetForImageClassification(cfg)

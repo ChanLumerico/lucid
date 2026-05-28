@@ -221,10 +221,15 @@ class _RelAttnBlock(nn.Module):
 
 
 class _TransformerStage(nn.Module):
-    """Transformer stage: AvgPool2d(2) → linear channel proj → N×RelAttnBlock.
+    """Transformer stage: optional AvgPool2d(2) → linear channel proj → N×RelAttnBlock.
 
-    The stage always spatially downsamples by 2× via AvgPool2d before the
-    first block.  Channel projection (in_ch → out_ch) is a single Linear.
+    When ``downsample=True`` (default — what S3 and S4 use in CoAtNet-0..5)
+    the stage spatially halves via AvgPool2d before the first block.  When
+    ``downsample=False`` it preserves spatial dims and just channel-projects
+    + applies the N attention blocks — the mode CoAtNet-6 / CoAtNet-7 use
+    for the transformer part of the mixed S3 (spatial halving already
+    happened inside the preceding MBConv sub-stage).  Channel projection
+    (``in_ch → out_ch``) is a single Linear.
     """
 
     def __init__(
@@ -234,13 +239,18 @@ class _TransformerStage(nn.Module):
         num_blocks: int,
         num_heads: int,
         input_grid: tuple[int, int],
+        downsample: bool = True,
     ) -> None:
         super().__init__()
-        # Grid after 2× pooling
-        grid_h = input_grid[0] // 2
-        grid_w = input_grid[1] // 2
+        # Grid after optional 2× pooling.
+        if downsample:
+            grid_h = input_grid[0] // 2
+            grid_w = input_grid[1] // 2
+        else:
+            grid_h = input_grid[0]
+            grid_w = input_grid[1]
 
-        self.pool = nn.AvgPool2d(2, stride=2)
+        self.pool: nn.Module = nn.AvgPool2d(2, stride=2) if downsample else nn.Identity()
         self.proj = nn.Linear(in_ch, out_ch)
         self.blocks = nn.ModuleList(
             [
@@ -275,7 +285,7 @@ def _build_body(
     nn.Sequential,  # stem
     nn.Sequential,  # s1 (MBConv)
     nn.Sequential,  # s2 (MBConv)
-    _TransformerStage,  # s3 (Transformer)
+    nn.Module,  # s3 (Transformer for variants 0..5; Sequential for mixed-S3 variants 6/7)
     _TransformerStage,  # s4 (Transformer)
     list[FeatureInfo],
 ]:
@@ -315,19 +325,53 @@ def _build_body(
     # After S2: H/8 × W/8
 
     # ------------------------------------------------------------------ S3
-    s3_grid = (img_size // 8, img_size // 8)  # input to S3
-    s3 = _TransformerStage(d[1], d[2], n[2], heads[0], input_grid=s3_grid)
+    # Two code paths:
+    #   * Uniform (variants 0..5): single transformer stage as before.
+    #   * Mixed (variants 6/7): MBConv sub-stage (does the spatial halving)
+    #     → 1×1 channel-expand → transformer sub-stage at the wider width.
+    s3_grid = (img_size // 8, img_size // 8)  # input to S3 (H/8 × W/8)
+    s3: nn.Module
+    s3_out_ch: int
+    if config.mixed_s3 is None:
+        s3 = _TransformerStage(d[1], d[2], n[2], heads[0], input_grid=s3_grid)
+        s3_out_ch = d[2]
+    else:
+        L_mb, L_attn, D_attn = config.mixed_s3
+        # MBConv sub-stage: d[1] → d[2] with stride-2 in the first block,
+        # then L_mb − 1 more isotropic blocks at d[2].  Mirrors S1/S2 layout.
+        s3_mb_layers: list[nn.Module] = [_MBConv(d[1], d[2], expand=exp, stride=2)]
+        for _ in range(1, L_mb):
+            s3_mb_layers.append(_MBConv(d[2], d[2], expand=exp, stride=1))
+        # 1×1 channel-expand transition: d[2] → D_attn (no spatial change).
+        # Paper §A.2 only says "double the hidden dimension"; we realise it
+        # as the standard 1×1 conv + BN + GELU used elsewhere in CoAtNet.
+        s3_expand = nn.Sequential(
+            nn.Conv2d(d[2], D_attn, 1, bias=False),
+            nn.BatchNorm2d(D_attn),
+            nn.GELU(),
+        )
+        # Transformer sub-stage at width D_attn, grid 1/16 (no further pool).
+        # Head count comes from config.attn_heads[0] — paper convention is
+        # head_dim=32 so this stays D_attn/32 for paper-faithful configs but
+        # the user can override on the config without forking the model.
+        s3_attn_grid = (img_size // 16, img_size // 16)
+        s3_attn = _TransformerStage(
+            D_attn, D_attn, L_attn, heads[0],
+            input_grid=s3_attn_grid, downsample=False,
+        )
+        s3 = nn.Sequential(*s3_mb_layers, s3_expand, s3_attn)
+        s3_out_ch = D_attn
     # After S3: H/16 × W/16
 
     # ------------------------------------------------------------------ S4
     s4_grid = (img_size // 16, img_size // 16)  # input to S4
-    s4 = _TransformerStage(d[2], d[3], n[3], heads[1], input_grid=s4_grid)
+    s4 = _TransformerStage(s3_out_ch, d[3], n[3], heads[1], input_grid=s4_grid)
     # After S4: H/32 × W/32
 
     feature_info = [
         FeatureInfo(stage=1, num_channels=d[0], reduction=4),
         FeatureInfo(stage=2, num_channels=d[1], reduction=8),
-        FeatureInfo(stage=3, num_channels=d[2], reduction=16),
+        FeatureInfo(stage=3, num_channels=s3_out_ch, reduction=16),
         FeatureInfo(stage=4, num_channels=d[3], reduction=32),
     ]
     return stem, s1, s2, s3, s4, feature_info

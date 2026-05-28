@@ -72,9 +72,21 @@ verified across 180 parity tests.
   - `coatnet_4` / `coatnet_4_cls` — 275M params, 85.0% top-1
   - `coatnet_5` / `coatnet_5_cls` — 688M params, 85.8% top-1
   
-  CoAtNet-6 and CoAtNet-7 (multi-axis attention variants) will land in
-  a follow-up commit that extends `_model.py` with the required
-  building block.
+  CoAtNet-6 and CoAtNet-7 land in the immediately-following commit
+  (mixed-S3 stage support via a new `mixed_s3` config field).
+
+- **`lucid.models.vision.coatnet`** — CoAtNet-6 and CoAtNet-7 from
+  paper §A.2 / Table 12.  Adds a new `mixed_s3: tuple[int, int, int] | None`
+  field to `CoAtNetConfig` and a corresponding branch in `_build_body`
+  so stage 3 can host an MBConv sub-stage followed by a 1×1 channel
+  expansion and a transformer sub-stage at the wider width (paper:
+  *"we move 2/3 of the MBConv blocks of S2 into S3 and double its
+  hidden dimension"*).  ~1.5B / ~2.4B params respectively — only
+  meaningful with very-large-scale pretraining; the paper's headline
+  88.4-89.0% ImageNet numbers come from JFT-3B + 512×512 finetune.
+  Not buildable on a 16 GB Mac host; unit tests therefore exercise
+  the mixed-S3 builder via a tiny proportional config that fits in
+  test memory.
 
 ### Added
 

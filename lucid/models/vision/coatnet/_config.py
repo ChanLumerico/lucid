@@ -149,6 +149,21 @@ class CoAtNetConfig(ModelConfig):
 
     dropout: float = 0.0
 
+    # CoAtNet-6 / CoAtNet-7 mixed-S3 spec (Dai et al., 2021, §A.2 / Table 12):
+    # When ``None`` (default for variants 0-5) the third stage is a uniform
+    # transformer stage of ``blocks_per_stage[2]`` blocks at width ``dims[2]``.
+    # When set to ``(L_mb, L_attn, D_attn)`` the third stage becomes a
+    # *mixed-block* stage: first ``L_mb`` MBConv blocks at width ``dims[2]``
+    # (entering S3 doubles channel from ``dims[1]``), then a 1×1 channel-
+    # expansion conv from ``dims[2]`` to ``D_attn`` (no spatial change), then
+    # ``L_attn`` relative-attention transformer blocks at width ``D_attn``.
+    # S4 then enters from ``D_attn`` (not ``dims[2]``) and expands to
+    # ``dims[3]`` as usual.  The paper rationale: "we move 2/3 of the MBConv
+    # blocks of S2 into S3 and double its hidden dimension" — keeps FLOPs
+    # comparable to a deeper homogeneous backbone while halving the memory
+    # footprint of the deep transformer stack.
+    mixed_s3: tuple[int, int, int] | None = None
+
     def __post_init__(self) -> None:
         object.__setattr__(self, "blocks_per_stage", tuple(self.blocks_per_stage))
         object.__setattr__(self, "dims", tuple(self.dims))

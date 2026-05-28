@@ -9,6 +9,8 @@ from lucid.models.vision.coatnet._pretrained import (
     coatnet_3, coatnet_3_cls,
     coatnet_4, coatnet_4_cls,
     coatnet_5, coatnet_5_cls,
+    coatnet_6, coatnet_6_cls,
+    coatnet_7, coatnet_7_cls,
 )
 
 __all__ = [
@@ -21,4 +23,6 @@ __all__ = [
     "coatnet_3", "coatnet_3_cls",
     "coatnet_4", "coatnet_4_cls",
     "coatnet_5", "coatnet_5_cls",
+    "coatnet_6", "coatnet_6_cls",
+    "coatnet_7", "coatnet_7_cls",
 ]
