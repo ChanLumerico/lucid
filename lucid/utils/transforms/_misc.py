@@ -105,7 +105,31 @@ class _BBoxAwareCrop:
 
 
 class BBoxSafeRandomCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
-    r"""Random crop guaranteed to contain every bounding box (Albu ``BBoxSafeRandomCrop``)."""
+    r"""Random crop guaranteed to contain every bounding box (Albumentations ``BBoxSafeRandomCrop``).
+
+    Computes the tightest axis-aligned window enclosing every box in
+    the sample, then jitters the four edges outward into the
+    surrounding image — picking a uniformly random crop within that
+    enlarged region.  The resulting crop always fully contains every
+    input box, so detection / instance-segmentation labels never need
+    to be filtered.  If the sample carries no boxes the transform
+    degenerates into a no-op identity crop covering the full image.
+
+    Parameters
+    ----------
+    erosion_rate : float, optional, default=0.0
+        Fraction by which the enclosing box-union is *shrunk* before
+        the jittered window is drawn.  ``0`` keeps every box fully
+        inside; positive values let the window cut into boxes by up
+        to ``erosion_rate`` of their extent (Albumentations parity).
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.BBoxSafeRandomCrop(p=1.0)
+    """
 
     def __init__(self, erosion_rate: float = 0.0, p: float = 1.0) -> None:
         super().__init__(p=p)
@@ -133,7 +157,35 @@ class BBoxSafeRandomCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
 
 
 class RandomSizedBBoxSafeCrop(_NoParams, Transform[Empty], _BBoxAwareCrop):
-    r"""Box-safe crop then resize to ``height`` x ``width`` (Albu ``RandomSizedBBoxSafeCrop``)."""
+    r"""Box-safe crop then resize to a fixed output size (Albumentations ``RandomSizedBBoxSafeCrop``).
+
+    Composes :class:`BBoxSafeRandomCrop` with a fixed-size
+    :class:`Resize`: first draws a window that fully contains every
+    box (eroded by ``erosion_rate``), then rescales the cropped patch
+    to ``(height, width)``.  This is the canonical training-time crop
+    for detection / instance-segmentation pipelines where the model
+    expects a fixed input resolution.
+
+    Parameters
+    ----------
+    height : int
+        Output height in pixels after the resize.
+    width : int
+        Output width in pixels after the resize.
+    erosion_rate : float, optional, default=0.0
+        Forwarded to the inner box-safe window — see
+        :class:`BBoxSafeRandomCrop`.
+    interpolation : int or str, optional, default=1
+        Resize mode; accepts reference-framework integer / name
+        aliases (``0=nearest``, ``1=bilinear``, etc.).
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomSizedBBoxSafeCrop(height=512, width=512, p=1.0)
+    """
 
     def __init__(
         self,

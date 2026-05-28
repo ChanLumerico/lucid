@@ -235,6 +235,8 @@ class CenterCrop(_NoParams, GeometricTransform[Empty]):
 
 @dataclass(frozen=True)
 class Offset:
+    """Per-call ``(top, left)`` pixel offset used by :class:`RandomCrop`."""
+
     top: int
     left: int
 

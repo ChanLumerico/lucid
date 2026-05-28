@@ -68,11 +68,18 @@ class WarpParams:
 
 @dataclass(frozen=True)
 class FlipAxis:
-    code: int  # 1 = horizontal, 0 = vertical, -1 = both
+    """Per-call flip axis used by :class:`Flip` / :class:`Transpose`.
+
+    ``code = 1`` flips horizontally, ``0`` vertically, ``-1`` both.
+    """
+
+    code: int
 
 
 @dataclass(frozen=True)
 class Rot90Param:
+    """Per-call number of 90° rotations used by :class:`RandomRotate90`."""
+
     k: int
 
 
@@ -443,6 +450,8 @@ class Perspective(_WarpTransform):
 
 @dataclass(frozen=True)
 class ScaleParam:
+    """Per-call target ``(new_h, new_w)`` used by :class:`RandomScale`."""
+
     new_h: int
     new_w: int
 
@@ -509,8 +518,14 @@ class RandomScale(GeometricTransform[ScaleParam]):
 
 @dataclass(frozen=True)
 class D4Param:
-    k: int  # number of 90° rotations
-    flip: bool  # then horizontal flip
+    """Per-call dihedral-4 (square symmetry) parameters used by :class:`D4`.
+
+    ``k`` 90°-rotations followed by an optional horizontal ``flip``
+    covers the eight elements of the symmetry group of a square.
+    """
+
+    k: int
+    flip: bool
 
 
 class D4(GeometricTransform[D4Param]):
@@ -552,9 +567,47 @@ class D4(GeometricTransform[D4Param]):
 
 
 class SafeRotate(_WarpTransform):
-    r"""Rotate by a random angle, expanding the canvas to keep all content.
+    r"""Rotate by a random angle, expanding the canvas to keep all content (Albumentations ``SafeRotate``).
 
-    Albumentations ``SafeRotate``.
+    Like :class:`Rotate` but enlarges the output canvas so the full
+    rotated rectangle fits without clipping.  The new size is
+
+    .. math:: (W',\, H') = \left(\lceil W\cos\theta + H\sin\theta\rceil,
+        \; \lceil W\sin\theta + H\cos\theta\rceil\right),
+
+    with :math:`\theta` sampled per call from ``limit``.  The affine
+    matrix is built as "rotate about the old center, then translate
+    into the centre of the new canvas" — so straight rotations
+    (multiples of 90°) preserve pixel positions exactly within their
+    new canvas, and content never leaves the frame.
+
+    Parameters
+    ----------
+    limit : float or (float, float), optional, default=90
+        Range from which the rotation angle (degrees, image-space CW)
+        is sampled uniformly.  A scalar ``a`` is treated as ``(-a, a)``.
+    interpolation : int, str, or Interpolation, optional, default=1
+        Resampling mode; accepts the integer / name aliases used by the
+        reference framework (``0=nearest``, ``1=bilinear``).
+    border_mode : int, optional, default=4
+        Border handling mode (reference-framework convention).
+        ``0`` is constant fill with ``value``; other modes mirror /
+        reflect the boundary.
+    value : float, optional, default=0.0
+        Constant fill value used when ``border_mode == 0``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.SafeRotate(limit=(45, 45), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 24, 32))).data
+    >>> out.shape[0]               # channels preserved
+    3
+    >>> out.shape[-1] >= 32        # width expanded to fit rotated content
+    True
     """
 
     def __init__(
@@ -597,6 +650,8 @@ class SafeRotate(_WarpTransform):
 
 @dataclass(frozen=True)
 class ShuffleParam:
+    """Per-call cell permutation and ``(rows, cols)`` grid for :class:`RandomGridShuffle`."""
+
     perm: tuple[int, ...]
     grid: tuple[int, int]
 

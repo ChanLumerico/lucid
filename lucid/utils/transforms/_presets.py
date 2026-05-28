@@ -233,12 +233,42 @@ class AutoTransformsPreset:
 
     @staticmethod
     def from_dict(cfg: dict[str, object]) -> TransformsPreset:
-        """Reconstruct a preset from a :meth:`TransformsPreset.to_dict` payload."""
+        """Reconstruct a preset from a :meth:`TransformsPreset.to_dict` payload.
+
+        Dispatches on the ``preprocessor_type`` key to the registered
+        :class:`TransformsPreset` subclass and forwards ``init_kwargs``
+        to its constructor.  Symmetric with :meth:`TransformsPreset.to_dict`
+        — the round-trip ``from_dict(p.to_dict())`` produces a preset
+        with identical behaviour.
+
+        Parameters
+        ----------
+        cfg : dict
+            ``{"preprocessor_type": <class-key>, "init_kwargs": {...}}``
+            payload — typically loaded from a pretrained model's
+            ``preprocessor_config.json``.
+
+        Returns
+        -------
+        TransformsPreset
+            Fresh instance of the named subclass.
+
+        Raises
+        ------
+        ValueError
+            If ``preprocessor_type`` is missing or names an unknown
+            preset; if ``init_kwargs`` is not a dict.
+        """
         return TransformsPreset.from_dict(cfg)
 
     @staticmethod
     def registered() -> list[str]:
-        """Return the sorted list of registered preset type keys."""
+        """Return the sorted list of registered preset type keys.
+
+        Useful for discovery / introspection — every returned name is
+        a legal value of the ``preprocessor_type`` field accepted by
+        :meth:`from_dict`.
+        """
         return sorted(_PRESET_REGISTRY)
 
 

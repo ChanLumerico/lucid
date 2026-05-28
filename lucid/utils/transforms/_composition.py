@@ -45,7 +45,32 @@ class _Container(_NoParams, Transform[Empty]):
 
 
 class OneOf(_Container):
-    r"""Apply exactly one child, chosen by child-``p`` weight (Albumentations ``OneOf``)."""
+    r"""Apply exactly one child, sampled by child-``p`` weight (Albumentations ``OneOf``).
+
+    On each call (gated by the container's ``p``), draws a single child
+    via a categorical distribution whose weights are the children's
+    own ``p`` values normalised to sum to 1.  The selected child is
+    then forced to run with its own probability gate bypassed — its
+    ``p`` acts purely as a *selection weight*, not a per-call
+    skip-probability.  Equal weights ⇒ uniform sampling.
+
+    Parameters
+    ----------
+    transforms : list of TransformLike
+        Candidate children.  Each child's ``p`` is used as its
+        unnormalised selection weight; raw callables get weight 1.
+    p : float, optional, default=0.5
+        Container-level gate — with probability ``1 - p`` the entire
+        block is skipped and the input passes through unchanged.
+
+    Examples
+    --------
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.OneOf([
+    ...     T.HorizontalFlip(p=1.0),
+    ...     T.VerticalFlip(p=1.0),
+    ... ], p=1.0)
+    """
 
     def __init__(self, transforms: list[TransformLike], p: float = 0.5) -> None:
         super().__init__(transforms, p=p)
@@ -140,7 +165,32 @@ class Sequential(_Container):
 
 
 class OneOrOther(_Container):
-    r"""Apply ``first`` with probability ``p`` else ``second`` (Albumentations ``OneOrOther``)."""
+    r"""Apply ``first`` with probability ``p`` else ``second`` (Albumentations ``OneOrOther``).
+
+    A two-way categorical: every call invokes either ``first`` or
+    ``second``, never both, never neither.  The selected child is
+    forced to run with its own probability gate bypassed — ``p`` here
+    is the *switch* between the two branches, not a skip-probability,
+    so the container has effective probability 1.
+
+    Parameters
+    ----------
+    first : TransformLike
+        Child invoked when the per-call uniform sample is below ``p``.
+    second : TransformLike
+        Child invoked otherwise.
+    p : float, optional, default=0.5
+        Switch probability; ``0.5`` gives the two branches equal odds.
+
+    Examples
+    --------
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.OneOrOther(
+    ...     first=T.HorizontalFlip(p=1.0),
+    ...     second=T.VerticalFlip(p=1.0),
+    ...     p=0.7,
+    ... )
+    """
 
     def __init__(
         self, first: TransformLike, second: TransformLike, p: float = 0.5
@@ -194,6 +244,27 @@ class ReplayCompose(_Container):
     def replay(
         self, saved: list[tuple[TransformLike, object, bool]], inputs: object
     ) -> object:
+        """Re-apply a previously recorded ``replay_data`` to a new sample.
+
+        Walks the saved ``(transform, params, applied)`` log in order
+        and dispatches each :class:`Transform` with its *original*
+        sampled params (no fresh sampling).  Raw callables are
+        re-invoked without parameters.  Records marked ``applied=False``
+        are skipped, preserving the original gate decisions.
+
+        Parameters
+        ----------
+        saved : list of (TransformLike, object, bool)
+            Trace produced by an earlier :meth:`__call__`; usually
+            ``other_compose.replay_data``.
+        inputs : object
+            Sample to feed through the replayed pipeline.
+
+        Returns
+        -------
+        object
+            The replayed output, structurally matching ``inputs``.
+        """
         out = inputs
         for tf, params, applied in saved:
             if not applied:

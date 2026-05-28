@@ -16,9 +16,14 @@ from lucid.utils.transforms._base import PhotometricTransform
 
 @dataclass
 class HoleParams:
-    holes: list[tuple[int, int, int, int]] = field(
-        default_factory=list
-    )  # (top,left,h,w)
+    """Per-call list of ``(top, left, height, width)`` cutout windows.
+
+    Used by :class:`CoarseDropout` / :class:`GridDropout` to carry the
+    sampled rectangle list from ``make_params`` into the shared apply
+    path so image, mask, boxes, and keypoints all see the same holes.
+    """
+
+    holes: list[tuple[int, int, int, int]] = field(default_factory=list)
 
 
 def _apply_holes(

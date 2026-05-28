@@ -23,17 +23,23 @@ def _rng(value: float | tuple[float, float]) -> tuple[float, float]:
 
 @dataclass(frozen=True)
 class BCParams:
+    """Per-call brightness offset and contrast multiplier."""
+
     brightness: float
     contrast: float
 
 
 @dataclass(frozen=True)
 class ScalarParams:
+    """Single per-call scalar (gamma exponent, posterise bits, etc.)."""
+
     value: float
 
 
 @dataclass(frozen=True)
 class TripletParams:
+    """Three per-call scalars; interpretation depends on the host transform."""
+
     a: float
     b: float
     c: float
@@ -41,11 +47,15 @@ class TripletParams:
 
 @dataclass(frozen=True)
 class PermParams:
+    """Per-call channel permutation used by :class:`ChannelShuffle`."""
+
     order: tuple[int, int, int]
 
 
 @dataclass(frozen=True)
 class ChannelDropParams:
+    """Per-call set of channel indices to zero out (used by :class:`ChannelDropout`)."""
+
     channels: tuple[int, ...]
 
 
@@ -1004,7 +1014,45 @@ class RandomContrast(PhotometricTransform[ScalarParams]):
 
 
 class UnsharpMask(PhotometricTransform[TripletParams]):
-    r"""Unsharp masking — sharpen via ``img + alpha*(img - blur)`` (Albu ``UnsharpMask``)."""
+    r"""Unsharp-mask sharpen via ``img + alpha*(img - blur)`` (Albumentations ``UnsharpMask``).
+
+    Subtracts a Gaussian-blurred copy from the original and adds the
+    high-frequency residual back, scaled by ``alpha``.  This is the
+    photographic "unsharp mask" used to enhance edges without amplifying
+    noise as much as a raw Laplacian sharpen would.  The kernel size
+    ``k`` and Gaussian ``sigma`` are sampled per call from
+    ``blur_limit`` / ``sigma_limit``; ``sigma`` defaults to the
+    OpenCV-style heuristic ``0.3 * ((k - 1) * 0.5 - 1.0) + 0.8`` when
+    the sampled value is non-positive.
+
+    Parameters
+    ----------
+    blur_limit : (int, int), optional, default=(3, 7)
+        Inclusive range from which the Gaussian kernel size ``k`` is
+        sampled (snapped to the next odd integer).
+    sigma_limit : float or (float, float), optional, default=0.0
+        Range from which the Gaussian standard deviation is sampled
+        uniformly.  A scalar ``s`` is treated as ``(0, s)``; ``0`` falls
+        back to the kernel-derived heuristic above.
+    alpha : (float, float), optional, default=(0.2, 0.5)
+        Range from which the residual blend weight is sampled
+        uniformly; higher values yield a stronger sharpen.
+    threshold : float, optional, default=10.0
+        Reserved for parity with the reference framework's
+        masked-residual variant; kept on the signature for forward
+        compatibility but currently unused (every pixel is sharpened).
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.UnsharpMask(blur_limit=(3, 7), alpha=(0.2, 0.5), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -1152,6 +1200,8 @@ class FancyPCA(PhotometricTransform[Empty]):
 
 @dataclass(frozen=True)
 class PixelMaskParams:
+    """Per-call dropout mask (broadcastable to the image) used by :class:`PixelDropout`."""
+
     mask: Tensor
 
 
@@ -1216,6 +1266,11 @@ class PixelDropout(PhotometricTransform[PixelMaskParams]):
 
 @dataclass(frozen=True)
 class BandParams:
+    """Per-call row / column band intervals used by :class:`XYMasking`.
+
+    Each interval is ``(start, stop)`` in pixel coordinates (half-open).
+    """
+
     rows: tuple[tuple[int, int], ...]
     cols: tuple[tuple[int, int], ...]
 

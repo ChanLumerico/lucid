@@ -957,7 +957,31 @@ def remap(img: Tensor, dx: Tensor, dy: Tensor, *, mode: str = "bilinear") -> Ten
 def sample_field_at_points(
     field: Tensor, pts: Tensor, canvas_hw: tuple[int, int]
 ) -> Tensor:
-    """Bilinearly sample a ``(H, W)`` field at ``(N, 2)`` ``(x, y)`` points → ``(N, 1)``."""
+    """Bilinearly sample a 2-D scalar field at arbitrary continuous points.
+
+    Wraps :func:`grid_sample` for the common case of looking up
+    displacement / flow / mask values at non-integer keypoint
+    coordinates.  The points are converted from pixel space to the
+    ``[-1, 1]`` normalised grid expected by :func:`grid_sample` using
+    the same ``align_corners=True`` convention adopted across
+    ``lucid.utils.transforms``.
+
+    Parameters
+    ----------
+    field : Tensor of shape (H, W)
+        Scalar field to sample.
+    pts : Tensor of shape (N, 2)
+        Pixel-space ``(x, y)`` query points; ``x`` along width,
+        ``y`` along height.
+    canvas_hw : (int, int)
+        ``(H, W)`` of ``field`` — passed in explicitly to avoid an
+        extra shape inspection inside the warp dispatch.
+
+    Returns
+    -------
+    Tensor of shape (N, 1)
+        Bilinearly-interpolated field values at the query points.
+    """
     h, w = canvas_hw
     n = int(pts.shape[0])
     gx = 2.0 * pts[:, 0:1] / (w - 1) - 1.0

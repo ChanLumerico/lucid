@@ -25,6 +25,8 @@ from lucid.utils.transforms._interpolation import Interpolation, as_interpolatio
 
 @dataclass(frozen=True)
 class CropBox:
+    """Per-call crop window ``(top, left, height, width)`` in pixel coordinates."""
+
     top: int
     left: int
     height: int

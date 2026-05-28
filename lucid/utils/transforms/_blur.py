@@ -20,34 +20,46 @@ def _odd(k: int) -> int:
 
 @dataclass(frozen=True)
 class KSizeParam:
+    """Per-call kernel-size parameter (used by box / median / Gaussian blurs)."""
+
     ksize: int
 
 
 @dataclass(frozen=True)
 class SigmaParam:
+    """Per-call kernel size + Gaussian standard deviation."""
+
     ksize: int
     sigma: float
 
 
 @dataclass(frozen=True)
 class MotionParam:
+    """Per-call motion-blur parameters: kernel size + line angle (degrees)."""
+
     ksize: int
     angle: float
 
 
 @dataclass(frozen=True)
 class NoiseParam:
+    """Per-call additive-noise standard deviation."""
+
     std: float
 
 
 @dataclass(frozen=True)
 class MultiplierParam:
+    """Per-call multiplicative-noise bounds (lower / upper)."""
+
     lo: float
     hi: float
 
 
 @dataclass(frozen=True)
 class ScaleParam:
+    """Per-call downscale factor used by :class:`Downscale`."""
+
     scale: float
 
 
@@ -376,6 +388,8 @@ class Downscale(PhotometricTransform[ScaleParam]):
 
 @dataclass(frozen=True)
 class RadiusParam:
+    """Per-call disk-kernel radius used by :class:`Defocus`."""
+
     radius: int
 
 
@@ -421,6 +435,8 @@ class Defocus(PhotometricTransform[RadiusParam]):
 
 @dataclass(frozen=True)
 class ZoomParam:
+    """Per-call zoom factor used by :class:`ZoomBlur` (>1 = zoom in)."""
+
     factor: float
 
 
