@@ -90,5 +90,35 @@ class TestCLAHE:
         assert tuple(out.shape) == (3, 28, 36)
 
 
+# ── Posterize modes ──────────────────────────────────────────────────
+
+
+class TestPosterize:
+    def test_uint8_mask_distinct_levels(self) -> None:
+        # 3 bits → 8 distinct values; the bit mask zeros the low 5 bits.
+        lucid.manual_seed(0)
+        img = lucid.rand(3, 16, 16)
+        out = T.Posterize(num_bits=3, mode="uint8_mask", p=1.0)(T.Image(img)).data
+        unique = set(out.numpy().reshape(-1).tolist())
+        assert len(unique) <= 8
+
+    def test_float_mode_is_strictly_lower_bound(self) -> None:
+        # float floor → result strictly ≤ original.
+        lucid.manual_seed(1)
+        img = lucid.rand(3, 8, 8)
+        out = T.Posterize(num_bits=4, mode="float", p=1.0)(T.Image(img)).data
+        assert float((out - img).max().item()) <= 0.0 + 1e-7
+
+    def test_invalid_num_bits_raises(self) -> None:
+        with pytest.raises(ValueError):
+            T.Posterize(num_bits=0)
+        with pytest.raises(ValueError):
+            T.Posterize(num_bits=8)
+
+    def test_invalid_mode_raises(self) -> None:
+        with pytest.raises(ValueError):
+            T.Posterize(num_bits=4, mode="bitmask")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -319,11 +319,43 @@ class Solarize(PhotometricTransform[ScalarParams]):
 
 
 class Posterize(PhotometricTransform[Empty]):
-    r"""Reduce bits per channel (Albumentations ``Posterize``)."""
+    r"""Reduce bits per channel (Albumentations ``Posterize``).
 
-    def __init__(self, num_bits: int = 4, p: float = 0.5) -> None:
+    Two quantisation modes:
+
+    * ``"uint8_mask"`` (default) — matches Albumentations / OpenCV bit-
+      exactly.  Internally converts to ``uint8`` and applies the bit
+      mask ``~((1 << (8 - num_bits)) - 1)``, then back to ``[0, 1]``.
+      Use this when you need numerical parity with reference pipelines.
+    * ``"float"`` — pure-float quantisation via
+      ``floor(x * 2**num_bits) / 2**num_bits``.  Slightly different
+      mid-bin placement than the OpenCV bit-mask; cheaper (no
+      round-trip).  Use for novel pipelines where Albu parity isn't
+      required.
+
+    Parameters
+    ----------
+    num_bits : int, optional, default=4
+        Number of bits to keep per channel; output has ``2**num_bits``
+        distinct levels.  Must be in ``[1, 7]``.
+    mode : str, optional, default="uint8_mask"
+        Quantisation algorithm; see above.
+    p : float, optional, default=0.5
+    """
+
+    def __init__(
+        self,
+        num_bits: int = 4,
+        mode: str = "uint8_mask",
+        p: float = 0.5,
+    ) -> None:
         super().__init__(p=p)
+        if not 1 <= num_bits <= 7:
+            raise ValueError(f"num_bits must be in [1, 7], got {num_bits}")
+        if mode not in ("uint8_mask", "float"):
+            raise ValueError(f"mode must be 'uint8_mask' or 'float', got {mode!r}")
         self.num_bits = num_bits
+        self.mode = mode
 
     def make_params(self, img: Tensor) -> Empty:
         from lucid.utils.transforms._base import NO_PARAMS
@@ -331,11 +363,19 @@ class Posterize(PhotometricTransform[Empty]):
         return NO_PARAMS
 
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
-        levels = float(2**self.num_bits)
-        return lucid.floor(lucid.clip(img, 0.0, 1.0) * levels) / levels
+        if self.mode == "float":
+            levels = float(2**self.num_bits)
+            return lucid.floor(lucid.clip(img, 0.0, 1.0) * levels) / levels
+        # uint8_mask — round to uint8, apply bit mask, back to float
+        mask_int = (~((1 << (8 - self.num_bits)) - 1)) & 0xFF
+        u8 = lucid.clip(lucid.round(img * 255.0), 0.0, 255.0).long()
+        masked = u8 & mask_int
+        return masked.to(img.dtype) / 255.0
 
     def __repr__(self) -> str:
-        return f"Posterize(num_bits={self.num_bits}, p={self.p})"
+        return (
+            f"Posterize(num_bits={self.num_bits}, mode={self.mode!r}, p={self.p})"
+        )
 
 
 class InvertImg(_NoParams, PhotometricTransform[Empty]):

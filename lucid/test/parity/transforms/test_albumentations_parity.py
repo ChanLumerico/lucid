@@ -101,6 +101,15 @@ class TestExact:
         )
         np.testing.assert_allclose(got, ref, atol=1e-5)
 
+    @pytest.mark.parametrize("num_bits", [1, 2, 3, 4, 5, 6, 7])
+    def test_posterize_uint8_mask(self, num_bits: int) -> None:
+        # Float-eps tier: uint8 bit-mask round-trip matches Albu's cv2
+        # path to float32 epsilon for every supported bit count.
+        chw, hwc = _image(8 + num_bits)
+        got = _run_lucid(T.Posterize(num_bits=num_bits, mode="uint8_mask", p=1.0), chw)
+        ref = _run_albu(A.Posterize(num_bits=num_bits, p=1.0), hwc)
+        np.testing.assert_allclose(got, ref, atol=1e-5)
+
     def test_to_gray(self) -> None:
         chw, hwc = _image(4)
         got = _run_lucid(T.ToGray(p=1.0), chw)
@@ -135,6 +144,109 @@ class TestBallpark:
             hwc,
         )
         assert np.abs(got - ref).max() < 0.05
+
+
+# ── multi-seed statistical aggregate ────────────────────────────────
+
+
+class TestStatisticalParity:
+    """Replays each exact-tier transform over many seeds and asserts the
+    *max* and *mean* difference stay within the documented tolerance.
+
+    A single-seed match in :class:`TestExact` could be coincidence;
+    these aggregate checks pin the parity claim across the input
+    distribution rather than at one point.
+    """
+
+    N_SEEDS = 200  # ~3 s total on M-series; still meaningful coverage.
+
+    def _aggregate(
+        self,
+        make_lucid: object,
+        make_albu: object,
+        *,
+        atol: float = 1e-5,
+        shape: tuple[int, int] = (24, 32),
+    ) -> None:
+        max_diffs: list[float] = []
+        for seed in range(self.N_SEEDS):
+            chw, hwc = _image(seed, *shape)
+            got = _run_lucid(make_lucid(), chw)  # type: ignore[operator]
+            ref = _run_albu(make_albu(), hwc)  # type: ignore[operator]
+            max_diffs.append(float(np.abs(got - ref).max()))
+        worst = max(max_diffs)
+        mean = float(np.mean(max_diffs))
+        # Worst-case bound: 50× the per-seed tolerance — catches the
+        # "lucky single-seed match" case where most seeds diverge.
+        # Mean must stay below the per-seed tolerance.
+        worst_bound = max(atol * 50, 1e-12)  # avoid 0-vs-0 strict-less trap
+        assert worst <= worst_bound, (
+            f"worst-case diff {worst:.3e} exceeds {worst_bound:.3e} "
+            f"across {self.N_SEEDS} seeds"
+        )
+        assert mean <= atol or mean < 1e-12, (
+            f"mean-of-max diff {mean:.3e} exceeds {atol:.3e} "
+            f"across {self.N_SEEDS} seeds"
+        )
+
+    def test_horizontal_flip_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.HorizontalFlip(p=1.0), lambda: A.HorizontalFlip(p=1.0), atol=0.0
+        )
+
+    def test_vertical_flip_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.VerticalFlip(p=1.0), lambda: A.VerticalFlip(p=1.0), atol=0.0
+        )
+
+    def test_invert_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.InvertImg(p=1.0), lambda: A.InvertImg(p=1.0), atol=0.0
+        )
+
+    def test_normalize_aggregate(self) -> None:
+        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+        self._aggregate(
+            lambda: T.Normalize(mean, std, max_pixel_value=1.0, p=1.0),
+            lambda: A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0),
+        )
+
+    def test_to_gray_aggregate(self) -> None:
+        self._aggregate(lambda: T.ToGray(p=1.0), lambda: A.ToGray(p=1.0))
+
+    def test_resize_bilinear_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.Resize(12, 16, p=1.0),
+            lambda: A.Resize(12, 16, interpolation=1, p=1.0),
+        )
+
+    def test_resize_nearest_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.Resize(12, 16, interpolation="nearest", p=1.0),
+            lambda: A.Resize(12, 16, interpolation=0, p=1.0),
+            atol=0.0,
+        )
+
+    def test_center_crop_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.CenterCrop(16, 20, p=1.0),
+            lambda: A.CenterCrop(16, 20, p=1.0),
+            atol=0.0,
+        )
+
+    def test_crop_aggregate(self) -> None:
+        self._aggregate(
+            lambda: T.Crop(2, 3, 18, 23, p=1.0),
+            lambda: A.Crop(2, 3, 18, 23, p=1.0),
+            atol=0.0,
+        )
+
+    @pytest.mark.parametrize("num_bits", [3, 5])
+    def test_posterize_aggregate(self, num_bits: int) -> None:
+        self._aggregate(
+            lambda nb=num_bits: T.Posterize(num_bits=nb, mode="uint8_mask", p=1.0),
+            lambda nb=num_bits: A.Posterize(num_bits=nb, p=1.0),
+        )
 
 
 if __name__ == "__main__":
