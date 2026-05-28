@@ -18,7 +18,9 @@ Two responsibilities:
    on every call.
 """
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, cast
+
+from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
     from lucid.compile._signature import CacheKey
@@ -53,7 +55,9 @@ def run_eager(
         outputs (lists, dicts, dataclasses).
     """
 
-    return model(*args, **kwargs)
+    # Module.__call__ wants Tensor positionals; the docstring promises
+    # this entry accepts whatever the user passed (incl. non-Tensor).
+    return model(*(cast(Tensor, a) for a in args), **kwargs)
 
 
 class EagerFallbackSet:

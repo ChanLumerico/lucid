@@ -18,7 +18,7 @@ Audit reference: this addresses #6/#7 of the production-OOP audit
 
 import enum
 from dataclasses import dataclass, field
-from typing import Mapping
+from typing import Callable, Mapping
 
 from lucid.optim.optimizer import Optimizer
 
@@ -152,12 +152,18 @@ class OptimizerSpec:
 def _hp(g: Mapping[str, object], key: str, default: float) -> float:
     """Extract a float hyperparameter with the named default."""
     v = g.get(key, default)
-    return float(v) if v is not None else default
+    if v is None:
+        return default
+    if not isinstance(v, (int, float, bool)):
+        raise TypeError(
+            f"hyperparameter {key!r} must be numeric, got {type(v).__name__}"
+        )
+    return float(v)
 
 
 def _sgd_spec(opt: Optimizer) -> OptimizerSpec:
     g = opt.param_groups[0]
-    has_mom = float(g.get("momentum", 0.0)) != 0.0
+    has_mom = _hp(g, "momentum", 0.0) != 0.0
     return OptimizerSpec(
         kind=OptimizerKind.SGD,
         lr=_hp(g, "lr", 0.0),
@@ -189,7 +195,7 @@ def _adamw_spec(opt: Optimizer) -> OptimizerSpec:
 
 def _rmsprop_spec(opt: Optimizer) -> OptimizerSpec:
     g = opt.param_groups[0]
-    has_mom = float(g.get("momentum", 0.0)) != 0.0
+    has_mom = _hp(g, "momentum", 0.0) != 0.0
     return OptimizerSpec(
         kind=OptimizerKind.RMSPROP,
         lr=_hp(g, "lr", 0.01),
@@ -252,7 +258,7 @@ def _nadam_spec(opt: Optimizer) -> OptimizerSpec:
     )
 
 
-_CLASS_NAME_TO_FACTORY = {
+_CLASS_NAME_TO_FACTORY: dict[str, Callable[[Optimizer], OptimizerSpec]] = {
     "SGD": _sgd_spec,
     "Adam": _adam_spec,
     "AdamW": _adamw_spec,

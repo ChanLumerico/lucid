@@ -106,9 +106,9 @@ def checkpoint(
             return output
 
         @staticmethod
-        def backward(  # type: ignore[override]  # narrower signature than Function/Module base by design
+        def backward(  # type: ignore[override]  # reason: narrower return (tuple[Tensor|None,...]) than base's union — established convention; see linalg/__init__.py.
             ctx: FunctionCtx, grad_output: Tensor
-        ) -> tuple["Tensor | None", ...]:
+        ) -> tuple[Tensor | None, ...]:
             inputs = ctx.saved_tensors
 
             # Detach inputs so the re-run doesn't accumulate into their .grad

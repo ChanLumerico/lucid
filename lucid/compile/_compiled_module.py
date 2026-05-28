@@ -28,12 +28,28 @@ Acceptance gate (Plan §1.4):
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, Mapping
+from typing import TYPE_CHECKING, Callable, Iterator, Mapping, Protocol, cast
+
+
+# Engine-side objects exposed via pybind11; the binding doesn't carry
+# stubs, so we name the surface we actually use here.
+class _TracerLike(Protocol):
+    graph: object
+    external_feeds: dict[int, object]
+
+    def lookup_id(self, impl: object) -> int | None: ...
+
+
+class _ExecutableLike(Protocol):
+    input_ids: list[int]
+    output_ids: list[int]
+    num_inputs: int
 
 from lucid._C import engine as _C_engine
 
 from lucid.compile._fallback import EagerFallbackSet, run_eager
 from lucid.compile._signature import CacheKey, signature_of
+from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
 if TYPE_CHECKING:
@@ -55,7 +71,9 @@ if TYPE_CHECKING:
 #                                                       ("logits", ("tensor", 1))])
 
 
-def _extract_return_impls(value: object, tracer: object) -> tuple[object, list[int]]:
+def _extract_return_impls(
+    value: object, tracer: _TracerLike
+) -> tuple[object, list[int]]:
     """Walk ``value`` and replace every Tensor with a slot descriptor.
 
     Returns ``(return_spec, explicit_outputs)`` where:
@@ -190,6 +208,21 @@ class _CacheEntry:
 
 
 class CompiledModule:
+    # ── Class-level annotations ──────────────────────────────────
+    # All instance attrs are written via ``object.__setattr__`` to
+    # bypass ``Module.__setattr__`` (we are NOT an nn.Module
+    # subclass — we just delegate to one).  Declaring them at the
+    # class level gives mypy a real type for each, so the delegation
+    # methods below (parameters / state_dict / to / train / …) stay
+    # checkable instead of collapsing to ``object``.
+    _model: Module
+    _dynamic: bool
+    _cache: dict[CacheKey, _CacheEntry]
+    _eager_only: EagerFallbackSet
+    _call_counter: dict[CacheKey, int]
+    _param_fp_cache: tuple[tuple[str, str], ...] | None
+    _step_callables: dict[int, Callable[..., Tensor]]
+
     r"""User-facing wrapper returned by :func:`lucid.compile`.
 
     Wraps an :class:`nn.Module` (or any callable, via the internal
@@ -301,7 +334,7 @@ class CompiledModule:
     :func:`compile_optimizer` : compile only the update step.
     """
 
-    def __init__(self, model: object, *, dynamic: bool = False) -> None:
+    def __init__(self, model: Module, *, dynamic: bool = False) -> None:
         """Wrap ``model`` for cached graph-capture execution.
 
         Parameters
@@ -349,9 +382,9 @@ class CompiledModule:
         # parameters / state_dict double-count).
         object.__setattr__(self, "_model", model)
         object.__setattr__(self, "_dynamic", bool(dynamic))
-        object.__setattr__(self, "_cache", {})  # type: ignore[var-annotated]
+        object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_eager_only", EagerFallbackSet())
-        object.__setattr__(self, "_call_counter", {})  # type: ignore[var-annotated]
+        object.__setattr__(self, "_call_counter", {})
         # Param fingerprint cache — invalidated by train()/eval()/to()/
         # load_state_dict() (those all call clear_cache).  Without this
         # signature_of would walk model.parameters() on every __call__,
@@ -364,7 +397,7 @@ class CompiledModule:
         # intentionally key by object identity, not value equality —
         # a fresh closure each call would defeat the cache, which the
         # docstring warns about.
-        object.__setattr__(self, "_step_callables", {})  # type: ignore[var-annotated]
+        object.__setattr__(self, "_step_callables", {})
 
     # ── Delegation surface ────────────────────────────────────────
 
@@ -397,11 +430,18 @@ class CompiledModule:
         """Delegate to ``model.buffers``; buffers are pinned trace constants."""
         return self._model.buffers(recurse=recurse)
 
-    def state_dict(self, *args: object, **kwargs: object) -> Mapping[str, object]:
+    def state_dict(
+        self,
+        destination: dict[str, Tensor] | None = None,
+        prefix: str = "",
+        keep_vars: bool = False,
+    ) -> dict[str, Tensor]:
         """Delegate to ``model.state_dict`` — the cache holds no separate state."""
-        return self._model.state_dict(*args, **kwargs)
+        return self._model.state_dict(destination, prefix, keep_vars)
 
-    def load_state_dict(self, *args: object, **kwargs: object) -> object:
+    def load_state_dict(
+        self, state_dict: dict[str, Tensor], strict: bool = True, assign: bool = False
+    ) -> object:
         """Forward to ``model.load_state_dict`` and **drop the cache**.
 
         Loading new weights doesn't change the graph topology, but
@@ -413,7 +453,7 @@ class CompiledModule:
         # Loading new weights doesn't invalidate the graph itself —
         # only its captured constants would — but the safe default is
         # to drop the cache so the user never sees stale graph state.
-        result = self._model.load_state_dict(*args, **kwargs)
+        result = self._model.load_state_dict(state_dict, strict, assign)
         self.clear_cache()
         return result
 
@@ -549,7 +589,7 @@ class CompiledModule:
     def step(
         self,
         *args: object,
-        loss_fn: object,
+        loss_fn: Callable[..., Tensor] | None,
     ) -> object:
         """Run one compiled training step.
 
@@ -765,7 +805,10 @@ class CompiledModule:
         t_compile_start = time.perf_counter()
         with no_grad():
             with _tracing() as tracer:
-                return_value = self._model(*args, **kwargs)
+                # Module.__call__ wants Tensor positionals; the runtime
+                # may receive non-Tensor extras (CompileModule preserves
+                # whatever the user passed).  Cast each at the boundary.
+                return_value = self._model(*(cast(Tensor, a) for a in args), **kwargs)
 
         graph = tracer.graph
         if not graph.ops:
@@ -867,7 +910,8 @@ class CompiledModule:
 
         # Build the feed list in exe.input_ids order.
         feed_impls: list[object] = []
-        for tid, src in zip(entry.exe.input_ids, entry.input_source):
+        exe = cast(_ExecutableLike, entry.exe)
+        for tid, src in zip(exe.input_ids, entry.input_source):
             if src is None:
                 # Pinned parameter / constant — use the trace-time impl.
                 feed_impls.append(entry.external_feeds[tid])
@@ -891,7 +935,7 @@ class CompiledModule:
         # heuristic if the spec is missing (older cached entries).
         outs_wrapped = [_wrap(o) for o in outs]
         if entry.return_spec is not None:
-            return _repack_outputs(entry.return_spec, outs_wrapped)
+            return _repack_outputs(entry.return_spec, cast(list[object], outs_wrapped))
 
         # Legacy: single forward output → plain Tensor.  Multi-output →
         # tuple.  No grad_fn — the compiled forward graph is its own

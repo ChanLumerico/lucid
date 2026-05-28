@@ -40,9 +40,12 @@ fallback policy).
 import sys
 import types
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast
 
 from lucid._C import engine as _C_engine
+from lucid._tensor import Tensor
+from lucid._types import _ModuleOutput
+from lucid.nn.module import Module as _Module
 
 if TYPE_CHECKING:
     # The Tracer class lives in the `_C.engine.compile` sub-module.  The
@@ -206,18 +209,27 @@ def load_compiled(path: str) -> object:
             f"load_compiled: missing artifact at {path!r} — expected both "
             f"{pkg_path!r} and {meta_path!r}."
         )
-    exe = _C_engine.compile.load_executable(path)
-    if exe is None:
+    # Engine-level executable handle — its attributes are pybind11
+    # objects, untyped at the Python boundary.  Narrow via a small
+    # Protocol so the wrapper class stays type-checked.
+    class _ExecutableHandle(Protocol):
+        num_inputs: int
+        input_ids: list[int]
+        output_ids: list[int]
+
+    exe_raw = _C_engine.compile.load_executable(path)
+    if exe_raw is None:
         raise RuntimeError(
             f"load_compiled: failed to deserialise {path!r} — likely an "
             "ABI / format-version mismatch.  Recompile the model from "
             "source."
         )
+    exe = cast(_ExecutableHandle, exe_raw)
 
     class _LoadedExecutable:
         """Thin wrapper that runs the deserialised executable."""
 
-        def __init__(self, exe: object) -> None:
+        def __init__(self, exe: _ExecutableHandle) -> None:
             self._exe = exe
             self.num_inputs = exe.num_inputs
             self.input_ids = list(exe.input_ids)
@@ -233,7 +245,7 @@ def load_compiled(path: str) -> object:
                     f"followed by runtime inputs in the order they appeared "
                     f"during the original trace."
                 )
-            feeds = [_unwrap(a) for a in args]
+            feeds = [_unwrap(cast(Tensor, a)) for a in args]
             outs = _C_engine.compile.run_executable(self._exe, feeds)
             wrapped = [_wrap(o) for o in outs]
             if not wrapped:
@@ -436,7 +448,6 @@ def compile(target: object, *, dynamic: bool = False) -> object:
     # decorator.  Detect by ``target`` being missing on the call site;
     # the module ``__call__`` below short-circuits the explicit form.
     from lucid.compile._compiled_module import CompiledModule as _CM
-    from lucid.nn.module import Module as _Module
 
     if isinstance(target, _Module):
         return _CM(target, dynamic=dynamic)
@@ -452,98 +463,54 @@ def compile(target: object, *, dynamic: bool = False) -> object:
     )
 
 
-class _CallableModule:
-    """Internal adapter: wraps a plain callable as a minimal Module-like.
+class _CallableModule(_Module):
+    """Internal adapter: wraps a plain callable as an :class:`nn.Module`.
 
-    Provides only the slots :class:`CompiledModule` consults
-    (``training``, ``parameters``, ``state_dict``, ``to``, ``train``,
-    ``__call__``).  Has zero parameters; never registers anything in
-    ``_modules``.  ``__getattr__`` raises so any missing attribute is
-    surfaced loudly rather than silently passed through.
+    Subclasses :class:`Module` so :class:`CompiledModule`'s static type
+    is ``Module`` everywhere (no ``object`` fallback).  Holds zero
+    parameters / buffers / submodules; :meth:`forward` simply invokes
+    the wrapped callable.  All Module hooks (training-mode flag,
+    pre/post forward hooks, state_dict, to/train/eval) come from
+    Module's default implementations.
     """
 
+    _fn: object
+
     def __init__(self, fn: object) -> None:
-        """Wrap ``fn`` so it duck-types as an :class:`nn.Module`.
+        """Wrap ``fn`` so it satisfies the :class:`nn.Module` contract.
 
         Parameters
         ----------
         fn : callable
             The plain callable the user passed to :func:`compile`.
-            Stored unwrapped; invoked verbatim on every
-            :meth:`__call__`.
-
-        Notes
-        -----
-        Does *not* go through :meth:`nn.Module.__setattr__` (we are
-        not subclassing :class:`nn.Module`).  ``_fn`` and
-        ``_training`` are stored as plain instance attributes; no
-        submodule / buffer / parameter registration happens.
+            Stored unwrapped; invoked verbatim on every forward.
         """
-        # Avoid Module.__setattr__ side-effects — we are *not* an
-        # nn.Module subclass, just duck-typed.
-        self._fn = fn
-        self._training: bool = False
+        super().__init__()
+        # Stored via object.__setattr__ to bypass Module.__setattr__'s
+        # Parameter / Tensor / Module-routing — ``fn`` is none of those.
+        object.__setattr__(self, "_fn", fn)
 
-    # ── Module-shaped surface ────────────────────────────────────
-    @property
-    def training(self) -> bool:
-        """Current training-mode flag (defaults to ``False`` on construct)."""
-        return self._training
+    def forward(self, *args: object, **kwargs: object) -> _ModuleOutput:
+        """Invoke the wrapped callable and return its result as a Module output.
 
-    def train(self, mode: bool = True) -> "_CallableModule":
-        """Set training mode; returns ``self`` for chaining."""
-        self._training = bool(mode)
-        return self
-
-    def eval(self) -> "_CallableModule":
-        """Shorthand for ``self.train(False)``."""
-        return self.train(False)
-
-    def parameters(self, recurse: bool = True) -> "Iterator[object]":
-        """Plain callables carry no parameters — always returns an empty iterator."""
-        return iter(())
-
-    def named_parameters(self, recurse: bool = True) -> "Iterator[tuple[str, object]]":
-        """Plain callables carry no named parameters — always returns an empty iterator."""
-        return iter(())
-
-    def buffers(self, recurse: bool = True) -> "Iterator[object]":
-        """Plain callables carry no buffers — always returns an empty iterator."""
-        return iter(())
-
-    def state_dict(self, *args: object, **kwargs: object) -> dict:
-        """Always empty — plain callables have no learnable state."""
-        return {}
-
-    def load_state_dict(self, *args: object, **kwargs: object) -> None:
-        """No-op — there is no state to load into a plain callable."""
-        return None
-
-    def to(self, *args: object, **kwargs: object) -> "_CallableModule":
-        """No-op device / dtype move; returns ``self``.
-
-        A plain callable carries no buffers to move; the inputs the
-        caller passes already determine where the call executes.
+        The wrapped callable's runtime return type isn't statically
+        known; the :data:`_ModuleOutput` cast at the boundary is the
+        contract :class:`CompiledModule` expects.  A mismatch (e.g. a
+        callable returning a ``dict``) would surface at runtime as a
+        downstream ``isinstance`` failure rather than silently corrupt
+        the cache key.
         """
-        # No-op — plain callable carries no buffers to move.
-        return self
+        fn = cast("Callable[..., object]", self._fn)
+        out = fn(*args, **kwargs)
+        if not isinstance(out, Tensor) and not (
+            isinstance(out, tuple) and all(isinstance(t, Tensor) for t in out)
+        ):
+            raise TypeError(
+                "lucid.compile: wrapped callable must return a Tensor or "
+                f"tuple of Tensors, got {type(out).__name__}"
+            )
+        return cast(_ModuleOutput, out)
 
-    def modules(self) -> "Iterator[object]":
-        """Single-element iterator over ``(self,)`` — there are no children."""
-        return iter((self,))
-
-    def named_modules(
-        self, *args: object, **kwargs: object
-    ) -> "Iterator[tuple[str, object]]":
-        """Single-element iterator over ``(("", self),)`` — root entry only."""
-        return iter((("", self),))
-
-    def __call__(self, *args: object, **kwargs: object) -> object:
-        """Invoke the wrapped callable with the given positional + keyword arguments."""
-        return self._fn(*args, **kwargs)
-
-    # Allow CompiledModule's signature_of (``model.training`` /
-    # ``model.parameters``) to work without surprises.
     def __repr__(self) -> str:
         """Diagnostic repr including the wrapped callable's qualname."""
         name = getattr(self._fn, "__qualname__", repr(self._fn))
@@ -590,15 +557,18 @@ class _CallableCompileModule(types.ModuleType):
             If more than one positional argument is supplied — the
             entry point is strictly unary in target.
         """
+        # The accepted keyword is currently just ``dynamic`` (bool).
+        # Extract + coerce so the typed callees stay typed.
+        dynamic = bool(kwargs.get("dynamic", False))
         if not args:
             # Factory form: ``@lucid.compile(dynamic=...)``.
-            return _compile_decorator_factory(**kwargs)
+            return _compile_decorator_factory(dynamic=dynamic)
         if len(args) != 1:
             raise TypeError(
                 f"lucid.compile: expected 0 or 1 positional argument, "
                 f"got {len(args)}"
             )
-        return compile(args[0], **kwargs)
+        return compile(args[0], dynamic=dynamic)
 
 
 sys.modules[__name__].__class__ = _CallableCompileModule

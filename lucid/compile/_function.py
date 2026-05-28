@@ -29,9 +29,9 @@ from contextlib import nullcontext
 from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
+from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
 __all__ = ["compiled_step"]
@@ -110,6 +110,12 @@ def compiled_step(
     with grad_ctx:
         with _tracing() as tracer:
             out = model(x)
+            # Module.__call__ widens to Tensor|tuple; loss_fn expects Tensor.
+            if not isinstance(out, Tensor):
+                raise TypeError(
+                    "compiled_step: model must return a Tensor for the loss_fn "
+                    f"to consume, got {type(out).__name__}"
+                )
             loss_fn(out)
 
     g = tracer.graph
