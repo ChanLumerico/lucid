@@ -122,7 +122,15 @@ from lucid.utils.transforms._photometric import (
     Normalize,
     ToFloat,
 )
-from lucid.utils.transforms._presets import ImageClassification
+from lucid.utils.transforms._presets import (
+    AutoTransformsPreset,
+    Detection,
+    ImageClassification,
+    ImageClassificationAugment,
+    Pose,
+    Segmentation,
+    TransformsPreset,
+)
 from lucid.utils.transforms._spatial import (
     Affine,
     D4,
@@ -238,8 +246,14 @@ __all__ = [
     "ReplayCompose",
     # Utility
     "Lambda",
-    # Presets
+    # Presets — pretrained preprocessing contract
+    "TransformsPreset",
+    "AutoTransformsPreset",
     "ImageClassification",
+    "ImageClassificationAugment",
+    "Detection",
+    "Segmentation",
+    "Pose",
     # Functional submodule
     "functional",
 ]

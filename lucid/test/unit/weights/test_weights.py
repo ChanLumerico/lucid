@@ -152,6 +152,73 @@ class TestImageClassification:
         assert tuple(out.shape) == (3, 128, 128)
 
 
+# ── Preset ↔ pretrained pipeline integration (G0) ───────────────────
+
+
+class TestPresetIntegration:
+    """Pins the contract between WeightEntry.transforms, the on-Hub
+    config.json preprocessing block, and AutoTransformsPreset round-trip.
+
+    The preset's to_dict() shape is what the conversion tool now
+    emits into config.json; if that schema drifts here the published
+    metadata silently becomes unreadable.
+    """
+
+    def test_resnet18_entry_transforms_is_preset(self) -> None:
+        # WeightEntry.transforms must be a registered preset subclass
+        # (not a raw Compose) so AutoTransformsPreset can round-trip it.
+        from lucid.utils.transforms import TransformsPreset
+
+        tf = ResNet18Weights.IMAGENET1K_V1.transforms()
+        assert isinstance(tf, TransformsPreset)
+        assert tf.preset_type == "ImageClassification"
+
+    def test_resnet18_to_dict_matches_expected_schema(self) -> None:
+        tf = ResNet18Weights.IMAGENET1K_V1.transforms()
+        cfg = tf.to_dict()
+        assert set(cfg) == {"preprocessor_type", "init_kwargs"}
+        kw = cfg["init_kwargs"]
+        assert isinstance(kw, dict)
+        # Pinned ResNet-18 ImageNet hyperparams.
+        assert kw["crop_size"] == 224
+        assert kw["resize_size"] == 256
+        assert kw["mean"] == [0.485, 0.456, 0.406]
+        assert kw["std"] == [0.229, 0.224, 0.225]
+        assert kw["interpolation"] == "bilinear"
+
+    def test_resnet18_round_trip_via_auto_resolver(self) -> None:
+        from lucid.utils.transforms import AutoTransformsPreset
+
+        tf = ResNet18Weights.IMAGENET1K_V1.transforms()
+        back = AutoTransformsPreset.from_dict(tf.to_dict())
+        assert type(back) is type(tf)
+        assert back.to_dict() == tf.to_dict()
+
+    def test_resnet18_preset_threads_multitarget_sample(self) -> None:
+        # An ImageClassification preset called on a {image, mask}
+        # sample must thread both through the inner geometric stages
+        # (Normalize touches only the image, mask survives Resize +
+        # CenterCrop unchanged in label set).
+        import lucid.utils.transforms as T
+
+        lucid.manual_seed(0)
+        img = lucid.rand(3, 300, 400)
+        mask_raw = lucid.floor(lucid.rand(1, 300, 400) * 5.0)
+        sample = {"image": T.Image(img), "mask": T.Mask(mask_raw)}
+        tf = ResNet18Weights.IMAGENET1K_V1.transforms()
+        out = tf(sample)
+        assert tuple(out["image"].data.shape) == (3, 224, 224)
+        assert tuple(out["mask"].data.shape) == (1, 224, 224)
+        before = {int(round(v)) for v in mask_raw.numpy().reshape(-1).tolist()}
+        after = {
+            int(round(v)) for v in out["mask"].data.numpy().reshape(-1).tolist()
+        }
+        assert after <= before, (
+            f"mask gained synthetic labels {sorted(after - before)} — "
+            "ImageClassification leaked the geometric chain past nearest."
+        )
+
+
 # ── Factory wiring ──────────────────────────────────────────────────
 
 

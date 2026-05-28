@@ -84,15 +84,21 @@ class ResNetArch(Architecture):
 
         tv_meta = dict(self._tv_weights.meta)
         categories = list(tv_meta.get("categories", []))
+        from lucid.utils.transforms import ImageClassification
+
         tf = self._tv_weights.transforms()
-        preprocessing = {
-            "type": "ImageClassification",
-            "resize_size": int(tf.resize_size[0]),
-            "crop_size": int(tf.crop_size[0]),
-            "mean": [float(m) for m in tf.mean],
-            "std": [float(s) for s in tf.std],
-            "interpolation": str(tf.interpolation.value),
-        }
+        # Construct a Lucid preset and serialise via its own to_dict
+        # so the on-Hub schema stays in lock-step with the runtime
+        # contract (``AutoTransformsPreset.from_dict`` consumes this
+        # exact shape).
+        preset = ImageClassification(
+            crop_size=int(tf.crop_size[0]),
+            resize_size=int(tf.resize_size[0]),
+            mean=tuple(float(m) for m in tf.mean),
+            std=tuple(float(s) for s in tf.std),
+            interpolation=str(tf.interpolation.value),
+        )
+        preprocessing = preset.to_dict()
         meta = {
             "num_params": int(tv_meta.get("num_params", 0)),
             "gflops": float(tv_meta.get("_ops", 0.0)),
