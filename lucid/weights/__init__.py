@@ -58,6 +58,13 @@ from lucid.weights._registry import (
     weights_for,
 )
 
+#: Hugging Face Hub URL root for every Lucid-hosted checkpoint.  Each
+#: per-family ``_weights.py`` imports this and composes its repo URL as
+#: ``f"{HUB_BASE}/<family-slug>/resolve/main/<TAG>/model.safetensors"``,
+#: so the org name lives in exactly one place (e.g. if Lucid ever moves
+#: off the ``lucid-dl`` org, only this constant changes).
+HUB_BASE: str = "https://huggingface.co/lucid-dl"
+
 __all__ = [
     # Core types
     "WeightsEnum",
@@ -71,4 +78,6 @@ __all__ = [
     "download",
     "load_weight_entry",
     "resolve_weights",
+    # Hub root
+    "HUB_BASE",
 ]

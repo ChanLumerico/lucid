@@ -16,9 +16,7 @@ one-directional (``models`` → ``weights``).
 """
 
 from lucid.utils.transforms import ImageClassification
-from lucid.weights import WeightEntry, WeightsEnum, register_weights
-
-_HUB = "https://huggingface.co/lucid-dl"
+from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
 
 @register_weights("resnet_18")
@@ -33,7 +31,7 @@ class ResNet18Weights(WeightsEnum):
     """
 
     IMAGENET1K_V1 = WeightEntry(
-        url=f"{_HUB}/resnet-18/resolve/main/IMAGENET1K_V1/model.safetensors",
+        url=f"{HUB_BASE}/resnet-18/resolve/main/IMAGENET1K_V1/model.safetensors",
         sha256="bb7eab3083c24be6364e32f1d37844a00c5e500fa48a83a91f750a7621d152cb",
         num_classes=1000,
         transforms=ImageClassification(crop_size=224, resize_size=256),
