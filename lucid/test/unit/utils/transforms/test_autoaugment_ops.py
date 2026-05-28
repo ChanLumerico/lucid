@@ -214,6 +214,37 @@ class TestApplyOp:
         out = apply_op(x, "Rotate", 30.0, fill=0.5)
         assert tuple(out.shape) == (3, 16, 16)
 
+    def test_fill_value_actually_paints_exposed_pixels(self) -> None:
+        """Non-zero ``fill`` should paint the entire out-of-bounds region
+        with the requested constant value, not zero (codex P2 regression
+        guard)."""
+        # Uniform 1.0 input → after rotation, exposed corners must equal `fill`.
+        x = lucid.full((3, 16, 16), 1.0)
+        for fill in (0.25, 0.5, 0.75):
+            out = apply_op(
+                x, "Rotate", 30.0, fill=fill, interpolation=Interpolation.BILINEAR
+            ).numpy()
+            # Each corner is fully outside the rotated source for a 30°
+            # rotation of a square — should equal `fill` to 1e-5.
+            for cy, cx in [(0, 0), (0, 15), (15, 0), (15, 15)]:
+                assert (
+                    float(out[0, cy, cx]) == pytest.approx(fill, abs=1e-5)
+                ), f"corner ({cy},{cx}) for fill={fill}: got {out[0, cy, cx]}"
+            # Center is still inside the source — should be ~1.0.
+            assert float(out[0, 8, 8]) == pytest.approx(1.0, abs=1e-5)
+
+    def test_fill_value_works_for_shear(self) -> None:
+        """ShearX with top-left anchor exposes a triangle in the top-right
+        and bottom-left of the canvas (or vice versa for negative).
+        Verify that triangle is filled with the requested constant."""
+        x = lucid.full((3, 16, 16), 1.0)
+        out = apply_op(
+            x, "ShearX", 0.3, fill=0.7, interpolation=Interpolation.BILINEAR
+        ).numpy()
+        # Far top-right pixel is fully outside the sheared source.
+        assert float(out[0, 0, 15]) == pytest.approx(1.0)  # in-bounds (top edge)
+        assert float(out[0, 15, 15]) == pytest.approx(0.7, abs=1e-5)
+
 
 class TestSampleSignedMagnitude:
     def test_no_magnitude_returns_zero(self) -> None:

@@ -55,7 +55,20 @@ class ScaleParam:
 
 
 class Blur(PhotometricTransform[KSizeParam]):
-    r"""Box blur with a random odd kernel size (Albumentations ``Blur``)."""
+    r"""Box (mean) blur with a random odd kernel size (Albumentations ``Blur``).
+
+    Samples an odd kernel size ``k`` uniformly from ``[3, blur_limit]``
+    and convolves the image with a normalised ``k x k`` all-ones kernel
+    via :func:`functional.depthwise_conv2d`.
+
+    Parameters
+    ----------
+    blur_limit : int, optional, default=7
+        Inclusive upper bound on the sampled kernel size; values are
+        rounded up to the next odd integer to keep the kernel centred.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -74,7 +87,21 @@ class Blur(PhotometricTransform[KSizeParam]):
 
 
 class MedianBlur(PhotometricTransform[KSizeParam]):
-    r"""Median filter with a random odd kernel (Albumentations ``MedianBlur``)."""
+    r"""Median filter with a random odd kernel (Albumentations ``MedianBlur``).
+
+    Samples an odd kernel size ``k`` uniformly from ``[3, blur_limit]``,
+    builds the ``k * k`` shifted-neighbour stack via :func:`lucid.roll`,
+    sorts along the stack axis, and returns the median element — an
+    impulse-noise denoiser that preserves edges better than ``Blur``.
+
+    Parameters
+    ----------
+    blur_limit : int, optional, default=7
+        Inclusive upper bound on the sampled kernel size; rounded up
+        to the next odd integer so the window is centred.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -100,7 +127,21 @@ class MedianBlur(PhotometricTransform[KSizeParam]):
 
 
 class MotionBlur(PhotometricTransform[MotionParam]):
-    r"""Directional motion blur (Albumentations ``MotionBlur``)."""
+    r"""Directional (linear streak) motion blur (Albumentations ``MotionBlur``).
+
+    Samples an odd kernel size and a streak angle in ``[0, 180)°``, draws
+    a 1-pixel-wide line through the kernel centre at that angle, then
+    convolves the normalised kernel with the image — approximates the
+    look of a camera panning while the shutter is open.
+
+    Parameters
+    ----------
+    blur_limit : int, optional, default=7
+        Inclusive upper bound on the kernel size; rounded up to the
+        next odd integer.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(self, blur_limit: int = 7, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -132,7 +173,24 @@ class MotionBlur(PhotometricTransform[MotionParam]):
 
 
 class GaussianBlur(PhotometricTransform[SigmaParam]):
-    r"""Gaussian blur (Albumentations ``GaussianBlur``)."""
+    r"""Gaussian blur with random kernel size and sigma (Albumentations ``GaussianBlur``).
+
+    Samples an odd kernel size from ``blur_limit`` and a sigma from
+    ``sigma_limit``; when sigma is left at zero the OpenCV default
+    ``0.3 * ((k - 1) * 0.5 - 1.0) + 0.8`` is used so the kernel matches
+    cv2's auto-sigma policy.
+
+    Parameters
+    ----------
+    blur_limit : (int, int), optional, default=(3, 7)
+        Inclusive range for the kernel size; both ends are rounded up
+        to the next odd integer.
+    sigma_limit : float or (float, float), optional, default=0.0
+        Range for the Gaussian sigma.  A scalar ``v`` expands to
+        ``(0.0, v)``; ``0`` triggers the OpenCV auto-sigma formula.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(
         self,
@@ -192,7 +250,23 @@ class GaussNoise(PhotometricTransform[NoiseParam]):
 
 
 class MultiplicativeNoise(PhotometricTransform[MultiplierParam]):
-    r"""Multiply by random noise (Albumentations ``MultiplicativeNoise``)."""
+    r"""Multiply pixel values by random noise (Albumentations ``MultiplicativeNoise``).
+
+    With ``elementwise=False`` (default) a single scalar is sampled
+    per call and the whole image is scaled by it; with
+    ``elementwise=True`` an independent multiplier is sampled per
+    pixel.  The output is always clipped back to ``[0, 1]``.
+
+    Parameters
+    ----------
+    multiplier : (float, float), optional, default=(0.9, 1.1)
+        Inclusive range of the per-pixel (or per-image) multiplier.
+    elementwise : bool, optional, default=False
+        If ``True``, sample one multiplier per pixel rather than one
+        per image.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(
         self,
@@ -252,7 +326,23 @@ class ISONoise(PhotometricTransform[NoiseParam]):
 
 
 class Downscale(PhotometricTransform[ScaleParam]):
-    r"""Downscale then upscale to lose detail (Albumentations ``Downscale``)."""
+    r"""Downscale then upscale to lose high-frequency detail (Albumentations ``Downscale``).
+
+    Samples a scale factor uniformly from ``[scale_min, scale_max]``,
+    resizes the image to that fraction of its original ``(H, W)`` via
+    nearest-neighbour, then resizes back to the original size — a
+    cheap way to simulate sensor / JPEG block-level degradation.
+
+    Parameters
+    ----------
+    scale_min : float, optional, default=0.25
+        Lower bound of the downscale factor.
+    scale_max : float, optional, default=0.25
+        Upper bound of the downscale factor (set equal to
+        ``scale_min`` for a deterministic factor).
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(
         self,
@@ -290,7 +380,22 @@ class RadiusParam:
 
 
 class Defocus(PhotometricTransform[RadiusParam]):
-    r"""Disk-kernel (out-of-focus) blur (Albumentations ``Defocus``)."""
+    r"""Disk-kernel (out-of-focus) blur (Albumentations ``Defocus``).
+
+    Samples an integer radius ``r`` from ``radius`` (inclusive) and
+    convolves with a normalised disk of radius ``r`` — pixels inside
+    the disk get weight ``1 / area``, those outside get zero.
+    Approximates the bokeh circle of an out-of-focus lens better than
+    Gaussian blur.
+
+    Parameters
+    ----------
+    radius : (int, int), optional, default=(3, 10)
+        Inclusive sampling range for the disk radius in pixels.
+        Larger radii produce more aggressive defocus.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(self, radius: tuple[int, int] = (3, 10), p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -320,7 +425,24 @@ class ZoomParam:
 
 
 class ZoomBlur(PhotometricTransform[ZoomParam]):
-    r"""Zoom blur — average of progressively zoomed copies (Albu ``ZoomBlur``)."""
+    r"""Radial zoom blur via averaged centre-zoomed copies (Albumentations ``ZoomBlur``).
+
+    Samples a final zoom factor uniformly from ``[1.0, max_factor]``,
+    builds 5 centre-crops at progressively-increasing zoom levels
+    (each resized back to the input ``(H, W)`` via bilinear), and
+    averages them with the original image — simulates a fast forward
+    dolly into the scene.
+
+    Parameters
+    ----------
+    max_factor : float, optional, default=1.31
+        Upper bound on the final zoom factor (must be ``>= 1.0``).
+    step_factor : (float, float), optional, default=(0.01, 0.03)
+        Reserved for future per-step jitter; currently the 5 zoom
+        levels are evenly spaced toward ``max_factor`` regardless.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+    """
 
     def __init__(
         self,

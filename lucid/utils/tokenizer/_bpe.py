@@ -449,6 +449,31 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         ``vocab.json`` + ``merges.txt`` pair.
 
         Unified format wins when present.
+
+        Parameters
+        ----------
+        directory : str
+            Path containing the on-disk BPE checkpoint — either the
+            unified HF ``tokenizer.json`` or the legacy pair
+            (``vocab.json`` + ``merges.txt``).  Optionally also
+            ``special_tokens_map.json`` for the special-token registry.
+        normalizer : Normalizer, optional, keyword-only
+            Override the encode-time normalisation chain.  Defaults
+            to :class:`~lucid.utils.tokenizer._normalizers.NFC` when
+            not supplied.
+        pre_tokenizer : PreTokenizer, optional, keyword-only
+            Override the chunk splitter applied after normalisation.
+            Defaults to
+            :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespaceSplit`.
+        special_tokens : SpecialTokens, optional, keyword-only
+            Override the special-token registry.  When ``None`` (the
+            default), parsed from ``special_tokens_map.json`` if
+            present.
+
+        Returns
+        -------
+        BPETokenizer
+            Freshly-constructed instance ready for encode / decode.
         """
         unified = os.path.join(directory, "tokenizer.json")
         if os.path.isfile(unified):
@@ -633,6 +658,17 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         large corpora the user is responsible for chunking.  After
         training, the Python-side vocab / merges caches are refreshed
         from the C++ side so subsequent encodes see the new state.
+
+        Parameters
+        ----------
+        corpus : iterable of str
+            Documents to train on — each item is one document (or
+            chunk thereof).  Generators are consumed exactly once
+            and materialised into a list before crossing into C++.
+        vocab_size : int, optional, keyword-only, default=30000
+            Target total vocab size (characters + merges).  The C++
+            trainer stops early if no symbol pair appears more than
+            once.
         """
         corpus_list = list(corpus)
         self._cpp.train(corpus_list, vocab_size)
@@ -671,7 +707,32 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
     ) -> BPETokenizerFast:
         """Identical loader to :meth:`BPETokenizer.from_file`; the
         only difference is the returned class (and hence the encode
-        backend).
+        backend — C++ instead of pure-Python merge loop).
+
+        Parameters
+        ----------
+        directory : str
+            Path containing the on-disk BPE checkpoint — either the
+            unified HF ``tokenizer.json`` or the legacy pair
+            (``vocab.json`` + ``merges.txt``).  Optionally also
+            ``special_tokens_map.json`` for the special-token registry.
+        normalizer : Normalizer, optional, keyword-only
+            Override the encode-time normalisation chain.  Defaults to
+            :class:`~lucid.utils.tokenizer._normalizers.NFC`.
+        pre_tokenizer : PreTokenizer, optional, keyword-only
+            Override the chunk splitter applied after normalisation.
+            Defaults to
+            :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespaceSplit`.
+        special_tokens : SpecialTokens, optional, keyword-only
+            Override the special-token registry.  When ``None`` (the
+            default), parsed from ``special_tokens_map.json`` if
+            present in ``directory``.
+
+        Returns
+        -------
+        BPETokenizerFast
+            Freshly-constructed C++-backed instance ready for
+            encode / decode.
         """
         unified = os.path.join(directory, "tokenizer.json")
         if os.path.isfile(unified):

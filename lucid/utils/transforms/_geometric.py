@@ -34,7 +34,19 @@ from lucid.utils.transforms._interpolation import Interpolation, as_interpolatio
 
 @dataclass(frozen=True)
 class CropBox:
-    """A crop window: top-left plus extent."""
+    r"""Sampled crop window ``(top, left, height, width)`` for one call.
+
+    Carried by :class:`RandomResizedCrop` from :meth:`make_params` to
+    :meth:`_apply_image` / :meth:`_apply_mask` / :meth:`_apply_boxes`
+    / :meth:`_apply_keypoints` so every target shares the same crop.
+
+    Attributes
+    ----------
+    top, left : int
+        Top-left corner of the crop window in input-image pixels.
+    height, width : int
+        Spatial extent of the crop window.
+    """
 
     top: int
     left: int
@@ -123,7 +135,22 @@ class _MaxSizeResize(_NoParams, GeometricTransform[Empty]):
 
 
 class SmallestMaxSize(_MaxSizeResize):
-    r"""Scale so the **shorter** side equals ``max_size`` (aspect kept)."""
+    r"""Scale so the shorter side equals ``max_size`` (Albumentations ``SmallestMaxSize``).
+
+    Computes the scale factor ``max_size / min(H, W)`` and applies it to
+    both axes — the aspect ratio is preserved and the longer side ends
+    up at least as large as ``max_size``.  Image uses ``interpolation``,
+    masks use nearest, boxes / keypoints scale exactly.
+
+    Parameters
+    ----------
+    max_size : int
+        Target length of the shorter side after resize.
+    interpolation : int or str or Interpolation, optional, default=1
+        Image resampling mode (OpenCV codes accepted).
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+    """
 
     def _target(self, h: int, w: int) -> tuple[int, int]:
         scale = self.max_size / min(h, w)
@@ -134,7 +161,22 @@ class SmallestMaxSize(_MaxSizeResize):
 
 
 class LongestMaxSize(_MaxSizeResize):
-    r"""Scale so the **longer** side equals ``max_size`` (aspect kept)."""
+    r"""Scale so the longer side equals ``max_size`` (Albumentations ``LongestMaxSize``).
+
+    Computes the scale factor ``max_size / max(H, W)`` and applies it
+    to both axes — the aspect ratio is preserved and the shorter side
+    ends up at most as large as ``max_size``.  Image uses
+    ``interpolation``, masks use nearest.
+
+    Parameters
+    ----------
+    max_size : int
+        Target length of the longer side after resize.
+    interpolation : int or str or Interpolation, optional, default=1
+        Image resampling mode (OpenCV codes accepted).
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+    """
 
     def _target(self, h: int, w: int) -> tuple[int, int]:
         scale = self.max_size / max(h, w)
@@ -148,7 +190,21 @@ class LongestMaxSize(_MaxSizeResize):
 
 
 class CenterCrop(_NoParams, GeometricTransform[Empty]):
-    r"""Crop a centered ``height`` x ``width`` window (Albumentations ``CenterCrop``)."""
+    r"""Crop a centred ``height`` x ``width`` window (Albumentations ``CenterCrop``).
+
+    Computes a deterministic crop centred on the input — top-left at
+    ``((H - height) // 2, (W - width) // 2)`` — and applies the same
+    offsets to mask / boxes / keypoints so every target stays aligned.
+
+    Parameters
+    ----------
+    height : int
+        Target crop height in pixels.
+    width : int
+        Target crop width in pixels.
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+    """
 
     def __init__(self, height: int, width: int, p: float = 1.0) -> None:
         super().__init__(p=p)
@@ -184,7 +240,21 @@ class Offset:
 
 
 class RandomCrop(GeometricTransform[Offset]):
-    r"""Crop a random ``height`` x ``width`` window (Albumentations ``RandomCrop``)."""
+    r"""Crop a random ``height`` x ``width`` window (Albumentations ``RandomCrop``).
+
+    Samples ``top`` uniformly from ``[0, H - height]`` and ``left``
+    uniformly from ``[0, W - width]``, then applies the same crop to
+    image / mask / boxes / keypoints so every target stays aligned.
+
+    Parameters
+    ----------
+    height : int
+        Target crop height in pixels (must be ``<= H``).
+    width : int
+        Target crop width in pixels (must be ``<= W``).
+    p : float, optional, default=1.0
+        Probability of applying the transform.
+    """
 
     def __init__(self, height: int, width: int, p: float = 1.0) -> None:
         super().__init__(p=p)
@@ -306,7 +376,17 @@ class RandomResizedCrop(GeometricTransform[CropBox]):
 
 
 class HorizontalFlip(_NoParams, GeometricTransform[Empty]):
-    r"""Flip left-right with probability ``p`` (Albumentations ``HorizontalFlip``)."""
+    r"""Flip left-right with probability ``p`` (Albumentations ``HorizontalFlip``).
+
+    Mirrors the image about its vertical centre-line, mirrors the mask
+    the same way, and reflects bounding-box / keypoint x-coordinates
+    via the canvas width so every target stays aligned.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the flip.
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -328,7 +408,18 @@ class HorizontalFlip(_NoParams, GeometricTransform[Empty]):
 
 
 class VerticalFlip(_NoParams, GeometricTransform[Empty]):
-    r"""Flip top-bottom with probability ``p`` (Albumentations ``VerticalFlip``)."""
+    r"""Flip top-bottom with probability ``p`` (Albumentations ``VerticalFlip``).
+
+    Mirrors the image about its horizontal centre-line, mirrors the
+    mask the same way, and reflects bounding-box / keypoint
+    y-coordinates via the canvas height so every target stays
+    aligned.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the flip.
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)

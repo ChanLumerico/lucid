@@ -77,14 +77,43 @@ def _cat(tensors: list[Tensor], dim: int) -> Tensor:
 
 @dataclass
 class Image:
-    """Wraps a pixel image tensor ``(C, H, W)`` or ``(B, C, H, W)``."""
+    """Wraps a pixel image tensor ``(C, H, W)`` or ``(B, C, H, W)``.
+
+    A lightweight typed marker so multi-target transforms can dispatch
+    on :func:`isinstance` and route a pixel image differently from a
+    segmentation :class:`Mask`, a :class:`BoundingBoxes` target, or a
+    :class:`Keypoints` target.  Single-image pipelines need not wrap —
+    a bare :class:`lucid.Tensor` is also treated as an image.
+
+    Parameters
+    ----------
+    data : Tensor
+        Pixel image with shape ``(C, H, W)`` or ``(B, C, H, W)``.
+        Photometric transforms operate on ``data`` in place of
+        per-channel statistics; geometric transforms resample with the
+        configured interpolation mode.
+    """
 
     data: Tensor
 
 
 @dataclass
 class Mask:
-    """Wraps a segmentation / label mask, resampled with nearest mode."""
+    """Wraps a segmentation / label mask, resampled with nearest mode.
+
+    Companion target for semantic / instance segmentation pipelines.
+    Geometric transforms (flip / crop / resize / rotate) move the mask
+    in lock-step with its image but always resample with *nearest*
+    interpolation so class indices survive unblended; photometric
+    transforms (colour-jitter, blur, ...) leave the mask untouched.
+
+    Parameters
+    ----------
+    data : Tensor
+        Label / probability map with shape ``(H, W)``, ``(C, H, W)``,
+        or ``(B, C, H, W)``.  Integer dtypes are recommended for class
+        indices to preserve nearest-neighbour resampling exactly.
+    """
 
     data: Tensor
 
@@ -273,7 +302,28 @@ def _rebuild(
 
 
 def flip_boxes(boxes: BoundingBoxes, *, horizontal: bool) -> BoundingBoxes:
-    """Mirror boxes horizontally or vertically within the canvas."""
+    r"""Mirror bounding boxes horizontally or vertically within the canvas.
+
+    Geometric companion to :class:`HorizontalFlip` / :class:`VerticalFlip`
+    so a sample's boxes stay aligned with its flipped image.  Operates
+    on the :func:`to_xyxy` pivot internally and re-encodes the result
+    back into the original ``boxes.format``; ``boxes.labels`` ride
+    through unchanged.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes in any supported format
+        (``xyxy`` / ``xywh`` / ``cxcywh`` / ``yolo`` / ``albumentations``).
+    horizontal : bool
+        ``True`` mirrors along the vertical axis (left/right swap);
+        ``False`` mirrors along the horizontal axis (top/bottom swap).
+
+    Returns
+    -------
+    BoundingBoxes
+        Flipped boxes with the same format, canvas, and labels.
+    """
     h, w = boxes.canvas_size
     xy = to_xyxy(boxes)
     x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
@@ -285,7 +335,29 @@ def flip_boxes(boxes: BoundingBoxes, *, horizontal: bool) -> BoundingBoxes:
 
 
 def resize_boxes(boxes: BoundingBoxes, new_h: int, new_w: int) -> BoundingBoxes:
-    """Scale box coordinates to a new canvas size."""
+    r"""Scale box coordinates to a new canvas size.
+
+    Geometric companion to :class:`Resize` so a sample's boxes follow
+    the resampled image.  Computes independent per-axis scale factors
+    :math:`s_x = W' / W`, :math:`s_y = H' / H` on the :func:`to_xyxy`
+    pivot and re-emits a :class:`BoundingBoxes` with ``canvas_size``
+    set to ``(new_h, new_w)``.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes; ``canvas_size`` is read for the input height/width.
+    new_h : int
+        Target canvas height in pixels.
+    new_w : int
+        Target canvas width in pixels.
+
+    Returns
+    -------
+    BoundingBoxes
+        Rescaled boxes with the same format / labels and the new
+        ``canvas_size = (new_h, new_w)``.
+    """
     h, w = boxes.canvas_size
     sx, sy = new_w / w, new_h / h
     xy = to_xyxy(boxes)
@@ -297,7 +369,34 @@ def resize_boxes(boxes: BoundingBoxes, new_h: int, new_w: int) -> BoundingBoxes:
 def crop_boxes(
     boxes: BoundingBoxes, top: int, left: int, height: int, width: int
 ) -> BoundingBoxes:
-    """Translate boxes into a crop window and clip to its bounds."""
+    r"""Translate boxes into a crop window and clip to its bounds.
+
+    Geometric companion to :class:`Crop` / :class:`CenterCrop` /
+    :class:`RandomCrop`.  Subtracts the ``(left, top)`` offset from
+    every corner and clips to the ``[0, width] × [0, height]`` window
+    so boxes spanning the crop edge are kept as their visible
+    rectangle; fully-out-of-frame boxes become zero-area and are
+    typically dropped downstream by :func:`filter_boxes`.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes; their canvas is implied to contain the crop.
+    top : int
+        Pixel row of the crop window's top edge.
+    left : int
+        Pixel column of the crop window's left edge.
+    height : int
+        Crop window height in pixels — becomes the new canvas height.
+    width : int
+        Crop window width in pixels — becomes the new canvas width.
+
+    Returns
+    -------
+    BoundingBoxes
+        Cropped + clipped boxes with the same format / labels and
+        ``canvas_size = (height, width)``.
+    """
     xy = to_xyxy(boxes)
     x1 = lucid.clip(xy[:, 0:1] - left, 0.0, float(width))
     y1 = lucid.clip(xy[:, 1:2] - top, 0.0, float(height))
@@ -310,7 +409,32 @@ def crop_boxes(
 def pad_boxes(
     boxes: BoundingBoxes, left: int, top: int, new_h: int, new_w: int
 ) -> BoundingBoxes:
-    """Shift boxes by a pad offset onto a larger canvas."""
+    r"""Shift boxes by a pad offset onto a larger canvas.
+
+    Geometric companion to :class:`Pad`.  Adds ``(left, top)`` to every
+    corner so each box keeps its place inside the original sub-region
+    of the new, larger canvas.  Coordinates are not clipped because the
+    new canvas fully contains the old.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes on the pre-pad canvas.
+    left : int
+        Number of pixels added to the left edge.
+    top : int
+        Number of pixels added to the top edge.
+    new_h : int
+        Post-pad canvas height in pixels.
+    new_w : int
+        Post-pad canvas width in pixels.
+
+    Returns
+    -------
+    BoundingBoxes
+        Translated boxes with the same format / labels and
+        ``canvas_size = (new_h, new_w)``.
+    """
     xy = to_xyxy(boxes)
     x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
     new = _cat([x1 + left, y1 + top, x2 + left, y2 + top], 1)
@@ -337,7 +461,27 @@ def _kp_rebuild(
 
 
 def flip_keypoints(kps: Keypoints, *, horizontal: bool) -> Keypoints:
-    """Mirror keypoints within the canvas."""
+    r"""Mirror keypoint coordinates horizontally or vertically.
+
+    Geometric companion to :class:`HorizontalFlip` / :class:`VerticalFlip`
+    for the keypoints target.  Only the ``x, y`` columns move; any
+    trailing columns (visibility / score / angle / scale) are passed
+    through unchanged.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source ``(N, D)`` keypoints with ``D >= 2``.
+    horizontal : bool
+        ``True`` mirrors along the vertical axis (``x' = W - x``);
+        ``False`` mirrors along the horizontal axis (``y' = H - y``).
+
+    Returns
+    -------
+    Keypoints
+        Flipped keypoints with the same canvas size and trailing
+        columns preserved.
+    """
     h, w = kps.canvas_size
     x, y, rest = _kp_xy_rest(kps)
     if horizontal:
@@ -348,7 +492,28 @@ def flip_keypoints(kps: Keypoints, *, horizontal: bool) -> Keypoints:
 
 
 def resize_keypoints(kps: Keypoints, new_h: int, new_w: int) -> Keypoints:
-    """Scale keypoint coordinates to a new canvas size."""
+    r"""Scale keypoint coordinates to a new canvas size.
+
+    Geometric companion to :class:`Resize` for the keypoints target.
+    Computes independent per-axis scale factors :math:`s_x = W' / W`,
+    :math:`s_y = H' / H` and applies them to the ``x, y`` columns;
+    trailing columns are preserved.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source keypoints; ``canvas_size`` is read for the input
+        height/width.
+    new_h : int
+        Target canvas height in pixels.
+    new_w : int
+        Target canvas width in pixels.
+
+    Returns
+    -------
+    Keypoints
+        Rescaled keypoints with ``canvas_size = (new_h, new_w)``.
+    """
     h, w = kps.canvas_size
     x, y, rest = _kp_xy_rest(kps)
     return _kp_rebuild(x * (new_w / w), y * (new_h / h), rest, (new_h, new_w))
@@ -357,7 +522,34 @@ def resize_keypoints(kps: Keypoints, new_h: int, new_w: int) -> Keypoints:
 def crop_keypoints(
     kps: Keypoints, top: int, left: int, height: int, width: int
 ) -> Keypoints:
-    """Translate keypoints into a crop window (canvas → crop size)."""
+    r"""Translate keypoints into a crop window (canvas to crop size).
+
+    Geometric companion to :class:`Crop` / :class:`CenterCrop` /
+    :class:`RandomCrop` for the keypoints target.  Subtracts the
+    ``(left, top)`` offset from every point; unlike :func:`crop_boxes`
+    the result is **not clipped**, so keypoints falling outside the
+    crop window keep their (now-negative or out-of-range) coordinates
+    — callers can detect them via the visibility column or by range
+    test, since dropping rows would break joint-index assumptions.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source keypoints; their canvas is implied to contain the crop.
+    top : int
+        Pixel row of the crop window's top edge.
+    left : int
+        Pixel column of the crop window's left edge.
+    height : int
+        Crop window height in pixels — becomes the new canvas height.
+    width : int
+        Crop window width in pixels — becomes the new canvas width.
+
+    Returns
+    -------
+    Keypoints
+        Translated keypoints with ``canvas_size = (height, width)``.
+    """
     x, y, rest = _kp_xy_rest(kps)
     return _kp_rebuild(x - left, y - top, rest, (height, width))
 
@@ -365,7 +557,31 @@ def crop_keypoints(
 def pad_keypoints(
     kps: Keypoints, left: int, top: int, new_h: int, new_w: int
 ) -> Keypoints:
-    """Shift keypoints by a pad offset onto a larger canvas."""
+    r"""Shift keypoints by a pad offset onto a larger canvas.
+
+    Geometric companion to :class:`Pad` for the keypoints target.
+    Adds ``(left, top)`` to every point so each keeps its place inside
+    the original sub-region of the new, larger canvas; trailing
+    columns are preserved.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source keypoints on the pre-pad canvas.
+    left : int
+        Number of pixels added to the left edge.
+    top : int
+        Number of pixels added to the top edge.
+    new_h : int
+        Post-pad canvas height in pixels.
+    new_w : int
+        Post-pad canvas width in pixels.
+
+    Returns
+    -------
+    Keypoints
+        Translated keypoints with ``canvas_size = (new_h, new_w)``.
+    """
     x, y, rest = _kp_xy_rest(kps)
     return _kp_rebuild(x + left, y + top, rest, (new_h, new_w))
 
@@ -390,7 +606,38 @@ def _clip_xyxy(
 def affine_boxes(
     boxes: BoundingBoxes, matrix: Tensor, out_hw: tuple[int, int]
 ) -> BoundingBoxes:
-    """Warp boxes by a forward matrix; return the enclosing axis-aligned box."""
+    r"""Warp boxes by a forward affine matrix and re-axis-align them.
+
+    Geometric companion to :class:`Affine` / :class:`RandomAffine` /
+    :class:`RandomRotation`.  Each input rectangle is warped by mapping
+    its four corners through ``matrix`` and then taking the smallest
+    enclosing axis-aligned box of the warped quadrilateral.  Results
+    are clipped to ``out_hw`` so partially-out-of-frame boxes survive
+    as their visible rectangle.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes in any supported format.
+    matrix : Tensor
+        ``(2, 3)`` forward affine matrix in pixel coordinates, applied
+        via :func:`lucid.utils.transforms.functional.affine_points`.
+    out_hw : (int, int)
+        ``(H', W')`` of the warped output canvas; becomes the new
+        ``canvas_size`` and is used to clip the corner coordinates.
+
+    Returns
+    -------
+    BoundingBoxes
+        Axis-aligned enclosing boxes with the same format / labels and
+        ``canvas_size = out_hw``.
+
+    Notes
+    -----
+    Because the result is re-axis-aligned, the returned area is an
+    upper bound on the warped rectangle's area whenever ``matrix``
+    includes a non-zero rotation or shear component.
+    """
     from lucid.utils.transforms import functional as _F
 
     xy = to_xyxy(boxes)
@@ -420,7 +667,31 @@ def affine_boxes(
 def affine_keypoints(
     kps: Keypoints, matrix: Tensor, out_hw: tuple[int, int]
 ) -> Keypoints:
-    """Warp keypoint coordinates by a forward matrix."""
+    r"""Warp keypoint coordinates by a forward affine matrix.
+
+    Geometric companion to :class:`Affine` / :class:`RandomAffine` /
+    :class:`RandomRotation` for the keypoints target.  The ``x, y``
+    columns are passed through
+    :func:`lucid.utils.transforms.functional.affine_points`; trailing
+    columns (visibility / score / angle / scale) are preserved.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source ``(N, D)`` keypoints with ``D >= 2``.
+    matrix : Tensor
+        ``(2, 3)`` forward affine matrix in pixel coordinates.
+    out_hw : (int, int)
+        ``(H', W')`` of the warped output canvas; becomes the new
+        ``canvas_size``.
+
+    Returns
+    -------
+    Keypoints
+        Warped keypoints with ``canvas_size = out_hw`` and trailing
+        columns unchanged.  Coordinates are **not clipped** — out-of-frame
+        points keep their warped position for the caller to inspect.
+    """
     from lucid.utils.transforms import functional as _F
 
     x, y, rest = _kp_xy_rest(kps)
@@ -429,7 +700,24 @@ def affine_keypoints(
 
 
 def transpose_boxes(boxes: BoundingBoxes) -> BoundingBoxes:
-    """Swap x/y axes (image transpose); canvas (H, W) -> (W, H)."""
+    r"""Swap the ``x`` and ``y`` axes of every box (image transpose).
+
+    Geometric companion to :class:`Transpose` (matrix transpose of the
+    image).  Each box ``(x1, y1, x2, y2)`` becomes
+    ``(y1, x1, y2, x2)`` and the canvas swaps from ``(H, W)`` to
+    ``(W, H)`` so the result still indexes a valid image.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes on a ``(H, W)`` canvas.
+
+    Returns
+    -------
+    BoundingBoxes
+        Transposed boxes with the same format / labels and
+        ``canvas_size = (W, H)``.
+    """
     h, w = boxes.canvas_size
     xy = to_xyxy(boxes)
     x1, y1, x2, y2 = xy[:, 0:1], xy[:, 1:2], xy[:, 2:3], xy[:, 3:4]
@@ -438,14 +726,54 @@ def transpose_boxes(boxes: BoundingBoxes) -> BoundingBoxes:
 
 
 def transpose_keypoints(kps: Keypoints) -> Keypoints:
-    """Swap x/y of keypoints; canvas (H, W) -> (W, H)."""
+    r"""Swap the ``x`` and ``y`` columns of every keypoint.
+
+    Geometric companion to :class:`Transpose` for the keypoints target.
+    Each point ``(x, y, *rest)`` becomes ``(y, x, *rest)`` and the
+    canvas swaps from ``(H, W)`` to ``(W, H)``; trailing columns are
+    preserved.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source ``(N, D)`` keypoints with ``D >= 2`` on a ``(H, W)``
+        canvas.
+
+    Returns
+    -------
+    Keypoints
+        Transposed keypoints with ``canvas_size = (W, H)`` and trailing
+        columns unchanged.
+    """
     h, w = kps.canvas_size
     x, y, rest = _kp_xy_rest(kps)
     return _kp_rebuild(y, x, rest, (w, h))
 
 
 def rot90_boxes(boxes: BoundingBoxes, k: int) -> BoundingBoxes:
-    """Rotate boxes by ``k`` CCW quarter-turns (matching ``rot90``)."""
+    r"""Rotate boxes by ``k`` CCW quarter-turns to match :func:`rot90`.
+
+    Geometric companion to :class:`Rot90` / pipeline use of
+    :func:`lucid.rot90` on the image side.  Each quarter-turn maps a
+    box ``(x1, y1, x2, y2)`` on a ``(H, W)`` canvas to
+    ``(y1, (W-1)-x2, y2, (W-1)-x1)`` on a ``(W, H)`` canvas, applied
+    ``k mod 4`` times; ``k = 0`` is a no-op.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes.
+    k : int
+        Number of 90° counter-clockwise rotations to apply.  Reduced
+        modulo 4; negative values are valid (Python ``%`` semantics
+        give a non-negative residue).
+
+    Returns
+    -------
+    BoundingBoxes
+        Rotated boxes with the same format / labels and the canvas
+        appropriately swapped (``H`` <-> ``W``) for odd ``k``.
+    """
     out = boxes
     for _ in range(k % 4):
         h, w = out.canvas_size
@@ -461,7 +789,27 @@ def rot90_boxes(boxes: BoundingBoxes, k: int) -> BoundingBoxes:
 
 
 def rot90_keypoints(kps: Keypoints, k: int) -> Keypoints:
-    """Rotate keypoints by ``k`` CCW quarter-turns."""
+    r"""Rotate keypoints by ``k`` CCW quarter-turns to match :func:`rot90`.
+
+    Geometric companion to :class:`Rot90` for the keypoints target.
+    Each quarter-turn maps ``(x, y)`` on a ``(H, W)`` canvas to
+    ``(y, (W-1)-x)`` on a ``(W, H)`` canvas, applied ``k mod 4`` times;
+    trailing columns (visibility / score / ...) are preserved.
+
+    Parameters
+    ----------
+    kps : Keypoints
+        Source ``(N, D)`` keypoints with ``D >= 2``.
+    k : int
+        Number of 90° counter-clockwise rotations to apply.  Reduced
+        modulo 4.
+
+    Returns
+    -------
+    Keypoints
+        Rotated keypoints with the canvas appropriately swapped
+        (``H`` <-> ``W``) for odd ``k`` and trailing columns unchanged.
+    """
     out = kps
     for _ in range(k % 4):
         h, w = out.canvas_size

@@ -32,7 +32,22 @@ class CropBox:
 
 
 class Crop(_NoParams, GeometricTransform[Empty]):
-    r"""Crop a fixed region ``[x_min, y_min, x_max, y_max)`` (Albumentations ``Crop``)."""
+    r"""Crop a fixed region ``[x_min, y_min, x_max, y_max)`` (Albumentations ``Crop``).
+
+    Deterministic — every call returns the same rectangle regardless
+    of input size.  Masks, boxes, and keypoints are translated in
+    lock-step with the image (``GeometricTransform`` contract).
+
+    Parameters
+    ----------
+    x_min, y_min : int, optional, default=0
+        Top-left corner of the crop window (inclusive).
+    x_max, y_max : int, optional, default=1024
+        Bottom-right corner (exclusive).
+    p : float, optional, default=1.0
+        Probability of applying the crop.  Below ``1.0``, the input
+        passes through unchanged on ``1 - p`` of calls.
+    """
 
     def __init__(
         self,

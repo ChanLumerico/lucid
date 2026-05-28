@@ -50,7 +50,26 @@ def register_weights(
 
 
 def weights_for(model_name: str) -> type[WeightsEnum] | None:
-    """Return the :class:`WeightsEnum` registered for ``model_name``, or None."""
+    r"""Return the :class:`WeightsEnum` registered for ``model_name``.
+
+    Parameters
+    ----------
+    model_name : str
+        Factory name, e.g. ``"resnet_18"`` — the same string passed
+        to :func:`register_weights` at module import time.
+
+    Returns
+    -------
+    type[WeightsEnum] or None
+        The registered enum class, or ``None`` when the model has
+        no pretrained weights declared yet.
+
+    Examples
+    --------
+    >>> import lucid.weights as W
+    >>> W.weights_for("resnet_18")
+    <enum 'ResNet18Weights'>
+    """
     return _WEIGHTS_BY_MODEL.get(model_name)
 
 

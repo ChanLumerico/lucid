@@ -146,7 +146,7 @@ def _apply_affine(
     cx: float | None = None,
     cy: float | None = None,
 ) -> Tensor:
-    """Compose ``affine_matrix`` + ``warp_affine`` for the geometric ops.
+    r"""Compose ``affine_matrix`` + ``warp_affine`` for the geometric ops.
 
     Optional ``cx`` / ``cy`` override the anchor point.  Default is the
     image centre ``((w-1)/2, (h-1)/2)`` — matching reference-framework
@@ -154,6 +154,24 @@ def _apply_affine(
     framework anchors at the top-left corner ``(0, 0)`` (legacy
     AutoAugment paper convention); pass ``cx=0, cy=0`` explicitly to
     reproduce that behaviour.
+
+    Honours the ``fill`` arg as a *constant* value over the entire
+    out-of-bounds region.  Lucid's :func:`warp_affine` plumbs ``fill``
+    to ``grid_sample`` which only supports ``"zeros"`` / ``"border"``
+    / ``"reflection"`` padding modes (no true constant fill), so this
+    helper renders the constant fill explicitly via a mask-and-add:
+
+    .. math::
+
+        out(p) = \mathrm{warp}_0(p) + fill \cdot (1 - mask(p))
+
+    where ``warp_0`` is the zero-padded warp of the image and ``mask``
+    is the zero-padded warp of an all-ones image (the in-bounds
+    sampling weight at every output pixel).  This is mathematically
+    equivalent to grid-sampling with a true constant outside the
+    source — fully in-bounds pixels (``mask = 1``) pass through, fully
+    out-of-bounds pixels (``mask = 0``) become ``fill``, and bilinear
+    border interpolations get the correct fractional blend.
     """
     h, w = F._spatial_hw(img)
     if cx is None:
@@ -171,7 +189,14 @@ def _apply_affine(
         translate_y=translate_y,
     )
     mode = "nearest" if interpolation is Interpolation.NEAREST else "bilinear"
-    return F.warp_affine(img, matrix, (h, w), mode=mode, fill=fill)
+    warped = F.warp_affine(img, matrix, (h, w), mode=mode, fill=0.0)
+    if fill == 0.0:
+        return warped
+    # Validity mask: warp an all-ones image with zero padding → 1 where
+    # the source was fully in-bounds, fractional at borders, 0 outside.
+    ones = lucid.ones_like(img)
+    mask = F.warp_affine(ones, matrix, (h, w), mode=mode, fill=0.0)
+    return warped + fill * (1.0 - mask)
 
 
 def apply_op(

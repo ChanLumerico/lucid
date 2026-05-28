@@ -371,11 +371,19 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         directory : str
             Directory containing ``vocab.txt`` and optionally
             ``special_tokens_map.json``.
-        unk_token, continuing_prefix, max_chars_per_word
-            See class docstring.  Defaults match BERT.
-        normalizer, pre_tokenizer, special_tokens
-            See class docstring.  ``special_tokens`` falls back to
-            the on-disk ``special_tokens_map.json`` when omitted.
+        unk_token : str, optional, keyword-only, default="[UNK]"
+            See class docstring.  Default matches BERT.
+        continuing_prefix : str, optional, keyword-only, default="##"
+            See class docstring.  Default matches BERT.
+        max_chars_per_word : int, optional, keyword-only, default=100
+            See class docstring.  Default matches BERT.
+        normalizer : Normalizer or None, optional, keyword-only
+            See class docstring.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            See class docstring.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            See class docstring.  Falls back to the on-disk
+            ``special_tokens_map.json`` when omitted.
 
         Returns
         -------
@@ -556,7 +564,20 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
 
         Parameters
         ----------
-        See :meth:`WordPieceTokenizer.from_file`.
+        directory : str
+            Directory containing ``vocab.txt``.
+        unk_token : str, optional, keyword-only, default="[UNK]"
+            See :meth:`WordPieceTokenizer.from_file`.
+        continuing_prefix : str, optional, keyword-only, default="##"
+            See :meth:`WordPieceTokenizer.from_file`.
+        max_chars_per_word : int, optional, keyword-only, default=100
+            See :meth:`WordPieceTokenizer.from_file`.
+        normalizer : Normalizer or None, optional, keyword-only
+            See :meth:`WordPieceTokenizer.from_file`.
+        pre_tokenizer : PreTokenizer or None, optional, keyword-only
+            See :meth:`WordPieceTokenizer.from_file`.
+        special_tokens : SpecialTokens or None, optional, keyword-only
+            See :meth:`WordPieceTokenizer.from_file`.
 
         Returns
         -------

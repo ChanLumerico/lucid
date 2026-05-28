@@ -21,7 +21,22 @@ from lucid.utils.transforms._base import Empty, PhotometricTransform, _NoParams
 
 @dataclass(frozen=True)
 class ColorJitterParams:
-    """Sampled per-call jitter factors + the order to apply them in."""
+    r"""Sampled per-call jitter factors + the order to apply them in.
+
+    Returned by :meth:`ColorJitter.make_params` once per call —
+    captures every random choice the transform makes so the apply
+    step is fully deterministic given the same instance.
+
+    Attributes
+    ----------
+    order : tuple of int
+        Random permutation of ``(0, 1, 2, 3)`` indexing the
+        ``(brightness, contrast, saturation, hue)`` adjustment
+        sequence — matches the torchvision reference.
+    brightness, contrast, saturation, hue : float or None
+        Sampled factors per adjustment, or ``None`` when the
+        corresponding range was disabled at construction time.
+    """
 
     order: tuple[int, ...]
     brightness: float | None

@@ -26,7 +26,24 @@ from lucid.utils.transforms._interpolation import Interpolation, as_interpolatio
 
 @dataclass
 class DispParams:
-    """A sampled displacement field for one call (pixel units)."""
+    r"""A sampled displacement field for one call (pixel units).
+
+    Returned by each ``_DisplacementTransform.make_params`` —
+    encapsulates the per-pixel ``(dx, dy)`` shift that
+    :class:`ElasticTransform`, :class:`GridDistortion`,
+    :class:`OpticalDistortion`, and :class:`GridElasticDeform`
+    feed into :func:`~lucid.utils.transforms.functional.remap`.
+
+    Attributes
+    ----------
+    dx, dy : Tensor
+        Per-pixel displacement fields of shape ``(H, W)`` in pixel
+        units.
+    out_hw : tuple of (int, int)
+        Output ``(H, W)`` — usually equal to the input size, but
+        kept explicit so the dispatch hooks know the target canvas
+        for boxes / keypoints.
+    """
 
     dx: Tensor
     dy: Tensor

@@ -53,7 +53,34 @@ class ChannelDropParams:
 
 
 class RandomBrightnessContrast(PhotometricTransform[BCParams]):
-    r"""Random brightness + contrast (Albumentations ``RandomBrightnessContrast``)."""
+    r"""Randomly perturb brightness and contrast jointly (Albumentations ``RandomBrightnessContrast``).
+
+    Samples a brightness offset and a contrast multiplier independently
+    from their limit ranges, then applies ``img * (1 + c) + b`` in one
+    pass and clips to ``[0, 1]``.  Equivalent to chaining
+    :class:`RandomBrightness` and :class:`RandomContrast` but cheaper
+    (one fused expression, one clip).
+
+    Parameters
+    ----------
+    brightness_limit : float or (float, float), optional, default=0.2
+        Additive brightness offset range.  A scalar ``v`` is interpreted
+        as the symmetric range ``(-v, v)``.
+    contrast_limit : float or (float, float), optional, default=0.2
+        Multiplicative contrast offset range (multiplier is
+        ``1 + sampled_value``).  Scalar ``v`` expands to ``(-v, v)``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -83,7 +110,30 @@ class RandomBrightnessContrast(PhotometricTransform[BCParams]):
 
 
 class RandomGamma(PhotometricTransform[ScalarParams]):
-    r"""Random gamma correction (Albumentations ``RandomGamma``)."""
+    r"""Random gamma correction (Albumentations ``RandomGamma``).
+
+    Samples a gamma value uniformly from ``gamma_limit / 100`` and
+    applies ``img ** gamma`` after clipping the input to ``[0, 1]``.
+    Gamma ``< 1`` brightens midtones; gamma ``> 1`` darkens them.
+
+    Parameters
+    ----------
+    gamma_limit : (int, int), optional, default=(80, 120)
+        Inclusive range of the gamma exponent expressed in percent
+        (matches Albumentations' integer-percent convention).  Sampled
+        gamma is ``randint(gamma_limit[0], gamma_limit[1]) / 100``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomGamma(gamma_limit=(80, 120), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self, gamma_limit: tuple[int, int] = (80, 120), p: float = 0.5
@@ -181,7 +231,40 @@ class HueSaturationValue(PhotometricTransform[TripletParams]):
 
 
 class RGBShift(PhotometricTransform[TripletParams]):
-    r"""Add per-channel shifts (Albumentations ``RGBShift``); limits on 0-255 scale."""
+    r"""Add per-channel additive shifts to an RGB image (Albumentations ``RGBShift``).
+
+    Samples an independent offset for each of the R / G / B channels
+    from the corresponding limit, scales by ``1/255`` so the limits stay
+    on the familiar OpenCV 0-255 scale, then adds and clips to
+    ``[0, 1]``.  Channel-gated to 3-channel input via
+    :meth:`PhotometricTransform._require_channels`.
+
+    Parameters
+    ----------
+    r_shift_limit : float or (float, float), optional, default=20
+        Red-channel shift range on the 0-255 scale; scalar ``v`` expands
+        to ``(-v, v)``.
+    g_shift_limit : float or (float, float), optional, default=20
+        Green-channel shift range on the 0-255 scale.
+    b_shift_limit : float or (float, float), optional, default=20
+        Blue-channel shift range on the 0-255 scale.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If the input image does not have exactly 3 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RGBShift(r_shift_limit=15, g_shift_limit=15, b_shift_limit=15, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -216,7 +299,32 @@ class RGBShift(PhotometricTransform[TripletParams]):
 
 
 class ChannelShuffle(PhotometricTransform[PermParams]):
-    r"""Randomly permute the RGB channels (Albumentations ``ChannelShuffle``)."""
+    r"""Randomly permute the RGB channel order (Albumentations ``ChannelShuffle``).
+
+    Samples a uniformly random permutation of ``(0, 1, 2)`` via a
+    Fisher-Yates shuffle, then reorders the channel axis accordingly.
+    No pixel arithmetic is performed — the operation is a pure slice +
+    concat, so it composes cleanly with autograd.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If the input image does not have exactly 3 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.ChannelShuffle(p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -239,7 +347,32 @@ class ChannelShuffle(PhotometricTransform[PermParams]):
 
 
 class ChannelDropout(PhotometricTransform[ChannelDropParams]):
-    r"""Zero out random channels (Albumentations ``ChannelDropout``)."""
+    r"""Replace random channels with a constant fill value (Albumentations ``ChannelDropout``).
+
+    Samples a count ``n`` uniformly from ``channel_drop_range`` and
+    selects ``n`` distinct channels without replacement.  Each chosen
+    channel is replaced by ``fill_value`` via a multiplicative keep-mask
+    + additive fill, so the op stays autograd-friendly.
+
+    Parameters
+    ----------
+    channel_drop_range : (int, int), optional, default=(1, 1)
+        Inclusive range from which the number of channels to drop is
+        sampled (``randint(lo, hi + 1)``).
+    fill_value : float, optional, default=0.0
+        Value written into the dropped channels.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.ChannelDropout(channel_drop_range=(1, 1), fill_value=0.0, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -278,7 +411,28 @@ class ChannelDropout(PhotometricTransform[ChannelDropParams]):
 
 
 class Equalize(_NoParams, PhotometricTransform[Empty]):
-    r"""Per-channel histogram equalization (Albumentations ``Equalize``)."""
+    r"""Per-channel histogram equalization (Albumentations ``Equalize``).
+
+    Computes a cumulative distribution per channel and remaps intensities
+    so the output histogram is as flat as possible.  Useful for stretching
+    contrast on dim or hazy images.  Delegates to
+    :func:`functional.equalize`, which handles the uint8 round-trip and
+    per-channel CDF construction.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Equalize(p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -352,7 +506,32 @@ class CLAHE(_NoParams, PhotometricTransform[Empty]):
 
 
 class Solarize(PhotometricTransform[ScalarParams]):
-    r"""Invert pixels above ``threshold`` (Albumentations ``Solarize``)."""
+    r"""Invert pixel intensities above a threshold (Albumentations ``Solarize``).
+
+    Samples a threshold uniformly from ``threshold`` (on the 0-255
+    scale, divided by 255 internally), then replaces every pixel
+    ``x >= t`` with ``1 - x``, leaving pixels below the threshold
+    untouched.  Classic photographic posterisation effect, also used by
+    AutoAugment / RandAugment.
+
+    Parameters
+    ----------
+    threshold : float or (float, float), optional, default=128
+        Threshold (0-255 scale) for the inversion cutoff.  Scalar ``v``
+        is interpreted as the constant range ``(v, v)``; a tuple samples
+        the threshold uniformly per call.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Solarize(threshold=128, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self, threshold: float | tuple[float, float] = 128, p: float = 0.5
@@ -457,7 +636,27 @@ class Posterize(PhotometricTransform[Empty]):
 
 
 class InvertImg(_NoParams, PhotometricTransform[Empty]):
-    r"""Invert intensities ``1 - img`` (Albumentations ``InvertImg``)."""
+    r"""Invert pixel intensities via ``1 - img`` (Albumentations ``InvertImg``).
+
+    Photographic negative — every channel of every pixel is replaced by
+    ``1 - x``.  No parameters and no sampling; deterministic when
+    triggered.  Often used as a building block for AutoAugment /
+    RandAugment policies.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.InvertImg(p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -470,7 +669,27 @@ class InvertImg(_NoParams, PhotometricTransform[Empty]):
 
 
 class ToGray(_NoParams, PhotometricTransform[Empty]):
-    r"""Convert to grayscale, keeping 3 channels (Albumentations ``ToGray``)."""
+    r"""Convert an RGB image to grayscale while keeping 3 channels (Albumentations ``ToGray``).
+
+    Applies the BT.601 luminance weights ``Y = 0.299 R + 0.587 G + 0.114 B``
+    and broadcasts the scalar luminance back to a 3-channel image so
+    downstream ops that expect RGB still work.  Delegates to
+    :func:`functional.rgb_to_grayscale` with ``keep_channels=True``.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.ToGray(p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -483,7 +702,31 @@ class ToGray(_NoParams, PhotometricTransform[Empty]):
 
 
 class ToSepia(_NoParams, PhotometricTransform[Empty]):
-    r"""Apply a sepia colour matrix (Albumentations ``ToSepia``)."""
+    r"""Apply the canonical sepia-tone colour matrix (Albumentations ``ToSepia``).
+
+    Multiplies the input by the fixed 3x3 sepia matrix used by
+    Microsoft / PIL / Albumentations and clips to ``[0, 1]``.  Produces a
+    warm brown-tinted output reminiscent of vintage photographs.
+
+    Parameters
+    ----------
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If the input image does not have exactly 3 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.ToSepia(p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     _M = (
         (0.393, 0.769, 0.189),
@@ -513,7 +756,35 @@ class ToSepia(_NoParams, PhotometricTransform[Empty]):
 
 
 class Sharpen(PhotometricTransform[TripletParams]):
-    r"""Sharpen via unsharp kernel blend (Albumentations ``Sharpen``)."""
+    r"""Sharpen an image via a 3x3 unsharp kernel blend (Albumentations ``Sharpen``).
+
+    Convolves the image with a 3x3 Laplacian-of-Gaussian style kernel
+    whose centre weight is ``8 + lightness``, then blends the sharpened
+    result with the original using a per-call ``alpha``.  Higher
+    ``alpha`` puts more weight on the sharpened image; ``lightness``
+    controls the centre-weight of the kernel and thus the strength of
+    the high-frequency boost.
+
+    Parameters
+    ----------
+    alpha : (float, float), optional, default=(0.2, 0.5)
+        Range from which the original / sharpened blend weight is
+        sampled uniformly per call.
+    lightness : (float, float), optional, default=(0.5, 1.0)
+        Range for the kernel-centre additive term ``lightness``; larger
+        values give a stronger sharpen.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -544,7 +815,34 @@ class Sharpen(PhotometricTransform[TripletParams]):
 
 
 class Emboss(PhotometricTransform[TripletParams]):
-    r"""Emboss via directional kernel blend (Albumentations ``Emboss``)."""
+    r"""Emboss an image via a 3x3 directional gradient kernel (Albumentations ``Emboss``).
+
+    Convolves the image with an asymmetric 3x3 kernel that highlights
+    the top-left to bottom-right gradient, producing a faux 3-D relief
+    effect.  Blends the embossed result with the original using a
+    per-call ``alpha`` and a per-call ``strength`` that controls the
+    off-diagonal kernel weights.
+
+    Parameters
+    ----------
+    alpha : (float, float), optional, default=(0.2, 0.5)
+        Range from which the original / embossed blend weight is sampled
+        uniformly per call.
+    strength : (float, float), optional, default=(0.2, 0.7)
+        Range for the kernel off-diagonal magnitude; larger values give
+        a more pronounced relief.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Emboss(alpha=(0.2, 0.5), strength=(0.2, 0.7), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -575,7 +873,31 @@ class Emboss(PhotometricTransform[TripletParams]):
 
 
 class RandomToneCurve(PhotometricTransform[ScalarParams]):
-    r"""Random S-shaped tone curve (Albumentations ``RandomToneCurve``)."""
+    r"""Apply a random S-shaped tone curve around midtones (Albumentations ``RandomToneCurve``).
+
+    Samples an amount ``a`` uniformly from ``(-scale, scale)`` and adds
+    ``a * sin(2 * pi * x)`` to the clipped image.  The sine wave biases
+    midtones up (if ``a > 0``) or down (if ``a < 0``) while leaving the
+    deep shadows and bright highlights near identity, producing a
+    classic photographic S-curve.
+
+    Parameters
+    ----------
+    scale : float, optional, default=0.1
+        Half-width of the symmetric range from which the tone-curve
+        amount is sampled (uniform ``(-scale, scale)``).
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomToneCurve(scale=0.1, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, scale: float = 0.1, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -598,7 +920,30 @@ class RandomToneCurve(PhotometricTransform[ScalarParams]):
 
 
 class RandomBrightness(PhotometricTransform[ScalarParams]):
-    r"""Random brightness only (Albumentations ``RandomBrightness``)."""
+    r"""Randomly perturb brightness only (Albumentations ``RandomBrightness``).
+
+    Samples an additive brightness offset uniformly from ``limit``,
+    adds it to the image, and clips to ``[0, 1]``.  Equivalent to the
+    brightness leg of :class:`RandomBrightnessContrast` — included as
+    a standalone class for parity with the Albumentations API.
+
+    Parameters
+    ----------
+    limit : float or (float, float), optional, default=0.2
+        Additive brightness offset range.  Scalar ``v`` is interpreted
+        as the symmetric range ``(-v, v)``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomBrightness(limit=0.2, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self, limit: float | tuple[float, float] = 0.2, p: float = 0.5
@@ -617,7 +962,30 @@ class RandomBrightness(PhotometricTransform[ScalarParams]):
 
 
 class RandomContrast(PhotometricTransform[ScalarParams]):
-    r"""Random contrast only (Albumentations ``RandomContrast``)."""
+    r"""Randomly perturb contrast only (Albumentations ``RandomContrast``).
+
+    Samples a contrast factor uniformly from ``limit``, multiplies the
+    image by ``1 + factor``, and clips to ``[0, 1]``.  Equivalent to
+    the contrast leg of :class:`RandomBrightnessContrast` — included as
+    a standalone class for parity with the Albumentations API.
+
+    Parameters
+    ----------
+    limit : float or (float, float), optional, default=0.2
+        Multiplicative contrast offset range (multiplier is
+        ``1 + sampled_value``).  Scalar ``v`` expands to ``(-v, v)``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RandomContrast(limit=0.2, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self, limit: float | tuple[float, float] = 0.2, p: float = 0.5
@@ -674,7 +1042,33 @@ class UnsharpMask(PhotometricTransform[TripletParams]):
 
 
 class RingingOvershoot(PhotometricTransform[Empty]):
-    r"""Ringing overshoot via a high-pass kernel blend (Albu ``RingingOvershoot``)."""
+    r"""Simulate ringing / overshoot artefacts via a high-pass kernel (Albumentations ``RingingOvershoot``).
+
+    Convolves the image with a 3x3 high-pass kernel that exaggerates
+    edges, producing the bright halo / undershoot pattern typical of
+    aggressive sharpening or low-pass filter ringing.  Useful for
+    simulating compression artefacts and JPEG-style edge halos during
+    training.
+
+    Parameters
+    ----------
+    blur_limit : (int, int), optional, default=(7, 15)
+        Reserved for parity with the Albumentations API; the current
+        implementation uses a fixed 3x3 high-pass kernel and ignores
+        this argument, but it is kept on the signature for forward
+        compatibility.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.RingingOvershoot(blur_limit=(7, 15), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, blur_limit: tuple[int, int] = (7, 15), p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -695,7 +1089,36 @@ class RingingOvershoot(PhotometricTransform[Empty]):
 
 
 class FancyPCA(PhotometricTransform[Empty]):
-    r"""AlexNet-style PCA colour augmentation (Albumentations ``FancyPCA``)."""
+    r"""AlexNet-style PCA colour augmentation (Krizhevsky 2012, Albumentations ``FancyPCA``).
+
+    Computes the per-image RGB covariance matrix, takes its
+    eigendecomposition, and adds a random linear combination of the
+    eigenvectors weighted by their eigenvalues to every pixel.  The
+    weights are i.i.d. samples from ``alpha * U(-1, 1)`` per channel —
+    same recipe used in the original AlexNet training pipeline.
+
+    Parameters
+    ----------
+    alpha : float, optional, default=0.1
+        Standard deviation scale on the eigenvalue-weighted perturbation;
+        larger values give more colour jitter.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If the input image does not have exactly 3 channels.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.FancyPCA(alpha=0.1, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(self, alpha: float = 0.1, p: float = 0.5) -> None:
         super().__init__(p=p)
@@ -733,7 +1156,37 @@ class PixelMaskParams:
 
 
 class PixelDropout(PhotometricTransform[PixelMaskParams]):
-    r"""Randomly set pixels to ``drop_value`` (Albumentations ``PixelDropout``)."""
+    r"""Randomly set individual pixels to a fill value (Albumentations ``PixelDropout``).
+
+    Samples a per-pixel Bernoulli mask with drop probability
+    ``dropout_prob`` and replaces masked pixels with ``drop_value``
+    using a multiplicative keep-mask + additive fill (autograd-friendly,
+    no in-place writes).  When ``per_channel=True`` the mask is sampled
+    independently for each channel; otherwise a single mask is broadcast
+    across channels.
+
+    Parameters
+    ----------
+    dropout_prob : float, optional, default=0.01
+        Independent per-pixel drop probability.
+    per_channel : bool, optional, default=False
+        If ``True``, sample the dropout mask independently per channel.
+        If ``False``, a single mask is shared across channels so dropped
+        pixels go to the fill value in all channels at once.
+    drop_value : float, optional, default=0.0
+        Value written into dropped pixels.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.PixelDropout(dropout_prob=0.05, per_channel=False, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
@@ -768,7 +1221,39 @@ class BandParams:
 
 
 class XYMasking(PhotometricTransform[BandParams]):
-    r"""Mask random horizontal + vertical bands (Albumentations ``XYMasking``)."""
+    r"""Mask random horizontal and vertical bands of the image (Albumentations ``XYMasking``).
+
+    Samples ``num_masks_x`` vertical column-bands of width
+    ``mask_x_length`` and ``num_masks_y`` horizontal row-bands of height
+    ``mask_y_length``, each placed at a uniformly-sampled offset.  All
+    sampled bands are unioned into a single multiplicative keep-mask
+    and applied via the standard mask + fill pattern.  Equivalent to
+    SpecAugment-style time / frequency masking but for spatial inputs.
+
+    Parameters
+    ----------
+    num_masks_x : int, optional, default=0
+        Number of vertical (column-direction) bands to sample.
+    num_masks_y : int, optional, default=0
+        Number of horizontal (row-direction) bands to sample.
+    mask_x_length : int, optional, default=10
+        Width in pixels of each vertical band.
+    mask_y_length : int, optional, default=10
+        Height in pixels of each horizontal band.
+    fill_value : float, optional, default=0.0
+        Value written into the masked bands.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.XYMasking(num_masks_x=2, num_masks_y=2, mask_x_length=8, mask_y_length=8, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
+    """
 
     def __init__(
         self,
