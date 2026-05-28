@@ -21,6 +21,38 @@ Closes the torchvision `ClassificationPresetTrain` parity gap in one phased PR:
 `TransformsPreset` framework, with reference-framework numerical parity
 verified across 180 parity tests.
 
+### Changed — AlexNet single-stream re-derivation
+
+- **`lucid.models.vision.alexnet`** — backbone re-implemented as the
+  Krizhevsky 2014 single-stream "One Weird Trick" variant
+  (arXiv:1404.5997) with channel widths `(64, 192, 384, 256, 256)` and
+  no `LocalResponseNorm`, replacing the previous NIPS 2012 paper-faithful
+  channel widths `(96, 256, 384, 384, 256)` with LRN.  This is the
+  topology every published reference ImageNet checkpoint targets, so
+  pretrained weights now load directly.  R-CNN's internal AlexNet-style
+  backbone (`lucid.models.vision.rcnn._AlexNetBackbone`) is kept on the
+  original 96-channel topology — R-CNN is faithful to Girshick CVPR 2014
+  and is unaffected by this change.
+  - `alexnet()` param count: 3.7M → 2.5M (conv trunk only)
+  - `alexnet_cls()` param count: 62.4M → 61.1M
+  - `feature_info` channels: `[96, 256, 384, 384, 256]` →
+    `[64, 192, 384, 256, 256]`
+
+### Added — Pretrained weights
+
+- **`lucid.models.vision.alexnet`** — pretrained ImageNet-1k weights for
+  `alexnet_cls`.  Hosted on
+  [`lucid-dl/alexnet`](https://huggingface.co/lucid-dl/alexnet).
+  Converted from `torchvision.AlexNet_Weights.IMAGENET1K_V1`
+  (acc@1 = 56.522 / acc@5 = 79.066).  Numerical parity vs reference:
+  max abs logit diff `9.5e-7` on a random 224×224 input.  Load via:
+  ```python
+  from lucid.models.vision.alexnet import alexnet_cls, AlexNetWeights
+  m = alexnet_cls(pretrained=True)                       # DEFAULT tag
+  m = alexnet_cls(pretrained="IMAGENET1K_V1")            # by tag name
+  m = alexnet_cls(weights=AlexNetWeights.IMAGENET1K_V1)  # by enum
+  ```
+
 ### Added
 
 - **`lucid.utils.transforms`** — 4 new policy classes + 1 new transform:

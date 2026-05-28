@@ -1,21 +1,29 @@
-"""AlexNet backbone and classifier (Krizhevsky, Sutskever & Hinton, 2012).
+"""AlexNet backbone and classifier — "One Weird Trick" single-stream variant.
 
-Paper: "ImageNet Classification with Deep Convolutional Neural Networks"
-Architecture:
-    Conv1 : 3→96,  11×11, stride=4, pad=2  → ReLU → LRN → MaxPool 3×3 s2
-    Conv2 : 96→256,  5×5,  pad=2            → ReLU → LRN → MaxPool 3×3 s2
-    Conv3 : 256→384, 3×3,  pad=1            → ReLU
-    Conv4 : 384→384, 3×3,  pad=1            → ReLU
-    Conv5 : 384→256, 3×3,  pad=1            → ReLU → MaxPool 3×3 s2
+Implements the architecture used in Krizhevsky 2014 ("One weird trick for
+parallelizing convolutional neural networks", arXiv:1404.5997), which is
+the single-stream, no-LRN re-derivation of the original Krizhevsky 2012
+two-GPU AlexNet ("ImageNet Classification with Deep Convolutional Neural
+Networks", NIPS 2012).  The 2014 single-stream channel widths are what
+the canonical reference-framework checkpoint targets, so they are what
+Lucid ships — letting ``alexnet_cls(pretrained=True)`` load directly.
+
+Architecture::
+
+    Conv1 : 3→64,   11×11, stride=4, pad=2  → ReLU → MaxPool 3×3 s2
+    Conv2 : 64→192,  5×5,  pad=2            → ReLU → MaxPool 3×3 s2
+    Conv3 : 192→384, 3×3,  pad=1            → ReLU
+    Conv4 : 384→256, 3×3,  pad=1            → ReLU
+    Conv5 : 256→256, 3×3,  pad=1            → ReLU → MaxPool 3×3 s2
     AdaptiveAvgPool → 6×6
     FC6   : 256*6*6 → 4096                  → ReLU → Dropout
     FC7   : 4096    → 4096                  → ReLU → Dropout
     FC8   : 4096    → num_classes
 
-The original paper split conv filters across two GPUs; the merged single-
-stream version (as in standard implementations) is used here.
-
-LRN (Local Response Normalisation) is kept for historical accuracy.
+LRN was a contribution of the 2012 paper but is dropped in the 2014
+single-stream derivation (and in essentially every subsequent ImageNet-
+classifier publication) — it adds compute without measurable accuracy
+gain once dropout + ReLU + heavy augmentation are present.
 """
 
 from typing import ClassVar, cast
@@ -30,25 +38,27 @@ from lucid.models.vision.alexnet._config import AlexNetConfig
 
 
 def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
+    # OWT-2014 single-stream channel widths (64/192/384/256/256), no LRN.
+    # Indices in the resulting Sequential land at {0, 3, 6, 8, 10} for the
+    # five convolutions — matching the reference-framework state_dict so
+    # the converted checkpoint loads with a direct ``features.N.*`` map.
     return nn.Sequential(
         # Block 1
-        nn.Conv2d(cfg.in_channels, 96, 11, stride=4, padding=2),
+        nn.Conv2d(cfg.in_channels, 64, 11, stride=4, padding=2),
         nn.ReLU(inplace=True),
-        nn.LocalResponseNorm(5, alpha=1e-4, beta=0.75, k=2.0),
         nn.MaxPool2d(3, stride=2),
         # Block 2
-        nn.Conv2d(96, 256, 5, padding=2),
+        nn.Conv2d(64, 192, 5, padding=2),
         nn.ReLU(inplace=True),
-        nn.LocalResponseNorm(5, alpha=1e-4, beta=0.75, k=2.0),
         nn.MaxPool2d(3, stride=2),
         # Block 3
-        nn.Conv2d(256, 384, 3, padding=1),
+        nn.Conv2d(192, 384, 3, padding=1),
         nn.ReLU(inplace=True),
         # Block 4
-        nn.Conv2d(384, 384, 3, padding=1),
+        nn.Conv2d(384, 256, 3, padding=1),
         nn.ReLU(inplace=True),
         # Block 5
-        nn.Conv2d(384, 256, 3, padding=1),
+        nn.Conv2d(256, 256, 3, padding=1),
         nn.ReLU(inplace=True),
         nn.MaxPool2d(3, stride=2),
     )
@@ -62,18 +72,17 @@ def _build_features(cfg: AlexNetConfig) -> nn.Sequential:
 class AlexNet(PretrainedModel, BackboneMixin):
     r"""AlexNet feature-extracting backbone (no fully-connected head).
 
-    Implements the five-stage convolutional trunk from Krizhevsky,
-    Sutskever & Hinton, "ImageNet Classification with Deep
-    Convolutional Neural Networks", NIPS 2012: an :math:`11\times11`
-    stride-4 first convolution, an :math:`5\times5` second
-    convolution, three :math:`3\times3` convolutions, with
-    :class:`~lucid.nn.LocalResponseNorm` after the first two blocks
-    and overlapping :math:`3\times3` max-pools that reduce the spatial
-    size by an additional factor of 2 after blocks 1, 2, and 5.  A
+    Implements the single-stream, no-LRN derivation from Krizhevsky,
+    "One weird trick for parallelizing convolutional neural networks",
+    arXiv:1404.5997 — the canonical re-derivation of the original
+    Krizhevsky, Sutskever & Hinton 2012 two-GPU model into a single
+    merged stream with adjusted channel widths
+    :math:`(64, 192, 384, 256, 256)`.  Five convolutions
+    (:math:`11\times11` stride-4 first; :math:`5\times5` second; three
+    :math:`3\times3`), each followed by ReLU, with overlapping
+    :math:`3\times3` stride-2 max-pools after blocks 1, 2, and 5.  A
     final :class:`~lucid.nn.AdaptiveAvgPool2d` collapses the feature
-    map to :math:`6\times6` regardless of input resolution.  The
-    original two-GPU model-parallel split is collapsed into a single
-    merged stream — standard practice in modern reimplementations.
+    map to :math:`6\times6` regardless of input resolution.
 
     Parameters
     ----------
@@ -88,8 +97,8 @@ class AlexNet(PretrainedModel, BackboneMixin):
     config : AlexNetConfig
         Stored copy of the config that built this model.
     features : nn.Sequential
-        The five conv blocks (Conv → ReLU → optional LRN → optional
-        MaxPool) — see :func:`_build_features` for the exact ordering.
+        The five conv blocks (Conv → ReLU → optional MaxPool) — see
+        :func:`_build_features` for the exact ordering.
     avgpool : nn.AdaptiveAvgPool2d
         Global pool down to a :math:`6\times6` spatial map so the
         backbone produces a fixed-size feature regardless of input
@@ -100,27 +109,20 @@ class AlexNet(PretrainedModel, BackboneMixin):
 
     Notes
     -----
-    From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  AlexNet's
-    contribution to deep-learning history is threefold: the
-    *rectified linear unit* :math:`\phi(x) = \max(0, x)` replaced
-    saturating nonlinearities and cut training time by several factors;
-    *dropout* with :math:`p = 0.5` regularised the 4096-dim
-    fully-connected layers against overfitting on a 1.2 M-image dataset;
-    and *local response normalisation*
-
-    .. math::
-
-        b_{x,y}^i = \frac{a_{x,y}^i}{
-            \left(k + \alpha \sum_{j=\max(0, i-n/2)}^{\min(N-1, i+n/2)}
-            (a_{x,y}^j)^2 \right)^{\beta}
-        }
-
-    provided implicit lateral inhibition between feature maps —
-    superseded later by :class:`~lucid.nn.BatchNorm2d`.  The total
-    parameter count is approximately 60 M (≈58 M of which sit in the
-    two 4096-dim fully-connected layers of the classifier variant).
-    With the original ImageNet-1k training recipe AlexNet reaches a
-    top-5 error of 15.3%.
+    From Krizhevsky 2014, §3.  AlexNet's contribution to deep-learning
+    history is threefold: the *rectified linear unit*
+    :math:`\phi(x) = \max(0, x)` replaced saturating nonlinearities and
+    cut training time by several factors; *dropout* with :math:`p=0.5`
+    regularised the 4096-dim fully-connected layers against overfitting
+    on a 1.2 M-image dataset; and *heavy data augmentation* (random
+    crop, horizontal flip, AlexNet-style PCA colour jitter) was made
+    central to the recipe.  The 2012 paper additionally used local
+    response normalisation between blocks 1-2; the 2014 derivation
+    drops it as compute-without-accuracy.  The classifier variant has
+    approximately 61.1 M parameters (≈58.6 M of which sit in the two
+    4096-dim fully-connected layers).  With the original ImageNet-1k
+    training recipe the single-stream AlexNet reaches roughly 56.5%
+    top-1 / 79.1% top-5 on the validation split.
 
     Examples
     --------
@@ -138,7 +140,7 @@ class AlexNet(PretrainedModel, BackboneMixin):
 
     >>> info = backbone.feature_info
     >>> [(fi.stage, fi.num_channels, fi.reduction) for fi in info[:2]]
-    [(1, 96, 4), (2, 256, 8)]
+    [(1, 64, 4), (2, 192, 8)]
     """
 
     config_class: ClassVar[type[AlexNetConfig]] = AlexNetConfig
@@ -149,10 +151,10 @@ class AlexNet(PretrainedModel, BackboneMixin):
         self.features = _build_features(config)
         self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         self._feature_info = [
-            FeatureInfo(stage=1, num_channels=96, reduction=4),
-            FeatureInfo(stage=2, num_channels=256, reduction=8),
+            FeatureInfo(stage=1, num_channels=64, reduction=4),
+            FeatureInfo(stage=2, num_channels=192, reduction=8),
             FeatureInfo(stage=3, num_channels=384, reduction=16),
-            FeatureInfo(stage=4, num_channels=384, reduction=16),
+            FeatureInfo(stage=4, num_channels=256, reduction=16),
             FeatureInfo(stage=5, num_channels=256, reduction=32),
         ]
 
@@ -211,12 +213,12 @@ class AlexNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     Notes
     -----
-    From Krizhevsky et al., NIPS 2012, §3 and Figure 2.  The two
-    4096-dim hidden layers alone account for roughly 54 M of the
-    network's 60 M parameters — the original rationale for *dropout*,
-    which randomly zeros out half of each FC activation during training
-    so that no individual co-adapted neuron is critical for any single
-    decision.  Loss is the standard cross-entropy
+    From Krizhevsky 2014 (single-stream re-derivation of NIPS 2012).
+    The two 4096-dim hidden layers alone account for roughly 54.5 M of
+    the network's 61.1 M parameters — the original rationale for
+    *dropout*, which randomly zeros out half of each FC activation
+    during training so that no individual co-adapted neuron is critical
+    for any single decision.  Loss is the standard cross-entropy
 
     .. math::
 

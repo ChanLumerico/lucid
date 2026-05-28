@@ -10,9 +10,12 @@ from lucid.models._meta import model_family_meta
 @model_family_meta(
     canonical_name="AlexNet",
     citation=(
-        'Krizhevsky, Alex, et al. "ImageNet Classification with Deep '
-        'Convolutional Neural Networks." Advances in Neural Information '
-        "Processing Systems, 2012."
+        'Krizhevsky, Alex, Ilya Sutskever, and Geoffrey E. Hinton. '
+        '"ImageNet Classification with Deep Convolutional Neural '
+        'Networks." Advances in Neural Information Processing Systems, '
+        '2012.  Single-stream channel widths from Krizhevsky, Alex. '
+        '"One weird trick for parallelizing convolutional neural '
+        'networks." arXiv:1404.5997 (2014).'
     ),
     theory=r"""
     AlexNet is the architecture that re-ignited deep learning, winning
@@ -30,18 +33,22 @@ from lucid.models._meta import model_family_meta
     :math:`\phi(x) = \max(0, x)` replaced saturating nonlinearities,
     cutting training time by several factors; (ii) *dropout* with
     :math:`p=0.5` in the two large 4096-dim fully-connected layers
-    regularised the ≈60 M parameters against overfitting; and
-    (iii) *local response normalisation* together with overlapping
-    max-pooling provided implicit lateral inhibition between feature
-    maps.
+    regularised the ≈61 M parameters against overfitting; and
+    (iii) overlapping max-pooling combined with heavy data
+    augmentation (random crops, horizontal flips, AlexNet-style PCA
+    colour jitter) closed the train-test gap.
 
-    Training was split across two GPUs in a model-parallel
-    configuration — a practical necessity given the 3 GB memory
-    budget of a single GTX 580 at the time, and the origin of the
-    "two-stream" diagram in the paper.  AlexNet's success established
-    the now-standard recipe of deep ConvNet + ReLU + dropout + heavy
-    data augmentation + SGD with momentum, and every subsequent
-    ImageNet-scale vision model descends from it directly.
+    The original 2012 paper split conv filters across two GPUs (model
+    parallel) because a single GTX 580's 3 GB memory budget could not
+    hold the network — Krizhevsky 2014 ("One weird trick for
+    parallelizing convolutional neural networks") later re-derived
+    the network as a single merged stream with adjusted channel widths
+    :math:`(64, 192, 384, 256, 256)` and no local response
+    normalisation; this single-stream variant is what Lucid (and every
+    published reference checkpoint) ships.  AlexNet's success
+    established the now-standard recipe of deep ConvNet + ReLU +
+    dropout + heavy data augmentation + SGD with momentum, and every
+    subsequent ImageNet-scale vision model descends from it directly.
     """,
 )
 @dataclass(frozen=True)

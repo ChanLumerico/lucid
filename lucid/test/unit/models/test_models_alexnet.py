@@ -1,4 +1,4 @@
-"""Unit tests for AlexNet (Krizhevsky, Sutskever & Hinton, 2012)."""
+"""Unit tests for AlexNet (Krizhevsky 2014 single-stream OWT)."""
 
 import tempfile
 import unittest
@@ -8,6 +8,7 @@ import lucid.models as models
 from lucid.models.vision.alexnet import (
     AlexNetConfig,
     AlexNetForImageClassification,
+    AlexNetWeights,
     alexnet,
     alexnet_cls,
 )
@@ -41,15 +42,15 @@ class TestAlexNetConfig(unittest.TestCase):
 
 
 class TestAlexNetParamCounts(unittest.TestCase):
-    """Paper-exact counts for the merged single-stream architecture."""
+    """Krizhevsky 2014 single-stream OWT counts (64/192/384/256/256)."""
 
     def test_backbone_params(self) -> None:
-        # Conv1(34944) + Conv2(614656) + Conv3(885120) + Conv4(1327488) + Conv5(884992)
-        self.assertEqual(alexnet().num_parameters(), 3_747_200)
+        # Conv1(23296) + Conv2(307392) + Conv3(663936) + Conv4(884992) + Conv5(590080)
+        self.assertEqual(alexnet().num_parameters(), 2_469_696)
 
     def test_classifier_params(self) -> None:
-        # backbone + FC6(37752832) + FC7(16781312) + Out(4097000) = 62378344
-        self.assertEqual(alexnet_cls().num_parameters(), 62_378_344)
+        # backbone + FC6(37752832) + FC7(16781312) + Out(4097000) = 61100840
+        self.assertEqual(alexnet_cls().num_parameters(), 61_100_840)
 
 
 class TestAlexNetBackbone(unittest.TestCase):
@@ -61,7 +62,7 @@ class TestAlexNetBackbone(unittest.TestCase):
     def test_feature_info_5_stages(self) -> None:
         fi = self.model.feature_info
         self.assertEqual(len(fi), 5)
-        self.assertEqual([f.num_channels for f in fi], [96, 256, 384, 384, 256])
+        self.assertEqual([f.num_channels for f in fi], [64, 192, 384, 256, 256])
 
     def test_forward_features_shape_224(self) -> None:
         x = lucid.randn(1, 3, 224, 224)
@@ -153,6 +154,60 @@ class TestAlexNetSerialization(unittest.TestCase):
             m2.eval()
             diff = float((before - m2(x).logits).abs().max().item())
         self.assertAlmostEqual(diff, 0.0, places=6)
+
+
+class TestAlexNetWeightsEnum(unittest.TestCase):
+    """Static contract of :class:`AlexNetWeights` — no network required."""
+
+    def test_default_aliases_imagenet1k_v1(self) -> None:
+        self.assertIs(AlexNetWeights.DEFAULT, AlexNetWeights.IMAGENET1K_V1)
+
+    def test_entry_fields(self) -> None:
+        e = AlexNetWeights.IMAGENET1K_V1.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertEqual(len(e.sha256), 64)  # hex-encoded SHA-256
+        self.assertTrue(e.url.endswith("/model.safetensors"))
+        self.assertIn("lucid-dl/alexnet", e.url)
+
+    def test_meta_keys(self) -> None:
+        meta = AlexNetWeights.IMAGENET1K_V1.meta
+        self.assertEqual(meta["source"], "torchvision/AlexNet_Weights.IMAGENET1K_V1")
+        self.assertEqual(meta["num_params"], 61_100_840)
+        self.assertIn("ImageNet-1k", meta["metrics"])
+
+    def test_transforms_imagenet_preset(self) -> None:
+        tf = AlexNetWeights.IMAGENET1K_V1.transforms()
+        # ImageClassification preset with 224 crop / 256 resize / ImageNet stats
+        self.assertEqual(tf.crop_size, 224)
+        self.assertEqual(tf.resize_size, 256)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        self.assertIn("IMAGENET1K_V1", list_pretrained("alexnet_cls"))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestAlexNetWeightsLoad(unittest.TestCase):
+    """End-to-end: download from Hub, SHA-verify, load into model."""
+
+    def test_pretrained_true_loads(self) -> None:
+        m = alexnet_cls(pretrained=True)
+        m.eval()
+        x = lucid.rand(1, 3, 224, 224)
+        out = m(x)
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_pretrained_string_tag(self) -> None:
+        m = alexnet_cls(pretrained="IMAGENET1K_V1")
+        self.assertIsInstance(m, AlexNetForImageClassification)
+
+    def test_explicit_enum(self) -> None:
+        m = alexnet_cls(weights=AlexNetWeights.IMAGENET1K_V1)
+        self.assertIsInstance(m, AlexNetForImageClassification)
 
 
 if __name__ == "__main__":
