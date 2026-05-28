@@ -37,7 +37,7 @@ Constraints
 """
 
 import contextlib
-from typing import Any, Iterator
+from typing import Any, Iterator, cast
 
 from lucid._C import engine as _C_engine
 
@@ -86,7 +86,7 @@ class PhantomImpl:
     def clone_with_grad(self, requires_grad: bool) -> PhantomImpl:
         return PhantomImpl(self.shape, self.dtype, self.device, requires_grad)
 
-    def reshape(self, shape) -> PhantomImpl:
+    def reshape(self, shape: Any) -> PhantomImpl:
         return PhantomImpl(shape, self.dtype, self.device, self.requires_grad)
 
     def detach(self) -> PhantomImpl:
@@ -115,7 +115,7 @@ class PhantomImpl:
     # (init helpers in nn/init.py call lots of these).  Returns a
     # chainable lambda so ``impl.foo(...).bar(...)`` style fluent calls
     # don't blow up.
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> _PhantomMethod:
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(name)
         return _PhantomMethod(self)
@@ -177,7 +177,7 @@ def _reshape_factory(impl: Any, shape: Any, *args: Any, **kwargs: Any) -> Phanto
     Pass-through for phantom input; defer to real engine otherwise."""
     if isinstance(impl, PhantomImpl):
         return PhantomImpl(shape, impl.dtype, impl.device, impl.requires_grad)
-    return _ORIGINAL["reshape"](impl, shape, *args, **kwargs)
+    return cast(PhantomImpl, _ORIGINAL["reshape"](impl, shape, *args, **kwargs))
 
 
 def _meshgrid_factory(tensors: Any, *args: Any, **kwargs: Any) -> list[Any]:
@@ -197,7 +197,7 @@ def _meshgrid_factory(tensors: Any, *args: Any, **kwargs: Any) -> list[Any]:
         # Pick a representative phantom for dtype/device
         rep = next(t for t in tensors if isinstance(t, PhantomImpl))
         return [PhantomImpl(combined, rep.dtype, rep.device, False) for _ in tensors]
-    return _ORIGINAL["meshgrid"](tensors, *args, **kwargs)
+    return cast(list[Any], _ORIGINAL["meshgrid"](tensors, *args, **kwargs))
 
 
 def _find_phantom(args: tuple[Any, ...]) -> PhantomImpl | None:
@@ -364,7 +364,7 @@ def shadow_alloc() -> Iterator[None]:
         if _mod is None:
             continue
         if getattr(_mod, "_unwrap", None) is _orig_unwrap:
-            _mod._unwrap = _shadow_unwrap
+            setattr(_mod, "_unwrap", _shadow_unwrap)
             _unwrap_rebindings.append(_mod)
     _ORIGINAL["__unwrap_sites__"] = (_orig_unwrap, _unwrap_rebindings)
 
@@ -391,7 +391,7 @@ def shadow_alloc() -> Iterator[None]:
         if _mod is None:
             continue
         if getattr(_mod, "_unwrap_or_scalar", None) is _orig_uos:
-            _mod._unwrap_or_scalar = _shadow_uos
+            setattr(_mod, "_unwrap_or_scalar", _shadow_uos)
             _uos_rebindings.append(_mod)
     _ORIGINAL["__uos_sites__"] = (_orig_uos, _uos_rebindings)
 

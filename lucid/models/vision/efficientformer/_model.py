@@ -94,7 +94,10 @@ class _EfficientFormerPoolBlock(nn.Module):
         x = shortcut + x
 
         # Pooling mixer (spatial) with LayerScale + DropPath.
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls1(self.pool_mixer(x)))))
+        x = x + cast(
+            Tensor,
+            self.drop_path(cast(Tensor, self.ls1(cast(Tensor, self.pool_mixer(x))))),
+        )
 
         # MLP (channel-last) with LayerScale + DropPath. LayerScale applied
         # in (B, C, H, W) layout after permute-back.

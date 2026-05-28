@@ -2,6 +2,8 @@
 nn.Parameter: a Tensor that is automatically registered by Module.
 """
 
+from typing import cast
+
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
 from lucid._factories.converters import _to_impl
@@ -98,6 +100,12 @@ class Parameter(Tensor):
         # avoid a circular import.
         from lucid.nn._shadow import is_active as _shadow_active, PhantomImpl
 
+        # ``impl`` may be a real ``TensorImpl`` or — under the shadow
+        # allocator (size-tracing for ``model_summary``) — a structural
+        # ``PhantomImpl`` stand-in.  The assignment below casts back to
+        # ``TensorImpl`` because ``Tensor._impl`` is declared concrete;
+        # phantom impls duck-type the surface we touch in shadow mode.
+        impl: _C_engine.TensorImpl | PhantomImpl
         if data is None:
             if _shadow_active():
                 impl = PhantomImpl((0,), None, None, requires_grad)
@@ -109,7 +117,7 @@ class Parameter(Tensor):
         else:
             impl = _to_impl(data, requires_grad=requires_grad)
         obj = object.__new__(cls)
-        obj._impl = impl
+        obj._impl = cast(_C_engine.TensorImpl, impl)
         return obj
 
     def __init__(

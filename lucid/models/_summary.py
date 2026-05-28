@@ -90,7 +90,7 @@ def _module_node(name: str, mod: nn.Module) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def _structural_signature(node: dict[str, Any]) -> tuple:
+def _structural_signature(node: dict[str, Any]) -> tuple[object, ...]:
     """Signature used to decide whether two sibling nodes can collapse
     into a single ``× N`` entry.  Two nodes match iff they have the
     *same type* and the *same param count* and the same recursively

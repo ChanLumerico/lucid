@@ -14,7 +14,7 @@ keep the numpy bridge.
 """
 
 import struct
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Sequence, SupportsFloat, SupportsInt, cast
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import normalize_factory_kwargs
@@ -143,9 +143,9 @@ def _coerce_for_struct(v: object, dtype: _C_engine.Dtype) -> object:
         _C_engine.Dtype.I32,
         _C_engine.Dtype.I64,
     ):
-        return int(v)  # type: ignore[arg-type]
+        return int(cast(SupportsInt, v))
     # F16 / F32 / F64
-    return float(v)  # type: ignore[arg-type]
+    return float(cast(SupportsFloat, v))
 
 
 def _pack_complex64(flat: Sequence[object]) -> bytes:
@@ -158,7 +158,10 @@ def _pack_complex64(flat: Sequence[object]) -> bytes:
         return b""
     floats: list[float] = []
     for v in flat:
-        c = complex(v)  # type: ignore[arg-type]  # accepts int/float/complex
+        if isinstance(v, complex):
+            c = v
+        else:
+            c = complex(cast(SupportsFloat, v))
         floats.append(c.real)
         floats.append(c.imag)
     return struct.pack(f"={len(floats)}f", *floats)

@@ -112,4 +112,4 @@ class DropPath(nn.Module):
         shape = (int(x.shape[0]),) + (1,) * (x.ndim - 1)
         random_tensor = lucid.rand(shape, device=x.device.type)
         binary_mask = (random_tensor < keep_prob).float()
-        return cast(Tensor, x * binary_mask / keep_prob)
+        return x * binary_mask / keep_prob

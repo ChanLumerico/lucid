@@ -322,7 +322,7 @@ def resnet_152(pretrained: bool = False, **overrides: object) -> ResNet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",

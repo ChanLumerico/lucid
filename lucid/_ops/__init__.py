@@ -52,7 +52,7 @@ del _e, _fn
 if sys.version_info >= (3, 14):
     import annotationlib
 
-    _FORWARDREF: object | None = annotationlib.Format.FORWARDREF
+    _FORWARDREF: annotationlib.Format | None = annotationlib.Format.FORWARDREF
 else:
     _FORWARDREF = None
 

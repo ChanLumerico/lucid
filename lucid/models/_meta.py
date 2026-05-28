@@ -169,7 +169,7 @@ def model_family_meta(
         # bypass the dataclass transform — accessing it surfaces a clear
         # TypeError early.
         _ = fields(cls)
-        cls.__model_family_meta__ = meta  # type: ignore[attr-defined]
+        cls.__model_family_meta__ = meta
         return cls
 
     return _wrap

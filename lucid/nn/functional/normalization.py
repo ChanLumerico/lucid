@@ -126,7 +126,7 @@ def batch_norm(
         )
     elif ndim == 4:
         return _wrap(
-            _C_engine.nn.batch_norm(xi, w, b, eps, rm_impl, rv_impl, momentum)  # type: ignore[call-arg, arg-type]
+            _C_engine.nn.batch_norm(xi, w, b, eps, rm_impl, rv_impl, momentum)
         )
     elif ndim == 5:
         return _wrap(

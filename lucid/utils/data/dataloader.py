@@ -8,7 +8,7 @@ expected, but ``import lucid.utils.data`` itself stays numpy-free.
 
 import multiprocessing as _mp
 import random
-from typing import Callable, Iterator
+from typing import Callable, Iterator, cast
 
 from lucid._tensor.tensor import Tensor
 from lucid._factories.converters import tensor as _tensor_fn
@@ -292,8 +292,15 @@ class _SingleProcessDataLoaderIter:
         # skip the per-sample loop + collate_fn entirely.  cProfile on
         # LeNet-5/MNIST measured ~30 ms / batch in this path; the fast
         # path collapses it to ~1 ms (1 fancy-index per wrapped tensor).
+        # BatchSampler overrides ``__iter__`` to yield ``list[int]`` — the
+        # base ``Sampler`` declares ``Iterator[int]`` so mypy can't see this
+        # without a localised cast.
+        idx_list = cast(list[int], indices)
         if self._getitems_fn is not None:
-            return self._getitems_fn(list(indices))  # type: ignore[return-value]
+            batched = cast(
+                Tensor | tuple[Tensor, ...], self._getitems_fn(idx_list)
+            )
+            return batched
         batch = [self._dataset[i] for i in indices]  # type: ignore[attr-defined]
         return self._collate_fn(batch)  # type: ignore[arg-type, return-value]
 

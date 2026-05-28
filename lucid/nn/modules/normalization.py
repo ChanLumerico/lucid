@@ -658,9 +658,9 @@ class _BatchNormBase(Module):
             if not _tracing_active:
                 self._update_running_stats(x)
         elif fuse_running_update and not _tracing_active:
-            self._buffers["num_batches_tracked"] = (
-                self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
-            )
+            nbt = self._buffers["num_batches_tracked"]
+            assert nbt is not None, "num_batches_tracked buffer missing"
+            self._buffers["num_batches_tracked"] = nbt + 1
 
         # Pick which stats path the functional uses:
         #   - eval + tracking          → precomputed running stats (eval kernel)
@@ -716,12 +716,16 @@ class _BatchNormBase(Module):
             # mean/var reduction, EMA update, async_eval.  num_batches_tracked
             # is incremented in Python (one cheap op; its I64 dtype isn't
             # universally supported via backend add_scalar).
-            self._buffers["num_batches_tracked"] = (
-                self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
+            nbt = self._buffers["num_batches_tracked"]
+            rm = self._buffers["running_mean"]
+            rv = self._buffers["running_var"]
+            assert nbt is not None and rm is not None and rv is not None, (
+                "BatchNorm running-stats buffers missing under track_running_stats=True"
             )
+            self._buffers["num_batches_tracked"] = nbt + 1
             _C_engine.nn.batch_norm_update_running_stats(
-                self._buffers["running_mean"]._impl,
-                self._buffers["running_var"]._impl,
+                rm._impl,
+                rv._impl,
                 x._impl,
                 reduce_dims,
                 float(self.momentum),
@@ -790,9 +794,9 @@ class _BatchNormBase(Module):
                     batch_var = batch_var.to(dtype=rv_dt)
 
                 # Increment the count first (matches reference framework order).
-                self._buffers["num_batches_tracked"] = (
-                    self._buffers["num_batches_tracked"] + 1  # type: ignore[union-attr]
-                )
+                nbt = self._buffers["num_batches_tracked"]
+                assert nbt is not None, "num_batches_tracked buffer missing"
+                self._buffers["num_batches_tracked"] = nbt + 1
 
                 eff: float
                 if self.momentum is None:
