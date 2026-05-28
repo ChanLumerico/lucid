@@ -164,9 +164,7 @@ class TestApplyOpDispatchParity:
         "src_y, src_x, magnitude",
         [(4, 4, -0.3), (4, 4, 0.3), (8, 20, 0.2), (20, 8, -0.2), (12, 6, 0.1)],
     )
-    def test_shear_x_marker(
-        self, src_y: int, src_x: int, magnitude: float
-    ) -> None:
+    def test_shear_x_marker(self, src_y: int, src_x: int, magnitude: float) -> None:
         """Semantic ShearX parity via marker position (NEAREST interp).
 
         ±1 pixel tolerance accommodates the half-pixel center
@@ -177,8 +175,11 @@ class TestApplyOpDispatchParity:
         cl, ct = self._marker_image(src_y, src_x)
         out_l = apply_op(cl, "ShearX", magnitude, interpolation=Interpolation.NEAREST)
         out_t = ref_apply_op(
-            ct, "ShearX", magnitude,
-            interpolation=T_ref.InterpolationMode.NEAREST, fill=[0.0],
+            ct,
+            "ShearX",
+            magnitude,
+            interpolation=T_ref.InterpolationMode.NEAREST,
+            fill=[0.0],
         )
         pos_l = self._marker_pos(out_l.numpy())
         pos_t = self._marker_pos(np.asarray(out_t))
@@ -191,9 +192,7 @@ class TestApplyOpDispatchParity:
         "src_y, src_x, magnitude",
         [(4, 4, -0.3), (4, 4, 0.3), (8, 20, 0.2), (20, 8, -0.2), (6, 12, 0.1)],
     )
-    def test_shear_y_marker(
-        self, src_y: int, src_x: int, magnitude: float
-    ) -> None:
+    def test_shear_y_marker(self, src_y: int, src_x: int, magnitude: float) -> None:
         """Semantic ShearY parity via marker position (NEAREST interp).
 
         Same ±1 pixel tolerance as ShearX — see that test's docstring."""
@@ -201,8 +200,11 @@ class TestApplyOpDispatchParity:
         cl, ct = self._marker_image(src_y, src_x)
         out_l = apply_op(cl, "ShearY", magnitude, interpolation=Interpolation.NEAREST)
         out_t = ref_apply_op(
-            ct, "ShearY", magnitude,
-            interpolation=T_ref.InterpolationMode.NEAREST, fill=[0.0],
+            ct,
+            "ShearY",
+            magnitude,
+            interpolation=T_ref.InterpolationMode.NEAREST,
+            fill=[0.0],
         )
         pos_l = self._marker_pos(out_l.numpy())
         pos_t = self._marker_pos(np.asarray(out_t))
@@ -214,21 +216,24 @@ class TestApplyOpDispatchParity:
     @pytest.mark.parametrize(
         "src_y, src_x, pixels", [(12, 4, 2), (12, 4, -3), (4, 12, 0), (20, 20, 1)]
     )
-    def test_translate_x_marker(
-        self, src_y: int, src_x: int, pixels: int
-    ) -> None:
+    def test_translate_x_marker(self, src_y: int, src_x: int, pixels: int) -> None:
         """Semantic TranslateX parity — Lucid takes fraction-of-width,
         reference takes integer pixels.  Same expected marker delta."""
         self._skip_if_ref_apply_op_missing()
         size = 24
         cl, ct = self._marker_image(src_y, src_x, size=size)
         out_l = apply_op(
-            cl, "TranslateX", pixels / size,
+            cl,
+            "TranslateX",
+            pixels / size,
             interpolation=Interpolation.NEAREST,
         )
         out_t = ref_apply_op(
-            ct, "TranslateX", float(pixels),
-            interpolation=T_ref.InterpolationMode.NEAREST, fill=[0.0],
+            ct,
+            "TranslateX",
+            float(pixels),
+            interpolation=T_ref.InterpolationMode.NEAREST,
+            fill=[0.0],
         )
         pos_l = self._marker_pos(out_l.numpy())
         pos_t = self._marker_pos(np.asarray(out_t))
@@ -240,20 +245,23 @@ class TestApplyOpDispatchParity:
     @pytest.mark.parametrize(
         "src_y, src_x, pixels", [(12, 4, 2), (12, 4, -3), (4, 12, 0), (20, 20, 1)]
     )
-    def test_translate_y_marker(
-        self, src_y: int, src_x: int, pixels: int
-    ) -> None:
+    def test_translate_y_marker(self, src_y: int, src_x: int, pixels: int) -> None:
         """Semantic TranslateY parity via marker position."""
         self._skip_if_ref_apply_op_missing()
         size = 24
         cl, ct = self._marker_image(src_y, src_x, size=size)
         out_l = apply_op(
-            cl, "TranslateY", pixels / size,
+            cl,
+            "TranslateY",
+            pixels / size,
             interpolation=Interpolation.NEAREST,
         )
         out_t = ref_apply_op(
-            ct, "TranslateY", float(pixels),
-            interpolation=T_ref.InterpolationMode.NEAREST, fill=[0.0],
+            ct,
+            "TranslateY",
+            float(pixels),
+            interpolation=T_ref.InterpolationMode.NEAREST,
+            fill=[0.0],
         )
         pos_l = self._marker_pos(out_l.numpy())
         pos_t = self._marker_pos(np.asarray(out_t))
@@ -266,9 +274,7 @@ class TestApplyOpDispatchParity:
         "src_y, src_x, magnitude",
         [(6, 18, 10.0), (6, 18, -10.0), (3, 20, 30.0), (15, 10, 10.0), (4, 4, -30.0)],
     )
-    def test_rotate_marker(
-        self, src_y: int, src_x: int, magnitude: float
-    ) -> None:
+    def test_rotate_marker(self, src_y: int, src_x: int, magnitude: float) -> None:
         """Semantic Rotate parity via marker position (NEAREST interp).
 
         Lucid uses the math-convention (positive degrees → CCW); the
@@ -281,8 +287,11 @@ class TestApplyOpDispatchParity:
         cl, ct = self._marker_image(src_y, src_x)
         out_l = apply_op(cl, "Rotate", magnitude, interpolation=Interpolation.NEAREST)
         out_t = ref_apply_op(
-            ct, "Rotate", magnitude,
-            interpolation=T_ref.InterpolationMode.NEAREST, fill=[0.0],
+            ct,
+            "Rotate",
+            magnitude,
+            interpolation=T_ref.InterpolationMode.NEAREST,
+            fill=[0.0],
         )
         pos_l = self._marker_pos(out_l.numpy())
         pos_t = self._marker_pos(np.asarray(out_t))
@@ -316,7 +325,9 @@ class TestApplyOpDispatchParity:
             ).numpy()
             out_t = np.asarray(
                 ref_apply_op(
-                    chw_t, op_name, mag_ref,
+                    chw_t,
+                    op_name,
+                    mag_ref,
                     interpolation=T_ref.InterpolationMode.BILINEAR,
                     fill=[0.0] * 3,
                 )
@@ -463,12 +474,12 @@ class TestApplyOpDispatchParity:
         # tolerance + cap the max diff fraction.
         diff = np.abs(out_l.numpy() - out_t_f.detach().cpu().numpy())
         # > 90% of pixels within 4 / 256, mean diff within 2 / 256.
-        assert float(diff.mean()) < 4.0 / 256, (
-            f"equalize mean diff {diff.mean():.4f} > 4/256"
-        )
-        assert float((diff < 8.0 / 256).mean()) > 0.85, (
-            f"equalize: only {(diff < 8.0 / 256).mean():.2%} pixels within 8/256"
-        )
+        assert (
+            float(diff.mean()) < 4.0 / 256
+        ), f"equalize mean diff {diff.mean():.4f} > 4/256"
+        assert (
+            float((diff < 8.0 / 256).mean()) > 0.85
+        ), f"equalize: only {(diff < 8.0 / 256).mean():.2%} pixels within 8/256"
 
     def test_invert(self) -> None:
         self._skip_if_ref_apply_op_missing()
@@ -709,7 +720,10 @@ class TestTrivialAugmentWideDistribution:
         torch_mod.manual_seed(1234)
         tf_t = T_ref.TrivialAugmentWide()
         t_imgs = np.stack(
-            [tf_t(chw_u8).numpy().astype(np.float32) / 255.0 for _ in range(_N_SAMPLES)],
+            [
+                tf_t(chw_u8).numpy().astype(np.float32) / 255.0
+                for _ in range(_N_SAMPLES)
+            ],
             axis=0,
         )
 
@@ -728,9 +742,9 @@ class TestTrivialAugmentWideDistribution:
         # ballpark.
         l_var = l_imgs.var(axis=0).mean()
         t_var = t_imgs.var(axis=0).mean()
-        assert abs(float(l_var) - float(t_var)) < 0.05, (
-            f"variance mismatch: lucid={l_var:.4f} vs ref={t_var:.4f}"
-        )
+        assert (
+            abs(float(l_var) - float(t_var)) < 0.05
+        ), f"variance mismatch: lucid={l_var:.4f} vs ref={t_var:.4f}"
 
 
 @pytest.mark.parity
@@ -780,7 +794,10 @@ class TestRandAugmentDistribution:
         torch_mod.manual_seed(99)
         tf_t = T_ref.RandAugment(num_ops=2, magnitude=9)
         t_imgs = np.stack(
-            [tf_t(chw_u8).numpy().astype(np.float32) / 255.0 for _ in range(_N_SAMPLES)],
+            [
+                tf_t(chw_u8).numpy().astype(np.float32) / 255.0
+                for _ in range(_N_SAMPLES)
+            ],
             axis=0,
         )
 
@@ -871,7 +888,10 @@ class TestAutoAugmentDistribution:
         torch_mod.manual_seed(2026)
         tf_t = T_ref.AutoAugment(policy=AutoAugmentPolicy.IMAGENET)
         t_imgs = np.stack(
-            [tf_t(chw_u8).numpy().astype(np.float32) / 255.0 for _ in range(_N_SAMPLES)],
+            [
+                tf_t(chw_u8).numpy().astype(np.float32) / 255.0
+                for _ in range(_N_SAMPLES)
+            ],
             axis=0,
         )
 
@@ -887,7 +907,9 @@ class TestAutoAugmentDistribution:
 
 
 def _normalize_ref_table(
-    ref_table: list[tuple[tuple[str, float, int | None], tuple[str, float, int | None]]],
+    ref_table: list[
+        tuple[tuple[str, float, int | None], tuple[str, float, int | None]]
+    ],
 ) -> tuple[tuple[tuple[str, float, int], tuple[str, float, int]], ...]:
     """Replace reference framework's ``magnitude_id=None`` (signalling
     "no magnitude") with ``0`` so each sub-op triple has the same
@@ -904,9 +926,7 @@ def _normalize_ref_table(
 
 
 def _normalize_lucid_table(
-    lucid_table: tuple[
-        tuple[tuple[str, float, int], tuple[str, float, int]], ...
-    ],
+    lucid_table: tuple[tuple[tuple[str, float, int], tuple[str, float, int]], ...],
 ) -> tuple[tuple[tuple[str, float, int], tuple[str, float, int]], ...]:
     """Zero out the magnitude_idx for ops that ignore magnitude — the
     reference framework stores ``None`` for those, so for comparison
@@ -966,8 +986,7 @@ class TestAutoAugmentPolicyTable:
         assert len(ref_norm) == 25
         for i, (l_sub, r_sub) in enumerate(zip(lucid_norm, ref_norm)):
             assert l_sub == r_sub, (
-                f"imagenet sub-policy {i} mismatch: "
-                f"lucid={l_sub} vs ref={r_sub}"
+                f"imagenet sub-policy {i} mismatch: " f"lucid={l_sub} vs ref={r_sub}"
             )
 
     def test_cifar10_policy_table(self) -> None:
@@ -979,8 +998,7 @@ class TestAutoAugmentPolicyTable:
         assert len(ref_norm) == 25
         for i, (l_sub, r_sub) in enumerate(zip(lucid_norm, ref_norm)):
             assert l_sub == r_sub, (
-                f"cifar10 sub-policy {i} mismatch: "
-                f"lucid={l_sub} vs ref={r_sub}"
+                f"cifar10 sub-policy {i} mismatch: " f"lucid={l_sub} vs ref={r_sub}"
             )
 
     def test_svhn_policy_table(self) -> None:
@@ -992,8 +1010,7 @@ class TestAutoAugmentPolicyTable:
         assert len(ref_norm) == 25
         for i, (l_sub, r_sub) in enumerate(zip(lucid_norm, ref_norm)):
             assert l_sub == r_sub, (
-                f"svhn sub-policy {i} mismatch: "
-                f"lucid={l_sub} vs ref={r_sub}"
+                f"svhn sub-policy {i} mismatch: " f"lucid={l_sub} vs ref={r_sub}"
             )
 
 

@@ -60,7 +60,9 @@ def _ref_scalar_fill(value: float, c: int, h: int, w: int) -> object:
 
 def _ref_per_channel_fill(values: tuple[float, ...], h: int, w: int) -> object:
     """Reference framework per-channel fill tensor of shape ``(C, h, w)``."""
-    col = torch_mod.tensor(list(values), dtype=torch_mod.float32).view(len(values), 1, 1)
+    col = torch_mod.tensor(list(values), dtype=torch_mod.float32).view(
+        len(values), 1, 1
+    )
     return col.expand(len(values), h, w).contiguous()
 
 
@@ -69,9 +71,7 @@ def _lucid_scalar_fill(value: float, c: int, h: int, w: int) -> lucid.Tensor:
     return lucid.full((c, h, w), float(value), dtype=lucid.float32)
 
 
-def _lucid_per_channel_fill(
-    values: tuple[float, ...], h: int, w: int
-) -> lucid.Tensor:
+def _lucid_per_channel_fill(values: tuple[float, ...], h: int, w: int) -> lucid.Tensor:
     """Lucid per-channel fill tensor of shape ``(C, h, w)``."""
     c = len(values)
     col = lucid.tensor(list(values), dtype=lucid.float32).reshape(c, 1, 1)
@@ -272,9 +272,9 @@ class TestRandomErasingDistribution:
         hi_bound = self.SCALE[1] * img_area * 1.5
         for top, left, h, w in rects:
             area = h * w
-            assert lo_bound <= area <= hi_bound, (
-                f"area {area} outside [{lo_bound:.1f}, {hi_bound:.1f}]"
-            )
+            assert (
+                lo_bound <= area <= hi_bound
+            ), f"area {area} outside [{lo_bound:.1f}, {hi_bound:.1f}]"
 
     def test_sampled_aspect_within_ratio_bounds(self) -> None:
         """Every sampled rectangle's aspect ratio must lie inside ``ratio``."""
@@ -287,9 +287,9 @@ class TestRandomErasingDistribution:
         hi = self.RATIO[1] * 2.0
         for top, left, h, w in rects:
             aspect = h / w  # eh / ew, matching the sampler convention
-            assert lo <= aspect <= hi, (
-                f"aspect {aspect:.3f} outside [{lo:.3f}, {hi:.3f}]"
-            )
+            assert (
+                lo <= aspect <= hi
+            ), f"aspect {aspect:.3f} outside [{lo:.3f}, {hi:.3f}]"
 
     def test_mean_area_matches_reference(self) -> None:
         """Mean erase area across many samples agrees with the reference impl."""
@@ -329,9 +329,7 @@ class TestRandomErasingDistribution:
         lucid_log_aspect = float(
             np.mean([math.log(h / w) for _, _, h, w in lucid_rects])
         )
-        ref_log_aspect = float(
-            np.mean([math.log(h / w) for _, _, h, w in ref_rects])
-        )
+        ref_log_aspect = float(np.mean([math.log(h / w) for _, _, h, w in ref_rects]))
         # Theoretical mean of log-uniform on [log(0.3), log(3.3)] is 0;
         # check both sample means are close to each other (and to 0).
         abs_diff = abs(lucid_log_aspect - ref_log_aspect)
@@ -348,12 +346,12 @@ class TestRandomErasingDistribution:
             self.N_SAMPLES, self.IMG_H, self.IMG_W, self.SCALE, self.RATIO, seed=1
         )
         for top, left, h, w in rects:
-            assert 0 <= top and top + h <= self.IMG_H, (
-                f"vertical out of bounds: top={top} h={h} (img_h={self.IMG_H})"
-            )
-            assert 0 <= left and left + w <= self.IMG_W, (
-                f"horizontal out of bounds: left={left} w={w} (img_w={self.IMG_W})"
-            )
+            assert (
+                0 <= top and top + h <= self.IMG_H
+            ), f"vertical out of bounds: top={top} h={h} (img_h={self.IMG_H})"
+            assert (
+                0 <= left and left + w <= self.IMG_W
+            ), f"horizontal out of bounds: left={left} w={w} (img_w={self.IMG_W})"
 
 
 # ── tier 3: edge cases (both impls must handle gracefully) ──────────

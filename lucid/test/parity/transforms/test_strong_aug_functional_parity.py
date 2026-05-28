@@ -203,7 +203,9 @@ class TestPosterizeParity:
         rng = np.random.default_rng(100 + num_bits)
         arr = rng.random((3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy((arr * 255.0).round().clip(0, 255).astype(np.uint8))
+        tx_u8 = torch_mod.from_numpy(
+            (arr * 255.0).round().clip(0, 255).astype(np.uint8)
+        )
         got = F.posterize(lx, num_bits).numpy()
         ref_u8 = TF.posterize(tx_u8, num_bits).numpy()
         ref = ref_u8.astype(np.float32) / 255.0
@@ -218,7 +220,9 @@ class TestPosterizeParity:
         rng = np.random.default_rng(200 + num_bits)
         arr = rng.random((2, 3, 24, 32), dtype=np.float32)
         lx = lucid.tensor(arr.tolist())
-        tx_u8 = torch_mod.from_numpy((arr * 255.0).round().clip(0, 255).astype(np.uint8))
+        tx_u8 = torch_mod.from_numpy(
+            (arr * 255.0).round().clip(0, 255).astype(np.uint8)
+        )
         got = F.posterize(lx, num_bits).numpy()
         ref_u8 = TF.posterize(tx_u8, num_bits).numpy()
         ref = ref_u8.astype(np.float32) / 255.0
