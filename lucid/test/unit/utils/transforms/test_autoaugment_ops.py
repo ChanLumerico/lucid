@@ -227,8 +227,8 @@ class TestApplyOp:
             # Each corner is fully outside the rotated source for a 30°
             # rotation of a square — should equal `fill` to 1e-5.
             for cy, cx in [(0, 0), (0, 15), (15, 0), (15, 15)]:
-                assert (
-                    float(out[0, cy, cx]) == pytest.approx(fill, abs=1e-5)
+                assert float(out[0, cy, cx]) == pytest.approx(
+                    fill, abs=1e-5
                 ), f"corner ({cy},{cx}) for fill={fill}: got {out[0, cy, cx]}"
             # Center is still inside the source — should be ~1.0.
             assert float(out[0, 8, 8]) == pytest.approx(1.0, abs=1e-5)

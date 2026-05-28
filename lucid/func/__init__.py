@@ -37,7 +37,7 @@ Limitations
 """
 
 from typing import Callable, TYPE_CHECKING
-from lucid._vmap_ctx import _RandomnessGuard as _RandGuard
+from lucid._ctx import _RandomnessGuard as _RandGuard
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor

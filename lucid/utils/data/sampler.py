@@ -634,9 +634,7 @@ class RASampler(Sampler):
         if num_replicas < 1:
             raise ValueError(f"num_replicas must be >= 1, got {num_replicas}")
         if not 0 <= rank < num_replicas:
-            raise ValueError(
-                f"rank must be in [0, {num_replicas}), got {rank}"
-            )
+            raise ValueError(f"rank must be in [0, {num_replicas}), got {rank}")
         if num_repeats < 1:
             raise ValueError(f"num_repeats must be >= 1, got {num_repeats}")
         self.dataset: Dataset = dataset
@@ -666,9 +664,7 @@ class RASampler(Sampler):
             rng.shuffle(indices)
         # Repeat each unique index ``num_repeats`` times in-place — the
         # consecutive repeats are the whole point.
-        repeated: list[int] = [
-            idx for idx in indices for _ in range(self.num_repeats)
-        ]
+        repeated: list[int] = [idx for idx in indices for _ in range(self.num_repeats)]
         # Wrap-pad to ``total_size`` so the replica slabs divide evenly.
         if len(repeated) < self.total_size:
             repeated = repeated + repeated[: self.total_size - len(repeated)]

@@ -49,9 +49,7 @@ class TestRASampler:
         # repeated set via num_replicas=1 (single slab, no truncation past
         # num_selected_samples — so we explicitly inspect the internal slab).
         ds = _ToyDataset(8)
-        sampler = D.RASampler(
-            ds, num_replicas=1, num_repeats=3, shuffle=False
-        )
+        sampler = D.RASampler(ds, num_replicas=1, num_repeats=3, shuffle=False)
         # Without shuffle: indices = [0,1,2,...,7], repeated → [0,0,0,1,1,1,...].
         # num_selected_samples = floor(8/1) = 8, so we get the first 8 elements.
         out = list(sampler)
@@ -82,9 +80,7 @@ class TestRASampler:
         # num_repeats=1 + shuffle=False → indices appear once, sequentially,
         # truncated to floor(N / W).
         ds = _ToyDataset(8)
-        sampler = D.RASampler(
-            ds, num_replicas=1, num_repeats=1, shuffle=False
-        )
+        sampler = D.RASampler(ds, num_replicas=1, num_repeats=1, shuffle=False)
         assert list(sampler) == [0, 1, 2, 3, 4, 5, 6, 7]
 
     def test_invalid_num_replicas(self) -> None:
@@ -102,12 +98,8 @@ class TestRASampler:
     def test_distributed_disjoint_slabs(self) -> None:
         # Two ranks of a num_replicas=2 split should see disjoint slabs.
         ds = _ToyDataset(20)
-        s0 = D.RASampler(
-            ds, num_replicas=2, rank=0, num_repeats=3, shuffle=False
-        )
-        s1 = D.RASampler(
-            ds, num_replicas=2, rank=1, num_repeats=3, shuffle=False
-        )
+        s0 = D.RASampler(ds, num_replicas=2, rank=0, num_repeats=3, shuffle=False)
+        s1 = D.RASampler(ds, num_replicas=2, rank=1, num_repeats=3, shuffle=False)
         # ceil(20*3/2) = 30 per rank; num_selected_samples = floor(20/2) = 10.
         out0 = list(s0)
         out1 = list(s1)

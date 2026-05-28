@@ -4,7 +4,7 @@ Random tensor creation: rand, randn, randint, bernoulli, normal, manual_seed.
 
 import os
 from typing import TYPE_CHECKING
-from lucid._vmap_ctx import check_random_allowed as _check_random
+from lucid._ctx import check_random_allowed as _check_random
 
 import lucid as _lucid
 from lucid._C import engine as _C_engine

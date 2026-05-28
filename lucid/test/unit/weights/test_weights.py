@@ -210,9 +210,7 @@ class TestPresetIntegration:
         assert tuple(out["image"].data.shape) == (3, 224, 224)
         assert tuple(out["mask"].data.shape) == (1, 224, 224)
         before = {int(round(v)) for v in mask_raw.numpy().reshape(-1).tolist()}
-        after = {
-            int(round(v)) for v in out["mask"].data.numpy().reshape(-1).tolist()
-        }
+        after = {int(round(v)) for v in out["mask"].data.numpy().reshape(-1).tolist()}
         assert after <= before, (
             f"mask gained synthetic labels {sorted(after - before)} — "
             "ImageClassification leaked the geometric chain past nearest."

@@ -200,23 +200,17 @@ class TestImageClassificationAugmentStrong:
         assert tuple(y.shape) == (3, 224, 224)
 
     def test_auto_augment_ta_wide_runs(self) -> None:
-        preset = T.ImageClassificationAugment(
-            crop_size=64, auto_augment="ta_wide"
-        )
+        preset = T.ImageClassificationAugment(crop_size=64, auto_augment="ta_wide")
         y = preset(lucid.rand(3, 96, 96))
         assert tuple(y.shape) == (3, 64, 64)
 
     def test_auto_augment_ra_with_params(self) -> None:
-        preset = T.ImageClassificationAugment(
-            crop_size=64, auto_augment="ra-m9-n2"
-        )
+        preset = T.ImageClassificationAugment(crop_size=64, auto_augment="ra-m9-n2")
         y = preset(lucid.rand(3, 96, 96))
         assert tuple(y.shape) == (3, 64, 64)
 
     def test_auto_augment_aa_imagenet(self) -> None:
-        preset = T.ImageClassificationAugment(
-            crop_size=64, auto_augment="aa_imagenet"
-        )
+        preset = T.ImageClassificationAugment(crop_size=64, auto_augment="aa_imagenet")
         y = preset(lucid.rand(3, 96, 96))
         assert tuple(y.shape) == (3, 64, 64)
 

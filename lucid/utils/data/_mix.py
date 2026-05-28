@@ -33,7 +33,6 @@ from lucid._tensor import Tensor
 from lucid.utils.data.dataloader import default_collate
 from lucid.utils.transforms import _random
 
-
 # ── helpers ─────────────────────────────────────────────────────────
 
 
@@ -212,9 +211,7 @@ class CutMixCollator:
         inner = lucid.zeros(1, by2 - by1, bx2 - bx1, dtype=images.dtype)
         from lucid.utils.transforms import functional as F
 
-        keep_1c = F.pad(
-            inner, (bx1, w - bx2, by1, h - by2), value=1.0
-        )  # (1, H, W)
+        keep_1c = F.pad(inner, (bx1, w - bx2, by1, h - by2), value=1.0)  # (1, H, W)
         keep = keep_1c[None]  # (1, 1, H, W) — broadcasts over batch + channels
 
         perm = lucid.randperm(b)  # type: ignore[attr-defined]
@@ -264,15 +261,9 @@ class RandomMixupCutMixCollator:
         if not 0.0 <= p <= 1.0:
             raise ValueError(f"p must be in [0, 1], got {p}")
         if not 0.0 <= switch_prob <= 1.0:
-            raise ValueError(
-                f"switch_prob must be in [0, 1], got {switch_prob}"
-            )
-        self.mixup = MixupCollator(
-            alpha=mixup_alpha, num_classes=num_classes, p=1.0
-        )
-        self.cutmix = CutMixCollator(
-            alpha=cutmix_alpha, num_classes=num_classes, p=1.0
-        )
+            raise ValueError(f"switch_prob must be in [0, 1], got {switch_prob}")
+        self.mixup = MixupCollator(alpha=mixup_alpha, num_classes=num_classes, p=1.0)
+        self.cutmix = CutMixCollator(alpha=cutmix_alpha, num_classes=num_classes, p=1.0)
         self.num_classes = num_classes
         self.p = p
         self.switch_prob = switch_prob
@@ -281,9 +272,7 @@ class RandomMixupCutMixCollator:
         if float(lucid.rand(1).item()) >= self.p:
             # Neither fires — soft-label the raw batch for shape consistency.
             images_obj, labels_obj = default_collate(batch)
-            if not isinstance(images_obj, Tensor) or not isinstance(
-                labels_obj, Tensor
-            ):
+            if not isinstance(images_obj, Tensor) or not isinstance(labels_obj, Tensor):
                 raise TypeError(
                     "RandomMixupCutMixCollator expects (image, label) tuples"
                 )

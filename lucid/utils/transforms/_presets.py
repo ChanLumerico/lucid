@@ -412,9 +412,7 @@ class ImageClassificationAugment(TransformsPreset):
         interpolation: str | Interpolation = Interpolation.BILINEAR,
     ) -> None:
         if not 0.0 <= random_erasing <= 1.0:
-            raise ValueError(
-                f"random_erasing must be in [0, 1], got {random_erasing}"
-            )
+            raise ValueError(f"random_erasing must be in [0, 1], got {random_erasing}")
         self.crop_size = crop_size
         self.scale = scale
         self.ratio = ratio

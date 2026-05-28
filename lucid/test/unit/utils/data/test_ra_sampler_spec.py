@@ -78,9 +78,7 @@ class TestPaperFormulaInvariants:
     @pytest.mark.parametrize("N", [10, 20, 47, 100])
     @pytest.mark.parametrize("W", [1, 2, 4])
     @pytest.mark.parametrize("R", [1, 3, 4])
-    def test_num_selected_samples_formula(
-        self, N: int, W: int, R: int
-    ) -> None:
+    def test_num_selected_samples_formula(self, N: int, W: int, R: int) -> None:
         """num_selected_samples = floor(N / num_replicas) — and is
         invariant to num_repeats (the whole point: repetition stays
         within the epoch, doesn't extend it)."""
@@ -91,9 +89,7 @@ class TestPaperFormulaInvariants:
     @pytest.mark.parametrize("N", [10, 20, 47, 100])
     @pytest.mark.parametrize("W", [1, 2, 4])
     @pytest.mark.parametrize("R", [1, 3, 4])
-    def test_len_matches_num_selected_samples(
-        self, N: int, W: int, R: int
-    ) -> None:
+    def test_len_matches_num_selected_samples(self, N: int, W: int, R: int) -> None:
         """``len(sampler)`` returns the per-replica yield count."""
         ds = _ToyDataset(N)
         s = D.RASampler(ds, num_replicas=W, num_repeats=R)
@@ -107,24 +103,18 @@ class TestPaperFormulaInvariants:
     ) -> None:
         """Iteration emits exactly ``num_selected_samples`` indices."""
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=W, num_repeats=R, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=W, num_repeats=R, shuffle=False)
         produced = list(s)
         assert len(produced) == s.num_selected_samples
 
     @pytest.mark.parametrize("N", [10, 20, 47, 100])
     @pytest.mark.parametrize("W", [1, 2, 4])
     @pytest.mark.parametrize("R", [1, 3, 4])
-    def test_all_emitted_indices_in_range(
-        self, N: int, W: int, R: int
-    ) -> None:
+    def test_all_emitted_indices_in_range(self, N: int, W: int, R: int) -> None:
         """Every yielded index ``i`` satisfies ``0 <= i < N``."""
         ds = _ToyDataset(N)
         for rank in range(W):
-            s = D.RASampler(
-                ds, num_replicas=W, rank=rank, num_repeats=R
-            )
+            s = D.RASampler(ds, num_replicas=W, rank=rank, num_repeats=R)
             for idx in s:
                 assert 0 <= idx < N
 
@@ -140,25 +130,21 @@ class TestRepeatStructure:
     behaviour of the sampler."""
 
     @pytest.mark.parametrize("R", [1, 2, 3, 4])
-    def test_each_index_repeated_R_times_consecutively(
-        self, R: int
-    ) -> None:
+    def test_each_index_repeated_R_times_consecutively(self, R: int) -> None:
         """num_replicas=1, shuffle=False: the slab equals the
         un-truncated stream up to floor(N/1) = N, so we can inspect
         the first floor(N/R) full runs explicitly."""
         N = 12
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=R, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=R, shuffle=False)
         out = list(s)
         # Number of *complete* runs we can see in the truncated slab:
         full_runs = N // R
         for run_idx in range(full_runs):
             chunk = out[run_idx * R : (run_idx + 1) * R]
-            assert chunk == [run_idx] * R, (
-                f"Run {run_idx} expected {[run_idx] * R}, got {chunk}"
-            )
+            assert (
+                chunk == [run_idx] * R
+            ), f"Run {run_idx} expected {[run_idx] * R}, got {chunk}"
 
     @pytest.mark.parametrize("R", [2, 3, 4])
     def test_repeat_counts_with_shuffle(self, R: int) -> None:
@@ -170,9 +156,7 @@ class TestRepeatStructure:
         of the slab."""
         N = 30
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=R, shuffle=True, seed=0
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=R, shuffle=True, seed=0)
         out = list(s)
         # Walk through runs head-first.  Each complete run = R identical
         # consecutive ints.
@@ -189,22 +173,16 @@ class TestRepeatStructure:
         assert complete_runs >= 1
 
     @pytest.mark.parametrize("R", [1, 2, 3])
-    def test_unique_index_appearance_count_bounded(
-        self, R: int
-    ) -> None:
+    def test_unique_index_appearance_count_bounded(self, R: int) -> None:
         """In the un-truncated repeated list each unique index appears
         exactly R times; after truncation to num_selected_samples the
         per-index count is at most R (and at least 0)."""
         N = 20
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=R, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=R, shuffle=False)
         counts = Counter(list(s))
         for idx, c in counts.items():
-            assert 0 <= c <= R, (
-                f"Index {idx} appeared {c} times, expected 0..{R}"
-            )
+            assert 0 <= c <= R, f"Index {idx} appeared {c} times, expected 0..{R}"
 
 
 # --------------------------------------------------------------------------- #
@@ -226,14 +204,10 @@ class TestDistributedSlabs:
         R = 3
         ds = _ToyDataset(N)
         # Sampler internals: num_samples is the per-replica slab size.
-        s0 = D.RASampler(
-            ds, num_replicas=W, rank=0, num_repeats=R, shuffle=False
-        )
+        s0 = D.RASampler(ds, num_replicas=W, rank=0, num_repeats=R, shuffle=False)
         # Slab[rank] = [rank * num_samples : (rank+1) * num_samples]
         slab_size = s0.num_samples
-        boundaries = [
-            (r * slab_size, (r + 1) * slab_size) for r in range(W)
-        ]
+        boundaries = [(r * slab_size, (r + 1) * slab_size) for r in range(W)]
         # Disjoint: boundary[r].end == boundary[r+1].start
         for r in range(W - 1):
             assert boundaries[r][1] == boundaries[r + 1][0]
@@ -265,9 +239,7 @@ class TestDistributedSlabs:
         0's slab is the head, so the first element is 0."""
         N = 12
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=2, rank=0, num_repeats=3, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=2, rank=0, num_repeats=3, shuffle=False)
         out = list(s)
         assert out[0] == 0
 
@@ -337,9 +309,7 @@ class TestEdgeCases:
         ``range(N)`` truncated to floor(N/1) = N."""
         N = 8
         ds = _ToyDataset(N)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=1, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=1, shuffle=False)
         assert list(s) == list(range(N))
 
     def test_num_repeats_one_degenerates_per_rank(self) -> None:
@@ -367,9 +337,7 @@ class TestEdgeCases:
         """N=4, num_replicas=8 → num_selected_samples = floor(4/8) = 0;
         iter is empty but the sampler is still constructible."""
         ds = _ToyDataset(4)
-        s = D.RASampler(
-            ds, num_replicas=8, rank=0, num_repeats=3
-        )
+        s = D.RASampler(ds, num_replicas=8, rank=0, num_repeats=3)
         assert s.num_selected_samples == 0
         assert len(s) == 0
         assert list(s) == []
@@ -378,9 +346,7 @@ class TestEdgeCases:
         """N=1, num_replicas=1, num_repeats=R → emit [0] * 1 (since
         num_selected_samples = floor(1/1) = 1)."""
         ds = _ToyDataset(1)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=4, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=4, shuffle=False)
         out = list(s)
         assert out == [0]
 
@@ -402,9 +368,7 @@ class TestEdgeCases:
     def test_large_num_repeats(self, R: int) -> None:
         """num_repeats much larger than N stays well-defined."""
         ds = _ToyDataset(5)
-        s = D.RASampler(
-            ds, num_replicas=1, num_repeats=R, shuffle=False
-        )
+        s = D.RASampler(ds, num_replicas=1, num_repeats=R, shuffle=False)
         # num_samples = ceil(5*R/1) = 5*R, total_size = 5*R.
         assert s.num_samples == 5 * R
         assert s.total_size == 5 * R
@@ -440,15 +404,9 @@ class TestDataLoaderIntegration:
     def test_batch_count_drop_last_false(self, BS: int) -> None:
         """drop_last=False → ceil(num_selected_samples / BS) batches."""
         N = 20
-        ds = D.TensorDataset(
-            lucid.arange(N).reshape(N, 1).to(lucid.float32)
-        )
-        sampler = D.RASampler(
-            ds, num_repeats=3, shuffle=True, seed=0
-        )
-        loader = D.DataLoader(
-            ds, batch_size=BS, sampler=sampler, drop_last=False
-        )
+        ds = D.TensorDataset(lucid.arange(N).reshape(N, 1).to(lucid.float32))
+        sampler = D.RASampler(ds, num_repeats=3, shuffle=True, seed=0)
+        loader = D.DataLoader(ds, batch_size=BS, sampler=sampler, drop_last=False)
         batches = list(loader)
         expected = math.ceil(sampler.num_selected_samples / BS)
         assert len(batches) == expected
@@ -457,15 +415,9 @@ class TestDataLoaderIntegration:
     def test_batch_count_drop_last_true(self, BS: int) -> None:
         """drop_last=True → floor(num_selected_samples / BS) batches."""
         N = 20
-        ds = D.TensorDataset(
-            lucid.arange(N).reshape(N, 1).to(lucid.float32)
-        )
-        sampler = D.RASampler(
-            ds, num_repeats=3, shuffle=True, seed=0
-        )
-        loader = D.DataLoader(
-            ds, batch_size=BS, sampler=sampler, drop_last=True
-        )
+        ds = D.TensorDataset(lucid.arange(N).reshape(N, 1).to(lucid.float32))
+        sampler = D.RASampler(ds, num_repeats=3, shuffle=True, seed=0)
+        loader = D.DataLoader(ds, batch_size=BS, sampler=sampler, drop_last=True)
         batches = list(loader)
         expected = sampler.num_selected_samples // BS
         assert len(batches) == expected
@@ -474,15 +426,9 @@ class TestDataLoaderIntegration:
         """Each non-trailing batch has shape (BS, ...)."""
         N = 20
         BS = 4
-        ds = D.TensorDataset(
-            lucid.arange(N).reshape(N, 1).to(lucid.float32)
-        )
-        sampler = D.RASampler(
-            ds, num_repeats=3, shuffle=True, seed=0
-        )
-        loader = D.DataLoader(
-            ds, batch_size=BS, sampler=sampler, drop_last=True
-        )
+        ds = D.TensorDataset(lucid.arange(N).reshape(N, 1).to(lucid.float32))
+        sampler = D.RASampler(ds, num_repeats=3, shuffle=True, seed=0)
+        loader = D.DataLoader(ds, batch_size=BS, sampler=sampler, drop_last=True)
         for batch in loader:
             (x,) = batch
             assert tuple(x.shape) == (BS, 1)
@@ -502,9 +448,7 @@ except ImportError:
     _timm_available = False
 
 
-@pytest.mark.skipif(
-    not _timm_available, reason="timm not installed"
-)
+@pytest.mark.skipif(not _timm_available, reason="timm not installed")
 class TestTimmComparison:
     """If timm is installed, verify our sequence matches timm's
     RepeatAugSampler bit-for-bit at seed=0, epoch=0."""

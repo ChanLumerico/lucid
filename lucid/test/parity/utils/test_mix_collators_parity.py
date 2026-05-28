@@ -91,13 +91,9 @@ class TestMixupAlgorithmParity:
     where the answer is trivially computable.
     """
 
-    def test_lambda_one_is_identity(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_lambda_one_is_identity(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """λ = 1 → mixed_x == x and mixed_y == y (no contribution from perm)."""
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 1.0
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 1.0)
         batch = _make_batch(b=4, num_classes=10, seed=1)
         coll = MixupCollator(alpha=0.2, num_classes=10)
         ref_images = _stack_images(batch)
@@ -111,13 +107,9 @@ class TestMixupAlgorithmParity:
             assert float(y_np[i].max()) == pytest.approx(1.0, abs=1e-6)
             assert float(y_np[i].sum()) == pytest.approx(1.0, abs=1e-6)
 
-    def test_lambda_zero_uses_permuted(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_lambda_zero_uses_permuted(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """λ = 0 → mixed_x == x[perm], mixed_y == y[perm]."""
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.0
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.0)
         batch = _make_batch(b=4, num_classes=10, seed=2)
         coll = MixupCollator(alpha=0.2, num_classes=10)
         x, y = coll(batch)
@@ -128,9 +120,7 @@ class TestMixupAlgorithmParity:
         out_imgs = x.numpy()
         # Every output row must be one of the input rows (set equality).
         for out_row in out_imgs:
-            matches = [
-                np.allclose(out_row, in_row, atol=1e-6) for in_row in in_imgs
-            ]
+            matches = [np.allclose(out_row, in_row, atol=1e-6) for in_row in in_imgs]
             assert any(matches), "λ=0 output not a permutation of input"
         # Soft labels remain one-hot (any single permuted row).
         y_np = y.numpy()
@@ -146,9 +136,7 @@ class TestMixupAlgorithmParity:
         to exactly 1.  Reference framework MixUp produces the same shape
         and same sum-to-1 invariant.
         """
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.3
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.3)
         batch = _make_batch(b=8, num_classes=10, seed=3)
         coll = MixupCollator(alpha=0.2, num_classes=10)
         _, y = coll(batch)
@@ -178,9 +166,7 @@ class TestMixupAlgorithmParity:
         convex combination of two input pixels.  Pins the mixing math
         independent of the chosen permutation.
         """
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.6
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.6)
         batch = _make_batch(b=4, num_classes=10, seed=4)
         coll = MixupCollator(alpha=0.2, num_classes=10)
         x, _ = coll(batch)
@@ -203,15 +189,11 @@ class TestCutMixGeometryParity:
     share.
     """
 
-    def test_lambda_one_is_identity(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_lambda_one_is_identity(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """λ = 1 → ``cut_w = cut_h = 0``, the collator early-exits with
         the original batch and one-hot soft targets.
         """
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 1.0
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 1.0)
         batch = _make_batch(b=4, c=3, h=16, w=16, num_classes=10, seed=5)
         coll = CutMixCollator(alpha=1.0, num_classes=10)
         x, y = coll(batch)
@@ -223,9 +205,7 @@ class TestCutMixGeometryParity:
             assert float(y_np[i].max()) == pytest.approx(1.0, abs=1e-6)
             assert float(y_np[i].sum()) == pytest.approx(1.0, abs=1e-6)
 
-    def test_effective_lambda_formula(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_effective_lambda_formula(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Pin :math:`\\lambda_{\\rm eff} = 1 - {\\rm area}/{\\rm total}`.
 
         Read the lam_eff out of the produced soft labels (the two
@@ -236,9 +216,7 @@ class TestCutMixGeometryParity:
         """
         # Choose λ so the cut box is non-trivial but the formula is
         # deterministic given fixed lucid seed.
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.5
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.5)
         lucid.manual_seed(0)
         batch = _make_batch(b=4, c=3, h=32, w=32, num_classes=10, seed=6)
         coll = CutMixCollator(alpha=1.0, num_classes=10)
@@ -266,9 +244,7 @@ class TestCutMixGeometryParity:
         mask is strictly 0 or 1).  Pins CutMix's hard-paste semantics
         which the reference framework also follows.
         """
-        monkeypatch.setattr(
-            "lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.5
-        )
+        monkeypatch.setattr("lucid.utils.data._mix._sample_lambda", lambda _alpha: 0.5)
         lucid.manual_seed(0)
         batch = _make_batch(b=4, c=3, h=16, w=16, num_classes=10, seed=7)
         coll = CutMixCollator(alpha=1.0, num_classes=10)
@@ -405,9 +381,7 @@ class TestEndToEndShapeParity:
         # Lucid path.
         lucid.manual_seed(0)
         lucid_coll = MixupCollator(alpha=0.2, num_classes=num_classes)
-        l_batch = _make_batch(
-            b=b, c=c, h=h, w=w, num_classes=num_classes, seed=20
-        )
+        l_batch = _make_batch(b=b, c=c, h=h, w=w, num_classes=num_classes, seed=20)
         l_x, l_y = lucid_coll(l_batch)
         # Reference framework path — v2.MixUp wants a pre-collated
         # (images, labels) pair, not a list of (image, label).
@@ -418,18 +392,14 @@ class TestEndToEndShapeParity:
                 axis=0,
             )
         )
-        r_labels = ref.tensor(
-            [i % num_classes for i in range(b)], dtype=ref.int64
-        )
+        r_labels = ref.tensor([i % num_classes for i in range(b)], dtype=ref.int64)
         r_mix = v2.MixUp(num_classes=num_classes, alpha=0.2)
         r_x, r_y = r_mix(r_imgs, r_labels)
         # Shapes match.
         assert tuple(l_x.shape) == tuple(r_x.shape) == (b, c, h, w)
         assert tuple(l_y.shape) == tuple(r_y.shape) == (b, num_classes)
         # Both produce sum-to-1 soft targets.
-        np.testing.assert_allclose(
-            l_y.numpy().sum(axis=1), np.ones(b), atol=1e-5
-        )
+        np.testing.assert_allclose(l_y.numpy().sum(axis=1), np.ones(b), atol=1e-5)
         np.testing.assert_allclose(
             r_y.detach().cpu().numpy().sum(axis=1), np.ones(b), atol=1e-5
         )
@@ -439,9 +409,7 @@ class TestEndToEndShapeParity:
         # Lucid path.
         lucid.manual_seed(0)
         lucid_coll = CutMixCollator(alpha=1.0, num_classes=num_classes)
-        l_batch = _make_batch(
-            b=b, c=c, h=h, w=w, num_classes=num_classes, seed=21
-        )
+        l_batch = _make_batch(b=b, c=c, h=h, w=w, num_classes=num_classes, seed=21)
         l_x, l_y = lucid_coll(l_batch)
         # Reference path.
         rng = np.random.default_rng(21)
@@ -451,18 +419,14 @@ class TestEndToEndShapeParity:
                 axis=0,
             )
         )
-        r_labels = ref.tensor(
-            [i % num_classes for i in range(b)], dtype=ref.int64
-        )
+        r_labels = ref.tensor([i % num_classes for i in range(b)], dtype=ref.int64)
         r_cut = v2.CutMix(num_classes=num_classes, alpha=1.0)
         r_x, r_y = r_cut(r_imgs, r_labels)
         # Shapes match.
         assert tuple(l_x.shape) == tuple(r_x.shape) == (b, c, h, w)
         assert tuple(l_y.shape) == tuple(r_y.shape) == (b, num_classes)
         # Both produce sum-to-1 soft targets.
-        np.testing.assert_allclose(
-            l_y.numpy().sum(axis=1), np.ones(b), atol=1e-5
-        )
+        np.testing.assert_allclose(l_y.numpy().sum(axis=1), np.ones(b), atol=1e-5)
         np.testing.assert_allclose(
             r_y.detach().cpu().numpy().sum(axis=1), np.ones(b), atol=1e-5
         )
