@@ -13,6 +13,14 @@ from lucid.models.vision.crossvit._model import (
     CrossViT,
     CrossViTForImageClassification,
 )
+from lucid.models.vision.crossvit._weights import (
+    CrossViT9Weights,
+    CrossViT15Weights,
+    CrossViT18Weights,
+    CrossViTBaseWeights,
+    CrossViTSmallWeights,
+    CrossViTTinyWeights,
+)
 
 # ---------------------------------------------------------------------------
 # Paper Table 2 configurations.
@@ -146,8 +154,7 @@ def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 # ---------------------------------------------------------------------------
-# Lazy import of per-variant weights enums (declared in _weights.py).
-# Imported inside each factory body to keep the import graph clean.
+# Classification factories with pretrained-weight wiring (task="image-classification")
 # ---------------------------------------------------------------------------
 
 
@@ -162,7 +169,7 @@ def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
 def crossvit_tiny_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViTTinyWeights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-Ti image classifier (Chen et al., ICCV 2021).
@@ -172,8 +179,6 @@ def crossvit_tiny_cls(
     parameters; paper Table 2 reports **72.6%** ImageNet-1k top-1 at
     240×240.
     """
-    from lucid.models.vision.crossvit._weights import CrossViTTinyWeights
-
     entry = weights_mod.resolve_weights(CrossViTTinyWeights, pretrained, weights)
     model = _c(_CFG_TINY, overrides)
     if entry is not None:
@@ -192,14 +197,12 @@ def crossvit_tiny_cls(
 def crossvit_small_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViTSmallWeights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-S image classifier — ``embed_dims=(192, 384)``, depths
     ``((1, 4, 0)) × 3``, 6 heads per branch.  ~26.7M params; paper
     Table 2 reports **81.0%** ImageNet-1k top-1 at 240×240."""
-    from lucid.models.vision.crossvit._weights import CrossViTSmallWeights
-
     entry = weights_mod.resolve_weights(CrossViTSmallWeights, pretrained, weights)
     model = _c(_CFG_SMALL, overrides)
     if entry is not None:
@@ -218,14 +221,12 @@ def crossvit_small_cls(
 def crossvit_base_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViTBaseWeights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-B image classifier — ``embed_dims=(384, 768)``, depths
     ``((1, 4, 0)) × 3``, 12 heads per branch.  ~105M params; paper
     Table 2 reports **82.2%** ImageNet-1k top-1 at 240×240."""
-    from lucid.models.vision.crossvit._weights import CrossViTBaseWeights
-
     entry = weights_mod.resolve_weights(CrossViTBaseWeights, pretrained, weights)
     model = _c(_CFG_BASE, overrides)
     if entry is not None:
@@ -244,14 +245,12 @@ def crossvit_base_cls(
 def crossvit_9_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViT9Weights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-9 image classifier — ``embed_dims=(128, 256)``, depths
     ``((1, 3, 0)) × 3``, 4 heads per branch.  ~8.6M params; paper
     Table 2 reports **73.9%** ImageNet-1k top-1 at 240×240."""
-    from lucid.models.vision.crossvit._weights import CrossViT9Weights
-
     entry = weights_mod.resolve_weights(CrossViT9Weights, pretrained, weights)
     model = _c(_CFG_9, overrides)
     if entry is not None:
@@ -270,14 +269,12 @@ def crossvit_9_cls(
 def crossvit_15_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViT15Weights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-15 image classifier — ``embed_dims=(192, 384)``, depths
     ``((1, 5, 0)) × 3``, 6 heads per branch.  ~27.4M params; paper
     Table 2 reports **81.5%** ImageNet-1k top-1 at 240×240."""
-    from lucid.models.vision.crossvit._weights import CrossViT15Weights
-
     entry = weights_mod.resolve_weights(CrossViT15Weights, pretrained, weights)
     model = _c(_CFG_15, overrides)
     if entry is not None:
@@ -296,14 +293,12 @@ def crossvit_15_cls(
 def crossvit_18_cls(
     pretrained: bool | str = False,
     *,
-    weights: object | None = None,
+    weights: CrossViT18Weights | None = None,
     **overrides: object,
 ) -> CrossViTForImageClassification:
     r"""CrossViT-18 image classifier — ``embed_dims=(224, 448)``, depths
     ``((1, 6, 0)) × 3``, 7 heads per branch.  ~43.3M params; paper
     Table 2 reports **82.5%** ImageNet-1k top-1 at 240×240."""
-    from lucid.models.vision.crossvit._weights import CrossViT18Weights
-
     entry = weights_mod.resolve_weights(CrossViT18Weights, pretrained, weights)
     model = _c(_CFG_18, overrides)
     if entry is not None:

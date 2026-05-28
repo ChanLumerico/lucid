@@ -119,6 +119,35 @@ verified across 180 parity tests.
     in a follow-up commit sourced from timm — torchvision does not
     publish a 1k-class xlarge head.
 
+- **`lucid.models.vision.crossvit`** — paper-faithful rebuild + pretrained
+  ImageNet-1k weights for all six paper-cited variants (Chen et al.,
+  ICCV 2021, Table 2).  Pre-3.5 CrossViT was a single-stage toy at
+  20-50% of paper-cited params; replaced with the full paper
+  architecture (dual-input 240/224, K=3 ``MultiScaleBlock``s, CLS-token
+  cross-attention per stage).  All six variants land within 1% of the
+  paper-published param count (7.0 / 8.6 / 26.7 / 27.4 / 43.3 /
+  105.0 M).  Sourced from ``timm/crossvit_<variant>_240.in1k``, hosted
+  on [`lucid-dl/crossvit-<variant>`](https://huggingface.co/lucid-dl).
+  Numerical parity vs timm: max abs logit diff ``7.7e-6`` on crossvit_tiny.
+  
+  Side-effect: added a Python-level **bicubic 2D resampler** to the
+  CrossViT model (the large-branch input is bicubic-rescaled, and
+  Lucid's engine-level ``F.interpolate`` does not yet ship a bicubic
+  kernel).  Implemented as a separable row+col pass with the
+  Mitchell-Netravali ``a=-0.75`` weights on top of Lucid native ops
+  (``arange`` + ``clamp`` + advanced indexing); matches PyTorch
+  ``F.interpolate(mode='bicubic', align_corners=False)`` bit-for-bit
+  on the CrossViT input distribution.  Promotion to a proper engine
+  kernel is filed for a separate PR.
+  
+  Load via:
+  ```python
+  from lucid.models import crossvit_tiny_cls
+  from lucid.models.weights import CrossViTTinyWeights
+  m = crossvit_tiny_cls(pretrained=True)
+  m = crossvit_tiny_cls(weights=CrossViTTinyWeights.IN1K)
+  ```
+
 - **`lucid.models.vision.convnext`** — pretrained weights for
   `convnext_xlarge_cls` (Liu et al., 2022, Table 11).  Hosted on
   [`lucid-dl/convnext-xlarge`](https://huggingface.co/lucid-dl/convnext-xlarge).

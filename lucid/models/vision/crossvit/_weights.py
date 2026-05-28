@@ -24,7 +24,7 @@ class CrossViTTinyWeights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-tiny/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="f0213ad20473517f15f176f5f086962dcee31c60b910f8a113a8dba5e324645d",
         num_classes=1000,
         transforms=_PRESET,
         meta={
@@ -44,7 +44,7 @@ class CrossViTSmallWeights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-small/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="3b5a05f3a82a44eb6313368b9244c8a526ea5fd8cf0f13b7dd4d81ade476ca8f",
         num_classes=1000,
         transforms=_PRESET,
         meta={
@@ -64,7 +64,7 @@ class CrossViTBaseWeights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-base/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="780bd01e7f83e79d4bd0bbec7a2527ee7771b52e222d3612849705718f26bc1f",
         num_classes=1000,
         transforms=_PRESET,
         meta={
@@ -84,7 +84,7 @@ class CrossViT9Weights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-9/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="fc4a65ad01b32d198f6dc106b3e3b3c012f8114143c2585e4eef0ae28986e5da",
         num_classes=1000,
         transforms=_PRESET,
         meta={
@@ -104,7 +104,7 @@ class CrossViT15Weights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-15/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="e3dc9964773551bfec1031e781a72ac7aa13cf6830749b6466ec0d0c0dedc100",
         num_classes=1000,
         transforms=_PRESET,
         meta={
@@ -124,7 +124,7 @@ class CrossViT18Weights(WeightsEnum):
 
     IN1K = WeightEntry(
         url=f"{HUB_BASE}/crossvit-18/resolve/main/IN1K/model.safetensors",
-        sha256="__PENDING_UPLOAD__",
+        sha256="7238e4b62ce35b543018f0f5b3ba9ad12b48ef19d125ed6065e303c4a2479419",
         num_classes=1000,
         transforms=_PRESET,
         meta={

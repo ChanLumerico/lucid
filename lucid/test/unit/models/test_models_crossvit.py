@@ -162,5 +162,82 @@ class TestCrossViTKeyParityWithTimm(unittest.TestCase):
         self.assertEqual(len(luc.state_dict()), len(tim.state_dict()))
 
 
+class TestCrossViTWeightsEnums(unittest.TestCase):
+    """Static contract of every per-variant ``<X>Weights`` enum — no network."""
+
+    def test_default_aliases_in1k(self) -> None:
+        from lucid.models.weights import (
+            CrossViT9Weights,
+            CrossViT15Weights,
+            CrossViT18Weights,
+            CrossViTBaseWeights,
+            CrossViTSmallWeights,
+            CrossViTTinyWeights,
+        )
+
+        for cls in (
+            CrossViTTinyWeights,
+            CrossViTSmallWeights,
+            CrossViTBaseWeights,
+            CrossViT9Weights,
+            CrossViT15Weights,
+            CrossViT18Weights,
+        ):
+            self.assertIs(cls.DEFAULT, cls.IN1K)
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.weights import CrossViTTinyWeights
+
+        e = CrossViTTinyWeights.IN1K.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertEqual(len(e.sha256), 64)
+        self.assertIn("lucid-dl/crossvit-tiny", e.url)
+        self.assertIn("/IN1K/", e.url)  # UPPERCASE tag in Hub URL path
+
+    def test_meta_provenance(self) -> None:
+        from lucid.models.weights import CrossViTBaseWeights
+
+        meta = CrossViTBaseWeights.IN1K.meta
+        self.assertEqual(meta["source"], "timm/crossvit_base_240.in1k")
+        self.assertEqual(meta["license"], "apache-2.0")
+        self.assertIn("ImageNet-1k", meta["metrics"])
+
+    def test_transforms_match_timm(self) -> None:
+        from lucid.models.weights import CrossViTTinyWeights
+
+        tf = CrossViTTinyWeights.IN1K.transforms()
+        self.assertEqual(tf.crop_size, 240)
+        self.assertEqual(tf.resize_size, 274)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for name in (
+            "crossvit_tiny_cls",
+            "crossvit_small_cls",
+            "crossvit_base_cls",
+            "crossvit_9_cls",
+            "crossvit_15_cls",
+            "crossvit_18_cls",
+        ):
+            self.assertIn("IN1K", list_pretrained(name))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestCrossViTPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_tiny_default(self) -> None:
+        from lucid.models import crossvit_tiny_cls as factory
+
+        m = factory(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 240, 240))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+
 if __name__ == "__main__":
     unittest.main()

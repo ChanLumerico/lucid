@@ -16,11 +16,25 @@ from lucid.models.vision.crossvit._pretrained import (
     crossvit_18,
     crossvit_18_cls,
 )
+from lucid.models.vision.crossvit._weights import (
+    CrossViT9Weights,
+    CrossViT15Weights,
+    CrossViT18Weights,
+    CrossViTBaseWeights,
+    CrossViTSmallWeights,
+    CrossViTTinyWeights,
+)
 
 __all__ = [
     "CrossViTConfig",
     "CrossViT",
     "CrossViTForImageClassification",
+    "CrossViT9Weights",
+    "CrossViT15Weights",
+    "CrossViT18Weights",
+    "CrossViTBaseWeights",
+    "CrossViTSmallWeights",
+    "CrossViTTinyWeights",
     "crossvit_9",
     "crossvit_9_cls",
     "crossvit_tiny",

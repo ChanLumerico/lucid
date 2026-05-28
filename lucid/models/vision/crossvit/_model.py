@@ -147,8 +147,10 @@ class _Block(nn.Module):
         self.mlp = _Mlp(dim, int(dim * mlp_ratio), dim, drop=drop)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.attn(self.norm1(x)))))
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.mlp(self.norm2(x)))))
+        n1 = cast(Tensor, self.norm1(x))
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.attn(n1))))
+        n2 = cast(Tensor, self.norm2(x))
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.mlp(n2))))
         return x
 
 
@@ -306,26 +308,20 @@ class _MultiScaleBlock(nn.Module):
 
         # Cross-attention fusion: query CLS (already projected) + KV from the
         # other branch's patch tokens.  Built at the *destination* dim.
-        # ``depth[2]`` extra cross-attention blocks (paper-cited variants = 0,
-        # i.e. just one mandatory cross-attn pass per branch).
-        n_cross = max(1, depth[2] if depth[2] > 0 else 1)
+        # Paper-cited variants run exactly one cross-attention pass per
+        # branch per stage (``depth[2] = 0``), so ``self.fusion[d]`` is a
+        # single ``_CrossAttentionBlock`` — not a Sequential — matching
+        # timm's layout exactly.
         self.fusion = nn.ModuleList(
             [
-                nn.Sequential(
-                    *[
-                        _CrossAttentionBlock(
-                            dim[(d + 1) % 2],
-                            num_heads[(d + 1) % 2],
-                            qkv_bias=qkv_bias,
-                            drop=drop,
-                            attn_drop=attn_drop,
-                            drop_path=(
-                                drop_path[2][i] if drop_path else 0.0
-                            ),
-                            layer_norm_eps=layer_norm_eps,
-                        )
-                        for i in range(n_cross)
-                    ]
+                _CrossAttentionBlock(
+                    dim[(d + 1) % 2],
+                    num_heads[(d + 1) % 2],
+                    qkv_bias=qkv_bias,
+                    drop=drop,
+                    attn_drop=attn_drop,
+                    drop_path=(drop_path[2][0] if drop_path else 0.0),
+                    layer_norm_eps=layer_norm_eps,
                 )
                 for d in range(self.num_branches)
             ]
@@ -368,6 +364,90 @@ class _MultiScaleBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+def _bicubic_2d(x: Tensor, oh: int, ow: int) -> Tensor:
+    """``align_corners=False`` 2D bicubic resampling — separable row+col.
+
+    Mirrors the reference framework's ``F.interpolate(..., mode='bicubic',
+    align_corners=False)`` exactly, with the Mitchell-Netravali kernel
+    coefficient ``a = -0.75`` (reference-framework / OpenCV default).  Implemented
+    in Python on top of Lucid native ops because Lucid's engine-level
+    ``F.interpolate`` does not yet ship a bicubic kernel; the path
+    is only hit once per forward pass in CrossViT (large-branch
+    rescale), so the lack of a fused C++ kernel doesn't matter.
+
+    Shape: ``(B, C, H, W) → (B, C, oh, ow)``.
+    """
+    B, C, H, W = x.shape
+    a = -0.75
+
+    def _coords(out_size: int, in_size: int) -> tuple[Tensor, Tensor]:
+        src = (lucid.arange(out_size, dtype=lucid.float32) + 0.5) * (
+            in_size / out_size
+        ) - 0.5
+        idx = src.floor().to(lucid.int64)
+        frac = src - idx.to(lucid.float32)
+        return idx, frac
+
+    def _weights(
+        frac: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        # Distances to the four source samples are (1+t, t, 1-t, 2-t).
+        d0 = 1.0 + frac
+        d1 = frac
+        d2 = 1.0 - frac
+        d3 = 2.0 - frac
+        # |d| in [1,2]: w(d) = a·d³ − 5a·d² + 8a·d − 4a
+        w0 = a * (d0 ** 3) - 5 * a * (d0 ** 2) + 8 * a * d0 - 4 * a
+        w3 = a * (d3 ** 3) - 5 * a * (d3 ** 2) + 8 * a * d3 - 4 * a
+        # |d| in [0,1]: w(d) = (a+2)·d³ − (a+3)·d² + 1
+        w1 = (a + 2) * (d1 ** 3) - (a + 3) * (d1 ** 2) + 1.0
+        w2 = (a + 2) * (d2 ** 3) - (a + 3) * (d2 ** 2) + 1.0
+        return w0, w1, w2, w3
+
+    # ── Row (height) pass: (B, C, H, W) → (B, C, oh, W) ─────────────
+    y_idx, y_frac = _coords(oh, H)
+    wy0, wy1, wy2, wy3 = _weights(y_frac)
+    # Lucid's clamp/clip backend does not yet handle int64; float
+    # round-trip is the (currently) cheapest path.
+    y_idx_f = y_idx.to(lucid.float32)
+    y_m1 = lucid.clamp(y_idx_f - 1.0, 0.0, float(H - 1)).to(lucid.int64)
+    y_p0 = lucid.clamp(y_idx_f, 0.0, float(H - 1)).to(lucid.int64)
+    y_p1 = lucid.clamp(y_idx_f + 1.0, 0.0, float(H - 1)).to(lucid.int64)
+    y_p2 = lucid.clamp(y_idx_f + 2.0, 0.0, float(H - 1)).to(lucid.int64)
+    r_m1 = x[:, :, y_m1, :]
+    r_p0 = x[:, :, y_p0, :]
+    r_p1 = x[:, :, y_p1, :]
+    r_p2 = x[:, :, y_p2, :]
+    wy_shape = (1, 1, oh, 1)
+    out_r = (
+        wy0.reshape(*wy_shape) * r_m1
+        + wy1.reshape(*wy_shape) * r_p0
+        + wy2.reshape(*wy_shape) * r_p1
+        + wy3.reshape(*wy_shape) * r_p2
+    )
+
+    # ── Column (width) pass: (B, C, oh, W) → (B, C, oh, ow) ─────────
+    x_idx, x_frac = _coords(ow, W)
+    wx0, wx1, wx2, wx3 = _weights(x_frac)
+    x_idx_f = x_idx.to(lucid.float32)
+    x_m1 = lucid.clamp(x_idx_f - 1.0, 0.0, float(W - 1)).to(lucid.int64)
+    x_p0 = lucid.clamp(x_idx_f, 0.0, float(W - 1)).to(lucid.int64)
+    x_p1 = lucid.clamp(x_idx_f + 1.0, 0.0, float(W - 1)).to(lucid.int64)
+    x_p2 = lucid.clamp(x_idx_f + 2.0, 0.0, float(W - 1)).to(lucid.int64)
+    c_m1 = out_r[:, :, :, x_m1]
+    c_p0 = out_r[:, :, :, x_p0]
+    c_p1 = out_r[:, :, :, x_p1]
+    c_p2 = out_r[:, :, :, x_p2]
+    wx_shape = (1, 1, 1, ow)
+    out = (
+        wx0.reshape(*wx_shape) * c_m1
+        + wx1.reshape(*wx_shape) * c_p0
+        + wx2.reshape(*wx_shape) * c_p1
+        + wx3.reshape(*wx_shape) * c_p2
+    )
+    return out
+
+
 def _scale_image(x: Tensor, scale: float, crop_scale: bool) -> Tensor:
     """Resize (default) or center-crop the input by ``scale``.
 
@@ -382,14 +462,11 @@ def _scale_image(x: Tensor, scale: float, crop_scale: bool) -> Tensor:
         top = (H - h) // 2
         left = (W - w) // 2
         return x[:, :, top : top + h, left : left + w]
-    # Bilinear interpolate.
+    # Bicubic interpolation matches timm's ``scale_image`` exactly.
     _, _, H, W = x.shape
     new_h = int(round(H * scale))
     new_w = int(round(W * scale))
-    return cast(
-        Tensor,
-        F.interpolate(x, size=(new_h, new_w), mode="bilinear", align_corners=False),
-    )
+    return _bicubic_2d(x, new_h, new_w)
 
 
 # ---------------------------------------------------------------------------
@@ -501,17 +578,17 @@ class CrossViT(PretrainedModel, BackboneMixin):
         x = x + pos
         return cast(Tensor, self.pos_drop(x))
 
-    def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:
+    def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        cfg = cast(CrossViTConfig, self.config)
         # Rescale per branch.
-        xs = [
-            _scale_image(x, self.config.img_scale[d], self.config.crop_scale)
-            for d in range(2)
+        xs: list[Tensor] = [
+            _scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)
         ]
         # Patch-embed + CLS + positional.
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
-        # K cross-attention stages.
+        # K cross-attention stages — _MultiScaleBlock takes/returns ``list[Tensor]``.
         for stage in self.stages:
-            xs = stage(xs)
+            xs = stage(xs)  # type: ignore[arg-type,assignment]
         # Final norm per branch.
         xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
         # Return the two CLS tokens.
@@ -616,11 +693,13 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        cfg = self.config
-        xs = [_scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)]
+        cfg = cast(CrossViTConfig, self.config)
+        xs: list[Tensor] = [
+            _scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)
+        ]
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:
-            xs = stage(xs)
+            xs = stage(xs)  # type: ignore[arg-type,assignment]
         xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
         cls = [xs[d][:, 0] for d in range(2)]
         logits_s = cast(Tensor, self.head[0](cls[0]))
