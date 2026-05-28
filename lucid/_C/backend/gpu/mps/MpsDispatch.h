@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cstdint>
+
 #include "../../../core/Dtype.h"
 
 namespace lucid::gpu::mps {
@@ -284,9 +285,7 @@ bool should_dispatch_silu_metal(std::int64_t numel, Dtype dt);
 // See Also
 // --------
 // :func:`embedding_backward` — the kernel that gets dispatched.
-bool should_dispatch_embedding_backward(std::int64_t M_total,
-                                        std::int64_t D,
-                                        Dtype dt);
+bool should_dispatch_embedding_backward(std::int64_t M_total, std::int64_t D, Dtype dt);
 
 // Shape-gated ops — only dispatch when the gap exceeds dispatch overhead.
 // Heuristics come from obsidian/perf/perf-mpsgraph-shortlist-2026-05.md

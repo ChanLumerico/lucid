@@ -604,8 +604,7 @@ public:
     // -------
     // std::shared_ptr<TensorImpl>
     //     New tensor on ``target`` with the same shape and dtype.
-    std::shared_ptr<TensorImpl>
-    transfer_to_device(Device target, bool requires_grad) const;
+    std::shared_ptr<TensorImpl> transfer_to_device(Device target, bool requires_grad) const;
 
     // Converts the tensor to a nested Python list (or a Python scalar for
     // 0-d tensors).

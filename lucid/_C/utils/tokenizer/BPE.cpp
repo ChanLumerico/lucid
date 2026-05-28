@@ -57,7 +57,8 @@ void BPE::rebuild_tables_() {
     // Build reverse id→string table.
     TokenId max_id = -1;
     for (const auto& [tok, id] : vocab_)
-        if (id > max_id) max_id = id;
+        if (id > max_id)
+            max_id = id;
     id_to_token_.assign(static_cast<std::size_t>(max_id + 1), std::string{});
     for (const auto& [tok, id] : vocab_) {
         if (id >= 0 && static_cast<std::size_t>(id) < id_to_token_.size())
@@ -79,9 +80,7 @@ void BPE::rebuild_tables_() {
             ++rank;
             continue;  // skip malformed
         }
-        pair_to_merge_.emplace(
-            std::make_pair(ia->second, ib->second),
-            BPEMerge{ic->second, rank});
+        pair_to_merge_.emplace(std::make_pair(ia->second, ib->second), BPEMerge{ic->second, rank});
         ++rank;
     }
 }
@@ -118,12 +117,18 @@ IdSequence BPE::encode_chunk_(const std::string& chunk) const {
     while (i < chunk.size()) {
         unsigned char c0 = static_cast<unsigned char>(chunk[i]);
         std::size_t cp_len;
-        if (c0 < 0x80) cp_len = 1;
-        else if ((c0 >> 5) == 0b110) cp_len = 2;
-        else if ((c0 >> 4) == 0b1110) cp_len = 3;
-        else if ((c0 >> 3) == 0b11110) cp_len = 4;
-        else cp_len = 1;  // invalid lead byte — treat as single char
-        if (i + cp_len > chunk.size()) cp_len = chunk.size() - i;
+        if (c0 < 0x80)
+            cp_len = 1;
+        else if ((c0 >> 5) == 0b110)
+            cp_len = 2;
+        else if ((c0 >> 4) == 0b1110)
+            cp_len = 3;
+        else if ((c0 >> 3) == 0b11110)
+            cp_len = 4;
+        else
+            cp_len = 1;  // invalid lead byte — treat as single char
+        if (i + cp_len > chunk.size())
+            cp_len = chunk.size() - i;
         std::string cp = chunk.substr(i, cp_len);
         auto it = vocab_.find(cp);
         if (it != vocab_.end()) {
@@ -152,14 +157,16 @@ IdSequence BPE::encode_chunk_(const std::string& chunk) const {
         TokenId best_merged = -1;
         for (std::size_t k = 0; k + 1 < ids.size(); ++k) {
             auto it = pair_to_merge_.find({ids[k], ids[k + 1]});
-            if (it == pair_to_merge_.end()) continue;
+            if (it == pair_to_merge_.end())
+                continue;
             if (it->second.rank < best_rank) {
                 best_rank = it->second.rank;
                 best_pos = k;
                 best_merged = it->second.result;
             }
         }
-        if (best_pos == ids.size()) break;  // no applicable merge
+        if (best_pos == ids.size())
+            break;  // no applicable merge
         // Apply the merge: replace ids[best_pos..best_pos+2) with the
         // merged id.  Erase + insert is O(N) per merge — fine for
         // typical chunk sizes.
@@ -224,11 +231,9 @@ struct WordState {
 // target sizes; otherwise always succeeds (possibly with a smaller
 // vocab if the corpus runs out of distinct merges before the target
 // is reached).  NOT thread-safe — mutates internal tables.
-void BPE::train(const std::vector<std::string>& corpus,
-                std::size_t target_vocab_size) {
+void BPE::train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) {
     if (target_vocab_size < 1)
-        throw std::runtime_error(
-            "BPE::train: target_vocab_size must be at least 1");
+        throw std::runtime_error("BPE::train: target_vocab_size must be at least 1");
 
     // 1. Count word frequencies via whitespace pre-tokenization.
     //    (Real HF training has a more sophisticated pre-tokenizer
@@ -242,12 +247,11 @@ void BPE::train(const std::vector<std::string>& corpus,
         while (i < doc.size()) {
             // skip whitespace
             while (i < doc.size() &&
-                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' ||
-                    doc[i] == '\r'))
+                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
             std::size_t start = i;
-            while (i < doc.size() && !(doc[i] == ' ' || doc[i] == '\t' ||
-                                       doc[i] == '\n' || doc[i] == '\r'))
+            while (i < doc.size() &&
+                   !(doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
             if (i > start)
                 ++word_freq[doc.substr(start, i - start)];
@@ -261,7 +265,8 @@ void BPE::train(const std::vector<std::string>& corpus,
     TokenId next_id = 0;
     auto add_to_vocab = [&](const std::string& tok) {
         auto [it, inserted] = vocab_.try_emplace(tok, next_id);
-        if (inserted) ++next_id;
+        if (inserted)
+            ++next_id;
         return it->second;
     };
 
@@ -275,12 +280,18 @@ void BPE::train(const std::vector<std::string>& corpus,
         while (i < w.size()) {
             unsigned char c0 = static_cast<unsigned char>(w[i]);
             std::size_t cp_len;
-            if (c0 < 0x80) cp_len = 1;
-            else if ((c0 >> 5) == 0b110) cp_len = 2;
-            else if ((c0 >> 4) == 0b1110) cp_len = 3;
-            else if ((c0 >> 3) == 0b11110) cp_len = 4;
-            else cp_len = 1;
-            if (i + cp_len > w.size()) cp_len = w.size() - i;
+            if (c0 < 0x80)
+                cp_len = 1;
+            else if ((c0 >> 5) == 0b110)
+                cp_len = 2;
+            else if ((c0 >> 4) == 0b1110)
+                cp_len = 3;
+            else if ((c0 >> 3) == 0b11110)
+                cp_len = 4;
+            else
+                cp_len = 1;
+            if (i + cp_len > w.size())
+                cp_len = w.size() - i;
             std::string cp = w.substr(i, cp_len);
             add_to_vocab(cp);
             ws.symbols.push_back(std::move(cp));
@@ -302,7 +313,8 @@ void BPE::train(const std::vector<std::string>& corpus,
                 pair_freq[key] += ws.count;
             }
         }
-        if (pair_freq.empty()) break;
+        if (pair_freq.empty())
+            break;
 
         // Find the max-count pair (ties broken by lexicographic order
         // of the key for determinism).
@@ -313,7 +325,8 @@ void BPE::train(const std::vector<std::string>& corpus,
                 best_it = it;
             }
         }
-        if (best_it->second < 2) break;  // no point merging singletons
+        if (best_it->second < 2)
+            break;  // no point merging singletons
 
         // Split the key back into the two halves.
         std::string key = best_it->first;

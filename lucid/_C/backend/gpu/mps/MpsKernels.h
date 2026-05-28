@@ -96,10 +96,7 @@ Storage gelu_metal_forward(const Storage& x, const Shape& shape, Dtype dt);
 // -------
 // Storage
 //     Gradient w.r.t. ``x``.
-Storage gelu_metal_backward(const Storage& x,
-                            const Storage& grad,
-                            const Shape& shape,
-                            Dtype dt);
+Storage gelu_metal_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // GELU exact (erf-based) forward via custom Metal kernel.  Matches the
 // default ``F.gelu(x)`` path (``approximate="none"``).  Same wrapper
@@ -109,9 +106,7 @@ Storage gelu_metal_backward(const Storage& x,
 // See Also
 // --------
 // :func:`gelu_metal_forward` — tanh-approx variant.
-Storage gelu_exact_metal_forward(const Storage& x,
-                                 const Shape& shape,
-                                 Dtype dt);
+Storage gelu_exact_metal_forward(const Storage& x, const Shape& shape, Dtype dt);
 
 // GELU exact (erf-based) backward via custom Metal kernel.
 //
@@ -119,10 +114,8 @@ Storage gelu_exact_metal_forward(const Storage& x,
 // ----
 // ``dy/dx = Φ(x) + x · φ(x)`` where ``Φ`` is the standard normal CDF
 // and ``φ`` its PDF.
-Storage gelu_exact_metal_backward(const Storage& x,
-                                  const Storage& grad,
-                                  const Shape& shape,
-                                  Dtype dt);
+Storage
+gelu_exact_metal_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // GELU backward (tanh approximation).
 //
@@ -154,10 +147,7 @@ Storage gelu_exact_metal_backward(const Storage& x,
 // See Also
 // --------
 // :func:`gelu_forward` — corresponding forward.
-Storage gelu_backward(const Storage& x,
-                      const Storage& grad,
-                      const Shape& shape,
-                      Dtype dt);
+Storage gelu_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // SiLU backward through a fused MPSGraph kernel.
 //
@@ -185,24 +175,16 @@ Storage gelu_backward(const Storage& x,
 // See Also
 // --------
 // :func:`should_dispatch_silu_backward` — dispatch gate.
-Storage silu_backward(const Storage& x,
-                      const Storage& grad,
-                      const Shape& shape,
-                      Dtype dt);
+Storage silu_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // SiLU forward via a one-pass custom Metal compute kernel.
 // ``y = x * sigmoid(x) = x / (1 + exp(-x))``.  Same float4-vectorised
 // dispatcher (``metal_unary_f32``) as the GELU custom kernels.
-Storage silu_metal_forward(const Storage& x,
-                           const Shape& shape,
-                           Dtype dt);
+Storage silu_metal_forward(const Storage& x, const Shape& shape, Dtype dt);
 
 // SiLU backward via custom Metal kernel.  ``dy/dx = σ(x) · (1 +
 // x · (1 - σ(x)))``.
-Storage silu_metal_backward(const Storage& x,
-                            const Storage& grad,
-                            const Shape& shape,
-                            Dtype dt);
+Storage silu_metal_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // GELU exact (Gaussian-CDF) forward via fused MPSGraph kernel.
 //
@@ -255,10 +237,7 @@ Storage gelu_exact_forward(const Storage& x, const Shape& shape, Dtype dt);
 // ----
 // $$\frac{\partial y}{\partial x} = \Phi(x) + x \, \phi(x)$$
 // where $\Phi$ is the standard normal CDF and $\phi$ its PDF.
-Storage gelu_exact_backward(const Storage& x,
-                            const Storage& grad,
-                            const Shape& shape,
-                            Dtype dt);
+Storage gelu_exact_backward(const Storage& x, const Storage& grad, const Shape& shape, Dtype dt);
 
 // Bundle of LayerNorm backward outputs.
 //
@@ -540,11 +519,8 @@ BatchNormBackwardOut batch_norm_train_backward(const Storage& x,
 // See Also
 // --------
 // :func:`should_dispatch_softmax_backward` — dispatch gate.
-Storage softmax_backward(const Storage& z,
-                         const Storage& grad,
-                         int axis,
-                         const Shape& shape,
-                         Dtype dt);
+Storage
+softmax_backward(const Storage& z, const Storage& grad, int axis, const Shape& shape, Dtype dt);
 
 // Embedding backward — scatter-add gradient rows into the weight grad
 // table via a single fused MPSGraph kernel.

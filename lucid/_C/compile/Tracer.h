@@ -216,7 +216,8 @@ public:
     // the builder drop "unconsumed but Python-discarded" intermediates
     // like RNN's ``h_n`` tensor when the user only kept ``out``).
     TensorId lookup_id(const TensorImpl* impl) const {
-        if (impl == nullptr) return TraceId::external_feed();
+        if (impl == nullptr)
+            return TraceId::external_feed();
         const auto it = impl_to_id_.find(const_cast<TensorImpl*>(impl));
         return (it != impl_to_id_.end()) ? it->second : TraceId::external_feed();
     }

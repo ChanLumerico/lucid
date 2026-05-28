@@ -39,9 +39,9 @@ WordPiece::WordPiece() = default;
 // ``rebuild_tables_`` then populates the dense reverse table and
 // caches ``unk_id_`` so the encode hot path skips a hash lookup.
 WordPiece::WordPiece(std::unordered_map<std::string, TokenId> vocab,
-                      std::string unk_token,
-                      std::string continuing_prefix,
-                      std::size_t max_chars_per_word)
+                     std::string unk_token,
+                     std::string continuing_prefix,
+                     std::size_t max_chars_per_word)
     : vocab_(std::move(vocab)),
       unk_token_(std::move(unk_token)),
       continuing_prefix_(std::move(continuing_prefix)),
@@ -56,7 +56,8 @@ WordPiece::WordPiece(std::unordered_map<std::string, TokenId> vocab,
 void WordPiece::rebuild_tables_() {
     TokenId max_id = -1;
     for (const auto& [tok, id] : vocab_)
-        if (id > max_id) max_id = id;
+        if (id > max_id)
+            max_id = id;
     id_to_token_.assign(static_cast<std::size_t>(max_id + 1), std::string{});
     for (const auto& [tok, id] : vocab_) {
         if (id >= 0 && static_cast<std::size_t>(id) < id_to_token_.size())
@@ -89,7 +90,8 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
         return {it->second};
     // 2. Cap on length — BERT drops anything longer than 100 chars.
     if (word.size() > max_chars_per_word_) {
-        if (unk_id_ >= 0) return {unk_id_};
+        if (unk_id_ >= 0)
+            return {unk_id_};
         return {};
     }
     // 3. Greedy longest-match left-to-right.  Walk through UTF-8
@@ -102,12 +104,18 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
         cp_offsets.push_back(i);
         unsigned char c0 = static_cast<unsigned char>(word[i]);
         std::size_t cp_len;
-        if (c0 < 0x80) cp_len = 1;
-        else if ((c0 >> 5) == 0b110) cp_len = 2;
-        else if ((c0 >> 4) == 0b1110) cp_len = 3;
-        else if ((c0 >> 3) == 0b11110) cp_len = 4;
-        else cp_len = 1;
-        if (i + cp_len > word.size()) cp_len = word.size() - i;
+        if (c0 < 0x80)
+            cp_len = 1;
+        else if ((c0 >> 5) == 0b110)
+            cp_len = 2;
+        else if ((c0 >> 4) == 0b1110)
+            cp_len = 3;
+        else if ((c0 >> 3) == 0b11110)
+            cp_len = 4;
+        else
+            cp_len = 1;
+        if (i + cp_len > word.size())
+            cp_len = word.size() - i;
         i += cp_len;
     }
     cp_offsets.push_back(word.size());
@@ -118,12 +126,11 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
         // Try longest prefix first.
         TokenId match_id = -1;
         std::size_t match_cp_end = cp_start;
-        for (std::size_t cp_end = cp_offsets.size() - 1; cp_end > cp_start;
-             --cp_end) {
-            std::string sub = word.substr(
-                cp_offsets[cp_start],
-                cp_offsets[cp_end] - cp_offsets[cp_start]);
-            if (cp_start > 0) sub = continuing_prefix_ + sub;
+        for (std::size_t cp_end = cp_offsets.size() - 1; cp_end > cp_start; --cp_end) {
+            std::string sub =
+                word.substr(cp_offsets[cp_start], cp_offsets[cp_end] - cp_offsets[cp_start]);
+            if (cp_start > 0)
+                sub = continuing_prefix_ + sub;
             auto it = vocab_.find(sub);
             if (it != vocab_.end()) {
                 match_id = it->second;
@@ -133,7 +140,8 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
         }
         if (match_id < 0) {
             // No valid prefix at this position → entire word is UNK.
-            if (unk_id_ >= 0) return {unk_id_};
+            if (unk_id_ >= 0)
+                return {unk_id_};
             return {};
         }
         ids.push_back(match_id);
@@ -155,13 +163,13 @@ IdSequence WordPiece::encode(const std::string& text) const {
     std::size_t i = 0;
     while (i < text.size()) {
         while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' ||
-                text[i] == '\r'))
+               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
-        if (i >= text.size()) break;
+        if (i >= text.size())
+            break;
         std::size_t start = i;
-        while (i < text.size() && !(text[i] == ' ' || text[i] == '\t' ||
-                                    text[i] == '\n' || text[i] == '\r'))
+        while (i < text.size() &&
+               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
             ++i;
         auto word_ids = encode_word_(text.substr(start, i - start));
         out.insert(out.end(), word_ids.begin(), word_ids.end());
@@ -182,14 +190,13 @@ std::string WordPiece::decode(const IdSequence& ids) const {
         if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
             continue;
         const std::string& tok = id_to_token_[static_cast<std::size_t>(id)];
-        bool is_continuation =
-            tok.size() >= continuing_prefix_.size() &&
-            tok.compare(0, continuing_prefix_.size(), continuing_prefix_) ==
-                0;
+        bool is_continuation = tok.size() >= continuing_prefix_.size() &&
+                               tok.compare(0, continuing_prefix_.size(), continuing_prefix_) == 0;
         if (is_continuation) {
             out += tok.substr(continuing_prefix_.size());
         } else {
-            if (!first) out += ' ';
+            if (!first)
+                out += ' ';
             out += tok;
         }
         first = false;
@@ -232,22 +239,21 @@ struct WordState {
 // forms strip the right half's ``##`` prefix (keeping the left's, if
 // any) so the resulting vocab matches BERT layout byte-for-byte.
 // NOT thread-safe — mutates ``vocab_`` / cached tables in place.
-void WordPiece::train(const std::vector<std::string>& corpus,
-                       std::size_t target_vocab_size) {
+void WordPiece::train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) {
     // 1. Word frequencies.
     std::unordered_map<std::string, std::uint64_t> word_freq;
     for (const auto& doc : corpus) {
         std::size_t i = 0;
         while (i < doc.size()) {
             while (i < doc.size() &&
-                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' ||
-                    doc[i] == '\r'))
+                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
             std::size_t start = i;
-            while (i < doc.size() && !(doc[i] == ' ' || doc[i] == '\t' ||
-                                       doc[i] == '\n' || doc[i] == '\r'))
+            while (i < doc.size() &&
+                   !(doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
-            if (i > start) ++word_freq[doc.substr(start, i - start)];
+            if (i > start)
+                ++word_freq[doc.substr(start, i - start)];
         }
     }
     // 2. Seed vocab with chars + continuation chars + the UNK token.
@@ -258,7 +264,8 @@ void WordPiece::train(const std::vector<std::string>& corpus,
     }
     auto add_token = [&](const std::string& s) {
         auto [it, inserted] = vocab_.try_emplace(s, next_id);
-        if (inserted) ++next_id;
+        if (inserted)
+            ++next_id;
         return it->second;
     };
     std::vector<WordState> words;
@@ -271,12 +278,18 @@ void WordPiece::train(const std::vector<std::string>& corpus,
         while (pos < w.size()) {
             unsigned char c0 = static_cast<unsigned char>(w[pos]);
             std::size_t cp_len;
-            if (c0 < 0x80) cp_len = 1;
-            else if ((c0 >> 5) == 0b110) cp_len = 2;
-            else if ((c0 >> 4) == 0b1110) cp_len = 3;
-            else if ((c0 >> 3) == 0b11110) cp_len = 4;
-            else cp_len = 1;
-            if (pos + cp_len > w.size()) cp_len = w.size() - pos;
+            if (c0 < 0x80)
+                cp_len = 1;
+            else if ((c0 >> 5) == 0b110)
+                cp_len = 2;
+            else if ((c0 >> 4) == 0b1110)
+                cp_len = 3;
+            else if ((c0 >> 3) == 0b11110)
+                cp_len = 4;
+            else
+                cp_len = 1;
+            if (pos + cp_len > w.size())
+                cp_len = w.size() - pos;
             std::string ch = w.substr(pos, cp_len);
             std::string tok = first ? ch : continuing_prefix_ + ch;
             add_token(tok);
@@ -295,7 +308,8 @@ void WordPiece::train(const std::vector<std::string>& corpus,
                 pair_freq[key] += ws.count;
             }
         }
-        if (pair_freq.empty()) break;
+        if (pair_freq.empty())
+            break;
         auto best_it = pair_freq.begin();
         for (auto it = pair_freq.begin(); it != pair_freq.end(); ++it) {
             if (it->second > best_it->second ||
@@ -303,7 +317,8 @@ void WordPiece::train(const std::vector<std::string>& corpus,
                 best_it = it;
             }
         }
-        if (best_it->second < 2) break;
+        if (best_it->second < 2)
+            break;
         std::string key = best_it->first;
         auto sep = key.find('\x01');
         std::string left = key.substr(0, sep);
@@ -313,8 +328,7 @@ void WordPiece::train(const std::vector<std::string>& corpus,
         // LEFT half had one).
         std::string right_core = right;
         if (right.size() >= continuing_prefix_.size() &&
-            right.compare(0, continuing_prefix_.size(), continuing_prefix_) ==
-                0) {
+            right.compare(0, continuing_prefix_.size(), continuing_prefix_) == 0) {
             right_core = right.substr(continuing_prefix_.size());
         }
         std::string merged = left + right_core;

@@ -105,17 +105,18 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     scope.set_attr("proj_size", static_cast<std::int64_t>(opts.proj_size));
     scope.set_attr("has_bias", weights.size() >= 4);
 
-    auto register_trace_outputs = [&](const TensorImplPtr& out_t,
-                                       const TensorImplPtr& hn_t,
-                                       const TensorImplPtr& cn_t) {
+    auto register_trace_outputs = [&](const TensorImplPtr& out_t, const TensorImplPtr& hn_t,
+                                      const TensorImplPtr& cn_t) {
         auto* trc = ::lucid::compile::current_tracer();
-        if (trc == nullptr) return;
+        if (trc == nullptr)
+            return;
         // Pass all inputs on the first on_op_io call; the subsequent
         // calls pass empty input lists so the trace's input record
         // doesn't duplicate (see Tracer's first-vs-subsequent
         // detection logic).
         std::vector<TensorImplPtr> all_inputs{input, h0, c0};
-        for (const auto& w : weights) all_inputs.push_back(w);
+        for (const auto& w : weights)
+            all_inputs.push_back(w);
         trc->on_op_io(all_inputs, out_t);
         trc->on_op_io({}, hn_t);
         trc->on_op_io({}, cn_t);
@@ -129,8 +130,7 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
     // that walks the storage rank (``sum`` / ``flatten`` / …) then
     // fails with ``Invalid axis 2 for array with 2 dimensions``.  Add
     // the unsqueeze here so the storage rank matches what callers see.
-    const Shape hn_storage_2d{static_cast<std::int64_t>(B),
-                              static_cast<std::int64_t>(Hout)};
+    const Shape hn_storage_2d{static_cast<std::int64_t>(B), static_cast<std::int64_t>(Hout)};
     const Shape cn_storage_2d{static_cast<std::int64_t>(B), static_cast<std::int64_t>(H)};
 
     if (!needs_grad) {
@@ -144,7 +144,8 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
                 ErrorBuilder("lstm").fail("lstm_forward_train returned < 3 outputs");
             auto hn_3d = be.reshape(res_p[1], hn_storage_2d, hn_shape, dt);
             auto cn_3d = be.reshape(res_p[2], cn_storage_2d, cn_shape, dt);
-            auto out_t = std::make_shared<TensorImpl>(std::move(res_p[0]), out_shape, dt, dev, false);
+            auto out_t =
+                std::make_shared<TensorImpl>(std::move(res_p[0]), out_shape, dt, dev, false);
             auto hn_t = std::make_shared<TensorImpl>(std::move(hn_3d), hn_shape, dt, dev, false);
             auto cn_t = std::make_shared<TensorImpl>(std::move(cn_3d), cn_shape, dt, dev, false);
             register_trace_outputs(out_t, hn_t, cn_t);

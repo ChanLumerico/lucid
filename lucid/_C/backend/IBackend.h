@@ -1840,10 +1840,8 @@ public:
     // 3-op chain (greater + astype + multiply) into one MLX expression that
     // MLX can fuse natively (or that GPU dispatches as ``where``).  Falls back
     // to the 2-step composition on backends without a fused path.
-    virtual Storage relu_backward(const Storage& g,
-                                  const Storage& x,
-                                  const Shape& shape,
-                                  Dtype dt) = 0;
+    virtual Storage
+    relu_backward(const Storage& g, const Storage& x, const Shape& shape, Dtype dt) = 0;
 
     // Reduces `grad` (of shape grad_shape) to target_shape by summing over the
     // broadcast dimensions.  Used in broadcast backward passes.

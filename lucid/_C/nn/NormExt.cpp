@@ -88,10 +88,9 @@ TensorImplPtr BatchNormEvalBackward::forward(const TensorImplPtr& x,
 
     auto& be = backend::Dispatcher::for_device(x_eff->device());
     // batch_norm_eval_forward returns [y, rstd].
-    auto fwd = be.batch_norm_eval_forward(x_eff->storage(), mean_eff->storage(),
-                                          var_eff->storage(), gamma_eff->storage(),
-                                          beta_eff->storage(), x_eff->shape(), C, spatial, eps,
-                                          eff_dt);
+    auto fwd = be.batch_norm_eval_forward(x_eff->storage(), mean_eff->storage(), var_eff->storage(),
+                                          gamma_eff->storage(), beta_eff->storage(), x_eff->shape(),
+                                          C, spatial, eps, eff_dt);
     Storage out_storage = std::move(fwd[0]);
     Storage rstd_storage = std::move(fwd[1]);
 

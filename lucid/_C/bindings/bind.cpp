@@ -105,8 +105,8 @@ PYBIND11_MODULE(engine, m) {
     // 3.5 Phase 1.1: lucid.compile() graph-capture tracer.  The compile
     // surface lives in its own sub-module so the global namespace stays
     // clean (mirrors `nn` / `linalg` / `einops` / `fft`).
-    auto compile_mod = m.def_submodule(
-        "compile", "Graph-capture tracer and compiled executable cache.");
+    auto compile_mod =
+        m.def_submodule("compile", "Graph-capture tracer and compiled executable cache.");
     lucid::bindings::register_compile(compile_mod);
 
     // 3.5+ utils sub-module — exclusively for new packages whose Python
@@ -115,9 +115,8 @@ PYBIND11_MODULE(engine, m) {
     // manipulation ops at the top level for backwards compatibility;
     // this ``utils`` sub-module is a *separate* namespace dedicated to
     // tokenization / future helpers that mirror ``lucid.utils.*``.
-    auto utils_mod = m.def_submodule(
-        "utils",
-        "Helper sub-packages mirroring lucid.utils.* (tokenizer, ...).");
+    auto utils_mod =
+        m.def_submodule("utils", "Helper sub-packages mirroring lucid.utils.* (tokenizer, ...).");
     lucid::bindings::register_tokenizer(utils_mod);
 
     // Fused kernel bindings that directly call IBackend dispatch and therefore

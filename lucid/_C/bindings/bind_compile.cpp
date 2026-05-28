@@ -28,11 +28,11 @@
 #include "../compile/CompiledExecutable.h"
 #include "../compile/ExecutableCache.h"
 #include "../compile/MpsBuilder.h"
-#include "../version.h"
 #include "../compile/OpEmitters/OpEmitter.h"
 #include "../compile/Tracer.h"
 #include "../compile/VjpEmitters/VjpEmitter.h"
 #include "../core/TensorImpl.h"
+#include "../version.h"
 
 namespace py = pybind11;
 
@@ -40,7 +40,8 @@ namespace py = pybind11;
 // Python ``int`` ⇆ ``TraceId{int64_t}`` at the boundary.  Without
 // this, ``std::vector<TraceId>`` / ``std::unordered_map<TraceId, …>``
 // cross the C++↔Python boundary as unregistered opaque types.
-namespace pybind11 { namespace detail {
+namespace pybind11 {
+namespace detail {
 template <>
 struct type_caster<::lucid::compile::TraceId> {
 public:
@@ -59,12 +60,13 @@ public:
         return true;
     }
 
-    static handle cast(::lucid::compile::TraceId src,
-                       return_value_policy /*policy*/, handle /*parent*/) {
+    static handle
+    cast(::lucid::compile::TraceId src, return_value_policy /*policy*/, handle /*parent*/) {
         return PyLong_FromLongLong(static_cast<long long>(src.v));
     }
 };
-}}  // namespace pybind11::detail
+}  // namespace detail
+}  // namespace pybind11
 
 namespace lucid::bindings {
 
@@ -86,12 +88,8 @@ public:
 
     lucid::compile::CompiledExecutable* raw() const { return exe_; }
 
-    std::size_t num_inputs() const {
-        return lucid::compile::executable_num_inputs(exe_);
-    }
-    std::size_t num_outputs() const {
-        return lucid::compile::executable_num_outputs(exe_);
-    }
+    std::size_t num_inputs() const { return lucid::compile::executable_num_inputs(exe_); }
+    std::size_t num_outputs() const { return lucid::compile::executable_num_outputs(exe_); }
     std::vector<lucid::compile::TensorId> input_ids() const {
         return lucid::compile::executable_input_ids(exe_);
     }
@@ -127,9 +125,8 @@ void register_compile(py::module_& m) {
         .def_readonly("shape", &TensorMeta::shape)
         .def_readonly("dtype", &TensorMeta::dtype)
         .def_readonly("device", &TensorMeta::device)
-        .def("__repr__", [](const TensorMeta& t) {
-            return "TensorMeta(id=" + std::to_string(t.id) + ")";
-        });
+        .def("__repr__",
+             [](const TensorMeta& t) { return "TensorMeta(id=" + std::to_string(t.id) + ")"; });
 
     // OpNode mirrors the C++ aggregate; Python sees inputs as a list of
     // ints, outputs as a list of TensorMeta, and attrs as a dict whose
@@ -141,8 +138,7 @@ void register_compile(py::module_& m) {
         .def_readonly("outputs", &OpNode::outputs)
         .def_readonly("attrs", &OpNode::attrs)
         .def("__repr__", [](const OpNode& n) {
-            return "OpNode(name='" + n.name +
-                   "', outputs=" + std::to_string(n.outputs.size()) +
+            return "OpNode(name='" + n.name + "', outputs=" + std::to_string(n.outputs.size()) +
                    ", attrs=" + std::to_string(n.attrs.size()) + ")";
         });
 
@@ -159,8 +155,7 @@ void register_compile(py::module_& m) {
     // the `_tracing()` context manager enforces this).
     py::class_<Tracer>(m, "Tracer")
         .def(py::init<>())
-        .def_property_readonly("graph", &Tracer::graph,
-                               py::return_value_policy::reference_internal)
+        .def_property_readonly("graph", &Tracer::graph, py::return_value_policy::reference_internal)
         .def_property_readonly(
             "external_feeds",
             [](const Tracer& t) {
@@ -176,7 +171,8 @@ void register_compile(py::module_& m) {
             "lookup_id",
             [](const Tracer& t, const lucid::TensorImplPtr& impl) -> py::object {
                 const lucid::compile::TensorId id = t.lookup_id(impl.get());
-                if (id < 0) return py::none();
+                if (id < 0)
+                    return py::none();
                 return py::cast(id);
             },
             py::arg("impl"),
@@ -186,19 +182,16 @@ void register_compile(py::module_& m) {
     // set_current_tracer accepts None to detach the active tracer.  The
     // engine holds a raw pointer, so the Python caller must keep the
     // Tracer alive until detached.
-    m.def("set_current_tracer", &lucid::compile::set_current_tracer,
-          py::arg("tracer").none(true));
+    m.def("set_current_tracer", &lucid::compile::set_current_tracer, py::arg("tracer").none(true));
     // current_tracer returns a borrowed reference; Python must not delete it.
-    m.def("current_tracer", &lucid::compile::current_tracer,
-          py::return_value_policy::reference);
+    m.def("current_tracer", &lucid::compile::current_tracer, py::return_value_policy::reference);
 
     // ── Phase 1.2 step 1: compile / run / cache surface ──────────────────
 
     // Opaque executable handle.  Python owns one PyCompiledExecutable per
     // compile_trace() return; destruction releases the MPSGraphExecutable
     // via the wrapper's destructor.
-    py::class_<PyCompiledExecutable, std::shared_ptr<PyCompiledExecutable>>(
-        m, "CompiledExecutable")
+    py::class_<PyCompiledExecutable, std::shared_ptr<PyCompiledExecutable>>(m, "CompiledExecutable")
         .def_property_readonly("num_inputs", &PyCompiledExecutable::num_inputs)
         .def_property_readonly("num_outputs", &PyCompiledExecutable::num_outputs)
         .def_property_readonly("input_ids", &PyCompiledExecutable::input_ids,
@@ -245,8 +238,7 @@ void register_compile(py::module_& m) {
     m.def(
         "run_executable",
         [](const std::shared_ptr<PyCompiledExecutable>& wrapper,
-           const std::vector<lucid::TensorImplPtr>& inputs)
-            -> std::vector<lucid::TensorImplPtr> {
+           const std::vector<lucid::TensorImplPtr>& inputs) -> std::vector<lucid::TensorImplPtr> {
             if (!wrapper)
                 throw std::invalid_argument("run_executable: null wrapper");
             return lucid::compile::run_executable(wrapper->raw(), inputs);
@@ -261,10 +253,8 @@ void register_compile(py::module_& m) {
            const std::vector<lucid::TensorImplPtr>& inputs,
            const std::vector<lucid::TensorImplPtr>& output_targets) -> void {
             if (!wrapper)
-                throw std::invalid_argument(
-                    "run_executable_inplace: null wrapper");
-            lucid::compile::run_executable_inplace(
-                wrapper->raw(), inputs, output_targets);
+                throw std::invalid_argument("run_executable_inplace: null wrapper");
+            lucid::compile::run_executable_inplace(wrapper->raw(), inputs, output_targets);
         },
         py::arg("executable"), py::arg("inputs"), py::arg("output_targets"),
         "Execute a CompiledExecutable, writing each output directly into "
@@ -292,10 +282,8 @@ void register_compile(py::module_& m) {
         "(stub semantics) — this helper only distinguishes "
         "'registered but possibly a stub' from 'no emitter at all'.");
 
-    m.def("session_cache_size",
-          [] { return lucid::compile::ExecutableCache::session().size(); });
-    m.def("session_cache_clear",
-          [] { lucid::compile::ExecutableCache::session().clear(); });
+    m.def("session_cache_size", [] { return lucid::compile::ExecutableCache::session().size(); });
+    m.def("session_cache_clear", [] { lucid::compile::ExecutableCache::session().clear(); });
 
     // Phase 1.2 secondary acceptance gate: cache-aware compile.  On the
     // first call with a given structural signature the trace is compiled
@@ -304,10 +292,8 @@ void register_compile(py::module_& m) {
     // owns=false — cache owns the raw pointer).
     m.def(
         "compile_or_cached",
-        [](const lucid::compile::TraceGraph& graph,
-           const py::dict& external_feeds_py,
-           bool dynamic_batch,
-           const std::vector<lucid::compile::TensorId>& param_ids,
+        [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
+           bool dynamic_batch, const std::vector<lucid::compile::TensorId>& param_ids,
            const std::vector<lucid::compile::TensorId>& explicit_outputs) -> py::object {
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
@@ -325,10 +311,8 @@ void register_compile(py::module_& m) {
                 // caller (CompiledModule) holds its own
                 // dynamic-batch-aware Python cache.
                 std::string err;
-                lucid::compile::CompiledExecutable* exe =
-                    lucid::compile::compile_trace(
-                        graph, feeds, &err, /*dynamic_batch=*/true, param_ids,
-                        explicit_outputs);
+                lucid::compile::CompiledExecutable* exe = lucid::compile::compile_trace(
+                    graph, feeds, &err, /*dynamic_batch=*/true, param_ids, explicit_outputs);
                 if (exe == nullptr) {
                     if (!err.empty())
                         throw std::runtime_error(err);
@@ -366,22 +350,19 @@ void register_compile(py::module_& m) {
                     dir = dir_env;
                 } else {
                     const char* tmp = std::getenv("TMPDIR");
-                    dir = std::string(tmp ? tmp : "/tmp") +
-                          "lucid_mpsgraph_cache";
+                    dir = std::string(tmp ? tmp : "/tmp") + "lucid_mpsgraph_cache";
                 }
                 // Ensure trailing slash + create directory if missing.
-                if (!dir.empty() && dir.back() != '/') dir.push_back('/');
+                if (!dir.empty() && dir.back() != '/')
+                    dir.push_back('/');
                 // ``mkdir -p`` via POSIX ``mkdir`` (one level is enough
                 // because $TMPDIR / user-provided dir already exists).
                 (void)::mkdir(dir.c_str(), 0755);
                 lucid::compile::CacheKeyHash h;
                 std::size_t hashv = h(key);
                 char buf[128];
-                std::snprintf(buf, sizeof(buf),
-                              "%slucid_abi%d_%016zx",
-                              dir.c_str(),
-                              static_cast<int>(LUCID_ABI_VERSION),
-                              hashv);
+                std::snprintf(buf, sizeof(buf), "%slucid_abi%d_%016zx", dir.c_str(),
+                              static_cast<int>(LUCID_ABI_VERSION), hashv);
                 disk_path = buf;
 
                 std::string load_err;
@@ -397,8 +378,7 @@ void register_compile(py::module_& m) {
             std::string err;
             lucid::compile::CompiledExecutable* exe =
                 lucid::compile::compile_trace(graph, feeds, &err,
-                                              /*dynamic_batch=*/false, param_ids,
-                                              explicit_outputs);
+                                              /*dynamic_batch=*/false, param_ids, explicit_outputs);
             if (exe == nullptr) {
                 if (!err.empty())
                     throw std::runtime_error(err);
@@ -410,8 +390,7 @@ void register_compile(py::module_& m) {
                 (void)lucid::compile::save_executable(hit, disk_path);
             return py::cast(std::make_shared<PyCompiledExecutable>(hit, /*owns=*/false));
         },
-        py::arg("graph"), py::arg("external_feeds"),
-        py::arg("dynamic_batch") = false,
+        py::arg("graph"), py::arg("external_feeds"), py::arg("dynamic_batch") = false,
         py::arg("param_ids") = std::vector<lucid::compile::TensorId>{},
         py::arg("explicit_outputs") = std::vector<lucid::compile::TensorId>{},
         "Cache-aware compile: on a cache miss the trace is compiled and "
@@ -431,8 +410,7 @@ void register_compile(py::module_& m) {
     // serialisation now flows through these.
     m.def(
         "save_executable",
-        [](const std::shared_ptr<PyCompiledExecutable>& wrapper,
-           const std::string& path) -> bool {
+        [](const std::shared_ptr<PyCompiledExecutable>& wrapper, const std::string& path) -> bool {
             if (!wrapper)
                 throw std::invalid_argument("save_executable: null wrapper");
             return lucid::compile::save_executable(wrapper->raw(), path);
@@ -450,10 +428,10 @@ void register_compile(py::module_& m) {
         "load_executable",
         [](const std::string& path) -> py::object {
             std::string err;
-            lucid::compile::CompiledExecutable* exe =
-                lucid::compile::load_executable(path, &err);
+            lucid::compile::CompiledExecutable* exe = lucid::compile::load_executable(path, &err);
             if (exe == nullptr) {
-                if (!err.empty()) throw std::runtime_error(err);
+                if (!err.empty())
+                    throw std::runtime_error(err);
                 return py::none();
             }
             return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
@@ -470,10 +448,8 @@ void register_compile(py::module_& m) {
     // Phase 1.3: forward + backward in one executable.
     m.def(
         "compile_trace_with_backward",
-        [](const lucid::compile::TraceGraph& graph,
-           const py::dict& external_feeds_py,
-           lucid::compile::TensorId loss_id,
-           const std::vector<lucid::compile::TensorId>& param_ids,
+        [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
+           lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            bool dynamic_batch) -> py::object {
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
@@ -483,9 +459,8 @@ void register_compile(py::module_& m) {
                 feeds.emplace(tid, std::move(impl));
             }
             std::string err;
-            lucid::compile::CompiledExecutable* exe =
-                lucid::compile::compile_trace_with_backward(
-                    graph, feeds, loss_id, param_ids, &err, dynamic_batch);
+            lucid::compile::CompiledExecutable* exe = lucid::compile::compile_trace_with_backward(
+                graph, feeds, loss_id, param_ids, &err, dynamic_batch);
             if (exe == nullptr) {
                 if (!err.empty())
                     throw std::runtime_error(err);
@@ -493,8 +468,8 @@ void register_compile(py::module_& m) {
             }
             return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
         },
-        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"),
-        py::arg("param_ids"), py::arg("dynamic_batch") = false,
+        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
+        py::arg("dynamic_batch") = false,
         "Lower a TraceGraph + (loss_id, param_ids) into a single MPSGraph "
         "executable that computes the forward (loss) and the auto-derived "
         "gradients of loss w.r.t. each parameter.  Returns None on any "
@@ -517,8 +492,7 @@ void register_compile(py::module_& m) {
         .def_readwrite("lr", &lucid::compile::OptimizerSpec::lr)
         .def_readwrite("momentum", &lucid::compile::OptimizerSpec::momentum)
         .def_readwrite("dampening", &lucid::compile::OptimizerSpec::dampening)
-        .def_readwrite("weight_decay",
-                       &lucid::compile::OptimizerSpec::weight_decay)
+        .def_readwrite("weight_decay", &lucid::compile::OptimizerSpec::weight_decay)
         .def_readwrite("nesterov", &lucid::compile::OptimizerSpec::nesterov)
         .def_readwrite("beta1", &lucid::compile::OptimizerSpec::beta1)
         .def_readwrite("beta2", &lucid::compile::OptimizerSpec::beta2)
@@ -526,17 +500,12 @@ void register_compile(py::module_& m) {
 
     m.def(
         "compile_fused_training_step",
-        [](const lucid::compile::TraceGraph& graph,
-           const py::dict& external_feeds_py,
-           lucid::compile::TensorId loss_id,
-           const std::vector<lucid::compile::TensorId>& param_ids,
+        [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
+           lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            const lucid::compile::OptimizerSpec& opt_spec,
-           const std::vector<std::vector<lucid::compile::TensorId>>&
-               state_buf_ids_per_param,
-           const std::vector<lucid::compile::TensorId>& scalar_input_ids)
-            -> py::object {
-            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr>
-                feeds;
+           const std::vector<std::vector<lucid::compile::TensorId>>& state_buf_ids_per_param,
+           const std::vector<lucid::compile::TensorId>& scalar_input_ids) -> py::object {
+            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
                 auto tid = py::cast<lucid::compile::TensorId>(item.first);
@@ -544,20 +513,18 @@ void register_compile(py::module_& m) {
                 feeds.emplace(tid, std::move(impl));
             }
             std::string err;
-            lucid::compile::CompiledExecutable* exe =
-                lucid::compile::compile_fused_training_step(
-                    graph, feeds, loss_id, param_ids, opt_spec,
-                    state_buf_ids_per_param, scalar_input_ids, &err);
+            lucid::compile::CompiledExecutable* exe = lucid::compile::compile_fused_training_step(
+                graph, feeds, loss_id, param_ids, opt_spec, state_buf_ids_per_param,
+                scalar_input_ids, &err);
             if (exe == nullptr) {
-                if (!err.empty()) throw std::runtime_error(err);
+                if (!err.empty())
+                    throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(
-                std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
         },
-        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"),
-        py::arg("param_ids"), py::arg("opt_spec"),
-        py::arg("state_buf_ids_per_param"), py::arg("scalar_input_ids"),
+        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
+        py::arg("opt_spec"), py::arg("state_buf_ids_per_param"), py::arg("scalar_input_ids"),
         "Lower (forward + backward + optimizer.step) into a single MPSGraph "
         "executable.  Outputs (in order): [loss, new_param_0, new_param_1, "
         "..., new_state_0_0, new_state_0_1, ..., new_state_N_0, ...].  Used "
@@ -569,15 +536,11 @@ void register_compile(py::module_& m) {
     // duplication.
     m.def(
         "compile_generic_fused_step",
-        [](const lucid::compile::TraceGraph& graph,
-           const py::dict& external_feeds_py,
-           lucid::compile::TensorId loss_id,
-           const std::vector<lucid::compile::TensorId>& param_ids,
+        [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
+           lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            const std::vector<lucid::compile::TensorId>& ghost_grad_ids,
-           const std::vector<lucid::compile::TensorId>& output_target_ids)
-            -> py::object {
-            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr>
-                feeds;
+           const std::vector<lucid::compile::TensorId>& output_target_ids) -> py::object {
+            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
                 auto tid = py::cast<lucid::compile::TensorId>(item.first);
@@ -597,20 +560,17 @@ void register_compile(py::module_& m) {
             // session cache only for fused_step until the package
             // format improves.
             std::string err;
-            lucid::compile::CompiledExecutable* exe =
-                lucid::compile::compile_generic_fused_step(
-                    graph, feeds, loss_id, param_ids, ghost_grad_ids,
-                    output_target_ids, &err);
+            lucid::compile::CompiledExecutable* exe = lucid::compile::compile_generic_fused_step(
+                graph, feeds, loss_id, param_ids, ghost_grad_ids, output_target_ids, &err);
             if (exe == nullptr) {
-                if (!err.empty()) throw std::runtime_error(err);
+                if (!err.empty())
+                    throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(
-                std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
         },
-        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"),
-        py::arg("param_ids"), py::arg("ghost_grad_ids"),
-        py::arg("output_target_ids"),
+        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
+        py::arg("ghost_grad_ids"), py::arg("output_target_ids"),
         "Generic fused-step compile.  The TraceGraph contains both the "
         "forward+loss path and the optimizer update.  ``ghost_grad_ids`` "
         "are placeholder tensor ids that the Python wrapper reserved for "
@@ -629,17 +589,13 @@ void register_compile(py::module_& m) {
     // into the Lucid Tensor's existing MTLBuffer on each call.
     m.def(
         "compile_generic_fused_step_with_vars",
-        [](const lucid::compile::TraceGraph& graph,
-           const py::dict& external_feeds_py,
-           lucid::compile::TensorId loss_id,
-           const std::vector<lucid::compile::TensorId>& param_ids,
+        [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
+           lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
            const std::vector<lucid::compile::TensorId>& ghost_grad_ids,
            const std::vector<lucid::compile::TensorId>& output_target_ids,
-           const std::vector<std::pair<lucid::compile::TensorId,
-                                       lucid::compile::TensorId>>& variable_pairs)
-            -> py::object {
-            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr>
-                feeds;
+           const std::vector<std::pair<lucid::compile::TensorId, lucid::compile::TensorId>>&
+               variable_pairs) -> py::object {
+            std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
                 auto tid = py::cast<lucid::compile::TensorId>(item.first);
@@ -649,18 +605,17 @@ void register_compile(py::module_& m) {
             std::string err;
             lucid::compile::CompiledExecutable* exe =
                 lucid::compile::compile_generic_fused_step_with_vars(
-                    graph, feeds, loss_id, param_ids, ghost_grad_ids,
-                    output_target_ids, variable_pairs, &err);
+                    graph, feeds, loss_id, param_ids, ghost_grad_ids, output_target_ids,
+                    variable_pairs, &err);
             if (exe == nullptr) {
-                if (!err.empty()) throw std::runtime_error(err);
+                if (!err.empty())
+                    throw std::runtime_error(err);
                 return py::none();
             }
-            return py::cast(
-                std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
+            return py::cast(std::make_shared<PyCompiledExecutable>(exe, /*owns=*/true));
         },
-        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"),
-        py::arg("param_ids"), py::arg("ghost_grad_ids"),
-        py::arg("output_target_ids"), py::arg("variable_pairs"),
+        py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
+        py::arg("ghost_grad_ids"), py::arg("output_target_ids"), py::arg("variable_pairs"),
         "Stateful-variables variant of compile_generic_fused_step.  "
         "``variable_pairs`` is a list of ``(feed_id, write_id)`` tuples: "
         "the feed becomes a persistent MPSGraph variable initialised "
@@ -676,7 +631,8 @@ void register_compile(py::module_& m) {
     // The 3-state classification + per-op registration query that
     // backs :func:`lucid.compile.diagnose`.  Pure introspection — no
     // graph state is touched.
-    py::enum_<lucid::compile::VjpRegistration>(m, "VjpRegistration",
+    py::enum_<lucid::compile::VjpRegistration>(
+        m, "VjpRegistration",
         "Three-state classification of an op's manual-VJP coverage.  "
         "``Registered`` = real backward (a :class:`VjpEmitter` exists); "
         "``GradSink`` = the walker stops gradient flow here by design "
@@ -688,15 +644,14 @@ void register_compile(py::module_& m) {
         .value("GradSink", lucid::compile::VjpRegistration::GradSink)
         .value("Missing", lucid::compile::VjpRegistration::Missing);
 
-    m.def("vjp_registration_status",
-          [](const std::string& op_name) {
-              return lucid::compile::vjp_registration_status(op_name);
-          },
-          py::arg("op_name"),
-          "Look up an op's manual-VJP coverage status.  Returns a "
-          ":class:`VjpRegistration` value.  Used by "
-          ":func:`lucid.compile.diagnose` to build per-trace coverage "
-          "reports without re-running the model.");
+    m.def(
+        "vjp_registration_status",
+        [](const std::string& op_name) { return lucid::compile::vjp_registration_status(op_name); },
+        py::arg("op_name"),
+        "Look up an op's manual-VJP coverage status.  Returns a "
+        ":class:`VjpRegistration` value.  Used by "
+        ":func:`lucid.compile.diagnose` to build per-trace coverage "
+        "reports without re-running the model.");
 
     m.def("use_manual_vjp", &lucid::compile::use_manual_vjp,
           "Return ``True`` if manual VJP is enabled "

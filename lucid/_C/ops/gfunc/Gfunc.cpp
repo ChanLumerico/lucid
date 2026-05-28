@@ -771,8 +771,8 @@ TensorImplPtr unfold_dim_op(const TensorImplPtr& a, int dim, int size, int step)
 
     auto& be = backend::Dispatcher::for_device(a->device());
     Storage out_s = be.unfold_dim(a->storage(), in_shape, d, size, step, a->dtype());
-    auto result = std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(),
-                                                false);
+    auto result =
+        std::make_shared<TensorImpl>(std::move(out_s), out_shape, a->dtype(), a->device(), false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, result);
     }

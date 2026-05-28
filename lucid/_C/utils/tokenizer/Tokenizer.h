@@ -99,8 +99,7 @@ public:
     // throws ``std::runtime_error`` (algorithm doesn't support
     // training in C++).  BPE / WordPiece overrides should populate
     // the internal vocab + merge table from scratch.
-    virtual void train(const std::vector<std::string>& corpus,
-                       std::size_t target_vocab_size);
+    virtual void train(const std::vector<std::string>& corpus, std::size_t target_vocab_size);
 
     // Special token registry.  Default is empty.  Subclasses set
     // it during construction or via ``set_special_tokens``.
@@ -110,12 +109,10 @@ public:
     // Batched encode — default loops over ``encode``.  Subclasses
     // can override for parallelism / batched algorithm-specific
     // optimisations.
-    virtual std::vector<IdSequence>
-    encode_batch(const std::vector<std::string>& texts) const;
+    virtual std::vector<IdSequence> encode_batch(const std::vector<std::string>& texts) const;
 
     // Batched decode — default loops over ``decode``.
-    virtual std::vector<std::string>
-    decode_batch(const std::vector<IdSequence>& batch) const;
+    virtual std::vector<std::string> decode_batch(const std::vector<IdSequence>& batch) const;
 
     // Vocab introspection: map from token string → id.  Used by the
     // Python ``__call__`` for special-token-mask computation and by

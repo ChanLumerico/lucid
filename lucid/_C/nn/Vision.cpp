@@ -26,8 +26,8 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/Node.h"
-#include "../compile/Tracer.h"
 #include "../backend/Dispatcher.h"
+#include "../compile/Tracer.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -157,7 +157,8 @@ TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
                                             x1->device(), false);
     if (auto* trc = ::lucid::compile::current_tracer()) {
         std::vector<TensorImplPtr> ins{x1, x2, weight};
-        if (bias) ins.push_back(bias);
+        if (bias)
+            ins.push_back(bias);
         trc->on_op_io(ins, out);
     }
     const bool any_grad = x1->requires_grad() || x2->requires_grad() || weight->requires_grad() ||

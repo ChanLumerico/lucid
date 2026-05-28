@@ -162,8 +162,8 @@ void Tracer::on_op_io(const std::vector<TensorImplPtr>& inputs, const TensorImpl
                 // and append a new TensorMeta so the emitter can bind
                 // this piece independently.
                 const TensorId new_id = graph_.next_id++;
-                node.outputs.push_back(TensorMeta{
-                    new_id, output->shape(), output->dtype(), output->device()});
+                node.outputs.push_back(
+                    TensorMeta{new_id, output->shape(), output->dtype(), output->device()});
                 impl_to_id_[output.get()] = new_id;
             }
         }

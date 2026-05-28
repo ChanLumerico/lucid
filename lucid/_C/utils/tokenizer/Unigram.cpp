@@ -22,10 +22,14 @@ constexpr double kNegInf = -std::numeric_limits<double>::infinity();
 
 // UTF-8 codepoint length given a lead byte.
 inline std::size_t utf8_cp_len(unsigned char c0) noexcept {
-    if (c0 < 0x80) return 1;
-    if ((c0 >> 5) == 0b110) return 2;
-    if ((c0 >> 4) == 0b1110) return 3;
-    if ((c0 >> 3) == 0b11110) return 4;
+    if (c0 < 0x80)
+        return 1;
+    if ((c0 >> 5) == 0b110)
+        return 2;
+    if ((c0 >> 4) == 0b1110)
+        return 3;
+    if ((c0 >> 3) == 0b11110)
+        return 4;
     return 1;  // invalid lead — treat as single byte
 }
 
@@ -46,8 +50,10 @@ std::vector<bool> build_is_cp_start_(const std::string& s) {
 
 // Numerically-stable log-sum-exp for forward-backward.
 inline double logsumexp_(double a, double b) {
-    if (a == kNegInf) return b;
-    if (b == kNegInf) return a;
+    if (a == kNegInf)
+        return b;
+    if (b == kNegInf)
+        return a;
     double m = std::max(a, b);
     return m + std::log(std::exp(a - m) + std::exp(b - m));
 }
@@ -65,9 +71,7 @@ Unigram::Unigram() = default;
 Unigram::Unigram(std::vector<std::pair<std::string, double>> pieces,
                  std::string unk_token,
                  double unk_log_prob)
-    : pieces_(std::move(pieces)),
-      unk_token_(std::move(unk_token)),
-      unk_log_prob_(unk_log_prob) {
+    : pieces_(std::move(pieces)), unk_token_(std::move(unk_token)), unk_log_prob_(unk_log_prob) {
     rebuild_tables_();
 }
 
@@ -98,7 +102,8 @@ std::unordered_map<std::string, TokenId> Unigram::get_vocab() const {
 // for out-of-range ids (matches the SentencePiece convention rather
 // than throwing — callers detect via ``vocab_size()``).
 std::string Unigram::id_to_token(TokenId id) const {
-    if (id < 0 || static_cast<std::size_t>(id) >= pieces_.size()) return "";
+    if (id < 0 || static_cast<std::size_t>(id) >= pieces_.size())
+        return "";
     return pieces_[static_cast<std::size_t>(id)].first;
 }
 
@@ -112,24 +117,27 @@ std::string Unigram::id_to_token(TokenId id) const {
 // unreachable (no UNK + no covering pieces).
 IdSequence Unigram::viterbi_encode_(const std::string& chunk) const {
     const std::size_t N = chunk.size();
-    if (N == 0) return {};
+    if (N == 0)
+        return {};
 
     // ``dp[i]`` = max log-prob for the chunk prefix ending at byte i.
     // ``back[i]`` = (start byte of last piece, piece id) achieving dp[i].
     std::vector<double> dp(N + 1, kNegInf);
-    std::vector<std::pair<std::size_t, TokenId>> back(
-        N + 1, {static_cast<std::size_t>(-1), -1});
+    std::vector<std::pair<std::size_t, TokenId>> back(N + 1, {static_cast<std::size_t>(-1), -1});
     dp[0] = 0.0;
 
     auto is_cp_start = build_is_cp_start_(chunk);
 
     for (std::size_t i = 1; i <= N; ++i) {
-        if (!is_cp_start[i]) continue;  // can't end a piece mid-codepoint
+        if (!is_cp_start[i])
+            continue;  // can't end a piece mid-codepoint
         // Look back at every j < i where (j, i) covers a vocab piece.
         std::size_t j_min = (i > max_piece_bytes_) ? (i - max_piece_bytes_) : 0;
         for (std::size_t j = j_min; j < i; ++j) {
-            if (!is_cp_start[j]) continue;
-            if (dp[j] == kNegInf) continue;
+            if (!is_cp_start[j])
+                continue;
+            if (dp[j] == kNegInf)
+                continue;
             std::string sub = chunk.substr(j, i - j);
             auto it = piece_to_id_.find(sub);
             double score;
@@ -153,14 +161,16 @@ IdSequence Unigram::viterbi_encode_(const std::string& chunk) const {
 
     // If dp[N] is still -inf, the chunk can't be encoded at all
     // (no UNK + no covering pieces).  Return empty rather than crash.
-    if (dp[N] == kNegInf) return {};
+    if (dp[N] == kNegInf)
+        return {};
 
     // Trace back.
     IdSequence ids;
     std::size_t i = N;
     while (i > 0) {
         auto [j, pid] = back[i];
-        if (pid >= 0) ids.push_back(pid);
+        if (pid >= 0)
+            ids.push_back(pid);
         i = j;
     }
     std::reverse(ids.begin(), ids.end());
@@ -198,12 +208,12 @@ std::string Unigram::decode(const IdSequence& ids) const {
 // Numerically stable via log-sum-exp; unreachable words (Z = -inf)
 // contribute nothing.  Mutates ``expected_counts`` in place — caller
 // owns the buffer (one entry per piece id).
-void Unigram::forward_backward_accumulate_(
-    const std::string& chunk,
-    std::uint64_t weight,
-    std::vector<double>& expected_counts) const {
+void Unigram::forward_backward_accumulate_(const std::string& chunk,
+                                           std::uint64_t weight,
+                                           std::vector<double>& expected_counts) const {
     const std::size_t N = chunk.size();
-    if (N == 0) return;
+    if (N == 0)
+        return;
 
     auto is_cp_start = build_is_cp_start_(chunk);
 
@@ -211,16 +221,19 @@ void Unigram::forward_backward_accumulate_(
     std::vector<double> alpha(N + 1, kNegInf);
     alpha[0] = 0.0;
     for (std::size_t i = 1; i <= N; ++i) {
-        if (!is_cp_start[i]) continue;
+        if (!is_cp_start[i])
+            continue;
         std::size_t j_min = (i > max_piece_bytes_) ? (i - max_piece_bytes_) : 0;
         for (std::size_t j = j_min; j < i; ++j) {
-            if (!is_cp_start[j]) continue;
-            if (alpha[j] == kNegInf) continue;
+            if (!is_cp_start[j])
+                continue;
+            if (alpha[j] == kNegInf)
+                continue;
             std::string sub = chunk.substr(j, i - j);
             auto it = piece_to_id_.find(sub);
-            if (it == piece_to_id_.end()) continue;
-            double score = alpha[j]
-                + pieces_[static_cast<std::size_t>(it->second)].second;
+            if (it == piece_to_id_.end())
+                continue;
+            double score = alpha[j] + pieces_[static_cast<std::size_t>(it->second)].second;
             alpha[i] = logsumexp_(alpha[i], score);
         }
     }
@@ -230,16 +243,19 @@ void Unigram::forward_backward_accumulate_(
     beta[N] = 0.0;
     for (std::size_t i = N; i > 0;) {
         --i;
-        if (!is_cp_start[i]) continue;
+        if (!is_cp_start[i])
+            continue;
         std::size_t k_max = std::min(N, i + max_piece_bytes_);
         for (std::size_t k = i + 1; k <= k_max; ++k) {
-            if (!is_cp_start[k]) continue;
-            if (beta[k] == kNegInf) continue;
+            if (!is_cp_start[k])
+                continue;
+            if (beta[k] == kNegInf)
+                continue;
             std::string sub = chunk.substr(i, k - i);
             auto it = piece_to_id_.find(sub);
-            if (it == piece_to_id_.end()) continue;
-            double score = beta[k]
-                + pieces_[static_cast<std::size_t>(it->second)].second;
+            if (it == piece_to_id_.end())
+                continue;
+            double score = beta[k] + pieces_[static_cast<std::size_t>(it->second)].second;
             beta[i] = logsumexp_(beta[i], score);
         }
     }
@@ -247,23 +263,28 @@ void Unigram::forward_backward_accumulate_(
     // Total likelihood Z = alpha[N] (= beta[0]).  If Z is -inf the
     // word is unreachable under current vocab; skip.
     double Z = alpha[N];
-    if (Z == kNegInf) return;
+    if (Z == kNegInf)
+        return;
 
     // Accumulate expected counts: for each (j, i) edge,
     //   E_count(piece) += w * exp(alpha[j] + log p(piece) + beta[i] - Z).
     for (std::size_t i = 1; i <= N; ++i) {
-        if (!is_cp_start[i]) continue;
+        if (!is_cp_start[i])
+            continue;
         std::size_t j_min = (i > max_piece_bytes_) ? (i - max_piece_bytes_) : 0;
         for (std::size_t j = j_min; j < i; ++j) {
-            if (!is_cp_start[j]) continue;
-            if (alpha[j] == kNegInf || beta[i] == kNegInf) continue;
+            if (!is_cp_start[j])
+                continue;
+            if (alpha[j] == kNegInf || beta[i] == kNegInf)
+                continue;
             std::string sub = chunk.substr(j, i - j);
             auto it = piece_to_id_.find(sub);
-            if (it == piece_to_id_.end()) continue;
+            if (it == piece_to_id_.end())
+                continue;
             double log_lp = pieces_[static_cast<std::size_t>(it->second)].second;
             double posterior_log = alpha[j] + log_lp + beta[i] - Z;
-            expected_counts[static_cast<std::size_t>(it->second)]
-                += static_cast<double>(weight) * std::exp(posterior_log);
+            expected_counts[static_cast<std::size_t>(it->second)] +=
+                static_cast<double>(weight) * std::exp(posterior_log);
         }
     }
 }
@@ -271,8 +292,7 @@ void Unigram::forward_backward_accumulate_(
 // Public training entry point — delegates to ``train_with_options``
 // with SentencePiece-compatible defaults (2 EM passes, 0.75 shrink
 // factor, 16-byte max piece length, 10x initial-vocab multiplier).
-void Unigram::train(const std::vector<std::string>& corpus,
-                    std::size_t target_vocab_size) {
+void Unigram::train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) {
     train_with_options(corpus, target_vocab_size,
                        /*num_iterations=*/2,
                        /*shrink_factor=*/0.75,
@@ -287,19 +307,16 @@ void Unigram::train(const std::vector<std::string>& corpus,
 // (5) EM-refit-then-prune loop until vocab shrinks to target.  The
 // single-codepoint guarantee is what makes encode always terminate.
 // NOT thread-safe — mutates ``pieces_`` / cached tables in place.
-void Unigram::train_with_options(
-    const std::vector<std::string>& corpus,
-    std::size_t target_vocab_size,
-    std::size_t num_iterations,
-    double shrink_factor,
-    std::size_t max_piece_length,
-    std::size_t initial_vocab_multiplier) {
+void Unigram::train_with_options(const std::vector<std::string>& corpus,
+                                 std::size_t target_vocab_size,
+                                 std::size_t num_iterations,
+                                 double shrink_factor,
+                                 std::size_t max_piece_length,
+                                 std::size_t initial_vocab_multiplier) {
     if (target_vocab_size < 2)
-        throw std::runtime_error(
-            "Unigram::train: target_vocab_size must be >= 2");
+        throw std::runtime_error("Unigram::train: target_vocab_size must be >= 2");
     if (shrink_factor <= 0.0 || shrink_factor >= 1.0)
-        throw std::runtime_error(
-            "Unigram::train: shrink_factor must be in (0, 1)");
+        throw std::runtime_error("Unigram::train: shrink_factor must be in (0, 1)");
 
     // 1. Word frequency dict (whitespace split — the Python wrapper
     //    is responsible for the heavy normalisation chain).
@@ -308,14 +325,14 @@ void Unigram::train_with_options(
         std::size_t i = 0;
         while (i < doc.size()) {
             while (i < doc.size() &&
-                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' ||
-                    doc[i] == '\r'))
+                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
             std::size_t start = i;
-            while (i < doc.size() && !(doc[i] == ' ' || doc[i] == '\t' ||
-                                       doc[i] == '\n' || doc[i] == '\r'))
+            while (i < doc.size() &&
+                   !(doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
                 ++i;
-            if (i > start) ++word_freq[doc.substr(start, i - start)];
+            if (i > start)
+                ++word_freq[doc.substr(start, i - start)];
         }
     }
 
@@ -326,10 +343,12 @@ void Unigram::train_with_options(
     for (const auto& [w, freq] : word_freq) {
         auto is_cp = build_is_cp_start_(w);
         for (std::size_t j = 0; j < w.size(); ++j) {
-            if (!is_cp[j]) continue;
+            if (!is_cp[j])
+                continue;
             std::size_t k_max = std::min(w.size(), j + max_piece_length);
             for (std::size_t k = j + 1; k <= k_max; ++k) {
-                if (!is_cp[k]) continue;
+                if (!is_cp[k])
+                    continue;
                 piece_freq[w.substr(j, k - j)] += freq;
             }
         }
@@ -338,44 +357,47 @@ void Unigram::train_with_options(
     // 3. Seed pieces — top ``initial_vocab_multiplier * target`` by
     //    frequency, but always include every single-codepoint piece
     //    (so Viterbi is always feasible).
-    std::vector<std::pair<std::string, std::uint64_t>> seeds(
-        piece_freq.begin(), piece_freq.end());
+    std::vector<std::pair<std::string, std::uint64_t>> seeds(piece_freq.begin(), piece_freq.end());
     // Mark single-codepoint pieces as "always keep" by giving them a
     // huge frequency bonus during the partial_sort that follows.
     auto is_single_cp = [](const std::string& s) {
-        if (s.empty()) return false;
+        if (s.empty())
+            return false;
         return s.size() == utf8_cp_len(static_cast<unsigned char>(s[0]));
     };
-    std::size_t initial_size = std::min(
-        seeds.size(), initial_vocab_multiplier * target_vocab_size);
-    std::partial_sort(
-        seeds.begin(), seeds.begin() + initial_size, seeds.end(),
-        [&](const auto& a, const auto& b) {
-            // is_single_cp pieces sort first, then by frequency desc.
-            bool sa = is_single_cp(a.first);
-            bool sb = is_single_cp(b.first);
-            if (sa != sb) return sa;
-            return a.second > b.second;
-        });
+    std::size_t initial_size = std::min(seeds.size(), initial_vocab_multiplier * target_vocab_size);
+    std::partial_sort(seeds.begin(), seeds.begin() + initial_size, seeds.end(),
+                      [&](const auto& a, const auto& b) {
+                          // is_single_cp pieces sort first, then by frequency desc.
+                          bool sa = is_single_cp(a.first);
+                          bool sb = is_single_cp(b.first);
+                          if (sa != sb)
+                              return sa;
+                          return a.second > b.second;
+                      });
     seeds.resize(initial_size);
 
     // 4. Initialise probabilities from frequencies + UNK token.
     pieces_.clear();
     pieces_.reserve(seeds.size() + 1);
     // Reserve id 0 for UNK so it's always present.
-    if (unk_token_.empty()) unk_token_ = "<unk>";
+    if (unk_token_.empty())
+        unk_token_ = "<unk>";
     pieces_.emplace_back(unk_token_, unk_log_prob_);
 
     std::uint64_t total = 0;
     for (const auto& [p, f] : seeds) {
-        if (p == unk_token_) continue;
+        if (p == unk_token_)
+            continue;
         total += f;
     }
     for (const auto& [p, f] : seeds) {
-        if (p == unk_token_) continue;
+        if (p == unk_token_)
+            continue;
         double prob = (total > 0) ? (static_cast<double>(f) / total) : 1.0 / seeds.size();
         // Floor to avoid log(0); SentencePiece uses 1e-10.
-        if (prob < 1e-10) prob = 1e-10;
+        if (prob < 1e-10)
+            prob = 1e-10;
         pieces_.emplace_back(p, std::log(prob));
     }
     rebuild_tables_();
@@ -388,13 +410,16 @@ void Unigram::train_with_options(
             for (const auto& [w, freq] : word_freq) {
                 forward_backward_accumulate_(w, freq, expected_counts);
             }
-            double total_count = std::accumulate(
-                expected_counts.begin(), expected_counts.end(), 0.0);
-            if (total_count <= 0.0) break;
+            double total_count =
+                std::accumulate(expected_counts.begin(), expected_counts.end(), 0.0);
+            if (total_count <= 0.0)
+                break;
             for (std::size_t i = 0; i < pieces_.size(); ++i) {
-                if (static_cast<TokenId>(i) == unk_id_) continue;
+                if (static_cast<TokenId>(i) == unk_id_)
+                    continue;
                 double prob = expected_counts[i] / total_count;
-                if (prob < 1e-10) prob = 1e-10;
+                if (prob < 1e-10)
+                    prob = 1e-10;
                 pieces_[i].second = std::log(prob);
             }
         }
@@ -403,16 +428,15 @@ void Unigram::train_with_options(
         std::vector<std::pair<double, std::size_t>> scored;
         scored.reserve(pieces_.size());
         for (std::size_t i = 0; i < pieces_.size(); ++i) {
-            if (static_cast<TokenId>(i) == unk_id_) continue;
+            if (static_cast<TokenId>(i) == unk_id_)
+                continue;
             scored.emplace_back(pieces_[i].second, i);
         }
-        std::sort(scored.begin(), scored.end(),
-                  [](const auto& a, const auto& b) {
-                      return a.first > b.first;  // descending log-prob
-                  });
+        std::sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) {
+            return a.first > b.first;  // descending log-prob
+        });
         std::size_t keep_n = std::max(
-            target_vocab_size,
-            static_cast<std::size_t>(scored.size() * (1.0 - shrink_factor)));
+            target_vocab_size, static_cast<std::size_t>(scored.size() * (1.0 - shrink_factor)));
         keep_n = std::min(keep_n, scored.size());
         std::vector<std::pair<std::string, double>> new_pieces;
         new_pieces.reserve(keep_n + 1);
@@ -421,7 +445,8 @@ void Unigram::train_with_options(
         std::vector<bool> kept(pieces_.size(), false);
         kept[static_cast<std::size_t>(unk_id_)] = true;
         for (std::size_t i = 0; i < pieces_.size(); ++i) {
-            if (i == static_cast<std::size_t>(unk_id_)) continue;
+            if (i == static_cast<std::size_t>(unk_id_))
+                continue;
             if (is_single_cp(pieces_[i].first)) {
                 new_pieces.push_back(pieces_[i]);
                 kept[i] = true;
@@ -429,12 +454,15 @@ void Unigram::train_with_options(
         }
         // Then top-scored multi-codepoint pieces, in score order.
         for (const auto& [score, idx] : scored) {
-            if (new_pieces.size() >= keep_n + 1) break;  // +1 for UNK
-            if (kept[idx]) continue;
+            if (new_pieces.size() >= keep_n + 1)
+                break;  // +1 for UNK
+            if (kept[idx])
+                continue;
             new_pieces.push_back(pieces_[idx]);
             kept[idx] = true;
         }
-        if (new_pieces.size() >= pieces_.size()) break;  // can't shrink
+        if (new_pieces.size() >= pieces_.size())
+            break;  // can't shrink
         pieces_ = std::move(new_pieces);
         rebuild_tables_();
     }

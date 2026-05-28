@@ -116,10 +116,10 @@ TensorImplPtr LayerNormBackward::forward(const TensorImplPtr& x,
     scope.set_attr("eps", eps);
 
     // layer_norm_forward returns {y, mean, rstd}.
-    auto forward = backend::Dispatcher::for_device(x_eff->device())
-                       .layer_norm_forward(x_eff->storage(), gamma_eff->storage(),
-                                           beta_eff->storage(), outer, N, eps, x_eff->shape(),
-                                           eff_dt);
+    auto forward =
+        backend::Dispatcher::for_device(x_eff->device())
+            .layer_norm_forward(x_eff->storage(), gamma_eff->storage(), beta_eff->storage(), outer,
+                                N, eps, x_eff->shape(), eff_dt);
     scope.set_flops(static_cast<std::int64_t>(outer * N) * 5);
 
     auto out = std::make_shared<TensorImpl>(std::move(forward[0]), x_eff->shape(), eff_dt,

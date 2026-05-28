@@ -110,8 +110,10 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
     {
         std::vector<std::int64_t> ax_a, ax_b;
-        for (int v : axes_a) ax_a.push_back(static_cast<std::int64_t>(v));
-        for (int v : axes_b) ax_b.push_back(static_cast<std::int64_t>(v));
+        for (int v : axes_a)
+            ax_a.push_back(static_cast<std::int64_t>(v));
+        for (int v : axes_b)
+            ax_b.push_back(static_cast<std::int64_t>(v));
         scope.set_attr("axes_a", std::move(ax_a));
         scope.set_attr("axes_b", std::move(ax_b));
     }

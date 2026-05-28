@@ -1029,8 +1029,8 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage silu_backward(
-        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+    Storage
+    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
         std::size_t n = shape_numel(shape);
@@ -1090,8 +1090,10 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage gelu_exact_backward(
-        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+    Storage gelu_exact_backward(const Storage& a,
+                                const Storage& grad,
+                                const Shape& shape,
+                                Dtype dt) override {
         // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
         const auto& cs = std::get<CpuStorage>(a);
         const auto& gs = std::get<CpuStorage>(grad);
@@ -3739,8 +3741,7 @@ public:
         // MLX-path GPU backend benefits from saving the full xnorm.
         return {Storage{CpuStorage{y_ptr, total * dtype_size(dt), dt}},
                 Storage{CpuStorage{mean_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{rstd_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{}}};
+                Storage{CpuStorage{rstd_ptr, param_nbytes, dt}}, Storage{CpuStorage{}}};
     }
 
     std::vector<Storage> batch_norm_backward(const Storage& x,
@@ -4792,17 +4793,14 @@ public:
         // half-precision decoder is intentionally exported through
         // ``TensorImpl::item()`` already; here we just delegate to a static
         // local helper.
-        auto needs_f16_bridge = [](Dtype s, Dtype d) {
-            return s == Dtype::F16 || d == Dtype::F16;
-        };
+        auto needs_f16_bridge = [](Dtype s, Dtype d) { return s == Dtype::F16 || d == Dtype::F16; };
 
         if (needs_f16_bridge(src_dt, dst_dt) && src_dt != dst_dt) {
             // Two-step: src -> F32 -> dst.  Recursive call into astype itself
             // resolves each leg via the main switch below.
-            Storage as_f32 = (src_dt == Dtype::F32)
-                                 ? a
-                                 : astype(a, shape, src_dt, Dtype::F32);
-            if (dst_dt == Dtype::F32) return as_f32;
+            Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
+            if (dst_dt == Dtype::F32)
+                return as_f32;
             return astype(as_f32, shape, Dtype::F32, dst_dt);
         }
 
@@ -4812,25 +4810,55 @@ public:
         bool ok = true;
 #define HANDLE_DST(F)                                                                              \
     switch (dst_dt) {                                                                              \
-    case Dtype::F32: CPU_CAST(F, float); break;                                                    \
-    case Dtype::F64: CPU_CAST(F, double); break;                                                   \
-    case Dtype::I8:  CPU_CAST(F, I8); break;                                                       \
-    case Dtype::I16: CPU_CAST(F, I16); break;                                                      \
-    case Dtype::I32: CPU_CAST(F, I32); break;                                                      \
-    case Dtype::I64: CPU_CAST(F, I64); break;                                                      \
-    case Dtype::Bool: CPU_CAST(F, bool); break;                                                    \
-    default: ok = false;                                                                           \
+    case Dtype::F32:                                                                               \
+        CPU_CAST(F, float);                                                                        \
+        break;                                                                                     \
+    case Dtype::F64:                                                                               \
+        CPU_CAST(F, double);                                                                       \
+        break;                                                                                     \
+    case Dtype::I8:                                                                                \
+        CPU_CAST(F, I8);                                                                           \
+        break;                                                                                     \
+    case Dtype::I16:                                                                               \
+        CPU_CAST(F, I16);                                                                          \
+        break;                                                                                     \
+    case Dtype::I32:                                                                               \
+        CPU_CAST(F, I32);                                                                          \
+        break;                                                                                     \
+    case Dtype::I64:                                                                               \
+        CPU_CAST(F, I64);                                                                          \
+        break;                                                                                     \
+    case Dtype::Bool:                                                                              \
+        CPU_CAST(F, bool);                                                                         \
+        break;                                                                                     \
+    default:                                                                                       \
+        ok = false;                                                                                \
     }
 
         switch (src_dt) {
-        case Dtype::F32: HANDLE_DST(float); break;
-        case Dtype::F64: HANDLE_DST(double); break;
-        case Dtype::I8:  HANDLE_DST(I8); break;
-        case Dtype::I16: HANDLE_DST(I16); break;
-        case Dtype::I32: HANDLE_DST(I32); break;
-        case Dtype::I64: HANDLE_DST(I64); break;
-        case Dtype::Bool: HANDLE_DST(bool); break;
-        default: ok = false;
+        case Dtype::F32:
+            HANDLE_DST(float);
+            break;
+        case Dtype::F64:
+            HANDLE_DST(double);
+            break;
+        case Dtype::I8:
+            HANDLE_DST(I8);
+            break;
+        case Dtype::I16:
+            HANDLE_DST(I16);
+            break;
+        case Dtype::I32:
+            HANDLE_DST(I32);
+            break;
+        case Dtype::I64:
+            HANDLE_DST(I64);
+            break;
+        case Dtype::Bool:
+            HANDLE_DST(bool);
+            break;
+        default:
+            ok = false;
         }
 
 #undef HANDLE_DST
@@ -9901,9 +9929,11 @@ private:
                             if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
                                 acc += v;
                             } else if (op == ReduceOp::Max) {
-                                if (v > acc) acc = v;
+                                if (v > acc)
+                                    acc = v;
                             } else {
-                                if (v < acc) acc = v;
+                                if (v < acc)
+                                    acc = v;
                             }
                         }
                         outp[o * inner + i] = acc;
@@ -10205,10 +10235,8 @@ private:
     // 3.4+ Phase A.1: fused ReLU backward.  Single-pass loop replacing
     // positive_mask + multiply, eliminating one intermediate buffer.  See
     // GpuBackend::relu_backward for the GPU rationale.
-    Storage relu_backward(const Storage& g,
-                          const Storage& x,
-                          const Shape& shape,
-                          Dtype dt) override {
+    Storage
+    relu_backward(const Storage& g, const Storage& x, const Shape& shape, Dtype dt) override {
         const auto& cg = std::get<CpuStorage>(g);
         const auto& cx = std::get<CpuStorage>(x);
         std::size_t n = shape_numel(shape);

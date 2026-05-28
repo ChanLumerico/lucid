@@ -471,7 +471,8 @@ public:
     // :meth:`silu_backward`.
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
             return gpu::mps::silu_metal_forward(a, shape, dt);
         }
@@ -488,10 +489,11 @@ public:
     // Math
     // ----
     // $\partial y/\partial x = \sigma(x) \, (1 + x \, (1 - \sigma(x)))$.
-    Storage silu_backward(
-        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+    Storage
+    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
             return gpu::mps::silu_metal_backward(a, grad, shape, dt);
         }
@@ -539,7 +541,8 @@ public:
         // reference framework's MPS path).
         // See perf-baseline-rebench-2026-05-25.md.
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
             return gpu::mps::gelu_metal_forward(a, shape, dt);
         }
@@ -572,7 +575,8 @@ public:
     // allows; otherwise composes via ``mlx::core::erf``.
     Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_gelu_exact_metal(numel, dt)) {
             return gpu::mps::gelu_exact_metal_forward(a, shape, dt);
         }
@@ -585,16 +589,18 @@ public:
             ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
             ::mlx::core::array inv_sqrt2(0.7071067811865476, gpu::to_mlx_dtype(dt));
             auto z = ::mlx::core::multiply(x, inv_sqrt2);
-            auto cdf = ::mlx::core::multiply(half,
-                ::mlx::core::add(one, ::mlx::core::erf(z)));
+            auto cdf = ::mlx::core::multiply(half, ::mlx::core::add(one, ::mlx::core::erf(z)));
             return ::mlx::core::multiply(x, cdf);
         });
     }
 
-    Storage gelu_exact_backward(
-        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
+    Storage gelu_exact_backward(const Storage& a,
+                                const Storage& grad,
+                                const Shape& shape,
+                                Dtype dt) override {
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_gelu_exact(numel, dt)) {
             return gpu::mps::gelu_exact_backward(a, grad, shape, dt);
         }
@@ -606,11 +612,10 @@ public:
             ::mlx::core::array inv_sqrt2(0.7071067811865476, gpu::to_mlx_dtype(dt));
             ::mlx::core::array inv_sqrt2pi(0.3989422804014327, gpu::to_mlx_dtype(dt));
             auto z = ::mlx::core::multiply(x, inv_sqrt2);
-            auto cdf = ::mlx::core::multiply(half,
-                ::mlx::core::add(one, ::mlx::core::erf(z)));
+            auto cdf = ::mlx::core::multiply(half, ::mlx::core::add(one, ::mlx::core::erf(z)));
             auto x2 = ::mlx::core::multiply(x, x);
             auto pdf = ::mlx::core::multiply(inv_sqrt2pi,
-                ::mlx::core::exp(::mlx::core::multiply(neg_half, x2)));
+                                             ::mlx::core::exp(::mlx::core::multiply(neg_half, x2)));
             auto dx = ::mlx::core::add(cdf, ::mlx::core::multiply(x, pdf));
             return ::mlx::core::multiply(dx, g);
         });
@@ -619,7 +624,8 @@ public:
     Storage
     gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
         std::int64_t numel = 1;
-        for (std::int64_t d : shape) numel *= d;
+        for (std::int64_t d : shape)
+            numel *= d;
         if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
             return gpu::mps::gelu_metal_backward(a, grad, shape, dt);
         }
@@ -958,14 +964,18 @@ public:
     // Math
     // ----
     // $\partial L / \partial x_i = z_i \, (g_i - \sum_j z_j g_j)$.
-    Storage softmax_backward(
-        const Storage& z, const Storage& grad_out, const Shape& shape_param, int axis, Dtype dt) override {
+    Storage softmax_backward(const Storage& z,
+                             const Storage& grad_out,
+                             const Shape& shape_param,
+                             int axis,
+                             Dtype dt) override {
         const auto& z_gpu = std::get<GpuStorage>(z);
         const auto& g_gpu = std::get<GpuStorage>(grad_out);
         if (z_gpu.arr) {
             Shape z_shape;
             z_shape.reserve(z_gpu.arr->ndim());
-            for (auto d : z_gpu.arr->shape()) z_shape.push_back(d);
+            for (auto d : z_gpu.arr->shape())
+                z_shape.push_back(d);
             int ax = axis < 0 ? axis + static_cast<int>(z_shape.size()) : axis;
             std::int64_t axis_size = ax < (int)z_shape.size() ? z_shape[ax] : 0;
             if (gpu::mps::should_dispatch_softmax_backward(axis_size, dt)) {
@@ -1741,15 +1751,14 @@ public:
         auto x_2d = ::mlx::core::reshape(*gx.arr, flat_x);
         auto g_1d = ::mlx::core::reshape(*gg.arr, {static_cast<int>(normalized_size)});
 
-        auto y_2d = ::mlx::core::fast::rms_norm(
-            x_2d, std::optional<::mlx::core::array>{g_1d}, static_cast<float>(eps));
+        auto y_2d = ::mlx::core::fast::rms_norm(x_2d, std::optional<::mlx::core::array>{g_1d},
+                                                static_cast<float>(eps));
         auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x_shape));
 
         // Saved tensor for backward: rstd = 1 / sqrt(mean(x^2) + eps).
         // MLX fuses square+mean into a single reduction kernel.
         auto ms = ::mlx::core::mean(::mlx::core::square(x_2d), std::vector<int>{1}, true);
-        auto rstd = ::mlx::core::rsqrt(
-            ::mlx::core::add(ms, gpu::mlx_scalar(eps, mlx_dt)));
+        auto rstd = ::mlx::core::rsqrt(::mlx::core::add(ms, gpu::mlx_scalar(eps, mlx_dt)));
         return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
     }
@@ -1838,17 +1847,16 @@ public:
         auto g_1d = ::mlx::core::reshape(*gg.arr, {static_cast<int>(normalized_size)});
         auto b_1d = ::mlx::core::reshape(*gb.arr, {static_cast<int>(normalized_size)});
 
-        auto y_2d = ::mlx::core::fast::layer_norm(
-            x_2d, std::optional<::mlx::core::array>{g_1d},
-            std::optional<::mlx::core::array>{b_1d}, static_cast<float>(eps));
+        auto y_2d = ::mlx::core::fast::layer_norm(x_2d, std::optional<::mlx::core::array>{g_1d},
+                                                  std::optional<::mlx::core::array>{b_1d},
+                                                  static_cast<float>(eps));
         auto y = ::mlx::core::reshape(y_2d, gpu::to_mlx_shape(x_shape));
 
         // Saved tensors for backward: mean and rstd.  ``var(ddof=0)`` is the
         // population variance — matches Lucid's prior `mean(square(centered))`.
         auto mean = ::mlx::core::mean(x_2d, std::vector<int>{1}, true);
         auto var = ::mlx::core::var(x_2d, std::vector<int>{1}, true, /*ddof=*/0);
-        auto rstd = ::mlx::core::rsqrt(
-            ::mlx::core::add(var, gpu::mlx_scalar(eps, mlx_dt)));
+        auto rstd = ::mlx::core::rsqrt(::mlx::core::add(var, gpu::mlx_scalar(eps, mlx_dt)));
         return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(mean), dt)},
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
@@ -1877,11 +1885,10 @@ public:
                                              const Shape& beta_shape,
                                              Dtype dt) override {
         if (gpu::mps::should_dispatch_layer_norm_backward(
-                static_cast<std::int64_t>(outer),
-                static_cast<std::int64_t>(normalized_size), dt)) {
-            auto out = gpu::mps::layer_norm_backward(
-                x, gamma, saved_mean, saved_rstd, grad, outer, normalized_size,
-                x_shape, gamma_shape, beta_shape, dt);
+                static_cast<std::int64_t>(outer), static_cast<std::int64_t>(normalized_size), dt)) {
+            auto out = gpu::mps::layer_norm_backward(x, gamma, saved_mean, saved_rstd, grad, outer,
+                                                     normalized_size, x_shape, gamma_shape,
+                                                     beta_shape, dt);
             return {std::move(out.dx), std::move(out.dgamma), std::move(out.dbeta)};
         }
         const auto& gx = std::get<GpuStorage>(x);
@@ -1964,25 +1971,28 @@ public:
         if (gx.arr) {
             Shape x_shape;
             x_shape.reserve(gx.arr->ndim());
-            for (auto d : gx.arr->shape()) x_shape.push_back(d);
+            for (auto d : gx.arr->shape())
+                x_shape.push_back(d);
             std::int64_t numel = 1;
-            for (auto d : x_shape) numel *= d;
+            for (auto d : x_shape)
+                numel *= d;
             // Custom Metal (2-pass reduce + normalize) is the primary
             // fast path; gate on per-channel reduction size.
             std::int64_t per_channel = 1;
-            if (x_shape.size() >= 1) per_channel *= x_shape[0];      // N
+            if (x_shape.size() >= 1)
+                per_channel *= x_shape[0];  // N
             for (int i = 0; i < ndim; ++i) {
-                per_channel *= x_shape[2 + i];                       // H, W, …
+                per_channel *= x_shape[2 + i];  // H, W, …
             }
             if (gpu::mps::should_dispatch_bn_train_metal(per_channel, dt)) {
-                auto out = gpu::mps::bn_train_metal_forward(
-                    x, gamma, beta, channels, ndim, eps, x_shape, dt);
-                return {std::move(out.y), std::move(out.mean),
-                        std::move(out.rstd), Storage{GpuStorage{}}};
+                auto out = gpu::mps::bn_train_metal_forward(x, gamma, beta, channels, ndim, eps,
+                                                            x_shape, dt);
+                return {std::move(out.y), std::move(out.mean), std::move(out.rstd),
+                        Storage{GpuStorage{}}};
             }
             if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
-                auto out = gpu::mps::batch_norm_train_forward(
-                    x, gamma, beta, channels, ndim, eps, x_shape, dt);
+                auto out = gpu::mps::batch_norm_train_forward(x, gamma, beta, channels, ndim, eps,
+                                                              x_shape, dt);
                 // 4th slot empty Storage — MPSGraph backward computes
                 // xnorm internally, no need to expose it (Phase A.4).
                 return {std::move(out.y), std::move(out.mean), std::move(out.rstd),
@@ -2017,14 +2027,12 @@ public:
         std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
         for (int i = 0; i < ndim; ++i)
             N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
-        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
-                                 gpu::to_mlx_dtype(dt));
+        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced), gpu::to_mlx_dtype(dt));
 
         auto sum_x_kept = ::mlx::core::sum(*gx.arr, axes, true);
         auto mean = ::mlx::core::multiply(sum_x_kept, inv_N);
         auto centered = ::mlx::core::subtract(*gx.arr, mean);
-        auto sum_sq_kept =
-            ::mlx::core::sum(::mlx::core::square(centered), axes, true);
+        auto sum_sq_kept = ::mlx::core::sum(::mlx::core::square(centered), axes, true);
         auto var = ::mlx::core::multiply(sum_sq_kept, inv_N);
         auto rstd =
             ::mlx::core::rsqrt(::mlx::core::add(var, gpu::mlx_scalar(eps, gpu::to_mlx_dtype(dt))));
@@ -2075,9 +2083,11 @@ public:
         if (gx.arr) {
             Shape x_shape;
             x_shape.reserve(gx.arr->ndim());
-            for (auto d : gx.arr->shape()) x_shape.push_back(d);
+            for (auto d : gx.arr->shape())
+                x_shape.push_back(d);
             std::int64_t numel = 1;
-            for (auto d : x_shape) numel *= d;
+            for (auto d : x_shape)
+                numel *= d;
             if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
                 auto out = gpu::mps::batch_norm_train_backward(
                     x, gamma, saved_mean, saved_rstd, grad, channels, ndim, x_shape, dt, eps);
@@ -2099,7 +2109,8 @@ public:
         // Storage (e.g. MPSGraph dispatch which doesn't expose xnorm).
         ::mlx::core::array xnorm = [&]() -> ::mlx::core::array {
             if (const auto* xn = std::get_if<GpuStorage>(&saved_xnorm)) {
-                if (xn->arr) return *xn->arr;
+                if (xn->arr)
+                    return *xn->arr;
             }
             auto centered = ::mlx::core::subtract(*gx.arr, *gm.arr);
             return ::mlx::core::multiply(centered, *gr.arr);
@@ -2138,8 +2149,7 @@ public:
         std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
         for (int i = 0; i < ndim; ++i)
             N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
-        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
-                                 gpu::to_mlx_dtype(dt));
+        ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced), gpu::to_mlx_dtype(dt));
         auto mean_g = ::mlx::core::multiply(sum_grad_kept, inv_N);
         auto mean_g_xn = ::mlx::core::multiply(sum_grad_xn_kept, inv_N);
 
@@ -2281,8 +2291,7 @@ public:
         std::int64_t N_reduced = static_cast<std::int64_t>(channels_per_group);
         for (int s : spatial_dims)
             N_reduced *= static_cast<std::int64_t>(s);
-        const ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced),
-                                       gpu::to_mlx_dtype(dt));
+        const ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced), gpu::to_mlx_dtype(dt));
         auto sum_gx_kept = ::mlx::core::sum(gx_scaled_g, red_axes, true);
         auto sum_gx_xn_kept =
             ::mlx::core::sum(::mlx::core::multiply(gx_scaled_g, xnorm_g), red_axes, true);
@@ -3585,8 +3594,7 @@ public:
         // PERF: softmax + valid_count are produced by fresh MLX kernels —
         // contiguous() wraps were redundant and forced a copy of the saved
         // softmax that the backward path then immediately re-read.
-        return {std::move(output),
-                Storage{gpu::wrap_mlx_array(std::move(softmax), dt)},
+        return {std::move(output), Storage{gpu::wrap_mlx_array(std::move(softmax), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(valid_count), dt)}};
     }
 
@@ -3845,8 +3853,8 @@ public:
 
         // PERF: contiguous before conv_transpose — same rationale as forward
         // conv path. See conv_nd_forward for the microbench data.
-        auto x_nhwc = ::mlx::core::contiguous(
-            ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto x_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
         auto W_nhwc = ::mlx::core::contiguous(
             ::mlx::core::transpose(*gW.arr, gpu_w_to_mlx_transpose_perm(N)));
         auto y_nhwc = gpu_mlx_conv_transpose(x_nhwc, W_nhwc, stride, pad, opad, N);
@@ -3894,10 +3902,9 @@ public:
             w_dx_perm.push_back(2 + i);
         w_dx_perm.push_back(1);
         // PERF: contiguous before conv kernel — see conv_nd_forward microbench.
-        auto grad_nhwc = ::mlx::core::contiguous(
-            ::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
-        auto W_dx_nhwc =
-            ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, w_dx_perm));
+        auto grad_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gG.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto W_dx_nhwc = ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, w_dx_perm));
         auto dx_nhwc = gpu_mlx_conv(grad_nhwc, W_dx_nhwc, stride, pad, N);
         // PERF: see conv_transpose_nd_forward — strided view returned, MLX
         // ops handle strides natively. Materialization is deferred to the
@@ -4038,11 +4045,10 @@ public:
         // on GPT-style inputs (M_total × D ≥ 1M); gated to keep tiny
         // embedding tables on the MLX path where dispatch overhead would
         // dominate.
-        if (gpu::mps::should_dispatch_embedding_backward(
-                static_cast<std::int64_t>(M_total), D, dt)) {
+        if (gpu::mps::should_dispatch_embedding_backward(static_cast<std::int64_t>(M_total), D,
+                                                         dt)) {
             return gpu::mps::embedding_backward(
-                grad_out, indices, N, D,
-                static_cast<std::int64_t>(M_total), padding_idx, dt);
+                grad_out, indices, N, D, static_cast<std::int64_t>(M_total), padding_idx, dt);
         }
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
         const auto& gg = std::get<GpuStorage>(grad_out);
@@ -4065,10 +4071,9 @@ public:
         // Broadcast the index column across D so each row of grad_flat
         // lands on the correct vocab row of dW.
         auto idx_2d = ::mlx::core::reshape(idx_flat, {static_cast<int>(M_total), 1});
-        auto idx_bcast = ::mlx::core::broadcast_to(
-            idx_2d, {static_cast<int>(M_total), static_cast<int>(D)});
-        auto base = ::mlx::core::zeros(
-            {static_cast<int>(N), static_cast<int>(D)}, mlx_dt);
+        auto idx_bcast =
+            ::mlx::core::broadcast_to(idx_2d, {static_cast<int>(M_total), static_cast<int>(D)});
+        auto base = ::mlx::core::zeros({static_cast<int>(N), static_cast<int>(D)}, mlx_dt);
         auto dW = ::mlx::core::scatter_add_axis(base, idx_bcast, grad_flat, /*axis=*/0);
         return Storage{gpu::wrap_mlx_array(std::move(dW), dt)};
     }
@@ -4524,10 +4529,10 @@ public:
         // up front lets MLX pick the fastest conv kernel.  Measured on a
         // training-pattern microbench (W changes every iter, simulating
         // bump_version after optimizer.step()): -7.8 % vs view-only.
-        auto x_nhwc = ::mlx::core::contiguous(
-            ::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
-        auto W_nhwc = ::mlx::core::contiguous(
-            ::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto x_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gx.arr, gpu_nchw_to_nhwc_perm(N)));
+        auto W_nhwc =
+            ::mlx::core::contiguous(::mlx::core::transpose(*gW.arr, gpu_nchw_to_nhwc_perm(N)));
         auto y_nhwc =
             ::mlx::core::conv_general(x_nhwc, W_nhwc, sv, pv, pv, dv, idv, opts.groups, false);
         int Cout_local = static_cast<int>(out_shape[1]);
@@ -4623,20 +4628,18 @@ public:
                               const ::mlx::core::array& W_arr) -> ::mlx::core::array {
             auto grad_nhwc = ::mlx::core::transpose(grad_arr, gpu_nchw_to_nhwc_perm(N));
             auto W_t_nhwc = ::mlx::core::transpose(W_arr, W_t_perm);
-            auto dx_nhwc = ::mlx::core::conv_general(
-                grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx, dv, sv,
-                /*groups=*/1, /*flip=*/true);
+            auto dx_nhwc =
+                ::mlx::core::conv_general(grad_nhwc, W_t_nhwc, ones_n, pad_lo_dx, pad_hi_dx, dv, sv,
+                                          /*groups=*/1, /*flip=*/true);
             return ::mlx::core::transpose(dx_nhwc, gpu_nhwc_to_nchw_perm(N));
         };
 
-        auto compute_dW = [&](const ::mlx::core::array& x_arr,
-                              const ::mlx::core::array& grad_arr,
-                              int local_Cin_g,
-                              int local_Cout) -> ::mlx::core::array {
+        auto compute_dW = [&](const ::mlx::core::array& x_arr, const ::mlx::core::array& grad_arr,
+                              int local_Cin_g, int local_Cout) -> ::mlx::core::array {
             auto x_perm = ::mlx::core::transpose(x_arr, perm);
             auto g_perm = ::mlx::core::transpose(grad_arr, perm);
-            auto dW_raw = ::mlx::core::conv_general(
-                x_perm, g_perm, conv_s, pv, pv, sv, dv, /*groups=*/1, /*flip=*/false);
+            auto dW_raw = ::mlx::core::conv_general(x_perm, g_perm, conv_s, pv, pv, sv, dv,
+                                                    /*groups=*/1, /*flip=*/false);
             ::mlx::core::Shape crop_lo(N + 2, 0), crop_hi;
             crop_hi.push_back(local_Cin_g);
             for (int i = 0; i < N; ++i)
@@ -6711,10 +6714,7 @@ private:
     // conditional-select kernel that handles the typecast implicitly.  ResNet-
     // 18 ReLU bwd per-op (microbench, M4 Max): the +0.79 ms gap vs the
     // reference framework should close.
-    Storage relu_backward(const Storage& g,
-                          const Storage& x,
-                          const Shape&,
-                          Dtype dt) override {
+    Storage relu_backward(const Storage& g, const Storage& x, const Shape&, Dtype dt) override {
         const auto& gg = std::get<GpuStorage>(g);
         const auto& gx = std::get<GpuStorage>(x);
         if (!gg.arr || !gx.arr)
@@ -6781,9 +6781,8 @@ private:
                 // F32 array then cast — ``mlx::core::array`` ctor doesn't
                 // accept a float16 scalar directly, but ``astype`` from F32
                 // is fast and matches the dtype of ``ones_arr``.
-                return ::mlx::core::astype(
-                    ::mlx::core::array(static_cast<float>(fill_value)),
-                    ::mlx::core::float16);
+                return ::mlx::core::astype(::mlx::core::array(static_cast<float>(fill_value)),
+                                           ::mlx::core::float16);
             case Dtype::F32:
                 return ::mlx::core::array(static_cast<float>(fill_value));
             case Dtype::F64:

@@ -47,3 +47,45 @@ SpacesBeforeTrailingComments: 2
 MaxEmptyLinesToKeep: 1
 KeepEmptyLinesAtTheStartOfBlocks: false
 EmptyLineBeforeAccessModifier: LogicalBlock
+
+---
+# Objective-C++ — share the C++ settings.  Required so clang-format
+# accepts ``.mm`` files and ``.h`` headers that ``#import <Foundation/...>``
+# (the bridge headers under ``lucid/_C/backend/gpu/mps/`` and
+# ``lucid/_C/compile/...`` Metal-helper headers).
+Language: ObjC
+BasedOnStyle: LLVM
+Standard: c++20
+
+ColumnLimit: 100
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+BinPackParameters: false
+BinPackArguments: true
+AlwaysBreakTemplateDeclarations: Yes
+AllowAllParametersOfDeclarationOnNextLine: true
+
+ConstructorInitializerIndentWidth: 4
+PackConstructorInitializers: NextLine
+
+ReflowComments: false
+SpacesBeforeTrailingComments: 2
+
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+EmptyLineBeforeAccessModifier: LogicalBlock

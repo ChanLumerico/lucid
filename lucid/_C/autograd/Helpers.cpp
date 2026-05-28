@@ -118,7 +118,7 @@ void accumulate_into(Storage& dst, const Storage& src) {
     Storage src_owned;
     const Storage* src_ptr = &src;
     if (src_dt != dst_dt) {
-        const Device dev = storage_is_cpu(src) ? Device::CPU
+        const Device dev = storage_is_cpu(src)   ? Device::CPU
                            : storage_is_gpu(src) ? Device::GPU
                                                  : Device::CPU;  // SharedStorage is CPU-viewable
         const std::size_t n = storage_nbytes(src) / dtype_size(src_dt);

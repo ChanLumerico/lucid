@@ -61,8 +61,7 @@ TensorImplPtr astype_op(const TensorImplPtr& a, Dtype dst_dtype) {
     // ``GradMode``.
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, out_impl);
-        trc->on_op_attr("dst_dtype",
-                        static_cast<std::int64_t>(static_cast<int>(dst_dtype)));
+        trc->on_op_attr("dst_dtype", static_cast<std::int64_t>(static_cast<int>(dst_dtype)));
     }
 
     // Autograd: wire AstypeBackward when the input takes a gradient.  This

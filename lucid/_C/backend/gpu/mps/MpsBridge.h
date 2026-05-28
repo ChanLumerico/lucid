@@ -166,10 +166,8 @@ BufferView array_to_buffer(const ::mlx::core::array& arr);
 // Calling this with a buffer that the caller still intends to
 // release elsewhere causes a double-free.  Hand off ownership
 // cleanly.
-::mlx::core::array buffer_to_array(void* mtl_buffer,
-                                   std::vector<int> shape,
-                                   Dtype dt,
-                                   std::size_t offset_bytes = 0);
+::mlx::core::array
+buffer_to_array(void* mtl_buffer, std::vector<int> shape, Dtype dt, std::size_t offset_bytes = 0);
 
 // Block until every in-flight MPS command buffer has completed.
 //
