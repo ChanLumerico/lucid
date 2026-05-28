@@ -33,18 +33,20 @@ MPSGraph dispatch time alone, beating eager once the parameter
 count is large enough to amortise the per-call overhead.
 """
 
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence, cast
 
 from lucid._C import engine as _C_engine
+from lucid._device import device as _device_cls
+from lucid._dtype import dtype as _dtype_cls
+from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
     from lucid.optim.optimizer import Optimizer
 
 __all__ = ["compile_optimizer"]
 
 
-def compile_optimizer(opt: Optimizer) -> object:
+def compile_optimizer(opt: Optimizer) -> _CompiledStepBase:
     r"""Wrap ``opt`` so ``opt.step()`` runs as a single MPSGraph executable.
 
     Dispatches on the concrete optimizer subclass and returns the
@@ -246,12 +248,13 @@ def _flatten_params(opt: Optimizer) -> list[Tensor]:
     """
     out: list[Tensor] = []
     for group in opt.param_groups:
-        for p in group["params"]:
+        params = cast(list[Tensor], group["params"])
+        for p in params:
             out.append(p)
     return out
 
 
-def _zero_scalar(dt: object, dev: object) -> Tensor:
+def _zero_scalar(dt: _dtype_cls, dev: _device_cls) -> Tensor:
     """Allocate a 0-D zero tensor.  Used as a stable host for the bias
     correction scalars that the Adam-family compiled executables read
     on every step — we update the *value* of these tensors each step
@@ -629,7 +632,7 @@ class _CompiledStepBase:
 
     def _trace_update(
         self,
-        all_inputs: Sequence[Tensor],
+        all_inputs: Sequence[Tensor] | None,
         grads: Sequence[Tensor],
         scalars: dict[str, Tensor],
     ) -> list[Tensor]:

@@ -75,6 +75,8 @@ import threading
 from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
+from lucid._device import device as _device_cls
+from lucid._dtype import dtype as _dtype_cls
 
 # Thread-local flag flipped on while ``_FusedStep._build_executable``
 # is actively tracing.  ``lucid.nn.functional.dropout`` checks it to
@@ -376,16 +378,16 @@ class _FusedStep:
 
         self._exe: object | None = None
         # Per-call args stash so positional resolvers can pick them up.
-        self._current_args: tuple = ()
+        self._current_args: tuple[Tensor, ...] = ()
         # Built at compile time, indexed by exe.input_ids.
         self._input_resolvers: list[Callable[[], Tensor]] = []
         # output_targets list parallel to exe.grad_output_ids (the opt
         # outputs in order: new_params + new_state buffers).
         self._output_targets: list[Tensor] = []
         # Loss meta for fresh allocation each step.
-        self._loss_shape: tuple = ()
-        self._loss_dtype: object = None
-        self._loss_device: object = None
+        self._loss_shape: tuple[int, ...] = ()
+        self._loss_dtype: _dtype_cls | None = None
+        self._loss_device: _device_cls | None = None
         # The "scale that was applied this step" — captured before
         # ``run`` so the user-visible loss can be unscaled afterwards
         # even if the scaler's schedule advances between calls.
@@ -564,6 +566,9 @@ class _FusedStep:
                         # Cast scale to loss dtype so the multiply
                         # respects the chain dtype (autocast: loss is
                         # F16 or F32 depending on the chain).
+                        assert self._scale_holder is not None, (
+                            "_scale_holder must be allocated when scaler_enabled"
+                        )
                         scale_in_loss_dtype = self._scale_holder.to(loss.dtype)
                         loss_for_bwd = loss * scale_in_loss_dtype
                     else:
@@ -866,21 +871,32 @@ class _FusedStep:
             )
 
         # Build per-input resolvers (impl identity → live tensor getter).
+        # The closure-capture pattern uses ``def`` factories rather than
+        # default-arg lambdas so mypy can infer ``Callable[[], Tensor]``
+        # without per-site casts.
         impl_to_resolver: dict[int, Callable[[], Tensor]] = {}
+
+        def _param_resolver(i: int) -> Callable[[], Tensor]:
+            return lambda: self._params[i]
+
+        def _scalar_resolver(name: str) -> Callable[[], Tensor]:
+            return lambda: copt._scalar_slots[name]
+
+        def _arg_resolver(slot: int) -> Callable[[], Tensor]:
+            return lambda: self._current_args[slot]
+
         for i, p in enumerate(self._params):
-            impl_to_resolver[id(_unwrap(p))] = lambda _i=i: self._params[_i]
+            impl_to_resolver[id(_unwrap(p))] = _param_resolver(i)
         # State buffers + scalar holders from the compile_optimizer.
         for (kind, idx), getter in copt._buffer_table.items():
             impl_to_resolver[id(_unwrap(getter()))] = getter
         for name, t in copt._scalar_slots.items():
-            impl_to_resolver[id(_unwrap(t))] = lambda _n=name: copt._scalar_slots[_n]
+            impl_to_resolver[id(_unwrap(t))] = _scalar_resolver(name)
         # Positional model inputs (keyed by impl id captured here, but
         # read from self._current_args at run time).
         for slot, a in enumerate(args):
             if isinstance(a, Tensor):
-                impl_to_resolver[id(_unwrap(a))] = lambda _s=slot: self._current_args[
-                    _s
-                ]
+                impl_to_resolver[id(_unwrap(a))] = _arg_resolver(slot)
 
         # Pinned constants (mirror of CompiledModule's ``input_source``
         # treatment): if a trace external_feed isn't a known
@@ -907,7 +923,11 @@ class _FusedStep:
                 # grad, no autograd hook) and return it verbatim every
                 # call.
                 pinned_tensor = _TensorT(impl, requires_grad=False)
-                r = lambda _t=pinned_tensor: _t
+
+                def _pinned_resolver(t: Tensor = pinned_tensor) -> Tensor:
+                    return t
+
+                r = _pinned_resolver
             resolvers.append(r)
         self._input_resolvers = resolvers
 

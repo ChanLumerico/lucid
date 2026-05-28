@@ -30,10 +30,19 @@ Acceptance:
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Protocol, cast
 
 from lucid._C import engine as _C_engine
-from lucid.autograd.function import Function
+from lucid._C.engine import TensorImpl
+from lucid.autograd.function import Function, FunctionCtx
+
+
+class _ExecutableLike(Protocol):
+    """Surface of pybind11 ``CompiledExecutable`` consumed by _step.py."""
+
+    input_ids: list[int]
+    output_ids: list[int]
+    num_inputs: int
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -242,7 +251,7 @@ def make_step(
 
     def _run(
         entry: _StepEntry, x_args: tuple[Tensor, ...]
-    ) -> tuple[object, list[object]]:
+    ) -> tuple[TensorImpl, list[TensorImpl]]:
         """Execute one cached step entry; return ``(loss_impl, [grad_impls])``.
 
         The executable returns ``len(params) + 1`` storages — the loss
@@ -251,7 +260,8 @@ def make_step(
         Lucid Tensors and feeds them into the autograd graph.
         """
         feed_impls: list[object] = []
-        for tid, src in zip(entry.exe.input_ids, entry.input_source):
+        exe = cast(_ExecutableLike, entry.exe)
+        for tid, src in zip(exe.input_ids, entry.input_source):
             if src is None:
                 feed_impls.append(entry.external_feeds[tid])
             else:
@@ -261,8 +271,8 @@ def make_step(
         entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
         entry.n_hits += 1
         # outs = [loss_impl, grad_param_0_impl, …]
-        loss_impl = outs[0]
-        grad_impls = list(outs[1 : 1 + len(params)])
+        loss_impl = cast(TensorImpl, outs[0])
+        grad_impls = [cast(TensorImpl, g) for g in outs[1 : 1 + len(params)]]
         return loss_impl, grad_impls
 
     class _CompiledStepFunction(Function):
@@ -275,7 +285,11 @@ def make_step(
         """
 
         @staticmethod
-        def forward(ctx, entry_holder, *step_args):
+        def forward(  # type: ignore[override]  # reason: takes a non-Tensor ``entry_holder`` 1st positional (the _StepEntry holder); Function.forward base types *args as Tensor. Documented as an exception per CompiledModule's design.
+            ctx: FunctionCtx,
+            entry_holder: list[_StepEntry],
+            *step_args: Tensor,
+        ) -> Tensor:
             """Run the cached executable; save grads for backward.
 
             ``entry_holder[0]`` is the :class:`_StepEntry` selected
@@ -303,7 +317,9 @@ def make_step(
             return _wrap(loss_impl)
 
         @staticmethod
-        def backward(ctx, grad_loss):
+        def backward(  # type: ignore[override]  # reason: returns tuple[Tensor|None, ...] (one slot per next-edge: None for user inputs, Tensors for params); base returns Tensor|tuple[Tensor,...].
+            ctx: FunctionCtx, grad_loss: Tensor
+        ) -> tuple[Tensor | None, ...]:
             """Chain ``grad_loss`` into each saved per-parameter gradient.
 
             Returns one slot per autograd next-edge: ``None`` for
@@ -317,8 +333,10 @@ def make_step(
             # optimizer ignores).  The ``entry_holder`` non-Tensor
             # input does not appear in ``next_edges`` so no slot is
             # produced for it here.
-            scaled = [grad_loss * _wrap(g) for g in ctx.saved_grad_impls]
-            return tuple([None] * ctx.n_user + scaled)
+            saved_grad_impls = cast(list[TensorImpl], ctx.saved_grad_impls)
+            n_user = cast(int, ctx.n_user)
+            scaled = [grad_loss * _wrap(g) for g in saved_grad_impls]
+            return tuple([None] * n_user + scaled)
 
     def step(*x_args: Tensor) -> Tensor:
         """Run one fwd+bwd compiled training step (or eager fallback).
@@ -363,7 +381,7 @@ def make_step(
             if key is not None:
                 cache[key] = entry
 
-        return _CompiledStepFunction.apply([entry], *x_args, *params)
+        return cast(Tensor, _CompiledStepFunction.apply([entry], *x_args, *params))
 
     # Stash the cache / introspection handles on the returned callable
     # so tests + telemetry can poke at them without grabbing them via
