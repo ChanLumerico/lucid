@@ -3,7 +3,16 @@ import { ImageResponse } from "next/og";
 /** Root-level Open-Graph card.  Picked up automatically by Next for the
  *  ``/`` route and inherited by any page that doesn't define its own
  *  per-route ``opengraph-image``. */
-export const runtime = "edge";
+//
+// ``output: export`` (in next.config.ts) statically prerenders every
+// route at build time — the previous ``runtime = "edge"`` setting is
+// incompatible with that mode and ``dynamic`` defaults to ``"auto"``
+// which Next.js then flags as an error.  Drop the edge runtime
+// (defaulting to nodejs is fine here — the image is generated once at
+// build time, never at request time) and pin ``dynamic`` to
+// ``"force-static"`` so the static export collector knows this route
+// is build-time-only.
+export const dynamic = "force-static";
 export const alt = "Lucid — Production ML for Apple Silicon";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
