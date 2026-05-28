@@ -266,6 +266,11 @@ from lucid.models.vision.swin import (
 from lucid.models.vision.coatnet import (
     CoAtNetConfig, CoAtNet, CoAtNetForImageClassification,
     coatnet_0, coatnet_0_cls,
+    coatnet_1, coatnet_1_cls,
+    coatnet_2, coatnet_2_cls,
+    coatnet_3, coatnet_3_cls,
+    coatnet_4, coatnet_4_cls,
+    coatnet_5, coatnet_5_cls,
 )
 # 2021 — CvT (Wu et al.)
 from lucid.models.vision.cvt import (
@@ -513,7 +518,9 @@ __all__ = [
     "swin_base", "swin_base_cls", "swin_large", "swin_large_cls",
     # ── Vision (2021) CoAtNet ────────────────────────────────────────────────
     "CoAtNetConfig", "CoAtNet", "CoAtNetForImageClassification",
-    "coatnet_0", "coatnet_0_cls",
+    "coatnet_0", "coatnet_0_cls", "coatnet_1", "coatnet_1_cls",
+    "coatnet_2", "coatnet_2_cls", "coatnet_3", "coatnet_3_cls",
+    "coatnet_4", "coatnet_4_cls", "coatnet_5", "coatnet_5_cls",
     # ── Vision (2021) CvT ────────────────────────────────────────────────────
     "CvTConfig", "CvT", "CvTForImageClassification",
     "cvt_13", "cvt_13_cls", "cvt_21", "cvt_21_cls", "cvt_w24", "cvt_w24_cls",

@@ -53,6 +53,29 @@ verified across 180 parity tests.
   m = alexnet_cls(weights=AlexNetWeights.IMAGENET1K_V1)  # by enum
   ```
 
+### Added — CoAtNet paper-faithful variants (no pretrained weights yet)
+
+- **`lucid.models.vision.coatnet`** — full Table 5 lineup from Dai et al.,
+  NeurIPS 2021 (arXiv:2106.04803).  Previously only `coatnet_0` was
+  registered; this PR fills in the 5 remaining paper-cited variants
+  (CoAtNet-1 through CoAtNet-5).  Existing 4-stage builder accepts the
+  new `(stem_width, dims, blocks_per_stage, attn_heads)` tuples
+  unchanged — no architectural surgery required.  No pretrained
+  weights ship: the only public CoAtNet checkpoints (timm's `_rw_*`
+  series) are a Ross Wightman re-implementation with a different
+  topology (different MBConv expand ratio + `se_early` block + head),
+  so they are not paper-cited and therefore skipped per H11.  New
+  factories:
+  - `coatnet_1` / `coatnet_1_cls` — 42M params, 83.3% top-1
+  - `coatnet_2` / `coatnet_2_cls` — 75M params, 84.1% top-1
+  - `coatnet_3` / `coatnet_3_cls` — 168M params, 84.5% top-1
+  - `coatnet_4` / `coatnet_4_cls` — 275M params, 85.0% top-1
+  - `coatnet_5` / `coatnet_5_cls` — 688M params, 85.8% top-1
+  
+  CoAtNet-6 and CoAtNet-7 (multi-axis attention variants) will land in
+  a follow-up commit that extends `_model.py` with the required
+  building block.
+
 ### Added
 
 - **`lucid.utils.transforms`** — 4 new policy classes + 1 new transform:
