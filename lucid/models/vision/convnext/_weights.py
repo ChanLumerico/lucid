@@ -110,7 +110,7 @@ class ConvNeXtXLargeWeights(WeightsEnum):
 
     FB_IN22K_FT_IN1K = WeightEntry(
         url=f"{HUB_BASE}/convnext-xlarge/resolve/main/FB_IN22K_FT_IN1K/model.safetensors",
-        sha256="a9c04d71a06a7da29256a91b86c2de901c91c5ba2af9aea451c5989d3442c571",
+        sha256="6c94f07df6893351e9d9b1079bca7e923eb1196c215f6649338f7ccad561a1fd",
         num_classes=1000,
         transforms=ImageClassification(
             crop_size=224, resize_size=256, interpolation="bicubic"
