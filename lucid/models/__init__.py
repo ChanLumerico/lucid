@@ -118,7 +118,6 @@ from lucid.models.vision.lenet import (
 # 2012 — AlexNet (Krizhevsky, Sutskever & Hinton)
 from lucid.models.vision.alexnet import (
     AlexNetConfig, AlexNet, AlexNetForImageClassification,
-    AlexNetWeights,
     alexnet, alexnet_cls,
 )
 # 2013 — ZFNet (Zeiler & Fergus)
@@ -142,7 +141,6 @@ from lucid.models.vision.googlenet import (
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet import (
     ResNetConfig, ResNet, ResNetForImageClassification,
-    ResNet18Weights,
     resnet_18, resnet_18_cls,
     resnet_34, resnet_34_cls,
     resnet_50, resnet_50_cls,
@@ -429,7 +427,6 @@ __all__ = [
     "lenet_5", "lenet_5_cls",
     # ── Vision (2012) AlexNet ─────────────────────────────────────────────────
     "AlexNetConfig", "AlexNet", "AlexNetForImageClassification",
-    "AlexNetWeights",
     "alexnet", "alexnet_cls",
     # ── Vision (2013) ZFNet ───────────────────────────────────────────────────
     "ZFNetConfig", "ZFNet", "ZFNetForImageClassification",
@@ -445,7 +442,6 @@ __all__ = [
     "googlenet", "googlenet_cls",
     # ── Vision (2015) ResNet ──────────────────────────────────────────────────
     "ResNetConfig", "ResNet", "ResNetForImageClassification",
-    "ResNet18Weights",
     "resnet_18", "resnet_18_cls", "resnet_34", "resnet_34_cls",
     "resnet_50", "resnet_50_cls", "resnet_101", "resnet_101_cls", "resnet_152", "resnet_152_cls",
     "resnet_200", "resnet_200_cls", "resnet_269", "resnet_269_cls",
