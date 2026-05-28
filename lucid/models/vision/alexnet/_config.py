@@ -10,10 +10,10 @@ from lucid.models._meta import model_family_meta
 @model_family_meta(
     canonical_name="AlexNet",
     citation=(
-        'Krizhevsky, Alex, Ilya Sutskever, and Geoffrey E. Hinton. '
+        "Krizhevsky, Alex, Ilya Sutskever, and Geoffrey E. Hinton. "
         '"ImageNet Classification with Deep Convolutional Neural '
         'Networks." Advances in Neural Information Processing Systems, '
-        '2012.  Single-stream channel widths from Krizhevsky, Alex. '
+        "2012.  Single-stream channel widths from Krizhevsky, Alex. "
         '"One weird trick for parallelizing convolutional neural '
         'networks." arXiv:1404.5997 (2014).'
     ),

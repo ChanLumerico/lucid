@@ -208,9 +208,7 @@ class TestRot90Boxes:
 class TestAffineBoxes:
     def test_identity(self) -> None:
         boxes = _make_boxes([[10.0, 20.0, 30.0, 40.0]], h=100, w=100)
-        eye = lucid.tensor(
-            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-        )
+        eye = lucid.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         out = affine_boxes(boxes, eye, out_hw=(100, 100))
         np.testing.assert_allclose(
             out.data.numpy(), [[10.0, 20.0, 30.0, 40.0]], atol=1e-5
@@ -219,9 +217,7 @@ class TestAffineBoxes:
     def test_translation(self) -> None:
         # Pure translation by (+5, +8); enlarge output canvas so no clip.
         boxes = _make_boxes([[10.0, 20.0, 30.0, 40.0]], h=100, w=100)
-        mat = lucid.tensor(
-            [[1.0, 0.0, 5.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]]
-        )
+        mat = lucid.tensor([[1.0, 0.0, 5.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]])
         out = affine_boxes(boxes, mat, out_hw=(200, 200))
         np.testing.assert_allclose(
             out.data.numpy(), [[15.0, 28.0, 35.0, 48.0]], atol=1e-5
@@ -234,9 +230,7 @@ class TestAffineBoxes:
         # x ∈ [-40, -20], y ∈ [10, 30]. Output canvas (100, 100) clips
         # the negative-x corners to 0.
         boxes = _make_boxes([[10.0, 20.0, 30.0, 40.0]], h=100, w=100)
-        mat = lucid.tensor(
-            [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
-        )
+        mat = lucid.tensor([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
         out = affine_boxes(boxes, mat, out_hw=(100, 100))
         # x clipped to 0; y unchanged
         np.testing.assert_allclose(
@@ -280,9 +274,7 @@ class TestFlipKeypoints:
         # (x, y, visibility) — visibility column should pass through untouched
         kps = _make_kps([[10.0, 20.0, 1.0]], h=100, w=100)
         out = flip_keypoints(kps, horizontal=True)
-        np.testing.assert_allclose(
-            out.data.numpy(), [[90.0, 20.0, 1.0]], atol=1e-5
-        )
+        np.testing.assert_allclose(out.data.numpy(), [[90.0, 20.0, 1.0]], atol=1e-5)
 
 
 # ── Keypoints: resize ───────────────────────────────────────────────
@@ -300,9 +292,7 @@ class TestResizeKeypoints:
         # 100x100 → 50x200: sx=2.0, sy=0.5; extra col is preserved
         kps = _make_kps([[10.0, 20.0, 0.7]], h=100, w=100)
         out = resize_keypoints(kps, new_h=50, new_w=200)
-        np.testing.assert_allclose(
-            out.data.numpy(), [[20.0, 10.0, 0.7]], atol=1e-5
-        )
+        np.testing.assert_allclose(out.data.numpy(), [[20.0, 10.0, 0.7]], atol=1e-5)
 
 
 # ── Keypoints: crop ─────────────────────────────────────────────────
@@ -372,9 +362,7 @@ class TestRot90Keypoints:
     def test_k4_identity(self) -> None:
         kps = _make_kps([[10.0, 20.0, 0.9]], h=100, w=80)
         out = rot90_keypoints(kps, k=4)
-        np.testing.assert_allclose(
-            out.data.numpy(), [[10.0, 20.0, 0.9]], atol=1e-5
-        )
+        np.testing.assert_allclose(out.data.numpy(), [[10.0, 20.0, 0.9]], atol=1e-5)
         assert out.canvas_size == (100, 80)
 
 
@@ -385,21 +373,15 @@ class TestRot90Keypoints:
 class TestAffineKeypoints:
     def test_identity(self) -> None:
         kps = _make_kps([[10.0, 20.0]], h=100, w=100)
-        eye = lucid.tensor(
-            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-        )
+        eye = lucid.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         out = affine_keypoints(kps, eye, out_hw=(100, 100))
         np.testing.assert_allclose(out.data.numpy(), [[10.0, 20.0]], atol=1e-5)
 
     def test_translation_preserves_extras(self) -> None:
         kps = _make_kps([[10.0, 20.0, 1.0]], h=100, w=100)
-        mat = lucid.tensor(
-            [[1.0, 0.0, 5.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]]
-        )
+        mat = lucid.tensor([[1.0, 0.0, 5.0], [0.0, 1.0, 8.0], [0.0, 0.0, 1.0]])
         out = affine_keypoints(kps, mat, out_hw=(100, 100))
-        np.testing.assert_allclose(
-            out.data.numpy(), [[15.0, 28.0, 1.0]], atol=1e-5
-        )
+        np.testing.assert_allclose(out.data.numpy(), [[15.0, 28.0, 1.0]], atol=1e-5)
         assert out.canvas_size == (100, 100)
 
     def test_rotation_about_center(self) -> None:

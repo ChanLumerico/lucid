@@ -153,9 +153,7 @@ class TestUint8Roundtrip:
         # class form ``T.Posterize(num_bits=…, mode="uint8_mask")``;
         # functional form is covered by ``test_albumentations_parity.py``.
         chw, hwc = _image(10 + num_bits)
-        got = _run_lucid(
-            T.Posterize(num_bits=num_bits, mode="uint8_mask", p=1.0), chw
-        )
+        got = _run_lucid(T.Posterize(num_bits=num_bits, mode="uint8_mask", p=1.0), chw)
         ref = _run_albu(A.Posterize(num_bits=num_bits, p=1.0), hwc)
         assert got.shape == ref.shape
         # 1.5/256 ≈ 6e-3 is the half-step uint8 quantisation budget;
@@ -213,9 +211,7 @@ class TestKernelBounded:
         # way to get matched-kernel parity.
         chw, hwc = _image(5, h=32, w=40)
         lucid.manual_seed(0)
-        got = _run_lucid(
-            T.Sharpen(alpha=(0.5, 0.5), lightness=(1.0, 1.0), p=1.0), chw
-        )
+        got = _run_lucid(T.Sharpen(alpha=(0.5, 0.5), lightness=(1.0, 1.0), p=1.0), chw)
         # Force Albu to the ``"kernel"`` method (not the newer Gaussian
         # path), matching Lucid's 3x3 Laplacian-style kernel.
         ref = _run_albu(
@@ -240,12 +236,8 @@ class TestKernelBounded:
         # Same story as Sharpen — fix the sampled values to singletons.
         chw, hwc = _image(6, h=32, w=40)
         lucid.manual_seed(0)
-        got = _run_lucid(
-            T.Emboss(alpha=(0.5, 0.5), strength=(0.5, 0.5), p=1.0), chw
-        )
-        ref = _run_albu(
-            A.Emboss(alpha=(0.5, 0.5), strength=(0.5, 0.5), p=1.0), hwc
-        )
+        got = _run_lucid(T.Emboss(alpha=(0.5, 0.5), strength=(0.5, 0.5), p=1.0), chw)
+        ref = _run_albu(A.Emboss(alpha=(0.5, 0.5), strength=(0.5, 0.5), p=1.0), hwc)
         assert got.shape == ref.shape
         np.testing.assert_allclose(
             _strip_border(got, margin=2),
@@ -323,12 +315,8 @@ class TestStructural:
         # equalisations, so the global mean should be preserved to
         # within a small CDF-tie-break envelope.
         chw, hwc = _image(9, h=32, w=40)
-        got = _run_lucid(
-            T.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0), chw
-        )
-        ref = _run_albu(
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0), hwc
-        )
+        got = _run_lucid(T.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0), chw)
+        ref = _run_albu(A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=1.0), hwc)
         assert got.shape == ref.shape == hwc.shape
         assert 0.0 <= got.min() and got.max() <= 1.0
         # Both should stay close to the input mean — CLAHE redistributes
@@ -369,9 +357,7 @@ class TestStructural:
             chw,
         )
         ref = _run_albu(
-            A.PixelDropout(
-                dropout_prob=prob, per_channel=False, drop_value=0.0, p=1.0
-            ),
+            A.PixelDropout(dropout_prob=prob, per_channel=False, drop_value=0.0, p=1.0),
             hwc,
         )
         assert got.shape == ref.shape == hwc.shape

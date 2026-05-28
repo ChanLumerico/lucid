@@ -474,11 +474,20 @@ class TestTimmComparison:
         # fall back to without (the epoch counter still drives shuffling).
         try:
             timm_s = RepeatAugSampler(
-                ds, num_replicas=1, rank=0, num_repeats=3, shuffle=True, seed=0,
+                ds,
+                num_replicas=1,
+                rank=0,
+                num_repeats=3,
+                shuffle=True,
+                seed=0,
             )
         except TypeError:
             timm_s = RepeatAugSampler(
-                ds, num_replicas=1, rank=0, num_repeats=3, shuffle=True,
+                ds,
+                num_replicas=1,
+                rank=0,
+                num_repeats=3,
+                shuffle=True,
             )
         timm_s.set_epoch(0)
         # The RNG is platform-specific (timm uses torch.Generator,

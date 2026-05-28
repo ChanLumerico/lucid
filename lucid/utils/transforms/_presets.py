@@ -71,10 +71,10 @@ from lucid.utils.transforms._photometric import ColorJitter, Normalize
 # ── registry + auto-resolver ────────────────────────────────────────
 
 
-_PRESET_REGISTRY: dict[str, type["TransformsPreset"]] = {}
+_PRESET_REGISTRY: dict[str, type[TransformsPreset]] = {}
 
 
-def _register_preset(cls: type["TransformsPreset"]) -> type["TransformsPreset"]:
+def _register_preset(cls: type[TransformsPreset]) -> type[TransformsPreset]:
     """Class decorator: register ``cls`` under its ``preset_type`` key."""
     key = cls.preset_type
     if key in _PRESET_REGISTRY and _PRESET_REGISTRY[key] is not cls:
@@ -150,7 +150,7 @@ class TransformsPreset(_NoParams, Transform[Empty], abc.ABC):
         }
 
     @classmethod
-    def from_dict(cls, cfg: dict[str, object]) -> "TransformsPreset":
+    def from_dict(cls, cfg: dict[str, object]) -> TransformsPreset:
         r"""Reconstruct a preset instance from a :meth:`to_dict` payload.
 
         When called on the base :class:`TransformsPreset`, dispatches

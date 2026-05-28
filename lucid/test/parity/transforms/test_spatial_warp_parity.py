@@ -65,16 +65,16 @@ class TestRotate:
         )(T.Image(chw)).data.numpy()
         hwc = np.zeros((24, 24, 1), dtype=np.float32)
         hwc[8, 20, 0] = 1.0
-        out_a = A.Rotate(
-            limit=(angle, angle), interpolation=0, border_mode=0, p=1.0
-        )(image=hwc)["image"]
+        out_a = A.Rotate(limit=(angle, angle), interpolation=0, border_mode=0, p=1.0)(
+            image=hwc
+        )["image"]
         pl = _marker_pos(out_l)
         pa = _marker_pos(out_a)
         if pl is None or pa is None:
             return
-        assert abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1, (
-            f"Rotate {angle}: Lucid {pl}, Albu {pa}"
-        )
+        assert (
+            abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1
+        ), f"Rotate {angle}: Lucid {pl}, Albu {pa}"
 
     def test_zero_angle_passes_through(self):
         """Identity (angle=0) is bit-exact."""
@@ -107,34 +107,28 @@ class TestAffine:
         )(T.Image(chw)).data.numpy()
         hwc = np.zeros((24, 24, 1), dtype=np.float32)
         hwc[8, 20, 0] = 1.0
-        out_a = A.Affine(
-            rotate=(angle, angle), interpolation=0, border_mode=0, p=1.0
-        )(image=hwc)["image"]
+        out_a = A.Affine(rotate=(angle, angle), interpolation=0, border_mode=0, p=1.0)(
+            image=hwc
+        )["image"]
         pl = _marker_pos(out_l)
         pa = _marker_pos(out_a)
         if pl is None or pa is None:
             return
-        assert abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1, (
-            f"Affine rot {angle}: Lucid {pl}, Albu {pa}"
-        )
+        assert (
+            abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1
+        ), f"Affine rot {angle}: Lucid {pl}, Albu {pa}"
 
     def test_identity_passes_through(self):
         """scale=1, rotate=0, shear=0 → bit-exact."""
         chw, hwc = _image(1)
-        out_l = _run_lucid(
-            T.Affine(scale=1.0, rotate=(0, 0), shear=(0, 0), p=1.0), chw
-        )
+        out_l = _run_lucid(T.Affine(scale=1.0, rotate=(0, 0), shear=(0, 0), p=1.0), chw)
         np.testing.assert_allclose(out_l, hwc, atol=1e-5)
 
     def test_bilinear_random_mean_drift(self):
         """BILINEAR with small params: mean drift bounded."""
         chw, hwc = _image(7)
-        out_l = _run_lucid(
-            T.Affine(scale=(1.05, 1.05), rotate=(5, 5), p=1.0), chw
-        )
-        out_a = _run_albu(
-            A.Affine(scale=(1.05, 1.05), rotate=(5, 5), p=1.0), hwc
-        )
+        out_l = _run_lucid(T.Affine(scale=(1.05, 1.05), rotate=(5, 5), p=1.0), chw)
+        out_a = _run_albu(A.Affine(scale=(1.05, 1.05), rotate=(5, 5), p=1.0), hwc)
         assert float(np.abs(out_l - out_a).mean()) < 0.45
 
 
@@ -169,9 +163,9 @@ class TestShiftScaleRotate:
         pa = _marker_pos(out_a)
         if pl is None or pa is None:
             return
-        assert abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1, (
-            f"SSR {angle}: Lucid {pl}, Albu {pa}"
-        )
+        assert (
+            abs(pl[0] - pa[0]) <= 1 and abs(pl[1] - pa[1]) <= 1
+        ), f"SSR {angle}: Lucid {pl}, Albu {pa}"
 
     def test_identity_passes_through(self):
         """All limits zero → bit-exact."""
@@ -237,9 +231,9 @@ class TestSafeRotate:
         # rounding in Albu — different canvas sizes can shift the
         # marker by several pixels even when the rotation itself is
         # correct.  Allow ±6 px to absorb canvas-size convention drift.
-        assert abs(pl[0] - pa[0]) <= 6 and abs(pl[1] - pa[1]) <= 6, (
-            f"SafeRotate {angle}: Lucid {pl}, Albu {pa}"
-        )
+        assert (
+            abs(pl[0] - pa[0]) <= 6 and abs(pl[1] - pa[1]) <= 6
+        ), f"SafeRotate {angle}: Lucid {pl}, Albu {pa}"
 
     def test_zero_angle_passes_through(self):
         """Identity (angle=0) preserves shape and content."""

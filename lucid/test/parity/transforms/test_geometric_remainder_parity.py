@@ -27,9 +27,7 @@ A = pytest.importorskip("albumentations")
 pytest.importorskip("cv2")
 
 
-def _image(
-    seed: int = 0, h: int = 24, w: int = 32
-) -> tuple[lucid.Tensor, np.ndarray]:
+def _image(seed: int = 0, h: int = 24, w: int = 32) -> tuple[lucid.Tensor, np.ndarray]:
     """A matched (Lucid CHW tensor, Albumentations HWC array) image pair."""
     hwc = np.random.default_rng(seed).random((h, w, 3), dtype=np.float32)
     chw = lucid.tensor(np.transpose(hwc, (2, 0, 1)).tolist())
@@ -59,9 +57,7 @@ class TestResize:
     def test_resize_bilinear(self) -> None:
         chw, hwc = _image(0)
         for hh, ww in [(12, 16), (40, 50)]:
-            got = _run_lucid(
-                T.Resize(hh, ww, interpolation="bilinear", p=1.0), chw
-            )
+            got = _run_lucid(T.Resize(hh, ww, interpolation="bilinear", p=1.0), chw)
             ref = _run_albu(A.Resize(hh, ww, interpolation=1, p=1.0), hwc)
             np.testing.assert_allclose(got, ref, atol=1e-5)
 
@@ -73,12 +69,8 @@ class TestResize:
 class TestSmallestMaxSize:
     def test_bilinear(self) -> None:
         chw, hwc = _image(0)
-        got = _run_lucid(
-            T.SmallestMaxSize(16, interpolation="bilinear", p=1.0), chw
-        )
-        ref = _run_albu(
-            A.SmallestMaxSize(16, interpolation=1, p=1.0), hwc
-        )
+        got = _run_lucid(T.SmallestMaxSize(16, interpolation="bilinear", p=1.0), chw)
+        ref = _run_albu(A.SmallestMaxSize(16, interpolation=1, p=1.0), hwc)
         np.testing.assert_allclose(got, ref, atol=1e-5)
 
 
@@ -89,12 +81,8 @@ class TestSmallestMaxSize:
 class TestLongestMaxSize:
     def test_bilinear(self) -> None:
         chw, hwc = _image(0)
-        got = _run_lucid(
-            T.LongestMaxSize(20, interpolation="bilinear", p=1.0), chw
-        )
-        ref = _run_albu(
-            A.LongestMaxSize(20, interpolation=1, p=1.0), hwc
-        )
+        got = _run_lucid(T.LongestMaxSize(20, interpolation="bilinear", p=1.0), chw)
+        ref = _run_albu(A.LongestMaxSize(20, interpolation=1, p=1.0), hwc)
         np.testing.assert_allclose(got, ref, atol=1e-5)
 
 
