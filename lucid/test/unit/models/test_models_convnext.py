@@ -187,6 +187,27 @@ class TestConvNeXtWeightsEnums(unittest.TestCase):
         ):
             self.assertIs(cls.DEFAULT, cls.IMAGENET1K_V1)
 
+    def test_xlarge_default_aliases_fb_in22k_ft_in1k(self) -> None:
+        from lucid.models.weights import ConvNeXtXLargeWeights
+
+        # XLarge uses the timm-sourced fb_in22k_ft_in1k tag (different
+        # naming convention from the torchvision IMAGENET1K_V1 four).
+        self.assertIs(
+            ConvNeXtXLargeWeights.DEFAULT, ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K
+        )
+
+    def test_xlarge_meta_provenance(self) -> None:
+        from lucid.models.weights import ConvNeXtXLargeWeights
+
+        meta = ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K.meta
+        self.assertEqual(meta["source"], "timm/convnext_xlarge.fb_in22k_ft_in1k")
+        self.assertEqual(meta["license"], "apache-2.0")
+        self.assertEqual(meta["num_params"], 350_196_968)
+        tf = ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K.transforms()
+        # timm preset: 224 crop, 256 resize, bicubic (≠ torchvision bilinear).
+        self.assertEqual(tf.crop_size, 224)
+        self.assertEqual(tf.resize_size, 256)
+
     def test_entry_fields(self) -> None:
         from lucid.models.weights import ConvNeXtTinyWeights
 

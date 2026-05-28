@@ -96,6 +96,40 @@ class ConvNeXtBaseWeights(WeightsEnum):
     DEFAULT = IMAGENET1K_V1
 
 
+@register_weights("convnext_xlarge_cls")
+class ConvNeXtXLargeWeights(WeightsEnum):
+    r"""Pretrained weights for :func:`lucid.models.convnext_xlarge_cls`.
+
+    Currently ships :attr:`FB_IN22K_FT_IN1K` — Facebook AI Research's
+    ImageNet-22k pretraining → ImageNet-1k finetune checkpoint
+    (paper Table 11, acc@1 ≈ 87.0%), sourced via timm's
+    ``convnext_xlarge.fb_in22k_ft_in1k`` and re-hosted under
+    ``huggingface.co/lucid-dl/convnext-xlarge``.  torchvision does not
+    publish a 1k-class ConvNeXt-XLarge head.
+    """
+
+    FB_IN22K_FT_IN1K = WeightEntry(
+        # Hub folder mirrors timm's lowercase source tag; the enum member
+        # ``FB_IN22K_FT_IN1K`` follows the per-family uppercase convention.
+        url=f"{HUB_BASE}/convnext-xlarge/resolve/main/fb_in22k_ft_in1k/model.safetensors",
+        sha256="478e03b9bc6f7f50fc3df0ec1dd52a74a0edff4b040823dcbdf35d86f04d38bc",
+        num_classes=1000,
+        transforms=ImageClassification(
+            crop_size=224, resize_size=256, interpolation="bicubic"
+        ),
+        meta={
+            "tag": "FB_IN22K_FT_IN1K",
+            "source": "timm/convnext_xlarge.fb_in22k_ft_in1k",
+            "license": "apache-2.0",
+            "num_params": 350_196_968,
+            "gflops": 60.98,
+            "file_size_mb": 1336.6,
+            "metrics": {"ImageNet-1k": {"acc@1": 87.0, "acc@5": 98.2}},
+        },
+    )
+    DEFAULT = FB_IN22K_FT_IN1K
+
+
 @register_weights("convnext_large_cls")
 class ConvNeXtLargeWeights(WeightsEnum):
     r"""Pretrained weights for :func:`lucid.models.convnext_large_cls`.

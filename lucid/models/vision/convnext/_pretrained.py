@@ -9,6 +9,7 @@ from lucid.models.vision.convnext._weights import (
     ConvNeXtLargeWeights,
     ConvNeXtSmallWeights,
     ConvNeXtTinyWeights,
+    ConvNeXtXLargeWeights,
 )
 
 _CFG_T = ConvNeXtConfig(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768))
@@ -509,7 +510,7 @@ def convnext_large_cls(
     return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -517,7 +518,10 @@ def convnext_large_cls(
     default_config=_CFG_XL,
 )
 def convnext_xlarge_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ConvNeXtXLargeWeights | None = None,
+    **overrides: object,
 ) -> ConvNeXtForImageClassification:
     r"""ConvNeXt-XLarge image classifier (Liu et al., 2022).
 
@@ -553,5 +557,15 @@ def convnext_xlarge_cls(
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> model(x).logits.shape
     (1, 1000)
+
+    Load ImageNet-22k-pretrained-then-1k-finetuned weights:
+
+    >>> model = convnext_xlarge_cls(pretrained=True)
+    >>> from lucid.models.weights import ConvNeXtXLargeWeights
+    >>> model = convnext_xlarge_cls(weights=ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K)
     """
-    return _c(_CFG_XL, overrides)
+    entry = weights_mod.resolve_weights(ConvNeXtXLargeWeights, pretrained, weights)
+    model = _c(_CFG_XL, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="convnext_xlarge_cls")
+    return model

@@ -19,6 +19,7 @@ from lucid.models.vision.convnext._weights import (
     ConvNeXtSmallWeights,
     ConvNeXtBaseWeights,
     ConvNeXtLargeWeights,
+    ConvNeXtXLargeWeights,
 )
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "ConvNeXtSmallWeights",
     "ConvNeXtBaseWeights",
     "ConvNeXtLargeWeights",
+    "ConvNeXtXLargeWeights",
     "convnext_tiny",
     "convnext_tiny_cls",
     "convnext_small",

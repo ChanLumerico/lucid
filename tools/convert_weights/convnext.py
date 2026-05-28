@@ -205,3 +205,175 @@ def _build_base(tag: str) -> Architecture:
 @register_arch("convnext_large")
 def _build_large(tag: str) -> Architecture:
     return ConvNeXtArch("convnext_large", tag)
+
+
+# ---------------------------------------------------------------------------
+# CONVNEXT-XLARGE — sourced from timm's ``fb_in22k_ft_in1k`` checkpoint.
+# torchvision does not ship a 1k-class XLarge head; timm wraps the official
+# Facebook AI Research weights instead.
+# ---------------------------------------------------------------------------
+
+
+class ConvNeXtTimmArch(Architecture):
+    """Converter for a timm-hosted ConvNeXt variant + tag.
+
+    timm uses a different key layout from torchvision:
+
+    ===============================================  ===========================
+    timm                                             Lucid
+    ===============================================  ===========================
+    ``stem.0.{w,b}``                                 ``stem.conv.0.{w,b}``
+    ``stem.1.{w,b}``                                 ``stem.norm.{w,b}``
+    ``stages.S.blocks.N.gamma``     (C,)             ``stages.S.N.gamma``  (C,)
+    ``stages.S.blocks.N.conv_dw.{w,b}``              ``stages.S.N.dwconv.{w,b}``
+    ``stages.S.blocks.N.norm.{w,b}``                 ``stages.S.N.norm.{w,b}``
+    ``stages.S.blocks.N.mlp.fc1.{w,b}``              ``stages.S.N.fc1.{w,b}``
+    ``stages.S.blocks.N.mlp.fc2.{w,b}``              ``stages.S.N.fc2.{w,b}``
+    ``stages.{1,2,3}.downsample.0.{w,b}`` (LN)       ``downsamplers.{0,1,2}.norm.{w,b}``
+    ``stages.{1,2,3}.downsample.1.{w,b}`` (Conv)     ``downsamplers.{0,1,2}.conv.{w,b}``
+    ``head.norm.{w,b}``                              ``head_norm.{w,b}``
+    ``head.fc.{w,b}``                                ``classifier.{w,b}``
+    ===============================================  ===========================
+
+    ``gamma`` already ships as ``(C,)`` here (timm uses a 1-D layer_scale
+    parameter), so no ``transform_value`` reshape is required.
+    """
+
+    def __init__(self, arch: str, tag: str) -> None:
+        import timm
+
+        self.arch = arch
+        self.tag = tag
+        # timm's full name combines arch + tag: ``convnext_xlarge.fb_in22k_ft_in1k``
+        self._timm_name = f"{arch}.{tag}"
+        self._model = timm.create_model(self._timm_name, pretrained=True)
+        self._model.eval()
+        # Build a Lucid model just to read its config + state_dict layout.
+        import lucid.models as models
+
+        self._lucid_factory = _TIMM_VARIANTS[arch][0]
+        self._lucid_model = getattr(models, self._lucid_factory)()
+
+    def source_state_dict(self) -> dict[str, object]:
+        return {
+            k: v.detach().cpu().numpy() for k, v in self._model.state_dict().items()
+        }
+
+    def target_model(self) -> Module:
+        return self._lucid_model
+
+    def map_key(self, src_key: str) -> str | None:
+        # Stem
+        if src_key.startswith("stem.0."):
+            return "stem.conv.0." + src_key[len("stem.0.") :]
+        if src_key.startswith("stem.1."):
+            return "stem.norm." + src_key[len("stem.1.") :]
+        # Head
+        if src_key.startswith("head.norm."):
+            return "head_norm." + src_key[len("head.norm.") :]
+        if src_key.startswith("head.fc."):
+            return "classifier." + src_key[len("head.fc.") :]
+        # Stages — both block body and (per-stage) downsample.
+        if src_key.startswith("stages."):
+            parts = src_key.split(".")
+            # parts = ["stages", "S", "blocks", "N", ...rest...]
+            #       OR ["stages", "S", "downsample", {"0","1"}, "weight"/"bias"]
+            stage = parts[1]
+            kind = parts[2]
+            if kind == "downsample":
+                # timm: stages.S.downsample.0/1 → Lucid: downsamplers.{S-1}.norm/conv
+                # Stage 0 has no downsample (it's after the stem); ds blocks live on
+                # stages 1, 2, 3 in timm.
+                if stage == "0":
+                    return None
+                luc_idx = str(int(stage) - 1)
+                ds_part = parts[3]  # "0" (LN) or "1" (Conv)
+                rest = ".".join(parts[4:])
+                if ds_part == "0":
+                    return f"downsamplers.{luc_idx}.norm.{rest}"
+                if ds_part == "1":
+                    return f"downsamplers.{luc_idx}.conv.{rest}"
+                return None
+            if kind == "blocks":
+                block = parts[3]
+                inner_parts = parts[4:]
+                inner = ".".join(inner_parts)
+                lucid_prefix = f"stages.{stage}.{block}"
+                if inner == "gamma":
+                    return f"{lucid_prefix}.gamma"
+                if inner.startswith("conv_dw."):
+                    return f"{lucid_prefix}.dwconv." + inner[len("conv_dw.") :]
+                if inner.startswith("norm."):
+                    return f"{lucid_prefix}.norm." + inner[len("norm.") :]
+                if inner.startswith("mlp.fc1."):
+                    return f"{lucid_prefix}.fc1." + inner[len("mlp.fc1.") :]
+                if inner.startswith("mlp.fc2."):
+                    return f"{lucid_prefix}.fc2." + inner[len("mlp.fc2.") :]
+                return None
+        return None
+
+    def spec(self) -> ConversionSpec:
+        factory_name, repo_id, title = _TIMM_VARIANTS[self.arch]
+        config = {
+            k: (list(v) if isinstance(v, tuple) else v)
+            for k, v in dataclasses.asdict(self._lucid_model.config).items()
+        }
+
+        cfg = self._model.default_cfg
+        from lucid.utils.transforms import ImageClassification
+
+        crop = int(cfg["input_size"][1])
+        resize = int(round(crop / float(cfg.get("crop_pct", 0.875))))
+        preset = ImageClassification(
+            crop_size=crop,
+            resize_size=resize,
+            mean=tuple(float(m) for m in cfg.get("mean", (0.485, 0.456, 0.406))),
+            std=tuple(float(s) for s in cfg.get("std", (0.229, 0.224, 0.225))),
+            interpolation=str(cfg.get("interpolation", "bicubic")),
+        )
+        preprocessing = preset.to_dict()
+
+        meta = {
+            "num_params": int(
+                sum(p.numel() for p in self._model.parameters())
+            ),
+            "recipe": str(cfg.get("url", "")),
+            # timm's default_cfg doesn't carry accuracy numbers directly; the
+            # tag is the convention (paper Table 11 reports 87.0% top-1 for
+            # the in22k_ft_in1k variant at 224x224).
+            "metrics": {"ImageNet-1k": {"acc@1": 87.0, "acc@5": 98.2}},
+        }
+
+        return ConversionSpec(
+            model_name=factory_name,
+            architecture=self.arch,
+            repo_id=repo_id,
+            tag=self.tag,
+            task="image-classification",
+            model_type="convnext",
+            source=f"timm/{self._timm_name}",
+            license=str(cfg.get("license", "apache-2.0")),
+            num_classes=int(self._lucid_model.config.num_classes),
+            config=config,
+            preprocessing=preprocessing,
+            citation=_CONVNEXT_CITATION,
+            title=title,
+            paper_url="Liu et al., 2022 — *A ConvNet for the 2020s* "
+            "(arXiv:2201.03545)",
+            categories=[],
+            meta=meta,
+        )
+
+
+_TIMM_VARIANTS: dict[str, tuple[str, str, str]] = {
+    "convnext_xlarge": (
+        "convnext_xlarge_cls",
+        "lucid-dl/convnext-xlarge",
+        "ConvNeXt-XLarge",
+    ),
+}
+
+
+@register_arch("convnext_xlarge")
+def _build_xlarge(tag: str) -> Architecture:
+    return ConvNeXtTimmArch("convnext_xlarge", tag)

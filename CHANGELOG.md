@@ -119,6 +119,27 @@ verified across 180 parity tests.
     in a follow-up commit sourced from timm — torchvision does not
     publish a 1k-class xlarge head.
 
+- **`lucid.models.vision.convnext`** — pretrained weights for
+  `convnext_xlarge_cls` (Liu et al., 2022, Table 11).  Hosted on
+  [`lucid-dl/convnext-xlarge`](https://huggingface.co/lucid-dl/convnext-xlarge).
+  Sourced from `timm/convnext_xlarge.fb_in22k_ft_in1k` (Facebook AI
+  Research's ImageNet-22k pretraining → ImageNet-1k finetune; ~350M
+  params, acc@1 ≈ 87.0% at 224×224).  Numeric parity vs timm: max
+  abs logit diff `2.4e-5`.  Preset uses **bicubic** interpolation +
+  resize_size=256 (timm default; differs from the four
+  IMAGENET1K_V1 torchvision-sourced variants which use bilinear +
+  variant-specific resize).  Adds a new `ConvNeXtTimmArch`
+  converter class in `tools/convert_weights/convnext.py` for sourcing
+  weights from timm rather than torchvision (key layout differs:
+  `stem.0/1`, `stages.S.blocks.N.{conv_dw, mlp.fc1/fc2}`,
+  `stages.S.downsample.0/1`, `head.norm/fc`).  Load via:
+  ```python
+  from lucid.models import convnext_xlarge_cls
+  from lucid.models.weights import ConvNeXtXLargeWeights
+  m = convnext_xlarge_cls(pretrained=True)
+  m = convnext_xlarge_cls(weights=ConvNeXtXLargeWeights.FB_IN22K_FT_IN1K)
+  ```
+
 ### Added
 
 - **`lucid.utils.transforms`** — 4 new policy classes + 1 new transform:
