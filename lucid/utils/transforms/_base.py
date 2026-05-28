@@ -197,21 +197,43 @@ class _NoParams:
 
 @dataclass
 class BboxParams:
-    """Bounding-box handling policy for :class:`Compose` (Albumentations-style).
+    r"""Bounding-box handling policy for :class:`Compose` (Albumentations-style).
+
+    When a :class:`Compose` is constructed with ``bbox_params=...``,
+    it records every :class:`~lucid.utils.transforms.BoundingBoxes`'s
+    *pre-pipeline* area, runs the pipeline, then calls
+    :func:`~lucid.utils.transforms._datatypes.filter_boxes` on the
+    result with these thresholds.  Out-of-frame / heavily-occluded
+    boxes — and their labels — are dropped in one place rather than
+    re-implemented inside every geometric transform.
 
     Parameters
     ----------
     format : str, optional, default="pascal_voc"
-        Albumentations format name (informational; each
-        :class:`BoundingBoxes` already carries its own ``format``).
+        Albumentations format name.  Informational only; each
+        :class:`~lucid.utils.transforms.BoundingBoxes` already carries
+        its own ``format`` and conversion is handled per-instance.
     min_area : float, optional, default=0.0
-        Drop post-transform boxes whose absolute pixel area is below this.
+        Drop post-transform boxes whose absolute pixel area is below
+        this (units: pixels² in the post-transform canvas).
     min_visibility : float, optional, default=0.0
         Drop boxes whose visible fraction (area / original area) falls
-        below this.
+        below this.  The ratio is computed against the
+        :func:`~lucid.utils.transforms._datatypes.box_areas` snapshot
+        recorded *before* the pipeline ran.
     label_fields : tuple of str, optional
-        Reserved for API parity; labels travel on
-        :attr:`BoundingBoxes.labels`.
+        Reserved for API parity with Albumentations; in Lucid, labels
+        already travel on :attr:`BoundingBoxes.labels` and are trimmed
+        in lock-step.  No-op here.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Compose(
+    ...     [T.Crop(0, 0, 50, 50)],
+    ...     bbox_params=T.BboxParams(min_area=10.0, min_visibility=0.5),
+    ... )
     """
 
     format: str = "pascal_voc"

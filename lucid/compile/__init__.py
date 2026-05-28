@@ -209,6 +209,7 @@ def load_compiled(path: str) -> object:
             f"load_compiled: missing artifact at {path!r} — expected both "
             f"{pkg_path!r} and {meta_path!r}."
         )
+
     # Engine-level executable handle — its attributes are pybind11
     # objects, untyped at the Python boundary.  Narrow via a small
     # Protocol so the wrapper class stays type-checked.

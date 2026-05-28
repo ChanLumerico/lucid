@@ -32,8 +32,6 @@ applied scale on the return path so callers see numerically the same
 value as the eager AMP loop.
 """
 
-
-
 import lucid
 import lucid.amp as amp
 import lucid.metal as metal

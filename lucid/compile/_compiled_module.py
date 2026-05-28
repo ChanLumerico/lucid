@@ -45,6 +45,7 @@ class _ExecutableLike(Protocol):
     output_ids: list[int]
     num_inputs: int
 
+
 from lucid._C import engine as _C_engine
 
 from lucid.compile._fallback import EagerFallbackSet, run_eager

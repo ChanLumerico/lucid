@@ -4,7 +4,6 @@ Exercises conv2d VJP using MPSGraph's
 ``convolution2DDataGradient`` / ``convolution2DWeightsGradient`` APIs.
 """
 
-
 import pytest
 
 import lucid

@@ -719,9 +719,9 @@ class _BatchNormBase(Module):
             nbt = self._buffers["num_batches_tracked"]
             rm = self._buffers["running_mean"]
             rv = self._buffers["running_var"]
-            assert nbt is not None and rm is not None and rv is not None, (
-                "BatchNorm running-stats buffers missing under track_running_stats=True"
-            )
+            assert (
+                nbt is not None and rm is not None and rv is not None
+            ), "BatchNorm running-stats buffers missing under track_running_stats=True"
             self._buffers["num_batches_tracked"] = nbt + 1
             _C_engine.nn.batch_norm_update_running_stats(
                 rm._impl,

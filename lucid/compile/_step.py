@@ -44,6 +44,7 @@ class _ExecutableLike(Protocol):
     output_ids: list[int]
     num_inputs: int
 
+
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module

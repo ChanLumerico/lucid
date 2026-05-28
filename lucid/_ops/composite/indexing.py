@@ -345,9 +345,7 @@ def index_put(
     common_shape: tuple[int, ...] = tuple(indices[0].shape)
     for idx in indices[1:]:
         common_shape = (
-            lucid._tensor.tensor.broadcast_shapes(
-                common_shape, tuple(idx.shape)
-            )
+            lucid._tensor.tensor.broadcast_shapes(common_shape, tuple(idx.shape))
             if hasattr(lucid._tensor, "tensor")
             and hasattr(lucid._tensor.tensor, "broadcast_shapes")
             else common_shape

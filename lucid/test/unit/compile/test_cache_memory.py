@@ -15,7 +15,6 @@ on a shape-variable input stream will OOM on the cumulative MPSGraph
 executables.
 """
 
-
 import lucid
 import lucid.nn as nn
 from lucid._C import engine as _C_engine

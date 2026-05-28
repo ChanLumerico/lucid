@@ -22,9 +22,7 @@ import lucid
 import lucid.utils.transforms as T
 
 
-def _kps(
-    xy_extra: list[list[float]], canvas: tuple[int, int]
-) -> T.Keypoints:
+def _kps(xy_extra: list[list[float]], canvas: tuple[int, int]) -> T.Keypoints:
     """Build a Keypoints object from row-major ``[[x, y, extra...], ...]``."""
     return T.Keypoints(lucid.tensor(xy_extra), canvas)
 
@@ -153,17 +151,17 @@ def _invariant_check(tf_factory: object, name: str) -> None:
         "kps": _kps(xy_extra, (h, w)),
     }
     out = tf_factory()(s)  # type: ignore[operator]
-    assert int(out["kps"].data.shape[0]) == n, (
-        f"{name}: keypoint count changed {n} → {int(out['kps'].data.shape[0])}"
-    )
-    assert int(out["kps"].data.shape[1]) >= 3, (
-        f"{name}: extra columns dropped (shape={tuple(out['kps'].data.shape)})"
-    )
+    assert (
+        int(out["kps"].data.shape[0]) == n
+    ), f"{name}: keypoint count changed {n} → {int(out['kps'].data.shape[0])}"
+    assert (
+        int(out["kps"].data.shape[1]) >= 3
+    ), f"{name}: extra columns dropped (shape={tuple(out['kps'].data.shape)})"
     # Extra column (vis flag) untouched.
     extras = out["kps"].data.numpy()[:, 2].tolist()
-    assert all(abs(v - 1.0) < 1e-5 for v in extras), (
-        f"{name}: visibility column mutated to {extras}"
-    )
+    assert all(
+        abs(v - 1.0) < 1e-5 for v in extras
+    ), f"{name}: visibility column mutated to {extras}"
 
 
 class TestStochasticInvariants:

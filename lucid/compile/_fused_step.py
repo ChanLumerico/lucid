@@ -566,9 +566,9 @@ class _FusedStep:
                         # Cast scale to loss dtype so the multiply
                         # respects the chain dtype (autocast: loss is
                         # F16 or F32 depending on the chain).
-                        assert self._scale_holder is not None, (
-                            "_scale_holder must be allocated when scaler_enabled"
-                        )
+                        assert (
+                            self._scale_holder is not None
+                        ), "_scale_holder must be allocated when scaler_enabled"
                         scale_in_loss_dtype = self._scale_holder.to(loss.dtype)
                         loss_for_bwd = loss * scale_in_loss_dtype
                     else:

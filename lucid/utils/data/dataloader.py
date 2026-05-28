@@ -297,9 +297,7 @@ class _SingleProcessDataLoaderIter:
         # without a localised cast.
         idx_list = cast(list[int], indices)
         if self._getitems_fn is not None:
-            batched = cast(
-                Tensor | tuple[Tensor, ...], self._getitems_fn(idx_list)
-            )
+            batched = cast(Tensor | tuple[Tensor, ...], self._getitems_fn(idx_list))
             return batched
         batch = [self._dataset[i] for i in indices]  # type: ignore[attr-defined]
         return self._collate_fn(batch)  # type: ignore[arg-type, return-value]

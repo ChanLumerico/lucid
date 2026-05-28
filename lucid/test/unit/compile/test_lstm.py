@@ -16,7 +16,6 @@ Coverage:
     (emit returns nullptr → builder aborts → trace marked eager-only)
 """
 
-
 import lucid
 import lucid.nn as nn
 

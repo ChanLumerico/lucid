@@ -113,9 +113,7 @@ class TestDeterministicBench:
         _bench_pair(
             bench,
             "Resize 224→128 (nearest)",
-            lambda: _run_lucid(
-                T.Resize(128, 128, interpolation="nearest", p=1.0), chw
-            ),
+            lambda: _run_lucid(T.Resize(128, 128, interpolation="nearest", p=1.0), chw),
             lambda: _run_albu(A.Resize(128, 128, interpolation=0, p=1.0), hwc),
         )
 
@@ -143,9 +141,7 @@ class TestDeterministicBench:
         _bench_pair(
             bench,
             "Normalize 224",
-            lambda: _run_lucid(
-                T.Normalize(mean, std, max_pixel_value=1.0, p=1.0), chw
-            ),
+            lambda: _run_lucid(T.Normalize(mean, std, max_pixel_value=1.0, p=1.0), chw),
             lambda: _run_albu(
                 A.Normalize(mean=mean, std=std, max_pixel_value=1.0, p=1.0), hwc
             ),
@@ -174,9 +170,7 @@ class TestDeterministicBench:
         _bench_pair(
             bench,
             "Posterize 3-bit",
-            lambda: _run_lucid(
-                T.Posterize(num_bits=3, mode="uint8_mask", p=1.0), chw
-            ),
+            lambda: _run_lucid(T.Posterize(num_bits=3, mode="uint8_mask", p=1.0), chw),
             lambda: _run_albu(A.Posterize(num_bits=3, p=1.0), hwc),
         )
 

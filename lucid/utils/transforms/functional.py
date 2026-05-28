@@ -227,10 +227,49 @@ def _frac1(z: Tensor) -> Tensor:
 
 
 def rgb_to_hsv(img: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-    r"""Convert an RGB image (``[0, 1]``) to HSV channels, each ``(…, 1, H, W)``.
+    r"""Convert an RGB image (in ``[0, 1]``) to HSV channels.
 
-    Hue is returned in ``[0, 1)`` (achromatic pixels → 0); saturation and
-    value in ``[0, 1]``.  Matches the standard hexcone HSV definition.
+    Implements the standard hexcone HSV definition: the hue piecewise
+    formula on the channel that holds the maximum, normalised to
+    ``[0, 1)``, with achromatic pixels (zero chroma) explicitly
+    snapped to ``0``.  Pure-tensor implementation — no Python loop,
+    no colour-space library.
+
+    .. math::
+
+        V = \max(R, G, B), \quad
+        S = \frac{V - \min(R, G, B)}{V}, \quad
+        H = \frac{1}{6} h_\text{hex}(R, G, B) \;\bmod\; 1
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image of shape ``(3, H, W)`` or ``(B, 3, H, W)``, values
+        in ``[0, 1]``.
+
+    Returns
+    -------
+    h : Tensor
+        Hue channel of shape ``(…, 1, H, W)``, in ``[0, 1)``.
+    s : Tensor
+        Saturation channel of shape ``(…, 1, H, W)``, in ``[0, 1]``.
+    v : Tensor
+        Value channel of shape ``(…, 1, H, W)``, in ``[0, 1]``.
+
+    Notes
+    -----
+    Round-trip with :func:`hsv_to_rgb` is exact to float32 epsilon
+    (verified by the G2 cv2-accuracy test suite).  Achromatic pixels
+    (``delta < 1e-10``) get ``h = 0`` to avoid the ``0/0`` form in the
+    hue definition.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> img = lucid.tensor([[[1.0]], [[0.0]], [[0.0]]])  # pure red
+    >>> h, s, v = rgb_to_hsv(img)
+    >>> float(h.item()), float(s.item()), float(v.item())
+    (0.0, 1.0, 1.0)
     """
     r = img[..., 0:1, :, :]
     g = img[..., 1:2, :, :]
@@ -255,7 +294,36 @@ def rgb_to_hsv(img: Tensor) -> tuple[Tensor, Tensor, Tensor]:
 
 
 def hsv_to_rgb(h: Tensor, s: Tensor, v: Tensor) -> Tensor:
-    r"""Convert HSV channels (each ``(…, 1, H, W)``) back to an RGB image."""
+    r"""Convert HSV channels back to an RGB image (inverse of :func:`rgb_to_hsv`).
+
+    Standard hexcone reconstruction: hue is partitioned into 6
+    sectors, each sector selects which two of ``(v, p, q, t)`` map to
+    which RGB channel.  Output is clipped to ``[0, 1]``.
+
+    Parameters
+    ----------
+    h : Tensor
+        Hue channel of shape ``(…, 1, H, W)``, expected in ``[0, 1)``
+        (values outside are wrapped via ``i_mod``).
+    s : Tensor
+        Saturation channel of shape ``(…, 1, H, W)``, in ``[0, 1]``.
+    v : Tensor
+        Value channel of shape ``(…, 1, H, W)``, in ``[0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        RGB image of shape ``(…, 3, H, W)``, values in ``[0, 1]``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> h = lucid.tensor([[[0.0]]])      # red
+    >>> s = lucid.tensor([[[1.0]]])
+    >>> v = lucid.tensor([[[1.0]]])
+    >>> hsv_to_rgb(h, s, v).numpy().reshape(-1).tolist()
+    [1.0, 0.0, 0.0]
+    """
     i = lucid.floor(h * 6.0)
     f = h * 6.0 - i
     p = v * (1.0 - s)
@@ -293,9 +361,49 @@ def adjust_hsv(
 ) -> Tensor:
     r"""Additive HSV shift (cv2 / Albumentations ``HueSaturationValue`` semantics).
 
-    ``hue_shift`` is on the OpenCV ``[0, 179]`` hue scale; ``sat_shift`` /
-    ``val_shift`` on the ``[0, 255]`` scale — converted to the ``[0, 1]``
-    internal HSV and added (hue wraps, S/V clip).
+    Round-trips through HSV via :func:`rgb_to_hsv` /
+    :func:`hsv_to_rgb`.  Inputs use the OpenCV scales so values
+    transfer between Lucid pipelines and any cv2 / Albumentations
+    reference implementation unchanged — internally each shift is
+    rescaled to the ``[0, 1]`` HSV representation, hue wraps mod 1
+    and saturation / value clip to ``[0, 1]``.
+
+    Parameters
+    ----------
+    img : Tensor
+        RGB image of shape ``(3, H, W)`` or ``(B, 3, H, W)`` in ``[0, 1]``.
+    hue_shift : float
+        Hue offset on the OpenCV scale ``[0, 179]`` (``180`` ≡ a full
+        revolution).  Divided by ``180`` and added to the normalised
+        hue.
+    sat_shift : float
+        Saturation offset on the OpenCV scale ``[0, 255]``.  Divided
+        by ``255`` and added to the normalised saturation, then
+        clipped to ``[0, 1]``.
+    val_shift : float
+        Value (brightness) offset on the OpenCV scale ``[0, 255]``,
+        same scaling as ``sat_shift``.
+
+    Returns
+    -------
+    Tensor
+        Shifted RGB image with the same shape and dtype as ``img``.
+
+    Notes
+    -----
+    Lucid keeps the entire round-trip in float, while Albumentations
+    quantises through ``uint8`` + cv2 HSV — Lucid's path is *more*
+    precise (diff vs Albu ≈ 0.02 max, dominated by Albu's 1/255
+    quantisation error).  Tracked in the G3 parity suite under the
+    "ballpark" tier.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> img = lucid.rand(3, 8, 8)
+    >>> out = adjust_hsv(img, hue_shift=20.0, sat_shift=30.0, val_shift=10.0)
+    >>> tuple(out.shape)
+    (3, 8, 8)
     """
     h, s, v = rgb_to_hsv(img)
     h = _frac1(h + hue_shift / 180.0)
@@ -544,11 +652,27 @@ def equalize(img: Tensor, clip_limit: float | None = None) -> Tensor:
 
 
 def _clahe_lut(tile: Tensor, clip_limit: float) -> Tensor:
-    """Build a 256-entry CLAHE mapping LUT (values in ``[0, 1]``) for one tile.
+    r"""Build a 256-entry CLAHE mapping LUT (values in ``[0, 1]``) for one tile.
 
-    Clips the histogram at ``clip_limit * area / 256`` and redistributes the
-    excess uniformly (cv2 ``createCLAHE`` contrast limiting), then maps the
-    CDF onto ``[0, 255]`` with scale ``255 / area``.
+    Clips the histogram at ``clip_limit * area / 256`` and
+    redistributes the clipped excess uniformly across all 256 bins
+    (cv2 ``createCLAHE`` contrast-limiting), then accumulates into a
+    CDF and rescales onto ``[0, 255]`` with the standard
+    ``scale = 255 / area`` mapping.
+
+    Parameters
+    ----------
+    tile : Tensor
+        A 2-D ``(h, w)`` slice of one channel, values in ``[0, 1]``.
+    clip_limit : float
+        Contrast clip threshold; ``0`` (or negative) disables
+        clipping and behaves as plain histogram equalization.
+
+    Returns
+    -------
+    Tensor
+        ``(1, 256)`` LUT where ``lut[v / 255]`` is the post-equalize
+        normalised intensity for source ``v``.
     """
     n = int(tile.shape[0]) * int(tile.shape[1])
     idx = lucid.clip(lucid.round(tile * 255.0), 0.0, 255.0).long().reshape(-1)
@@ -564,11 +688,36 @@ def _clahe_lut(tile: Tensor, clip_limit: float) -> Tensor:
 
 
 def _clahe_channel(ch: Tensor, clip_limit: float, grid_h: int, grid_w: int) -> Tensor:
-    """Contrast-limited adaptive equalization of a single ``(H, W)`` channel.
+    r"""Contrast-limited adaptive equalization of a single ``(H, W)`` channel.
 
-    Computes a clipped-histogram LUT per tile, then bilinearly interpolates
-    each pixel's mapped value between the four nearest tile centres (the
-    defining step that separates CLAHE from a global clip-limited equalize).
+    Computes a clipped-histogram LUT per tile (:func:`_clahe_lut`),
+    then bilinearly interpolates each pixel's mapped value between
+    the four nearest tile centres.  Bilinear inter-tile blending is
+    the defining step that separates CLAHE from a *global*
+    clip-limited equalize (the latter produces visible tile
+    boundaries; CLAHE does not).
+
+    Parameters
+    ----------
+    ch : Tensor
+        Single channel of shape ``(H, W)``, values in ``[0, 1]``.
+    clip_limit : float
+        Contrast clip threshold passed straight to :func:`_clahe_lut`.
+    grid_h, grid_w : int
+        Number of tile rows / columns the channel is divided into.
+
+    Returns
+    -------
+    Tensor
+        Equalized channel of shape ``(H, W)``, values in ``[0, 1]``.
+
+    Notes
+    -----
+    The vectorised gather (``lucid.take`` over a flattened
+    ``(grid_h * grid_w, 256)`` LUT bank) avoids per-pixel Python
+    loops, but the per-tile LUT construction still iterates the grid
+    in Python — this is the bottleneck behind the G4f benchmark
+    finding that CLAHE is ~30× slower than cv2.
     """
     h, w = int(ch.shape[0]), int(ch.shape[1])
     luts = []
@@ -606,12 +755,51 @@ def _clahe_channel(ch: Tensor, clip_limit: float, grid_h: int, grid_w: int) -> T
 def clahe(
     img: Tensor, clip_limit: float = 4.0, tile_grid_size: tuple[int, int] = (8, 8)
 ) -> Tensor:
-    """Contrast-limited adaptive histogram equalization (cv2 ``CLAHE``).
+    r"""Contrast-limited adaptive histogram equalization (cv2 ``CLAHE``).
 
-    A single-channel image is equalized directly; an RGB image is converted
-    to HSV and CLAHE is applied to the value channel (so hue / saturation are
-    preserved), mirroring Albumentations' "equalize luminance only" behaviour
-    without leaving tensor space.
+    Per-tile clipped-histogram LUT plus 4-neighbour bilinear
+    interpolation between tile centres; see :func:`_clahe_channel`
+    for the algorithmic detail.  Multi-channel routing mirrors
+    Albumentations' ``CLAHE`` (which goes through ``cv2.cvtColor``
+    LAB), but stays in tensor space:
+
+    * **single-channel** (``C == 1``) — equalize directly,
+    * **RGB** (``C == 3``) — convert to HSV via :func:`rgb_to_hsv`,
+      equalize the value channel, convert back via :func:`hsv_to_rgb`
+      so hue and saturation are preserved.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image of shape ``(C, H, W)`` or ``(B, C, H, W)``; supports
+        ``C in {1, 3}``.  Values in ``[0, 1]``.
+    clip_limit : float, optional, default=4.0
+        Contrast-clip threshold passed to :func:`_clahe_lut`
+        (histogram cap per tile = ``clip_limit * area / 256``).
+    tile_grid_size : (int, int), optional, default=(8, 8)
+        Number of tiles ``(rows, cols)`` the channel is divided into.
+
+    Returns
+    -------
+    Tensor
+        Equalized image with the same shape and dtype as ``img``.
+
+    Notes
+    -----
+    Approximate cv2 / Albumentations parity (the colour-space pivot
+    differs — HSV value vs LAB L — but both preserve hue /
+    saturation by operating on luminance only).  The G4f benchmark
+    records this at ~30× slower than Albu on a 224² RGB input; the
+    pure-tensor per-tile path is the bottleneck.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms.functional as F
+    >>> img = lucid.rand(3, 64, 64)
+    >>> out = F.clahe(img, clip_limit=4.0, tile_grid_size=(8, 8))
+    >>> tuple(out.shape)
+    (3, 64, 64)
     """
     grid_h, grid_w = tile_grid_size
     unbatched = img.ndim == 3

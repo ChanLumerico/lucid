@@ -107,13 +107,46 @@ class RandomGamma(PhotometricTransform[ScalarParams]):
 
 
 class HueSaturationValue(PhotometricTransform[TripletParams]):
-    r"""Shift hue / saturation / value (Albumentations ``HueSaturationValue``).
+    r"""Random hue / saturation / value shift (Albumentations ``HueSaturationValue``).
 
-    Matches cv2 / Albumentations semantics exactly: ``hue_shift_limit`` is
-    on the OpenCV hue scale ``[0, 179]`` and ``sat_shift_limit`` /
-    ``val_shift_limit`` on ``[0, 255]``; shifts are *additive* in HSV
-    (hue wraps, S / V clip) via a single :func:`functional.adjust_hsv`
-    round-trip.
+    Samples each shift uniformly from its limit range, then applies a
+    single :func:`functional.adjust_hsv` round-trip — additive in HSV,
+    hue wraps, saturation and value clip to ``[0, 1]``.  Channel-gated
+    to RGB (:meth:`PhotometricTransform._require_channels` rejects
+    non-3-channel input).
+
+    Parameters
+    ----------
+    hue_shift_limit : float or (float, float), optional, default=20
+        Hue offset range on the OpenCV scale ``[0, 179]``.  Scalar
+        ``v`` is interpreted as ``(-v, v)``.
+    sat_shift_limit : float or (float, float), optional, default=30
+        Saturation offset range on the OpenCV scale ``[0, 255]``.
+    val_shift_limit : float or (float, float), optional, default=20
+        Value (brightness) offset range on the OpenCV scale ``[0, 255]``.
+    p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If the image has anything other than 3 channels.
+
+    Notes
+    -----
+    Lucid stays in float for the full HSV round-trip; Albumentations
+    quantises through ``uint8`` + cv2 HSV, so the two match to
+    ``~0.02`` (G3 parity "ballpark" tier).  Lucid's path is the more
+    precise of the two.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.HueSaturationValue(hue_shift_limit=10, p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> tuple(out.shape)
+    (3, 32, 32)
     """
 
     def __init__(
@@ -260,18 +293,39 @@ class Equalize(_NoParams, PhotometricTransform[Empty]):
 class CLAHE(_NoParams, PhotometricTransform[Empty]):
     r"""Contrast-limited adaptive histogram equalization (Albumentations ``CLAHE``).
 
-    True tiled CLAHE: a clipped-histogram LUT is built per tile and each
-    pixel's mapped value is bilinearly interpolated between the four nearest
-    tile centres.  RGB images are equalized on the HSV value channel so hue
-    and saturation are preserved.
+    Thin wrapper around :func:`functional.clahe`: per-tile
+    clipped-histogram LUT + 4-neighbour bilinear interpolation between
+    tile centres.  Single-channel images are equalized directly; RGB
+    is routed through the HSV value channel so hue and saturation are
+    preserved (mirrors Albumentations' "luminance-only" behaviour).
 
     Parameters
     ----------
     clip_limit : float, optional, default=4.0
-        Contrast-clip threshold (histogram cap = ``clip_limit * area / 256``).
+        Contrast-clip threshold; per-tile histogram cap is
+        ``clip_limit * tile_area / 256``.  Higher values allow more
+        contrast amplification at the cost of noise.
     tile_grid_size : (int, int), optional, default=(8, 8)
         Number of tiles ``(rows, cols)`` the image is divided into.
+        Larger grids give more local adaptivity at a per-tile cost.
     p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Notes
+    -----
+    Approximate cv2 / Albumentations parity (colour-space pivot
+    differs: HSV value vs LAB L).  Currently ~30× slower than Albu
+    on a 224² RGB input — see :func:`functional.clahe` notes for the
+    bottleneck description.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.CLAHE(clip_limit=4.0, tile_grid_size=(8, 8), p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 64, 64))).data
+    >>> tuple(out.shape)
+    (3, 64, 64)
     """
 
     def __init__(
@@ -321,26 +375,52 @@ class Solarize(PhotometricTransform[ScalarParams]):
 class Posterize(PhotometricTransform[Empty]):
     r"""Reduce bits per channel (Albumentations ``Posterize``).
 
-    Two quantisation modes:
-
-    * ``"uint8_mask"`` (default) — matches Albumentations / OpenCV bit-
-      exactly.  Internally converts to ``uint8`` and applies the bit
-      mask ``~((1 << (8 - num_bits)) - 1)``, then back to ``[0, 1]``.
-      Use this when you need numerical parity with reference pipelines.
-    * ``"float"`` — pure-float quantisation via
-      ``floor(x * 2**num_bits) / 2**num_bits``.  Slightly different
-      mid-bin placement than the OpenCV bit-mask; cheaper (no
-      round-trip).  Use for novel pipelines where Albu parity isn't
-      required.
+    Two quantisation modes — pick based on whether you need
+    bit-exact Albumentations / cv2 parity or just a cheap float-only
+    posterise.
 
     Parameters
     ----------
     num_bits : int, optional, default=4
         Number of bits to keep per channel; output has ``2**num_bits``
         distinct levels.  Must be in ``[1, 7]``.
-    mode : str, optional, default="uint8_mask"
-        Quantisation algorithm; see above.
+    mode : {"uint8_mask", "float"}, optional, default="uint8_mask"
+        Quantisation algorithm:
+
+        * ``"uint8_mask"`` — matches Albumentations / OpenCV
+          bit-exactly.  Round-trips through ``uint8`` and applies the
+          bit mask ``~((1 << (8 - num_bits)) - 1)``, then divides by
+          ``255``.  Use this for parity with reference pipelines.
+        * ``"float"`` — pure-float quantisation via
+          ``floor(x * 2**num_bits) / 2**num_bits``.  Slightly
+          different mid-bin placement than the OpenCV bit-mask;
+          cheaper (no uint8 round-trip).  Use for novel pipelines
+          where Albu parity isn't required.
     p : float, optional, default=0.5
+        Probability of applying the transform.
+
+    Raises
+    ------
+    ValueError
+        If ``num_bits`` falls outside ``[1, 7]`` or ``mode`` is not one
+        of the two recognised names.
+
+    Notes
+    -----
+    The G3 parity suite verifies the ``"uint8_mask"`` mode matches
+    Albumentations to float32 epsilon across ``num_bits ∈ {1, …, 7}``.
+    A 200-seed statistical aggregate (G4e) confirms the mean-of-max
+    diff stays in the same regime.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> tf = T.Posterize(num_bits=3, mode="uint8_mask", p=1.0)
+    >>> out = tf(T.Image(lucid.rand(3, 32, 32))).data
+    >>> # 3-bit → 8 distinct quantisation levels per channel
+    >>> len(set(out.numpy().reshape(-1).tolist())) <= 8
+    True
     """
 
     def __init__(
@@ -373,9 +453,7 @@ class Posterize(PhotometricTransform[Empty]):
         return masked.to(img.dtype) / 255.0
 
     def __repr__(self) -> str:
-        return (
-            f"Posterize(num_bits={self.num_bits}, mode={self.mode!r}, p={self.p})"
-        )
+        return f"Posterize(num_bits={self.num_bits}, mode={self.mode!r}, p={self.p})"
 
 
 class InvertImg(_NoParams, PhotometricTransform[Empty]):

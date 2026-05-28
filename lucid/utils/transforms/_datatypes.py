@@ -35,7 +35,38 @@ _ALBU_FORMAT_ALIASES = {"pascal_voc": "xyxy", "coco": "xywh"}
 
 
 def normalize_box_format(fmt: str) -> str:
-    """Map an Albumentations format alias to the internal name."""
+    r"""Map an Albumentations format alias to the canonical internal name.
+
+    Albumentations exposes two human-friendly aliases (``"pascal_voc"``
+    for the corner-corner format and ``"coco"`` for the corner-size
+    format); the internal representation uses the shorter
+    ``"xyxy"`` / ``"xywh"`` names.  Unknown values pass through
+    untouched so :class:`BoundingBoxes` can raise a clear error.
+
+    Parameters
+    ----------
+    fmt : str
+        A user-supplied format name.  Either an internal name
+        (``"xyxy"``, ``"xywh"``, ``"cxcywh"``, ``"yolo"``,
+        ``"albumentations"``) or an Albumentations alias
+        (``"pascal_voc"``, ``"coco"``).
+
+    Returns
+    -------
+    str
+        The canonical internal name (one of ``"xyxy"``, ``"xywh"``,
+        ``"cxcywh"``, ``"yolo"``, ``"albumentations"``), or ``fmt``
+        unchanged if it isn't a known alias.
+
+    Examples
+    --------
+    >>> normalize_box_format("pascal_voc")
+    'xyxy'
+    >>> normalize_box_format("coco")
+    'xywh'
+    >>> normalize_box_format("yolo")
+    'yolo'
+    """
     return _ALBU_FORMAT_ALIASES.get(fmt, fmt)
 
 
@@ -79,18 +110,66 @@ class Keypoints:
 
 @dataclass
 class BoundingBoxes:
-    """Wraps ``(N, 4)`` bounding boxes with a format + canvas size.
+    r"""Wraps ``(N, 4)`` bounding boxes with a format + canvas size.
+
+    A typed target consumed by every :class:`GeometricTransform` —
+    flips / crops / resizes update both the coordinates and the
+    reported ``canvas_size`` consistently.  Optional ``labels`` ride
+    along the same row dimension so :func:`filter_boxes` can drop
+    out-of-frame boxes + their labels in one step.
 
     Parameters
     ----------
     data : Tensor
-        ``(N, 4)`` coordinates in ``format``.
-    format : {"xyxy", "xywh", "cxcywh"}
-        Coordinate convention: corner-corner, corner-size, or
-        center-size.
+        ``(N, 4)`` coordinates interpreted under ``format``.  For the
+        absolute formats (``xyxy`` / ``xywh`` / ``cxcywh``) units are
+        pixels; for the normalized formats (``yolo`` / ``albumentations``)
+        units are fractions of ``canvas_size``.
+    format : {"xyxy", "xywh", "cxcywh", "yolo", "albumentations", \
+              "pascal_voc", "coco"}
+        Coordinate convention.  ``"pascal_voc"`` is an alias for
+        ``"xyxy"``; ``"coco"`` for ``"xywh"``.  See
+        :func:`normalize_box_format`.
     canvas_size : (int, int)
-        ``(H, W)`` of the image the boxes index into.  Updated by
-        geometric transforms (crop / resize / pad).
+        ``(H, W)`` of the image the boxes index into.  Geometric
+        transforms (crop / resize / pad / rotate) re-emit a new
+        :class:`BoundingBoxes` with the matching canvas.
+    labels : Tensor, optional
+        ``(N,)`` class indices (or any per-box scalar — score, track
+        id, ...).  Carried through every geometric transform; trimmed
+        in lock-step with rows by :func:`filter_boxes`.  Default
+        ``None`` (no per-box labels).
+
+    Raises
+    ------
+    ValueError
+        If ``format`` (after alias normalisation) is not one of the
+        recognised names.
+
+    Notes
+    -----
+    Format conventions (each row's 4 values):
+
+    * ``xyxy`` — ``(x_min, y_min, x_max, y_max)``
+    * ``xywh`` — ``(x_min, y_min, width, height)``
+    * ``cxcywh`` — ``(cx, cy, width, height)``
+    * ``yolo`` — ``(cx, cy, w, h)``, all in ``[0, 1]``
+    * ``albumentations`` — ``(x_min, y_min, x_max, y_max)``, all in ``[0, 1]``
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> boxes = T.BoundingBoxes(
+    ...     lucid.tensor([[10.0, 10.0, 40.0, 40.0]]),
+    ...     "xyxy",
+    ...     canvas_size=(100, 100),
+    ...     labels=lucid.tensor([1.0]),
+    ... )
+    >>> out = T.HorizontalFlip(p=1.0)({"image": T.Image(lucid.rand(3, 100, 100)),
+    ...                                "boxes": boxes})
+    >>> out["boxes"].labels.numpy().tolist()
+    [1.0]
     """
 
     data: Tensor
@@ -108,7 +187,26 @@ class BoundingBoxes:
 
 
 def to_xyxy(boxes: BoundingBoxes) -> Tensor:
-    """Return the box coordinates as ``(N, 4)`` absolute-pixel xyxy."""
+    r"""Return the box coordinates as ``(N, 4)`` absolute-pixel xyxy.
+
+    Normalisation-free output: regardless of whether ``boxes`` is in
+    ``yolo`` (normalized cxcywh) or ``albumentations`` (normalized
+    xyxy), the returned tensor is in pixel units of
+    ``boxes.canvas_size``.  This is the canonical pivot every
+    transform uses internally — flips / crops / resizes operate on
+    xyxy and :func:`from_xyxy` re-encodes back to the original format.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes in any supported format.
+
+    Returns
+    -------
+    Tensor
+        ``(N, 4)`` absolute-pixel ``xyxy``.  Identical to ``boxes.data``
+        when the source format is already ``xyxy``.
+    """
     d = boxes.data
     h, w = boxes.canvas_size
     fmt = boxes.format
@@ -127,7 +225,30 @@ def to_xyxy(boxes: BoundingBoxes) -> Tensor:
 
 
 def from_xyxy(xyxy: Tensor, fmt: str, canvas: tuple[int, int]) -> Tensor:
-    """Convert absolute ``(N, 4)`` xyxy coordinates back to ``fmt``."""
+    r"""Convert absolute ``(N, 4)`` xyxy coordinates back into ``fmt``.
+
+    Inverse of :func:`to_xyxy`.  Normalised output formats divide by
+    ``canvas`` so the round-trip ``from_xyxy(to_xyxy(b), b.format,
+    b.canvas_size)`` reproduces the original ``data`` tensor.
+
+    Parameters
+    ----------
+    xyxy : Tensor
+        ``(N, 4)`` absolute-pixel ``xyxy`` coordinates.
+    fmt : str
+        Target format (any of ``xyxy``, ``xywh``, ``cxcywh``,
+        ``albumentations``, ``yolo``).  Pass the alias-normalised name
+        — use :func:`normalize_box_format` first if you have an Albu
+        alias.
+    canvas : (int, int)
+        ``(H, W)`` used to normalise when ``fmt`` is ``"yolo"`` or
+        ``"albumentations"``; ignored for the absolute formats.
+
+    Returns
+    -------
+    Tensor
+        ``(N, 4)`` coordinates in ``fmt``.
+    """
     h, w = canvas
     x1, y1, x2, y2 = xyxy[:, 0:1], xyxy[:, 1:2], xyxy[:, 2:3], xyxy[:, 3:4]
     if fmt == "xyxy":
@@ -353,7 +474,35 @@ def rot90_keypoints(kps: Keypoints, k: int) -> Keypoints:
 
 
 def box_areas(boxes: BoundingBoxes) -> list[float]:
-    """Absolute pixel areas of each box (clamped at 0), as Python floats."""
+    r"""Absolute pixel area of every box, as a Python ``list[float]``.
+
+    Computes :math:`\max(0, (x_2 - x_1)(y_2 - y_1))` on the
+    :func:`to_xyxy` representation.  Used by :func:`filter_boxes` to
+    drop degenerate / too-small / too-occluded rows, and by
+    :class:`~lucid.utils.transforms.Compose` to record pre-pipeline
+    areas for the ``min_visibility`` calculation.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Source boxes in any supported format.
+
+    Returns
+    -------
+    list of float
+        ``N`` entries, one per box, clamped at 0.  A Python list (not
+        a Tensor) so callers can stash it across the pipeline without
+        carrying an autograd handle.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> b = T.BoundingBoxes(lucid.tensor([[0.0, 0.0, 10.0, 5.0]]),
+    ...                     "xyxy", (100, 100))
+    >>> box_areas(b)
+    [50.0]
+    """
     xy = to_xyxy(boxes)
     n = int(xy.shape[0])
     w = xy[:, 2] - xy[:, 0]
@@ -369,11 +518,60 @@ def filter_boxes(
     min_area: float = 0.0,
     min_visibility: float = 0.0,
 ) -> BoundingBoxes:
-    """Drop degenerate / too-small / too-occluded boxes (+ their labels).
+    r"""Drop degenerate / too-small / too-occluded boxes (+ their labels).
 
-    A box is dropped when its post-transform area is non-positive, below
-    ``min_area`` (absolute pixels), or — when ``orig_areas`` is given —
-    its visible fraction ``area / orig_area`` is below ``min_visibility``.
+    A box at row ``i`` is dropped when **any** of the following holds:
+
+    * its post-transform area :math:`\le 0` (degenerate),
+    * its post-transform area :math:`<` ``min_area`` (absolute pixels),
+    * ``orig_areas`` is supplied **and** the visible fraction
+      :math:`a_i / o_i <` ``min_visibility`` (where :math:`a_i, o_i`
+      are the post-transform and original areas).
+
+    The companion ``labels`` tensor — when present — is trimmed in
+    lock-step, so downstream loss / NMS code never sees a label
+    without a matching box.
+
+    Parameters
+    ----------
+    boxes : BoundingBoxes
+        Boxes (and optional labels) after the transform whose effect
+        you want to filter.
+    orig_areas : list of float, optional
+        Per-row areas captured *before* the transform was applied —
+        typically the output of :func:`box_areas` on the pre-pipeline
+        boxes, recorded by :class:`~lucid.utils.transforms.Compose`
+        with ``bbox_params``.  When omitted, ``min_visibility`` is
+        ignored (only ``min_area`` / degeneracy are checked).
+    min_area : float, optional, default=0.0
+        Absolute-pixel minimum area; rows below this are dropped.
+    min_visibility : float, optional, default=0.0
+        Minimum fraction of the original area that must still be
+        visible.  Requires ``orig_areas``.
+
+    Returns
+    -------
+    BoundingBoxes
+        A new instance carrying only the surviving rows + their
+        labels.  Format, canvas, and the labels-or-``None`` shape are
+        all preserved.
+
+    Examples
+    --------
+    Filter out a tiny box and a degenerate one (with labels):
+
+    >>> import lucid
+    >>> import lucid.utils.transforms as T
+    >>> b = T.BoundingBoxes(
+    ...     lucid.tensor([[0., 0., 30., 30.],   # area 900
+    ...                   [0., 0.,  0.,  0.],   # degenerate
+    ...                   [0., 0.,  2.,  2.]]), # area 4 (too small)
+    ...     "xyxy", (100, 100),
+    ...     labels=lucid.tensor([1.0, 2.0, 3.0]),
+    ... )
+    >>> out = filter_boxes(b, min_area=10.0)
+    >>> out.labels.numpy().tolist()
+    [1.0]
     """
     cur = box_areas(boxes)
     keep: list[int] = []
