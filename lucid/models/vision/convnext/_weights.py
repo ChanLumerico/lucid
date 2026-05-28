@@ -109,10 +109,8 @@ class ConvNeXtXLargeWeights(WeightsEnum):
     """
 
     FB_IN22K_FT_IN1K = WeightEntry(
-        # Hub folder mirrors timm's lowercase source tag; the enum member
-        # ``FB_IN22K_FT_IN1K`` follows the per-family uppercase convention.
-        url=f"{HUB_BASE}/convnext-xlarge/resolve/main/fb_in22k_ft_in1k/model.safetensors",
-        sha256="478e03b9bc6f7f50fc3df0ec1dd52a74a0edff4b040823dcbdf35d86f04d38bc",
+        url=f"{HUB_BASE}/convnext-xlarge/resolve/main/FB_IN22K_FT_IN1K/model.safetensors",
+        sha256="a333dc8e31a6b6a0b1bbb90675281ecb2c7d95a3fab8169a47c91342b157b36b",
         num_classes=1000,
         transforms=ImageClassification(
             crop_size=224, resize_size=256, interpolation="bicubic"

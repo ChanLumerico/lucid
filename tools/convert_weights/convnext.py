@@ -243,9 +243,12 @@ class ConvNeXtTimmArch(Architecture):
         import timm
 
         self.arch = arch
+        # Lucid keeps weight-enum tags uppercase across all families
+        # (``IMAGENET1K_V1``, ``FB_IN22K_FT_IN1K`` …) — the Hub URL path
+        # then mirrors this verbatim.  timm's own model registry is
+        # case-sensitive and lowercase, so the lookup uses a lowered copy.
         self.tag = tag
-        # timm's full name combines arch + tag: ``convnext_xlarge.fb_in22k_ft_in1k``
-        self._timm_name = f"{arch}.{tag}"
+        self._timm_name = f"{arch}.{tag.lower()}"
         self._model = timm.create_model(self._timm_name, pretrained=True)
         self._model.eval()
         # Build a Lucid model just to read its config + state_dict layout.
