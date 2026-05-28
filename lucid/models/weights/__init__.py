@@ -36,9 +36,22 @@ from lucid.models.vision.alexnet._weights import AlexNetWeights
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet._weights import ResNet18Weights
 
+# 2022 — ConvNeXt (Liu et al.)
+from lucid.models.vision.convnext._weights import (
+    ConvNeXtTinyWeights,
+    ConvNeXtSmallWeights,
+    ConvNeXtBaseWeights,
+    ConvNeXtLargeWeights,
+)
+
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
+    # ── Vision (2022) ConvNeXt ────────────────────────────────────────
+    "ConvNeXtTinyWeights",
+    "ConvNeXtSmallWeights",
+    "ConvNeXtBaseWeights",
+    "ConvNeXtLargeWeights",
 ]

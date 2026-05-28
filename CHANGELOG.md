@@ -88,6 +88,37 @@ verified across 180 parity tests.
   the mixed-S3 builder via a tiny proportional config that fits in
   test memory.
 
+- **`lucid.models.vision.convnext`** — pretrained ImageNet-1k weights
+  for `convnext_{tiny,small,base,large}_cls` (Liu et al., 2022, Table 9).
+  Hosted on
+  [`lucid-dl/convnext-{tiny,small,base,large}`](https://huggingface.co/lucid-dl).
+  Converted from torchvision's `ConvNeXt_*_Weights.IMAGENET1K_V1` tag
+  (which redistributes Facebook AI Research's official checkpoints).
+  Numerical parity vs torchvision: max abs logit diff `4-5e-6` across
+  all three sizes verified (large skipped on 16 GB host).  Acc@1:
+  82.520 / 83.616 / 84.062 / 84.414.
+  - `ConvNeXtConfig` gains a `layer_norm_eps: float = 1e-6` field; every
+    LayerNorm in the trunk (stem / block / downsample / head) now uses
+    this eps.  Was the root cause of a `5.6e-2` initial parity gap —
+    Lucid's default LayerNorm eps `1e-5` diverges numerically from the
+    reference ConvNeXt recipe (paper / FAIR official / torchvision all
+    use `1e-6`).
+  - New `Architecture.transform_value` optional hook in
+    `tools/convert_weights/_base.py` to massage individual tensors
+    before they land in Lucid; ConvNeXt's `layer_scale` ships as
+    `(C, 1, 1)` for NCHW broadcasting and the converter squeezes it
+    down to `(C,)` for Lucid's explicit elementwise multiply.
+  - Load via:
+    ```python
+    from lucid.models import convnext_tiny_cls
+    from lucid.models.weights import ConvNeXtTinyWeights
+    m = convnext_tiny_cls(pretrained=True)
+    m = convnext_tiny_cls(weights=ConvNeXtTinyWeights.IMAGENET1K_V1)
+    ```
+  - `convnext_xlarge_cls` weights (350M params, ImageNet-22k → 1k) land
+    in a follow-up commit sourced from timm — torchvision does not
+    publish a 1k-class xlarge head.
+
 ### Added
 
 - **`lucid.utils.transforms`** — 4 new policy classes + 1 new transform:

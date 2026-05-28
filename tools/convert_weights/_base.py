@@ -87,6 +87,17 @@ class Architecture(abc.ABC):
         """Map an upstream key to its Lucid name (``None`` drops the key)."""
         raise NotImplementedError
 
+    def transform_value(self, src_key: str, arr: object) -> object:
+        """Optional hook — reshape / cast the raw upstream array per key.
+
+        Default identity.  Override on subclasses that need to massage a
+        few specific tensors before they land in Lucid (e.g. ConvNeXt's
+        ``layer_scale`` ships as ``(C, 1, 1)`` for use in NCHW
+        broadcasting but Lucid stores it as ``(C,)`` for an explicit
+        elementwise multiply).
+        """
+        return arr
+
     @abc.abstractmethod
     def spec(self) -> ConversionSpec:
         """Return the static :class:`ConversionSpec` for this checkpoint."""
@@ -130,7 +141,7 @@ def convert(arch: Architecture) -> tuple[dict[str, object], ConversionSpec]:
             raise RuntimeError(
                 f"convert: key collision — two source keys map to {lucid_key!r}"
             )
-        out[lucid_key] = from_numpy(arr)
+        out[lucid_key] = from_numpy(arch.transform_value(src_key, arr))
 
     got = set(out)
     missing = sorted(target_keys - got)

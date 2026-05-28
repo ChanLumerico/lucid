@@ -16,6 +16,7 @@ import sys
 
 # Importing the per-architecture modules registers their converters.
 import tools.convert_weights.alexnet  # noqa: F401
+import tools.convert_weights.convnext  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 from tools.convert_weights._base import convert, get_arch, upload, write
 

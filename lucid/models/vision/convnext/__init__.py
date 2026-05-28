@@ -14,11 +14,21 @@ from lucid.models.vision.convnext._pretrained import (
     convnext_xlarge,
     convnext_xlarge_cls,
 )
+from lucid.models.vision.convnext._weights import (
+    ConvNeXtTinyWeights,
+    ConvNeXtSmallWeights,
+    ConvNeXtBaseWeights,
+    ConvNeXtLargeWeights,
+)
 
 __all__ = [
     "ConvNeXtConfig",
     "ConvNeXt",
     "ConvNeXtForImageClassification",
+    "ConvNeXtTinyWeights",
+    "ConvNeXtSmallWeights",
+    "ConvNeXtBaseWeights",
+    "ConvNeXtLargeWeights",
     "convnext_tiny",
     "convnext_tiny_cls",
     "convnext_small",

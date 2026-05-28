@@ -168,5 +168,96 @@ class TestConvNeXtSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
 
+class TestConvNeXtWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def test_default_aliases_imagenet1k_v1(self) -> None:
+        from lucid.models.weights import (
+            ConvNeXtBaseWeights,
+            ConvNeXtLargeWeights,
+            ConvNeXtSmallWeights,
+            ConvNeXtTinyWeights,
+        )
+
+        for cls in (
+            ConvNeXtTinyWeights,
+            ConvNeXtSmallWeights,
+            ConvNeXtBaseWeights,
+            ConvNeXtLargeWeights,
+        ):
+            self.assertIs(cls.DEFAULT, cls.IMAGENET1K_V1)
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.weights import ConvNeXtTinyWeights
+
+        e = ConvNeXtTinyWeights.IMAGENET1K_V1.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertEqual(len(e.sha256), 64)
+        self.assertIn("lucid-dl/convnext-tiny", e.url)
+
+    def test_meta_provenance(self) -> None:
+        from lucid.models.weights import ConvNeXtBaseWeights
+
+        meta = ConvNeXtBaseWeights.IMAGENET1K_V1.meta
+        self.assertEqual(
+            meta["source"], "torchvision/ConvNeXt_Base_Weights.IMAGENET1K_V1"
+        )
+        self.assertEqual(meta["num_params"], 88_591_464)
+        self.assertIn("ImageNet-1k", meta["metrics"])
+
+    def test_transforms_match_torchvision(self) -> None:
+        # ConvNeXt resize sizes differ per variant (236 / 230 / 232 / 232).
+        from lucid.models.weights import (
+            ConvNeXtBaseWeights,
+            ConvNeXtLargeWeights,
+            ConvNeXtSmallWeights,
+            ConvNeXtTinyWeights,
+        )
+
+        cases = [
+            (ConvNeXtTinyWeights, 224, 236),
+            (ConvNeXtSmallWeights, 224, 230),
+            (ConvNeXtBaseWeights, 224, 232),
+            (ConvNeXtLargeWeights, 224, 232),
+        ]
+        for cls, crop, resize in cases:
+            tf = cls.IMAGENET1K_V1.transforms()
+            self.assertEqual(tf.crop_size, crop)
+            self.assertEqual(tf.resize_size, resize)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for name in (
+            "convnext_tiny_cls",
+            "convnext_small_cls",
+            "convnext_base_cls",
+            "convnext_large_cls",
+        ):
+            self.assertIn("IMAGENET1K_V1", list_pretrained(name))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestConvNeXtPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_tiny_default(self) -> None:
+        from lucid.models import convnext_tiny_cls
+
+        m = convnext_tiny_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_small_string_tag(self) -> None:
+        from lucid.models import convnext_small_cls
+
+        m = convnext_small_cls(pretrained="IMAGENET1K_V1")
+        self.assertIsInstance(m, ConvNeXtForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

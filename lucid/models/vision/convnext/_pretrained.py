@@ -1,8 +1,15 @@
 """Registry factories for ConvNeXt variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.convnext._config import ConvNeXtConfig
 from lucid.models.vision.convnext._model import ConvNeXt, ConvNeXtForImageClassification
+from lucid.models.vision.convnext._weights import (
+    ConvNeXtBaseWeights,
+    ConvNeXtLargeWeights,
+    ConvNeXtSmallWeights,
+    ConvNeXtTinyWeights,
+)
 
 _CFG_T = ConvNeXtConfig(depths=(3, 3, 9, 3), dims=(96, 192, 384, 768))
 _CFG_S = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(96, 192, 384, 768))
@@ -262,7 +269,7 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: convnext_tiny_cls adds typed weights= kwarg; ModelFactory protocol predates v3.1 weights system.
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -270,7 +277,10 @@ def convnext_xlarge(pretrained: bool = False, **overrides: object) -> ConvNeXt:
     default_config=_CFG_T,
 )
 def convnext_tiny_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ConvNeXtTinyWeights | None = None,
+    **overrides: object,
 ) -> ConvNeXtForImageClassification:
     r"""ConvNeXt-Tiny image classifier (Liu et al., 2022).
 
@@ -306,11 +316,21 @@ def convnext_tiny_cls(
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> model(x).logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = convnext_tiny_cls(pretrained=True)            # DEFAULT tag
+    >>> from lucid.models.weights import ConvNeXtTinyWeights
+    >>> model = convnext_tiny_cls(weights=ConvNeXtTinyWeights.IMAGENET1K_V1)
     """
-    return _c(_CFG_T, overrides)
+    entry = weights_mod.resolve_weights(ConvNeXtTinyWeights, pretrained, weights)
+    model = _c(_CFG_T, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="convnext_tiny_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -318,7 +338,10 @@ def convnext_tiny_cls(
     default_config=_CFG_S,
 )
 def convnext_small_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ConvNeXtSmallWeights | None = None,
+    **overrides: object,
 ) -> ConvNeXtForImageClassification:
     r"""ConvNeXt-Small image classifier (Liu et al., 2022).
 
@@ -352,11 +375,21 @@ def convnext_small_cls(
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> model(x).logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = convnext_small_cls(pretrained=True)
+    >>> from lucid.models.weights import ConvNeXtSmallWeights
+    >>> model = convnext_small_cls(weights=ConvNeXtSmallWeights.IMAGENET1K_V1)
     """
-    return _c(_CFG_S, overrides)
+    entry = weights_mod.resolve_weights(ConvNeXtSmallWeights, pretrained, weights)
+    model = _c(_CFG_S, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="convnext_small_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -364,7 +397,10 @@ def convnext_small_cls(
     default_config=_CFG_B,
 )
 def convnext_base_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ConvNeXtBaseWeights | None = None,
+    **overrides: object,
 ) -> ConvNeXtForImageClassification:
     r"""ConvNeXt-Base image classifier (Liu et al., 2022).
 
@@ -399,11 +435,21 @@ def convnext_base_cls(
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> model(x).logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = convnext_base_cls(pretrained=True)
+    >>> from lucid.models.weights import ConvNeXtBaseWeights
+    >>> model = convnext_base_cls(weights=ConvNeXtBaseWeights.IMAGENET1K_V1)
     """
-    return _c(_CFG_B, overrides)
+    entry = weights_mod.resolve_weights(ConvNeXtBaseWeights, pretrained, weights)
+    model = _c(_CFG_B, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="convnext_base_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="convnext",
     model_type="convnext",
@@ -411,7 +457,10 @@ def convnext_base_cls(
     default_config=_CFG_L,
 )
 def convnext_large_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ConvNeXtLargeWeights | None = None,
+    **overrides: object,
 ) -> ConvNeXtForImageClassification:
     r"""ConvNeXt-Large image classifier (Liu et al., 2022).
 
@@ -446,8 +495,18 @@ def convnext_large_cls(
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> model(x).logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = convnext_large_cls(pretrained=True)
+    >>> from lucid.models.weights import ConvNeXtLargeWeights
+    >>> model = convnext_large_cls(weights=ConvNeXtLargeWeights.IMAGENET1K_V1)
     """
-    return _c(_CFG_L, overrides)
+    entry = weights_mod.resolve_weights(ConvNeXtLargeWeights, pretrained, weights)
+    model = _c(_CFG_L, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="convnext_large_cls")
+    return model
 
 
 @register_model(

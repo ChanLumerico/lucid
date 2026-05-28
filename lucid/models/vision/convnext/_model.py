@@ -46,11 +46,15 @@ class _ConvNeXtBlock(nn.Module):
     """Depthwise 7×7 + inverted-bottleneck MLP + layer scale + DropPath."""
 
     def __init__(
-        self, dim: int, layer_scale_init: float, drop_path_rate: float = 0.0
+        self,
+        dim: int,
+        layer_scale_init: float,
+        drop_path_rate: float = 0.0,
+        layer_norm_eps: float = 1e-6,
     ) -> None:
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, 7, padding=3, groups=dim)
-        self.norm = nn.LayerNorm(dim)
+        self.norm = nn.LayerNorm(dim, eps=layer_norm_eps)
         self.fc1 = nn.Linear(dim, 4 * dim)
         self.fc2 = nn.Linear(4 * dim, dim)
         self.gamma = nn.Parameter(lucid.full((dim,), layer_scale_init))
@@ -74,9 +78,9 @@ class _ConvNeXtBlock(nn.Module):
 
 
 class _Downsample(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
+    def __init__(self, in_dim: int, out_dim: int, layer_norm_eps: float = 1e-6) -> None:
         super().__init__()
-        self.norm = nn.LayerNorm(in_dim)
+        self.norm = nn.LayerNorm(in_dim, eps=layer_norm_eps)
         self.conv = nn.Conv2d(in_dim, out_dim, 2, stride=2)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -105,7 +109,7 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
         nn.Conv2d(cfg.in_channels, cfg.dims[0], 4, stride=4),
         # LN applied in channel-last: use a wrapper
     )
-    stem_norm = nn.LayerNorm(cfg.dims[0])
+    stem_norm = nn.LayerNorm(cfg.dims[0], eps=cfg.layer_norm_eps)
 
     stages: list[nn.Module] = []
     downsamplers: list[nn.Module] = []
@@ -124,7 +128,12 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
         stage_blocks: list[nn.Module] = []
         for _ in range(depth):
             stage_blocks.append(
-                _ConvNeXtBlock(dim, cfg.layer_scale_init, dp_rates[block_cursor])
+                _ConvNeXtBlock(
+                    dim,
+                    cfg.layer_scale_init,
+                    dp_rates[block_cursor],
+                    layer_norm_eps=cfg.layer_norm_eps,
+                )
             )
             block_cursor += 1
         stage = nn.Sequential(*stage_blocks)
@@ -133,10 +142,12 @@ def _build_convnext(cfg: ConvNeXtConfig) -> tuple[
 
         if i < len(cfg.depths) - 1:
             next_dim = cfg.dims[i + 1]
-            downsamplers.append(_Downsample(dim, next_dim))
+            downsamplers.append(
+                _Downsample(dim, next_dim, layer_norm_eps=cfg.layer_norm_eps)
+            )
             reduction *= 2
 
-    head_norm = nn.LayerNorm(cfg.dims[-1])
+    head_norm = nn.LayerNorm(cfg.dims[-1], eps=cfg.layer_norm_eps)
 
     # Wrap stem + stem_norm together
     full_stem = _StemWithNorm(stem, stem_norm)

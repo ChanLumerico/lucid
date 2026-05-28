@@ -130,6 +130,13 @@ class ConvNeXtConfig(ModelConfig):
     depths: tuple[int, ...] = (3, 3, 9, 3)
     dims: tuple[int, ...] = (96, 192, 384, 768)
     layer_scale_init: float = 1e-6
+    # Every LayerNorm in the trunk uses ``eps=1e-6`` per the reference
+    # ConvNeXt recipe (matches Facebook AI Research's official repo + the
+    # torchvision implementation).  Lucid's default LayerNorm eps is
+    # ``1e-5`` which is fine for from-scratch training but diverges
+    # numerically from pretrained checkpoints; setting it here keeps the
+    # surface-level model match exact when loading converted weights.
+    layer_norm_eps: float = 1e-6
     dropout: float = 0.0
 
     def __post_init__(self) -> None:
