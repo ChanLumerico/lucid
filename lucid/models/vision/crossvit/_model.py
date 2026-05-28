@@ -1,9 +1,34 @@
-"""CrossViT backbone and classification head (Chen et al., 2021).
+"""CrossViT backbone and classifier (Chen et al., ICCV 2021).
 
-Two-branch Vision Transformer with different patch sizes. CLS tokens
-cross-attend between branches to fuse multi-scale features.
+Paper: "CrossViT: Cross-Attention Multi-Scale Vision Transformer for
+Image Classification" (arXiv:2103.14899).
+
+Architecture:
+    * Two parallel ViT branches with different patch sizes.
+      The *small-patch* branch processes the full image (240×240 with
+      patch size 12 → 20×20 = 400 tokens); the *large-patch* branch
+      processes a rescaled version (224×224 with patch size 16 →
+      14×14 = 196 tokens).  Each branch carries its own learnable
+      CLS token + positional embedding.
+    * The trunk is K=3 ``MultiScaleBlock`` s.  Each block first runs
+      ``N_s`` / ``N_l`` standard self-attention blocks on the two
+      branches *independently*, then exchanges CLS tokens between the
+      branches via cross-attention: the CLS from branch ``d`` is
+      projected (LN + GELU + Linear) into the embedding space of
+      branch ``d_=(d+1) % 2``, cross-attends to that branch's patch
+      tokens, then is projected back.  This is paper §3.2.
+    * Final head: per-branch ``LayerNorm`` over the CLS token + a
+      per-branch ``Linear`` → ``num_classes``.  The two logits are
+      averaged (paper §3.3, "ensemble of the two heads").
+
+Implementation note: module naming mirrors timm's
+``timm.models.crossvit`` so the converter only needs a single
+``blocks`` → ``stages`` rename to remap a timm checkpoint.  Block-
+level naming (``attn.qkv`` / ``attn.proj`` / ``mlp.fc1`` / ``mlp.fc2``)
+is identical.
 """
 
+import math
 from typing import ClassVar, cast
 
 import lucid
@@ -13,190 +38,358 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
+from lucid.models._utils._classification import DropPath
 from lucid.models.vision.crossvit._config import CrossViTConfig
 
+
 # ---------------------------------------------------------------------------
-# Shared building blocks
+# Patch embedding (one per branch)
 # ---------------------------------------------------------------------------
 
 
 class _PatchEmbed(nn.Module):
-    """Non-overlapping patch embedding: Conv2d(patch_size, stride=patch_size)."""
+    """``Conv2d(in→embed_dim, k=stride=patch)`` flattening to NLC tokens."""
 
-    def __init__(self, in_ch: int, patch_size: int, dim: int) -> None:
+    def __init__(self, in_channels: int, embed_dim: int, patch_size: int) -> None:
         super().__init__()
-        self.proj = nn.Conv2d(in_ch, dim, patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(in_channels, embed_dim, patch_size, stride=patch_size)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.proj(x))
+        x = cast(Tensor, self.proj(x))  # (B, C, H', W')
         B, C, H, W = x.shape
-        return x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, dim)
+        return x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
 
 
-class _MLP(nn.Module):
-    def __init__(self, dim: int, mlp_dim: int, dropout: float) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(dim, mlp_dim)
-        self.fc2 = nn.Linear(mlp_dim, dim)
-        self.drop = nn.Dropout(p=dropout)
-
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.drop(F.gelu(cast(Tensor, self.fc1(x)))))
-        return cast(Tensor, self.drop(cast(Tensor, self.fc2(x))))
+# ---------------------------------------------------------------------------
+# Self-attention block (standard ViT block)
+# ---------------------------------------------------------------------------
 
 
-class _SelfAttnBlock(nn.Module):
-    """Standard ViT self-attention block."""
+class _Attention(nn.Module):
+    """Standard multi-head self-attention with fused QKV projection."""
 
     def __init__(
-        self, dim: int, num_heads: int, mlp_ratio: float, dropout: float
+        self,
+        dim: int,
+        num_heads: int,
+        qkv_bias: bool = True,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim)
-        self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
-        self.norm2 = nn.LayerNorm(dim)
-        self.mlp = _MLP(dim, int(dim * mlp_ratio), dropout)
+        assert dim % num_heads == 0, "dim must be divisible by num_heads"
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        n = cast(Tensor, self.norm1(x))
-        attn_out, _ = self.attn(n, n, n)
-        x = x + attn_out
-        x = x + cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
+        B, N, C = x.shape
+        qkv = cast(Tensor, self.qkv(x)).reshape(
+            B, N, 3, self.num_heads, self.head_dim
+        )
+        qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
+        attn = F.softmax(attn, dim=-1)
+        attn = cast(Tensor, self.attn_drop(attn))
+        x = (attn @ v).swapaxes(1, 2).reshape(B, N, C)
+        x = cast(Tensor, self.proj(x))
+        return cast(Tensor, self.proj_drop(x))
+
+
+class _Mlp(nn.Module):
+    """Two-layer Linear-GELU-Linear MLP with dropout."""
+
+    def __init__(
+        self,
+        in_features: int,
+        hidden_features: int,
+        out_features: int,
+        drop: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = F.gelu(cast(Tensor, self.fc1(x)))
+        x = cast(Tensor, self.drop(x))
+        x = cast(Tensor, self.fc2(x))
+        return cast(Tensor, self.drop(x))
+
+
+class _Block(nn.Module):
+    """Standard ViT transformer block: LN → MSA → LN → MLP + residuals."""
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        mlp_ratio: float,
+        qkv_bias: bool = True,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_norm_eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim, eps=layer_norm_eps)
+        self.attn = _Attention(
+            dim, num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop
+        )
+        self.drop_path = DropPath(drop_path)
+        self.norm2 = nn.LayerNorm(dim, eps=layer_norm_eps)
+        self.mlp = _Mlp(dim, int(dim * mlp_ratio), dim, drop=drop)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.attn(self.norm1(x)))))
+        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.mlp(self.norm2(x)))))
         return x
 
 
 # ---------------------------------------------------------------------------
-# Cross-attention module
+# Cross-attention block (query from one branch's CLS, KV from the other branch)
 # ---------------------------------------------------------------------------
 
 
 class _CrossAttention(nn.Module):
-    """Cross-attention from one branch's CLS token to another branch's tokens.
+    """Cross-attention: query = single CLS token, KV = patch sequence.
 
-    The CLS token of the *source* branch attends over all tokens (incl. CLS)
-    in the *target* branch. The attended result is added back to the source
-    CLS position, enabling bidirectional information flow.
+    The query branch has dimension ``dim``; the KV branch has been
+    pre-projected (outside this module) to the same dimension so we
+    can use a single shared ``head_dim``.  Mirrors timm's
+    ``CrossAttention`` exactly so the state-dict naming
+    (``attn.wq`` / ``attn.wk`` / ``attn.wv`` / ``attn.proj``) carries
+    over without renames.
     """
 
-    def __init__(self, dim_src: int, dim_tgt: int) -> None:
-        super().__init__()
-        self.norm_src = nn.LayerNorm(dim_src)
-        self.norm_tgt = nn.LayerNorm(dim_tgt)
-        # Project source CLS to target dim for cross-attention query
-        self.q_proj = nn.Linear(dim_src, dim_tgt)
-        self.attn = nn.MultiheadAttention(dim_tgt, num_heads=1, batch_first=True)
-        # Project result back to source dim
-        self.out_proj = nn.Linear(dim_tgt, dim_src)
-        self.norm_out = nn.LayerNorm(dim_src)
-
-    def forward(self, src: Tensor, tgt: Tensor) -> Tensor:  # type: ignore[override]
-        """Update src CLS token using cross-attention over tgt tokens.
-
-        Args:
-            src: (B, N_src, dim_src) — source branch tokens (CLS at index 0)
-            tgt: (B, N_tgt, dim_tgt) — target branch tokens
-
-        Returns:
-            Updated (B, N_src, dim_src) source tokens.
-        """
-        cls_src = src[:, :1, :]  # (B, 1, dim_src)
-        cls_normed = cast(Tensor, self.norm_src(cls_src))
-        q = cast(Tensor, self.q_proj(cls_normed))  # (B, 1, dim_tgt)
-        kv = cast(Tensor, self.norm_tgt(tgt))  # (B, N_tgt, dim_tgt)
-        cross_out, _ = self.attn(q, kv, kv)  # (B, 1, dim_tgt)
-        delta = cast(Tensor, self.norm_out(cast(Tensor, self.out_proj(cross_out))))
-        new_cls = cls_src + delta
-        return lucid.cat([new_cls, src[:, 1:, :]], dim=1)
-
-
-# ---------------------------------------------------------------------------
-# One CrossViT stage (self-attn per branch + cross-attn between branches)
-# ---------------------------------------------------------------------------
-
-
-class _CrossViTStage(nn.Module):
     def __init__(
         self,
-        small_dim: int,
-        large_dim: int,
-        small_heads: int,
-        large_heads: int,
-        mlp_ratio: float,
-        dropout: float,
+        dim: int,
+        num_heads: int,
+        qkv_bias: bool = True,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
     ) -> None:
         super().__init__()
-        self.small_block = _SelfAttnBlock(small_dim, small_heads, mlp_ratio, dropout)
-        self.large_block = _SelfAttnBlock(large_dim, large_heads, mlp_ratio, dropout)
-        # Cross-attention: small CLS → large tokens
-        self.cross_s2l = _CrossAttention(small_dim, large_dim)
-        # Cross-attention: large CLS → small tokens
-        self.cross_l2s = _CrossAttention(large_dim, small_dim)
+        assert dim % num_heads == 0
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = 1.0 / math.sqrt(self.head_dim)
+        self.wq = nn.Linear(dim, dim, bias=qkv_bias)
+        self.wk = nn.Linear(dim, dim, bias=qkv_bias)
+        self.wv = nn.Linear(dim, dim, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(  # type: ignore[override]
-        self, x_s: Tensor, x_l: Tensor
-    ) -> tuple[Tensor, Tensor]:
-        x_s = cast(Tensor, self.small_block(x_s))
-        x_l = cast(Tensor, self.large_block(x_l))
-        # Exchange CLS information
-        x_s = cast(Tensor, self.cross_s2l(x_s, x_l))
-        x_l = cast(Tensor, self.cross_l2s(x_l, x_s))
-        return x_s, x_l
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        # x = concat(cls_query, kv_sequence) along token dim.
+        # timm's CrossAttention takes only the first token as query,
+        # the entire sequence as KV.
+        B, N, C = x.shape
+        q = (
+            cast(Tensor, self.wq(x[:, 0:1, :]))
+            .reshape(B, 1, self.num_heads, self.head_dim)
+            .permute(0, 2, 1, 3)
+        )
+        k = (
+            cast(Tensor, self.wk(x))
+            .reshape(B, N, self.num_heads, self.head_dim)
+            .permute(0, 2, 1, 3)
+        )
+        v = (
+            cast(Tensor, self.wv(x))
+            .reshape(B, N, self.num_heads, self.head_dim)
+            .permute(0, 2, 1, 3)
+        )
+        attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, 1, N)
+        attn = F.softmax(attn, dim=-1)
+        attn = cast(Tensor, self.attn_drop(attn))
+        x = (attn @ v).swapaxes(1, 2).reshape(B, 1, C)
+        x = cast(Tensor, self.proj(x))
+        return cast(Tensor, self.proj_drop(x))
+
+
+class _CrossAttentionBlock(nn.Module):
+    """Pre-norm cross-attention block (no MLP, mirroring the paper)."""
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        qkv_bias: bool = True,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: float = 0.0,
+        layer_norm_eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim, eps=layer_norm_eps)
+        self.attn = _CrossAttention(
+            dim, num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop
+        )
+        self.drop_path = DropPath(drop_path)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        # Residual is added only to the CLS query token (first slot).
+        cls_q = x[:, 0:1, :]
+        out = cast(Tensor, self.attn(cast(Tensor, self.norm1(x))))
+        return cls_q + cast(Tensor, self.drop_path(out))
 
 
 # ---------------------------------------------------------------------------
-# Body builder
+# Multi-scale block: per-branch self-attention + cross-branch fusion
 # ---------------------------------------------------------------------------
 
 
-def _build_trunk(
-    config: CrossViTConfig,
-) -> tuple[
-    _PatchEmbed,  # small embed
-    _PatchEmbed,  # large embed
-    Tensor,  # small cls_token
-    Tensor,  # large cls_token
-    Tensor,  # small pos_embed
-    Tensor,  # large pos_embed
-    nn.Dropout,
-    nn.ModuleList,  # stages
-    nn.LayerNorm,  # small norm
-    nn.LayerNorm,  # large norm
-]:
-    img = config.image_size
-    n_s = (img // config.small_patch) ** 2
-    n_l = (img // config.large_patch) ** 2
-
-    embed_s = _PatchEmbed(config.in_channels, config.small_patch, config.small_dim)
-    embed_l = _PatchEmbed(config.in_channels, config.large_patch, config.large_dim)
-
-    cls_s = nn.Parameter(lucid.zeros(1, 1, config.small_dim))
-    cls_l = nn.Parameter(lucid.zeros(1, 1, config.large_dim))
-    pos_s = nn.Parameter(lucid.zeros(1, n_s + 1, config.small_dim))
-    pos_l = nn.Parameter(lucid.zeros(1, n_l + 1, config.large_dim))
-    nn.init.trunc_normal_(cls_s, std=0.02)
-    nn.init.trunc_normal_(cls_l, std=0.02)
-    nn.init.trunc_normal_(pos_s, std=0.02)
-    nn.init.trunc_normal_(pos_l, std=0.02)
-
-    drop = nn.Dropout(p=config.dropout)
-
-    stages = nn.ModuleList(
-        [
-            _CrossViTStage(
-                config.small_dim,
-                config.large_dim,
-                config.small_heads,
-                config.large_heads,
-                config.mlp_ratio,
-                config.dropout,
-            )
-            for _ in range(config.depth)
-        ]
+def _make_proj(in_dim: int, out_dim: int, layer_norm_eps: float) -> nn.Sequential:
+    """LN(in) → GELU → Linear(in → out) — used for both proj and revert."""
+    return nn.Sequential(
+        nn.LayerNorm(in_dim, eps=layer_norm_eps),
+        nn.GELU(),
+        nn.Linear(in_dim, out_dim),
     )
-    norm_s = nn.LayerNorm(config.small_dim)
-    norm_l = nn.LayerNorm(config.large_dim)
 
-    return embed_s, embed_l, cls_s, cls_l, pos_s, pos_l, drop, stages, norm_s, norm_l
+
+class _MultiScaleBlock(nn.Module):
+    """One CrossViT stage: independent branches → CLS-token fusion."""
+
+    def __init__(
+        self,
+        dim: tuple[int, int],
+        depth: tuple[int, int, int],
+        num_heads: tuple[int, int],
+        mlp_ratio: tuple[float, float, float],
+        qkv_bias: bool = True,
+        drop: float = 0.0,
+        attn_drop: float = 0.0,
+        drop_path: tuple[list[float], list[float], list[float]] | None = None,
+        layer_norm_eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.num_branches = 2
+        # Per-branch self-attention stacks.
+        self.blocks = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *[
+                        _Block(
+                            dim[d],
+                            num_heads[d],
+                            mlp_ratio[d],
+                            qkv_bias=qkv_bias,
+                            drop=drop,
+                            attn_drop=attn_drop,
+                            drop_path=(drop_path[d][i] if drop_path else 0.0),
+                            layer_norm_eps=layer_norm_eps,
+                        )
+                        for i in range(depth[d])
+                    ]
+                )
+                for d in range(self.num_branches)
+            ]
+        )
+
+        # Project CLS from branch d to dim of branch d_ = (d+1) % 2.
+        self.projs = nn.ModuleList(
+            [
+                _make_proj(dim[d], dim[(d + 1) % 2], layer_norm_eps)
+                for d in range(self.num_branches)
+            ]
+        )
+
+        # Cross-attention fusion: query CLS (already projected) + KV from the
+        # other branch's patch tokens.  Built at the *destination* dim.
+        # ``depth[2]`` extra cross-attention blocks (paper-cited variants = 0,
+        # i.e. just one mandatory cross-attn pass per branch).
+        n_cross = max(1, depth[2] if depth[2] > 0 else 1)
+        self.fusion = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *[
+                        _CrossAttentionBlock(
+                            dim[(d + 1) % 2],
+                            num_heads[(d + 1) % 2],
+                            qkv_bias=qkv_bias,
+                            drop=drop,
+                            attn_drop=attn_drop,
+                            drop_path=(
+                                drop_path[2][i] if drop_path else 0.0
+                            ),
+                            layer_norm_eps=layer_norm_eps,
+                        )
+                        for i in range(n_cross)
+                    ]
+                )
+                for d in range(self.num_branches)
+            ]
+        )
+
+        # Revert projection: CLS back to original branch's dim.
+        self.revert_projs = nn.ModuleList(
+            [
+                _make_proj(dim[(d + 1) % 2], dim[d], layer_norm_eps)
+                for d in range(self.num_branches)
+            ]
+        )
+
+    def forward(self, xs: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+        # Per-branch self-attention.
+        xs = [cast(Tensor, self.blocks[d](xs[d])) for d in range(self.num_branches)]
+
+        # Project CLS of each branch into the other branch's dim space.
+        proj_cls = [
+            cast(Tensor, self.projs[d](xs[d][:, 0:1, :]))
+            for d in range(self.num_branches)
+        ]
+
+        # Cross-attend + revert.
+        out_xs: list[Tensor] = []
+        for d in range(self.num_branches):
+            d_ = (d + 1) % self.num_branches
+            # Concat projected CLS (1 token) + other-branch patch tokens.
+            tmp = lucid.cat([proj_cls[d], xs[d_][:, 1:, :]], dim=1)
+            tmp = cast(Tensor, self.fusion[d](tmp))
+            # Project the fused CLS back to original branch dim and stitch
+            # together with the unchanged patch tokens.
+            reverted = cast(Tensor, self.revert_projs[d](tmp))
+            out_xs.append(lucid.cat([reverted, xs[d][:, 1:, :]], dim=1))
+        return out_xs
+
+
+# ---------------------------------------------------------------------------
+# Image rescaling for the dual-input forward pass.
+# ---------------------------------------------------------------------------
+
+
+def _scale_image(x: Tensor, scale: float, crop_scale: bool) -> Tensor:
+    """Resize (default) or center-crop the input by ``scale``.
+
+    Mirrors timm's ``scale_image`` helper.  ``scale=1.0`` is a no-op.
+    """
+    if scale == 1.0:
+        return x
+    if crop_scale:
+        # Center crop to ``(B, C, H*scale, W*scale)``.
+        _, _, H, W = x.shape
+        h, w = int(round(H * scale)), int(round(W * scale))
+        top = (H - h) // 2
+        left = (W - w) // 2
+        return x[:, :, top : top + h, left : left + w]
+    # Bilinear interpolate.
+    _, _, H, W = x.shape
+    new_h = int(round(H * scale))
+    new_w = int(round(W * scale))
+    return cast(
+        Tensor,
+        F.interpolate(x, size=(new_h, new_w), mode="bilinear", align_corners=False),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,144 +398,128 @@ def _build_trunk(
 
 
 class CrossViT(PretrainedModel, BackboneMixin):
-    r"""CrossViT backbone (Chen et al., 2021).
+    r"""CrossViT backbone (Chen et al., ICCV 2021).
 
-    CrossViT runs *two parallel ViT branches* with different patch
-    sizes (``small_patch`` and ``large_patch``), each maintaining its
-    own learnable CLS token and positional embedding.  Within each
-    CrossViT stage every branch first performs ordinary self-attention,
-    then the two branches exchange information *only through their CLS
-    tokens* using bidirectional cross-attention:
+    Builds two parallel ViT branches that operate on different
+    resolutions and exchange information through K=3 cross-attention
+    fusion blocks.  See :class:`CrossViTConfig` for the per-variant
+    hyperparameters.
 
-    .. math::
-
-        \tilde{x}_{\text{cls}}^{\,l} = x_{\text{cls}}^{l} +
-            \mathrm{Attn}\!\bigl(W_q x_{\text{cls}}^{l},\,
-            W_k x_{\text{patch}}^{s},\, W_v x_{\text{patch}}^{s}\bigr),
-
-    and symmetrically for the large-to-small direction.  Because
-    cross-attention only updates the CLS tokens, the multi-scale fusion
-    cost is :math:`\mathcal{O}(N_s + N_l)` instead of
-    :math:`\mathcal{O}(N_s \cdot N_l)`.
-
-    :meth:`forward_features` returns the *large-branch* CLS token after
-    the final LayerNorm — a flat :math:`(B, \texttt{large\_dim})`
-    feature.  For end-to-end classification use
-    :class:`CrossViTForImageClassification`, which averages the logits
-    from both per-branch heads.
-
-    Parameters
-    ----------
-    config : CrossViTConfig
-        Frozen dataclass specifying ``image_size``, ``small_patch``,
-        ``large_patch``, ``small_dim``, ``large_dim``, ``small_heads``,
-        ``large_heads``, ``depth``, ``mlp_ratio``, ``dropout``, and
-        ``in_channels``.  See :class:`CrossViTConfig`.
-
-    Attributes
-    ----------
-    embed_s, embed_l : _PatchEmbed
-        Patch-embedding convolutions for the small / large branches.
-    cls_s, cls_l : Tensor
-        Learnable CLS tokens for the small / large branches.
-    pos_s, pos_l : Tensor
-        Learnable positional embeddings for each branch.
-    pos_drop : nn.Dropout
-        Dropout applied right after the positional embedding sum.
-    stages : nn.ModuleList
-        ``config.depth`` stacked :class:`_CrossViTStage` modules.
-    norm_s, norm_l : nn.LayerNorm
-        Final LayerNorms applied to each branch before extracting the
-        CLS token.
-    feature_info : list[FeatureInfo]
-        Single-stage feature description with channel count
-        ``config.large_dim`` and reduction ``config.large_patch``.
-
-    Notes
-    -----
-    Reference: Chun-Fu Chen *et al.*, *"CrossViT: Cross-Attention
-    Multi-Scale Vision Transformer for Image Classification"*,
-    ICCV 2021, `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    Build a CrossViT-9 backbone and run a forward pass:
-
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import CrossViT, CrossViTConfig
-    >>> cfg = CrossViTConfig(
-    ...     depth=3, small_dim=128, large_dim=256,
-    ...     small_heads=4, large_heads=4, mlp_ratio=3.0,
-    ... )
-    >>> model = CrossViT(cfg)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> feat = model.forward_features(x)
-    >>> feat.shape                       # (B, large_dim)
-    (1, 256)
+    Returns
+    -------
+    BaseModelOutput
+        ``last_hidden_state`` carries the concatenation of the two
+        per-branch CLS tokens along the channel dimension.  Use
+        :meth:`forward_features` to get the two CLS tokens separately.
     """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig
     base_model_prefix: ClassVar[str] = "crossvit"
 
-    cls_s: Tensor
-    cls_l: Tensor
-    pos_s: Tensor
-    pos_l: Tensor
-
     def __init__(self, config: CrossViTConfig) -> None:
         super().__init__(config)
-        (
-            embed_s,
-            embed_l,
-            cls_s,
-            cls_l,
-            pos_s,
-            pos_l,
-            drop,
-            stages,
-            norm_s,
-            norm_l,
-        ) = _build_trunk(config)
-        self.embed_s = embed_s
-        self.embed_l = embed_l
-        self.cls_s = cls_s
-        self.cls_l = cls_l
-        self.pos_s = pos_s
-        self.pos_l = pos_l
-        self.pos_drop = drop
-        self.stages = stages
-        self.norm_s = norm_s
-        self.norm_l = norm_l
+        cfg = config
+        in_ch = cfg.in_channels
+        eps = cfg.layer_norm_eps
+        D = cfg.embed_dims
+        P = cfg.patch_sizes
+
+        # Patch embeddings for each branch.
+        self.patch_embed = nn.ModuleList(
+            [_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)]
+        )
+
+        # CLS + positional embedding per branch.  Number of patch tokens
+        # depends on per-branch input size.
+        img_h = cfg.image_size
+        sizes = [int(round(img_h * cfg.img_scale[d])) for d in range(2)]
+        num_patches = [(sizes[d] // P[d]) ** 2 for d in range(2)]
+
+        self.cls_token_0 = nn.Parameter(lucid.zeros(1, 1, D[0]))
+        self.cls_token_1 = nn.Parameter(lucid.zeros(1, 1, D[1]))
+        self.pos_embed_0 = nn.Parameter(lucid.zeros(1, num_patches[0] + 1, D[0]))
+        self.pos_embed_1 = nn.Parameter(lucid.zeros(1, num_patches[1] + 1, D[1]))
+        self.pos_drop = nn.Dropout(cfg.dropout)
+
+        # Stochastic-depth schedule across all blocks in all stages.
+        n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
+        dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
+        dpr = (
+            [
+                cfg.drop_path_rate * i / max(1, dpr_total - 1)
+                for i in range(dpr_total)
+            ]
+            if cfg.drop_path_rate > 0.0
+            else [0.0] * dpr_total
+        )
+        cursor = 0
+        stages: list[nn.Module] = []
+        for stage_depth in cfg.depths:
+            n_s, n_l, n_c = stage_depth
+            n_c_eff = max(1, n_c if n_c > 0 else 1)
+            stage_dpr = (
+                dpr[cursor : cursor + n_s],
+                dpr[cursor + n_s : cursor + n_s + n_l],
+                dpr[cursor + n_s + n_l : cursor + n_s + n_l + n_c_eff],
+            )
+            stages.append(
+                _MultiScaleBlock(
+                    dim=D,
+                    depth=stage_depth,
+                    num_heads=cfg.num_heads,
+                    mlp_ratio=cfg.mlp_ratio,
+                    qkv_bias=cfg.qkv_bias,
+                    drop=cfg.dropout,
+                    attn_drop=0.0,
+                    drop_path=stage_dpr,
+                    layer_norm_eps=eps,
+                )
+            )
+            cursor += n_s + n_l + n_c_eff
+        self.stages = nn.ModuleList(stages)
+
+        # Final per-branch LayerNorm.
+        self.norm = nn.ModuleList([nn.LayerNorm(D[d], eps=eps) for d in range(2)])
+
         self._feature_info = [
-            FeatureInfo(
-                stage=1, num_channels=config.large_dim, reduction=config.large_patch
-            ),
+            FeatureInfo(stage=1, num_channels=D[0], reduction=P[0]),
+            FeatureInfo(stage=2, num_channels=D[1], reduction=P[1]),
         ]
 
     @property
     def feature_info(self) -> list[FeatureInfo]:
         return self._feature_info
 
-    def forward_features(self, x: Tensor) -> Tensor:
-        B = x.shape[0]
-        # Embed both branches
-        x_s = cast(Tensor, self.embed_s(x))  # (B, N_s, small_dim)
-        x_l = cast(Tensor, self.embed_l(x))  # (B, N_l, large_dim)
-        # Prepend CLS tokens + add positional embedding
-        x_s = lucid.cat([self.cls_s.expand(B, -1, -1), x_s], dim=1)
-        x_l = lucid.cat([self.cls_l.expand(B, -1, -1), x_l], dim=1)
-        x_s = cast(Tensor, self.pos_drop(x_s + self.pos_s))
-        x_l = cast(Tensor, self.pos_drop(x_l + self.pos_l))
-        # Cross-stage processing
+    def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
+        """Patch-embed branch + CLS + positional embedding + dropout."""
+        x = cast(Tensor, self.patch_embed[branch](x))  # (B, N, C)
+        cls_token = (
+            self.cls_token_0 if branch == 0 else self.cls_token_1
+        ).expand(x.shape[0], 1, x.shape[2])
+        x = lucid.cat([cls_token, x], dim=1)
+        pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
+        x = x + pos
+        return cast(Tensor, self.pos_drop(x))
+
+    def forward_features(self, x: Tensor) -> tuple[Tensor, Tensor]:
+        # Rescale per branch.
+        xs = [
+            _scale_image(x, self.config.img_scale[d], self.config.crop_scale)
+            for d in range(2)
+        ]
+        # Patch-embed + CLS + positional.
+        xs = [self._branch_tokens(xs[d], d) for d in range(2)]
+        # K cross-attention stages.
         for stage in self.stages:
-            result = cast(_CrossViTStage, stage).forward(x_s, x_l)
-            x_s, x_l = result
-        x_l = cast(Tensor, self.norm_l(x_l))
-        return x_l[:, 0]  # large CLS: (B, large_dim)
+            xs = stage(xs)
+        # Final norm per branch.
+        xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
+        # Return the two CLS tokens.
+        return xs[0][:, 0], xs[1][:, 0]
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
-        feat = self.forward_features(x)
-        return BaseModelOutput(last_hidden_state=feat.unsqueeze(1))
+        cls_s, cls_l = self.forward_features(x)
+        return BaseModelOutput(last_hidden_state=lucid.cat([cls_s, cls_l], dim=-1))
 
 
 # ---------------------------------------------------------------------------
@@ -351,147 +528,106 @@ class CrossViT(PretrainedModel, BackboneMixin):
 
 
 class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    r"""CrossViT with a dual-head classifier (Chen et al., 2021).
+    r"""CrossViT with two per-branch linear heads, output averaged.
 
-    Wraps the same two-branch trunk as :class:`CrossViT` and attaches
-    *one independent linear head per branch*.  Per paper §3.3, the
-    final prediction averages the two per-branch logits:
-
-    .. math::
-
-        \text{logits} = \tfrac{1}{2}\bigl(
-            W_s\, z_{\text{cls}}^{s,(L)}
-            + W_l\, z_{\text{cls}}^{l,(L)}
-        \bigr) + \tfrac{1}{2}(b_s + b_l),
-
-    where :math:`z_{\text{cls}}^{\cdot,(L)}` denotes the post-LayerNorm
-    CLS token at the final stage of each branch.
-
-    Pass ``labels`` to :meth:`forward` to compute the cross-entropy
-    loss in the same pass.
-
-    Parameters
-    ----------
-    config : CrossViTConfig
-        Architecture specification.  Must set ``num_classes`` to the
-        desired number of output categories.  See :class:`CrossViTConfig`.
-
-    Attributes
-    ----------
-    embed_s, embed_l : _PatchEmbed
-        Patch-embedding convolutions for the small / large branches.
-    cls_s, cls_l : Tensor
-        Learnable CLS tokens for each branch.
-    pos_s, pos_l : Tensor
-        Learnable positional embeddings for each branch.
-    pos_drop : nn.Dropout
-        Dropout applied right after positional embedding.
-    stages : nn.ModuleList
-        Stacked CrossViT stages (self-attention + cross-attention).
-    norm_s, norm_l : nn.LayerNorm
-        Final LayerNorms per branch.
-    classifier : nn.Linear
-        Small-branch classification head of shape
-        ``(num_classes, small_dim)``.
-    head_l : nn.Linear
-        Large-branch classification head of shape
-        ``(num_classes, large_dim)``, kept in sync with ``classifier``
-        by :meth:`reset_classifier`.
-
-    Notes
-    -----
-    Reference: Chen *et al.*, *"CrossViT: Cross-Attention Multi-Scale
-    Vision Transformer for Image Classification"*, ICCV 2021.
-
-    Examples
-    --------
-    End-to-end inference with a CrossViT-9 classifier:
-
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import (
-    ...     CrossViTConfig, CrossViTForImageClassification,
-    ... )
-    >>> cfg = CrossViTConfig(
-    ...     depth=3, small_dim=128, large_dim=256,
-    ...     small_heads=4, large_heads=4, mlp_ratio=3.0,
-    ... )
-    >>> model = CrossViTForImageClassification(cfg)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> out = model(x)
-    >>> out.logits.shape
-    (1, 1000)
+    Paper §3.3 — the final prediction is the *mean* of the two
+    branch-specific logits, an implicit two-model ensemble.
     """
 
     config_class: ClassVar[type[CrossViTConfig]] = CrossViTConfig
     base_model_prefix: ClassVar[str] = "crossvit"
 
-    cls_s: Tensor
-    cls_l: Tensor
-    pos_s: Tensor
-    pos_l: Tensor
-
     def __init__(self, config: CrossViTConfig) -> None:
         super().__init__(config)
-        (
-            embed_s,
-            embed_l,
-            cls_s,
-            cls_l,
-            pos_s,
-            pos_l,
-            drop,
-            stages,
-            norm_s,
-            norm_l,
-        ) = _build_trunk(config)
-        self.embed_s = embed_s
-        self.embed_l = embed_l
-        self.cls_s = cls_s
-        self.cls_l = cls_l
-        self.pos_s = pos_s
-        self.pos_l = pos_l
-        self.pos_drop = drop
-        self.stages = stages
-        self.norm_s = norm_s
-        self.norm_l = norm_l
-        # Paper §3.3: each branch has its *own* classifier; the final logits
-        # are the *average* of both heads (not concat → FC).  ``classifier``
-        # holds the small-branch head so :class:`ClassificationHeadMixin`'s
-        # ``reset_classifier`` still works; ``head_l`` is the large-branch
-        # head, kept in sync by our :meth:`reset_classifier` override below.
-        self._build_classifier(config.small_dim, config.num_classes)
-        self.head_l = nn.Linear(config.large_dim, config.num_classes)
+        cfg = config
+        D = cfg.embed_dims
+        P = cfg.patch_sizes
+        eps = cfg.layer_norm_eps
+        in_ch = cfg.in_channels
+
+        # Trunk (mirrors :class:`CrossViT` exactly so the state-dict
+        # layout is shared and a converter can target either head).
+        self.patch_embed = nn.ModuleList(
+            [_PatchEmbed(in_ch, D[d], P[d]) for d in range(2)]
+        )
+        img_h = cfg.image_size
+        sizes = [int(round(img_h * cfg.img_scale[d])) for d in range(2)]
+        num_patches = [(sizes[d] // P[d]) ** 2 for d in range(2)]
+        self.cls_token_0 = nn.Parameter(lucid.zeros(1, 1, D[0]))
+        self.cls_token_1 = nn.Parameter(lucid.zeros(1, 1, D[1]))
+        self.pos_embed_0 = nn.Parameter(lucid.zeros(1, num_patches[0] + 1, D[0]))
+        self.pos_embed_1 = nn.Parameter(lucid.zeros(1, num_patches[1] + 1, D[1]))
+        self.pos_drop = nn.Dropout(cfg.dropout)
+
+        n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
+        dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
+        dpr = (
+            [
+                cfg.drop_path_rate * i / max(1, dpr_total - 1)
+                for i in range(dpr_total)
+            ]
+            if cfg.drop_path_rate > 0.0
+            else [0.0] * dpr_total
+        )
+        cursor = 0
+        stages: list[nn.Module] = []
+        for stage_depth in cfg.depths:
+            n_s, n_l, n_c = stage_depth
+            n_c_eff = max(1, n_c if n_c > 0 else 1)
+            stage_dpr = (
+                dpr[cursor : cursor + n_s],
+                dpr[cursor + n_s : cursor + n_s + n_l],
+                dpr[cursor + n_s + n_l : cursor + n_s + n_l + n_c_eff],
+            )
+            stages.append(
+                _MultiScaleBlock(
+                    dim=D,
+                    depth=stage_depth,
+                    num_heads=cfg.num_heads,
+                    mlp_ratio=cfg.mlp_ratio,
+                    qkv_bias=cfg.qkv_bias,
+                    drop=cfg.dropout,
+                    attn_drop=0.0,
+                    drop_path=stage_dpr,
+                    layer_norm_eps=eps,
+                )
+            )
+            cursor += n_s + n_l + n_c_eff
+        self.stages = nn.ModuleList(stages)
+        self.norm = nn.ModuleList([nn.LayerNorm(D[d], eps=eps) for d in range(2)])
+
+        # Per-branch classifier heads (averaged at the logit level).
+        self.head = nn.ModuleList(
+            [nn.Linear(D[d], cfg.num_classes) for d in range(2)]
+        )
+
+    def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
+        x = cast(Tensor, self.patch_embed[branch](x))
+        cls_token = (
+            self.cls_token_0 if branch == 0 else self.cls_token_1
+        ).expand(x.shape[0], 1, x.shape[2])
+        x = lucid.cat([cls_token, x], dim=1)
+        pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
+        x = x + pos
+        return cast(Tensor, self.pos_drop(x))
 
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        B = x.shape[0]
-        x_s = cast(Tensor, self.embed_s(x))
-        x_l = cast(Tensor, self.embed_l(x))
-        x_s = lucid.cat([self.cls_s.expand(B, -1, -1), x_s], dim=1)
-        x_l = lucid.cat([self.cls_l.expand(B, -1, -1), x_l], dim=1)
-        x_s = cast(Tensor, self.pos_drop(x_s + self.pos_s))
-        x_l = cast(Tensor, self.pos_drop(x_l + self.pos_l))
+        cfg = self.config
+        xs = [_scale_image(x, cfg.img_scale[d], cfg.crop_scale) for d in range(2)]
+        xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:
-            result = cast(_CrossViTStage, stage).forward(x_s, x_l)
-            x_s, x_l = result
-        x_s = cast(Tensor, self.norm_s(x_s))
-        x_l = cast(Tensor, self.norm_l(x_l))
-        # Paper §3.3: average the logits of two per-branch classifiers.
-        logits_s = cast(Tensor, self.classifier(x_s[:, 0]))
-        logits_l = cast(Tensor, self.head_l(x_l[:, 0]))
-        logits = (logits_s + logits_l) * 0.5
+            xs = stage(xs)
+        xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
+        cls = [xs[d][:, 0] for d in range(2)]
+        logits_s = cast(Tensor, self.head[0](cls[0]))
+        logits_l = cast(Tensor, self.head[1](cls[1]))
+        logits = (logits_s + logits_l) / 2.0
 
         loss: Tensor | None = None
         if labels is not None:
             loss = F.cross_entropy(logits, labels)
-
         return ImageClassificationOutput(logits=logits, loss=loss)
-
-    def reset_classifier(self, num_classes: int) -> None:
-        # Override to keep the large-branch head in sync with the small one.
-        super().reset_classifier(num_classes)
-        in_features = int(self.head_l.in_features)
-        self.head_l = nn.Linear(in_features, num_classes)

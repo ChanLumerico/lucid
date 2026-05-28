@@ -1,89 +1,72 @@
-"""Registry factories for CrossViT variants."""
+"""Registry factories for the paper-cited CrossViT variants.
 
+All six configs from Chen et al., ICCV 2021, Table 2.  Per-variant
+hyperparameters are sourced from the paper directly and cross-checked
+against ``timm.models.crossvit`` so the converted timm checkpoints
+load with a direct ``blocks → stages`` key rename.
+"""
+
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.crossvit._config import CrossViTConfig
-from lucid.models.vision.crossvit._model import CrossViT, CrossViTForImageClassification
+from lucid.models.vision.crossvit._model import (
+    CrossViT,
+    CrossViTForImageClassification,
+)
 
 # ---------------------------------------------------------------------------
-# Canonical configs
-# Paper: Chen et al., 2021 — "CrossViT: Cross-Attention Multi-Scale Vision
-# Transformer for Image Classification"
+# Paper Table 2 configurations.
 #
-# Two-branch ViT: small patch (P_S) + large patch (P_L).
-# small_heads = small_dim // 64, large_heads = large_dim // 64 (typical).
-# depth = number of CrossViT stages (each stage = self-attn + cross-attn).
+# Every variant shares the same skeleton (K=3 MultiScaleBlocks, patch sizes
+# (12, 16), dual-input scale (240, 224)); only ``embed_dims`` / ``depths`` /
+# ``num_heads`` / ``mlp_ratio`` change.
 # ---------------------------------------------------------------------------
 
-# CrossViT-9  (~8.6 M) — small variant from paper
-_CFG_9 = CrossViTConfig(
-    depth=3,
-    small_dim=128,
-    large_dim=256,
-    small_patch=12,
-    large_patch=16,
-    small_heads=4,
-    large_heads=4,
-    mlp_ratio=3.0,
-)
+_DEPTH_TINY = ((1, 4, 0), (1, 4, 0), (1, 4, 0))
+_DEPTH_SMALL = ((1, 4, 0), (1, 4, 0), (1, 4, 0))
+_DEPTH_BASE = ((1, 4, 0), (1, 4, 0), (1, 4, 0))
+_DEPTH_9 = ((1, 3, 0), (1, 3, 0), (1, 3, 0))
+_DEPTH_15 = ((1, 5, 0), (1, 5, 0), (1, 5, 0))
+_DEPTH_18 = ((1, 6, 0), (1, 6, 0), (1, 6, 0))
 
-# CrossViT-Tiny (~7.0 M)
+_MLP_BCT = (4.0, 4.0, 1.0)  # tiny / small / base
+_MLP_9_15_18 = (3.0, 3.0, 1.0)  # 9 / 15 / 18
+
 _CFG_TINY = CrossViTConfig(
-    depth=1,
-    small_dim=96,
-    large_dim=192,
-    small_patch=12,
-    large_patch=16,
-    small_heads=3,
-    large_heads=3,
-    mlp_ratio=4.0,
+    embed_dims=(96, 192),
+    depths=_DEPTH_TINY,
+    num_heads=(3, 3),
+    mlp_ratio=_MLP_BCT,
 )
-
-# CrossViT-Small (~26.9 M)
 _CFG_SMALL = CrossViTConfig(
-    depth=4,
-    small_dim=192,
-    large_dim=384,
-    small_patch=12,
-    large_patch=16,
-    small_heads=6,
-    large_heads=6,
-    mlp_ratio=4.0,
+    embed_dims=(192, 384),
+    depths=_DEPTH_SMALL,
+    num_heads=(6, 6),
+    mlp_ratio=_MLP_BCT,
 )
-
-# CrossViT-Base (~105 M) — deeper / wider variant
 _CFG_BASE = CrossViTConfig(
-    depth=10,
-    small_dim=192,
-    large_dim=384,
-    small_patch=12,
-    large_patch=16,
-    small_heads=6,
-    large_heads=6,
-    mlp_ratio=4.0,
+    embed_dims=(384, 768),
+    depths=_DEPTH_BASE,
+    num_heads=(12, 12),
+    mlp_ratio=_MLP_BCT,
 )
-
-# CrossViT-15 (~27.5 M)
+_CFG_9 = CrossViTConfig(
+    embed_dims=(128, 256),
+    depths=_DEPTH_9,
+    num_heads=(4, 4),
+    mlp_ratio=_MLP_9_15_18,
+)
 _CFG_15 = CrossViTConfig(
-    depth=3,
-    small_dim=192,
-    large_dim=384,
-    small_patch=12,
-    large_patch=16,
-    small_heads=6,
-    large_heads=6,
-    mlp_ratio=3.0,
+    embed_dims=(192, 384),
+    depths=_DEPTH_15,
+    num_heads=(6, 6),
+    mlp_ratio=_MLP_9_15_18,
 )
-
-# CrossViT-18 (~43.3 M)
 _CFG_18 = CrossViTConfig(
-    depth=3,
-    small_dim=224,
-    large_dim=448,
-    small_patch=12,
-    large_patch=16,
-    small_heads=7,
-    large_heads=7,
-    mlp_ratio=3.0,
+    embed_dims=(224, 448),
+    depths=_DEPTH_18,
+    num_heads=(7, 7),
+    mlp_ratio=_MLP_9_15_18,
 )
 
 
@@ -98,563 +81,231 @@ def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassifica
 
 
 # ---------------------------------------------------------------------------
-# Backbone registrations (task="base")
+# Backbone factories (task="base")
 # ---------------------------------------------------------------------------
 
 
 @register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_9,
-)
-def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-9 backbone (Chen et al., 2021).
-
-    Builds the canonical *CrossViT-9* configuration: ``depth=3``,
-    ``small_dim=128``, ``large_dim=256``, ``small_patch=12``,
-    ``large_patch=16``, ``mlp_ratio=3.0``.  Approximately **8.6M
-    parameters** — the smallest variant in the paper.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available in the model zoo.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides applied on top of the canonical CrossViT-9
-        config.  Each override must match a field of
-        :class:`CrossViTConfig`.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 256)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    CrossViT-9 reaches **73.9% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5).  See
-    `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_9
-    >>> model = crossvit_9()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> feat = model.forward_features(x)
-    >>> feat.shape
-    (1, 256)
-    """
-    return _b(_CFG_9, overrides)
-
-
-@register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_TINY,
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_TINY, params=7_000_000,
 )
 def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-Tiny backbone (Chen et al., 2021).
-
-    Tiny dual-branch ViT with a *single* CrossViT stage
-    (``depth=1``), ``small_dim=96``, ``large_dim=192``,
-    ``mlp_ratio=4.0``.  Approximately **7.0M parameters** — useful for
-    rapid prototyping and mobile baselines.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Tiny config.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 192)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_tiny
-    >>> model = crossvit_tiny()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 192)
-    """
+    r"""CrossViT-Ti backbone — ``embed_dims=(96, 192)``, depths
+    ``((1, 4, 0))×3``, 3 heads.  ~7M params (paper Table 2)."""
     return _b(_CFG_TINY, overrides)
 
 
 @register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_SMALL,
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_SMALL, params=26_700_000,
 )
 def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-Small backbone (Chen et al., 2021).
-
-    Wider / deeper CrossViT with ``depth=4``, ``small_dim=192``,
-    ``large_dim=384``, ``mlp_ratio=4.0``.  Approximately **26.9M
-    parameters** — the standard small-class variant in the paper.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Small config.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 384)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_small
-    >>> model = crossvit_small()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 384)
-    """
+    r"""CrossViT-S backbone — ``embed_dims=(192, 384)``, depths
+    ``((1, 4, 0))×3``, 6 heads.  ~26.7M params (paper Table 2)."""
     return _b(_CFG_SMALL, overrides)
 
 
 @register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_BASE,
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_BASE, params=105_000_000,
 )
 def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-Base backbone (Chen et al., 2021).
-
-    Deeper variant with ``depth=10`` CrossViT stages,
-    ``small_dim=192``, ``large_dim=384``, ``mlp_ratio=4.0``.
-    Approximately **105M parameters** — trades parameter count for
-    accuracy by lengthening the trunk rather than widening it.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Base config.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 384)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_base
-    >>> model = crossvit_base()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 384)
-    """
+    r"""CrossViT-B backbone — ``embed_dims=(384, 768)``, depths
+    ``((1, 4, 0))×3``, 12 heads.  ~105M params (paper Table 2)."""
     return _b(_CFG_BASE, overrides)
 
 
 @register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_15,
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_9, params=8_600_000,
+)
+def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
+    r"""CrossViT-9 backbone — ``embed_dims=(128, 256)``, depths
+    ``((1, 3, 0))×3``, 4 heads.  ~8.6M params (paper Table 2)."""
+    return _b(_CFG_9, overrides)
+
+
+@register_model(
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_15, params=27_400_000,
 )
 def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-15 backbone (Chen et al., 2021).
-
-    Builds the *CrossViT-15* configuration: ``depth=3``,
-    ``small_dim=192``, ``large_dim=384``, ``small_heads=6``,
-    ``large_heads=6``, ``mlp_ratio=3.0``.  Approximately **27.5M
-    parameters**.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-15 config.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 384)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    CrossViT-15 reaches **81.5% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5).
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_15
-    >>> model = crossvit_15()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 384)
-    """
+    r"""CrossViT-15 backbone — ``embed_dims=(192, 384)``, depths
+    ``((1, 5, 0))×3``, 6 heads.  ~27.4M params (paper Table 2)."""
     return _b(_CFG_15, overrides)
 
 
 @register_model(
-    task="base",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViT,
-    default_config=_CFG_18,
+    task="base", family="crossvit", model_type="crossvit",
+    model_class=CrossViT, default_config=_CFG_18, params=43_300_000,
 )
 def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
-    r"""CrossViT-18 backbone (Chen et al., 2021).
-
-    Builds the *CrossViT-18* configuration: ``depth=3``,
-    ``small_dim=224``, ``large_dim=448``, ``small_heads=7``,
-    ``large_heads=7``, ``mlp_ratio=3.0``.  Approximately **43.3M
-    parameters** — the largest variant in the paper.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-18 config.
-
-    Returns
-    -------
-    CrossViT
-        A :class:`CrossViT` backbone returning a flat :math:`(B, 448)`
-        large-branch CLS feature.
-
-    Notes
-    -----
-    CrossViT-18 reaches **82.5% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5).
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_18
-    >>> model = crossvit_18()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model.forward_features(x).shape
-    (1, 448)
-    """
+    r"""CrossViT-18 backbone — ``embed_dims=(224, 448)``, depths
+    ``((1, 6, 0))×3``, 7 heads.  ~43.3M params (paper Table 2)."""
     return _b(_CFG_18, overrides)
 
 
 # ---------------------------------------------------------------------------
-# Classification head registrations (task="image-classification")
+# Lazy import of per-variant weights enums (declared in _weights.py).
+# Imported inside each factory body to keep the import graph clean.
 # ---------------------------------------------------------------------------
 
 
-@register_model(
-    task="image-classification",
-    family="crossvit",
-    model_type="crossvit",
-    model_class=CrossViTForImageClassification,
-    default_config=_CFG_9,
-)
-def crossvit_9_cls(
-    pretrained: bool = False, **overrides: object
-) -> CrossViTForImageClassification:
-    r"""CrossViT-9 image classifier (Chen et al., 2021).
-
-    Combines the :func:`crossvit_9` backbone with two per-branch
-    linear heads whose logits are averaged (paper §3.3).  Default
-    output is ``num_classes=1000`` (ImageNet-1k).  ~8.6M parameters.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-9 config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier returning :class:`ImageClassificationOutput` whose
-        ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    CrossViT-9 reaches **73.9% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5).
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_9_cls
-    >>> model = crossvit_9_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_9, overrides)
-
-
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_TINY,
+    params=7_000_000,
 )
 def crossvit_tiny_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
 ) -> CrossViTForImageClassification:
-    r"""CrossViT-Tiny image classifier (Chen et al., 2021).
+    r"""CrossViT-Ti image classifier (Chen et al., ICCV 2021).
 
-    Combines the :func:`crossvit_tiny` backbone (``depth=1``,
-    ``small_dim=96``, ``large_dim=192``) with two per-branch linear
-    heads whose logits are averaged.  ~7.0M parameters — useful as a
-    fast baseline for mobile / latency-sensitive applications.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Tiny config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_tiny_cls
-    >>> model = crossvit_tiny_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
+    Two-branch ViT with embedding dims ``(96, 192)``, per-stage depths
+    ``((1, 4, 0)) × 3``, and 3 attention heads per branch.  ~7M
+    parameters; paper Table 2 reports **72.6%** ImageNet-1k top-1 at
+    240×240.
     """
-    return _c(_CFG_TINY, overrides)
+    from lucid.models.vision.crossvit._weights import CrossViTTinyWeights
+
+    entry = weights_mod.resolve_weights(CrossViTTinyWeights, pretrained, weights)
+    model = _c(_CFG_TINY, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_tiny_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_SMALL,
+    params=26_700_000,
 )
 def crossvit_small_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
 ) -> CrossViTForImageClassification:
-    r"""CrossViT-Small image classifier (Chen et al., 2021).
+    r"""CrossViT-S image classifier — ``embed_dims=(192, 384)``, depths
+    ``((1, 4, 0)) × 3``, 6 heads per branch.  ~26.7M params; paper
+    Table 2 reports **81.0%** ImageNet-1k top-1 at 240×240."""
+    from lucid.models.vision.crossvit._weights import CrossViTSmallWeights
 
-    Combines the :func:`crossvit_small` backbone (``depth=4``,
-    ``small_dim=192``, ``large_dim=384``) with two per-branch linear
-    heads whose logits are averaged.  ~26.9M parameters.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Small config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_small_cls
-    >>> model = crossvit_small_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_SMALL, overrides)
+    entry = weights_mod.resolve_weights(CrossViTSmallWeights, pretrained, weights)
+    model = _c(_CFG_SMALL, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_small_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_BASE,
+    params=105_000_000,
 )
 def crossvit_base_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
 ) -> CrossViTForImageClassification:
-    r"""CrossViT-Base image classifier (Chen et al., 2021).
+    r"""CrossViT-B image classifier — ``embed_dims=(384, 768)``, depths
+    ``((1, 4, 0)) × 3``, 12 heads per branch.  ~105M params; paper
+    Table 2 reports **82.2%** ImageNet-1k top-1 at 240×240."""
+    from lucid.models.vision.crossvit._weights import CrossViTBaseWeights
 
-    Combines the :func:`crossvit_base` backbone (``depth=10``,
-    ``small_dim=192``, ``large_dim=384``) with two per-branch linear
-    heads whose logits are averaged.  ~105M parameters.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-Base config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    See `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_base_cls
-    >>> model = crossvit_base_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_BASE, overrides)
+    entry = weights_mod.resolve_weights(CrossViTBaseWeights, pretrained, weights)
+    model = _c(_CFG_BASE, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_base_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
+    task="image-classification",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViTForImageClassification,
+    default_config=_CFG_9,
+    params=8_600_000,
+)
+def crossvit_9_cls(
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
+) -> CrossViTForImageClassification:
+    r"""CrossViT-9 image classifier — ``embed_dims=(128, 256)``, depths
+    ``((1, 3, 0)) × 3``, 4 heads per branch.  ~8.6M params; paper
+    Table 2 reports **73.9%** ImageNet-1k top-1 at 240×240."""
+    from lucid.models.vision.crossvit._weights import CrossViT9Weights
+
+    entry = weights_mod.resolve_weights(CrossViT9Weights, pretrained, weights)
+    model = _c(_CFG_9, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_9_cls")
+    return model
+
+
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_15,
+    params=27_400_000,
 )
 def crossvit_15_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
 ) -> CrossViTForImageClassification:
-    r"""CrossViT-15 image classifier (Chen et al., 2021).
+    r"""CrossViT-15 image classifier — ``embed_dims=(192, 384)``, depths
+    ``((1, 5, 0)) × 3``, 6 heads per branch.  ~27.4M params; paper
+    Table 2 reports **81.5%** ImageNet-1k top-1 at 240×240."""
+    from lucid.models.vision.crossvit._weights import CrossViT15Weights
 
-    Combines the :func:`crossvit_15` backbone (``depth=3``,
-    ``small_dim=192``, ``large_dim=384``, ``mlp_ratio=3.0``) with two
-    per-branch linear heads whose logits are averaged.  ~27.5M
-    parameters.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-15 config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    CrossViT-15 reaches **81.5% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5).
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_15_cls
-    >>> model = crossvit_15_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_15, overrides)
+    entry = weights_mod.resolve_weights(CrossViT15Weights, pretrained, weights)
+    model = _c(_CFG_15, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_15_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="crossvit",
     model_type="crossvit",
     model_class=CrossViTForImageClassification,
     default_config=_CFG_18,
+    params=43_300_000,
 )
 def crossvit_18_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: object | None = None,
+    **overrides: object,
 ) -> CrossViTForImageClassification:
-    r"""CrossViT-18 image classifier (Chen et al., 2021).
+    r"""CrossViT-18 image classifier — ``embed_dims=(224, 448)``, depths
+    ``((1, 6, 0)) × 3``, 7 heads per branch.  ~43.3M params; paper
+    Table 2 reports **82.5%** ImageNet-1k top-1 at 240×240."""
+    from lucid.models.vision.crossvit._weights import CrossViT18Weights
 
-    Combines the :func:`crossvit_18` backbone (``depth=3``,
-    ``small_dim=224``, ``large_dim=448``, ``mlp_ratio=3.0``) with two
-    per-branch linear heads whose logits are averaged.  ~43.3M
-    parameters — the largest variant in the paper.
-
-    Parameters
-    ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
-    **overrides : object
-        Keyword overrides on top of the canonical CrossViT-18 config.
-
-    Returns
-    -------
-    CrossViTForImageClassification
-        Classifier whose ``logits`` has shape ``(B, num_classes)``.
-
-    Notes
-    -----
-    CrossViT-18 reaches **82.5% top-1 on ImageNet-1k** (Chen et al.,
-    2021, Table 5) — the headline result of the paper.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.crossvit import crossvit_18_cls
-    >>> model = crossvit_18_cls(num_classes=1000)
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> model(x).logits.shape
-    (1, 1000)
-    """
-    return _c(_CFG_18, overrides)
+    entry = weights_mod.resolve_weights(CrossViT18Weights, pretrained, weights)
+    model = _c(_CFG_18, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="crossvit_18_cls")
+    return model

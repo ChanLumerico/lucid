@@ -1,4 +1,4 @@
-"""CrossViT configuration dataclass (Chen et al., 2021)."""
+"""CrossViT configuration dataclass (Chen et al., ICCV 2021)."""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -19,117 +19,117 @@ from lucid.models._meta import model_family_meta
     CrossViT explicitly models *multi-scale* visual information by
     running two parallel ViT branches with different patch sizes and
     fusing them through a lightweight cross-attention mechanism.  A
-    *small-patch* branch (e.g. patch size 12) processes a long sequence
-    of fine-grained tokens, while a *large-patch* branch (e.g. patch
-    size 16) processes a short sequence of coarse tokens.  Each branch
-    has its own class token :math:`x_{\text{cls}}^{s}` /
-    :math:`x_{\text{cls}}^{l}` and is independently transformer-encoded
-    for :math:`L` blocks.
+    *small-patch* branch (patch size 12) processes a long sequence of
+    fine-grained tokens, while a *large-patch* branch (patch size 16)
+    processes a short sequence of coarse tokens.  The two branches
+    operate on *different* input resolutions — the small-patch branch
+    on the full image (e.g. :math:`240\times240`), the large-patch
+    branch on a slightly down-sampled version (e.g. :math:`224\times224`)
+    — and each has its own class token plus learnable positional
+    embedding.
 
-    Information is exchanged between branches only through the class
-    tokens, using *cross-attention*: the class token of one branch
-    attends to the patch tokens of the *other* branch as queries,
-    leaving the other branch's patch tokens unchanged.  Concretely, for
-    the small-to-large direction,
+    Each branch is independently transformer-encoded for
+    :math:`N_s` / :math:`N_l` standard self-attention blocks; the two
+    branches then exchange information at the **end of every stage**
+    via a *MultiScaleBlock*: the CLS token from one branch is
+    projected into the other branch's embedding space, cross-attends
+    to that branch's patch tokens, and is projected back.  Concretely,
+    for the small-to-large direction,
 
     .. math::
 
         \tilde{x}_{\text{cls}}^{\,l} = x_{\text{cls}}^{l} +
-            \mathrm{Attn}\!\bigl(W_q x_{\text{cls}}^{l},
+            \mathrm{CrossAttn}\!\bigl(W_q x_{\text{cls}}^{l},
             W_k x_{\text{patch}}^{s}, W_v x_{\text{patch}}^{s}\bigr),
 
     and symmetrically for large-to-small.  Because cross-attention is
     only :math:`\mathcal{O}(N_s + N_l)` per direction, multi-scale
-    fusion is essentially free relative to the per-branch self-attention
-    cost.  The final classifier averages the two updated class tokens.
-    The variants CrossViT-9 / 15 / 18 trade depth and width along this
-    two-branch skeleton.
+    fusion is essentially free relative to the per-branch
+    self-attention cost.  The complete network is :math:`K=3` such
+    MultiScaleBlocks stacked back-to-back; the final classifier head
+    averages the logits of the two per-branch linear layers.
+
+    The variants CrossViT-Ti / -S / -B / -9 / -15 / -18 trade depth and
+    width along this two-branch skeleton (paper Table 2).
     """,
 )
 @dataclass(frozen=True)
 class CrossViTConfig(ModelConfig):
-    r"""Configuration dataclass for every CrossViT variant.
-
-    ``CrossViTConfig`` is an immutable container that fully specifies
-    the architecture of a CrossViT (Chen et al., 2021).  CrossViT
-    couples two ViT branches that operate on *different patch sizes*
-    (``small_patch`` and ``large_patch``) and exchanges information
-    only through their CLS tokens via lightweight cross-attention.
+    r"""Configuration for every paper-cited CrossViT variant.
 
     Parameters
     ----------
-    num_classes : int, optional
-        Number of output classes for the classification head.
-        Defaults to ``1000`` (ImageNet-1k).
-    in_channels : int, optional
-        Number of input image channels.  Defaults to ``3`` (RGB).
-    image_size : int, optional
-        Spatial side length of the square input image.  Both
-        ``small_patch`` and ``large_patch`` must divide ``image_size``.
-        Defaults to ``224``.
-    small_patch : int, optional
-        Patch size for the *small-patch* branch (fine-grained tokens).
-        Defaults to ``12``.
-    large_patch : int, optional
-        Patch size for the *large-patch* branch (coarse tokens).
-        Defaults to ``16``.
-    small_dim : int, optional
-        Hidden width of the small-patch branch.  Defaults to ``192``.
-    large_dim : int, optional
-        Hidden width of the large-patch branch.  Defaults to ``384``.
-    small_heads : int, optional
-        Number of attention heads in the small-patch branch.  Defaults
-        to ``3``.
-    large_heads : int, optional
-        Number of attention heads in the large-patch branch.  Defaults
-        to ``6``.
-    depth : int, optional
-        Number of CrossViT stages.  Each stage applies a self-attention
-        block on both branches followed by a bidirectional CLS-token
-        cross-attention exchange.  Defaults to ``4``.
-    mlp_ratio : float, optional
-        MLP expansion ratio inside both branches.  Defaults to ``4.0``.
-    dropout : float, optional
-        Dropout probability after positional embeddings and inside
-        the MLP blocks.  Defaults to ``0.0``.
-
-    Attributes
-    ----------
-    model_type : ClassVar[str]
-        Constant string ``"crossvit"`` used by the model registry.
-
-    Notes
-    -----
-    Reference: Chun-Fu (Richard) Chen *et al.*, *"CrossViT:
-    Cross-Attention Multi-Scale Vision Transformer for Image
-    Classification"*, ICCV 2021,
-    `arXiv:2103.14899 <https://arxiv.org/abs/2103.14899>`_.
-
-    Examples
-    --------
-    Build a CrossViT-9 configuration with a 10-class head for CIFAR-10:
-
-    >>> from lucid.models.vision.crossvit import CrossViTConfig
-    >>> cfg = CrossViTConfig(
-    ...     depth=3, small_dim=128, large_dim=256,
-    ...     small_heads=4, large_heads=4, mlp_ratio=3.0,
-    ...     num_classes=10,
-    ... )
-    >>> cfg.small_dim, cfg.large_dim, cfg.depth, cfg.num_classes
-    (128, 256, 3, 10)
+    num_classes : int, optional, default=1000
+        Output-class count of the classification heads.
+    in_channels : int, optional, default=3
+        Number of input image channels.
+    image_size : int, optional, default=240
+        Spatial side of the small-branch input.  The large-branch
+        input is rescaled from this via :attr:`img_scale`.
+    img_scale : tuple of float, optional, default=(1.0, 224/240)
+        Per-branch scale relative to ``image_size`` — the first entry
+        targets the small-patch branch (always 1.0 in paper-cited
+        variants), the second the large-patch branch (224/240 in the
+        canonical recipe so the large branch consumes 224×224 from a
+        240×240 input).
+    crop_scale : bool, optional, default=False
+        Method used to rescale the large-branch input.  ``False`` ⇒
+        bilinear resize (paper default); ``True`` ⇒ center-crop.
+    patch_sizes : tuple of int, optional, default=(12, 16)
+        Patch sizes for the (small, large) branches.
+    embed_dims : tuple of int, optional, default=(96, 192)
+        Per-branch embedding dimensions (small, large).
+    depths : tuple of tuple of int, optional
+        Per-stage block counts ``(N_s, N_l, N_cross)`` for each of the
+        ``K`` MultiScaleBlocks.  Defaults to ``((1, 4, 0)) × 3`` (the
+        CrossViT-Ti recipe).  ``N_cross`` is the number of *extra*
+        cross-attention transformer blocks the stage runs after the
+        single mandatory cross-attention fusion — paper-cited variants
+        keep this at 0.
+    num_heads : tuple of int, optional, default=(3, 3)
+        Per-branch attention head counts (small, large).
+    mlp_ratio : tuple of float, optional, default=(4.0, 4.0, 1.0)
+        MLP expansion ratios for the (small self-attn, large
+        self-attn, cross-attention) sub-modules within a
+        MultiScaleBlock.
+    qkv_bias : bool, optional, default=True
+    drop_path_rate : float, optional, default=0.0
+        Stochastic-depth rate, linearly scheduled across the whole
+        trunk (sum of all blocks across all stages).
+    dropout : float, optional, default=0.0
+        Dropout probability inside attention + MLP modules.
+    layer_norm_eps : float, optional, default=1e-6
+        ``eps`` for every LayerNorm in the trunk (paper / timm use
+        ``1e-6``; matches the reference checkpoints exactly).
     """
 
     model_type: ClassVar[str] = "crossvit"
 
     num_classes: int = 1000
     in_channels: int = 3
-    image_size: int = 224
-    small_patch: int = 12
-    large_patch: int = 16
-    small_dim: int = 192
-    large_dim: int = 384
-    small_heads: int = 3
-    large_heads: int = 6
-    depth: int = 4
-    mlp_ratio: float = 4.0
+    image_size: int = 240
+    img_scale: tuple[float, float] = (1.0, 224.0 / 240.0)
+    crop_scale: bool = False
+    patch_sizes: tuple[int, int] = (12, 16)
+    embed_dims: tuple[int, int] = (96, 192)
+    depths: tuple[tuple[int, int, int], ...] = (
+        (1, 4, 0),
+        (1, 4, 0),
+        (1, 4, 0),
+    )
+    num_heads: tuple[int, int] = (3, 3)
+    mlp_ratio: tuple[float, float, float] = (4.0, 4.0, 1.0)
+    qkv_bias: bool = True
+    drop_path_rate: float = 0.0
     dropout: float = 0.0
+    layer_norm_eps: float = 1e-6
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "img_scale", tuple(self.img_scale))
+        object.__setattr__(self, "patch_sizes", tuple(self.patch_sizes))
+        object.__setattr__(self, "embed_dims", tuple(self.embed_dims))
+        object.__setattr__(
+            self, "depths", tuple(tuple(d) for d in self.depths)
+        )
+        object.__setattr__(self, "num_heads", tuple(self.num_heads))
+        object.__setattr__(self, "mlp_ratio", tuple(self.mlp_ratio))
