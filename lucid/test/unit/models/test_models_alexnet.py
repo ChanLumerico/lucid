@@ -6,7 +6,6 @@ import unittest
 import lucid
 import lucid.models as models
 from lucid.models.vision.alexnet import (
-    AlexNet,
     AlexNetConfig,
     AlexNetForImageClassification,
     alexnet,
@@ -24,7 +23,8 @@ class TestAlexNetConfig(unittest.TestCase):
         self.assertAlmostEqual(cfg.dropout, 0.5)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = AlexNetConfig(num_classes=100, dropout=0.3)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

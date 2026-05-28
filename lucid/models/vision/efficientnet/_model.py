@@ -304,8 +304,6 @@ class EfficientNet(PretrainedModel, BackboneMixin):
         self._num_features = num_features
 
         w = config.width_mult
-        d = config.depth_mult
-        strides = [1, 2, 2, 2, 1, 2, 1]
         cumulative = 1
         fi: list[FeatureInfo] = []
         for i, (_, _, base_out, _, stride, _) in enumerate(_BASE_SPECS):

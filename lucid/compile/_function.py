@@ -110,7 +110,7 @@ def compiled_step(
     with grad_ctx:
         with _tracing() as tracer:
             out = model(x)
-            loss = loss_fn(out)
+            loss_fn(out)
 
     g = tracer.graph
     ext = tracer.external_feeds

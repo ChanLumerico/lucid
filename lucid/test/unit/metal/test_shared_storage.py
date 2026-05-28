@@ -168,7 +168,7 @@ class TestZeroCopyTransfer:
 
     def test_write_cpu_read_via_metal(self) -> None:
         """Write on CPU via shared buffer, read back from GPU path."""
-        t = metal.shared_tensor((4,))
+        metal.shared_tensor((4,))
         # Write values on CPU (shared buffer is directly writable).
         src = lucid.tensor([10.0, 20.0, 30.0, 40.0])
         t_src = metal.to_shared(src)

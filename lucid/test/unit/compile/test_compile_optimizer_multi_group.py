@@ -7,7 +7,6 @@ per group.  Verifies that 5 SGD steps match eager training within
 1e-4 absolute (tighter than F16 because everything is F32).
 """
 
-import pytest
 
 import lucid
 import lucid.nn as nn

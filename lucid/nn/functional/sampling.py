@@ -519,7 +519,7 @@ def embedding_bag(
         # Flatten indices to 1-D
         flat_x = _C_engine.reshape(x_impl, [n_rows * seq_len])
         # Offsets: [0, seq_len, 2*seq_len, ...]
-        off_vals = list(range(0, n_rows * seq_len, seq_len))
+        list(range(0, n_rows * seq_len, seq_len))
         off_impl = _C_engine.full([n_rows], 0, _C_engine.I32, x_impl.device)
         # Build offsets as arange * seq_len via engine
         arange_impl = _C_engine.arange(

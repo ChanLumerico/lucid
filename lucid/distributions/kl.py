@@ -477,7 +477,7 @@ def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
             - \frac{\log(1 - p_q)}{p_p} - \log\!\bigl(p_q / (1 - p_q)\bigr)
     """
     # KL(Geom(p1) || Geom(p2)) = -H(p) - log(1-p2)/p1 - log(p2)
-    p_logits: Tensor = p.probs.log() - (1.0 - p.probs).log()  # log(p/(1-p))
+    p.probs.log() - (1.0 - p.probs).log()  # log(p/(1-p))
     q_logits: Tensor = q.probs.log() - (1.0 - q.probs).log()
     return -p.entropy() - lucid.log1p(-q.probs) / p.probs - q_logits
 
@@ -561,7 +561,7 @@ def _kl_normal_laplace(p: Normal, q: Laplace) -> Tensor:
     erf_term = (mu - m) * lucid.erf(z / _sqrt2)
     e_abs = exp_term + erf_term
 
-    log_p = p.entropy().neg() - 0.5 * (2.0 * math.pi * math.e)  # -H(p)
+    p.entropy().neg() - 0.5 * (2.0 * math.pi * math.e)  # -H(p)
     # Actually compute directly:
     # KL = H_cross(p, q) - H(p)  where H(p) = 0.5*(1 + log(2πσ²))
     # H_cross = log(2b) + e_abs / b

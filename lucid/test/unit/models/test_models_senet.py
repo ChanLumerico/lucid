@@ -12,11 +12,8 @@ from lucid.models.vision.senet import (
     se_resnet_18,
     se_resnet_18_cls,
     se_resnet_50,
-    se_resnet_50_cls,
     se_resnet_101,
-    se_resnet_101_cls,
     se_resnet_152,
-    se_resnet_152_cls,
 )
 
 
@@ -27,7 +24,8 @@ class TestSENetConfig(unittest.TestCase):
         self.assertEqual(cfg.model_type, "senet")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = SENetConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

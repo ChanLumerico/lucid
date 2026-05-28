@@ -267,7 +267,7 @@ def _fpn_roi_align(
     Returns:
         (Σ N_i, C, output_size, output_size) stacked crops, in proposal order.
     """
-    num_levels = len(fpn_feats)
+    len(fpn_feats)
     C = int(fpn_feats[0].shape[1])
     B = len(proposals)
     dev = fpn_feats[0].device.type
@@ -823,7 +823,7 @@ class MaskRCNNForObjectDetection(PretrainedModel):
               ``pred_masks`` : (Σ proposals, K, 28, 28) mask logits.
               ``loss``       : total loss when targets provided.
         """
-        B = int(x.shape[0])
+        int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 

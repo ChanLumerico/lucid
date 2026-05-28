@@ -31,7 +31,9 @@ class TestResNetConfig(unittest.TestCase):
         self.assertEqual(cfg.layers, (2, 2, 2, 2))
 
     def test_json_round_trip_coerces_tuples(self) -> None:
-        import json, tempfile, os
+        import json
+        import tempfile
+        import os
 
         cfg = ResNetConfig(block_type="basic", layers=(2, 2, 2, 2))
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -224,7 +226,8 @@ class TestResNetSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
     def test_config_saved_as_json(self) -> None:
-        import json, os
+        import json
+        import os
 
         m = resnet_50_cls()
         with tempfile.TemporaryDirectory() as tmp:

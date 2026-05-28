@@ -10,8 +10,8 @@ import math
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import as_tensor as _as_tensor
-from lucid.distributions._util import broadcast_pair as _broadcast_pair
+from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _broadcast_pair
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,
@@ -893,7 +893,7 @@ class ContinuousBernoulli(Distribution):
         u: Tensor = 2.0 * p - 1.0
         abs_u: Tensor = u.abs()
         eps: float = 1e-4
-        safe_u: Tensor = lucid.where(abs_u < eps, lucid.full_like(u, eps), u)
+        lucid.where(abs_u < eps, lucid.full_like(u, eps), u)
         # E[X^2] = C(p)*(1-p)*(exp(l)*(l^2-2l+2) - 2) / l^3 — complex to derive;
         # numerically stable shortcut: Var = mean*(1-mean) + ... is not closed-form.
         # Use: Var = E[X^2] - E[X]^2 where E[X^2] from the normaliser.

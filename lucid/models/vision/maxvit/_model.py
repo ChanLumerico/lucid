@@ -492,7 +492,7 @@ class _MaxViTBlock(nn.Module):
 
         # Pad to multiple of ws
         x_cl, orig_H, orig_W = _pad_to_multiple(x_cl, ws)
-        Hp, Wp = x_cl.shape[1], x_cl.shape[2]
+        _Hp, _Wp = x_cl.shape[1], x_cl.shape[2]
 
         # 2. Block (window) attention — local within ws×ws windows
         wins, nH, nW = _window_partition(x_cl, ws)  # (B*nH*nW, ws, ws, C)

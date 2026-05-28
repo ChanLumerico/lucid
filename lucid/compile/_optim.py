@@ -33,8 +33,7 @@ MPSGraph dispatch time alone, beating eager once the parameter
 count is large enough to amortise the per-call overhead.
 """
 
-import time
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence
 
 from lucid._C import engine as _C_engine
 
@@ -506,7 +505,6 @@ class _CompiledStepBase:
         ``self._input_plan``, and ``self._output_targets``.
         """
         from lucid._dispatch import _unwrap
-        from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
 
@@ -655,7 +653,6 @@ class _CompiledStepBase:
         their TensorImpl identity (and therefore their executable
         input slot) across steps.
         """
-        import lucid as _lucid
 
         for i, p in enumerate(self._params):
             if p.grad is None:
@@ -827,7 +824,7 @@ class _CompiledSGD(_CompiledStepBase):
     def _outputs_to_targets(self, outputs):
         """Map executable outputs to ``params`` (first N) then ``momenta`` (next N)."""
         # First N outputs → self._params, next N → self._momenta.
-        n = len(self._params)
+        len(self._params)
         return list(self._params) + list(self._momenta)
 
 

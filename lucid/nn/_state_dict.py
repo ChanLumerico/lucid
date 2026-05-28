@@ -29,8 +29,8 @@ from lucid.nn.module import Module
 from lucid._types import StateDict
 
 
-class IncompatibleKeys(
-    namedtuple("IncompatibleKeys", ["missing_keys", "unexpected_keys"])
+class _IncompatibleKeys(
+    namedtuple("_IncompatibleKeys", ["missing_keys", "unexpected_keys"])
 ):
     """Result tuple returned by ``Module.load_state_dict``.
 
@@ -231,7 +231,7 @@ def _walk_load(
     Post-hooks are deferred — modules with registered post-hooks are
     appended to `post_hook_modules` and fired by the top-level driver
     after the full walk completes, so each hook sees the final
-    IncompatibleKeys rather than a per-module snapshot.
+    _IncompatibleKeys rather than a per-module snapshot.
     """
     local_meta: dict[str, object] = (
         metadata.get(prefix.rstrip("."), {}) if metadata else {}
@@ -311,12 +311,12 @@ def _walk_load(
         )
 
 
-def load_state_dict(
+def _load_state_dict(
     module: Module,
     state_dict: StateDict,
     strict: bool = True,
     assign: bool = False,
-) -> IncompatibleKeys:
+) -> _IncompatibleKeys:
     """Driver for ``Module.load_state_dict``.
 
     Pre-order recursion: at each module, run pre-hooks, then
@@ -339,7 +339,7 @@ def load_state_dict(
         When ``True`` (default), raise if ``state_dict`` contains keys
         not present on the module or vice versa.  When ``False``, both
         kinds of mismatch are reported via the returned
-        :class:`IncompatibleKeys`.
+        :class:`_IncompatibleKeys`.
     assign : bool, optional
         When ``True``, replace the module's parameter / buffer tensors
         wholesale (preserving the checkpoint's dtype / device).  When
@@ -348,7 +348,7 @@ def load_state_dict(
 
     Returns
     -------
-    IncompatibleKeys
+    _IncompatibleKeys
         Named tuple ``(missing_keys, unexpected_keys)`` summarising the
         load.  Empty fields indicate a clean match.
     """
@@ -384,9 +384,9 @@ def load_state_dict(
     _collect_expected(module, "", expected_keys)
     unexpected_keys = [k for k in state_dict.keys() if k not in expected_keys]
 
-    incompatible: IncompatibleKeys = IncompatibleKeys(missing_keys, unexpected_keys)
+    incompatible: _IncompatibleKeys = _IncompatibleKeys(missing_keys, unexpected_keys)
 
-    # Fire post-hooks (instance + global) with the final IncompatibleKeys.
+    # Fire post-hooks (instance + global) with the final _IncompatibleKeys.
     for m in post_hook_modules:
         for hook in m._load_state_dict_post_hooks.values():
             hook(m, incompatible)

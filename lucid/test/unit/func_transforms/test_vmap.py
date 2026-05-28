@@ -317,7 +317,6 @@ class TestVmapStrategy:
 
     def test_isolated_strategy_explicit_for_user_fn(self) -> None:
         """User can force isolation for any function, e.g. custom vjp wrappers."""
-        results = []
 
         def f(x: lucid.Tensor) -> lucid.Tensor:
             out, vjp_fn = func.vjp(lambda z: (z**2).sum(), x)

@@ -496,7 +496,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
         )
 
         # Anchor generator (5 levels; one base size per level)
-        sizes: tuple[tuple[int, ...], ...] = tuple(
+        tuple(
             (int(s * r),)
             for s, r in [
                 (
@@ -609,7 +609,7 @@ class EfficientDetForObjectDetection(PretrainedModel):
         all_anchors: Tensor = lucid.cat(anchors_flat_parts, dim=0)  # (A, 4)
 
         # 8. Decode boxes
-        A_total = int(all_deltas.shape[1])
+        int(all_deltas.shape[1])
         all_boxes_parts: list[Tensor] = []
         for b in range(B):
             boxes_b = decode_boxes(all_deltas[b], all_anchors)  # (A, 4)

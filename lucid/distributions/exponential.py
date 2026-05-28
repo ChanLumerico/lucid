@@ -13,8 +13,8 @@ from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
 from lucid.distributions._util import (
-    as_tensor as _as_tensor,
-    broadcast_pair as _broadcast_pair,
+    _as_tensor,
+    _broadcast_pair,
 )
 
 

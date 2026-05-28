@@ -469,7 +469,6 @@ class DETRForObjectDetection(PretrainedModel):
         """Hungarian-matched set loss across the batch."""
         B = int(logits.shape[0])
         N = int(logits.shape[1])
-        K = self._cfg.num_classes
         iH, iW = image_size
 
         cls_losses: list[Tensor] = []
@@ -516,7 +515,7 @@ class DETRForObjectDetection(PretrainedModel):
             for pi in pred_idx:
                 weight_data[pi] = 1.0
 
-            cls_tgt = lucid.tensor(cls_targets_data)
+            lucid.tensor(cls_targets_data)
             weight = lucid.tensor(weight_data)
 
             # Weighted CE (per-sample weight)

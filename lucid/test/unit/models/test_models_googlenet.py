@@ -6,7 +6,6 @@ import unittest
 import lucid
 import lucid.models as models
 from lucid.models.vision.googlenet import (
-    GoogLeNet,
     GoogLeNetConfig,
     GoogLeNetForImageClassification,
     GoogLeNetOutput,
@@ -26,7 +25,8 @@ class TestGoogLeNetConfig(unittest.TestCase):
         self.assertAlmostEqual(cfg.aux_dropout, 0.7)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = GoogLeNetConfig(num_classes=100, aux_logits=False)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

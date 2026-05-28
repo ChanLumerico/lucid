@@ -26,7 +26,8 @@ class TestConvNeXtConfig(unittest.TestCase):
         self.assertAlmostEqual(cfg.layer_scale_init, 1e-6)
 
     def test_tuple_coercion(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = ConvNeXtConfig(depths=(3, 3, 27, 3), dims=(128, 256, 512, 1024))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

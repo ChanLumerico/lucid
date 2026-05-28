@@ -167,7 +167,7 @@ def _bool_to_int_indices(bool_impl: _C_engine.TensorImpl) -> list[_C_engine.Tens
         # 1-D boolean → single 1D index
         return [_to_i32(_C_engine.squeeze(nz, 1))]
     # Multi-dim boolean → k separate 1D index tensors (one per dim of the mask)
-    n_true = nz.shape[0]
+    nz.shape[0]
     result = []
     for d in range(k):
         # Slice column d from nz: shape (n_true, 1) → squeeze → (n_true,)
@@ -186,7 +186,7 @@ def _fancy_select(
     Result shape: (*impl.shape[:dim], *idx_impl.shape, *impl.shape[dim+1:])
     """
     idx_flat = _to_i32(_C_engine.reshape(idx_impl, [-1]))  # (M,) int32
-    M = _prod(idx_impl.shape)
+    _prod(idx_impl.shape)
     dim_size = impl.shape[dim]
     rest = list(impl.shape[dim + 1 :])
 
@@ -241,7 +241,7 @@ def _coordinate_select(
             )
         bc_indices.append(idx)
 
-    M = _prod(bcast_shape)
+    _prod(bcast_shape)
 
     # Compute strides for the indexed dims
     strides = []
@@ -282,7 +282,7 @@ def _advanced_getitem(
     idx_list has already had Ellipsis expanded.
     Contains a mix of int, slice, None, and Tensor elements.
     """
-    ndim = len(impl.shape)
+    len(impl.shape)
 
     # Phase 1: expand any bool Tensors to int index lists, replacing each
     # bool Tensor at position p with one or more int tensors.
@@ -390,9 +390,8 @@ def _advanced_getitem(
 
     if n_tensors == 1:
         # Single tensor: direct fancy select at adv_start_dim + tensor_local_dims[0]
-        adv_dim = adv_start_dim + tensor_local_dims[0]
+        adv_start_dim + tensor_local_dims[0]
         # Apply basic ops that come before the tensor dim
-        cur = adv_start_dim
         for ld, kind, val in basic_local_dims:
             if ld < tensor_local_dims[0]:
                 if kind == "__slice__":
@@ -712,7 +711,7 @@ def _setitem(t: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
         flat_idx = _C_engine.add(flat_idx, scaled_bc)
 
     flat_idx_1d = _to_i32(_C_engine.reshape(flat_idx, [-1]))  # (M,)
-    M = _prod(grid_shape)
+    _prod(grid_shape)
 
     # Flatten t
     total = _prod(shape)

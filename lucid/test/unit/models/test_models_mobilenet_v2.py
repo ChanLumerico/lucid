@@ -23,7 +23,8 @@ class TestMobileNetV2Config(unittest.TestCase):
         self.assertEqual(cfg.model_type, "mobilenet_v2")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = MobileNetV2Config(num_classes=10, width_mult=0.75)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

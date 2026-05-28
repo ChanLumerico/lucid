@@ -17,7 +17,6 @@ production-safe on long-running services / data-aug pipelines:
      compiled against.
 """
 
-import os
 
 import lucid
 import lucid.nn as nn

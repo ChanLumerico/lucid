@@ -573,7 +573,7 @@ def binary_cross_entropy(
     _validate_reduction(reduction)
     eps: float = 1e-12
     one: Tensor = _lucid.ones((), dtype=x.dtype, device=x.device)
-    eps_t: Tensor = _lucid.tensor(eps, dtype=x.dtype, device=x.device)
+    _lucid.tensor(eps, dtype=x.dtype, device=x.device)
     x_clamped: Tensor = x.clamp(eps, 1.0 - eps)
     bce: Tensor = -(target * x_clamped.log() + (one - target) * (one - x_clamped).log())
     if weight is not None:
@@ -1175,7 +1175,7 @@ def hinge_embedding_loss(
     """
     xi = _unwrap(x)
     yi = _unwrap(y)
-    ones = _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
+    _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
     zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
     margin_t = _C_engine.full(xi.shape, margin, xi.dtype, xi.device)
     loss_pos = xi  # y=1
@@ -1565,7 +1565,7 @@ def multi_margin_loss(
     # Build (N, 1) zero update, scatter into a ones mask along dim=1
     ones_mask = _C_engine.ones([N, C], xi.dtype, xi.device)
     zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
-    mask = _C_engine.scatter_add(ones_mask, ti_2d, zeros_nc, 1)
+    _C_engine.scatter_add(ones_mask, ti_2d, zeros_nc, 1)
     # After scatter_add the target column has 1+0=1, others are 1 — invert:
     # We want to zero the target. Use: where(correct_class, 0, loss).
     # Simpler: multiply by (1 - one_hot(target))
@@ -1655,7 +1655,7 @@ def multilabel_margin_loss(
     # Use: for each k, scatter 1 at position target[i,k] if target[i,k]>=0
     pos_mask = _C_engine.zeros([N, C], xi.dtype, xi.device)
     zeros_nc = _C_engine.zeros([N, 1], xi.dtype, xi.device)
-    ones_nc = _C_engine.ones([N, 1], xi.dtype, xi.device)
+    _C_engine.ones([N, 1], xi.dtype, xi.device)
 
     # Iterate over the K columns of target (K = C at most)
     for k in range(C):

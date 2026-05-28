@@ -22,7 +22,8 @@ class TestMaxViTConfig(unittest.TestCase):
         self.assertIsInstance(cfg.window_size, int)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = MaxViTConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

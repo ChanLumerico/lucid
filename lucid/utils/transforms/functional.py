@@ -563,9 +563,7 @@ def _clahe_lut(tile: Tensor, clip_limit: float) -> Tensor:
     return lut.reshape(1, 256)
 
 
-def _clahe_channel(
-    ch: Tensor, clip_limit: float, grid_h: int, grid_w: int
-) -> Tensor:
+def _clahe_channel(ch: Tensor, clip_limit: float, grid_h: int, grid_w: int) -> Tensor:
     """Contrast-limited adaptive equalization of a single ``(H, W)`` channel.
 
     Computes a clipped-histogram LUT per tile, then bilinearly interpolates

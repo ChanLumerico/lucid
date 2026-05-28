@@ -28,7 +28,6 @@ from lucid.utils.tokenizer._normalizers import NFC, Lowercase, Sequence
 from lucid.utils.tokenizer._pre_tokenizers import (
     ByteLevel,
     WhitespacePunctuationSplit,
-    WhitespaceSplit,
 )
 
 # ── Shared fixtures ─────────────────────────────────────────────────

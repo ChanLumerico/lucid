@@ -172,7 +172,7 @@ def max_pool1d(
     k = _int_or_tuple(kernel_size, 1)[0]
     s = k if stride is None else _int_or_tuple(stride, 1)[0]
     p = _int_or_tuple(padding, 1)[0]
-    d = _int_or_tuple(dilation, 1)[0]
+    _int_or_tuple(dilation, 1)[0]
     return _wrap(_C_engine.nn.max_pool1d(_unwrap(x), k, s, p))
 
 
@@ -1078,7 +1078,7 @@ def _scatter_unpool(
 
     # Flatten the trailing spatial dims of ``x`` and ``indices`` so that
     # ``scatter_add`` works on a single 1-D axis.
-    x_flat_shape = leading + [
+    leading + [
         (
             int(x.shape[-n_spatial:].numel())  # type: ignore[attr-defined]
             if hasattr(x.shape[-n_spatial:], "numel")

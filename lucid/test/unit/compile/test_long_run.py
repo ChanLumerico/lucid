@@ -23,7 +23,7 @@ import lucid.nn.functional as F
 import lucid.optim as optim
 from lucid.compile import compile_optimizer, fused_step
 
-from lucid.test.unit.compile._helpers import COMPILE_DEVICE, metal_tensor
+from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 
 def _make_problem() -> tuple[lucid.Tensor, lucid.Tensor, callable]:

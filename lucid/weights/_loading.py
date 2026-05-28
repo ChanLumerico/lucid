@@ -104,7 +104,7 @@ def load_weight_entry(
     Returns
     -------
     object
-        The ``IncompatibleKeys(missing_keys, unexpected_keys)`` result
+        The ``_IncompatibleKeys(missing_keys, unexpected_keys)`` result
         from :meth:`Module.load_state_dict`.
 
     Raises

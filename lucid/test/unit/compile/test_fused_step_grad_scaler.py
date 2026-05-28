@@ -32,9 +32,7 @@ applied scale on the return path so callers see numerically the same
 value as the eager AMP loop.
 """
 
-import os
 
-import pytest
 
 import lucid
 import lucid.amp as amp

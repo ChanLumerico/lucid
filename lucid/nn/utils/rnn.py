@@ -220,7 +220,7 @@ def pad_packed_sequence(
     batch_first: bool = False,
     padding_value: float = 0.0,
     total_length: int | None = None,
-) -> tuple[Any, Any]:
+) -> tuple[Tensor, Tensor]:
     r"""Inverse of :func:`pack_padded_sequence` — produce a padded tensor.
 
     Re-inflates a :class:`PackedSequence` into a dense
@@ -370,7 +370,7 @@ def pad_sequence(
         raise ValueError("pad_sequence: empty input list")
     T_max: int = max(int(s.shape[0]) for s in sequences)
     feat_shape: list[int] = list(sequences[0].shape[1:])
-    dtype = sequences[0].dtype
+    sequences[0].dtype
     device = sequences[0]._impl.device
 
     padded_each: list[Tensor] = []

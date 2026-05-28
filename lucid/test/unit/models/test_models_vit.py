@@ -30,7 +30,8 @@ class TestViTConfig(unittest.TestCase):
         self.assertAlmostEqual(cfg.mlp_ratio, 4.0)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = ViTConfig(patch_size=32, dim=1024, depth=24, num_heads=16)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

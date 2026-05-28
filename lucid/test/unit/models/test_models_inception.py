@@ -9,7 +9,6 @@ from lucid.models.vision.inception import (
     InceptionConfig,
     InceptionV3,
     InceptionV3ForImageClassification,
-    InceptionV3Output,
     inception_v3,
     inception_v3_cls,
 )
@@ -40,7 +39,8 @@ class TestInceptionV3Config(unittest.TestCase):
         self.assertEqual(cfg.model_type, "inception_v3")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = InceptionConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

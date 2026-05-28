@@ -23,7 +23,7 @@ silently degrade dropout in training mode.
 import lucid
 import lucid.nn as nn
 
-from lucid.test.unit.compile._helpers import COMPILE_DEVICE, metal_tensor
+from lucid.test.unit.compile._helpers import COMPILE_DEVICE
 
 
 class _RandModel(nn.Module):

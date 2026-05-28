@@ -123,7 +123,7 @@ def make_step(
     from lucid._tensor.tensor import Tensor
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
-    from lucid.compile._fallback import EagerFallbackSet, run_eager
+    from lucid.compile._fallback import EagerFallbackSet
     from lucid.compile._signature import signature_of
 
     # Phase 1.6 dynamic-batch: gated behind ``LUCID_COMPILE_DYNAMIC=1``
@@ -180,7 +180,7 @@ def make_step(
         with no_grad():
             with _tracing() as tracer:
                 x_out = model(*x_args[:1])
-                loss = loss_fn(x_out, *x_args[1:])
+                loss_fn(x_out, *x_args[1:])
 
         graph = tracer.graph
         if not graph.ops:

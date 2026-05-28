@@ -11,8 +11,6 @@ from lucid.models.vision.sknet import (
     sk_resnet_50,
     sk_resnet_50_cls,
     sk_resnet_101,
-    sk_resnet_101_cls,
-    sk_resnext_50_32x4d,
     sk_resnext_50_32x4d_cls,
 )
 
@@ -24,7 +22,9 @@ class TestSKNetConfig(unittest.TestCase):
         self.assertEqual(cfg.model_type, "sknet")
 
     def test_json_round_trip(self) -> None:
-        import json, os, tempfile
+        import json
+        import os
+        import tempfile
 
         cfg = SKNetConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

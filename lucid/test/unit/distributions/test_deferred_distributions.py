@@ -241,8 +241,8 @@ class TestNewKLPairs:
 
     def test_mc_fallback_finite(self) -> None:
         # A pair with no registration but p has rsample.
-        p = D.Normal(0.0, 1.0)
-        q = D.Laplace(0.5, 0.8)  # same pair hits analytical; use unregistered
+        D.Normal(0.0, 1.0)
+        D.Laplace(0.5, 0.8)  # same pair hits analytical; use unregistered
         # For a pair with no registration, MC fallback fires.
         # Weibull || Normal: not registered, Weibull has rsample.
         pw = D.Weibull(scale=1.0, concentration=2.0)

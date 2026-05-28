@@ -255,7 +255,7 @@ def main() -> None:
             print(f"  {key}: {val:.3f}")
         else:
             print(f"  {key}: {val}")
-    print(f"\nRun with --save to store as baseline, --check to compare.\n")
+    print("\nRun with --save to store as baseline, --check to compare.\n")
 
 
 if __name__ == "__main__":

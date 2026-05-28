@@ -27,7 +27,8 @@ class TestVGGConfig(unittest.TestCase):
         self.assertFalse(cfg.batch_norm)
 
     def test_arch_tuple_coercion(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = VGGConfig(arch=(1, 1, 2, 2, 2))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

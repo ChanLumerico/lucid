@@ -672,7 +672,7 @@ class FasterRCNNForObjectDetection(PretrainedModel):
               ``pred_boxes`` : (Σ proposals, 4) decoded xyxy boxes.
               ``loss``       : total loss when targets provided.
         """
-        B = int(x.shape[0])
+        int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 

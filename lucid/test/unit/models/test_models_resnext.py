@@ -12,9 +12,6 @@ from lucid.models.vision.resnext import (
     resnext_50_32x4d,
     resnext_50_32x4d_cls,
     resnext_101_32x4d,
-    resnext_101_32x4d_cls,
-    resnext_101_32x8d,
-    resnext_101_32x8d_cls,
 )
 
 
@@ -25,7 +22,8 @@ class TestResNeXtConfig(unittest.TestCase):
         self.assertEqual(cfg.model_type, "resnext")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = ResNeXtConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

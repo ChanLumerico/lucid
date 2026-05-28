@@ -782,7 +782,7 @@ class YOLOV3ForObjectDetection(PretrainedModel):
               ``loss``      : loss scalar when targets provided.
         """
         cfg = self._cfg
-        B = int(x.shape[0])
+        int(x.shape[0])
 
         # Backbone
         p3_raw, p4_raw, p5 = self.backbone.forward(x)

@@ -27,7 +27,8 @@ class TestEfficientNetConfig(unittest.TestCase):
         self.assertAlmostEqual(cfg.se_ratio, 0.25)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = EfficientNetConfig(width_mult=1.4, depth_mult=1.8, dropout=0.4)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

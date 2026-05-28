@@ -273,14 +273,12 @@ class LBFGS(Optimizer):
     ) -> tuple[float, float, Tensor]:
 
         alpha = lr
-        alpha_lo = 0.0
-        alpha_hi = float("inf")
-        f_lo = f_k
-        g_d = float(lucid.linalg.dot(g_k.flatten(), d.flatten()).item())
+        float("inf")
+        float(lucid.linalg.dot(g_k.flatten(), d.flatten()).item())
 
         for _ in range(max_ls):
             x_new = lucid.add(x_k, lucid.mul(lucid.tensor(alpha), d))
-            f_new = float(cast(Tensor, f(x_new)).item()) if callable(f) else f_k
+            float(cast(Tensor, f(x_new)).item()) if callable(f) else f_k
             break
 
         return alpha, f_k, g_k
@@ -367,12 +365,12 @@ class LBFGS(Optimizer):
 
         group = self.param_groups[0]
         lr = cast(float, group["lr"])
-        max_iter = cast(int, group["max_iter"])
+        cast(int, group["max_iter"])
         max_eval = cast(int, group["max_eval"])
         tol_grad = cast(float, group["tolerance_grad"])
-        tol_change = cast(float, group["tolerance_change"])
+        cast(float, group["tolerance_change"])
         history_size = cast(int, group["history_size"])
-        ls_fn = group["line_search_fn"]
+        group["line_search_fn"]
 
         st = self._lbfgs_state
 

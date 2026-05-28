@@ -9,7 +9,6 @@ Both verify forward + backward + bias gradient match eager under
 VJPs are actually executing).
 """
 
-import os
 
 import pytest
 

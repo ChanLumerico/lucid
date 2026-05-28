@@ -25,7 +25,6 @@ import lucid.models as M
 import lucid.nn as nn
 
 from lucid.test.unit.compile._helpers import (
-    COMPILE_DEVICE,
     assert_compile_parity,
     metal_tensor,
 )

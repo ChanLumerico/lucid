@@ -28,7 +28,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
-
 # Canonical special-token slot names.  Every algorithm honours this
 # scheme so attention-mask / special-token-mask computation can stay
 # uniform across BPE / WordPiece / Unigram.

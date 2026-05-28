@@ -13,7 +13,6 @@ Also exercises ``LUCID_MANUAL_VJP_DEBUG=1`` — when set, a coverage gap
 triggers a structured stderr line carrying the op name and signature.
 """
 
-import os
 import subprocess
 import sys
 

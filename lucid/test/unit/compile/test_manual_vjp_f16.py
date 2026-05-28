@@ -15,7 +15,6 @@ quickly (~3 decimal digits) and the test only verifies "stays in the
 same neighbourhood as eager", not bit-parity.
 """
 
-import os
 
 import pytest
 

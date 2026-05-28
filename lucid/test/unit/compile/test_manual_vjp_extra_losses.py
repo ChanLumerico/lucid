@@ -14,7 +14,6 @@ the trace surfaces the op directly (e.g. via a future Functional
 shortcut).
 """
 
-import os
 
 import pytest
 

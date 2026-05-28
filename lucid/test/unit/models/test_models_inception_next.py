@@ -24,7 +24,8 @@ class TestInceptionNeXtConfig(unittest.TestCase):
         self.assertEqual(cfg.band_kernel, 11)
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = InceptionNeXtConfig(num_classes=10, band_kernel=7)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

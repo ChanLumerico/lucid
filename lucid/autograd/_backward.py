@@ -3,7 +3,6 @@ autograd.backward() and autograd.grad() free functions.
 """
 
 from typing import TYPE_CHECKING
-from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:

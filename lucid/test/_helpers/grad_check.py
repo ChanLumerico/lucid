@@ -84,7 +84,7 @@ def _flat_jacobian_autograd(
     in_numel = int(inputs[0].numel())
 
     jac = np.zeros((out_numel, in_numel), dtype=np.float64)
-    flat_out = out.reshape(-1)
+    out.reshape(-1)
     for k in range(out_numel):
         # Re-run forward each time because autograd graphs are freed
         # after backward by default.

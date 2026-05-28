@@ -30,7 +30,8 @@ class TestLeNetConfig(unittest.TestCase):
         self.assertEqual(cfg.pooling, "max")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = LeNetConfig(num_classes=100, in_channels=3)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

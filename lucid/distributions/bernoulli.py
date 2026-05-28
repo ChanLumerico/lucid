@@ -13,7 +13,7 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution, ExponentialFamily
 
 
-from lucid.distributions._util import as_tensor as _as_tensor
+from lucid.distributions._util import _as_tensor
 
 
 def _probs_to_logits(probs: Tensor) -> Tensor:

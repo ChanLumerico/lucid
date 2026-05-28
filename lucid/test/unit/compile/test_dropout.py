@@ -24,7 +24,6 @@ compiles cleanly + produces randomised outputs across calls.
 
 import lucid
 import lucid.nn as nn
-import lucid.nn.functional as F
 
 from lucid.test.unit.compile._helpers import (
     COMPILE_DEVICE,

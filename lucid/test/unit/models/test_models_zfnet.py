@@ -21,7 +21,8 @@ class TestZFNetConfig(unittest.TestCase):
         self.assertEqual(cfg.model_type, "zfnet")
 
     def test_json_round_trip(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = ZFNetConfig(num_classes=10)
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

@@ -27,7 +27,8 @@ class TestSwinConfig(unittest.TestCase):
         self.assertEqual(cfg.window_size, 7)
 
     def test_tuple_coercion(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = SwinConfig(embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

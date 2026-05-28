@@ -26,7 +26,8 @@ class TestDenseNetConfig(unittest.TestCase):
         self.assertEqual(cfg.growth_rate, 32)
 
     def test_tuple_coercion(self) -> None:
-        import json, os
+        import json
+        import os
 
         cfg = DenseNetConfig(block_config=(6, 12, 32, 32))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:

@@ -126,3 +126,27 @@ markers = [
     "f64_only:  float64-only path; skipped when only f32 is available",
 ]
 addopts = "-v --tb=short -m 'not heavy'"
+
+# ── Ruff ────────────────────────────────────────────────────────────
+# Project lint gate (paired with mypy --strict). Intent: catch real
+# bugs (unused vars, undefined names, dead imports) without flagging
+# the math / lazy-import / closure-capture patterns the codebase
+# uses on purpose.
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = ["build", ".venv", "obsidian", "**/*.pyi"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # line length — formatter / reviewer's call, not gate
+    "E731",  # lambda assignments — used for closure capture (compile, math)
+    "E741",  # ambiguous names (l, I, O) — linear-algebra convention
+    "E402",  # late module imports — circular-dep, hot-path, conditional patterns
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-export / bootstrap ordering in package roots.
+"**/__init__.py"  = ["F401", "E402"]
+"**/__init__.pyi" = ["F401", "E402"]

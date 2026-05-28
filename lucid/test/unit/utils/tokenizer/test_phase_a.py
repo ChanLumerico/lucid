@@ -19,7 +19,6 @@ import pytest
 
 import lucid
 from lucid.utils.tokenizer import (
-    BPETokenizer,
     ByteLevelBPETokenizer,
     ByteLevelBPETokenizerFast,
     ByteTokenizer,

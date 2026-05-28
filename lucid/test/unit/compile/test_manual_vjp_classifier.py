@@ -16,7 +16,6 @@ combination).
 Pass criterion: 5 SGD steps within 1e-3 of eager.
 """
 
-import os
 
 import pytest
 

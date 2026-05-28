@@ -961,7 +961,7 @@ class Module:
         """Load parameters from a state_dict.
 
         Calls each module's ``_load_from_state_dict`` recursively.
-        Returns ``IncompatibleKeys(missing_keys, unexpected_keys)`` on success.
+        Returns ``_IncompatibleKeys(missing_keys, unexpected_keys)`` on success.
         Raises ``RuntimeError`` if ``strict=True`` and any keys are missing
         or unexpected, or if any error_msgs accumulated during loading.
 
@@ -978,7 +978,7 @@ class Module:
             ``False`` (default) copy data into the existing parameter
             preserving its dtype and device.
         """
-        from lucid.nn._state_dict import load_state_dict as _driver
+        from lucid.nn._state_dict import _load_state_dict as _driver
 
         return _driver(self, state_dict, strict=strict, assign=assign)
 

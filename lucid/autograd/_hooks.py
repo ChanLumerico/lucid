@@ -27,7 +27,6 @@ preserved.
 import weakref
 from typing import Callable, TYPE_CHECKING, cast
 
-from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap
 
 if TYPE_CHECKING:

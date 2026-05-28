@@ -110,7 +110,7 @@ def jacobian(
     results = []
     for x in inputs_rg:
         x_numel = x.numel()
-        out_total = sum(n for _, n in out_flat_list)
+        sum(n for _, n in out_flat_list)
         # Accumulate Jacobian rows as a list of 1-D tensors, then stack.
         J_rows: list[_C_engine.TensorImpl] = []
 
@@ -497,9 +497,9 @@ def jvp(
     # Forward pass with create_graph=True to allow higher-order differentation
     primals_out = func(*inputs_rg)
     if not isinstance(primals_out, (list, tuple)):
-        primals_list = [primals_out]
+        pass
     else:
-        primals_list = list(primals_out)
+        list(primals_out)
 
     # Use a dummy ones vector for the first backward, then use v for the second
     # Standard JVP via double-backward: jvp = d/dt[f(x + tv)] at t=0

@@ -28,7 +28,7 @@ Acceptance gate (Plan §1.4):
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterator, Mapping
+from typing import TYPE_CHECKING, Iterator, Mapping
 
 from lucid._C import engine as _C_engine
 
@@ -147,7 +147,6 @@ def _repack_outputs(spec: object, outs_wrapped: list[object]) -> object:
         kwargs = {k: _repack_outputs(child, outs_wrapped) for (k, child) in kvs}
         return cls(**kwargs)
     raise RuntimeError(f"_repack_outputs: unknown spec tag {tag!r}")
-    from lucid.nn.parameter import Parameter
 
 
 __all__ = ["CompiledModule"]

@@ -82,7 +82,7 @@ def gradcheck(
         numel = _unwrap(inp).numel()
         shape = list(_unwrap(inp).shape)
         # Work in F64 for numerical stability.
-        flat64 = _C_engine.astype(
+        _C_engine.astype(
             _C_engine.reshape(_unwrap(inp), [numel]),
             _C_engine.F64,
         )

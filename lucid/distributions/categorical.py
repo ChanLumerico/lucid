@@ -11,7 +11,7 @@ from lucid.distributions.constraints import (
 from lucid.distributions.distribution import Distribution
 
 
-from lucid.distributions._util import as_tensor as _as_tensor
+from lucid.distributions._util import _as_tensor
 
 
 def _normalize_probs(probs: Tensor) -> Tensor:

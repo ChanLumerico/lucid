@@ -4,7 +4,6 @@ Exercises BN train + eval VJPs in a tiny conv-less block:
   x (B, C, H, W) → BatchNorm(C, train) → ReLU → mean → Linear → MSE
 """
 
-import os
 
 import pytest
 

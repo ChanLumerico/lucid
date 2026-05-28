@@ -8,8 +8,8 @@ closed-form via lgamma.
 
 import lucid
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import as_tensor as _as_tensor
-from lucid.distributions._util import broadcast_pair as _broadcast_pair
+from lucid.distributions._util import _as_tensor
+from lucid.distributions._util import _broadcast_pair
 from lucid.distributions.bernoulli import (
     _logits_to_probs,
     _probs_to_logits,

@@ -15,7 +15,7 @@ import math
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import DTypeLike, DeviceLike
-from lucid.distributions._util import as_tensor as _as_tensor
+from lucid.distributions._util import _as_tensor
 
 
 class Transform:
@@ -1256,7 +1256,7 @@ class CorrCholeskyTransform(Transform):
         for row in range(d):
             if row == 0:
                 # first diagonal element = 1
-                diag_val = lucid.ones(*batch, 1, dtype=x.dtype, device=x.device)
+                lucid.ones(*batch, 1, dtype=x.dtype, device=x.device)
                 off = lucid.zeros(*batch, d, dtype=x.dtype, device=x.device)
                 rows.append(off)
                 # Actually build row by row using a different approach below.

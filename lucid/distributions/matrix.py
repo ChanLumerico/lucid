@@ -13,7 +13,7 @@ import lucid
 import lucid.linalg as _la
 import lucid.special as _sp
 from lucid._tensor.tensor import Tensor
-from lucid.distributions._util import as_tensor as _as_tensor
+from lucid.distributions._util import _as_tensor
 from lucid.distributions.constraints import (
     Constraint,
     positive,

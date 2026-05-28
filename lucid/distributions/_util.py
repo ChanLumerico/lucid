@@ -4,7 +4,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 
 
-def as_tensor(x: Tensor | float | int) -> Tensor:
+def _as_tensor(x: Tensor | float | int) -> Tensor:
     """Promote a Python scalar to a 0-dim Lucid tensor — matches the
     reference framework's convention so distributions parameterised by
     scalars get ``batch_shape == ()`` rather than ``(1,)``."""
@@ -16,7 +16,7 @@ def as_tensor(x: Tensor | float | int) -> Tensor:
     return t
 
 
-def broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
+def _broadcast_pair(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
     """Broadcast ``a`` and ``b`` to a common shape via arithmetic ``+ 0``.
 
     Cheaper than constructing two ``broadcast_to`` views — the

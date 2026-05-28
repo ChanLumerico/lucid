@@ -716,7 +716,7 @@ class _QRRGrad(_AutogradFunction):
         Phi = lucid.tril(M) - 0.5 * (M * eye_n)
         Y = solve_triangular(L.mT, Phi, upper=True)
         Z = solve_triangular(L.mT, Y.mT, upper=True).mT
-        G_B = (Z + Z.mT) * 0.5  # symmetric
+        (Z + Z.mT) * 0.5  # symmetric
         # dA = 2 * ctx_A * G_B — but we don't have A here.
         # Recover A: A = Q R but we don't have Q stored in ctx.
         # Use A = L^T D R ??? No: L = D R^T → L^T = R D^T = R D (D is diagonal & symmetric)
