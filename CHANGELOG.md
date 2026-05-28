@@ -13,6 +13,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.0 unreleased] — 2026-05-29
+
+**Strong-augment suite — RandomErasing + AutoAugment family + Mixup/CutMix + RA-Sampler.**
+Closes the torchvision `ClassificationPresetTrain` parity gap in one phased PR:
+8 new public classes, 5 new functional ops, integrated into the G0
+`TransformsPreset` framework, with reference-framework numerical parity
+verified across 180 parity tests.
+
+### Added
+
+- **`lucid.utils.transforms`** — 4 new policy classes + 1 new transform:
+  - `RandomErasing(p, scale, ratio, value)` (Zhong et al., 2017,
+    arXiv:1708.04896) — single rectangular region erase, with
+    constant / per-channel-tuple / `"random"` (i.i.d. normal) fill.
+  - `TrivialAugmentWide(num_magnitude_bins, interpolation, fill, p)`
+    (Müller & Hutter, 2021 — arXiv:2103.10158) — uniform sample of
+    1 op + 1 magnitude per call.
+  - `RandAugment(num_ops, magnitude, num_magnitude_bins, ...)` (Cubuk
+    et al., 2020 — arXiv:1909.13719) — `num_ops` ops uniform-sampled
+    with replacement; shared magnitude.
+  - `AutoAugment(policy, num_magnitude_bins, ...)` (Cubuk et al.,
+    2019 — arXiv:1805.09501) — 3 paper-faithful policy tables
+    (`"imagenet"` / `"cifar10"` / `"svhn"`), 25 sub-policies each
+    (verbatim from Tables 2/6/7).
+- **`lucid.utils.transforms.functional`** — 5 new ops:
+  - `adjust_sharpness(img, factor)` — PIL `ImageFilter.SMOOTH`
+    convention with 1-pixel border preserved (parity with reference
+    framework).
+  - `autocontrast(img)` — per-channel min-max stretch to `[0, 1]`,
+    flat channel passthrough.
+  - `posterize(img, num_bits)` — bit-mask quantisation via
+    uint8 round-trip, bit-exact PIL parity.
+  - `solarize(img, threshold)` — invert pixels at or above threshold.
+  - `invert(img)` — `1 - img`.
+- **`lucid.utils.data`** — 4 new public exports:
+  - `MixupCollator(alpha, *, num_classes, p)` (Zhang et al., 2018 —
+    arXiv:1710.09412) — Beta(α,α) lambda mix; produces soft labels.
+  - `CutMixCollator(alpha, *, num_classes, p)` (Yun et al., 2019 —
+    arXiv:1905.04899) — random patch paste; effective λ recomputed
+    after border clamping per paper Eq. 1.
+  - `RandomMixupCutMixCollator(...)` — uniform random choice between
+    the two per batch.
+  - `RASampler(dataset, num_replicas, rank, shuffle, seed, num_repeats)`
+    (Hoffer et al., 2020 — arXiv:1901.09335) — emits each unique
+    index `num_repeats` times consecutively for in-batch
+    augmentation diversity.
+- **`lucid.utils.transforms.ImageClassificationAugment`** — 2 new
+  `__init__` kwargs:
+  - `auto_augment: str | None = None` — timm-style spec parser
+    accepts `"ta_wide"`, `"ta"`, `"ra[-mM][-nN]"`,
+    `"aa_imagenet"` / `"aa_cifar10"` / `"aa_svhn"`.
+  - `random_erasing: float = 0.0` — applied **after** `Normalize`
+    per reference recipe ordering.
+- **AutoAugment shared infrastructure** — internal module
+  `lucid.utils.transforms._autoaugment` exposes a 15-op vocabulary
+  (`_OP_NAMES`), magnitude lookup (`_magnitudes_for`), and dispatch
+  (`apply_op`) shared by all three policy classes; new op vocabulary
+  is `Identity / ShearX / ShearY / TranslateX / TranslateY / Rotate /
+  Brightness / Color / Contrast / Sharpness / Posterize / Solarize /
+  AutoContrast / Equalize / Invert`.
+
+### Verified — Numerical reference-framework parity
+
+180 parity tests in `lucid/test/parity/transforms/` and
+`lucid/test/parity/utils/` opt into reference-framework comparison
+(`pytest -m parity`).  All pass against torch 2.12 / torchvision 0.27.
+
+Reference-parity conventions adopted in `apply_op`:
+
+- **ShearX / ShearY** anchor at `center=[0, 0]` (top-left, legacy
+  AutoAugment paper convention) and sign-flip the angle to match the
+  reference framework's matrix convention (Lucid's `affine_matrix`
+  uses forward-warp ``y_out += tan·x``; reference uses inverse-warp
+  ``y_out -= tan·x``).
+- **Rotate** sign-flips the angle to match the reference framework's
+  image-convention (positive degrees → clockwise) instead of Lucid's
+  default math-convention (positive degrees → counter-clockwise).
+- **TranslateX / TranslateY** — no flip needed; Lucid accepts the
+  magnitude as a fraction of image size (per ``ImageClassificationAugment``
+  contract), reference framework accepts integer pixels, converted at
+  the parity-test boundary.
+
+Known structural difference (not a bug): Lucid's `warp_affine` uses
+`align_corners=True` while reference framework's `F.affine` uses
+`align_corners=False`, so bilinear-interpolated geometric outputs
+differ by up to ~1 source-sampling pixel.  Parity tests use NEAREST
+interpolation with marker-position checks (semantic correctness) plus
+a bounded-mean drift check on BILINEAR random images.
+
+### Fixed
+
+- `F.adjust_sharpness` — 1-pixel border is now preserved (matches
+  PIL `ImageFilter.SMOOTH` convention) instead of bleeding through
+  zero-padded `conv2d`.  Previously border pixels could clip to 1.0
+  on a uniform input.
+
+### Tested
+
+- **615 new unit tests** across 5 files (`test_erasing.py`,
+  `test_autoaugment_ops.py`, `test_mix.py`, `test_ra_sampler_spec.py`,
+  plus extensions to `test_presets.py`).
+- **180 new parity tests** across 5 files (`test_strong_aug_functional_parity.py`,
+  `test_autoaugment_family_parity.py`, `test_random_erasing_parity.py`,
+  `test_mix_collators_parity.py`).
+- Full repo regression: 856/856 model tests, 770/770 utils unit
+  tests, 30/30 weights tests — zero regression.
+
+### Documentation
+
+- Added retrospective `obsidian/retro/retro-strong-augment-suite.md`.
+- Added op-contract `obsidian/op-contracts/op-autoaugment-magnitude.md`.
+- Added engine quirk `obsidian/engine/engine-multiplicative-mask-broadcast.md`.
+- Updated `obsidian/api/api-python-utils-data.md` for the 4 new
+  exports (`__all__` count 21 → 25).
+- Updated `obsidian/INDEX.md` with 3 new note references.
+
+---
+
 ## [3.4.1] — 2026-05-22
 
 **No-compile speed sweep across the norm family + Adam + ReLU.**  Pure

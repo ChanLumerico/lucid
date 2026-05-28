@@ -831,3 +831,156 @@ def depthwise_conv2d(img: Tensor, kernel2d: list[list[float]]) -> Tensor:
     weight = _cat([k] * c, 0)
     y = F.conv2d(x, weight, padding=(kh // 2, kw // 2), groups=c)
     return y[0] if unbatched else y
+
+
+# ── AutoAugment family — single-image functional ops ────────────────
+
+
+def adjust_sharpness(img: Tensor, factor: float) -> Tensor:
+    r"""Adjust sharpness by blending with a smoothed copy.
+
+    Reference-framework compatible smoothing kernel (PIL ``ImageFilter.SMOOTH``)::
+
+        [[1, 1, 1],
+         [1, 5, 1],
+         [1, 1, 1]] / 13
+
+    ``factor == 0`` returns the blurred image, ``factor == 1`` is the
+    identity, ``factor > 1`` sharpens (extrapolates away from blur).
+
+    PIL convention is honoured for border pixels: the SMOOTH kernel
+    has no valid neighbourhood on a 1-pixel border so those pixels
+    pass through unchanged (preventing the zero-padded ``conv2d``
+    bleed into the result that would otherwise diverge from
+    reference-framework parity).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    factor : float
+        Non-negative interpolation factor.
+
+    Returns
+    -------
+    Tensor
+        Adjusted image, same shape and dtype as ``img``, clipped to ``[0, 1]``.
+    """
+    if factor < 0.0:
+        raise ValueError(f"factor must be non-negative, got {factor}")
+    if factor == 1.0:
+        return img
+    inv13 = 1.0 / 13.0
+    kernel = [
+        [inv13, inv13, inv13],
+        [inv13, 5.0 * inv13, inv13],
+        [inv13, inv13, inv13],
+    ]
+    blurred = depthwise_conv2d(img, kernel)
+    h, w = _spatial_hw(img)
+    if h <= 2 or w <= 2:
+        # No valid interior — kernel can't be applied; return identity.
+        return img
+    # Build a ``(1, H, W)`` interior mask: 1 in interior, 0 on the
+    # 1-pixel border.  Broadcast-friendly: works for both ``(C, H, W)``
+    # and ``(B, C, H, W)`` ``blurred``.
+    inner_ones = lucid.ones(1, h - 2, w - 2, dtype=img.dtype)
+    interior_mask = F.pad(inner_ones, (1, 1, 1, 1), value=0.0)
+    border_mask = 1.0 - interior_mask
+    smoothed = blurred * interior_mask + img * border_mask
+    return _blend(img, smoothed, factor)
+
+
+def autocontrast(img: Tensor) -> Tensor:
+    r"""Per-channel min-max stretch to ``[0, 1]`` (PIL ``ImageOps.autocontrast``).
+
+    Each channel's intensities are rescaled so its minimum maps to
+    ``0`` and its maximum maps to ``1``.  A flat channel (``max ==
+    min``) passes through unchanged.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        Contrast-stretched image, same shape and dtype as ``img``.
+    """
+    # min/max per channel over the spatial axes — both shape (..., C, 1, 1).
+    minv = lucid.min(lucid.min(img, dim=-1, keepdim=True), dim=-2, keepdim=True)
+    maxv = lucid.max(lucid.max(img, dim=-1, keepdim=True), dim=-2, keepdim=True)
+    span = maxv - minv  # (..., C, 1, 1)
+    # Multiplicative mask avoids the lucid.where shape constraint (which
+    # requires cond + branches all the same shape, no broadcast).  The
+    # mask is (..., C, 1, 1) and broadcasts over the spatial axes in
+    # subsequent arithmetic.
+    has_span = (span > 0.0).to(img.dtype)
+    safe_span = has_span * span + (1.0 - has_span)  # 1 where flat → safe div
+    stretched = (img - minv) / safe_span
+    return has_span * stretched + (1.0 - has_span) * img
+
+
+def posterize(img: Tensor, num_bits: int) -> Tensor:
+    r"""Reduce bits per channel, bit-exact PIL ``ImageOps.posterize``.
+
+    Round-trips through ``uint8`` and applies the bit mask
+    ``~((1 << (8 - num_bits)) - 1)``, then divides by ``255``.  Output
+    has ``2**num_bits`` distinct levels per channel.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    num_bits : int
+        Number of bits to keep per channel; must be in ``[1, 8]``.
+
+    Returns
+    -------
+    Tensor
+        Quantised image, same shape and dtype as ``img``.
+    """
+    if not 1 <= num_bits <= 8:
+        raise ValueError(f"num_bits must be in [1, 8], got {num_bits}")
+    if num_bits == 8:
+        return img
+    mask_int = (~((1 << (8 - num_bits)) - 1)) & 0xFF
+    u8 = lucid.clip(lucid.round(img * 255.0), 0.0, 255.0).long()
+    masked = u8 & mask_int
+    return masked.to(img.dtype) / 255.0
+
+
+def solarize(img: Tensor, threshold: float) -> Tensor:
+    r"""Invert pixels at or above ``threshold`` (PIL ``ImageOps.solarize``).
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+    threshold : float
+        Cut-off in ``[0, 1]``; pixels ``>= threshold`` become
+        ``1 - pixel``.
+
+    Returns
+    -------
+    Tensor
+        Solarised image, same shape and dtype as ``img``.
+    """
+    return lucid.where(img >= threshold, 1.0 - img, img)
+
+
+def invert(img: Tensor) -> Tensor:
+    r"""Invert intensities (PIL ``ImageOps.invert``): ``1 - img``.
+
+    Parameters
+    ----------
+    img : Tensor
+        Image ``(C, H, W)`` or ``(B, C, H, W)`` in ``[0, 1]``.
+
+    Returns
+    -------
+    Tensor
+        Inverted image, same shape and dtype as ``img``.
+    """
+    return 1.0 - img
