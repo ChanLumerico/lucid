@@ -179,12 +179,17 @@ try:
 except Exception as e:
     print('caught:', type(e).__name__, file=sys.stderr)
 """
+    # Repo root = three levels up from this file
+    # (lucid/test/unit/compile/test_compile_diagnose.py).
+    import pathlib
+
+    repo_root = pathlib.Path(__file__).resolve().parents[4]
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
         timeout=60,
-        cwd="/Users/chanlee/Desktop/Programming/Python/lucid",
+        cwd=str(repo_root),
     )
     return result.stderr
 
