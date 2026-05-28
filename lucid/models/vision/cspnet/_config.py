@@ -1,4 +1,4 @@
-"""CSPNet configuration dataclass (Wang et al., 2019)."""
+"""CSPNet configuration dataclass (Wang et al., CVPRW 2020)."""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -18,17 +18,12 @@ from lucid.models._meta import model_family_meta
     theory=r"""
     CSPNet ("Cross-Stage Partial Network") is a generic backbone
     transformation that can be wrapped around almost any
-    dense-or-residual stage — ResNet, ResNeXt, DenseNet — to cut
-    its compute and memory while *improving* its accuracy.  The
-    core observation is that during back-propagation the gradient
-    flowing through a dense block is *duplicated* many times across
-    repeated dense connections, which both wastes computation and
-    can confuse the optimisation by re-using the same gradient
-    information in many places.
+    dense-or-residual stage — ResNet, ResNeXt, DenseNet, Darknet —
+    to cut its compute and memory while *improving* its accuracy.
 
     The CSP transformation factors each stage as follows.  The
-    input feature map is split along the channel dimension into
-    two halves:
+    input feature map (after an expansion conv) is split along the
+    channel dimension into two halves:
 
     .. math::
 
@@ -36,8 +31,8 @@ from lucid.models._meta import model_family_meta
         x' \in \mathbb{R}^{H \times W \times C/2}, \;
         x'' \in \mathbb{R}^{H \times W \times C/2}.
 
-    Only :math:`x''` is fed through the original dense / residual
-    block to produce :math:`y'' = \mathcal{F}(x'')`; the other half
+    Only :math:`x''` is fed through the heavy residual block to
+    produce :math:`y'' = \mathcal{F}(x'')`; the other half
     :math:`x'` *bypasses* the block entirely.  At the end of the
     stage the two halves are concatenated and projected:
 
@@ -45,32 +40,115 @@ from lucid.models._meta import model_family_meta
 
         y = \mathrm{Transition}\big( [x', \mathcal{F}(x'')] \big).
 
-    Because :math:`x'` never enters the dense block, the duplicated
+    Because :math:`x'` never enters the heavy block, the duplicated
     gradient is split into two truncated paths that share no
     intermediate activations — which both reduces redundant gradient
     information *and* halves the FLOPs of the heavy block.  Applied
-    to a ResNet-50 / ResNeXt-50 / DenseNet-201 backbone, CSP cuts
+    to ResNet-50 / ResNeXt-50 / Darknet-53 backbones, CSP cuts
     compute by 10–20% while improving ImageNet top-1 by a fraction
-    of a percent.  In Lucid the :class:`CSPNetConfig` parameterises
-    the CSPResNet variants — four stages of CSP-wrapped bottleneck
-    blocks with configurable per-stage depths and channel widths.
+    of a percent.
+
+    Lucid ships the three paper-cited base variants from Wang 2020:
+    :func:`cspresnet_50`, :func:`cspresnext_50`, :func:`cspdarknet_53`.
+    The first two use ``CrossStage`` (CSP-wrapped residual bottleneck);
+    the last uses ``DarkStage`` (sequential Darknet block).
     """,
 )
 @dataclass(frozen=True)
 class CSPNetConfig(ModelConfig):
-    """Unified config for CSPResNet variants.
+    r"""Generic configuration for every paper-cited CSPNet variant.
 
-    ``layers`` — per-stage block counts (4 stages total).
-    ``channels`` — base channel widths per stage before CSP branching.
+    Parameters
+    ----------
+    num_classes : int, optional, default=1000
+    in_channels : int, optional, default=3
+    stem_out_chs : int, optional
+        Output channels of the stem.  ``64`` for the CSPResNet
+        variants (7×7 stride-4 + max-pool), ``32`` for CSPDarknet-53
+        (3×3 stride-1, no pool).
+    stem_kernel : int, optional, default=7
+        Kernel size of the stem convolution.
+    stem_stride : int, optional, default=4
+        Stride of the stem (post-stem max-pool yields a further /2 for
+        CSPResNet, none for CSPDarknet).
+    stem_pool : str, optional, default="max"
+        ``"max"`` (CSPResNet line) or ``""`` (CSPDarknet — no pool).
+    block_type : str, optional, default="bottle"
+        Per-stage block flavour: ``"bottle"`` = residual bottleneck
+        (CSPResNet / CSPResNeXt), ``"dark"`` = Darknet block
+        (CSPDarknet).
+    stage_layout : str, optional, default="cross"
+        ``"cross"`` = CSP-wrapped (CrossStage), ``"dark"`` = plain
+        sequential (DarkStage).
+    depths : tuple of int, optional
+        Block counts per stage.
+    out_chs : tuple of int, optional
+        Per-stage output channel widths.
+    strides : tuple of int, optional
+        Per-stage stride (1 = no downsample, 2 = halve spatial).
+    groups : int, optional, default=1
+        Per-bottleneck grouped-conv count (CSPResNeXt-50 uses 32).
+    expand_ratio : float, optional, default=2.0
+        How wide ``conv_exp`` is relative to the stage's input.
+    bottle_ratio : float, optional, default=0.5
+        Bottleneck reduction inside each block.
+    block_ratio : float, optional, default=1.0
+        Branch-output reduction inside CrossStage transitions.
+    cross_linear : bool, optional, default=True
+        Whether the ``conv_exp`` of CrossStage skips its activation
+        (paper-cited variants do skip).
+    down_growth : bool, optional, default=False
+        CSPDarknet only — whether the down-conv at each stage already
+        applies the channel expansion.
+    dropout : float, optional, default=0.0
+        Head dropout probability.
     """
 
     model_type: ClassVar[str] = "cspnet"
 
     num_classes: int = 1000
     in_channels: int = 3
-    layers: tuple[int, ...] = (3, 3, 5, 2)
-    channels: tuple[int, ...] = (64, 128, 256, 512)
+
+    # Stem
+    stem_out_chs: int = 64
+    stem_kernel: int = 7
+    stem_stride: int = 2
+    stem_pool: str = "max"
+
+    # Per-stage hyperparameters.  Every per-stage field is a tuple whose
+    # length must equal ``len(depths)`` — CSPResNet / CSPResNeXt are
+    # 4-stage, CSPDarknet-53 is 5-stage.  ``block_type``/``stage_type``
+    # vary across paper-cited variants too (``dark`` block inside the
+    # CSP-wrapped stages for CSPDarknet, ``bottle`` for the others).
+    depths: tuple[int, ...] = (3, 3, 5, 2)
+    out_chs: tuple[int, ...] = (128, 256, 512, 1024)
+    strides: tuple[int, ...] = (1, 2, 2, 2)
+    groups: tuple[int, ...] = (1, 1, 1, 1)
+    expand_ratio: tuple[float, ...] = (2.0, 2.0, 2.0, 2.0)
+    bottle_ratio: tuple[float, ...] = (0.5, 0.5, 0.5, 0.5)
+    block_ratio: tuple[float, ...] = (1.0, 1.0, 1.0, 1.0)
+    cross_linear: tuple[bool, ...] = (True, True, True, True)
+    down_growth: tuple[bool, ...] = (False, False, False, False)
+    block_type: tuple[str, ...] = ("bottle", "bottle", "bottle", "bottle")
+
+    dropout: float = 0.0
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "layers", tuple(self.layers))
-        object.__setattr__(self, "channels", tuple(self.channels))
+        for f in (
+            "depths", "out_chs", "strides", "groups",
+            "expand_ratio", "bottle_ratio", "block_ratio",
+            "cross_linear", "down_growth", "block_type",
+        ):
+            object.__setattr__(self, f, tuple(getattr(self, f)))
+        # Length consistency: every per-stage tuple must match ``depths``.
+        n = len(self.depths)
+        for f in (
+            "out_chs", "strides", "groups",
+            "expand_ratio", "bottle_ratio", "block_ratio",
+            "cross_linear", "down_growth", "block_type",
+        ):
+            if len(getattr(self, f)) != n:
+                raise ValueError(
+                    f"CSPNetConfig: {f!r} length {len(getattr(self, f))} "
+                    f"!= depths length {n}"
+                )

@@ -1,130 +1,180 @@
-"""Registry factories for CSPResNet variants."""
+"""Registry factories for the three paper-cited CSPNet variants.
 
+Wang et al., CVPRW 2020.  Three architectures ship: ``cspresnet_50``,
+``cspresnext_50``, ``cspdarknet_53``.  Hyperparameters lifted from
+``timm.models.cspnet`` to keep state-dict compatibility (the converter
+in ``tools/convert_weights/cspnet.py`` is a single ``map_key`` for all
+three variants).
+"""
+
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.cspnet._config import CSPNetConfig
 from lucid.models.vision.cspnet._model import CSPNet, CSPNetForImageClassification
+from lucid.models.vision.cspnet._weights import (
+    CSPDarknet53Weights,
+    CSPResNet50Weights,
+    CSPResNeXt50Weights,
+)
 
 # ---------------------------------------------------------------------------
-# Canonical configs
+# Per-variant configs (timm ``model_cfgs`` values, paper-faithful).
 # ---------------------------------------------------------------------------
 
-_CFG_50 = CSPNetConfig(layers=(3, 3, 5, 2), channels=(64, 128, 256, 512))
+_CFG_CSPRESNET_50 = CSPNetConfig(
+    stem_out_chs=64,
+    stem_kernel=7,
+    stem_stride=2,
+    stem_pool="max",
+    depths=(3, 3, 5, 2),
+    out_chs=(128, 256, 512, 1024),
+    strides=(1, 2, 2, 2),
+    groups=(1, 1, 1, 1),
+    expand_ratio=(2.0, 2.0, 2.0, 2.0),
+    bottle_ratio=(0.5, 0.5, 0.5, 0.5),
+    block_ratio=(1.0, 1.0, 1.0, 1.0),
+    cross_linear=(True, True, True, True),
+    down_growth=(False, False, False, False),
+    block_type=("bottle", "bottle", "bottle", "bottle"),
+)
+
+_CFG_CSPRESNEXT_50 = CSPNetConfig(
+    stem_out_chs=64,
+    stem_kernel=7,
+    stem_stride=2,
+    stem_pool="max",
+    depths=(3, 3, 5, 2),
+    out_chs=(256, 512, 1024, 2048),
+    strides=(1, 2, 2, 2),
+    groups=(32, 32, 32, 32),
+    expand_ratio=(1.0, 1.0, 1.0, 1.0),
+    bottle_ratio=(1.0, 1.0, 1.0, 1.0),
+    block_ratio=(0.5, 0.5, 0.5, 0.5),
+    cross_linear=(True, True, True, True),
+    down_growth=(False, False, False, False),
+    block_type=("bottle", "bottle", "bottle", "bottle"),
+)
+
+_CFG_CSPDARKNET_53 = CSPNetConfig(
+    stem_out_chs=32,
+    stem_kernel=3,
+    stem_stride=1,
+    stem_pool="",
+    depths=(1, 2, 8, 8, 4),
+    out_chs=(64, 128, 256, 512, 1024),
+    strides=(2, 2, 2, 2, 2),
+    groups=(1, 1, 1, 1, 1),
+    expand_ratio=(2.0, 1.0, 1.0, 1.0, 1.0),
+    bottle_ratio=(0.5, 1.0, 1.0, 1.0, 1.0),
+    block_ratio=(1.0, 0.5, 0.5, 0.5, 0.5),
+    cross_linear=(False, False, False, False, False),
+    down_growth=(True, True, True, True, True),
+    block_type=("dark", "dark", "dark", "dark", "dark"),
+)
+
+
+def _b(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNet:
+    return CSPNet(CSPNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg)
+
+
+def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification:
+    return CSPNetForImageClassification(
+        CSPNetConfig(**{**cfg.__dict__, **kw}) if kw else cfg
+    )
+
 
 # ---------------------------------------------------------------------------
-# Backbone registrations (task="base")
+# Backbones (task="base")
 # ---------------------------------------------------------------------------
 
 
 @register_model(
-    task="base",
-    family="cspnet",
-    model_type="cspnet",
-    model_class=CSPNet,
-    default_config=_CFG_50,
+    task="base", family="cspnet", model_type="cspnet",
+    model_class=CSPNet, default_config=_CFG_CSPRESNET_50, params=21_620_000,
 )
 def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
-    r"""CSPResNet-50 feature-extracting backbone (no classification head).
-
-    Builds a :class:`CSPNet` with ResNet-50-style bottleneck
-    topology wrapped in the Cross-Stage-Partial transformation:
-    block repeats ``(3, 3, 5, 2)`` over four stages at channel
-    widths ``(64, 128, 256, 512)``.  Approximately 21.6M
-    parameters.  Wang et al., 2020 report 76.6% ImageNet-1k
-    top-1 accuracy — comparable to plain ResNet-50 (76.1%) but at
-    substantially reduced FLOPs and memory.
-
-    Parameters
-    ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored — the returned model is randomly initialised.
-    **overrides
-        Keyword overrides forwarded into :class:`CSPNetConfig`
-        (e.g. ``in_channels=1`` for grayscale input).
-
-    Returns
-    -------
-    CSPNet
-        Backbone with the CSPResNet-50 configuration applied (or
-        with ``overrides`` merged on top of it).
-
-    Notes
-    -----
-    See Wang et al., "CSPNet: A New Backbone that can Enhance
-    Learning Capability of CNN", CVPR Workshops 2020
-    (arXiv:1911.11929).  The key idea is the channel-wise split
-    that halves the FLOPs of each residual stage while
-    diversifying the gradient paths through truncated dense
-    connections.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.cspnet import cspresnet_50
-    >>> model = cspresnet_50()
-    >>> x = lucid.randn(1, 3, 224, 224)
-    >>> out = model(x)
-    >>> out.last_hidden_state.shape
-    (1, 512, 7, 7)
-    """
-    cfg = CSPNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
-    return CSPNet(cfg)
-
-
-# ---------------------------------------------------------------------------
-# Classification head registrations (task="image-classification")
-# ---------------------------------------------------------------------------
+    r"""CSPResNet-50 backbone — ResNet-50 with CSP-wrapped stages."""
+    return _b(_CFG_CSPRESNET_50, overrides)
 
 
 @register_model(
-    task="image-classification",
-    family="cspnet",
-    model_type="cspnet",
+    task="base", family="cspnet", model_type="cspnet",
+    model_class=CSPNet, default_config=_CFG_CSPRESNEXT_50, params=20_570_000,
+)
+def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
+    r"""CSPResNeXt-50 backbone — ResNeXt-50 (32×4d) with CSP wrap."""
+    return _b(_CFG_CSPRESNEXT_50, overrides)
+
+
+@register_model(
+    task="base", family="cspnet", model_type="cspnet",
+    model_class=CSPNet, default_config=_CFG_CSPDARKNET_53, params=27_610_000,
+)
+def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
+    r"""CSPDarknet-53 backbone — Darknet-53 (YOLOv3 base) with CSP wrap."""
+    return _b(_CFG_CSPDARKNET_53, overrides)
+
+
+# ---------------------------------------------------------------------------
+# Classifiers (task="image-classification")
+# ---------------------------------------------------------------------------
+
+
+@register_model(  # type: ignore[arg-type]
+    task="image-classification", family="cspnet", model_type="cspnet",
     model_class=CSPNetForImageClassification,
-    default_config=_CFG_50,
+    default_config=_CFG_CSPRESNET_50, params=21_620_000,
 )
 def cspresnet_50_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: CSPResNet50Weights | None = None,
+    **overrides: object,
 ) -> CSPNetForImageClassification:
-    r"""CSPResNet-50 image classifier (backbone + GAP + linear head).
+    r"""CSPResNet-50 image classifier — paper Table 1, **21.6M** params,
+    ImageNet-1k acc@1 ≈ 76.2% (timm ``ra_in1k`` recipe)."""
+    entry = weights_mod.resolve_weights(CSPResNet50Weights, pretrained, weights)
+    model = _c(_CFG_CSPRESNET_50, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cspresnet_50_cls")
+    return model
 
-    Builds a :class:`CSPNetForImageClassification` with the
-    canonical CSPResNet-50 backbone followed by global average
-    pooling and a linear projection to ``config.num_classes``
-    (default 1000 for ImageNet-1k).  Approximately 21.6M
-    parameters and 76.6% ImageNet-1k top-1 accuracy (Wang et al.,
-    2020).
 
-    Parameters
-    ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
-    **overrides
-        Keyword overrides forwarded into :class:`CSPNetConfig`
-        (typically ``num_classes`` to retarget the classifier).
+@register_model(  # type: ignore[arg-type]
+    task="image-classification", family="cspnet", model_type="cspnet",
+    model_class=CSPNetForImageClassification,
+    default_config=_CFG_CSPRESNEXT_50, params=20_570_000,
+)
+def cspresnext_50_cls(
+    pretrained: bool | str = False,
+    *,
+    weights: CSPResNeXt50Weights | None = None,
+    **overrides: object,
+) -> CSPNetForImageClassification:
+    r"""CSPResNeXt-50 image classifier — paper Table 1, **20.6M**
+    params, ImageNet-1k acc@1 ≈ 80.0% (timm ``ra_in1k`` recipe)."""
+    entry = weights_mod.resolve_weights(CSPResNeXt50Weights, pretrained, weights)
+    model = _c(_CFG_CSPRESNEXT_50, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cspresnext_50_cls")
+    return model
 
-    Returns
-    -------
-    CSPNetForImageClassification
-        Classifier with the CSPResNet-50 configuration applied
-        (or with ``overrides`` merged on top of it).
 
-    Notes
-    -----
-    See Wang et al., "CSPNet: A New Backbone that can Enhance
-    Learning Capability of CNN", CVPR Workshops 2020
-    (arXiv:1911.11929).
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.models.vision.cspnet import cspresnet_50_cls
-    >>> model = cspresnet_50_cls(num_classes=10)
-    >>> x = lucid.randn(2, 3, 224, 224)
-    >>> out = model(x)
-    >>> out.logits.shape
-    (2, 10)
-    """
-    cfg = CSPNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
-    return CSPNetForImageClassification(cfg)
+@register_model(  # type: ignore[arg-type]
+    task="image-classification", family="cspnet", model_type="cspnet",
+    model_class=CSPNetForImageClassification,
+    default_config=_CFG_CSPDARKNET_53, params=27_610_000,
+)
+def cspdarknet_53_cls(
+    pretrained: bool | str = False,
+    *,
+    weights: CSPDarknet53Weights | None = None,
+    **overrides: object,
+) -> CSPNetForImageClassification:
+    r"""CSPDarknet-53 image classifier — paper Table 1, **27.6M**
+    params, ImageNet-1k acc@1 ≈ 80.1% (timm ``ra_in1k`` recipe)."""
+    entry = weights_mod.resolve_weights(CSPDarknet53Weights, pretrained, weights)
+    model = _c(_CFG_CSPDARKNET_53, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cspdarknet_53_cls")
+    return model

@@ -119,6 +119,37 @@ verified across 180 parity tests.
     in a follow-up commit sourced from timm — torchvision does not
     publish a 1k-class xlarge head.
 
+- **`lucid.models.vision.cspnet`** — paper-faithful rebuild + pretrained
+  ImageNet-1k weights for the three paper-cited variants (Wang et al.,
+  CVPRW 2020).  Pre-3.5 CSPNet shipped only ``cspresnet_50`` and at
+  the wrong channel widths (7.5M vs paper 21.6M).  Replaced with a
+  generic ``CSPNet`` trunk parameterised by ``CSPNetConfig`` (per-stage
+  ``depths`` / ``out_chs`` / ``strides`` / ``groups`` / ``expand_ratio`` /
+  ``block_ratio`` / ``bottle_ratio`` / ``cross_linear`` / ``down_growth``
+  / ``block_type`` tuples) covering all three paper architectures.
+  All three variants match the timm-reported param count to 0.00%:
+  ``cspresnet_50`` 21.62M, ``cspresnext_50`` 20.57M, ``cspdarknet_53``
+  27.64M.
+  
+  Weights sourced from ``timm/csp{resnet50,resnext50,darknet53}.ra_in1k``,
+  hosted on ``lucid-dl/csp{resnet-50,resnext-50,darknet-53}``.
+  Numerical parity vs timm: max abs logit diff ``3-4e-6`` across all
+  three variants.
+  
+  Module + state-dict naming mirrors ``timm.models.cspnet`` so the
+  converter is a *single* trivial rename (``head.fc → classifier``).
+  ``_ConvBnAct`` uses ``LeakyReLU(0.01)`` everywhere (paper / timm
+  recipe) and the stem is 7×7 stride-2 + 3×3 max-pool stride-2 — total
+  stem stride 4, matching ResNet.
+  
+  Load via:
+  ```python
+  from lucid.models import cspresnet_50_cls
+  from lucid.models.weights import CSPResNet50Weights
+  m = cspresnet_50_cls(pretrained=True)
+  m = cspresnet_50_cls(weights=CSPResNet50Weights.RA_IN1K)
+  ```
+
 - **`lucid.models.vision.crossvit`** — paper-faithful rebuild + pretrained
   ImageNet-1k weights for all six paper-cited variants (Chen et al.,
   ICCV 2021, Table 2).  Pre-3.5 CrossViT was a single-stage toy at

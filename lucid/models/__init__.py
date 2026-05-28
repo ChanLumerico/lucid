@@ -236,6 +236,8 @@ from lucid.models.vision.mobilenet_v3 import (
 from lucid.models.vision.cspnet import (
     CSPNetConfig, CSPNet, CSPNetForImageClassification,
     cspresnet_50, cspresnet_50_cls,
+    cspresnext_50, cspresnext_50_cls,
+    cspdarknet_53, cspdarknet_53_cls,
 )
 # 2020 — ResNeSt (Zhang et al.)
 from lucid.models.vision.resnest import (
@@ -503,6 +505,9 @@ __all__ = [
     "mobilenet_v3_small", "mobilenet_v3_small_cls",
     # ── Vision (2019) CSPNet ─────────────────────────────────────────────────
     "CSPNetConfig", "CSPNet", "CSPNetForImageClassification",
+    "cspresnet_50", "cspresnet_50_cls",
+    "cspresnext_50", "cspresnext_50_cls",
+    "cspdarknet_53", "cspdarknet_53_cls",
     "cspresnet_50", "cspresnet_50_cls",
     # ── Vision (2020) ResNeSt ────────────────────────────────────────────────
     "ResNeStConfig", "ResNeSt", "ResNeStForImageClassification",

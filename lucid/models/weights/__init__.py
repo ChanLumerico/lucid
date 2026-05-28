@@ -36,6 +36,13 @@ from lucid.models.vision.alexnet._weights import AlexNetWeights
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet._weights import ResNet18Weights
 
+# 2019 — CSPNet (Wang et al.)
+from lucid.models.vision.cspnet._weights import (
+    CSPDarknet53Weights,
+    CSPResNet50Weights,
+    CSPResNeXt50Weights,
+)
+
 # 2021 — CrossViT (Chen et al.)
 from lucid.models.vision.crossvit._weights import (
     CrossViT9Weights,
@@ -60,6 +67,10 @@ __all__ = [
     "AlexNetWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
+    # ── Vision (2019) CSPNet ──────────────────────────────────────────
+    "CSPResNet50Weights",
+    "CSPResNeXt50Weights",
+    "CSPDarknet53Weights",
     # ── Vision (2021) CrossViT ────────────────────────────────────────
     "CrossViTTinyWeights",
     "CrossViTSmallWeights",
