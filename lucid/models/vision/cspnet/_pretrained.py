@@ -89,8 +89,12 @@ def _c(cfg: CSPNetConfig, kw: dict[str, object]) -> CSPNetForImageClassification
 
 
 @register_model(
-    task="base", family="cspnet", model_type="cspnet",
-    model_class=CSPNet, default_config=_CFG_CSPRESNET_50, params=21_620_000,
+    task="base",
+    family="cspnet",
+    model_type="cspnet",
+    model_class=CSPNet,
+    default_config=_CFG_CSPRESNET_50,
+    params=21_620_000,
 )
 def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     r"""CSPResNet-50 backbone — ResNet-50 with CSP-wrapped stages."""
@@ -98,8 +102,12 @@ def cspresnet_50(pretrained: bool = False, **overrides: object) -> CSPNet:
 
 
 @register_model(
-    task="base", family="cspnet", model_type="cspnet",
-    model_class=CSPNet, default_config=_CFG_CSPRESNEXT_50, params=20_570_000,
+    task="base",
+    family="cspnet",
+    model_type="cspnet",
+    model_class=CSPNet,
+    default_config=_CFG_CSPRESNEXT_50,
+    params=20_570_000,
 )
 def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
     r"""CSPResNeXt-50 backbone — ResNeXt-50 (32×4d) with CSP wrap."""
@@ -107,8 +115,12 @@ def cspresnext_50(pretrained: bool = False, **overrides: object) -> CSPNet:
 
 
 @register_model(
-    task="base", family="cspnet", model_type="cspnet",
-    model_class=CSPNet, default_config=_CFG_CSPDARKNET_53, params=27_610_000,
+    task="base",
+    family="cspnet",
+    model_type="cspnet",
+    model_class=CSPNet,
+    default_config=_CFG_CSPDARKNET_53,
+    params=27_610_000,
 )
 def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
     r"""CSPDarknet-53 backbone — Darknet-53 (YOLOv3 base) with CSP wrap."""
@@ -121,9 +133,12 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
 
 
 @register_model(  # type: ignore[arg-type]
-    task="image-classification", family="cspnet", model_type="cspnet",
+    task="image-classification",
+    family="cspnet",
+    model_type="cspnet",
     model_class=CSPNetForImageClassification,
-    default_config=_CFG_CSPRESNET_50, params=21_620_000,
+    default_config=_CFG_CSPRESNET_50,
+    params=21_620_000,
 )
 def cspresnet_50_cls(
     pretrained: bool | str = False,
@@ -141,9 +156,12 @@ def cspresnet_50_cls(
 
 
 @register_model(  # type: ignore[arg-type]
-    task="image-classification", family="cspnet", model_type="cspnet",
+    task="image-classification",
+    family="cspnet",
+    model_type="cspnet",
     model_class=CSPNetForImageClassification,
-    default_config=_CFG_CSPRESNEXT_50, params=20_570_000,
+    default_config=_CFG_CSPRESNEXT_50,
+    params=20_570_000,
 )
 def cspresnext_50_cls(
     pretrained: bool | str = False,
@@ -161,9 +179,12 @@ def cspresnext_50_cls(
 
 
 @register_model(  # type: ignore[arg-type]
-    task="image-classification", family="cspnet", model_type="cspnet",
+    task="image-classification",
+    family="cspnet",
+    model_type="cspnet",
     model_class=CSPNetForImageClassification,
-    default_config=_CFG_CSPDARKNET_53, params=27_610_000,
+    default_config=_CFG_CSPDARKNET_53,
+    params=27_610_000,
 )
 def cspdarknet_53_cls(
     pretrained: bool | str = False,

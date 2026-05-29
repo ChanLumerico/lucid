@@ -87,9 +87,7 @@ class TestCrossViTClassifier(unittest.TestCase):
 
     def test_custom_num_classes(self) -> None:
         m = CrossViTForImageClassification(
-            CrossViTConfig(
-                num_classes=10, embed_dims=(128, 256), num_heads=(4, 4)
-            )
+            CrossViTConfig(num_classes=10, embed_dims=(128, 256), num_heads=(4, 4))
         )
         m.eval()
         out = m(lucid.randn(1, 3, 240, 240))
@@ -101,12 +99,18 @@ class TestCrossViTRegistry(unittest.TestCase):
     def test_all_variants_registered(self) -> None:
         names = models.list_models(family="crossvit")
         for n in (
-            "crossvit_tiny", "crossvit_tiny_cls",
-            "crossvit_small", "crossvit_small_cls",
-            "crossvit_base", "crossvit_base_cls",
-            "crossvit_9", "crossvit_9_cls",
-            "crossvit_15", "crossvit_15_cls",
-            "crossvit_18", "crossvit_18_cls",
+            "crossvit_tiny",
+            "crossvit_tiny_cls",
+            "crossvit_small",
+            "crossvit_small_cls",
+            "crossvit_base",
+            "crossvit_base_cls",
+            "crossvit_9",
+            "crossvit_9_cls",
+            "crossvit_15",
+            "crossvit_15_cls",
+            "crossvit_18",
+            "crossvit_18_cls",
         ):
             self.assertIn(n, names)
 
@@ -121,7 +125,8 @@ class TestCrossViTPaperParamCounts(unittest.TestCase):
         n = float(getattr(models, factory_name)().num_parameters()) / 1e6
         delta = abs(n - paper_M) / paper_M
         self.assertLess(
-            delta, 0.02,
+            delta,
+            0.02,
             f"{factory_name}: {n:.2f}M deviates {delta*100:.1f}% from paper {paper_M}M",
         )
 

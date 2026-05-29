@@ -73,9 +73,12 @@ class TestCvTRegistry(unittest.TestCase):
     def test_variants_registered(self) -> None:
         names = models.list_models(family="cvt")
         for n in (
-            "cvt_13", "cvt_13_cls",
-            "cvt_21", "cvt_21_cls",
-            "cvt_w24", "cvt_w24_cls",
+            "cvt_13",
+            "cvt_13_cls",
+            "cvt_21",
+            "cvt_21_cls",
+            "cvt_w24",
+            "cvt_w24_cls",
         ):
             self.assertIn(n, names)
 
@@ -107,9 +110,7 @@ class TestCvTWeightsEnums(unittest.TestCase):
 
         self.assertIs(CvT13Weights.DEFAULT, CvT13Weights.IN1K)
         self.assertIs(CvT21Weights.DEFAULT, CvT21Weights.IN1K)
-        self.assertIs(
-            CvTW24Weights.DEFAULT, CvTW24Weights.IN22K_FT_IN1K_384
-        )
+        self.assertIs(CvTW24Weights.DEFAULT, CvTW24Weights.IN22K_FT_IN1K_384)
 
     def test_entry_fields(self) -> None:
         from lucid.models.weights import CvT13Weights

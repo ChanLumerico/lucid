@@ -94,8 +94,12 @@ def _c(cfg: CrossViTConfig, kw: dict[str, object]) -> CrossViTForImageClassifica
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_TINY, params=7_000_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_TINY,
+    params=7_000_000,
 )
 def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-Ti backbone — ``embed_dims=(96, 192)``, depths
@@ -104,8 +108,12 @@ def crossvit_tiny(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_SMALL, params=26_700_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_SMALL,
+    params=26_700_000,
 )
 def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-S backbone — ``embed_dims=(192, 384)``, depths
@@ -114,8 +122,12 @@ def crossvit_small(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_BASE, params=105_000_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_BASE,
+    params=105_000_000,
 )
 def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-B backbone — ``embed_dims=(384, 768)``, depths
@@ -124,8 +136,12 @@ def crossvit_base(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_9, params=8_600_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_9,
+    params=8_600_000,
 )
 def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-9 backbone — ``embed_dims=(128, 256)``, depths
@@ -134,8 +150,12 @@ def crossvit_9(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_15, params=27_400_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_15,
+    params=27_400_000,
 )
 def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-15 backbone — ``embed_dims=(192, 384)``, depths
@@ -144,8 +164,12 @@ def crossvit_15(pretrained: bool = False, **overrides: object) -> CrossViT:
 
 
 @register_model(
-    task="base", family="crossvit", model_type="crossvit",
-    model_class=CrossViT, default_config=_CFG_18, params=43_300_000,
+    task="base",
+    family="crossvit",
+    model_type="crossvit",
+    model_class=CrossViT,
+    default_config=_CFG_18,
+    params=43_300_000,
 )
 def crossvit_18(pretrained: bool = False, **overrides: object) -> CrossViT:
     r"""CrossViT-18 backbone — ``embed_dims=(224, 448)``, depths

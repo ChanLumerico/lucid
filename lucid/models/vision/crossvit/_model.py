@@ -41,7 +41,6 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._classification import DropPath
 from lucid.models.vision.crossvit._config import CrossViTConfig
 
-
 # ---------------------------------------------------------------------------
 # Patch embedding (one per branch)
 # ---------------------------------------------------------------------------
@@ -88,9 +87,7 @@ class _Attention(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         B, N, C = x.shape
-        qkv = cast(Tensor, self.qkv(x)).reshape(
-            B, N, 3, self.num_heads, self.head_dim
-        )
+        qkv = cast(Tensor, self.qkv(x)).reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D)
         q, k, v = qkv[0], qkv[1], qkv[2]
         attn = (q @ k.swapaxes(-2, -1)) * self.scale  # (B, H, N, N)
@@ -397,11 +394,11 @@ def _bicubic_2d(x: Tensor, oh: int, ow: int) -> Tensor:
         d2 = 1.0 - frac
         d3 = 2.0 - frac
         # |d| in [1,2]: w(d) = a·d³ − 5a·d² + 8a·d − 4a
-        w0 = a * (d0 ** 3) - 5 * a * (d0 ** 2) + 8 * a * d0 - 4 * a
-        w3 = a * (d3 ** 3) - 5 * a * (d3 ** 2) + 8 * a * d3 - 4 * a
+        w0 = a * (d0**3) - 5 * a * (d0**2) + 8 * a * d0 - 4 * a
+        w3 = a * (d3**3) - 5 * a * (d3**2) + 8 * a * d3 - 4 * a
         # |d| in [0,1]: w(d) = (a+2)·d³ − (a+3)·d² + 1
-        w1 = (a + 2) * (d1 ** 3) - (a + 3) * (d1 ** 2) + 1.0
-        w2 = (a + 2) * (d2 ** 3) - (a + 3) * (d2 ** 2) + 1.0
+        w1 = (a + 2) * (d1**3) - (a + 3) * (d1**2) + 1.0
+        w2 = (a + 2) * (d2**3) - (a + 3) * (d2**2) + 1.0
         return w0, w1, w2, w3
 
     # ── Row (height) pass: (B, C, H, W) → (B, C, oh, W) ─────────────
@@ -522,10 +519,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
         dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
         dpr = (
-            [
-                cfg.drop_path_rate * i / max(1, dpr_total - 1)
-                for i in range(dpr_total)
-            ]
+            [cfg.drop_path_rate * i / max(1, dpr_total - 1) for i in range(dpr_total)]
             if cfg.drop_path_rate > 0.0
             else [0.0] * dpr_total
         )
@@ -570,9 +564,9 @@ class CrossViT(PretrainedModel, BackboneMixin):
     def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
         """Patch-embed branch + CLS + positional embedding + dropout."""
         x = cast(Tensor, self.patch_embed[branch](x))  # (B, N, C)
-        cls_token = (
-            self.cls_token_0 if branch == 0 else self.cls_token_1
-        ).expand(x.shape[0], 1, x.shape[2])
+        cls_token = (self.cls_token_0 if branch == 0 else self.cls_token_1).expand(
+            x.shape[0], 1, x.shape[2]
+        )
         x = lucid.cat([cls_token, x], dim=1)
         pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
         x = x + pos
@@ -639,10 +633,7 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         n_cross_total = sum(max(1, d[2] if d[2] > 0 else 1) for d in cfg.depths)
         dpr_total = sum(d[0] + d[1] for d in cfg.depths) + n_cross_total
         dpr = (
-            [
-                cfg.drop_path_rate * i / max(1, dpr_total - 1)
-                for i in range(dpr_total)
-            ]
+            [cfg.drop_path_rate * i / max(1, dpr_total - 1) for i in range(dpr_total)]
             if cfg.drop_path_rate > 0.0
             else [0.0] * dpr_total
         )
@@ -674,15 +665,13 @@ class CrossViTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         self.norm = nn.ModuleList([nn.LayerNorm(D[d], eps=eps) for d in range(2)])
 
         # Per-branch classifier heads (averaged at the logit level).
-        self.head = nn.ModuleList(
-            [nn.Linear(D[d], cfg.num_classes) for d in range(2)]
-        )
+        self.head = nn.ModuleList([nn.Linear(D[d], cfg.num_classes) for d in range(2)])
 
     def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
         x = cast(Tensor, self.patch_embed[branch](x))
-        cls_token = (
-            self.cls_token_0 if branch == 0 else self.cls_token_1
-        ).expand(x.shape[0], 1, x.shape[2])
+        cls_token = (self.cls_token_0 if branch == 0 else self.cls_token_1).expand(
+            x.shape[0], 1, x.shape[2]
+        )
         x = lucid.cat([cls_token, x], dim=1)
         pos = self.pos_embed_0 if branch == 0 else self.pos_embed_1
         x = x + pos

@@ -83,14 +83,22 @@ class TestCoAtNetRegistry(unittest.TestCase):
     def test_all_variants_registered(self) -> None:
         names = models.list_models(family="coatnet")
         for n in (
-            "coatnet_0", "coatnet_0_cls",
-            "coatnet_1", "coatnet_1_cls",
-            "coatnet_2", "coatnet_2_cls",
-            "coatnet_3", "coatnet_3_cls",
-            "coatnet_4", "coatnet_4_cls",
-            "coatnet_5", "coatnet_5_cls",
-            "coatnet_6", "coatnet_6_cls",
-            "coatnet_7", "coatnet_7_cls",
+            "coatnet_0",
+            "coatnet_0_cls",
+            "coatnet_1",
+            "coatnet_1_cls",
+            "coatnet_2",
+            "coatnet_2_cls",
+            "coatnet_3",
+            "coatnet_3_cls",
+            "coatnet_4",
+            "coatnet_4_cls",
+            "coatnet_5",
+            "coatnet_5_cls",
+            "coatnet_6",
+            "coatnet_6_cls",
+            "coatnet_7",
+            "coatnet_7_cls",
         ):
             self.assertIn(n, names)
 
@@ -108,7 +116,9 @@ class TestCoAtNetVariantsBuild(unittest.TestCase):
     rather than risking OOM on the developer machine.
     """
 
-    def _check_params_within(self, model: object, paper_M: int, tol_M: float = 5.0) -> None:
+    def _check_params_within(
+        self, model: object, paper_M: int, tol_M: float = 5.0
+    ) -> None:
         n = float(getattr(model, "num_parameters")()) / 1e6
         self.assertLess(
             abs(n - paper_M),

@@ -292,7 +292,11 @@ class _CvTStage(nn.Module):
         self.blocks = nn.ModuleList(
             [
                 _CvTBlock(
-                    dim, num_heads, stride_kv, mlp_ratio, dropout,
+                    dim,
+                    num_heads,
+                    stride_kv,
+                    mlp_ratio,
+                    dropout,
                     with_cls_token=with_cls_token,
                 )
                 for _ in range(depth)
@@ -343,8 +347,14 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
         with_cls = bool(config.cls_token[i]) if i < len(config.cls_token) else False
         stages.append(
             _CvTStage(
-                in_ch, dim, depth, heads, stride, config.mlp_ratio,
-                config.dropout, with_cls_token=with_cls,
+                in_ch,
+                dim,
+                depth,
+                heads,
+                stride,
+                config.mlp_ratio,
+                config.dropout,
+                with_cls_token=with_cls,
             )
         )
         in_ch = dim

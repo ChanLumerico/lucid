@@ -250,7 +250,9 @@ class _TransformerStage(nn.Module):
             grid_h = input_grid[0]
             grid_w = input_grid[1]
 
-        self.pool: nn.Module = nn.AvgPool2d(2, stride=2) if downsample else nn.Identity()
+        self.pool: nn.Module = (
+            nn.AvgPool2d(2, stride=2) if downsample else nn.Identity()
+        )
         self.proj = nn.Linear(in_ch, out_ch)
         self.blocks = nn.ModuleList(
             [
@@ -356,8 +358,12 @@ def _build_body(
         # the user can override on the config without forking the model.
         s3_attn_grid = (img_size // 16, img_size // 16)
         s3_attn = _TransformerStage(
-            D_attn, D_attn, L_attn, heads[0],
-            input_grid=s3_attn_grid, downsample=False,
+            D_attn,
+            D_attn,
+            L_attn,
+            heads[0],
+            input_grid=s3_attn_grid,
+            downsample=False,
         )
         s3 = nn.Sequential(*s3_mb_layers, s3_expand, s3_attn)
         s3_out_ch = D_attn

@@ -12,7 +12,6 @@ import lucid.models as models
 from lucid.models.vision.cspnet import (
     CSPNetConfig,
     CSPNet,
-    CSPNetForImageClassification,
     cspresnet_50,
     cspresnet_50_cls,
 )
@@ -45,6 +44,7 @@ class TestCSPNetBackbone(unittest.TestCase):
 
     def test_forward_base_model_output(self) -> None:
         from lucid.models._output import BaseModelOutput
+
         out = self.model(lucid.randn(1, 3, 256, 256))
         self.assertIsInstance(out, BaseModelOutput)
 
@@ -63,9 +63,7 @@ class TestCSPNetClassifier(unittest.TestCase):
         self.assertIsNone(self.model(lucid.randn(1, 3, 256, 256)).loss)
 
     def test_labels_produce_scalar_loss(self) -> None:
-        out = self.model(
-            lucid.randn(2, 3, 256, 256), labels=lucid.tensor([0, 999])
-        )
+        out = self.model(lucid.randn(2, 3, 256, 256), labels=lucid.tensor([0, 999]))
         self.assertIsNotNone(out.loss)
         self.assertEqual(out.loss.shape, ())
 
@@ -75,9 +73,12 @@ class TestCSPNetRegistry(unittest.TestCase):
     def test_all_variants_registered(self) -> None:
         names = models.list_models(family="cspnet")
         for n in (
-            "cspresnet_50", "cspresnet_50_cls",
-            "cspresnext_50", "cspresnext_50_cls",
-            "cspdarknet_53", "cspdarknet_53_cls",
+            "cspresnet_50",
+            "cspresnet_50_cls",
+            "cspresnext_50",
+            "cspresnext_50_cls",
+            "cspdarknet_53",
+            "cspdarknet_53_cls",
         ):
             self.assertIn(n, names)
 

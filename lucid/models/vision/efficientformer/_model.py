@@ -61,8 +61,12 @@ class _Stem(nn.Module):
         self.act2 = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.act1(cast(Tensor, self.norm1(cast(Tensor, self.conv1(x))))))
-        x = cast(Tensor, self.act2(cast(Tensor, self.norm2(cast(Tensor, self.conv2(x))))))
+        x = cast(
+            Tensor, self.act1(cast(Tensor, self.norm1(cast(Tensor, self.conv1(x)))))
+        )
+        x = cast(
+            Tensor, self.act2(cast(Tensor, self.norm2(cast(Tensor, self.conv2(x)))))
+        )
         return x
 
 
@@ -299,14 +303,19 @@ class _MetaBlock1d(nn.Module):
             self.drop_path1(
                 cast(
                     Tensor,
-                    self.ls1(cast(Tensor, self.token_mixer(cast(Tensor, self.norm1(x))))),
+                    self.ls1(
+                        cast(Tensor, self.token_mixer(cast(Tensor, self.norm1(x))))
+                    ),
                 )
             ),
         )
         x = x + cast(
             Tensor,
             self.drop_path2(
-                cast(Tensor, self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))))
+                cast(
+                    Tensor,
+                    self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))),
+                )
             ),
         )
         return x

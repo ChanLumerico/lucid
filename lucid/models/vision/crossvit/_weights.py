@@ -13,9 +13,7 @@ variant.
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = ImageClassification(
-    crop_size=240, resize_size=274, interpolation="bicubic"
-)
+_PRESET = ImageClassification(crop_size=240, resize_size=274, interpolation="bicubic")
 
 
 @register_weights("crossvit_tiny_cls")

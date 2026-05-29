@@ -135,17 +135,30 @@ class CSPNetConfig(ModelConfig):
 
     def __post_init__(self) -> None:
         for f in (
-            "depths", "out_chs", "strides", "groups",
-            "expand_ratio", "bottle_ratio", "block_ratio",
-            "cross_linear", "down_growth", "block_type",
+            "depths",
+            "out_chs",
+            "strides",
+            "groups",
+            "expand_ratio",
+            "bottle_ratio",
+            "block_ratio",
+            "cross_linear",
+            "down_growth",
+            "block_type",
         ):
             object.__setattr__(self, f, tuple(getattr(self, f)))
         # Length consistency: every per-stage tuple must match ``depths``.
         n = len(self.depths)
         for f in (
-            "out_chs", "strides", "groups",
-            "expand_ratio", "bottle_ratio", "block_ratio",
-            "cross_linear", "down_growth", "block_type",
+            "out_chs",
+            "strides",
+            "groups",
+            "expand_ratio",
+            "bottle_ratio",
+            "block_ratio",
+            "cross_linear",
+            "down_growth",
+            "block_type",
         ):
             if len(getattr(self, f)) != n:
                 raise ValueError(

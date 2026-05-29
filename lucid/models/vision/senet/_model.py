@@ -244,7 +244,9 @@ def _build_body(
     )
     bn1 = nn.BatchNorm2d(stem_channels)
     pool: nn.Module = (
-        _LegacyStemPool() if config.legacy_pool else nn.MaxPool2d(3, stride=2, padding=1)
+        _LegacyStemPool()
+        if config.legacy_pool
+        else nn.MaxPool2d(3, stride=2, padding=1)
     )
 
     cur = stem_channels

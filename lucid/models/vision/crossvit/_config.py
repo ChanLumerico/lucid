@@ -128,8 +128,6 @@ class CrossViTConfig(ModelConfig):
         object.__setattr__(self, "img_scale", tuple(self.img_scale))
         object.__setattr__(self, "patch_sizes", tuple(self.patch_sizes))
         object.__setattr__(self, "embed_dims", tuple(self.embed_dims))
-        object.__setattr__(
-            self, "depths", tuple(tuple(d) for d in self.depths)
-        )
+        object.__setattr__(self, "depths", tuple(tuple(d) for d in self.depths))
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
         object.__setattr__(self, "mlp_ratio", tuple(self.mlp_ratio))
