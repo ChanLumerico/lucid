@@ -27,6 +27,7 @@ import tools.convert_weights.mobilenet_v2  # noqa: F401
 import tools.convert_weights.mobilenet_v3  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 import tools.convert_weights.resnext  # noqa: F401
+import tools.convert_weights.senet  # noqa: F401
 import tools.convert_weights.sknet  # noqa: F401
 import tools.convert_weights.xception  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401

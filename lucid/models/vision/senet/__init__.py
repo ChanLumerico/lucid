@@ -14,6 +14,13 @@ from lucid.models.vision.senet._pretrained import (
     se_resnet_152,
     se_resnet_152_cls,
 )
+from lucid.models.vision.senet._weights import (
+    SEResNet18Weights,
+    SEResNet34Weights,
+    SEResNet50Weights,
+    SEResNet101Weights,
+    SEResNet152Weights,
+)
 
 __all__ = [
     "SENetConfig",
@@ -29,4 +36,9 @@ __all__ = [
     "se_resnet_101_cls",
     "se_resnet_152",
     "se_resnet_152_cls",
+    "SEResNet18Weights",
+    "SEResNet34Weights",
+    "SEResNet50Weights",
+    "SEResNet101Weights",
+    "SEResNet152Weights",
 ]

@@ -4,7 +4,7 @@ Paper: "Squeeze-and-Excitation Networks"
 SE block: AdaptiveAvgPool2d(1) → Conv2d(C→rd_C,1×1) → ReLU
           → Conv2d(rd_C→C,1×1) → Sigmoid
 The SE output is multiplied channel-wise with the block's feature map.
-rd_channels = make_divisible(C / 16, divisor=8).
+rd_channels = C // reduction (matches the canonical SE-ResNet design).
 """
 
 from typing import ClassVar, cast
@@ -15,7 +15,6 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
-from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.senet._config import SENetConfig
 
 # ---------------------------------------------------------------------------
@@ -28,12 +27,12 @@ class _SEBlock(nn.Module):
 
     Uses Conv2d fc1/fc2 (kernel 1×1, bias=True) so the gate operates entirely
     in 4-D space without any flatten/reshape.
-    rd_channels = make_divisible(channels / 16, divisor=8).
+    rd_channels = channels // reduction (canonical SE-ResNet bottleneck).
     """
 
     def __init__(self, channels: int, reduction: int = 16) -> None:
         super().__init__()
-        rd_channels = _make_divisible(channels / reduction, divisor=8)
+        rd_channels = channels // reduction
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.fc1 = nn.Conv2d(channels, rd_channels, kernel_size=1, bias=True)
         self.fc2 = nn.Conv2d(rd_channels, channels, kernel_size=1, bias=True)
@@ -84,7 +83,9 @@ class _SEBasicBlock(nn.Module):
         out = cast(
             Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
         )
-        out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
+        out = cast(
+            Tensor, self.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
+        )
         out = cast(Tensor, self.se(out))
 
         if self.downsample is not None:
@@ -148,6 +149,33 @@ class _SEBottleneck(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Legacy SENet stem max-pool
+# ---------------------------------------------------------------------------
+
+
+class _LegacyStemPool(nn.Module):
+    """Canonical SENet stem pool — 3×3 stride-2, no padding, ceil rounding.
+
+    The original SE-ResNet line rounds the stem max-pool output size up
+    (``ceil_mode=True``) with zero padding, so the last row/column of
+    windows reaches one element past the floor-mode grid.  Reproduce that
+    exactly by right/bottom-padding the input by one element with a very
+    negative fill (a no-op under ``max``) and then applying a plain
+    floor-mode 3×3 stride-2 pool.
+    """
+
+    _NEG_FILL: ClassVar[float] = -1e30
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pool = nn.MaxPool2d(3, stride=2, padding=0, ceil_mode=False)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = F.pad(x, (0, 1, 0, 1), mode="constant", value=self._NEG_FILL)
+        return cast(Tensor, self.pool(x))
+
+
+# ---------------------------------------------------------------------------
 # Stage builder
 # ---------------------------------------------------------------------------
 
@@ -192,7 +220,7 @@ def _build_body(
 ) -> tuple[
     nn.Conv2d,
     nn.BatchNorm2d,
-    nn.MaxPool2d,
+    nn.Module,
     nn.Sequential,
     nn.Sequential,
     nn.Sequential,
@@ -215,7 +243,9 @@ def _build_body(
         config.in_channels, stem_channels, 7, stride=2, padding=3, bias=False
     )
     bn1 = nn.BatchNorm2d(stem_channels)
-    pool = nn.MaxPool2d(3, stride=2, padding=1)
+    pool: nn.Module = (
+        _LegacyStemPool() if config.legacy_pool else nn.MaxPool2d(3, stride=2, padding=1)
+    )
 
     cur = stem_channels
     layer1, cur = _make_layer(
@@ -289,8 +319,9 @@ class SENet(PretrainedModel, BackboneMixin):
         7×7 stem convolution at stride 2.
     bn1 : nn.BatchNorm2d
         BatchNorm paired with the stem conv.
-    maxpool : nn.MaxPool2d
-        3×3 max-pool at stride 2.
+    maxpool : nn.Module
+        3×3 max-pool at stride 2 — :class:`nn.MaxPool2d` for the modern
+        stem, or :class:`_LegacyStemPool` when ``config.legacy_pool``.
     layer1, layer2, layer3, layer4 : nn.Sequential
         The four SE-augmented residual stages.
     feature_info : list[FeatureInfo]

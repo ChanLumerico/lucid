@@ -71,6 +71,10 @@ class SENetConfig(ModelConfig):
     ``block_type`` selects BasicBlock (SE-ResNet-18/34) or Bottleneck
     (SE-ResNet-50/101/152).  ``layers`` is the per-stage repetition count.
     ``reduction`` is the channel reduction ratio in the SE block (default 16).
+    ``legacy_pool`` selects the original SENet stem max-pool geometry
+    (``padding=0``, ``ceil_mode=True``) used by the canonical SE-ResNet
+    line; ``False`` (default) uses the modern ResNet stem pool
+    (``padding=1``, ``ceil_mode=False``).
     """
 
     model_type: ClassVar[str] = "senet"
@@ -80,6 +84,7 @@ class SENetConfig(ModelConfig):
     layers: tuple[int, ...] = (3, 4, 6, 3)
     reduction: int = 16
     block_type: str = "bottleneck"
+    legacy_pool: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "layers", tuple(self.layers))

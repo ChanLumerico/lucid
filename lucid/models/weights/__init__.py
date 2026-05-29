@@ -77,6 +77,15 @@ from lucid.models.vision.mobilenet_v3._weights import (
     MobileNetV3SmallWeights,
 )
 
+# 2018 — SENet (Hu et al.)
+from lucid.models.vision.senet._weights import (
+    SEResNet18Weights,
+    SEResNet34Weights,
+    SEResNet50Weights,
+    SEResNet101Weights,
+    SEResNet152Weights,
+)
+
 # 2019 — SKNet (Li et al.)
 from lucid.models.vision.sknet._weights import (
     SKResNet18Weights,
@@ -147,6 +156,12 @@ __all__ = [
     # ── Vision (2019) MobileNetV3 ─────────────────────────────────────
     "MobileNetV3LargeWeights",
     "MobileNetV3SmallWeights",
+    # ── Vision (2018) SENet ───────────────────────────────────────────
+    "SEResNet18Weights",
+    "SEResNet34Weights",
+    "SEResNet50Weights",
+    "SEResNet101Weights",
+    "SEResNet152Weights",
     # ── Vision (2019) SKNet ───────────────────────────────────────────
     "SKResNet18Weights",
     "SKResNet34Weights",

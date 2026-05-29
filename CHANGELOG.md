@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: SE-ResNet
+
+- **senet** — `se_resnet_{18,34,101,152}_cls` ← timm `legacy_seresnet*.in1k`
+  (IN1K); `se_resnet_50_cls` ← timm `seresnet50.ra2_in1k` (RA2_IN1K).
+  Clean topology match; enums on `lucid.models.weights`.
+
 ### Added — Pretrained weights: ResNet (full set) + ResNeXt
 
 - **resnet** — ImageNet-1k weights for the 4 remaining canonical ResNets
