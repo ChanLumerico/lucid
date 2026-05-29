@@ -544,6 +544,43 @@ class TestRoIAlign:
         assert bool(lucid.isfinite(out).all().item())
 
 
+class TestMSDeformAttn:
+    """Multi-scale deformable attention (Deformable DETR / Mask2Former) —
+    composite over the fixed grid_sample; reproduces the reference op."""
+
+    def test_output_shape(self) -> None:
+        import lucid
+        from lucid.models._utils._detection import multi_scale_deformable_attention
+
+        bs, nh, hd, nq, nl, npt = 1, 8, 32, 25, 3, 4
+        shapes = [(8, 8), (4, 4), (2, 2)]
+        s = sum(h * w for h, w in shapes)
+        value = lucid.randn(bs, s, nh, hd)
+        loc = lucid.rand(bs, nq, nh, nl, npt, 2)
+        aw = lucid.rand(bs, nq, nh, nl, npt)
+        out = multi_scale_deformable_attention(value, shapes, loc, aw)
+        assert tuple(out.shape) == (bs, nq, nh * hd)
+        assert bool(lucid.isfinite(out).all().item())
+
+    def test_constant_value_with_unit_weights(self) -> None:
+        import lucid
+        from lucid.models._utils._detection import multi_scale_deformable_attention
+
+        # Constant value C + attention weights that sum to 1 over (nl*npt)
+        # per (query, head) → output must be C everywhere (interior samples,
+        # no boundary zero-padding).
+        bs, nh, hd, nq, nl, npt = 1, 2, 4, 3, 2, 2
+        shapes = [(8, 8), (4, 4)]
+        s = sum(h * w for h, w in shapes)
+        value = lucid.ones(bs, s, nh, hd) * 2.5
+        # interior sampling locations (0.5 = centre) avoid edge zero-pad
+        loc = lucid.ones(bs, nq, nh, nl, npt, 2) * 0.5
+        aw = lucid.ones(bs, nq, nh, nl, npt) / float(nl * npt)
+        out = multi_scale_deformable_attention(value, shapes, loc, aw)
+        assert abs(float(out.max().item()) - 2.5) < 1e-5
+        assert abs(float(out.min().item()) - 2.5) < 1e-5
+
+
 class TestFasterRCNNWeightsEnums:
     """Static contract of the Faster R-CNN ResNet-50-FPN Weights enum."""
 

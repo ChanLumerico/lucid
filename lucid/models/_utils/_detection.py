@@ -771,6 +771,83 @@ def roi_pool(
     return lucid.cat(results, dim=0)
 
 
+def multi_scale_deformable_attention(
+    value: Tensor,
+    value_spatial_shapes: list[tuple[int, int]],
+    sampling_locations: Tensor,
+    attention_weights: Tensor,
+) -> Tensor:
+    """Multi-scale deformable attention (Deformable DETR / Mask2Former).
+
+    A composite over :func:`~lucid.nn.functional.grid_sample` (bilinear,
+    ``align_corners=False``): each query head samples ``num_levels x
+    num_points`` learned locations across the multi-scale feature maps and
+    aggregates them with the predicted attention weights.  Reproduces the
+    reference pure-tensor implementation exactly (no custom kernel needed).
+
+    Parameters
+    ----------
+    value : Tensor
+        ``(bs, sum(H_l * W_l), num_heads, head_dim)`` flattened multi-scale
+        features.
+    value_spatial_shapes : list of (int, int)
+        ``(H_l, W_l)`` per level, in the same order ``value`` is concatenated.
+    sampling_locations : Tensor
+        ``(bs, num_queries, num_heads, num_levels, num_points, 2)`` in ``[0, 1]``
+        normalised ``(x, y)`` coordinates.
+    attention_weights : Tensor
+        ``(bs, num_queries, num_heads, num_levels, num_points)`` — softmaxed
+        over the flattened ``num_levels * num_points`` axis upstream.
+
+    Returns
+    -------
+    Tensor
+        ``(bs, num_queries, num_heads * head_dim)`` attended features.
+    """
+    bs = int(value.shape[0])
+    num_heads = int(value.shape[2])
+    head_dim = int(value.shape[3])
+    num_queries = int(sampling_locations.shape[1])
+    num_levels = int(sampling_locations.shape[3])
+    num_points = int(sampling_locations.shape[4])
+
+    # grid_sample wants [-1, 1] coords; the reference uses align_corners=False.
+    sampling_grids = 2.0 * sampling_locations - 1.0
+    sampled: list[Tensor] = []
+    offset = 0
+    for level, (h, w) in enumerate(value_spatial_shapes):
+        # (bs, H*W, num_heads, head_dim) → (bs*num_heads, head_dim, H, W)
+        value_l = (
+            value[:, offset : offset + h * w]
+            .reshape(bs, h * w, num_heads * head_dim)
+            .permute(0, 2, 1)
+            .reshape(bs * num_heads, head_dim, h, w)
+        )
+        offset += h * w
+        # (bs, num_queries, num_heads, num_points, 2) → (bs*num_heads, num_queries, num_points, 2)
+        grid_l = (
+            sampling_grids[:, :, :, level]
+            .permute(0, 2, 1, 3, 4)
+            .reshape(bs * num_heads, num_queries, num_points, 2)
+        )
+        sampled.append(
+            F.grid_sample(
+                value_l, grid_l, mode="bilinear", padding_mode="zeros",
+                align_corners=False,
+            )
+        )  # (bs*num_heads, head_dim, num_queries, num_points)
+
+    # (bs*num_heads, head_dim, num_queries, num_levels*num_points)
+    stacked = lucid.stack(sampled, dim=-2).reshape(
+        bs * num_heads, head_dim, num_queries, num_levels * num_points
+    )
+    weights = attention_weights.permute(0, 2, 1, 3, 4).reshape(
+        bs * num_heads, 1, num_queries, num_levels * num_points
+    )
+    out = (stacked * weights).sum(dim=-1)  # (bs*num_heads, head_dim, num_queries)
+    return out.reshape(bs, num_heads * head_dim, num_queries).permute(0, 2, 1)
+
+
 # ---------------------------------------------------------------------------
 # §5  Shared nn.Module components
 # ---------------------------------------------------------------------------
