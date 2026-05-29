@@ -44,26 +44,98 @@ def render_config_json(spec: "ConversionSpec") -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
-def _metrics_rows(spec: "ConversionSpec") -> str:
-    """Build the markdown tag-comparison table row(s) from ``meta``."""
+# Lucid task string → Hugging Face Hub ``pipeline_tag`` (HF has a single
+# segmentation pipeline; Lucid distinguishes semantic vs instance).
+_HF_PIPELINE_TAG: dict[str, str] = {
+    "image-classification": "image-classification",
+    "object-detection": "object-detection",
+    "semantic-segmentation": "image-segmentation",
+    "instance-segmentation": "image-segmentation",
+}
+
+
+def _hf_pipeline_tag(task: str) -> str:
+    """Map a Lucid ``task`` string to a valid HF Hub ``pipeline_tag``."""
+    return _HF_PIPELINE_TAG.get(task, task)
+
+
+def _first_metrics(spec: "ConversionSpec") -> dict[str, object]:
+    """Return the metric dict of the first dataset in ``meta['metrics']``."""
     metrics = spec.meta.get("metrics", {})
-    acc1 = acc5 = "—"
     if isinstance(metrics, dict):
         for _dataset, vals in metrics.items():
             if isinstance(vals, dict):
-                acc1 = str(vals.get("acc@1", "—"))
-                acc5 = str(vals.get("acc@5", "—"))
+                return dict(vals)
             break
+    return {}
+
+
+def _metrics_table(spec: "ConversionSpec") -> str:
+    """Build the full markdown tag-comparison table.
+
+    The metric columns are taken from whatever keys the converter put in
+    ``meta['metrics'][<dataset>]`` (``acc@1``/``acc@5`` for classification,
+    ``box mAP``/``mask mAP`` for detection, ``mIoU`` for segmentation, …),
+    so the table is task-agnostic.
+    """
+    vals = _first_metrics(spec)
+    metric_keys = list(vals.keys())
+
     params = spec.meta.get("num_params", "—")
     params_m = f"{params / 1e6:.1f}M" if isinstance(params, (int, float)) else "—"
     gflops = spec.meta.get("gflops", "—")
     size = spec.meta.get("file_size_mb", "—")
     size_s = f"{size} MB" if size != "—" else "—"
     src = spec.source.split("/")[0]
-    return (
-        f"| `{spec.tag}` *(default)* | {acc1} | {acc5} | {params_m} | "
-        f"{gflops} | {size_s} | {src} |"
+
+    headers = ["Tag", *metric_keys, "Params", "GFLOPs", "Size", "Source"]
+    header_row = "| " + " | ".join(headers) + " |"
+    sep_row = "|" + "|".join(["---"] * len(headers)) + "|"
+    cells = [
+        f"`{spec.tag}` *(default)*",
+        *[str(vals[k]) for k in metric_keys],
+        params_m,
+        str(gflops),
+        size_s,
+        src,
+    ]
+    data_row = "| " + " | ".join(cells) + " |"
+    return f"{header_row}\n{sep_row}\n{data_row}"
+
+
+def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
+    """Build the task-appropriate Python usage example body."""
+    preamble = (
+        "import lucid.models as models\n"
+        f"from lucid.models.weights import {enum_name}\n\n"
+        "# default tag\n"
+        f"model = models.{spec.model_name}(pretrained=True)\n\n"
+        "# explicit tag (enum or string)\n"
+        f"model = models.{spec.model_name}(weights={enum_name}.{spec.tag})\n"
+        f'model = models.{spec.model_name}(pretrained="{spec.tag}")\n\n'
+        "# preprocessing travels with the weights\n"
+        f"weights = {enum_name}.{spec.tag}\n"
+        "preprocess = weights.transforms()\n"
+        "out = model(preprocess(image)[None])\n"
     )
+    if spec.task == "object-detection":
+        tail = (
+            "# ObjectDetectionOutput: per-query/proposal class logits + boxes\n"
+            "logits, boxes = out.logits, out.pred_boxes\n"
+        )
+    elif spec.task == "instance-segmentation":
+        tail = (
+            "# InstanceSegmentationOutput: class logits + boxes + per-instance masks\n"
+            "logits, boxes, masks = out.logits, out.pred_boxes, out.pred_masks\n"
+        )
+    elif spec.task == "semantic-segmentation":
+        tail = (
+            "# SemanticSegmentationOutput: per-pixel class logits (B, C, H, W)\n"
+            "seg = out.logits.argmax(axis=1)  # (B, H, W) class indices\n"
+        )
+    else:  # image-classification
+        tail = "logits = out.logits  # (B, num_classes)\n"
+    return preamble + tail
 
 
 def _model_index(spec: "ConversionSpec") -> str:
@@ -132,7 +204,7 @@ def render_model_card(spec: "ConversionSpec") -> str:
     if dataset_names:
         frontmatter.append("datasets:")
         frontmatter += [f"  - {d}" for d in dataset_names]
-    frontmatter += [f"pipeline_tag: {spec.task}"]
+    frontmatter += [f"pipeline_tag: {_hf_pipeline_tag(spec.task)}"]
     mi = _model_index(spec)
     if mi:
         frontmatter.append(mi.rstrip("\n"))
@@ -146,28 +218,12 @@ converted to Lucid-native safetensors.
 
 ## Available weights
 
-| Tag | acc@1 | acc@5 | Params | GFLOPs | Size | Source |
-|---|---|---|---|---|---|---|
-{_metrics_rows(spec)}
+{_metrics_table(spec)}
 
 ## Usage
 
 ```python
-import lucid.models as models
-from lucid.models.weights import {enum_name}
-
-# default tag
-model = models.{spec.model_name}(pretrained=True)
-
-# explicit tag (enum or string)
-model = models.{spec.model_name}(weights={enum_name}.{spec.tag})
-model = models.{spec.model_name}(pretrained="{spec.tag}")
-
-# preprocessing travels with the weights
-weights = {enum_name}.{spec.tag}
-preprocess = weights.transforms()
-logits = model(preprocess(image)[None]).logits
-```
+{_usage_snippet(spec, enum_name)}```
 
 ## Conversion
 
