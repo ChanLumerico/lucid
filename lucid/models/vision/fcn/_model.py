@@ -91,9 +91,20 @@ def _make_layer(
     num_blocks: int,
     stride: int = 1,
     dilation: int = 1,
+    first_dilation: int | None = None,
 ) -> tuple[nn.Sequential, int]:
-    """Build one ResNet stage with optional dilation."""
+    """Build one ResNet stage with optional dilation.
+
+    The reference dilated ResNet (torchvision ``replace_stride_with_dilation``)
+    applies the *previous* stage's dilation to the first block of a dilated
+    stage and the new dilation to the remaining blocks — e.g. layer3's first
+    block uses dilation 1 then 2, layer4's first uses 2 then 4.
+    ``first_dilation`` carries that previous value (defaults to ``dilation``
+    for non-dilated stages, where they coincide).
+    """
     out_ch = mid_ch * 4
+    if first_dilation is None:
+        first_dilation = dilation
     ds: nn.Module | None = None
     if stride != 1 or in_ch != out_ch:
         ds = nn.Sequential(
@@ -101,7 +112,9 @@ def _make_layer(
             nn.BatchNorm2d(out_ch),
         )
     blocks: list[nn.Module] = [
-        _Bottleneck(in_ch, mid_ch, stride=stride, dilation=dilation, downsample=ds)
+        _Bottleneck(
+            in_ch, mid_ch, stride=stride, dilation=first_dilation, downsample=ds
+        )
     ]
     for _ in range(1, num_blocks):
         blocks.append(_Bottleneck(out_ch, mid_ch, dilation=dilation))
@@ -138,10 +151,14 @@ class _DilatedResNet(nn.Module):
 
         self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)
         self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)
-        # layer3: stride=1, dilation=2 → still 1/8 resolution
-        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=1, dilation=2)
-        # layer4: stride=1, dilation=4 → still 1/8 resolution
-        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=1, dilation=4)
+        # layer3: stride→dilation 2; first block keeps the previous dilation 1
+        self.layer3, c4 = _make_layer(
+            c3, 256, layers[2], stride=1, dilation=2, first_dilation=1
+        )
+        # layer4: stride→dilation 4; first block keeps the previous dilation 2
+        self.layer4, c5 = _make_layer(
+            c4, 512, layers[3], stride=1, dilation=4, first_dilation=2
+        )
 
         self.c4_channels: int = c4
         self.c5_channels: int = c5

@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: FCN (semantic-segmentation pattern)
+
+First semantic-segmentation model with pretrained weights — extends the
+detection sweep to dense prediction.
+
+- **fcn** — `fcn_resnet50` / `fcn_resnet101` ← torchvision
+  `FCN_ResNet{50,101}_Weights.COCO_WITH_VOC_LABELS_V1` (Long et al.,
+  2015; 21 classes = 20 Pascal-VOC + background; 60.5 / 63.7 mIoU).
+  Near-identity converter (the 334-key state dict matches torchvision
+  exactly bar the stem naming — `backbone.conv1`/`bn1` →
+  `backbone.stem.0`/`stem.1`).  One reference-faithfulness fix to
+  `_make_layer`: a dilated stage's **first block keeps the previous
+  stage's dilation** (layer3 → 1 then 2, layer4 → 2 then 4) instead of
+  applying the new dilation uniformly — this closed a 2.1 → 1.0e-5
+  per-pixel logit gap.  Enums `FCNResNet50Weights` / `FCNResNet101Weights`
+  on `lucid.models.weights` (tag `COCO_WITH_VOC_LABELS_V1`, `Segmentation`
+  transforms preset).
+
 ### Added — Pretrained weights: DETR (COCO detection sweep — pilot)
 
 First object-detection model with full COCO-pretrained weights, opening

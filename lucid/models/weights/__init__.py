@@ -175,6 +175,12 @@ from lucid.models.vision.detr._weights import (
     DETRResNet101Weights,
 )
 
+# 2015 — FCN semantic segmentation (Long et al.) — COCO-with-VOC
+from lucid.models.vision.fcn._weights import (
+    FCNResNet50Weights,
+    FCNResNet101Weights,
+)
+
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
 
@@ -312,6 +318,9 @@ __all__ = [
     # ── Vision (2020) DETR (COCO object detection) ────────────────────
     "DETRResNet50Weights",
     "DETRResNet101Weights",
+    # ── Vision (2015) FCN (COCO-with-VOC semantic segmentation) ───────
+    "FCNResNet50Weights",
+    "FCNResNet101Weights",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────
     "MobileNetV1Weights",
     # ── Vision (2022) EfficientFormer ─────────────────────────────────

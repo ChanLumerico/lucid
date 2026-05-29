@@ -24,6 +24,7 @@ import tools.convert_weights.densenet  # noqa: F401
 import tools.convert_weights.detr  # noqa: F401
 import tools.convert_weights.efficientformer  # noqa: F401
 import tools.convert_weights.efficientnet  # noqa: F401
+import tools.convert_weights.fcn  # noqa: F401
 import tools.convert_weights.googlenet  # noqa: F401
 import tools.convert_weights.inception  # noqa: F401
 import tools.convert_weights.inception_next  # noqa: F401

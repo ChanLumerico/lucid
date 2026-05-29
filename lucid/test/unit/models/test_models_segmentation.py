@@ -12,6 +12,8 @@ Tests are parametrized over the ``device`` fixture so they run on both
 the CPU (Accelerate) and Metal (MLX) streams.
 """
 
+import pytest
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._output import SemanticSegmentationOutput
@@ -283,3 +285,66 @@ class TestSegmentationRegistry:
         ]
         for name in expected:
             assert name in seg_models, f"{name!r} missing from registry"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FCN pretrained weights — static enum contract (no network)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_FCN_SHIPPED = (
+    ("fcn_resnet50", "fcn-resnet-50", "FCN_ResNet50_Weights", 35_322_218, 60.5),
+    ("fcn_resnet101", "fcn-resnet-101", "FCN_ResNet101_Weights", 54_314_346, 63.7),
+)
+
+
+def _fcn_enums() -> tuple[type, ...]:
+    from lucid.models.weights import FCNResNet50Weights, FCNResNet101Weights
+
+    return (FCNResNet50Weights, FCNResNet101Weights)
+
+
+def test_fcn_weights_default_aliases() -> None:
+    for cls in _fcn_enums():
+        assert cls.DEFAULT is cls.COCO_WITH_VOC_LABELS_V1
+
+
+def test_fcn_weights_entry_fields() -> None:
+    for cls, (_fac, slug, src, nparams, miou) in zip(_fcn_enums(), _FCN_SHIPPED):
+        e = cls.COCO_WITH_VOC_LABELS_V1.entry
+        assert e.num_classes == 21
+        assert len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__"
+        assert f"lucid-dl/{slug}" in e.url
+        assert "/COCO_WITH_VOC_LABELS_V1/" in e.url
+        meta = cls.COCO_WITH_VOC_LABELS_V1.meta
+        assert meta["source"] == f"torchvision/{src}.COCO_WITH_VOC_LABELS_V1"
+        assert meta["license"] == "bsd-3-clause"
+        assert meta["num_params"] == nparams
+        assert meta["metrics"]["COCO-val2017-VOC-labels"]["mIoU"] == miou
+
+
+def test_fcn_weights_segmentation_preset() -> None:
+    for cls in _fcn_enums():
+        tf = cls.COCO_WITH_VOC_LABELS_V1.transforms()
+        d = tf.to_dict()
+        assert d["preprocessor_type"] == "Segmentation"
+        assert d["init_kwargs"]["crop_size"] == 520
+
+
+def test_fcn_weights_registry_discoverable() -> None:
+    from lucid.weights import list_pretrained
+
+    for fac, *_ in _FCN_SHIPPED:
+        assert "COCO_WITH_VOC_LABELS_V1" in list_pretrained(fac)
+
+
+@pytest.mark.skipif(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") != "1",
+    reason="set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+def test_fcn_pretrained_load() -> None:
+    import lucid.models as models
+
+    m = models.fcn_resnet50(pretrained=True)
+    m.eval()
+    out = m(lucid.randn(1, 3, 256, 256))
+    assert out.logits.shape == (1, 21, 256, 256)

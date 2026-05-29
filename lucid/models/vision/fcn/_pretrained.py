@@ -1,8 +1,13 @@
 """Registry factories for FCN variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.fcn._config import FCNConfig
 from lucid.models.vision.fcn._model import FCNForSemanticSegmentation
+from lucid.models.vision.fcn._weights import (
+    FCNResNet50Weights,
+    FCNResNet101Weights,
+)
 
 _CFG_RESNET50 = FCNConfig(
     num_classes=21,
@@ -31,7 +36,7 @@ def _build(cfg: FCNConfig, kw: dict[str, object]) -> FCNForSemanticSegmentation:
     )
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: fcn_resnet50 adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="semantic-segmentation",
     family="fcn",
     model_type="fcn",
@@ -39,7 +44,9 @@ def _build(cfg: FCNConfig, kw: dict[str, object]) -> FCNForSemanticSegmentation:
     default_config=_CFG_RESNET50,
 )
 def fcn_resnet50(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: FCNResNet50Weights | None = None,
     **overrides: object,
 ) -> FCNForSemanticSegmentation:
     r"""FCN with ResNet-50 backbone (Long et al., CVPR 2015).
@@ -53,8 +60,13 @@ def fcn_resnet50(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`FCNResNet50Weights.COCO_WITH_VOC_LABELS_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : FCNResNet50Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`FCNConfig` (``num_classes``,
         ``in_channels``, ``classifier_hidden_channels``, ``dropout``, ...).
@@ -82,10 +94,14 @@ def fcn_resnet50(
     >>> out.logits.shape
     (1, 21, 512, 512)
     """
-    return _build(_CFG_RESNET50, overrides)
+    entry = weights_mod.resolve_weights(FCNResNet50Weights, pretrained, weights)
+    model = _build(_CFG_RESNET50, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="fcn_resnet50")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: fcn_resnet101 adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="semantic-segmentation",
     family="fcn",
     model_type="fcn",
@@ -93,7 +109,9 @@ def fcn_resnet50(
     default_config=_CFG_RESNET101,
 )
 def fcn_resnet101(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: FCNResNet101Weights | None = None,
     **overrides: object,
 ) -> FCNForSemanticSegmentation:
     r"""FCN with ResNet-101 backbone (Long et al., CVPR 2015).
@@ -105,8 +123,13 @@ def fcn_resnet101(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`FCNResNet101Weights.COCO_WITH_VOC_LABELS_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : FCNResNet101Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`FCNConfig`.
 
@@ -126,4 +149,8 @@ def fcn_resnet101(
     >>> out.logits.shape
     (1, 21, 512, 512)
     """
-    return _build(_CFG_RESNET101, overrides)
+    entry = weights_mod.resolve_weights(FCNResNet101Weights, pretrained, weights)
+    model = _build(_CFG_RESNET101, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="fcn_resnet101")
+    return model
