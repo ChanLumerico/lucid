@@ -20,11 +20,29 @@ from lucid.models.vision.vgg._pretrained import (
     vgg_19_bn_cls,
     vgg_19_cls,
 )
+from lucid.models.vision.vgg._weights import (
+    VGG11BNWeights,
+    VGG11Weights,
+    VGG13BNWeights,
+    VGG13Weights,
+    VGG16BNWeights,
+    VGG16Weights,
+    VGG19BNWeights,
+    VGG19Weights,
+)
 
 __all__ = [
     "VGGConfig",
     "VGG",
     "VGGForImageClassification",
+    "VGG11Weights",
+    "VGG13Weights",
+    "VGG16Weights",
+    "VGG19Weights",
+    "VGG11BNWeights",
+    "VGG13BNWeights",
+    "VGG16BNWeights",
+    "VGG19BNWeights",
     "vgg_11",
     "vgg_11_bn",
     "vgg_11_cls",

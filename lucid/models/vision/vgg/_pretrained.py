@@ -1,8 +1,19 @@
 """Registry factories for VGG variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vgg._config import VGGConfig
 from lucid.models.vision.vgg._model import VGG, VGGForImageClassification
+from lucid.models.vision.vgg._weights import (
+    VGG11BNWeights,
+    VGG11Weights,
+    VGG13BNWeights,
+    VGG13Weights,
+    VGG16BNWeights,
+    VGG16Weights,
+    VGG19BNWeights,
+    VGG19Weights,
+)
 
 _CFG_11 = VGGConfig(arch=(1, 1, 2, 2, 2))
 _CFG_13 = VGGConfig(arch=(2, 2, 2, 2, 2))
@@ -390,7 +401,7 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_11_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -398,7 +409,10 @@ def vgg_19_bn(pretrained: bool = False, **overrides: object) -> VGG:
     default_config=_CFG_11,
 )
 def vgg_11_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG11Weights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-11 image classifier (config A, no BatchNorm).
 
@@ -406,15 +420,19 @@ def vgg_11_cls(
     VGG-11 topology (``arch=(1, 1, 2, 2, 2)``) followed by the two
     4096-dim fully-connected layers and a final linear projection to
     ``config.num_classes``.  Approximately 132.9 M parameters total
-    (≈124 M of which sit in the two large FC layers).  Reaches a top-5
-    ImageNet validation error of 9.4% (Simonyan & Zisserman, ICLR 2015,
-    Table 3, configuration A).
+    (≈124 M of which sit in the two large FC layers).  Reaches a top-1
+    ImageNet validation accuracy of 69.02% (torchvision eval).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG11Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG11Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig` — use
         ``num_classes=N`` to retarget the head.
@@ -423,22 +441,32 @@ def vgg_11_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-11 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's ``VGG11_Weights``
+    and hosted on the Hugging Face Hub under ``lucid-dl/vgg-11``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_11_cls
-    >>> model = vgg_11_cls()
+    >>> model = vgg_11_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_11, overrides)
+    entry = weights_mod.resolve_weights(VGG11Weights, pretrained, weights)
+    model = _classifier(_CFG_11, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_11_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_13_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -446,21 +474,29 @@ def vgg_11_cls(
     default_config=_CFG_13,
 )
 def vgg_13_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG13Weights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-13 image classifier (config B, no BatchNorm).
 
     Builds a :class:`VGGForImageClassification` with the paper-cited
     VGG-13 topology (``arch=(2, 2, 2, 2, 2)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 133.0 M
-    parameters total.  Reaches a top-5 ImageNet validation error of
-    8.8% (Simonyan & Zisserman, ICLR 2015, Table 3, configuration B).
+    parameters total.  Reaches a top-1 ImageNet validation accuracy of
+    69.93% (torchvision eval).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG13Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG13Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -468,22 +504,32 @@ def vgg_13_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-13 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's ``VGG13_Weights``
+    and hosted on the Hugging Face Hub under ``lucid-dl/vgg-13``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_13_cls
-    >>> model = vgg_13_cls()
+    >>> model = vgg_13_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_13, overrides)
+    entry = weights_mod.resolve_weights(VGG13Weights, pretrained, weights)
+    model = _classifier(_CFG_13, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_13_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -491,22 +537,29 @@ def vgg_13_cls(
     default_config=_CFG_16,
 )
 def vgg_16_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG16Weights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-16 image classifier (config D, no BatchNorm).
 
     Builds a :class:`VGGForImageClassification` with the paper-cited
     VGG-16 topology (``arch=(2, 2, 3, 3, 3)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 138.4 M
-    parameters total and a top-5 ImageNet validation error of 7.3%
-    (Simonyan & Zisserman, ICLR 2015, Table 3, configuration D) — the
-    most widely used VGG variant.
+    parameters total and a top-1 ImageNet validation accuracy of 71.59%
+    (torchvision eval) — the most widely used VGG variant.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG16Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG16Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -514,22 +567,32 @@ def vgg_16_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-16 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's ``VGG16_Weights``
+    and hosted on the Hugging Face Hub under ``lucid-dl/vgg-16``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_16_cls
-    >>> model = vgg_16_cls(num_classes=100)
+    >>> model = vgg_16_cls(pretrained=True)
     >>> x = lucid.randn(2, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
-    (2, 100)
+    (2, 1000)
     """
-    return _classifier(_CFG_16, overrides)
+    entry = weights_mod.resolve_weights(VGG16Weights, pretrained, weights)
+    model = _classifier(_CFG_16, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_16_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_19_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -537,21 +600,29 @@ def vgg_16_cls(
     default_config=_CFG_19,
 )
 def vgg_19_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG19Weights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-19 image classifier (config E, no BatchNorm).
 
     Builds a :class:`VGGForImageClassification` with the paper-cited
     VGG-19 topology (``arch=(2, 2, 4, 4, 4)``) followed by the standard
     4096 → 4096 → ``num_classes`` FC head.  Approximately 143.7 M
-    parameters total.  Reaches a top-5 ImageNet validation error of
-    7.5% (Simonyan & Zisserman, ICLR 2015, Table 3, configuration E).
+    parameters total.  Reaches a top-1 ImageNet validation accuracy of
+    72.38% (torchvision eval).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG19Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG19Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -559,22 +630,32 @@ def vgg_19_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-19 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's ``VGG19_Weights``
+    and hosted on the Hugging Face Hub under ``lucid-dl/vgg-19``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_19_cls
-    >>> model = vgg_19_cls()
+    >>> model = vgg_19_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_19, overrides)
+    entry = weights_mod.resolve_weights(VGG19Weights, pretrained, weights)
+    model = _classifier(_CFG_19, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_19_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_11_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -582,7 +663,10 @@ def vgg_19_cls(
     default_config=_CFG_11_BN,
 )
 def vgg_11_bn_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG11BNWeights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-11 with BatchNorm — image classifier.
 
@@ -591,13 +675,19 @@ def vgg_11_bn_cls(
     BatchNorm was added in the timm / reference-framework
     reimplementations of VGG (not in the original paper) and
     substantially improves convergence speed and final accuracy.
-    Approximately 132.9 M parameters.
+    Approximately 132.9 M parameters; top-1 ImageNet validation
+    accuracy of 70.37% (torchvision eval).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG11BNWeights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG11BNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -605,22 +695,33 @@ def vgg_11_bn_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-11-BN configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``VGG11_BN_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/vgg-11-bn``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_11_bn_cls
-    >>> model = vgg_11_bn_cls()
+    >>> model = vgg_11_bn_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_11_BN, overrides)
+    entry = weights_mod.resolve_weights(VGG11BNWeights, pretrained, weights)
+    model = _classifier(_CFG_11_BN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_11_bn_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_13_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -628,19 +729,28 @@ def vgg_11_bn_cls(
     default_config=_CFG_13_BN,
 )
 def vgg_13_bn_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG13BNWeights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-13 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_13_cls` but with
     :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
-    Approximately 133.0 M parameters.
+    Approximately 133.0 M parameters; top-1 ImageNet validation
+    accuracy of 71.59% (torchvision eval).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG13BNWeights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG13BNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -648,22 +758,33 @@ def vgg_13_bn_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-13-BN configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``VGG13_BN_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/vgg-13-bn``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_13_bn_cls
-    >>> model = vgg_13_bn_cls()
+    >>> model = vgg_13_bn_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_13_BN, overrides)
+    entry = weights_mod.resolve_weights(VGG13BNWeights, pretrained, weights)
+    model = _classifier(_CFG_13_BN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_13_bn_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_16_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -671,20 +792,29 @@ def vgg_13_bn_cls(
     default_config=_CFG_16_BN,
 )
 def vgg_16_bn_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG16BNWeights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-16 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_16_cls` but with
     :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
-    Approximately 138.4 M parameters.  Often preferred over plain
+    Approximately 138.4 M parameters; top-1 ImageNet validation
+    accuracy of 73.36% (torchvision eval).  Often preferred over plain
     :func:`vgg_16_cls` for downstream fine-tuning.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG16BNWeights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG16BNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -692,22 +822,33 @@ def vgg_16_bn_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-16-BN configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``VGG16_BN_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/vgg-16-bn``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_16_bn_cls
-    >>> model = vgg_16_bn_cls()
+    >>> model = vgg_16_bn_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_16_BN, overrides)
+    entry = weights_mod.resolve_weights(VGG16BNWeights, pretrained, weights)
+    model = _classifier(_CFG_16_BN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_16_bn_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vgg_19_bn_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vgg",
     model_type="vgg",
@@ -715,20 +856,29 @@ def vgg_16_bn_cls(
     default_config=_CFG_19_BN,
 )
 def vgg_19_bn_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: VGG19BNWeights | None = None,
+    **overrides: object,
 ) -> VGGForImageClassification:
     r"""VGG-19 with BatchNorm — image classifier.
 
     Same topology as :func:`vgg_19_cls` but with
     :class:`~lucid.nn.BatchNorm2d` after each Conv + ReLU pair.
-    Approximately 143.7 M parameters.  The deepest VGG variant —
+    Approximately 143.7 M parameters; top-1 ImageNet validation
+    accuracy of 74.22% (torchvision eval).  The deepest VGG variant —
     BatchNorm is especially valuable at this depth.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`VGG19BNWeights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : VGG19BNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`VGGConfig`.
 
@@ -736,16 +886,27 @@ def vgg_19_bn_cls(
     -------
     VGGForImageClassification
         Classifier with the VGG-19-BN configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``VGG19_BN_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/vgg-19-bn``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.vgg import vgg_19_bn_cls
-    >>> model = vgg_19_bn_cls()
+    >>> model = vgg_19_bn_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _classifier(_CFG_19_BN, overrides)
+    entry = weights_mod.resolve_weights(VGG19BNWeights, pretrained, weights)
+    model = _classifier(_CFG_19_BN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vgg_19_bn_cls")
+    return model

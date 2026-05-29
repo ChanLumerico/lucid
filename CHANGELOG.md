@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: VGG (full set, 8 variants)
+
+- **vgg** — `vgg_{11,13,16,19}_cls` + `vgg_{11,13,16,19}_bn_cls` ←
+  torchvision `VGG*_Weights.IMAGENET1K_V1` (Simonyan & Zisserman, 2014).
+  Rename key map; E2E verified (incl. 528 MB vgg_16_bn).  acc@1 from
+  torchvision meta (69.0–74.2).  Enums on `lucid.models.weights`.
+
 ### Added — Pretrained weights: SE-ResNet
 
 - **senet** — `se_resnet_{18,34,101,152}_cls` ← timm `legacy_seresnet*.in1k`

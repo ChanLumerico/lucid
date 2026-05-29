@@ -29,6 +29,7 @@ import tools.convert_weights.resnet  # noqa: F401
 import tools.convert_weights.resnext  # noqa: F401
 import tools.convert_weights.senet  # noqa: F401
 import tools.convert_weights.sknet  # noqa: F401
+import tools.convert_weights.vgg  # noqa: F401
 import tools.convert_weights.xception  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 from tools.convert_weights._base import convert, get_arch, upload, write

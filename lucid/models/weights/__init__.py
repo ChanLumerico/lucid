@@ -41,6 +41,18 @@ from lucid.models.vision.densenet._weights import (
     DenseNet201Weights,
 )
 
+# 2014 — VGG (Simonyan & Zisserman)
+from lucid.models.vision.vgg._weights import (
+    VGG11Weights,
+    VGG13Weights,
+    VGG16Weights,
+    VGG19Weights,
+    VGG11BNWeights,
+    VGG13BNWeights,
+    VGG16BNWeights,
+    VGG19BNWeights,
+)
+
 # 2015 — ResNet (He et al.) — full variant set + Wide ResNet
 from lucid.models.vision.resnet._weights import (
     ResNet18Weights,
@@ -128,6 +140,15 @@ from lucid.models.vision.convnext._weights import (
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
+    # ── Vision (2014) VGG ─────────────────────────────────────────────
+    "VGG11Weights",
+    "VGG13Weights",
+    "VGG16Weights",
+    "VGG19Weights",
+    "VGG11BNWeights",
+    "VGG13BNWeights",
+    "VGG16BNWeights",
+    "VGG19BNWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
     "ResNet34Weights",
