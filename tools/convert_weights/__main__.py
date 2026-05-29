@@ -23,6 +23,7 @@ import tools.convert_weights.cvt  # noqa: F401
 import tools.convert_weights.densenet  # noqa: F401
 import tools.convert_weights.efficientnet  # noqa: F401
 import tools.convert_weights.inception  # noqa: F401
+import tools.convert_weights.inception_next  # noqa: F401
 import tools.convert_weights.inception_resnet  # noqa: F401
 import tools.convert_weights.mobilenet_v2  # noqa: F401
 import tools.convert_weights.mobilenet_v3  # noqa: F401

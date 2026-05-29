@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: InceptionNeXt
+
+- **inception_next** — `inception_next_{tiny,small,base}_cls` ← timm
+  `inception_next_*.sail_in1k` (Yu et al., 2023; SAIL_IN1K).  Parity
+  1.2e-5 (tiny).  Enums on `lucid.models.weights`.
+
 ### Added — Pretrained weights: EfficientNet (B0–B7)
 
 - **efficientnet** — `efficientnet_b{0..7}_cls` ← torchvision

@@ -74,6 +74,13 @@ from lucid.models.vision.resnext._weights import (
 # 2015 — Inception v3 (Szegedy et al.)
 from lucid.models.vision.inception._weights import InceptionV3Weights
 
+# 2023 — InceptionNeXt (Yu et al.)
+from lucid.models.vision.inception_next._weights import (
+    InceptionNeXtTinyWeights,
+    InceptionNeXtSmallWeights,
+    InceptionNeXtBaseWeights,
+)
+
 # 2016 — Inception-ResNet v2 (Szegedy et al.)
 from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
 
@@ -175,6 +182,10 @@ __all__ = [
     "ResNeXt101_32x8dWeights",
     # ── Vision (2015) Inception v3 ────────────────────────────────────
     "InceptionV3Weights",
+    # ── Vision (2023) InceptionNeXt ───────────────────────────────────
+    "InceptionNeXtTinyWeights",
+    "InceptionNeXtSmallWeights",
+    "InceptionNeXtBaseWeights",
     # ── Vision (2016) DenseNet ────────────────────────────────────────
     "DenseNet121Weights",
     "DenseNet161Weights",
