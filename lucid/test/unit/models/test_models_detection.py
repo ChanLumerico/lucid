@@ -642,9 +642,7 @@ class TestMaskRCNNWeightsEnums:
     def test_default_aliases_coco(self) -> None:
         from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
 
-        assert (
-            MaskRCNNResNet50FPNWeights.DEFAULT is MaskRCNNResNet50FPNWeights.COCO_V1
-        )
+        assert MaskRCNNResNet50FPNWeights.DEFAULT is MaskRCNNResNet50FPNWeights.COCO_V1
 
     def test_entry_fields(self) -> None:
         from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights

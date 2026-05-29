@@ -262,9 +262,7 @@ class _DETREncoderLayer(nn.Module):
     ``norm2``.  Dropout is a no-op in eval mode.
     """
 
-    def __init__(
-        self, d_model: int, n_head: int, dim_ff: int, dropout: float
-    ) -> None:
+    def __init__(self, d_model: int, n_head: int, dim_ff: int, dropout: float) -> None:
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)
         self.linear1 = nn.Linear(d_model, dim_ff)
@@ -298,9 +296,7 @@ class _DETRDecoderLayer(nn.Module):
     ``linear2``, ``norm1`` / ``norm2`` / ``norm3``.
     """
 
-    def __init__(
-        self, d_model: int, n_head: int, dim_ff: int, dropout: float
-    ) -> None:
+    def __init__(self, d_model: int, n_head: int, dim_ff: int, dropout: float) -> None:
         super().__init__()
         self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)
         self.multihead_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)

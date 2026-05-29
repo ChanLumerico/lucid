@@ -832,7 +832,10 @@ def multi_scale_deformable_attention(
         )
         sampled.append(
             F.grid_sample(
-                value_l, grid_l, mode="bilinear", padding_mode="zeros",
+                value_l,
+                grid_l,
+                mode="bilinear",
+                padding_mode="zeros",
                 align_corners=False,
             )
         )  # (bs*num_heads, head_dim, num_queries, num_points)
