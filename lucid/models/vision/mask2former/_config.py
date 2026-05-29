@@ -1,7 +1,7 @@
 """Mask2Former configuration (Cheng et al., CVPR 2022)."""
 
 from dataclasses import dataclass
-from typing import ClassVar, Literal
+from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
@@ -57,38 +57,41 @@ from lucid.models._meta import model_family_meta
 )
 @dataclass(frozen=True)
 class Mask2FormerConfig(ModelConfig):
-    """Configuration for Mask2Former.
+    """Configuration for Mask2Former (Cheng et al., CVPR 2022).
 
-    Mask2Former (Cheng et al., CVPR 2022) improves over MaskFormer with three
-    key changes:
+    The field set mirrors the reference framework's ``Mask2FormerConfig``
+    so the pretrained-weight converter is a near-identity key map.  The
+    pipeline is:
 
-    1. **Masked cross-attention**: each decoder layer restricts query attention
-       to within the predicted mask region from the previous layer.
-    2. **Multi-scale features**: decoder layers alternate attending to
-       different FPN feature levels (P3, P4, P5 cycling).
-    3. **Improved pixel decoder**: FPN with multiple output scales.
-
-    Architecture overview:
-      Image → ResNet backbone → [C2, C3, C4, C5]
-        → Multi-scale FPN Pixel Decoder → {P3, P4, P5} at fpn_out_channels
-                                        + P2 projected to d_model
-        → Transformer decoder (masked cross-attention cycling FPN levels)
-        → Class head + mask head (same as MaskFormer)
+      Image → Swin backbone → [stage1..4] feature maps
+        → MSDeformAttn pixel decoder → 3 multi-scale memory levels
+                                     + 1/4-scale mask features
+        → 9-layer masked-attention transformer decoder (cycling levels)
+        → class head (Linear → K+1) + mask head (MLP → dot mask features)
 
     Args:
-        num_classes:        Number of semantic classes.
-        in_channels:        Input image channels.
-        backbone_layers:    ResNet layer counts (default ResNet-50: 3,4,6,3).
-        d_model:            Transformer embedding dimension.
-        n_head:             Number of attention heads.
-        num_encoder_layers: Pixel decoder encoder depth.
-        num_decoder_layers: Query transformer decoder depth.
-        dim_feedforward:    FFN inner dimension.
-        dropout:            Dropout probability.
-        num_queries:        Number of learnable object queries N.
-        fpn_out_channels:   FPN lateral / output channel width.
-        num_feature_levels: Number of multi-scale FPN levels used in decoder
-                            cross-attention (cycles through them).
+        num_classes:           Number of semantic classes (foreground; the
+                               class head emits ``num_classes + 1``).
+        in_channels:           Input image channels.
+        swin_embed_dim:        Swin patch-embedding dimension.
+        swin_depths:           Swin per-stage block counts.
+        swin_num_heads:        Swin per-stage head counts.
+        swin_window_size:      Swin attention window size.
+        swin_mlp_ratio:        Swin MLP expansion ratio.
+        d_model:               Transformer / pixel-decoder feature dim.
+        mask_feature_size:     Per-pixel mask-feature channel width.
+        n_head:                Number of attention heads.
+        num_encoder_layers:    Deformable pixel-decoder encoder depth.
+        encoder_feedforward_dim: Pixel-decoder FFN inner dim.
+        num_decoder_layers:    Transformer decoder depth (the decoder uses
+                               ``num_decoder_layers - 1`` masked layers; the
+                               extra slot is the pre-layer mask prediction).
+        dim_feedforward:       Transformer-decoder FFN inner dim.
+        dropout:               Dropout probability (0 at inference).
+        num_queries:           Number of learnable object queries N.
+        num_feature_levels:    Number of multi-scale memory levels (3).
+        feature_strides:       Backbone output strides.
+        common_stride:         Finest pixel-decoder stride.
     """
 
     model_type: ClassVar[str] = "mask2former"
@@ -96,32 +99,30 @@ class Mask2FormerConfig(ModelConfig):
     num_classes: int = 150
     in_channels: int = 3
 
-    # Backbone
-    backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
-    backbone_type: Literal["resnet", "swin"] = "resnet"
-    backbone_block: Literal["basic", "bottleneck"] = "bottleneck"
-    # Swin-backbone config (used only when backbone_type == "swin")
+    # Swin backbone
     swin_embed_dim: int = 96
     swin_depths: tuple[int, int, int, int] = (2, 2, 6, 2)
     swin_num_heads: tuple[int, int, int, int] = (3, 6, 12, 24)
     swin_window_size: int = 7
+    swin_mlp_ratio: float = 4.0
 
-    # Transformer
+    # Transformer / pixel decoder
     d_model: int = 256
+    mask_feature_size: int = 256
     n_head: int = 8
     num_encoder_layers: int = 6
-    num_decoder_layers: int = 6
+    encoder_feedforward_dim: int = 1024
+    num_decoder_layers: int = 10
     dim_feedforward: int = 2048
-    dropout: float = 0.1
+    dropout: float = 0.0
     num_queries: int = 100
 
-    # FPN pixel decoder
-    fpn_out_channels: int = 256
-
-    # Multi-scale decoder cross-attention
-    num_feature_levels: int = 3  # P3, P4, P5
+    # Multi-scale memory levels
+    num_feature_levels: int = 3
+    feature_strides: tuple[int, int, int, int] = (4, 8, 16, 32)
+    common_stride: int = 4
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "backbone_layers", tuple(self.backbone_layers))
         object.__setattr__(self, "swin_depths", tuple(self.swin_depths))
         object.__setattr__(self, "swin_num_heads", tuple(self.swin_num_heads))
+        object.__setattr__(self, "feature_strides", tuple(self.feature_strides))

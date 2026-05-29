@@ -193,6 +193,14 @@ from lucid.models.vision.maskformer._weights import (
     MaskFormerResNet101Weights,
 )
 
+# 2022 — Mask2Former semantic segmentation (Cheng et al.) — ADE20k (Swin)
+from lucid.models.vision.mask2former._weights import (
+    Mask2FormerSwinTinyWeights,
+    Mask2FormerSwinSmallWeights,
+    Mask2FormerSwinBaseWeights,
+    Mask2FormerSwinLargeWeights,
+)
+
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
 
@@ -340,6 +348,11 @@ __all__ = [
     # ── Vision (2021) MaskFormer (ADE20k semantic segmentation) ───────
     "MaskFormerResNet50Weights",
     "MaskFormerResNet101Weights",
+    # ── Vision (2022) Mask2Former (ADE20k semantic segmentation, Swin) ─
+    "Mask2FormerSwinTinyWeights",
+    "Mask2FormerSwinSmallWeights",
+    "Mask2FormerSwinBaseWeights",
+    "Mask2FormerSwinLargeWeights",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────
     "MobileNetV1Weights",
     # ── Vision (2022) EfficientFormer ─────────────────────────────────

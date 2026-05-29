@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: Mask2Former Swin (ADE20k semantic segmentation)
+
+The most complex segmenter — deformable pixel decoder + masked-attention
+transformer decoder. `pretrained=True` loads the official ADE20k
+checkpoint and infers out of the box.
+
+- **mask2former** — `mask2former_swin_{tiny,small,base,large}` ← HF
+  `facebook/mask2former-swin-{tiny,small,base,large}-ade-semantic`
+  (Cheng et al., 2022; ADE20k, 150 classes; 47.7 / 51.3 / 53.9 / 56.1
+  mIoU; 47.4–216M params).  Full rebuild to HF's tree (semantic parity
+  ≤8.4e-6): HF-style **Swin** backbone, **MSDeformAttn pixel decoder**
+  (6-layer deformable encoder on the new
+  `multi_scale_deformable_attention` op), **9-layer masked-attention
+  transformer decoder** (cross-attn over 3 cycling feature levels,
+  attn-mask from the previous layer's `sigmoid(mask) < 0.5`) + learnable
+  queries/level embeddings, class + mask MLP heads.  base/large use the
+  384-pretrained Swin (window 12; tiny/small window 7) — and the
+  Mask2Former `SwinBackbone` runs with `always_partition=True`, so
+  shifted-window attention is **kept** even when the feature map equals
+  the window (the opposite of the classification Swin).  Enums on
+  `lucid.models.weights` (tag `ADE20K`, `Segmentation` transforms).
+  (The simplified ResNet/FPN Mask2Former stub was replaced; HF ships
+  only Swin ADE-semantic checkpoints.)
+
+- **detection ops** — `multi_scale_deformable_attention` added to
+  `_detection` (a `grid_sample` composite; reference parity 9.5e-7),
+  reusable for any deformable-attention model.
+
 ### Added — Pretrained weights: MaskFormer (ADE20k semantic segmentation)
 
 Mask-classification transformer segmenter — extends the segmentation

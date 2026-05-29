@@ -3,7 +3,7 @@
 Covers:
   FCN (resnet50/101), UNet (base/small/bilinear),
   Attention U-Net, MaskFormer (resnet50/101),
-  Mask2Former (resnet50/101)
+  Mask2Former (swin tiny/small/base/large)
 
 Each test combines factory check, output type, shape, deterministic
 self-consistency, and loss=None checks in ONE forward pass per device.
@@ -210,17 +210,20 @@ class TestMaskFormer:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestMask2Former:
+class TestMask2FormerSwinTiny:
     def test_factory_and_forward(self, device: str) -> None:
+        # Use a small config override (fewer queries / decoder layers) so the
+        # heavy deformable + masked-attention stack stays cheap on CPU/Metal.
+        # The Swin backbone pads internally so any input size works.
         from lucid.models.vision.mask2former import (
-            mask2former_resnet50,
+            mask2former_swin_tiny,
             Mask2FormerForSemanticSegmentation,
         )
 
         m = _build(
-            lambda: mask2former_resnet50(
+            lambda: mask2former_swin_tiny(
                 num_queries=20,
-                num_decoder_layers=2,
+                num_decoder_layers=3,
             ),
             device,
         )
@@ -229,33 +232,15 @@ class TestMask2Former:
         x = _img(device)
         out = m(x)
         assert isinstance(out, SemanticSegmentationOutput)
+        # Semantic output drops the no-object slot → K channels (matches the
+        # reference post_process_semantic_segmentation).
         K = m.config.num_classes
-        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
+        assert tuple(out.logits.shape) == (_B, K, _H, _W)
         assert out.loss is None
 
         out2 = m(x)
         diff = float(lucid.abs(out.logits - out2.logits).max().item())
         assert diff < 1e-5
-
-
-class TestMask2FormerSwinTiny:
-    def test_factory_and_forward(self, device: str) -> None:
-        # Override window_size to 4 so the Swin stages divide our 128px test
-        # input cleanly (default ws=7 expects 224/112/56/28 inputs).
-        from lucid.models.vision.mask2former import mask2former_swin_tiny
-
-        m = _build(
-            lambda: mask2former_swin_tiny(
-                num_queries=20,
-                num_decoder_layers=2,
-                swin_window_size=4,
-            ),
-            device,
-        )
-        out = m(_img(device))
-        assert isinstance(out, SemanticSegmentationOutput)
-        K = m.config.num_classes
-        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -278,8 +263,6 @@ class TestSegmentationRegistry:
             "attention_unet",
             "maskformer_resnet50",
             "maskformer_resnet101",
-            "mask2former_resnet50",
-            "mask2former_resnet101",
             "mask2former_swin_tiny",
             "mask2former_swin_small",
             "mask2former_swin_base",
@@ -431,3 +414,103 @@ def test_maskformer_pretrained_load() -> None:
     out = m(lucid.randn(1, 3, 256, 256))
     # Semantic output: num_classes channels (no-object slot dropped).
     assert out.logits.shape == (1, 150, 256, 256)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mask2Former pretrained weights — static enum contract (no network)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MASK2FORMER_SHIPPED = (
+    (
+        "mask2former_swin_tiny",
+        "mask2former-swin-tiny-ade",
+        "facebook/mask2former-swin-tiny-ade-semantic",
+        47_441_169,
+        47.7,
+    ),
+    (
+        "mask2former_swin_small",
+        "mask2former-swin-small-ade",
+        "facebook/mask2former-swin-small-ade-semantic",
+        68_815_312,
+        51.3,
+    ),
+    (
+        "mask2former_swin_base",
+        "mask2former-swin-base-ade",
+        "facebook/mask2former-swin-base-ade-semantic",
+        107_420_006,
+        53.9,
+    ),
+    (
+        "mask2former_swin_large",
+        "mask2former-swin-large-ade",
+        "facebook/mask2former-swin-large-ade-semantic",
+        215_986_594,
+        56.1,
+    ),
+)
+
+
+def _mask2former_enums() -> tuple[type, ...]:
+    from lucid.models.vision.mask2former import (
+        Mask2FormerSwinTinyWeights,
+        Mask2FormerSwinSmallWeights,
+        Mask2FormerSwinBaseWeights,
+        Mask2FormerSwinLargeWeights,
+    )
+
+    return (
+        Mask2FormerSwinTinyWeights,
+        Mask2FormerSwinSmallWeights,
+        Mask2FormerSwinBaseWeights,
+        Mask2FormerSwinLargeWeights,
+    )
+
+
+class TestMask2FormerWeightsEnums:
+    def test_default_aliases(self) -> None:
+        for cls in _mask2former_enums():
+            assert cls.DEFAULT is cls.ADE20K
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, src, nparams, miou) in zip(
+            _mask2former_enums(), _MASK2FORMER_SHIPPED
+        ):
+            e = cls.ADE20K.entry
+            assert e.num_classes == 150
+            assert len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__"
+            assert f"lucid-dl/{slug}" in e.url
+            assert "/ADE20K/" in e.url
+            meta = cls.ADE20K.meta
+            assert meta["source"] == src
+            assert meta["license"] == "other"
+            assert meta["num_params"] == nparams
+            assert meta["metrics"]["ADE20K"]["mIoU"] == miou
+
+    def test_segmentation_preset(self) -> None:
+        for cls in _mask2former_enums():
+            tf = cls.ADE20K.transforms()
+            d = tf.to_dict()
+            assert d["preprocessor_type"] == "Segmentation"
+            assert d["init_kwargs"]["crop_size"] == 384
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, *_ in _MASK2FORMER_SHIPPED:
+            assert "ADE20K" in list_pretrained(fac)
+
+
+@pytest.mark.skipif(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") != "1",
+    reason="set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+def test_mask2former_pretrained_load() -> None:
+    import lucid.models as models
+
+    m = models.mask2former_swin_tiny(pretrained=True)
+    m.eval()
+    out = m(lucid.randn(1, 3, 384, 384))
+    # Semantic output: num_classes channels (no-object slot dropped).
+    assert out.logits.shape == (1, 150, 384, 384)
