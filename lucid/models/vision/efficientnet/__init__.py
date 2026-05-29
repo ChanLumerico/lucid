@@ -23,11 +23,29 @@ from lucid.models.vision.efficientnet._pretrained import (
     efficientnet_b7,
     efficientnet_b7_cls,
 )
+from lucid.models.vision.efficientnet._weights import (
+    EfficientNetB0Weights,
+    EfficientNetB1Weights,
+    EfficientNetB2Weights,
+    EfficientNetB3Weights,
+    EfficientNetB4Weights,
+    EfficientNetB5Weights,
+    EfficientNetB6Weights,
+    EfficientNetB7Weights,
+)
 
 __all__ = [
     "EfficientNetConfig",
     "EfficientNet",
     "EfficientNetForImageClassification",
+    "EfficientNetB0Weights",
+    "EfficientNetB1Weights",
+    "EfficientNetB2Weights",
+    "EfficientNetB3Weights",
+    "EfficientNetB4Weights",
+    "EfficientNetB5Weights",
+    "EfficientNetB6Weights",
+    "EfficientNetB7Weights",
     "efficientnet_b0",
     "efficientnet_b0_cls",
     "efficientnet_b1",

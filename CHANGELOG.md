@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: EfficientNet (B0–B7)
+
+- **efficientnet** — `efficientnet_b{0..7}_cls` ← torchvision
+  `EfficientNet_B{0..7}_Weights.IMAGENET1K_V1` (Tan & Le, 2019).  Pure
+  key-rename (torchvision's nested `features[1..7]` MBConv stages
+  flattened onto Lucid's `features[3..N]`; the head's flat index is
+  derived from the per-variant block count).  Per-variant presets
+  (B0 224/256 … B7 600/600, all bicubic).  b0 parity 2.6e-6; E2E
+  verified b0 + b4.  Enums on `lucid.models.weights`.
+
 ### Added — Pretrained weights: VGG (full set, 8 variants)
 
 - **vgg** — `vgg_{11,13,16,19}_cls` + `vgg_{11,13,16,19}_bn_cls` ←

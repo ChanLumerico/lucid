@@ -21,6 +21,7 @@ import tools.convert_weights.crossvit  # noqa: F401
 import tools.convert_weights.cspnet  # noqa: F401
 import tools.convert_weights.cvt  # noqa: F401
 import tools.convert_weights.densenet  # noqa: F401
+import tools.convert_weights.efficientnet  # noqa: F401
 import tools.convert_weights.inception  # noqa: F401
 import tools.convert_weights.inception_resnet  # noqa: F401
 import tools.convert_weights.mobilenet_v2  # noqa: F401

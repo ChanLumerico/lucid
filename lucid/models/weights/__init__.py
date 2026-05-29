@@ -98,6 +98,18 @@ from lucid.models.vision.senet._weights import (
     SEResNet152Weights,
 )
 
+# 2019 — EfficientNet (Tan & Le)
+from lucid.models.vision.efficientnet._weights import (
+    EfficientNetB0Weights,
+    EfficientNetB1Weights,
+    EfficientNetB2Weights,
+    EfficientNetB3Weights,
+    EfficientNetB4Weights,
+    EfficientNetB5Weights,
+    EfficientNetB6Weights,
+    EfficientNetB7Weights,
+)
+
 # 2019 — SKNet (Li et al.)
 from lucid.models.vision.sknet._weights import (
     SKResNet18Weights,
@@ -183,6 +195,15 @@ __all__ = [
     "SEResNet50Weights",
     "SEResNet101Weights",
     "SEResNet152Weights",
+    # ── Vision (2019) EfficientNet ────────────────────────────────────
+    "EfficientNetB0Weights",
+    "EfficientNetB1Weights",
+    "EfficientNetB2Weights",
+    "EfficientNetB3Weights",
+    "EfficientNetB4Weights",
+    "EfficientNetB5Weights",
+    "EfficientNetB6Weights",
+    "EfficientNetB7Weights",
     # ── Vision (2019) SKNet ───────────────────────────────────────────
     "SKResNet18Weights",
     "SKResNet34Weights",

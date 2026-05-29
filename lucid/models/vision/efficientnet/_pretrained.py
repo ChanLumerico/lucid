@@ -1,10 +1,21 @@
 """Registry factories for EfficientNet B0–B7."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientnet._config import EfficientNetConfig
 from lucid.models.vision.efficientnet._model import (
     EfficientNet,
     EfficientNetForImageClassification,
+)
+from lucid.models.vision.efficientnet._weights import (
+    EfficientNetB0Weights,
+    EfficientNetB1Weights,
+    EfficientNetB2Weights,
+    EfficientNetB3Weights,
+    EfficientNetB4Weights,
+    EfficientNetB5Weights,
+    EfficientNetB6Weights,
+    EfficientNetB7Weights,
 )
 
 # Compound scaling: (width_mult, depth_mult, dropout)
@@ -434,7 +445,7 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b0_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -442,7 +453,10 @@ def efficientnet_b7(pretrained: bool = False, **overrides: object) -> EfficientN
     default_config=_CFGS["b0"],
 )
 def efficientnet_b0_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB0Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B0 image classifier (backbone + GAP + linear head).
 
@@ -455,24 +469,36 @@ def efficientnet_b0_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB0Weights.IMAGENET1K_V1`); a tag string
+        (e.g. ``"IMAGENET1K_V1"``) → that specific checkpoint.
+        Mutually exclusive with ``weights`` (which wins if both given).
+    weights : EfficientNetB0Weights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``EfficientNetB0Weights.IMAGENET1K_V1``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`
         (typically ``num_classes`` to retarget the classifier).
+        Overriding ``num_classes`` away from the checkpoint's class
+        count makes pretrained loading fail the strict key/shape check.
 
     Returns
     -------
     EfficientNetForImageClassification
         Classifier with the B0 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B0_Weights`` and hosted on the
+    Hugging Face Hub under ``lucid-dl/efficientnet-b0``.
 
     Examples
     --------
@@ -483,11 +509,19 @@ def efficientnet_b0_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = efficientnet_b0_cls(pretrained=True)            # DEFAULT tag
     """
-    return _c("b0", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB0Weights, pretrained, weights)
+    model = _c("b0", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b0_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -495,7 +529,10 @@ def efficientnet_b0_cls(
     default_config=_CFGS["b1"],
 )
 def efficientnet_b1_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB1Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B1 image classifier (backbone + GAP + linear head).
 
@@ -507,9 +544,14 @@ def efficientnet_b1_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB1Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB1Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -517,28 +559,35 @@ def efficientnet_b1_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B1 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B1_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b1``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b1_cls
-    >>> model = efficientnet_b1_cls()
+    >>> model = efficientnet_b1_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 240, 240)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b1", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB1Weights, pretrained, weights)
+    model = _c("b1", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b1_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -546,7 +595,10 @@ def efficientnet_b1_cls(
     default_config=_CFGS["b2"],
 )
 def efficientnet_b2_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB2Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B2 image classifier (backbone + GAP + linear head).
 
@@ -558,9 +610,14 @@ def efficientnet_b2_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB2Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB2Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -568,28 +625,35 @@ def efficientnet_b2_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B2 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B2_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b2``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b2_cls
-    >>> model = efficientnet_b2_cls()
+    >>> model = efficientnet_b2_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 260, 260)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b2", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB2Weights, pretrained, weights)
+    model = _c("b2", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b2_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -597,7 +661,10 @@ def efficientnet_b2_cls(
     default_config=_CFGS["b3"],
 )
 def efficientnet_b3_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB3Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B3 image classifier (backbone + GAP + linear head).
 
@@ -609,9 +676,14 @@ def efficientnet_b3_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB3Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB3Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -619,28 +691,35 @@ def efficientnet_b3_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B3 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B3_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b3``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b3_cls
-    >>> model = efficientnet_b3_cls()
+    >>> model = efficientnet_b3_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 300, 300)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b3", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB3Weights, pretrained, weights)
+    model = _c("b3", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b3_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b4_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -648,7 +727,10 @@ def efficientnet_b3_cls(
     default_config=_CFGS["b4"],
 )
 def efficientnet_b4_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB4Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B4 image classifier (backbone + GAP + linear head).
 
@@ -660,9 +742,14 @@ def efficientnet_b4_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB4Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB4Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -670,28 +757,35 @@ def efficientnet_b4_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B4 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B4_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b4``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b4_cls
-    >>> model = efficientnet_b4_cls()
+    >>> model = efficientnet_b4_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 380, 380)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b4", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB4Weights, pretrained, weights)
+    model = _c("b4", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b4_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b5_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -699,7 +793,10 @@ def efficientnet_b4_cls(
     default_config=_CFGS["b5"],
 )
 def efficientnet_b5_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB5Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B5 image classifier (backbone + GAP + linear head).
 
@@ -711,9 +808,14 @@ def efficientnet_b5_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB5Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB5Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -721,28 +823,35 @@ def efficientnet_b5_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B5 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B5_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b5``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b5_cls
-    >>> model = efficientnet_b5_cls()
+    >>> model = efficientnet_b5_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 456, 456)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b5", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB5Weights, pretrained, weights)
+    model = _c("b5", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b5_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b6_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -750,7 +859,10 @@ def efficientnet_b5_cls(
     default_config=_CFGS["b6"],
 )
 def efficientnet_b6_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB6Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B6 image classifier (backbone + GAP + linear head).
 
@@ -762,9 +874,14 @@ def efficientnet_b6_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB6Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB6Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -772,28 +889,35 @@ def efficientnet_b6_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B6 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
-    Table 2.
+    Table 2.  Pretrained weights are converted from the
+    reference-framework ``EfficientNet_B6_Weights`` and hosted under
+    ``lucid-dl/efficientnet-b6``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b6_cls
-    >>> model = efficientnet_b6_cls()
+    >>> model = efficientnet_b6_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 528, 528)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b6", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB6Weights, pretrained, weights)
+    model = _c("b6", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b6_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientnet_b7_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientnet",
     model_type="efficientnet",
@@ -801,7 +925,10 @@ def efficientnet_b6_cls(
     default_config=_CFGS["b7"],
 )
 def efficientnet_b7_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientNetB7Weights | None = None,
+    **overrides: object,
 ) -> EfficientNetForImageClassification:
     r"""EfficientNet-B7 image classifier (backbone + GAP + linear head).
 
@@ -815,9 +942,14 @@ def efficientnet_b7_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientNetB7Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``.
+    weights : EfficientNetB7Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`EfficientNetConfig`.
 
@@ -825,23 +957,30 @@ def efficientnet_b7_cls(
     -------
     EfficientNetForImageClassification
         Classifier with the B7 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See Tan & Le, "EfficientNet: Rethinking Model Scaling for
     Convolutional Neural Networks", ICML 2019 (arXiv:1905.11946),
     Table 2.  At 600×600 input resolution memory usage is
-    substantial — plan training accordingly.
+    substantial — plan inference accordingly.  Pretrained weights are
+    converted from the reference-framework ``EfficientNet_B7_Weights``
+    and hosted under ``lucid-dl/efficientnet-b7``.
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.efficientnet import efficientnet_b7_cls
-    >>> model = efficientnet_b7_cls()
+    >>> model = efficientnet_b7_cls(pretrained=True)
     >>> x = lucid.randn(1, 3, 600, 600)
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c("b7", overrides)
+    entry = weights_mod.resolve_weights(EfficientNetB7Weights, pretrained, weights)
+    model = _c("b7", overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientnet_b7_cls")
+    return model
