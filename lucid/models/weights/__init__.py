@@ -184,6 +184,9 @@ from lucid.models.vision.fcn._weights import (
 # 2017 — Faster R-CNN object detection (Ren et al.) — COCO
 from lucid.models.vision.faster_rcnn._weights import FasterRCNNResNet50FPNWeights
 
+# 2017 — Mask R-CNN instance segmentation (He et al.) — COCO
+from lucid.models.vision.mask_rcnn._weights import MaskRCNNResNet50FPNWeights
+
 # 2021 — MaskFormer semantic segmentation (Cheng et al.) — ADE20k
 from lucid.models.vision.maskformer._weights import (
     MaskFormerResNet50Weights,
@@ -332,6 +335,8 @@ __all__ = [
     "FCNResNet101Weights",
     # ── Vision (2017) Faster R-CNN (COCO object detection) ────────────
     "FasterRCNNResNet50FPNWeights",
+    # ── Vision (2017) Mask R-CNN (COCO instance segmentation) ─────────
+    "MaskRCNNResNet50FPNWeights",
     # ── Vision (2021) MaskFormer (ADE20k semantic segmentation) ───────
     "MaskFormerResNet50Weights",
     "MaskFormerResNet101Weights",

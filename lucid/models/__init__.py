@@ -351,7 +351,7 @@ from lucid.models.vision.faster_rcnn import (
 # 2017 — Mask R-CNN (He et al.)
 from lucid.models.vision.mask_rcnn import (
     MaskRCNNConfig, MaskRCNNForObjectDetection,
-    mask_rcnn,
+    mask_rcnn, mask_rcnn_resnet50_fpn,
 )
 # 2015 — FCN (Long et al.)
 from lucid.models.vision.fcn import (
@@ -587,6 +587,7 @@ __all__ = [
     # ── Vision (2017) Mask R-CNN ──────────────────────────────────────────────
     "MaskRCNNConfig", "MaskRCNNForObjectDetection",
     "mask_rcnn",
+    "mask_rcnn_resnet50_fpn",
     # ── Vision (2020) DETR ────────────────────────────────────────────────────
     "DETRConfig", "DETRForObjectDetection",
     "detr_resnet50", "detr_resnet101",

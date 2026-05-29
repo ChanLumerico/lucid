@@ -1,35 +1,14 @@
 """Registry factories for Mask R-CNN variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mask_rcnn._config import MaskRCNNConfig
 from lucid.models.vision.mask_rcnn._model import MaskRCNNForObjectDetection
+from lucid.models.vision.mask_rcnn._weights import MaskRCNNResNet50FPNWeights
 
-_CFG_R50_FPN = MaskRCNNConfig(
-    num_classes=80,
-    in_channels=3,
-    backbone_layers=(3, 4, 6, 3),
-    fpn_out_channels=256,
-    rpn_anchor_sizes=(32, 64, 128, 256, 512),
-    rpn_anchor_ratios=(0.5, 1.0, 2.0),
-    rpn_pre_nms_top_n=2000,
-    rpn_post_nms_top_n=1000,
-    rpn_nms_thresh=0.7,
-    rpn_min_size=1.0,
-    rpn_score_thresh=0.0,
-    rpn_fg_iou_thresh=0.7,
-    rpn_bg_iou_thresh=0.3,
-    roi_det_size=7,
-    roi_representation=1024,
-    roi_fg_iou_thresh=0.5,
-    roi_bg_iou_thresh=0.5,
-    bbox_reg_weights=(10.0, 10.0, 5.0, 5.0),
-    roi_mask_size=14,
-    mask_hidden_channels=256,
-    score_thresh=0.05,
-    nms_thresh=0.5,
-    max_detections=100,
-    mask_thresh=0.5,
-)
+# COCO config — the pretrained checkpoint uses num_classes=91 (90 COCO
+# categories + background slot 0).
+_CFG_R50_FPN = MaskRCNNConfig(num_classes=91)
 
 
 def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetection:
@@ -38,7 +17,7 @@ def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetecti
     )
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: mask_rcnn adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="object-detection",
     family="mask_rcnn",
     model_type="mask_rcnn",
@@ -46,51 +25,120 @@ def _seg(cfg: MaskRCNNConfig, kw: dict[str, object]) -> MaskRCNNForObjectDetecti
     default_config=_CFG_R50_FPN,
 )
 def mask_rcnn(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: MaskRCNNResNet50FPNWeights | None = None,
     **overrides: object,
 ) -> MaskRCNNForObjectDetection:
-    r"""Mask R-CNN with ResNet-50-FPN backbone (He et al., ICCV 2017).
+    r"""Mask R-CNN with a ResNet-50-FPN backbone (He et al., ICCV 2017).
 
-    Builds a :class:`MaskRCNNForObjectDetection` with the paper-cited
-    ResNet-50 + FPN topology: 256-channel FPN over ``C2-C5``, 5-scale
-    anchors (sizes 32 / 64 / 128 / 256 / 512 over P2-P6 with ratios
-    0.5 / 1.0 / 2.0), 7x7 RoI Align detection head, and 14x14 RoI Align
-    -> four-conv -> deconv 28x28 mask head.  Reaches COCO test-dev mask
-    AP of 33.6% (paper Table 1, R50-FPN row) and is the canonical
-    baseline for instance / panoptic segmentation research.
+    Alias of :func:`mask_rcnn_resnet50_fpn` — the canonical reference
+    configuration: Faster R-CNN's ResNet-50 trunk (frozen BN) + Feature
+    Pyramid Network + Region Proposal Network + Fast R-CNN box head, plus
+    a parallel FCN mask branch.  The COCO config uses ``num_classes = 91``.
+    Reaches COCO box AP 37.9 / mask AP 34.6 (reference
+    ``maskrcnn_resnet50_fpn``).
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`MaskRCNNResNet50FPNWeights.COCO_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : MaskRCNNResNet50FPNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over ``pretrained``.
     **overrides
-        Keyword overrides forwarded into :class:`MaskRCNNConfig` —
-        common knobs include ``num_classes``, ``backbone_layers``
-        (e.g. ``(3, 4, 23, 3)`` for ResNet-101), ``fpn_out_channels``,
-        ``max_detections``, and ``mask_thresh``.
+        Keyword overrides forwarded into :class:`MaskRCNNConfig`
+        (``num_classes``, ``rpn_pre_nms_top_n``, ``score_thresh``, ...).
 
     Returns
     -------
     MaskRCNNForObjectDetection
-        Detector with the Mask R-CNN ResNet-50-FPN configuration applied
-        (or with ``overrides`` merged on top of it).
-
-    Notes
-    -----
-    See He et al., "Mask R-CNN", ICCV 2017 (arXiv:1703.06870).  The two
-    key contributions over Faster R-CNN are RoI Align (replacing RoI Pool
-    to remove quantisation, which costs ~3 AP on small objects) and the
-    parallel mask head, which decouples mask and class prediction to
-    avoid competition between the two tasks.
+        Detector with the ResNet-50-FPN configuration applied (or with
+        ``overrides`` merged on top of it).
 
     Examples
     --------
     >>> import lucid
     >>> from lucid.models.vision.mask_rcnn import mask_rcnn
-    >>> model = mask_rcnn(num_classes=80)
-    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> model = mask_rcnn(num_classes=91)
+    >>> model.eval()
+    >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
     >>> out.pred_masks.shape[-2:]
     (28, 28)
     """
-    return _seg(_CFG_R50_FPN, overrides)
+    entry = weights_mod.resolve_weights(MaskRCNNResNet50FPNWeights, pretrained, weights)
+    model = _seg(_CFG_R50_FPN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mask_rcnn")
+    return model
+
+
+@register_model(  # type: ignore[arg-type]  # reason: mask_rcnn_resnet50_fpn adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
+    task="object-detection",
+    family="mask_rcnn",
+    model_type="mask_rcnn",
+    model_class=MaskRCNNForObjectDetection,
+    default_config=_CFG_R50_FPN,
+)
+def mask_rcnn_resnet50_fpn(
+    pretrained: bool | str = False,
+    *,
+    weights: MaskRCNNResNet50FPNWeights | None = None,
+    **overrides: object,
+) -> MaskRCNNForObjectDetection:
+    r"""Mask R-CNN with a ResNet-50-FPN backbone (COCO-pretrained).
+
+    Builds the reference ``maskrcnn_resnet50_fpn`` detector: Faster
+    R-CNN's ResNet-50 backbone with frozen batch-norm, a 5-level Feature
+    Pyramid Network (P2-P5 + a parameter-free pool level for RPN), anchors
+    at sizes ``((32,),(64,),(128,),(256,),(512,))`` and ratios
+    ``(0.5, 1.0, 2.0)``, a Fast R-CNN box head (TwoMLPHead +
+    FastRCNNPredictor) over MultiScale RoI Align (7×7), and a parallel
+    mask branch (MaskRCNNHeads + MaskRCNNPredictor) over MultiScale RoI
+    Align (14×14) emitting ``28×28`` per-class masks.  COCO box AP 37.9 /
+    mask AP 34.6, ~44.4M parameters.
+
+    Parameters
+    ----------
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True`` →
+        the ``DEFAULT`` tag (:attr:`MaskRCNNResNet50FPNWeights.COCO_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : MaskRCNNResNet50FPNWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over ``pretrained``.
+    **overrides
+        Keyword overrides forwarded into :class:`MaskRCNNConfig`.
+
+    Returns
+    -------
+    MaskRCNNForObjectDetection
+        Detector with the ResNet-50-FPN configuration applied (or with
+        ``overrides`` merged on top of it).
+
+    Notes
+    -----
+    Pretrained weights are converted from the reference
+    ``MaskRCNN_ResNet50_FPN_Weights.COCO_V1`` checkpoint and hosted under
+    ``lucid-dl/mask-rcnn-resnet-50-fpn``.  The detector expects an already
+    resized + normalised image batch (the
+    :class:`~lucid.utils.transforms.Detection` preset).
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn
+    >>> model = mask_rcnn_resnet50_fpn()
+    >>> model.eval()
+    >>> out = model(lucid.randn(1, 3, 224, 224))
+    >>> out.pred_masks.shape[-2:]
+    (28, 28)
+    """
+    entry = weights_mod.resolve_weights(MaskRCNNResNet50FPNWeights, pretrained, weights)
+    model = _seg(_CFG_R50_FPN, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mask_rcnn_resnet50_fpn")
+    return model

@@ -52,6 +52,21 @@ detection sweep to dense prediction.
   on `lucid.models.weights` (tag `COCO_WITH_VOC_LABELS_V1`, `Segmentation`
   transforms preset).
 
+### Added — Pretrained weights: Mask R-CNN ResNet-50-FPN (COCO instance segmentation)
+
+Instance segmentation — `pretrained=True` loads the official COCO
+checkpoint and returns detections + per-instance masks out of the box.
+
+- **mask_rcnn** — `mask_rcnn_resnet50_fpn` ← torchvision
+  `MaskRCNN_ResNet50_FPN_Weights.COCO_V1` (He et al.; 91 classes, box AP
+  37.9 / mask AP 34.6, 44.4M params).  Built on the shared Faster R-CNN
+  ResNet-50-FPN infra (backbone / FPN / RPN / box head byte-identical →
+  295 shared keys) plus the mask branch (`roi_heads.mask_head` 4×Conv3×3
+  + `roi_heads.mask_predictor` ConvTranspose→Conv1×1, 12 keys, 307 total,
+  strict-load).  Mask RoI-align at 14×14 → 28×28 per-instance class
+  masks.  Mask-branch parity 1.4e-6.  Enum `MaskRCNNResNet50FPNWeights`
+  on `lucid.models.weights` (tag `COCO_V1`, `Detection` transforms).
+
 ### Added — Pretrained weights: Faster R-CNN ResNet-50-FPN (COCO, two-stage)
 
 First two-stage detector with pretrained weights — `pretrained=True`

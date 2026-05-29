@@ -208,13 +208,52 @@ class TestMaskRCNN:
         x = _img(device)
         out = m(x)
         assert isinstance(out, InstanceSegmentationOutput)
+        # Raw RoI-head outputs: per-proposal class logits (N, num_classes),
+        # per-class boxes (N, num_classes, 4), per-class masks (N, K, 28, 28).
         assert int(out.logits.ndim) == 2
+        assert int(out.logits.shape[-1]) == 91  # COCO num_classes (incl. bg)
+        assert int(out.pred_boxes.ndim) == 3
         assert int(out.pred_boxes.shape[-1]) == 4
         assert int(out.pred_masks.ndim) == 4
+        assert int(out.pred_masks.shape[1]) == 91  # one mask per class
         assert int(out.pred_masks.shape[-1]) == 28
         assert int(out.pred_masks.shape[-2]) == 28
         assert int(out.logits.shape[0]) == int(out.pred_masks.shape[0])
+        assert int(out.logits.shape[0]) == int(out.pred_boxes.shape[0])
         assert out.loss is None
+
+
+class TestMaskRCNNTopology:
+    """The rebuilt detector mirrors the reference ResNet-50-FPN key layout."""
+
+    def test_reference_key_layout(self) -> None:
+        from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn
+
+        m = mask_rcnn_resnet50_fpn(num_classes=91)
+        keys = set(m.state_dict().keys())
+        # 295 shared Faster R-CNN keys + 12 mask-branch keys.
+        assert len(keys) == 307
+        # Shared backbone / FPN / RPN / box-head keys (identity-mapped).
+        assert "backbone.body.conv1.weight" in keys
+        assert "backbone.fpn.inner_blocks.0.0.weight" in keys
+        assert "rpn.head.conv.0.0.weight" in keys
+        assert "roi_heads.box_head.fc6.weight" in keys
+        assert "roi_heads.box_predictor.cls_score.weight" in keys
+        # Mask branch keys.
+        for i in range(4):
+            assert f"roi_heads.mask_head.{i}.0.weight" in keys
+            assert f"roi_heads.mask_head.{i}.0.bias" in keys
+        assert "roi_heads.mask_predictor.conv5_mask.weight" in keys
+        assert "roi_heads.mask_predictor.mask_fcn_logits.weight" in keys
+        # Frozen BN: no num_batches_tracked anywhere.
+        assert not any(k.endswith("num_batches_tracked") for k in keys)
+
+    def test_frozen_bn_eps_zero(self) -> None:
+        from lucid.models.vision.mask_rcnn import mask_rcnn_resnet50_fpn
+
+        m = mask_rcnn_resnet50_fpn(num_classes=91)
+        # Reference detection FrozenBatchNorm2d uses eps = 0.
+        assert float(m.backbone.body.bn1.eps) == 0.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -436,6 +475,7 @@ class TestDetectionRegistry:
             "faster_rcnn",
             "faster_rcnn_resnet50_fpn",
             "mask_rcnn",
+            "mask_rcnn_resnet50_fpn",
             "detr_resnet50",
             "detr_resnet101",
             "efficientdet_d0",
@@ -557,3 +597,60 @@ class TestFasterRCNNPretrainedLoad(unittest.TestCase):
         m.eval()
         out = m(lucid.randn(1, 3, 256, 256))
         assert int(out.logits.shape[-1]) == 91
+
+
+class TestMaskRCNNWeightsEnums:
+    """Static contract of the Mask R-CNN ResNet-50-FPN Weights enum."""
+
+    def test_default_aliases_coco(self) -> None:
+        from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
+
+        assert (
+            MaskRCNNResNet50FPNWeights.DEFAULT is MaskRCNNResNet50FPNWeights.COCO_V1
+        )
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
+
+        e = MaskRCNNResNet50FPNWeights.COCO_V1.entry
+        assert e.num_classes == 91
+        # sha256 is either a real 64-hex digest or the upload placeholder.
+        assert len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__"
+        assert "lucid-dl/mask-rcnn-resnet-50-fpn" in e.url
+        assert "/COCO_V1/" in e.url
+        meta = MaskRCNNResNet50FPNWeights.COCO_V1.meta
+        assert meta["source"] == ("torchvision/MaskRCNN_ResNet50_FPN_Weights.COCO_V1")
+        assert meta["license"] == "bsd-3-clause"
+        assert meta["num_params"] == 44_401_393
+        assert meta["metrics"]["COCO"]["box mAP"] == 37.9
+        assert meta["metrics"]["COCO"]["mask mAP"] == 34.6
+
+    def test_transforms_detection_preset(self) -> None:
+        from lucid.models.vision.mask_rcnn import MaskRCNNResNet50FPNWeights
+
+        tf = MaskRCNNResNet50FPNWeights.COCO_V1.transforms()
+        assert tf.to_dict()["preprocessor_type"] == "Detection"
+        assert tf.max_size == 1333
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        assert "COCO_V1" in list_pretrained("mask_rcnn")
+        assert "COCO_V1" in list_pretrained("mask_rcnn_resnet50_fpn")
+
+
+@unittest.skipUnless(
+    os.environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestMaskRCNNPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_default(self) -> None:
+        import lucid.models as M
+
+        m = M.create_model("mask_rcnn_resnet50_fpn", pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 256, 256))
+        assert int(out.logits.shape[-1]) == 91
+        assert int(out.pred_masks.shape[-1]) == 28

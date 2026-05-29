@@ -28,6 +28,7 @@ import tools.convert_weights.faster_rcnn  # noqa: F401
 import tools.convert_weights.fcn  # noqa: F401
 import tools.convert_weights.googlenet  # noqa: F401
 import tools.convert_weights.inception  # noqa: F401
+import tools.convert_weights.mask_rcnn  # noqa: F401
 import tools.convert_weights.maskformer  # noqa: F401
 import tools.convert_weights.inception_next  # noqa: F401
 import tools.convert_weights.inception_resnet  # noqa: F401

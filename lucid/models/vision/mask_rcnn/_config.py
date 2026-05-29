@@ -76,6 +76,7 @@ class MaskRCNNConfig(ModelConfig):
 
         -- Backbone/FPN --
         backbone_layers:   ResNet layer counts (default ResNet-50 = 3,4,6,3).
+        backbone_bn_eps:   FrozenBatchNorm2d epsilon (reference uses 0).
         fpn_out_channels:  Channel width of every FPN output level.
 
         -- RPN hyper-parameters --
@@ -91,14 +92,19 @@ class MaskRCNNConfig(ModelConfig):
 
         -- Detection head --
         roi_det_size:         RoI Align output for detection (7 → 7×7).
+        roi_sampling_ratio:   RoI Align sub-bin sampling ratio (2).
         roi_representation:   Hidden size of the 2-FC detection head.
         roi_fg_iou_thresh:    Proposal→GT IoU for fg assignment.
         roi_bg_iou_thresh:    Proposal→GT IoU upper bound for bg.
         bbox_reg_weights:     Per-component bbox delta scale.
+        canonical_scale:      FPN level-assignment canonical scale (224).
+        canonical_level:      FPN level-assignment canonical level (4).
 
         -- Mask head --
-        roi_mask_size:       RoI Align output for the mask branch (14 → 14×14).
+        roi_mask_size:        RoI Align output for the mask branch (14 → 14×14).
         mask_hidden_channels: Channel width inside the mask FCN.
+        mask_num_convs:       Number of 3×3 convs in the mask head (4).
+        mask_predictor_hidden: Channel width of the deconv upsampler (256).
 
         -- Inference --
         score_thresh:    Minimum final class score.
@@ -109,34 +115,40 @@ class MaskRCNNConfig(ModelConfig):
 
     model_type: ClassVar[str] = "mask_rcnn"
 
-    num_classes: int = 80
+    num_classes: int = 91
     in_channels: int = 3
 
-    # Backbone
+    # Backbone (ResNet-50-FPN)
     backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
+    backbone_bn_eps: float = 0.0  # reference FrozenBatchNorm2d uses eps=0
     fpn_out_channels: int = 256
 
-    # RPN
+    # RPN — one anchor scale per FPN level x 3 ratios = 3 anchors/location
     rpn_anchor_sizes: tuple[int, ...] = (32, 64, 128, 256, 512)
     rpn_anchor_ratios: tuple[float, ...] = (0.5, 1.0, 2.0)
-    rpn_pre_nms_top_n: int = 2000
+    rpn_pre_nms_top_n: int = 1000
     rpn_post_nms_top_n: int = 1000
     rpn_nms_thresh: float = 0.7
-    rpn_min_size: float = 1.0
+    rpn_min_size: float = 1e-3
     rpn_score_thresh: float = 0.0
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
 
     # Detection head
     roi_det_size: int = 7
+    roi_sampling_ratio: int = 2
     roi_representation: int = 1024
     roi_fg_iou_thresh: float = 0.5
     roi_bg_iou_thresh: float = 0.5
     bbox_reg_weights: tuple[float, float, float, float] = (10.0, 10.0, 5.0, 5.0)
+    canonical_scale: int = 224
+    canonical_level: int = 4
 
     # Mask head
     roi_mask_size: int = 14
     mask_hidden_channels: int = 256
+    mask_num_convs: int = 4
+    mask_predictor_hidden: int = 256
 
     # Inference
     score_thresh: float = 0.05
