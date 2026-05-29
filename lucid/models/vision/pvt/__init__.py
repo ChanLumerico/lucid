@@ -20,6 +20,7 @@ from lucid.models.vision.pvt._pretrained import (
 )
 from lucid.models.vision.pvt._weights import (
     PVTv2B0Weights,
+    PVTv2B1Weights,
     PVTv2B2Weights,
     PVTv2B3Weights,
     PVTv2B4Weights,
@@ -48,6 +49,7 @@ __all__ = [
     "pvt_tiny_cls",
     # Pretrained weight enums
     "PVTv2B0Weights",
+    "PVTv2B1Weights",
     "PVTv2B2Weights",
     "PVTv2B3Weights",
     "PVTv2B4Weights",

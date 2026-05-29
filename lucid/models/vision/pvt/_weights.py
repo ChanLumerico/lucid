@@ -1,14 +1,10 @@
 """Pretrained-weight declarations for the PVT v2 family.
 
-Five paper-cited variants (Wang et al., CVMJ 2022) ship ImageNet-1k
-checkpoints converted from timm's ``pvt_v2_b{0,2,3,4,5}.in1k`` model
-zoo: :class:`PVTv2B0Weights`, :class:`PVTv2B2Weights`,
-:class:`PVTv2B3Weights`, :class:`PVTv2B4Weights`, :class:`PVTv2B5Weights`.
-
-PVT v2-B1 is intentionally not shipped: Lucid's B1 config currently uses
-``depths=(2, 2, 4, 2)`` (~17.3M params) whereas the paper / timm
-``pvt_v2_b1`` is ``depths=(2, 2, 2, 2)`` (~14.0M), so the upstream
-checkpoint cannot load into Lucid's B1 without a config change.
+All six paper-cited variants (Wang et al., CVMJ 2022) ship ImageNet-1k
+checkpoints converted from timm's ``pvt_v2_b{0,1,2,3,4,5}.in1k`` model
+zoo: :class:`PVTv2B0Weights`, :class:`PVTv2B1Weights`,
+:class:`PVTv2B2Weights`, :class:`PVTv2B3Weights`,
+:class:`PVTv2B4Weights`, :class:`PVTv2B5Weights`.
 
 Every checkpoint uses the timm PVT v2 eval pipeline: 224 crop / 249
 resize (``crop_pct = 0.9``) / bicubic interpolation / ImageNet stats.
@@ -39,6 +35,30 @@ class PVTv2B0Weights(WeightsEnum):
             "license": "apache-2.0",
             "num_params": 3_666_760,
             "metrics": {"ImageNet-1k": {"acc@1": 70.5}},
+        },
+    )
+    DEFAULT = IN1K
+
+
+@register_weights("pvt_v2_b1_cls")
+class PVTv2B1Weights(WeightsEnum):
+    r"""Pretrained weights for :func:`lucid.models.pvt_v2_b1_cls`.
+
+    Single ImageNet-1k checkpoint converted from timm's
+    ``pvt_v2_b1.in1k`` (Wang et al., 2022; ~14.0M params, 78.7% top-1).
+    """
+
+    IN1K = WeightEntry(
+        url=f"{HUB_BASE}/pvt-v2-b1/resolve/main/IN1K/model.safetensors",
+        sha256="64e479955a1a8a644b8a5bf0e95b125235fa6268cc1148998273e503d28c3782",
+        num_classes=1000,
+        transforms=_PRESET,
+        meta={
+            "tag": "IN1K",
+            "source": "timm/pvt_v2_b1.in1k",
+            "license": "apache-2.0",
+            "num_params": 14_009_000,
+            "metrics": {"ImageNet-1k": {"acc@1": 78.7}},
         },
     )
     DEFAULT = IN1K

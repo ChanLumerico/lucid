@@ -6,6 +6,7 @@ from lucid.models.vision.pvt._config import PVTConfig
 from lucid.models.vision.pvt._model import PVT, PVTForImageClassification
 from lucid.models.vision.pvt._weights import (
     PVTv2B0Weights,
+    PVTv2B1Weights,
     PVTv2B2Weights,
     PVTv2B3Weights,
     PVTv2B4Weights,
@@ -26,7 +27,7 @@ _CFG_B0 = PVTConfig(
 _CFG_B1 = PVTConfig(
     variant="pvt_v2_b1",
     embed_dims=(64, 128, 320, 512),
-    depths=(2, 2, 4, 2),
+    depths=(2, 2, 2, 2),
     num_heads=(1, 2, 5, 8),
     sr_ratios=(8, 4, 2, 1),
     mlp_ratios=(8.0, 8.0, 4.0, 4.0),
@@ -142,7 +143,7 @@ def pvt_v2_b1(pretrained: bool = False, **overrides: object) -> PVT:
     r"""PVT v2-B1 backbone (Wang et al., 2022).
 
     Builds the canonical *PVT v2-B1* configuration:
-    ``embed_dims=(64, 128, 320, 512)``, ``depths=(2, 2, 4, 2)``,
+    ``embed_dims=(64, 128, 320, 512)``, ``depths=(2, 2, 2, 2)``,
     ``num_heads=(1, 2, 5, 8)``, ``sr_ratios=(8, 4, 2, 1)``.
     Approximately **14.0M parameters** — ResNet-18 / 34 class on the
     accuracy/cost trade-off.
@@ -468,7 +469,7 @@ def pvt_v2_b0_cls(
     return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="pvt",
     model_type="pvt",
@@ -476,7 +477,10 @@ def pvt_v2_b0_cls(
     default_config=_CFG_B1,
 )
 def pvt_v2_b1_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: PVTv2B1Weights | None = None,
+    **overrides: object,
 ) -> PVTForImageClassification:
     r"""PVT v2-B1 image classifier (Wang et al., 2022).
 
@@ -485,9 +489,14 @@ def pvt_v2_b1_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`PVTv2B1Weights.IN1K`); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : PVTv2B1Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical PVT v2-B1 config.
 
@@ -499,7 +508,8 @@ def pvt_v2_b1_cls(
     Notes
     -----
     PVT v2-B1 reaches **78.7% top-1 on ImageNet-1k** at 224x224 (Wang
-    et al., 2022, Table 1).
+    et al., 2022, Table 1).  Pretrained weights are converted from
+    timm's ``pvt_v2_b1.in1k`` and hosted under ``lucid-dl/pvt-v2-b1``.
 
     Examples
     --------
@@ -510,7 +520,11 @@ def pvt_v2_b1_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_B1, overrides)
+    entry = weights_mod.resolve_weights(PVTv2B1Weights, pretrained, weights)
+    model = _c(_CFG_B1, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="pvt_v2_b1_cls")
+    return model
 
 
 @register_model(  # type: ignore[arg-type]  # reason: pvt_v2_b2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.

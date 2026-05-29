@@ -45,6 +45,7 @@ _PVT_CITATION = (
 _PVT_VARIANTS: dict[str, tuple[str, str, str]] = {
     # arch -> (lucid_cls_factory, repo_id, title)
     "pvt_v2_b0": ("pvt_v2_b0_cls", "lucid-dl/pvt-v2-b0", "PVT v2-B0"),
+    "pvt_v2_b1": ("pvt_v2_b1_cls", "lucid-dl/pvt-v2-b1", "PVT v2-B1"),
     "pvt_v2_b2": ("pvt_v2_b2_cls", "lucid-dl/pvt-v2-b2", "PVT v2-B2"),
     "pvt_v2_b3": ("pvt_v2_b3_cls", "lucid-dl/pvt-v2-b3", "PVT v2-B3"),
     "pvt_v2_b4": ("pvt_v2_b4_cls", "lucid-dl/pvt-v2-b4", "PVT v2-B4"),
@@ -54,6 +55,7 @@ _PVT_VARIANTS: dict[str, tuple[str, str, str]] = {
 # Paper Table 1 top-1 accuracies @ 224x224 on ImageNet-1k.
 _ACC1: dict[str, float] = {
     "pvt_v2_b0": 70.5,
+    "pvt_v2_b1": 78.7,
     "pvt_v2_b2": 82.0,
     "pvt_v2_b3": 83.1,
     "pvt_v2_b4": 83.6,
@@ -152,6 +154,11 @@ class PVTArch(Architecture):
 @register_arch("pvt_v2_b0")
 def _b0(tag: str) -> Architecture:
     return PVTArch("pvt_v2_b0", tag)
+
+
+@register_arch("pvt_v2_b1")
+def _b1(tag: str) -> Architecture:
+    return PVTArch("pvt_v2_b1", tag)
 
 
 @register_arch("pvt_v2_b2")

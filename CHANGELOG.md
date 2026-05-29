@@ -58,14 +58,15 @@ Enabled by the corrections above; all enums on `lucid.models.weights`:
   `Swin_*_Weights.IMAGENET1K_V1`; `swin_large_cls` ← timm
   `swin_large_patch4_window7_224.ms_in22k_ft_in1k` (Liu et al., 2021).
 
-### Added — Pretrained weights: PVTv2
+### Added — Pretrained weights: PVTv2 (all 6 variants)
 
-- **pvt** — `pvt_v2_b{0,2,3,4,5}_cls` ← timm `pvt_v2_b*.in1k`
-  (Wang et al., 2022; IN1K).  Clean identity-rename map; b0 parity
-  9.9e-4; E2E verified b0 + b5.  Presets 224 crop / 249 resize /
-  bicubic.  Enums on `lucid.models.weights`.  `pvt_v2_b1` deferred —
-  its Lucid config (`depths=(2,2,4,2)`) diverges from the paper/timm
-  `(2,2,2,2)` and needs a config fix before the checkpoint can load.
+- **pvt** — `pvt_v2_b{0,1,2,3,4,5}_cls` ← timm `pvt_v2_b*.in1k`
+  (Wang et al., 2022; IN1K).  Clean identity-rename map; b0/b1 parity
+  ~7e-4; E2E verified b0/b1/b5.  Presets 224 crop / 249 resize /
+  bicubic.  Enums on `lucid.models.weights`.  `pvt_v2_b1` required a
+  config correction (`_CFG_B1` depths `(2,2,4,2)` → `(2,2,2,2)`,
+  17.3M → 14.0M params) to match the paper / timm before its
+  checkpoint could load.
 
 ### Added — Pretrained weights: InceptionNeXt
 

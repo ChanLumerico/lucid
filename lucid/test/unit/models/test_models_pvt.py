@@ -82,6 +82,7 @@ class TestPVTRegistry(unittest.TestCase):
 
 _SHIPPED = (
     ("pvt_v2_b0_cls", "pvt-v2-b0", "pvt_v2_b0.in1k", 3_666_760),
+    ("pvt_v2_b1_cls", "pvt-v2-b1", "pvt_v2_b1.in1k", 14_009_000),
     ("pvt_v2_b2_cls", "pvt-v2-b2", "pvt_v2_b2.in1k", 25_362_856),
     ("pvt_v2_b3_cls", "pvt-v2-b3", "pvt_v2_b3.in1k", 45_238_696),
     ("pvt_v2_b4_cls", "pvt-v2-b4", "pvt_v2_b4.in1k", 62_556_072),
@@ -95,6 +96,7 @@ class TestPVTv2WeightsEnums(unittest.TestCase):
     def _enums(self) -> tuple[type, ...]:
         from lucid.models.weights import (
             PVTv2B0Weights,
+            PVTv2B1Weights,
             PVTv2B2Weights,
             PVTv2B3Weights,
             PVTv2B4Weights,
@@ -103,6 +105,7 @@ class TestPVTv2WeightsEnums(unittest.TestCase):
 
         return (
             PVTv2B0Weights,
+            PVTv2B1Weights,
             PVTv2B2Weights,
             PVTv2B3Weights,
             PVTv2B4Weights,
