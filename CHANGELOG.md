@@ -13,7 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.5.0 unreleased] — 2026-05-29
+## [3.5.0 unreleased] — 2026-05-30
+
+### Added — Pretrained weights: BERT text family (Wikipedia + BookCorpus)
+
+First text-domain pretrained weights.  `pretrained=True` downloads the
+upstream checkpoint from the Hub, verifies its SHA-256, and strict-loads
+it — `bert_base(pretrained=True)` runs an encoder forward pass out of the
+box.  Conversion is a pure identity parameter map (Lucid mirrors the HF
+`BertModel` naming one-for-one), validated by forward parity vs the
+reference framework (`last_hidden_state` 8.0e-6 base; masked-LM logits
+4.1e-5 base, top-prediction exact).
+
+- **bert** — eight checkpoints on the Hub under `lucid-dl/bert-*`:
+  - Base encoders `bert_{tiny,mini,small,medium}` ← Turc et al. 2019
+    "Well-Read Students" pre-distilled sizes
+    (`google/bert_uncased_L-*_H-*_A-*`); `bert_base` / `bert_large` ←
+    Devlin et al. 2018 `google-bert/bert-{base,large}-uncased`.
+  - Masked-LM heads `bert_base_mlm` / `bert_large_mlm` ← the same
+    checkpoints' `cls.predictions` head (sourced from
+    `BertForPreTraining` so the pooler weights are real; the NSP head and
+    HF's duplicate tied `decoder.bias` are dropped).
+  - All `WIKIPEDIA_BOOKSCORPUS` tag, uncased, 30 522-token vocab; tokenize
+    with `lucid.models.text.bert.BertTokenizer`.
+- **Infrastructure** — text models consume token ids, so the conversion
+  card renderer (`tools/convert_weights/_templates.py`) gained text task
+  → HF `pipeline_tag` mappings (`base`→feature-extraction,
+  `masked-lm`→fill-mask, `causal-lm`→text-generation, …) and a token-id
+  usage snippet.  Weight entries carry a no-op preprocessing transform
+  (tokenization is a `lucid.utils.tokenizer` concern, not a tensor op).
 
 ### Added — Pretrained weights: Mask2Former Swin (ADE20k semantic segmentation)
 

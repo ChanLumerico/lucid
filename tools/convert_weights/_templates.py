@@ -51,7 +51,28 @@ _HF_PIPELINE_TAG: dict[str, str] = {
     "object-detection": "object-detection",
     "semantic-segmentation": "image-segmentation",
     "instance-segmentation": "image-segmentation",
+    # Text tasks (Lucid task string → HF Hub pipeline_tag).
+    "base": "feature-extraction",
+    "masked-lm": "fill-mask",
+    "causal-lm": "text-generation",
+    "seq2seq-lm": "text2text-generation",
+    "sequence-classification": "text-classification",
+    "token-classification": "token-classification",
+    "question-answering": "question-answering",
 }
+
+# Lucid task strings that operate on token-id inputs (no image preprocessing).
+_TEXT_TASKS: frozenset[str] = frozenset(
+    {
+        "base",
+        "masked-lm",
+        "causal-lm",
+        "seq2seq-lm",
+        "sequence-classification",
+        "token-classification",
+        "question-answering",
+    }
+)
 
 
 def _hf_pipeline_tag(task: str) -> str:
@@ -103,8 +124,38 @@ def _metrics_table(spec: "ConversionSpec") -> str:
     return f"{header_row}\n{sep_row}\n{data_row}"
 
 
+def _text_usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
+    """Build the usage example body for a token-id (text) model."""
+    preamble = (
+        "import lucid\n"
+        "import lucid.models as models\n"
+        f"from lucid.models.weights import {enum_name}\n\n"
+        "# default tag\n"
+        f"model = models.{spec.model_name}(pretrained=True)\n\n"
+        "# explicit tag (enum or string)\n"
+        f"model = models.{spec.model_name}(weights={enum_name}.{spec.tag})\n"
+        f'model = models.{spec.model_name}(pretrained="{spec.tag}")\n\n'
+        "# feed token ids (tokenize with the matching lucid.utils.tokenizer)\n"
+        "input_ids = lucid.tensor([[101, 7592, 2088, 102]], dtype=lucid.int64)\n"
+        "out = model(input_ids)\n"
+    )
+    if spec.task == "base":
+        tail = "hidden = out.last_hidden_state  # (B, T, hidden_size)\n"
+    elif spec.task in ("masked-lm", "causal-lm", "seq2seq-lm"):
+        tail = "logits = out.logits  # (B, T, vocab_size)\n"
+    elif spec.task == "question-answering":
+        tail = (
+            "start, end = out.start_logits, out.end_logits  # (B, T) each\n"
+        )
+    else:  # sequence-classification / token-classification
+        tail = "logits = out.logits  # classification logits\n"
+    return preamble + tail
+
+
 def _usage_snippet(spec: "ConversionSpec", enum_name: str) -> str:
     """Build the task-appropriate Python usage example body."""
+    if spec.task in _TEXT_TASKS:
+        return _text_usage_snippet(spec, enum_name)
     preamble = (
         "import lucid.models as models\n"
         f"from lucid.models.weights import {enum_name}\n\n"

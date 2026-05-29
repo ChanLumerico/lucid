@@ -2,12 +2,16 @@
 
 Sizes follow Devlin et al. (base / large) and Turc et al. 2019
 ("Well-Read Students Learn Better") for the four pre-distilled sizes
-(tiny / mini / small / medium).  No pretrained weight URLs are registered yet
-— follow-up work wires Hugging Face checkpoints through
-:mod:`lucid.weights` (a ``BertBaseWeights`` enum + ``weights=`` /
-``pretrained=`` on the factories, mirroring the ResNet wiring).
+(tiny / mini / small / medium).  All six base encoders and the two
+masked-LM heads ship Wikipedia + BookCorpus pretrained weights through
+:mod:`lucid.weights` (per-factory ``*Weights`` enums + ``weights=`` /
+``pretrained=``, mirroring the ResNet wiring).  The fine-tune heads
+(``*_cls`` / ``*_token_cls`` / ``*_qa``) carry no canonical pretrained
+checkpoint — they expose downstream-task topology with a randomly
+initialised head.
 """
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.bert._config import BertConfig
 from lucid.models.text.bert._model import (
@@ -16,6 +20,16 @@ from lucid.models.text.bert._model import (
     BertForSequenceClassification,
     BertForTokenClassification,
     BertModel,
+)
+from lucid.models.text.bert._weights import (
+    BertBaseMLMWeights,
+    BertBaseWeights,
+    BertLargeMLMWeights,
+    BertLargeWeights,
+    BertMediumWeights,
+    BertMiniWeights,
+    BertSmallWeights,
+    BertTinyWeights,
 )
 
 # Devlin et al. 2018 + Turc et al. 2019 size table.
@@ -54,14 +68,19 @@ def _apply(cfg: BertConfig, overrides: dict[str, object]) -> BertConfig:
 # ── Backbones ─────────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_tiny adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_TINY,
 )
-def bert_tiny(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_tiny(
+    pretrained: bool | str = False,
+    *,
+    weights: BertTinyWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Tiny encoder.
 
     Smallest of the four distillation-targeted variants from Turc, Chang,
@@ -101,17 +120,26 @@ def bert_tiny(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape   # (1, 3, 128)
     (1, 3, 128)
     """
-    return BertModel(_apply(_CFG_TINY, overrides))
+    entry = weights_mod.resolve_weights(BertTinyWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_TINY, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_tiny")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_mini adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_MINI,
 )
-def bert_mini(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_mini(
+    pretrained: bool | str = False,
+    *,
+    weights: BertMiniWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Mini encoder.
 
     Second-smallest of the Turc et al., 2019 distillation sizes:
@@ -145,17 +173,26 @@ def bert_mini(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape   # (1, 3, 256)
     (1, 3, 256)
     """
-    return BertModel(_apply(_CFG_MINI, overrides))
+    entry = weights_mod.resolve_weights(BertMiniWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_MINI, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_mini")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_small adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_SMALL,
 )
-def bert_small(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_small(
+    pretrained: bool | str = False,
+    *,
+    weights: BertSmallWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Small encoder.
 
     Distillation-targeted variant from Turc et al., 2019: :math:`L=4` layers,
@@ -189,17 +226,26 @@ def bert_small(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape   # (1, 3, 512)
     (1, 3, 512)
     """
-    return BertModel(_apply(_CFG_SMALL, overrides))
+    entry = weights_mod.resolve_weights(BertSmallWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_SMALL, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_small")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_medium adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_MEDIUM,
 )
-def bert_medium(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_medium(
+    pretrained: bool | str = False,
+    *,
+    weights: BertMediumWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Medium encoder.
 
     Largest of the Turc et al., 2019 distillation sizes: :math:`L=8` layers,
@@ -234,17 +280,26 @@ def bert_medium(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape   # (1, 3, 512)
     (1, 3, 512)
     """
-    return BertModel(_apply(_CFG_MEDIUM, overrides))
+    entry = weights_mod.resolve_weights(BertMediumWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_MEDIUM, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_medium")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_base adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_BASE,
 )
-def bert_base(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_base(
+    pretrained: bool | str = False,
+    *,
+    weights: BertBaseWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Base encoder.
 
     Canonical mid-size variant from Devlin et al., 2018 Table 1:
@@ -285,17 +340,26 @@ def bert_base(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape, out.pooler_output.shape
     ((1, 4, 768), (1, 768))
     """
-    return BertModel(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BertBaseWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_base")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_large adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="bert",
     model_type="bert",
     model_class=BertModel,
     default_config=_CFG_LARGE,
 )
-def bert_large(pretrained: bool = False, **overrides: object) -> BertModel:
+def bert_large(
+    pretrained: bool | str = False,
+    *,
+    weights: BertLargeWeights | None = None,
+    **overrides: object,
+) -> BertModel:
     r"""Construct a BERT-Large encoder.
 
     Larger of the two original variants from Devlin et al., 2018 Table 1:
@@ -334,20 +398,29 @@ def bert_large(pretrained: bool = False, **overrides: object) -> BertModel:
     >>> out.last_hidden_state.shape, out.pooler_output.shape
     ((1, 4, 1024), (1, 1024))
     """
-    return BertModel(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(BertLargeWeights, pretrained, weights)
+    model = BertModel(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_large")
+    return model
 
 
 # ── Masked-LM heads ───────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_base_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="masked-lm",
     family="bert",
     model_type="bert",
     model_class=BertForMaskedLM,
     default_config=_CFG_BASE,
 )
-def bert_base_mlm(pretrained: bool = False, **overrides: object) -> BertForMaskedLM:
+def bert_base_mlm(
+    pretrained: bool | str = False,
+    *,
+    weights: BertBaseMLMWeights | None = None,
+    **overrides: object,
+) -> BertForMaskedLM:
     r"""Construct a BERT-Base model with a tied masked-LM head.
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12, ~110M parameters),
@@ -385,17 +458,26 @@ def bert_base_mlm(pretrained: bool = False, **overrides: object) -> BertForMaske
     >>> out.logits.shape   # (1, 4, vocab_size=30522)
     (1, 4, 30522)
     """
-    return BertForMaskedLM(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BertBaseMLMWeights, pretrained, weights)
+    model = BertForMaskedLM(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_base_mlm")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_large_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="masked-lm",
     family="bert",
     model_type="bert",
     model_class=BertForMaskedLM,
     default_config=_CFG_LARGE,
 )
-def bert_large_mlm(pretrained: bool = False, **overrides: object) -> BertForMaskedLM:
+def bert_large_mlm(
+    pretrained: bool | str = False,
+    *,
+    weights: BertLargeMLMWeights | None = None,
+    **overrides: object,
+) -> BertForMaskedLM:
     r"""Construct a BERT-Large model with a tied masked-LM head.
 
     Same trunk as :func:`bert_large` (L=24, H=1024, A=16, ~340M parameters),
@@ -431,7 +513,11 @@ def bert_large_mlm(pretrained: bool = False, **overrides: object) -> BertForMask
     >>> out.logits.shape   # (1, 4, 30522)
     (1, 4, 30522)
     """
-    return BertForMaskedLM(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(BertLargeMLMWeights, pretrained, weights)
+    model = BertForMaskedLM(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_large_mlm")
+    return model
 
 
 # ── Sequence / token / QA classification heads ────────────────────────────────

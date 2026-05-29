@@ -291,3 +291,56 @@ class TestBertForCausalLM:
         h_b = m(ids_b).logits
         diff = float(((h_a[:, :3, :] - h_b[:, :3, :]) ** 2).sum().item())
         assert diff < 1e-6, f"Causal mask leaks in BertForCausalLM: diff = {diff}"
+
+
+# (factory, slug, hidden, num_params, task) — the eight shipped BERT
+# checkpoints: six base encoders (Turc miniatures + Devlin base/large) and two
+# masked-LM heads.  All Wikipedia + BookCorpus, uncased, 30 522-token vocab.
+_SHIPPED = (
+    ("BertTinyWeights", "bert-tiny", 128, 4_385_920, "base"),
+    ("BertMiniWeights", "bert-mini", 256, 11_171_328, "base"),
+    ("BertSmallWeights", "bert-small", 512, 28_763_648, "base"),
+    ("BertMediumWeights", "bert-medium", 512, 41_373_184, "base"),
+    ("BertBaseWeights", "bert-base", 768, 109_482_240, "base"),
+    ("BertLargeWeights", "bert-large", 1024, 335_141_888, "base"),
+    ("BertBaseMLMWeights", "bert-base-mlm", 30_522, 109_514_298, "mlm"),
+    ("BertLargeMLMWeights", "bert-large-mlm", 30_522, 335_174_586, "mlm"),
+)
+_TAG = "WIKIPEDIA_BOOKSCORPUS"
+
+
+class TestBertWeightsEnums:
+    """Static contract of the per-variant Weights enums — no network."""
+
+    @staticmethod
+    def _enum(name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    def test_default_aliases(self) -> None:
+        # Each enum's DEFAULT points at its single shipped tag member.
+        for enum_name, *_rest in _SHIPPED:
+            cls = self._enum(enum_name)
+            assert cls.DEFAULT is cls[_TAG]
+
+    def test_entry_fields(self) -> None:
+        for enum_name, slug, num_classes, _nparams, _task in _SHIPPED:
+            member = self._enum(enum_name)[_TAG]
+            e = member.entry
+            assert e.num_classes == num_classes
+            assert len(e.sha256) == 64
+            assert f"lucid-dl/{slug}" in e.url
+            assert f"/{_TAG}/" in e.url
+            assert member.meta["tag"] == _TAG
+            assert member.meta["license"] == "apache-2.0"
+
+    def test_registered_for_factories(self) -> None:
+        # The enum is discoverable from its factory name via lucid.weights.
+        from lucid.weights import weights_for
+
+        for enum_name, slug, *_rest in _SHIPPED:
+            factory = slug.replace("-", "_")
+            resolved = weights_for(factory)
+            assert resolved is not None
+            assert resolved.__name__ == enum_name

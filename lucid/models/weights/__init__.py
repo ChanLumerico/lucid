@@ -243,6 +243,18 @@ from lucid.models.vision.maxvit._weights import (
     MaxViTLargeWeights,
 )
 
+# 2018 — BERT (Devlin et al.) + Turc et al. 2019 miniatures (text)
+from lucid.models.text.bert._weights import (
+    BertTinyWeights,
+    BertMiniWeights,
+    BertSmallWeights,
+    BertMediumWeights,
+    BertBaseWeights,
+    BertLargeWeights,
+    BertBaseMLMWeights,
+    BertLargeMLMWeights,
+)
+
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
@@ -379,4 +391,13 @@ __all__ = [
     "MaxViTSmallWeights",
     "MaxViTBaseWeights",
     "MaxViTLargeWeights",
+    # ── Text (2018) BERT (Devlin et al.) + Turc et al. 2019 miniatures ─
+    "BertTinyWeights",
+    "BertMiniWeights",
+    "BertSmallWeights",
+    "BertMediumWeights",
+    "BertBaseWeights",
+    "BertLargeWeights",
+    "BertBaseMLMWeights",
+    "BertLargeMLMWeights",
 ]
