@@ -346,7 +346,7 @@ from lucid.models.vision.fast_rcnn import (
 # 2015 — Faster R-CNN (Ren et al.)
 from lucid.models.vision.faster_rcnn import (
     FasterRCNNConfig, FasterRCNNForObjectDetection,
-    faster_rcnn,
+    faster_rcnn, faster_rcnn_resnet50_fpn,
 )
 # 2017 — Mask R-CNN (He et al.)
 from lucid.models.vision.mask_rcnn import (
@@ -583,6 +583,7 @@ __all__ = [
     # ── Vision (2015) Faster R-CNN ────────────────────────────────────────────
     "FasterRCNNConfig", "FasterRCNNForObjectDetection",
     "faster_rcnn",
+    "faster_rcnn_resnet50_fpn",
     # ── Vision (2017) Mask R-CNN ──────────────────────────────────────────────
     "MaskRCNNConfig", "MaskRCNNForObjectDetection",
     "mask_rcnn",

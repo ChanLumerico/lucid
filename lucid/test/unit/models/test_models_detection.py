@@ -13,6 +13,9 @@ Tests are parametrized over the ``device`` fixture so they run on both
 the CPU (Accelerate) and Metal (MLX) compute streams.
 """
 
+import os
+import unittest
+
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.models._output import InstanceSegmentationOutput, ObjectDetectionOutput
@@ -113,13 +116,15 @@ class TestFastRCNN:
 class TestFasterRCNN:
     def test_factory_and_forward(self, device: str) -> None:
         from lucid.models.vision.faster_rcnn import (
-            faster_rcnn,
+            faster_rcnn_resnet50_fpn,
             FasterRCNNForObjectDetection,
         )
 
-        # Reduce RPN top-N to keep NMS python-loop tractable on metal
+        # Reduce RPN top-N to keep the python NMS loop tractable on metal.
         m = _build(
-            lambda: faster_rcnn(rpn_pre_nms_top_n=200, rpn_post_nms_top_n=100),
+            lambda: faster_rcnn_resnet50_fpn(
+                num_classes=91, rpn_pre_nms_top_n=200, rpn_post_nms_top_n=100
+            ),
             device,
         )
         assert isinstance(m, FasterRCNNForObjectDetection)
@@ -127,14 +132,58 @@ class TestFasterRCNN:
         x = _img(device)
         out = m(x)
         assert isinstance(out, ObjectDetectionOutput)
+        # ResNet-50-FPN: per-RoI logits (N, num_classes), per-class boxes
+        # (N, num_classes, 4).
         assert int(out.logits.ndim) == 2
+        assert int(out.logits.shape[-1]) == 91
+        assert int(out.pred_boxes.ndim) == 3
+        assert int(out.pred_boxes.shape[-2]) == 91
         assert int(out.pred_boxes.shape[-1]) == 4
+        assert out.proposals is not None
         assert out.loss is None
 
         out2 = m(x)
         assert out.logits.shape == out2.logits.shape
         diff = float(lucid.abs(out.logits - out2.logits).max().item())
         assert diff < 1e-5
+
+        # postprocess returns one dict per image with boxes/scores/labels.
+        dets = m.postprocess(out, image_sizes=[(_H, _W)])
+        assert len(dets) == _B
+        assert set(dets[0].keys()) == {"boxes", "scores", "labels"}
+
+
+class TestFasterRCNNTopology:
+    """The rebuilt detector mirrors the reference ResNet-50-FPN key layout."""
+
+    def test_reference_key_layout(self) -> None:
+        from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn
+
+        m = faster_rcnn_resnet50_fpn(num_classes=91)
+        keys = set(m.state_dict().keys())
+        assert len(keys) == 295
+        # Backbone body (ResNet) + FPN.
+        assert "backbone.body.conv1.weight" in keys
+        assert "backbone.body.layer4.2.bn3.running_mean" in keys
+        assert "backbone.fpn.inner_blocks.0.0.weight" in keys
+        assert "backbone.fpn.layer_blocks.3.0.weight" in keys
+        # RPN head.
+        assert "rpn.head.conv.0.0.weight" in keys
+        assert "rpn.head.cls_logits.weight" in keys
+        assert "rpn.head.bbox_pred.weight" in keys
+        # RoI heads.
+        assert "roi_heads.box_head.fc6.weight" in keys
+        assert "roi_heads.box_predictor.cls_score.weight" in keys
+        assert "roi_heads.box_predictor.bbox_pred.weight" in keys
+        # Frozen BN: no num_batches_tracked anywhere.
+        assert not any(k.endswith("num_batches_tracked") for k in keys)
+
+    def test_frozen_bn_eps_zero(self) -> None:
+        from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn
+
+        m = faster_rcnn_resnet50_fpn(num_classes=91)
+        # Reference detection FrozenBatchNorm2d uses eps = 0.
+        assert float(m.backbone.body.bn1.eps) == 0.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -385,6 +434,7 @@ class TestDetectionRegistry:
             "rcnn",
             "fast_rcnn",
             "faster_rcnn",
+            "faster_rcnn_resnet50_fpn",
             "mask_rcnn",
             "detr_resnet50",
             "detr_resnet101",
@@ -452,3 +502,58 @@ class TestRoIAlign:
         out = roi_align(feat, boxes, output_size=(5, 5), sampling_ratio=2)
         assert tuple(out.shape) == (1, 2, 5, 5)
         assert bool(lucid.isfinite(out).all().item())
+
+
+class TestFasterRCNNWeightsEnums:
+    """Static contract of the Faster R-CNN ResNet-50-FPN Weights enum."""
+
+    def test_default_aliases_coco(self) -> None:
+        from lucid.models.vision.faster_rcnn import FasterRCNNResNet50FPNWeights
+
+        assert (
+            FasterRCNNResNet50FPNWeights.DEFAULT is FasterRCNNResNet50FPNWeights.COCO_V1
+        )
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.vision.faster_rcnn import FasterRCNNResNet50FPNWeights
+
+        e = FasterRCNNResNet50FPNWeights.COCO_V1.entry
+        assert e.num_classes == 91
+        # sha256 is either a real 64-hex digest or the upload placeholder.
+        assert len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__"
+        assert "lucid-dl/faster-rcnn-resnet-50-fpn" in e.url
+        assert "/COCO_V1/" in e.url
+        meta = FasterRCNNResNet50FPNWeights.COCO_V1.meta
+        assert meta["source"] == ("torchvision/FasterRCNN_ResNet50_FPN_Weights.COCO_V1")
+        assert meta["license"] == "bsd-3-clause"
+        assert meta["num_params"] == 41_755_286
+        assert meta["metrics"]["COCO"]["box mAP"] == 37.0
+
+    def test_transforms_detection_preset(self) -> None:
+        from lucid.models.vision.faster_rcnn import FasterRCNNResNet50FPNWeights
+
+        tf = FasterRCNNResNet50FPNWeights.COCO_V1.transforms()
+        assert tf.to_dict()["preprocessor_type"] == "Detection"
+        assert tf.max_size == 1333
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        assert "COCO_V1" in list_pretrained("faster_rcnn")
+        assert "COCO_V1" in list_pretrained("faster_rcnn_resnet50_fpn")
+
+
+@unittest.skipUnless(
+    os.environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestFasterRCNNPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_default(self) -> None:
+        import lucid.models as M
+
+        m = M.create_model("faster_rcnn_resnet50_fpn", pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 256, 256))
+        assert int(out.logits.shape[-1]) == 91

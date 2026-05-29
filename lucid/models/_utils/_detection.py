@@ -548,9 +548,17 @@ def roi_align(
 ) -> Tensor:
     """RoI Align — bilinear sub-pixel sampling into fixed-size crops.
 
-    Uses ``F.grid_sample`` (bilinear) to sample the feature map at the
-    exact continuous coordinates of each RoI, replicating the reference
-    implementation in Mask R-CNN.
+    Reproduces the reference RoIAlign exactly, including its
+    ``bilinear_interpolate`` boundary rule: a sample whose coordinate falls
+    in ``[-1, 0]`` or ``[side-1, side]`` interpolates against an implicit
+    zero outside the map (rather than snapping to the edge pixel), and a
+    sample outside ``[-1, side]`` contributes zero.  When ``aligned`` is
+    False the per-RoI side is additionally floored at 1 pixel — the
+    reference legacy behaviour used by ``MultiScaleRoIAlign``.
+
+    Sampling uses a vectorised gather of the four bilinear corners per
+    sample point (no :func:`grid_sample`, whose ``align_corners`` /
+    normalised mapping does not match the reference high-boundary rule).
 
     Args:
         input:        (B, C, H, W) feature map.
@@ -559,6 +567,8 @@ def roi_align(
         output_size:  Height and width of each RoI crop.
         spatial_scale: Ratio of feature-map size to input image size
                        (e.g. 1/32 for a stride-32 backbone level).
+        sampling_ratio: Sub-bin samples per side (fixed when > 0, else
+                       ``ceil(roi_side / out_side)`` per box).
         aligned:      When True, apply the 0.5-pixel alignment offset.
 
     Returns:
@@ -572,7 +582,9 @@ def roi_align(
     feat_H = int(input.shape[2])
     feat_W = int(input.shape[3])
     C = int(input.shape[1])
+    dev = input.device.type
 
+    offset = 0.5 if aligned else 0.0
     results: list[Tensor] = []
 
     for b_idx, roi_boxes in enumerate(boxes):
@@ -580,24 +592,13 @@ def roi_align(
         if N == 0:
             continue
 
-        feat: Tensor = input[b_idx : b_idx + 1]  # (1, C, H, W)
+        feat_flat: Tensor = input[b_idx].reshape(C, feat_H * feat_W)  # (C, H*W)
 
-        x1 = roi_boxes[:, 0] * spatial_scale
-        y1 = roi_boxes[:, 1] * spatial_scale
-        x2 = roi_boxes[:, 2] * spatial_scale
-        y2 = roi_boxes[:, 3] * spatial_scale
+        x1 = roi_boxes[:, 0] * spatial_scale - offset
+        y1 = roi_boxes[:, 1] * spatial_scale - offset
+        x2 = roi_boxes[:, 2] * spatial_scale - offset
+        y2 = roi_boxes[:, 3] * spatial_scale - offset
 
-        if aligned:
-            x1 = x1 - 0.5
-            y1 = y1 - 0.5
-            x2 = x2 - 0.5
-            y2 = y2 - 0.5
-
-        # Per-box sub-bin sampling.  Each output bin is split into
-        # ``ry x rx`` sample points (fixed = ``sampling_ratio`` when > 0,
-        # else adaptive ``ceil(roi_side / out_side)`` per box like the
-        # reference), bilinearly sampled and averaged — matching the
-        # reference RoIAlign exactly (sampling_ratio semantics included).
         for n in range(N):
             rx1 = float(x1[n].item())
             rx2 = float(x2[n].item())
@@ -605,6 +606,9 @@ def roi_align(
             ry2 = float(y2[n].item())
             roi_w = rx2 - rx1
             roi_h = ry2 - ry1
+            if not aligned:
+                roi_w = max(roi_w, 1.0)
+                roi_h = max(roi_h, 1.0)
             bw = roi_w / out_w
             bh = roi_h / out_h
 
@@ -625,33 +629,88 @@ def roi_align(
                 for i in range(out_h)
                 for iy in range(ry)
             ]
-            # Clamp sample coords to [0, side-1] before sampling — this
-            # reproduces the reference RoIAlign's boundary rule (coords ≤0
-            # snap to 0, coords ≥side-1 snap to the last pixel) exactly,
-            # whereas grid_sample's zero-padding would bleed toward 0 at the
-            # edge.  (Proposals are image-clipped upstream, so the
-            # far-out-of-bounds → 0 case does not arise in practice.)
-            cxs = [min(max(xi, 0.0), float(feat_W - 1)) for xi in xs]
-            cys = [min(max(yi, 0.0), float(feat_H - 1)) for yi in ys]
-            norm_xs = [xi / (feat_W - 1) * 2.0 - 1.0 for xi in cxs]
-            norm_ys = [yi / (feat_H - 1) * 2.0 - 1.0 for yi in cys]
+            yl, yh, fy, zy = _bilinear_prep(ys, feat_H)
+            xl, xh, fx, zx = _bilinear_prep(xs, feat_W)
+            ny = len(ys)
+            nx = len(xs)
 
-            grid_rows: list[list[list[float]]] = [
-                [[nx, ny] for nx in norm_xs] for ny in norm_ys
-            ]
-            grid = lucid.tensor(
-                [grid_rows], device=feat.device.type
-            )  # (1, out_h*ry, out_w*rx, 2)
-            dense = F.grid_sample(
-                feat, grid, mode="bilinear", align_corners=True
-            )  # (1, C, out_h*ry, out_w*rx)
-            # Average the ry x rx sub-samples per bin → (1, C, out_h, out_w).
-            pooled = dense.reshape(1, C, out_h, ry, out_w, rx).mean(dim=(3, 5))
-            results.append(pooled)
+            # Gather the four bilinear corners (broadcast row/col indices).
+            zeros_ny_nx: Tensor = lucid.zeros((ny, nx), device=dev).long()
+            yl_b = lucid.tensor([[v] for v in yl], device=dev).long() + zeros_ny_nx
+            yh_b = lucid.tensor([[v] for v in yh], device=dev).long() + zeros_ny_nx
+            xl_b = lucid.tensor([xl], device=dev).long() + zeros_ny_nx
+            xh_b = lucid.tensor([xh], device=dev).long() + zeros_ny_nx
+
+            v1 = _gather_corner(feat_flat, yl_b, xl_b, C, ny, nx, feat_W)
+            v2 = _gather_corner(feat_flat, yl_b, xh_b, C, ny, nx, feat_W)
+            v3 = _gather_corner(feat_flat, yh_b, xl_b, C, ny, nx, feat_W)
+            v4 = _gather_corner(feat_flat, yh_b, xh_b, C, ny, nx, feat_W)
+
+            fy_t = lucid.tensor([[v] for v in fy], device=dev)  # (ny, 1)
+            fx_t = lucid.tensor([fx], device=dev)  # (1, nx)
+            hy = 1.0 - fy_t
+            hx = 1.0 - fx_t
+            w1 = hy * hx
+            w2 = hy * fx_t
+            w3 = fy_t * hx
+            w4 = fy_t * fx_t
+            zmask = lucid.tensor([[v] for v in zy], device=dev) * lucid.tensor(
+                [zx], device=dev
+            )  # (ny, nx) — 0 outside [-1, side]
+
+            samp = (v1 * w1 + v2 * w2 + v3 * w3 + v4 * w4) * zmask  # (C, ny, nx)
+            pooled = samp.reshape(C, out_h, ry, out_w, rx).mean(dim=(2, 4))
+            results.append(pooled.unsqueeze(0))
 
     if not results:
-        return lucid.zeros((0, C, out_h, out_w), device=input.device.type)
+        return lucid.zeros((0, C, out_h, out_w), device=dev)
     return lucid.cat(results, dim=0)
+
+
+def _bilinear_prep(
+    coords: list[float], size: int
+) -> tuple[list[int], list[int], list[float], list[float]]:
+    """Reference ``bilinear_interpolate`` index / weight prep for one axis.
+
+    For each continuous coordinate returns ``(low_idx, high_idx, frac,
+    zero)`` where ``frac`` is the fractional weight toward the high
+    neighbour and ``zero`` is 0 when the sample lies outside ``[-1, size]``
+    (the reference zeroes those) else 1.  Coordinates in ``[-1, 0]`` clamp
+    to 0; coordinates in ``[size-1, size]`` snap the neighbour pair to the
+    last pixel so they interpolate toward the implicit zero via ``zero``.
+    """
+    low: list[int] = []
+    high: list[int] = []
+    frac: list[float] = []
+    zero: list[float] = []
+    for c in coords:
+        if c < -1.0 or c > float(size):
+            low.append(0)
+            high.append(0)
+            frac.append(0.0)
+            zero.append(0.0)
+            continue
+        cc = 0.0 if c <= 0.0 else c
+        lo = int(cc)
+        if lo >= size - 1:
+            lo = size - 1
+            hi = size - 1
+            cc = float(lo)
+        else:
+            hi = lo + 1
+        low.append(lo)
+        high.append(hi)
+        frac.append(cc - lo)
+        zero.append(1.0)
+    return low, high, frac, zero
+
+
+def _gather_corner(
+    feat_flat: Tensor, yi: Tensor, xi: Tensor, C: int, ny: int, nx: int, fw: int
+) -> Tensor:
+    """Gather feature values at integer ``(yi, xi)`` → ``(C, ny, nx)``."""
+    flat = (yi * fw + xi).reshape(-1)  # (ny*nx,)
+    return feat_flat[:, flat].reshape(C, ny, nx)
 
 
 def roi_pool(
@@ -1067,3 +1126,341 @@ def solve_assignment(
         if p[j] != 0:
             row_ind[p[j] - 1] = j - 1
     return list(range(nr)), row_ind
+
+
+# ---------------------------------------------------------------------------
+# §6  Reference ResNet-50-FPN building blocks (torchvision-exact key layout)
+# ---------------------------------------------------------------------------
+#
+# The blocks below mirror the reference ``fasterrcnn_resnet50_fpn`` submodule
+# names verbatim (``backbone.body.*`` / ``backbone.fpn.inner_blocks.{i}.0`` /
+# ``backbone.fpn.layer_blocks.{i}.0`` / ``rpn.head.conv.0.0`` / ...), so the
+# weight converter for the COCO checkpoint is a near-identity prefix map.  They
+# are intentionally separate from the legacy ``FPN`` / ``RPN`` / ``RoIHead`` /
+# ``AnchorGenerator`` above (used by Mask R-CNN / EfficientDet), whose key
+# layout differs.
+
+
+class _FrozenBatchNorm2d(nn.Module):
+    r"""BatchNorm2d with frozen affine params + running stats (eval-only).
+
+    Holds exactly four persistent buffers — ``weight``, ``bias``,
+    ``running_mean``, ``running_var`` — with **no** ``num_batches_tracked``,
+    matching the reference ``FrozenBatchNorm2d`` key-set.  The forward applies
+
+    .. math::
+
+        y = (x - \mathrm{running\_mean})
+            \cdot \mathrm{rsqrt}(\mathrm{running\_var} + \varepsilon)
+            \cdot \mathrm{weight} + \mathrm{bias}
+
+    regardless of train / eval mode.  ``eps`` is configurable because the
+    reference uses :math:`\varepsilon = 0` inside detection backbones but
+    :math:`10^{-5}` elsewhere.
+    """
+
+    def __init__(self, num_features: int, eps: float = 1e-5) -> None:
+        super().__init__()
+        self.num_features = num_features
+        self.eps = eps
+        self.register_buffer("weight", lucid.ones(num_features))
+        self.register_buffer("bias", lucid.zeros(num_features))
+        self.register_buffer("running_mean", lucid.zeros(num_features))
+        self.register_buffer("running_var", lucid.ones(num_features))
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
+        b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
+        rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
+        rv = cast(Tensor, self.running_var).reshape(1, -1, 1, 1)
+        scale = w * (rv + self.eps).rsqrt()
+        bias = b - rm * scale
+        return x * scale + bias
+
+
+class _ResNetBottleneck(nn.Module):
+    """ResNet bottleneck block (frozen BN) with reference key names."""
+
+    expansion: int = 4
+
+    def __init__(
+        self,
+        in_ch: int,
+        mid_ch: int,
+        stride: int = 1,
+        downsample: nn.Module | None = None,
+        bn_eps: float = 0.0,
+    ) -> None:
+        super().__init__()
+        out_ch = mid_ch * self.expansion
+        self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
+        self.bn1 = _FrozenBatchNorm2d(mid_ch, eps=bn_eps)
+        self.conv2 = nn.Conv2d(mid_ch, mid_ch, 3, stride=stride, padding=1, bias=False)
+        self.bn2 = _FrozenBatchNorm2d(mid_ch, eps=bn_eps)
+        self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
+        self.bn3 = _FrozenBatchNorm2d(out_ch, eps=bn_eps)
+        self.downsample = downsample
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        identity = x
+        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
+        out = F.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
+        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
+        if self.downsample is not None:
+            identity = cast(Tensor, self.downsample(x))
+        return F.relu(out + identity)
+
+
+def _make_resnet_layer(
+    in_ch: int, mid_ch: int, num_blocks: int, stride: int, bn_eps: float
+) -> tuple[nn.Sequential, int]:
+    out_ch = mid_ch * 4
+    ds: nn.Module | None = None
+    if stride != 1 or in_ch != out_ch:
+        ds = nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
+            _FrozenBatchNorm2d(out_ch, eps=bn_eps),
+        )
+    blocks: list[nn.Module] = [
+        _ResNetBottleneck(in_ch, mid_ch, stride=stride, downsample=ds, bn_eps=bn_eps)
+    ]
+    for _ in range(1, num_blocks):
+        blocks.append(_ResNetBottleneck(out_ch, mid_ch, bn_eps=bn_eps))
+    return nn.Sequential(*blocks), out_ch
+
+
+class _ResNetBody(nn.Module):
+    """ResNet trunk exposing C2-C5, frozen BN, reference key layout.
+
+    Submodule names (``conv1`` / ``bn1`` / ``layer1``..``layer4``) mirror the
+    reference ResNet body so ``backbone.body.<rest>`` maps key-for-key.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        layers: tuple[int, int, int, int],
+        bn_eps: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
+        self.bn1 = _FrozenBatchNorm2d(64, eps=bn_eps)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(3, stride=2, padding=1)
+        self.layer1, c2 = _make_resnet_layer(64, 64, layers[0], 1, bn_eps)
+        self.layer2, c3 = _make_resnet_layer(c2, 128, layers[1], 2, bn_eps)
+        self.layer3, c4 = _make_resnet_layer(c3, 256, layers[2], 2, bn_eps)
+        self.layer4, c5 = _make_resnet_layer(c4, 512, layers[3], 2, bn_eps)
+        self.out_channels_list: list[int] = [c2, c3, c4, c5]
+
+    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
+        x = cast(Tensor, self.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x))))))
+        x = cast(Tensor, self.maxpool(x))
+        c2 = cast(Tensor, self.layer1(x))
+        c3 = cast(Tensor, self.layer2(c2))
+        c4 = cast(Tensor, self.layer3(c3))
+        c5 = cast(Tensor, self.layer4(c4))
+        return [c2, c3, c4, c5]
+
+
+class _FeaturePyramidNetwork(nn.Module):
+    """Reference FPN: ``inner_blocks`` (1x1 lateral) + ``layer_blocks`` (3x3).
+
+    Matches the reference module names exactly — each block is a
+    ``Sequential`` of a single ``Conv2d`` so the state-dict keys read
+    ``inner_blocks.{i}.0.weight`` / ``layer_blocks.{i}.0.weight``.  A
+    parameter-free ``LastLevelMaxPool`` appends the extra ``pool`` level
+    (kernel 1, stride 2) on top of the coarsest output.
+    """
+
+    def __init__(self, in_channels_list: list[int], out_channels: int) -> None:
+        super().__init__()
+        self.out_channels = out_channels
+        self.inner_blocks = nn.ModuleList(
+            [nn.Sequential(nn.Conv2d(ic, out_channels, 1)) for ic in in_channels_list]
+        )
+        self.layer_blocks = nn.ModuleList(
+            [
+                nn.Sequential(nn.Conv2d(out_channels, out_channels, 3, padding=1))
+                for _ in in_channels_list
+            ]
+        )
+
+    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+        """Top-down FPN over bottom-up maps (finest first) + a pool level.
+
+        Returns ``len(features) + 1`` maps: the FPN levels followed by the
+        ``LastLevelMaxPool`` output.
+        """
+        n = len(features)
+        last_inner = cast(Tensor, self.inner_blocks[n - 1](features[n - 1]))
+        results: list[Tensor] = [cast(Tensor, self.layer_blocks[n - 1](last_inner))]
+        for idx in range(n - 2, -1, -1):
+            inner_lateral = cast(Tensor, self.inner_blocks[idx](features[idx]))
+            fh = int(inner_lateral.shape[2])
+            fw = int(inner_lateral.shape[3])
+            inner_top_down = F.interpolate(last_inner, size=(fh, fw), mode="nearest")
+            last_inner = inner_lateral + inner_top_down
+            results.insert(0, cast(Tensor, self.layer_blocks[idx](last_inner)))
+        # LastLevelMaxPool: stride-2 subsample of the coarsest FPN output.
+        pool = F.max_pool2d(results[-1], kernel_size=1, stride=2, padding=0)
+        results.append(pool)
+        return results
+
+
+class _ReferenceAnchorGenerator(nn.Module):
+    """Per-level anchors matching the reference ``AnchorGenerator`` exactly.
+
+    Base anchors: ``ws = (1/sqrt(ratio)) * size``, ``hs = sqrt(ratio) * size``,
+    stacked as ``[-ws, -hs, ws, hs] / 2`` then **rounded**.  Grid shifts use
+    ``arange(0, dim) * stride`` (no half-cell offset); the ordering is
+    spatial-major / anchor-minor (``shifts[:, None] + base[None, :]``).
+    """
+
+    def __init__(
+        self,
+        sizes: tuple[tuple[int, ...], ...],
+        aspect_ratios: tuple[tuple[float, ...], ...],
+    ) -> None:
+        super().__init__()
+        self.sizes = sizes
+        self.aspect_ratios = aspect_ratios
+        self._cell_anchors: list[Tensor] = [
+            self._gen_cell_anchors(s, r) for s, r in zip(sizes, aspect_ratios)
+        ]
+
+    @staticmethod
+    def _gen_cell_anchors(scales: tuple[int, ...], ratios: tuple[float, ...]) -> Tensor:
+        rows: list[list[float]] = []
+        # Reference order: ratio outer, scale inner (w_ratios[:,None]*scales).
+        for ratio in ratios:
+            h_ratio = math.sqrt(ratio)
+            w_ratio = 1.0 / h_ratio
+            for scale in scales:
+                ws = w_ratio * float(scale)
+                hs = h_ratio * float(scale)
+                rows.append(
+                    [
+                        round(-ws / 2.0),
+                        round(-hs / 2.0),
+                        round(ws / 2.0),
+                        round(hs / 2.0),
+                    ]
+                )
+        return lucid.tensor(rows)
+
+    def num_anchors_per_location(self) -> list[int]:
+        return [len(s) * len(r) for s, r in zip(self.sizes, self.aspect_ratios)]
+
+    def _grid_anchors(
+        self, grid_size: tuple[int, int], stride: int, base: Tensor, device: str
+    ) -> Tensor:
+        gh, gw = grid_size
+        shifts: list[list[float]] = [
+            [float(c * stride), float(r * stride), float(c * stride), float(r * stride)]
+            for r in range(gh)
+            for c in range(gw)
+        ]
+        shifts_t = lucid.tensor(shifts, device=device)  # (G, 4)
+        base_dev = base.to(device=device) if base.device.type != device else base
+        grid = shifts_t[:, None, :] + base_dev[None, :, :]
+        return grid.reshape(-1, 4)
+
+    def forward(  # type: ignore[override]
+        self, feature_maps: list[Tensor], strides: list[int]
+    ) -> list[Tensor]:
+        device = feature_maps[0].device.type if feature_maps else "cpu"
+        out: list[Tensor] = []
+        for feat, base, stride in zip(feature_maps, self._cell_anchors, strides):
+            gh = int(feat.shape[2])
+            gw = int(feat.shape[3])
+            out.append(self._grid_anchors((gh, gw), stride, base, device=device))
+        return out
+
+
+def _fpn_level_for_boxes(
+    boxes: Tensor, k_min: int, k_max: int, canonical_scale: int, canonical_level: int
+) -> Tensor:
+    """Canonical FPN level assignment (eq. 1) — returns 0-based level index.
+
+    ``k = floor(canonical_level + log2(sqrt(wh) / canonical_scale) + eps)``,
+    clamped to ``[k_min, k_max]`` then shifted to a 0-based level index.
+    """
+    eps = 1e-6
+    area = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    s = area.clamp(0.0, 1e18).sqrt()
+    lvl = lucid.floor(
+        float(canonical_level) + lucid.log2(s / float(canonical_scale) + eps)
+    )
+    lvl = lvl.clamp(float(k_min), float(k_max))
+    return (lvl - float(k_min)).long()
+
+
+def multiscale_roi_align(
+    features: list[Tensor],
+    boxes: list[Tensor],
+    output_size: int,
+    spatial_scales: list[float],
+    sampling_ratio: int,
+    canonical_scale: int = 224,
+    canonical_level: int = 4,
+) -> Tensor:
+    """Pool per-image proposals from their assigned FPN level (RoI Align).
+
+    Mirrors the reference ``MultiScaleRoIAlign``: each proposal is routed to
+    one FPN level by :func:`_fpn_level_for_boxes`, RoI-aligned there with the
+    level's spatial scale, and the per-level crops are scattered back into a
+    single ``(sum(N_i), C, output_size, output_size)`` stack preserving the
+    original proposal order (image-major, then per-image proposal order).
+    """
+    num_levels = len(features)
+    C = int(features[0].shape[1])
+    dev = features[0].device.type
+
+    # Image-major proposal order (matches reference _convert_to_roi_format).
+    flat_boxes = [b for b in boxes if int(b.shape[0]) > 0]
+    if not flat_boxes:
+        return lucid.zeros((0, C, output_size, output_size), device=dev)
+    all_boxes = lucid.cat(flat_boxes, dim=0)  # (R, 4)
+    R = int(all_boxes.shape[0])
+
+    # NB: the reference ``MultiScaleRoIAlign`` calls ``roi_align`` with the
+    # default ``aligned=False`` (no half-pixel offset) — NOT ``aligned=True``.
+    if num_levels == 1:
+        return roi_align(
+            features[0],
+            [all_boxes],
+            output_size=output_size,
+            spatial_scale=spatial_scales[0],
+            sampling_ratio=sampling_ratio,
+            aligned=False,
+        )
+
+    # Per-box level assignment.  lvl_min/lvl_max derived from the scales.
+    lvl_min = int(round(-math.log2(spatial_scales[0])))
+    lvl_max = int(round(-math.log2(spatial_scales[-1])))
+    levels = _fpn_level_for_boxes(
+        all_boxes, lvl_min, lvl_max, canonical_scale, canonical_level
+    )  # (R,) 0-based
+    lvl_list: list[int] = [int(levels[i].item()) for i in range(R)]
+
+    out_rows: list[Tensor | None] = [None] * R
+    for level in range(num_levels):
+        idx = [i for i in range(R) if lvl_list[i] == level]
+        if not idx:
+            continue
+        idx_t = lucid.tensor(idx, device=dev).long()
+        boxes_lvl = all_boxes[idx_t]
+        pooled = roi_align(
+            features[level],
+            [boxes_lvl],
+            output_size=output_size,
+            spatial_scale=spatial_scales[level],
+            sampling_ratio=sampling_ratio,
+            aligned=False,
+        )  # (len(idx), C, o, o)
+        for j, orig in enumerate(idx):
+            out_rows[orig] = pooled[j : j + 1]
+
+    parts: list[Tensor] = [r for r in out_rows if r is not None]
+    return lucid.cat(parts, dim=0)

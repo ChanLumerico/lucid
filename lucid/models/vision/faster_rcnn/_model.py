@@ -3,43 +3,41 @@
 Paper: "Faster R-CNN: Towards Real-Time Object Detection with
         Region Proposal Networks"
 
-Key advance over Fast R-CNN
----------------------------
-Fast R-CNN still relies on external proposals (selective search ~2 s/image).
-Faster R-CNN introduces the Region Proposal Network (RPN), a small fully-
-convolutional network that shares the backbone feature map with the detector.
-The RPN slides over the feature map and predicts objectness + box deltas for
-k anchors at each spatial position.  This makes the full pipeline end-to-end
-trainable at ~5 fps (VGG16) or ~17 fps (ZFNet).
+This module implements the **ResNet-50-FPN** two-stage detector — the
+modern reference configuration shipped with the COCO ``box AP 37.0``
+checkpoint — rather than the original VGG16 single-scale design.  The
+submodule layout mirrors the reference detector verbatim so the COCO
+checkpoint loads strict:
 
-Architecture
-------------
   Image (B, C, H, W)
-    ↓  VGG16 backbone (conv1_1 … conv5_3, stride 16, no pool5)
-  Feature map (B, 512, H/16, W/16)
-    ├─ RPN head: 3×3 conv → cls (2k) + bbox (4k) per spatial cell
-    │    Anchors at 3 scales × 3 ratios = 9 per cell
-    │    → NMS → top-N proposals per image
+    ↓  ResNet-50 backbone (frozen BN, eps=0) → C2, C3, C4, C5
+    ↓  FPN: 1×1 lateral (``inner_blocks``) + top-down nearest add +
+           3×3 output (``layer_blocks``) + LastLevelMaxPool ("pool")
+  [P2, P3, P4, P5, pool]
+    ├─ RPN head (3×3 conv + ReLU → cls_logits + bbox_pred), 3 anchors/cell
+    │    sizes ((32,),(64,),(128,),(256,),(512,)), ratios (0.5,1,2)
+    │    → per-level top-k → decode → clip → NMS 0.7 → top-1000 proposals
     │
-    └─ RoI Pool (7×7) on proposals
+    └─ MultiScale RoI Align (7×7, sampling_ratio=2, aligned) over P2-P5
+         ↓  FPN level-assignment k = floor(4 + log2(sqrt(wh)/224)), k∈[2,5]
+       TwoMLPHead: fc6 (256·7·7 → 1024) → fc7 (1024 → 1024)
          ↓
-       FC head (fc6 4096, fc7 4096)
-         ↓
-       cls_score (K+1)  +  bbox_pred (K×4)
-
-Training uses alternating / approximate joint optimisation.
-Loss = L_rpn_cls + L_rpn_reg + L_det_cls + L_det_reg
+       FastRCNNPredictor: cls_score (1024 → 91) + bbox_pred (1024 → 91·4)
+         ↓  softmax, per-class decode (10,10,5,5), clip, NMS 0.5, top-100
 
 Faithfulness notes
 ------------------
-* VGG16 backbone identical to Fast R-CNN (conv1_1–conv5_3, pool5 removed).
-* Anchors: 9 per cell (3 scales × 3 ratios); default scales 128/256/512,
-  ratios 0.5/1.0/2.0 matching paper §3.1.
-* RPN anchor stride = backbone stride = 16.
-* RPN NMS threshold 0.7 (proposal generation), detection NMS 0.5 (per-class).
-* Smooth-L1 loss with σ=3 for RPN, σ=1 for RoI head (paper §3.1.2 / §3.2).
-* RPN: positive anchor if IoU ≥ 0.7 with any GT, negative if < 0.3.
-* RoI head: proposal assigned positive if IoU ≥ 0.5 with any GT.
+* Backbone batch-norm is **frozen** (eval-only affine + running-stat math,
+  no ``num_batches_tracked``) with ``eps = 0`` matching the reference
+  detection ``FrozenBatchNorm2d``.
+* FPN adds a parameter-free ``LastLevelMaxPool`` 5th level fed only to RPN.
+* RPN box-coder weights are ``(1, 1, 1, 1)``; RoI box-coder weights are
+  ``(10, 10, 5, 5)``.
+* The detector accepts an already-resized + normalised image batch (the
+  reference ``GeneralizedRCNNTransform`` normalisation / resize is a
+  :class:`~lucid.utils.transforms.Detection` preset that runs outside the
+  model).  ``forward`` returns raw RoI-head outputs and ``postprocess``
+  produces the final per-image detections.
 """
 
 from typing import ClassVar, cast
@@ -51,187 +49,143 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import ObjectDetectionOutput
 from lucid.models._utils._detection import (
-    AnchorGenerator,
+    _FeaturePyramidNetwork,
+    _ReferenceAnchorGenerator,
+    _ResNetBody,
     batched_nms,
-    box_iou,
     clip_boxes_to_image,
     decode_boxes,
-    encode_boxes,
+    multiscale_roi_align,
+    nms,
     remove_small_boxes,
-    roi_pool,
 )
 from lucid.models.vision.faster_rcnn._config import FasterRCNNConfig
 
 # ---------------------------------------------------------------------------
-# Smooth-L1 (reused from Fast R-CNN; σ configurable)
+# Backbone with FPN  (key prefix: ``backbone.body.*`` / ``backbone.fpn.*``)
 # ---------------------------------------------------------------------------
 
 
-def _smooth_l1(x: Tensor, sigma: float = 1.0) -> Tensor:
-    sigma2 = sigma * sigma
-    abs_x: Tensor = lucid.abs(x)
-    cond: Tensor = abs_x < (1.0 / sigma2)
-    return lucid.where(cond, 0.5 * sigma2 * x * x, abs_x - 0.5 / sigma2)
+class _BackboneWithFPN(nn.Module):
+    """ResNet trunk (``body``) feeding a Feature Pyramid Network (``fpn``).
 
+    Submodule names mirror the reference so the converter is a pure
+    identity map for every backbone key.
+    """
 
-# ---------------------------------------------------------------------------
-# VGG16 backbone  (identical to Fast R-CNN backbone)
-# ---------------------------------------------------------------------------
-
-
-def _vgg_block(in_ch: int, out_ch: int, n: int) -> list[nn.Module]:
-    layers: list[nn.Module] = []
-    for i in range(n):
-        layers += [
-            nn.Conv2d(in_ch if i == 0 else out_ch, out_ch, 3, padding=1),
-            nn.ReLU(inplace=True),
-        ]
-    return layers
-
-
-class _VGG16Features(nn.Module):
-    """VGG16 conv1_1 … conv5_3 (pool5 omitted).  Output stride = 16."""
-
-    def __init__(self, in_channels: int) -> None:
+    def __init__(
+        self,
+        in_channels: int,
+        layers: tuple[int, int, int, int],
+        fpn_out_channels: int,
+        bn_eps: float,
+    ) -> None:
         super().__init__()
-        self.features = nn.Sequential(
-            *_vgg_block(in_channels, 64, 2),
-            nn.MaxPool2d(2, stride=2),
-            *_vgg_block(64, 128, 2),
-            nn.MaxPool2d(2, stride=2),
-            *_vgg_block(128, 256, 3),
-            nn.MaxPool2d(2, stride=2),
-            *_vgg_block(256, 512, 3),
-            nn.MaxPool2d(2, stride=2),
-            *_vgg_block(512, 512, 3),
-        )
-        self.out_channels: int = 512
+        self.body = _ResNetBody(in_channels, layers, bn_eps=bn_eps)
+        self.fpn = _FeaturePyramidNetwork(self.body.out_channels_list, fpn_out_channels)
+        self.out_channels = fpn_out_channels
 
-    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.features(x))
+    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
+        c_feats = cast(list[Tensor], self.body(x))  # [C2, C3, C4, C5]
+        return self.fpn.forward(c_feats)  # [P2, P3, P4, P5, pool]
 
 
 # ---------------------------------------------------------------------------
-# RPN head
+# RPN  (key prefix: ``rpn.head.conv.0.0`` / ``rpn.head.cls_logits`` / ...)
 # ---------------------------------------------------------------------------
 
 
 class _RPNHead(nn.Module):
-    """Lightweight RPN head: 3×3 conv → objectness + bbox deltas.
+    """RPN head: shared 3×3 conv + ReLU, then cls / bbox 1×1 sibling convs.
 
-    Applied to the shared backbone feature map.  For each spatial cell
-    the head predicts:
-      - 2 × k objectness scores (fg / bg) — we use sigmoid and return
-        the foreground score
-      - 4 × k bbox deltas
-
-    where k = len(anchor_sizes) × len(anchor_ratios) = 9 by default.
+    The conv is wrapped in a ``Sequential`` of a ``Sequential`` so the
+    state-dict keys read ``conv.0.0.weight`` (reference
+    ``Conv2dNormActivation`` with no norm), matching exactly.
     """
 
     def __init__(self, in_channels: int, num_anchors: int) -> None:
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, in_channels, 3, padding=1)
-        self.cls_logits = nn.Conv2d(in_channels, num_anchors, 1)  # objectness
-        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)  # deltas
+        self.conv = nn.Sequential(
+            nn.Sequential(nn.Conv2d(in_channels, in_channels, 3, padding=1))
+        )
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, 1)
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, 1)
+
+    def forward(  # type: ignore[override]
+        self, features: list[Tensor]
+    ) -> tuple[list[Tensor], list[Tensor]]:
+        logits: list[Tensor] = []
+        bbox: list[Tensor] = []
+        for feat in features:
+            t = F.relu(cast(Tensor, self.conv(feat)))
+            logits.append(cast(Tensor, self.cls_logits(t)))
+            bbox.append(cast(Tensor, self.bbox_pred(t)))
+        return logits, bbox
+
+
+class _RegionProposalNetwork(nn.Module):
+    """Region Proposal Network — ``head`` + anchor-based proposal layer.
+
+    Holds only the parametric ``head``; the anchor generator and proposal
+    filtering are stateless helpers driven by the parent config.
+    """
+
+    def __init__(self, in_channels: int, num_anchors: int) -> None:
+        super().__init__()
+        self.head = _RPNHead(in_channels, num_anchors)
+
+
+# ---------------------------------------------------------------------------
+# RoI heads  (key prefix: ``roi_heads.box_head.*`` / ``roi_heads.box_predictor.*``)
+# ---------------------------------------------------------------------------
+
+
+class _TwoMLPHead(nn.Module):
+    """Reference ``TwoMLPHead``: flatten → fc6 → ReLU → fc7 → ReLU."""
+
+    def __init__(self, in_channels: int, representation_size: int) -> None:
+        super().__init__()
+        self.fc6 = nn.Linear(in_channels, representation_size)
+        self.fc7 = nn.Linear(representation_size, representation_size)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = x.flatten(1)
+        x = F.relu(cast(Tensor, self.fc6(x)))
+        x = F.relu(cast(Tensor, self.fc7(x)))
+        return x
+
+
+class _FastRCNNPredictor(nn.Module):
+    """Reference ``FastRCNNPredictor``: sibling cls_score + bbox_pred."""
+
+    def __init__(self, in_channels: int, num_classes: int) -> None:
+        super().__init__()
+        self.cls_score = nn.Linear(in_channels, num_classes)
+        self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
 
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        t: Tensor = F.relu(cast(Tensor, self.conv(x)))
-        return cast(Tensor, self.cls_logits(t)), cast(Tensor, self.bbox_pred(t))
+        return cast(Tensor, self.cls_score(x)), cast(Tensor, self.bbox_pred(x))
 
 
-# ---------------------------------------------------------------------------
-# RPN proposal generation
-# ---------------------------------------------------------------------------
+class _RoIHeads(nn.Module):
+    """RoI heads container — ``box_head`` (TwoMLPHead) + ``box_predictor``."""
 
-
-def _generate_proposals(
-    logits: Tensor,
-    deltas: Tensor,
-    anchors: Tensor,
-    image_size: tuple[int, int],
-    pre_nms_top_n: int,
-    post_nms_top_n: int,
-    nms_thresh: float,
-    min_size: float,
-    score_thresh: float,
-    bbox_weights: tuple[float, float, float, float],
-) -> tuple[Tensor, Tensor]:
-    """Generate proposals for a single image from one feature level.
-
-    Args:
-        logits:  (A,) objectness logits (A = H*W*k anchors).
-        deltas:  (A, 4) bbox regression deltas.
-        anchors: (A, 4) xyxy anchors.
-
-    Returns:
-        (proposals, scores): (K, 4) and (K,) after NMS.
-    """
-    scores = F.sigmoid(logits)  # (A,)
-
-    # Top-K before NMS
-    K = min(pre_nms_top_n, int(scores.shape[0]))
-    order = lucid.argsort(-scores)[:K]
-    scores = scores[order]
-    deltas = deltas[order]
-    anchors = anchors[order]
-
-    # Decode
-    dev = logits.device.type
-    props = decode_boxes(deltas, anchors, bbox_weights)
-    props = clip_boxes_to_image(props, image_size)
-
-    # Remove tiny boxes
-    keep_small = remove_small_boxes(props, min_size)
-    if int(keep_small.shape[0]) == 0:
-        return lucid.zeros((0, 4), device=dev), lucid.zeros((0,), device=dev)
-    props = props[keep_small]
-    scores = scores[keep_small]
-
-    # Score threshold
-    thr_mask: list[int] = [
-        i
-        for i in range(int(scores.shape[0]))
-        if float(scores[i].item()) >= score_thresh
-    ]
-    if not thr_mask:
-        return lucid.zeros((0, 4), device=dev), lucid.zeros((0,), device=dev)
-    thr_t = lucid.tensor(thr_mask, device=dev).long()
-    props = props[thr_t]
-    scores = scores[thr_t]
-
-    # NMS
-    keep = batched_nms(
-        props,
-        scores,
-        lucid.zeros(int(scores.shape[0]), device=dev),
-        nms_thresh,
-    )
-    keep = keep[:post_nms_top_n]
-    return props[keep], scores[keep]
-
-
-# ---------------------------------------------------------------------------
-# RoI head  (identical to Fast R-CNN _FastRCNNHead)
-# ---------------------------------------------------------------------------
-
-
-class _RoIHead(nn.Module):
     def __init__(
-        self, in_channels: int, roi_size: int, num_classes: int, dropout: float
+        self,
+        in_channels: int,
+        roi_size: int,
+        representation_size: int,
+        num_classes: int,
     ) -> None:
         super().__init__()
-        flat = in_channels * roi_size * roi_size
-        self.fc6 = nn.Linear(flat, 4096)
-        self.fc7 = nn.Linear(4096, 4096)
-        self.drop = nn.Dropout(p=dropout)
-        self.cls_score = nn.Linear(4096, num_classes + 1)
-        self.bbox_pred = nn.Linear(4096, num_classes * 4)
+        self.box_head = _TwoMLPHead(
+            in_channels * roi_size * roi_size, representation_size
+        )
+        self.box_predictor = _FastRCNNPredictor(representation_size, num_classes)
 
-    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
-        x = x.flatten(1)
-        x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc6(x)))))
-        x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc7(x)))))
-        return cast(Tensor, self.cls_score(x)), cast(Tensor, self.bbox_pred(x))
+    def forward(self, roi_feats: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        feats = cast(Tensor, self.box_head(roi_feats))
+        return cast(tuple[Tensor, Tensor], self.box_predictor(feats))
 
 
 # ---------------------------------------------------------------------------
@@ -240,415 +194,190 @@ class _RoIHead(nn.Module):
 
 
 class FasterRCNNForObjectDetection(PretrainedModel):
-    r"""Faster R-CNN end-to-end object detector (Ren et al., NeurIPS 2015).
+    r"""Faster R-CNN with a ResNet-50-FPN backbone (Ren et al., NeurIPS 2015).
 
-    Folds region proposal generation into the network via the Region
-    Proposal Network (RPN), eliminating the external selective-search
-    bottleneck of R-CNN / Fast R-CNN.  The RPN shares the backbone feature
-    map with the detection head: at every spatial location it predicts
-    objectness scores and bounding-box deltas for :math:`k = |\mathrm{sizes}|
-    \times |\mathrm{ratios}|` anchors, applies NMS to retain the
-    ``post_nms_top_n`` highest-scoring proposals, and forwards them to
-    the Fast R-CNN-style RoI head for class-specific classification and
-    box refinement.  The pipeline is end-to-end trainable with a four-term
-    loss
-
-    .. math::
-
-        L = L^{\mathrm{rpn}}_{\mathrm{cls}} + L^{\mathrm{rpn}}_{\mathrm{loc}}
-            + L^{\mathrm{det}}_{\mathrm{cls}} + L^{\mathrm{det}}_{\mathrm{loc}}.
+    The two-stage anchor-based detector in its modern reference
+    configuration: a ResNet-50 trunk with frozen batch-norm feeds a
+    Feature Pyramid Network, a Region Proposal Network emits per-image
+    proposals from five pyramid levels, and a Fast R-CNN-style RoI head
+    classifies + refines RoI-aligned crops.  The submodule layout mirrors
+    the reference detector so the COCO ``box AP 37.0`` checkpoint loads
+    strict and reproduces inference.
 
     Parameters
     ----------
     config : FasterRCNNConfig
-        Frozen architecture spec.  Use the :func:`faster_rcnn` factory for
-        the paper-cited VGG16 configuration (3-scale, 3-ratio anchors at
-        stride 16; 2000 / 1000 pre/post-NMS proposals at training time).
+        Frozen architecture spec.  Use the :func:`faster_rcnn_resnet50_fpn`
+        factory for the COCO-pretrained configuration (``num_classes = 91``).
 
     Attributes
     ----------
     config : FasterRCNNConfig
         Stored copy of the config that built this model.
-    backbone : _VGG16Features
-        Shared VGG16 conv1_1 .. conv5_3 trunk producing a stride-16
-        feature map :math:`(B, 512, H/16, W/16)`.
-    rpn_head : _RPNHead
-        3x3 conv + sibling 1x1 conv heads for objectness logits
-        (``B, k, fH, fW``) and per-anchor box deltas (``B, 4k, fH, fW``).
-    roi_head : _RoIHead
-        Fast R-CNN-style head: RoI Pool (7x7) -> ``fc6`` -> ``fc7`` ->
-        sibling class (K + 1) and class-specific box (4K) outputs.
-    _anchor_gen : AnchorGenerator
-        Anchor box generator with ``sizes`` x ``ratios`` boxes per cell;
-        produces :math:`fH \cdot fW \cdot k` reference boxes per image.
+    backbone : _BackboneWithFPN
+        ResNet-50 ``body`` + ``fpn`` producing five feature maps
+        ``[P2, P3, P4, P5, pool]`` at strides ``4/8/16/32/64``.
+    rpn : _RegionProposalNetwork
+        Proposal head shared across all pyramid levels.
+    roi_heads : _RoIHeads
+        ``box_head`` (TwoMLPHead) + ``box_predictor`` (FastRCNNPredictor).
 
     Notes
     -----
     See Ren et al., "Faster R-CNN: Towards Real-Time Object Detection with
-    Region Proposal Networks", NeurIPS 2015 (arXiv:1506.01497).  The
-    Region Proposal Network performs anchor-based regression: for each
-    anchor :math:`A`, the predicted offset :math:`(t_x, t_y, t_w, t_h)`
-    decodes to a proposal
-
-    .. math::
-
-        \begin{aligned}
-            \hat{G}_x &= A_w t_x + A_x, & \hat{G}_w &= A_w \exp(t_w), \\
-            \hat{G}_y &= A_h t_y + A_y, & \hat{G}_h &= A_h \exp(t_h).
-        \end{aligned}
-
-    The RPN is trained with binary cross-entropy on objectness and
-    smooth-:math:`L_1` on box deltas; anchors with IoU :math:`\geq`
-    ``rpn_fg_iou_thresh`` are positive and IoU :math:`<` ``rpn_bg_iou_thresh``
-    are negative.  Detection head losses match Fast R-CNN.  Default
-    ``bbox_reg_weights = (10, 10, 5, 5)`` matches the reference Caffe
-    implementation.
+    Region Proposal Networks", NeurIPS 2015 (arXiv:1506.01497) and Lin et
+    al., "Feature Pyramid Networks for Object Detection", CVPR 2017.  The
+    model expects an already resized + normalised image batch; final
+    detections come from :meth:`postprocess`.
 
     Examples
     --------
-    Run inference with internal proposal generation (no external proposals
-    required):
-
     >>> import lucid
-    >>> from lucid.models.vision.faster_rcnn import faster_rcnn
-    >>> model = faster_rcnn(num_classes=80)
-    >>> x = lucid.randn(1, 3, 800, 800)
+    >>> from lucid.models.vision.faster_rcnn import faster_rcnn_resnet50_fpn
+    >>> model = faster_rcnn_resnet50_fpn()
+    >>> model.eval()
+    >>> x = lucid.randn(1, 3, 224, 224)
     >>> out = model(x)
-    >>> out.logits.shape[-1]   # K + 1
-    81
-
-    Training pass with ground-truth targets (computes RPN + detection
-    multi-task loss):
-
-    >>> targets = [{
-    ...     "boxes":  lucid.tensor([[100.0, 100.0, 400.0, 400.0]]),
-    ...     "labels": lucid.tensor([5], dtype=lucid.int64),
-    ... }]
-    >>> out = model(x, targets=targets)
-    >>> out.loss.shape
-    ()
+    >>> out.logits.shape[-1]   # num_classes
+    91
+    >>> dets = model.postprocess(out, image_sizes=[(224, 224)])
+    >>> sorted(dets[0].keys())
+    ['boxes', 'labels', 'scores']
     """
 
     config_class: ClassVar[type[FasterRCNNConfig]] = FasterRCNNConfig
     base_model_prefix: ClassVar[str] = "faster_rcnn"
 
+    # FPN level strides: P2..P5 then the pool level.
+    _strides: ClassVar[tuple[int, ...]] = (4, 8, 16, 32, 64)
+
     def __init__(self, config: FasterRCNNConfig) -> None:
         super().__init__(config)
         self._cfg = config
 
-        # Backbone
-        self.backbone = _VGG16Features(config.in_channels)
+        self.backbone = _BackboneWithFPN(
+            in_channels=config.in_channels,
+            layers=config.backbone_layers,
+            fpn_out_channels=config.fpn_out_channels,
+            bn_eps=config.backbone_bn_eps,
+        )
         C = self.backbone.out_channels
 
-        # Anchors
-        k = len(config.rpn_anchor_sizes) * len(config.rpn_anchor_ratios)
-        self._num_anchors = k
-        self._anchor_gen = AnchorGenerator(
-            sizes=(tuple(config.rpn_anchor_sizes),),
-            aspect_ratios=(tuple(config.rpn_anchor_ratios),),
+        num_anchors = len(config.rpn_anchor_ratios)  # 1 scale per level x ratios
+        self._num_anchors = num_anchors
+        self.rpn = _RegionProposalNetwork(C, num_anchors)
+
+        # One anchor size per FPN level (5 levels including pool).
+        sizes: tuple[tuple[int, ...], ...] = tuple(
+            (s,) for s in config.rpn_anchor_sizes
         )
+        ratios: tuple[tuple[float, ...], ...] = tuple(
+            tuple(config.rpn_anchor_ratios) for _ in config.rpn_anchor_sizes
+        )
+        self._anchor_gen = _ReferenceAnchorGenerator(sizes, ratios)
 
-        # RPN head
-        self.rpn_head = _RPNHead(C, k)
-
-        # RoI head
-        self.roi_head = _RoIHead(
+        self.roi_heads = _RoIHeads(
             in_channels=C,
             roi_size=config.roi_size,
+            representation_size=config.roi_representation_size,
             num_classes=config.num_classes,
-            dropout=config.dropout,
         )
 
     # ------------------------------------------------------------------
     # RPN proposal generation (inference)
     # ------------------------------------------------------------------
 
-    def _run_rpn(
+    def _rpn_proposals(
         self,
-        feat: Tensor,
+        logits: list[Tensor],
+        deltas: list[Tensor],
+        anchors: list[Tensor],
         image_size: tuple[int, int],
-    ) -> tuple[list[Tensor], list[Tensor]]:
-        """Run RPN on a batched feature map and return per-image proposals.
+    ) -> list[Tensor]:
+        """Decode + filter RPN predictions into per-image proposals.
 
-        Args:
-            feat:       (B, C, H', W') shared backbone feature map.
-            image_size: (H, W) of original image (for clipping).
-
-        Returns:
-            (proposals, scores): lists of length B.
+        Mirrors the reference ``filter_proposals``: per-level top-k pre-NMS
+        selection, decode, clip, small-box removal, score threshold, then
+        per-level (class-offset) NMS and a post-NMS top-k.
         """
-        B = int(feat.shape[0])
-        fH = int(feat.shape[2])
-        fW = int(feat.shape[3])
-        stride = 16  # VGG16 backbone stride
+        B = int(logits[0].shape[0])
+        cfg = self._cfg
+        dev = logits[0].device.type
 
-        # Generate anchors for this feature level
-        anchors_lvl: list[Tensor] = self._anchor_gen.forward(
-            [feat], image_size, [(stride, stride)]
-        )
-        anchors = anchors_lvl[0]  # (fH*fW*k, 4)
+        # Flatten each level to (B, H*W*A, C) in spatial-major / anchor-minor
+        # order so it lines up with the anchor grid.
+        per_level_scores: list[Tensor] = []
+        per_level_deltas: list[Tensor] = []
+        level_sizes: list[int] = []
+        for lg, dl in zip(logits, deltas):
+            A = int(lg.shape[1])
+            fH = int(lg.shape[2])
+            fW = int(lg.shape[3])
+            sc = lg.permute(0, 2, 3, 1).reshape(B, fH * fW * A)  # (B, N_l)
+            dlf = (
+                dl.reshape(B, A, 4, fH, fW)
+                .permute(0, 3, 4, 1, 2)
+                .reshape(B, fH * fW * A, 4)
+            )
+            per_level_scores.append(sc)
+            per_level_deltas.append(dlf)
+            level_sizes.append(fH * fW * A)
 
-        # RPN head predictions
-        logits_map, deltas_map = self.rpn_head(feat)
-        # logits_map: (B, k, fH, fW)
-        # deltas_map: (B, 4k, fH, fW)
-
-        proposals_all: list[Tensor] = []
-        scores_all: list[Tensor] = []
-        k = self._num_anchors
-
+        proposals: list[Tensor] = []
         for b in range(B):
-            # Flatten logits/deltas to spatial-major order to match AnchorGenerator
-            # AnchorGenerator produces (fH*fW*k, 4) in row-major cell order.
-            # logits_map: (k, fH, fW) → permute(1,2,0) → (fH, fW, k) → (fH*fW*k,)
-            # deltas_map: (4k, fH, fW) → reshape(k,4,fH,fW) → permute(2,3,0,1)
-            #             → (fH, fW, k, 4) → (fH*fW*k, 4)
-            lg_b = logits_map[b].permute(1, 2, 0).reshape(-1)  # (fH*fW*k,)
-            dl_b = (
-                deltas_map[b].reshape(k, 4, fH, fW).permute(2, 3, 0, 1).reshape(-1, 4)
-            )  # (fH*fW*k, 4)
+            boxes_parts: list[Tensor] = []
+            scores_parts: list[Tensor] = []
+            levels_parts: list[Tensor] = []
+            for lvl in range(len(logits)):
+                sc_b = per_level_scores[lvl][b]  # (N_l,)
+                dl_b = per_level_deltas[lvl][b]  # (N_l, 4)
+                anc = anchors[lvl]  # (N_l, 4)
 
-            props_b, sc_b = _generate_proposals(
-                lg_b,
-                dl_b,
-                anchors,
-                image_size,
-                pre_nms_top_n=self._cfg.rpn_pre_nms_top_n,
-                post_nms_top_n=self._cfg.rpn_post_nms_top_n,
-                nms_thresh=self._cfg.rpn_nms_thresh,
-                min_size=self._cfg.rpn_min_size,
-                score_thresh=self._cfg.rpn_score_thresh,
-                bbox_weights=(1.0, 1.0, 1.0, 1.0),  # RPN uses unweighted targets
-            )
-            proposals_all.append(props_b)
-            scores_all.append(sc_b)
+                K = min(cfg.rpn_pre_nms_top_n, int(sc_b.shape[0]))
+                top_idx = lucid.argsort(-sc_b)[:K]
+                sc_t = sc_b[top_idx]
+                dl_t = dl_b[top_idx]
+                anc_t = anc[top_idx]
 
-        return proposals_all, scores_all
-
-    # ------------------------------------------------------------------
-    # RPN training loss
-    # ------------------------------------------------------------------
-
-    def _rpn_loss(
-        self,
-        feat: Tensor,
-        image_size: tuple[int, int],
-        targets: list[dict[str, Tensor]],
-    ) -> Tensor:
-        """Compute RPN classification + regression loss.
-
-        Anchor assignment:
-          IoU ≥ rpn_fg_iou_thresh → positive (label 1)
-          IoU < rpn_bg_iou_thresh → negative (label 0)
-          otherwise              → ignored  (label -1)
-
-        Sampling: up to 256 anchors per image (50% positive if available).
-        """
-        B = int(feat.shape[0])
-        fH = int(feat.shape[2])
-        fW = int(feat.shape[3])
-        stride = 16
-
-        anchors_lvl = self._anchor_gen.forward([feat], image_size, [(stride, stride)])
-        anchors = anchors_lvl[0]  # (A, 4)
-        A = int(anchors.shape[0])
-
-        logits_map, deltas_map = self.rpn_head(feat)
-        k = self._num_anchors
-
-        cls_losses: list[Tensor] = []
-        reg_losses: list[Tensor] = []
-
-        dev = feat.device.type
-
-        for b in range(B):
-            gt_boxes = targets[b]["boxes"]  # (M, 4)
-            M = int(gt_boxes.shape[0])
-
-            # Spatial-major ordering to match AnchorGenerator
-            lg_b = logits_map[b].permute(1, 2, 0).reshape(-1)
-            dl_b = (
-                deltas_map[b].reshape(k, 4, fH, fW).permute(2, 3, 0, 1).reshape(-1, 4)
-            )
-
-            if M == 0:
-                # No GT — all negatives
-                neg_mask: list[int] = list(range(min(256, A)))
-                neg_t = lucid.tensor(neg_mask, device=dev).long()
-                lbl_neg = lucid.zeros((len(neg_mask),), device=dev)
-                cls_losses.append(
-                    F.binary_cross_entropy_with_logits(lg_b[neg_t], lbl_neg)
+                props = decode_boxes(dl_t, anc_t, (1.0, 1.0, 1.0, 1.0))
+                props = clip_boxes_to_image(props, image_size)
+                boxes_parts.append(props)
+                scores_parts.append(F.sigmoid(sc_t))
+                levels_parts.append(
+                    lucid.full((int(sc_t.shape[0]),), float(lvl), device=dev)
                 )
+
+            boxes_b = lucid.cat(boxes_parts, dim=0)
+            scores_b = lucid.cat(scores_parts, dim=0)
+            lvls_b = lucid.cat(levels_parts, dim=0)
+
+            keep_small = remove_small_boxes(boxes_b, cfg.rpn_min_size)
+            if int(keep_small.shape[0]) == 0:
+                proposals.append(lucid.zeros((0, 4), device=dev))
                 continue
+            boxes_b = boxes_b[keep_small]
+            scores_b = scores_b[keep_small]
+            lvls_b = lvls_b[keep_small]
 
-            iou_mat = box_iou(anchors, gt_boxes)  # (A, M)
+            if cfg.rpn_score_thresh > 0.0:
+                mask = [
+                    i
+                    for i in range(int(scores_b.shape[0]))
+                    if float(scores_b[i].item()) >= cfg.rpn_score_thresh
+                ]
+                if not mask:
+                    proposals.append(lucid.zeros((0, 4), device=dev))
+                    continue
+                m_t = lucid.tensor(mask, device=dev).long()
+                boxes_b = boxes_b[m_t]
+                scores_b = scores_b[m_t]
+                lvls_b = lvls_b[m_t]
 
-            # Vectorised reductions: device-side argmax/max, then a single bulk
-            # materialisation each.  Replaces 2 × A × M ``.item()`` syncs with
-            # ~ 2A + M syncs.
-            best_gt_t = lucid.argmax(iou_mat, dim=1)  # (A,) int — best GT per anchor
-            best_iou_t = iou_mat.max(dim=1)  # (A,)
-            best_anc_t = lucid.argmax(iou_mat, dim=0)  # (M,) int — best anchor per GT
+            keep = batched_nms(boxes_b, scores_b, lvls_b, cfg.rpn_nms_thresh)
+            keep = keep[: cfg.rpn_post_nms_top_n]
+            proposals.append(boxes_b[keep])
 
-            best_iou_list: list[float] = [float(best_iou_t[a].item()) for a in range(A)]
-            best_gt_list: list[int] = [int(best_gt_t[a].item()) for a in range(A)]
-            best_anchor_for_gt: list[int] = [
-                int(best_anc_t[m].item()) for m in range(M)
-            ]
-
-            labels: list[int] = []
-            for a in range(A):
-                iou_v = best_iou_list[a]
-                if iou_v >= self._cfg.rpn_fg_iou_thresh:
-                    labels.append(1)
-                elif iou_v < self._cfg.rpn_bg_iou_thresh:
-                    labels.append(0)
-                else:
-                    labels.append(-1)
-            for anc_idx in best_anchor_for_gt:
-                labels[anc_idx] = 1
-
-            # Sample up to 256 (128 pos + 128 neg)
-            pos_idx = [a for a in range(A) if labels[a] == 1]
-            neg_idx = [a for a in range(A) if labels[a] == 0]
-            pos_idx = pos_idx[:128]
-            neg_idx = neg_idx[: max(0, 256 - len(pos_idx))]
-
-            sampled = pos_idx + neg_idx
-            if not sampled:
-                continue
-
-            samp_t = lucid.tensor(sampled, device=dev).long()
-            lbl_samp = lucid.tensor([labels[a] for a in sampled], device=dev)
-
-            # Classification loss (binary cross-entropy objectness)
-            cls_losses.append(
-                F.binary_cross_entropy_with_logits(
-                    lg_b[samp_t].float(), lbl_samp.float()
-                )
-            )
-
-            # Regression loss (positive anchors only)
-            if pos_idx:
-                pos_t = lucid.tensor(pos_idx, device=dev).long()
-                gt_pos = lucid.tensor(
-                    [
-                        [float(gt_boxes[best_gt_list[a], k2].item()) for k2 in range(4)]
-                        for a in pos_idx
-                    ],
-                    device=dev,
-                )
-                tgt_deltas = encode_boxes(gt_pos, anchors[pos_t], (1.0, 1.0, 1.0, 1.0))
-                pred_d = dl_b[pos_t]
-                reg_losses.append(_smooth_l1(pred_d - tgt_deltas, sigma=3.0).mean())
-
-        cls_loss = (
-            lucid.cat([l.reshape(1) for l in cls_losses]).mean()
-            if cls_losses
-            else lucid.zeros((1,), device=dev)
-        )
-        reg_loss = (
-            lucid.cat([l.reshape(1) for l in reg_losses]).mean()
-            if reg_losses
-            else lucid.zeros((1,), device=dev)
-        )
-        return cls_loss + reg_loss
-
-    # ------------------------------------------------------------------
-    # RoI head training loss  (same as Fast R-CNN)
-    # ------------------------------------------------------------------
-
-    def _roi_loss(
-        self,
-        proposals: list[Tensor],
-        all_logits: Tensor,
-        all_deltas: Tensor,
-        targets: list[dict[str, Tensor]],
-    ) -> Tensor:
-        K = self._cfg.num_classes
-        N_total = int(all_deltas.shape[0])
-        dev = all_logits.device.type
-
-        all_cls: list[Tensor] = []
-        all_reg_tgt: list[Tensor] = []
-        all_reg_wt: list[Tensor] = []
-
-        for b, (props, tgt) in enumerate(zip(proposals, targets)):
-            N_i = int(props.shape[0])
-            gt_b = tgt["boxes"]  # (M, 4)
-            lb_b = tgt["labels"]  # (M,)
-            M = int(gt_b.shape[0])
-
-            if M == 0:
-                all_cls.append(lucid.zeros((N_i,), device=dev))
-                all_reg_tgt.append(lucid.zeros((N_i, 4), device=dev))
-                all_reg_wt.append(lucid.zeros((N_i,), device=dev))
-                continue
-
-            iou_mat = box_iou(props, gt_b)  # (N_i, M)
-
-            labels_list: list[int] = []
-            # Vectorised: argmax + max over GT axis.
-            best_g_t = lucid.argmax(iou_mat, dim=1)  # (N_i,)
-            best_v_t = iou_mat.max(dim=1)  # (N_i,)
-            best_v_list: list[float] = [float(best_v_t[n].item()) for n in range(N_i)]
-            best_gt: list[int] = [int(best_g_t[n].item()) for n in range(N_i)]
-            for n in range(N_i):
-                best_v = best_v_list[n]
-                if best_v >= self._cfg.roi_fg_iou_thresh:
-                    labels_list.append(int(lb_b[best_gt[n]].item()))
-                elif best_v < self._cfg.roi_bg_iou_thresh:
-                    labels_list.append(0)
-                else:
-                    labels_list.append(-1)
-
-            matched_boxes_data = [
-                [float(gt_b[best_gt[n], k2].item()) for k2 in range(4)]
-                for n in range(N_i)
-            ]
-            matched_boxes = lucid.tensor(matched_boxes_data, device=dev)
-            reg_tgt = encode_boxes(matched_boxes, props, self._cfg.bbox_reg_weights)
-
-            lbl_t = lucid.tensor(labels_list, device=dev)
-            wt_t = lucid.tensor(
-                [1.0 if l > 0 else 0.0 for l in labels_list],
-                device=dev,
-            )
-
-            all_cls.append(lbl_t)
-            all_reg_tgt.append(reg_tgt)
-            all_reg_wt.append(wt_t)
-
-        cls_labels = lucid.cat(all_cls, dim=0)  # (N_total,)
-        reg_targets = lucid.cat(all_reg_tgt, dim=0)  # (N_total, 4)
-        reg_weights = lucid.cat(all_reg_wt, dim=0)  # (N_total,)
-
-        valid_idx: list[int] = [
-            n for n in range(N_total) if int(cls_labels[n].item()) >= 0
-        ]
-        if not valid_idx:
-            return lucid.zeros((1,), device=dev)
-        valid_t = lucid.tensor(valid_idx, device=dev).long()
-        cls_loss = F.cross_entropy(all_logits[valid_t], cls_labels[valid_t])
-
-        # Regression loss (foreground proposals only)
-        deltas_3d = all_deltas.reshape(N_total, K, 4)
-        reg_parts: list[Tensor] = []
-        for n in range(N_total):
-            if float(reg_weights[n].item()) == 0.0:
-                continue
-            c = max(0, min(int(cls_labels[n].item()) - 1, K - 1))
-            pred_d = deltas_3d[n, c]
-            tgt_d = reg_targets[n]
-            reg_parts.append(_smooth_l1(pred_d - tgt_d).mean())
-
-        reg_loss = (
-            lucid.cat([l.reshape(1) for l in reg_parts]).mean()
-            if reg_parts
-            else lucid.zeros((1,), device=dev)
-        )
-
-        return cls_loss + reg_loss
+        return proposals
 
     # ------------------------------------------------------------------
     # Forward
@@ -657,87 +386,79 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
-        targets: list[dict[str, Tensor]] | None = None,
+        proposals: list[Tensor] | None = None,
     ) -> ObjectDetectionOutput:
-        """Run Faster R-CNN on a batch of images.
+        """Run Faster R-CNN on a (pre-processed) image batch.
 
         Args:
-            x:       (B, C, H, W) image batch.
-            targets: Optional training targets (list of dicts with
-                     "boxes" and "labels").
+            x:         (B, C, H, W) resized + normalised image batch.
+            proposals: Optional precomputed per-image proposals.  When
+                       ``None`` the RPN generates them.
 
         Returns:
-            ``ObjectDetectionOutput``:
-              ``logits``     : (Σ proposals, num_classes+1) raw class logits.
-              ``pred_boxes`` : (Σ proposals, 4) decoded xyxy boxes.
-              ``loss``       : total loss when targets provided.
+            ``ObjectDetectionOutput`` with raw RoI-head outputs:
+              ``logits``     : (Σ proposals, num_classes) class logits.
+              ``pred_boxes`` : (Σ proposals, num_classes, 4) per-class boxes.
+              ``proposals``  : per-image proposal tensors.
         """
-        int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
+        dev = x.device.type
 
-        # 1. Shared backbone
-        feat = cast(Tensor, self.backbone(x))  # (B, 512, H/16, W/16)
+        # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
+        features = cast(list[Tensor], self.backbone(x))
 
-        # 2. RPN → proposals
-        proposals, _ = self._run_rpn(feat, (iH, iW))
+        # 2. RPN → per-image proposals (when not supplied)
+        if proposals is None:
+            logits, deltas = self.rpn.head.forward(features)
+            anchors = self._anchor_gen.forward(features, list(self._strides))
+            proposals = self._rpn_proposals(logits, deltas, anchors, (iH, iW))
 
-        # 3. RoI Pool
-        roi_crops = roi_pool(
-            feat,
+        # 3. MultiScale RoI Align over the four FPN detection levels (P2-P5).
+        det_feats = features[:4]
+        det_scales = [1.0 / float(s) for s in self._strides[:4]]
+        roi_feats = multiscale_roi_align(
+            det_feats,
             proposals,
             output_size=self._cfg.roi_size,
-            spatial_scale=self._cfg.spatial_scale,
+            spatial_scales=det_scales,
+            sampling_ratio=self._cfg.roi_sampling_ratio,
+            canonical_scale=self._cfg.canonical_scale,
+            canonical_level=self._cfg.canonical_level,
         )
 
-        # 4. RoI head
-        all_logits: Tensor
-        all_deltas: Tensor
-        dev = x.device.type
-        if int(roi_crops.shape[0]) > 0:
-            all_logits, all_deltas = self.roi_head(roi_crops)
+        # 4. RoI head → class logits + per-class box deltas
+        K = self._cfg.num_classes
+        if int(roi_feats.shape[0]) > 0:
+            class_logits, box_deltas = self.roi_heads(roi_feats)
         else:
-            K = self._cfg.num_classes
-            all_logits = lucid.zeros((0, K + 1), device=dev)
-            all_deltas = lucid.zeros((0, K * 4), device=dev)
+            class_logits = lucid.zeros((0, K), device=dev)
+            box_deltas = lucid.zeros((0, K * 4), device=dev)
 
-        # 5. Decode top-class boxes
-        pred_boxes = self._decode_boxes(proposals, all_deltas, (iH, iW))
-
-        # 6. Losses
-        loss: Tensor | None = None
-        if targets is not None:
-            loss_rpn = self._rpn_loss(feat, (iH, iW), targets)
-            loss_roi = self._roi_loss(proposals, all_logits, all_deltas, targets)
-            loss = loss_rpn + loss_roi
+        # 5. Decode per-class boxes → (N, K, 4)
+        pred_boxes = self._decode_per_class(proposals, box_deltas, (iH, iW))
 
         return ObjectDetectionOutput(
-            logits=all_logits,
+            logits=class_logits,
             pred_boxes=pred_boxes,
-            loss=loss,
+            loss=None,
             proposals=tuple(proposals),
         )
 
-    def _decode_boxes(
+    def _decode_per_class(
         self,
         proposals: list[Tensor],
-        all_deltas: Tensor,
+        box_deltas: Tensor,
         image_size: tuple[int, int],
     ) -> Tensor:
-        """Decode bbox deltas per class → ``(N_total, K, 4)``.
-
-        Per-class regression (paper §3.3): NMS for class ``c`` must use the
-        boxes decoded with class ``c``'s deltas, not a single canonical box.
-        """
-        dev = all_deltas.device.type
+        """Decode ``(N, K*4)`` deltas against proposals → ``(N, K, 4)`` boxes."""
+        dev = box_deltas.device.type
         K = self._cfg.num_classes
-        if not any(int(p.shape[0]) > 0 for p in proposals):
-            return lucid.zeros((0, K, 4), device=dev)
-        flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
-        N = int(all_deltas.shape[0])
+        N = int(box_deltas.shape[0])
         if N == 0:
             return lucid.zeros((0, K, 4), device=dev)
-        deltas_3d = all_deltas.reshape(N, K, 4)
+        flat_props = lucid.cat([p for p in proposals if int(p.shape[0]) > 0], dim=0)
+        deltas_3d = box_deltas.reshape(N, K, 4)
         per_class: list[Tensor] = []
         for c in range(K):
             boxes_c = decode_boxes(
@@ -753,30 +474,30 @@ class FasterRCNNForObjectDetection(PretrainedModel):
     def postprocess(
         self,
         output: ObjectDetectionOutput,
+        image_sizes: list[tuple[int, int]] | None = None,
         proposals: list[Tensor] | None = None,
     ) -> list[dict[str, Tensor]]:
-        """Per-class NMS on raw detector output.
+        """Softmax → per-class score filter → per-class NMS → top-k.
 
-        Reads per-image proposals from ``output.proposals`` (populated
-        by :meth:`forward`) when not given explicitly.
+        Mirrors the reference ``postprocess_detections``: drops the
+        background class (slot 0), score-thresholds, removes empty boxes,
+        runs per-class NMS, and keeps the top ``max_detections`` scores.
 
         Parameters
         ----------
         output : ObjectDetectionOutput
-            Raw RoI-head outputs from :meth:`forward` — class logits,
-            box deltas, and (optionally) the proposals they were
-            evaluated on.
+            Raw RoI-head outputs from :meth:`forward`.
+        image_sizes : list of (H, W), optional
+            Unused (boxes are already clipped); accepted for API symmetry
+            with other detectors.
         proposals : list of Tensor, optional
-            Per-image ``(N_i, 4)`` xyxy proposal boxes.  Required when
-            ``output.proposals`` is ``None``; otherwise this falls back
-            to the latter for the typical call-after-forward pattern.
+            Per-image proposals; falls back to ``output.proposals``.
 
         Returns
         -------
         list of dict
-            One entry per image, each a dict with keys
-            ``"boxes"`` (``(K, 4)`` xyxy), ``"scores"`` (``(K,)``), and
-            ``"labels"`` (``(K,)`` int64).
+            One dict per image with ``"boxes"`` ``(D, 4)``, ``"scores"``
+            ``(D,)``, ``"labels"`` ``(D,)`` int64.
         """
         if proposals is None:
             if output.proposals is None:
@@ -785,11 +506,13 @@ class FasterRCNNForObjectDetection(PretrainedModel):
                     "call forward() first so the output carries them."
                 )
             proposals = list(output.proposals)
+
         logits = output.logits
-        pred_boxes = output.pred_boxes
+        pred_boxes = output.pred_boxes  # (N, K, 4)
+        cfg = self._cfg
+        dev = logits.device.type
         results: list[dict[str, Tensor]] = []
         offset = 0
-        dev = logits.device.type
 
         for props in proposals:
             N_i = int(props.shape[0])
@@ -797,51 +520,56 @@ class FasterRCNNForObjectDetection(PretrainedModel):
             bx_i = pred_boxes[offset : offset + N_i]
             offset += N_i
 
-            scores_i = F.softmax(lg_i, dim=-1)
+            if N_i == 0:
+                results.append(self._empty_det(dev))
+                continue
+
+            scores_i = F.softmax(lg_i, dim=-1)  # (N_i, K)
             keep_boxes: list[Tensor] = []
             keep_scores: list[Tensor] = []
             keep_labels: list[Tensor] = []
 
-            for c in range(1, self._cfg.num_classes + 1):
+            for c in range(1, cfg.num_classes):  # skip background slot 0
                 sc_c_all = scores_i[:, c]
-                bx_class = bx_i[:, c - 1, :]  # (N_i, 4) per-class
-                mask: list[int] = [
+                bx_class = bx_i[:, c, :]  # (N_i, 4)
+                mask = [
                     i
                     for i in range(N_i)
-                    if float(sc_c_all[i].item()) >= self._cfg.score_thresh
+                    if float(sc_c_all[i].item()) > cfg.score_thresh
                 ]
                 if not mask:
                     continue
                 mask_t = lucid.tensor(mask, device=dev).long()
                 sc_c = sc_c_all[mask_t]
                 bx_c = bx_class[mask_t]
-                keep = batched_nms(
-                    bx_c,
-                    sc_c,
-                    lucid.zeros(int(sc_c.shape[0]), device=dev),
-                    self._cfg.nms_thresh,
-                )
-                keep = keep[: self._cfg.max_detections]
+                keep = nms(bx_c, sc_c, cfg.nms_thresh)
                 keep_boxes.append(bx_c[keep])
                 keep_scores.append(sc_c[keep])
                 keep_labels.append(
                     lucid.full((int(keep.shape[0]),), float(c), device=dev)
                 )
 
-            if keep_boxes:
-                results.append(
-                    {
-                        "boxes": lucid.cat(keep_boxes, dim=0),
-                        "scores": lucid.cat(keep_scores, dim=0),
-                        "labels": lucid.cat(keep_labels, dim=0),
-                    }
-                )
-            else:
-                results.append(
-                    {
-                        "boxes": lucid.zeros((0, 4), device=dev),
-                        "scores": lucid.zeros((0,), device=dev),
-                        "labels": lucid.zeros((0,), device=dev),
-                    }
-                )
+            if not keep_boxes:
+                results.append(self._empty_det(dev))
+                continue
+
+            all_b = lucid.cat(keep_boxes, dim=0)
+            all_s = lucid.cat(keep_scores, dim=0)
+            all_l = lucid.cat(keep_labels, dim=0)
+            order = lucid.argsort(-all_s)[: cfg.max_detections]
+            results.append(
+                {
+                    "boxes": all_b[order],
+                    "scores": all_s[order],
+                    "labels": all_l[order].long(),
+                }
+            )
         return results
+
+    @staticmethod
+    def _empty_det(dev: str) -> dict[str, Tensor]:
+        return {
+            "boxes": lucid.zeros((0, 4), device=dev),
+            "scores": lucid.zeros((0,), device=dev),
+            "labels": lucid.zeros((0,), device=dev).long(),
+        }

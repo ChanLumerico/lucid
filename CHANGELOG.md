@@ -52,6 +52,33 @@ detection sweep to dense prediction.
   on `lucid.models.weights` (tag `COCO_WITH_VOC_LABELS_V1`, `Segmentation`
   transforms preset).
 
+### Added — Pretrained weights: Faster R-CNN ResNet-50-FPN (COCO, two-stage)
+
+First two-stage detector with pretrained weights — `pretrained=True`
+loads the official COCO checkpoint and runs inference out of the box.
+
+- **faster_rcnn** — `faster_rcnn_resnet50_fpn` ← torchvision
+  `FasterRCNN_ResNet50_FPN_Weights.COCO_V1` (Ren et al.; 91 classes, box
+  AP 37.0, 41.8M params).  Full architecture rebuild from the legacy
+  VGG16 single-scale design to the reference ResNet-50-FPN two-stage
+  pipeline: `_FrozenBatchNorm2d` (eps 0) ResNet backbone +
+  `_FeaturePyramidNetwork` (inner/layer blocks + LastLevelMaxPool) + RPN
+  (3×3 conv + cls/bbox heads over 5-level anchors) + RoIHeads
+  (`multiscale_roi_align` with the canonical FPN level assignment →
+  TwoMLPHead → FastRCNNPredictor) + per-class decode / NMS post-process.
+  Verified by a staged parity gate (backbone+FPN 5.7e-6, RPN 1.6e-5, RoI
+  head 2.3e-5, final detections 1.8e-4).  Enum
+  `FasterRCNNResNet50FPNWeights` on `lucid.models.weights` (tag `COCO_V1`,
+  `Detection` transforms).
+
+- **detection ops** — `roi_align` rewritten with a vectorized 4-corner
+  bilinear gather reproducing the reference RoIAlign exactly across all
+  `sampling_ratio` / `aligned` settings (the reference's
+  `MultiScaleRoIAlign` uses `aligned=False`); new shared `_detection`
+  modules (`_FrozenBatchNorm2d`, `_ResNetBody`, `_FeaturePyramidNetwork`,
+  `_ReferenceAnchorGenerator`, `multiscale_roi_align`) reused across the
+  R-CNN family.
+
 ### Added — Pretrained weights: DETR (COCO detection sweep — pilot)
 
 First object-detection model with full COCO-pretrained weights, opening
