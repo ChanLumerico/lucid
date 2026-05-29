@@ -27,7 +27,6 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models.vision.cspnet._config import CSPNetConfig
 
-
 # ---------------------------------------------------------------------------
 # Conv-BN-Act primitive (mirrors timm's ``ConvNormAct``)
 # ---------------------------------------------------------------------------
@@ -55,8 +54,13 @@ class _ConvBnAct(nn.Module):
         if padding is None:
             padding = (kernel_size - 1) // 2
         self.conv = nn.Conv2d(
-            in_chs, out_chs, kernel_size,
-            stride=stride, padding=padding, groups=groups, bias=False,
+            in_chs,
+            out_chs,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            groups=groups,
+            bias=False,
         )
         self.bn = nn.BatchNorm2d(out_chs)
         self.apply_act = apply_act
@@ -200,14 +204,21 @@ class _CrossStage(nn.Module):
         self.conv_down: nn.Module
         if stride > 1:
             self.conv_down = _ConvBnAct(
-                in_chs, down_chs, kernel_size=3, stride=stride, groups=groups,
+                in_chs,
+                down_chs,
+                kernel_size=3,
+                stride=stride,
+                groups=groups,
             )
         else:
             self.conv_down = nn.Identity()
 
         # ── conv_exp ──  (expanded input — split in half along channels)
         self.conv_exp = _ConvBnAct(
-            down_chs, exp_chs, kernel_size=1, apply_act=not cross_linear,
+            down_chs,
+            exp_chs,
+            kernel_size=1,
+            apply_act=not cross_linear,
         )
         self.expand_chs = exp_chs
 
@@ -218,25 +229,33 @@ class _CrossStage(nn.Module):
             if block_type == "bottle":
                 blocks.append(
                     _BottleneckBlock(
-                        block_in, block_in,
-                        bottle_ratio=bottle_ratio, groups=groups,
+                        block_in,
+                        block_in,
+                        bottle_ratio=bottle_ratio,
+                        groups=groups,
                     )
                 )
             else:
                 blocks.append(
                     _DarkBlock(
-                        block_in, block_in,
-                        bottle_ratio=bottle_ratio, groups=groups,
+                        block_in,
+                        block_in,
+                        bottle_ratio=bottle_ratio,
+                        groups=groups,
                     )
                 )
         self.blocks = nn.Sequential(*blocks)
 
         # ── transitions ──
         self.conv_transition_b = _ConvBnAct(
-            exp_chs // 2, block_out_chs, kernel_size=1,
+            exp_chs // 2,
+            block_out_chs,
+            kernel_size=1,
         )
         self.conv_transition = _ConvBnAct(
-            block_out_chs + exp_chs // 2, out_chs, kernel_size=1,
+            block_out_chs + exp_chs // 2,
+            out_chs,
+            kernel_size=1,
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -270,9 +289,13 @@ class _DarkStage(nn.Module):
         groups: int = 1,
     ) -> None:
         super().__init__()
+        self.conv_down: nn.Module
         if stride > 1:
             self.conv_down = _ConvBnAct(
-                in_chs, out_chs, kernel_size=3, stride=stride,
+                in_chs,
+                out_chs,
+                kernel_size=3,
+                stride=stride,
             )
         else:
             self.conv_down = nn.Identity()
@@ -281,15 +304,19 @@ class _DarkStage(nn.Module):
             if block_type == "bottle":
                 blocks.append(
                     _BottleneckBlock(
-                        out_chs, out_chs,
-                        bottle_ratio=bottle_ratio, groups=groups,
+                        out_chs,
+                        out_chs,
+                        bottle_ratio=bottle_ratio,
+                        groups=groups,
                     )
                 )
             else:
                 blocks.append(
                     _DarkBlock(
-                        out_chs, out_chs,
-                        bottle_ratio=bottle_ratio, groups=groups,
+                        out_chs,
+                        out_chs,
+                        bottle_ratio=bottle_ratio,
+                        groups=groups,
                     )
                 )
         self.blocks = nn.Sequential(*blocks)

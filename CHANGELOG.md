@@ -119,6 +119,41 @@ verified across 180 parity tests.
     in a follow-up commit sourced from timm — torchvision does not
     publish a 1k-class xlarge head.
 
+- **`lucid.models.vision.cvt`** — pretrained weights for all three
+  paper-cited variants (Wu et al., ICCV 2021), sourced from Microsoft's
+  HuggingFace ``transformers`` CvT checkpoints.  Required three model
+  fixes to reach exact parity with the reference:
+  - **Stem padding** — the 7×7 stride-4 stem uses ``padding=2`` (not
+    ``kernel//2 = 3``); the wrong padding shifted the entire stage-0
+    feature map.
+  - **Attention scale** — CvT scales attention logits by the *full*
+    embedding dim (``dim ** -0.5``), not the per-head dim.  Invisible
+    on stage 0 (single head) but a large divergence on stages 1-2.
+  - **CLS token** — the last stage carries a learnable CLS token that
+    participates in attention (split off before the conv projection,
+    re-attached before the linear projection) and is what the
+    classifier reads (``layernorm(cls).mean(1)``).  Added a
+    ``cls_token`` per-stage flag to ``CvTConfig`` + the full split /
+    re-attach path through ``_ConvProj`` / ``_CvTAttention`` /
+    ``_CvTStage``.  Also dropped the spurious per-stage LayerNorm and
+    biased the conv-projection's linear layer to match the reference.
+  
+  Hosted on [`lucid-dl/cvt-{13,21,w24}`](https://huggingface.co/lucid-dl).
+  Verified parity vs ``transformers``: cvt_13 backbone CLS-token max abs
+  diff ``9.2e-5``, full-logit head max abs diff ``4.5e-6`` with top-5
+  predictions matching exactly.  (The reference torch CvT forward
+  SIGBUS-crashes in this M1 / py3.14 env — a torch CPU-BLAS GEMM bug
+  unrelated to Lucid — so parity was measured on the backbone CLS token
+  at a reduced 64×64 input plus a numpy-computed head reference.)
+  cvt_13/cvt_21 are ImageNet-1k @ 224; cvt_w24 is ImageNet-22k →
+  ImageNet-1k @ 384 (277M params).  Load via:
+  ```python
+  from lucid.models import cvt_13_cls
+  from lucid.models.weights import CvT13Weights
+  m = cvt_13_cls(pretrained=True)
+  m = cvt_13_cls(weights=CvT13Weights.IN1K)
+  ```
+
 - **`lucid.models.vision.cspnet`** — paper-faithful rebuild + pretrained
   ImageNet-1k weights for the three paper-cited variants (Wang et al.,
   CVPRW 2020).  Pre-3.5 CSPNet shipped only ``cspresnet_50`` and at

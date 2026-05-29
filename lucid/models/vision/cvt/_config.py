@@ -130,9 +130,16 @@ class CvTConfig(ModelConfig):
     embed_strides: tuple[int, ...] = (4, 2, 2)
     mlp_ratio: float = 4.0
     dropout: float = 0.0
+    # Per-stage class-token flag.  The reference CvT prepends a single
+    # learnable CLS token only on the *last* stage; that token gathers
+    # global information through the stage's attention and is what the
+    # classifier reads (``layernorm(cls).mean(1)``).  Stages without a
+    # CLS token attend over patch tokens only.
+    cls_token: tuple[bool, ...] = (False, False, True)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "dims", tuple(self.dims))
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
         object.__setattr__(self, "embed_strides", tuple(self.embed_strides))
+        object.__setattr__(self, "cls_token", tuple(self.cls_token))

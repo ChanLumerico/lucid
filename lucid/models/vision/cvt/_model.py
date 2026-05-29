@@ -20,6 +20,7 @@ Architecture (CvT-13, image=224):
 
 from typing import ClassVar, cast
 
+import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
@@ -84,21 +85,39 @@ class _ConvProj(nn.Module):
         padding: int = 1,
     ) -> None:
         super().__init__()
-        # Depthwise conv (groups=dim) + BN
+        # Depthwise conv (groups=dim) + BN.  The reference CvT
+        # checkpoints disable the conv bias (the following BN already
+        # absorbs any per-channel additive term), so we match that
+        # exactly to keep the state-dict 1:1.
         self.dw = nn.Conv2d(
-            dim, dim, kernel, stride=stride, padding=padding, groups=dim
+            dim,
+            dim,
+            kernel,
+            stride=stride,
+            padding=padding,
+            groups=dim,
+            bias=False,
         )
         self.bn = nn.BatchNorm2d(dim)
-        # Linear projection (bias=False as in the paper)
-        self.proj = nn.Linear(dim, dim, bias=False)
+        # Linear projection — biased to match the Microsoft / HF
+        # reference CvT checkpoints (``projection_query/key/value`` carry
+        # biases in ``transformers.CvtForImageClassification``).
+        self.proj = nn.Linear(dim, dim, bias=True)
 
-    def forward(self, x: Tensor, H: int, W: int) -> Tensor:  # type: ignore[override]
-        # x: (B, N, C) — reshape to spatial for DWConv
+    def forward(  # type: ignore[override]
+        self, x: Tensor, H: int, W: int, cls: Tensor | None = None
+    ) -> Tensor:
+        # x: (B, N, C) — the *spatial* token sequence (cls already split off
+        # by the caller).  Reshape to a feature map for the depthwise conv.
         B, N, C = x.shape
         x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
         x_2d = cast(Tensor, self.bn(cast(Tensor, self.dw(x_2d))))  # (B, C, H', W')
         _B, _C, H2, W2 = x_2d.shape
         x_flat = x_2d.reshape(B, C, H2 * W2).permute(0, 2, 1)  # (B, H'*W', C)
+        # Re-attach the CLS token (which bypasses the conv) before the
+        # shared linear projection, matching the reference CvT exactly.
+        if cls is not None:
+            x_flat = lucid.cat([cls, x_flat], dim=1)
         return cast(Tensor, self.proj(x_flat))
 
 
@@ -120,11 +139,17 @@ class _CvTAttention(nn.Module):
         dim: int,
         num_heads: int,
         stride_kv: int = 1,
+        with_cls_token: bool = False,
     ) -> None:
         super().__init__()
         self.num_heads = num_heads
-        head_dim = dim // num_heads
-        self.scale = head_dim**-0.5
+        self.with_cls_token = with_cls_token
+        # CvT scales attention logits by the *full* embedding dim, not the
+        # per-head dim (an unusual but deliberate choice — see the
+        # reference ``CvtSelfAttention.scale = embed_dim ** -0.5``).  This
+        # only matters when ``num_heads > 1``; stage 0 has a single head
+        # so ``head_dim == dim`` and the distinction is invisible there.
+        self.scale = dim**-0.5
 
         # Q: stride=1 (full resolution)
         self.proj_q = _ConvProj(dim, kernel=3, stride=1, padding=1)
@@ -138,9 +163,19 @@ class _CvTAttention(nn.Module):
         B, N, C = x.shape
         head_dim = C // self.num_heads
 
-        q = cast(Tensor, self.proj_q(x, H, W))  # type: ignore[arg-type]  # (B, N, C)
-        k = cast(Tensor, self.proj_k(x, H, W))  # type: ignore[arg-type]  # (B, N', C)
-        v = cast(Tensor, self.proj_v(x, H, W))  # type: ignore[arg-type]  # (B, N', C)
+        # When the stage carries a CLS token it occupies slot 0 of the
+        # sequence.  The conv projections operate on the spatial tokens
+        # only; the CLS token bypasses the conv and is re-attached inside
+        # ``_ConvProj`` before the shared linear projection.
+        cls: Tensor | None = None
+        spatial = x
+        if self.with_cls_token:
+            cls = x[:, 0:1, :]
+            spatial = x[:, 1:, :]
+
+        q = cast(Tensor, self.proj_q(spatial, H, W, cls))  # type: ignore[arg-type]
+        k = cast(Tensor, self.proj_k(spatial, H, W, cls))  # type: ignore[arg-type]
+        v = cast(Tensor, self.proj_v(spatial, H, W, cls))  # type: ignore[arg-type]
 
         Nq = q.shape[1]
         Nkv = k.shape[1]
@@ -189,10 +224,13 @@ class _CvTBlock(nn.Module):
         stride_kv: int,
         mlp_ratio: float,
         dropout: float,
+        with_cls_token: bool = False,
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = _CvTAttention(dim, num_heads, stride_kv=stride_kv)
+        self.attn = _CvTAttention(
+            dim, num_heads, stride_kv=stride_kv, with_cls_token=with_cls_token
+        )
         self.norm2 = nn.LayerNorm(dim)
         self.mlp = _MLP(dim, mlp_ratio, dropout)
 
@@ -225,11 +263,18 @@ class _CvTStage(nn.Module):
         embed_stride: int,
         mlp_ratio: float,
         dropout: float,
+        with_cls_token: bool = False,
     ) -> None:
         super().__init__()
-        # kernel=7 for stage 0 (large receptive field), kernel=3 for subsequent
-        kernel = 7 if embed_stride == 4 else 3
-        padding = kernel // 2
+        # kernel=7 for stage 0 (large receptive field), kernel=3 for subsequent.
+        # Padding follows the reference CvT exactly: the 7×7 stride-4 stem
+        # uses padding=2 (NOT kernel//2=3), the 3×3 stride-2 embeds use
+        # padding=1.  Getting the stem padding wrong shifts the entire
+        # feature map and breaks pretrained-weight parity.
+        if embed_stride == 4:
+            kernel, padding = 7, 2
+        else:
+            kernel, padding = 3, 1
         self.embed = _ConvEmbed(
             in_ch, dim, kernel=kernel, stride=embed_stride, padding=padding
         )
@@ -237,26 +282,49 @@ class _CvTStage(nn.Module):
         # three stages (Q is always stride=1).  This is the key trick that
         # makes CvT attention cheaper than ViT's O(N²).
         stride_kv = 2
+        self.with_cls_token = with_cls_token
+        # Learnable CLS token, only on the stage(s) flagged in the config
+        # (the last stage for paper-cited CvT).  Prepended to the token
+        # sequence so it gathers global context through attention.
+        self.cls_token: nn.Parameter | None = (
+            nn.Parameter(lucid.zeros(1, 1, dim)) if with_cls_token else None
+        )
         self.blocks = nn.ModuleList(
             [
-                _CvTBlock(dim, num_heads, stride_kv, mlp_ratio, dropout)
+                _CvTBlock(
+                    dim, num_heads, stride_kv, mlp_ratio, dropout,
+                    with_cls_token=with_cls_token,
+                )
                 for _ in range(depth)
             ]
         )
-        self.norm = nn.LayerNorm(dim)
+        # No stage-level LayerNorm.  The reference HF / Microsoft CvT
+        # checkpoint applies only a *single* final ``layernorm`` after
+        # the entire trunk; there is no per-stage normalisation between
+        # blocks.
 
-    def forward(self, x: Tensor) -> tuple[Tensor, int, int]:  # type: ignore[override]
+    def forward(  # type: ignore[override]
+        self, x: Tensor
+    ) -> tuple[Tensor, Tensor | None, int, int]:
         # x: (B, C_in, H_in, W_in)
         x_spatial, H, W = cast(tuple[Tensor, int, int], self.embed(x))
         # Flatten to sequence: (B, H*W, C)
         B, C, _H, _W = x_spatial.shape
         tokens = x_spatial.reshape(B, C, H * W).permute(0, 2, 1)
+        # Prepend the CLS token (if this stage owns one).
+        if self.cls_token is not None:
+            cls = self.cls_token.expand(B, 1, C)
+            tokens = lucid.cat([cls, tokens], dim=1)
         for blk in self.blocks:
             tokens = cast(Tensor, blk(tokens, H, W))  # type: ignore[arg-type]
-        tokens = cast(Tensor, self.norm(tokens))
-        # Reshape back to spatial for next stage
+        # Split the CLS token back off (if present); the spatial tokens
+        # are reshaped to a feature map for the next stage / pooling.
+        cls_out: Tensor | None = None
+        if self.cls_token is not None:
+            cls_out = tokens[:, 0:1, :]
+            tokens = tokens[:, 1:, :]
         x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
-        return x_out, H, W
+        return x_out, cls_out, H, W
 
 
 # ---------------------------------------------------------------------------
@@ -272,9 +340,11 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
     for i, (dim, depth, heads, stride) in enumerate(
         zip(config.dims, config.depths, config.num_heads, config.embed_strides)
     ):
+        with_cls = bool(config.cls_token[i]) if i < len(config.cls_token) else False
         stages.append(
             _CvTStage(
-                in_ch, dim, depth, heads, stride, config.mlp_ratio, config.dropout
+                in_ch, dim, depth, heads, stride, config.mlp_ratio,
+                config.dropout, with_cls_token=with_cls,
             )
         )
         in_ch = dim
@@ -363,9 +433,14 @@ class CvT(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
+        cls: Tensor | None = None
         for stage in self.stages:
-            x, _H, _W = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W) — flatten then mean
+            out = stage(x)
+            x, cls = out[0], out[1]
+        # Prefer the CLS token from the last stage that produced one;
+        # fall back to spatial mean-pool for cls-token-free configs.
+        if cls is not None:
+            return cls[:, 0]
         return x.flatten(2).mean(dim=2)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
@@ -447,11 +522,18 @@ class CvTForImageClassification(PretrainedModel, ClassificationHeadMixin):
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
+        cls: Tensor | None = None
         for stage in self.stages:
-            x, _H, _W = cast(tuple[Tensor, int, int], stage(x))
-        # x: (B, C, H, W) → (B, C) via global avg pool
-        feat = x.flatten(2).mean(dim=2)
-        feat = cast(Tensor, self.head_norm(feat))
+            out = stage(x)
+            x, cls = out[0], out[1]
+        # Classify from the last-stage CLS token when present (reference
+        # CvT: ``layernorm(cls).mean(1)``); otherwise from the spatial
+        # mean-pool.  ``cls`` is ``(B, 1, C)`` so the mean over dim 1 is
+        # a no-op that just squeezes the token axis.
+        if cls is not None:
+            feat = cast(Tensor, self.head_norm(cls)).mean(dim=1)
+        else:
+            feat = cast(Tensor, self.head_norm(x.flatten(2).mean(dim=2)))
         logits = cast(Tensor, self.classifier(feat))
 
         loss: Tensor | None = None

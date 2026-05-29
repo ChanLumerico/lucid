@@ -53,6 +53,13 @@ from lucid.models.vision.crossvit._weights import (
     CrossViTTinyWeights,
 )
 
+# 2021 — CvT (Wu et al.)
+from lucid.models.vision.cvt._weights import (
+    CvT13Weights,
+    CvT21Weights,
+    CvTW24Weights,
+)
+
 # 2022 — ConvNeXt (Liu et al.)
 from lucid.models.vision.convnext._weights import (
     ConvNeXtTinyWeights,
@@ -78,6 +85,10 @@ __all__ = [
     "CrossViT9Weights",
     "CrossViT15Weights",
     "CrossViT18Weights",
+    # ── Vision (2021) CvT ─────────────────────────────────────────────
+    "CvT13Weights",
+    "CvT21Weights",
+    "CvTW24Weights",
     # ── Vision (2022) ConvNeXt ────────────────────────────────────────
     "ConvNeXtTinyWeights",
     "ConvNeXtSmallWeights",

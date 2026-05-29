@@ -1,8 +1,14 @@
 """Registry factories for CvT variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.cvt._config import CvTConfig
 from lucid.models.vision.cvt._model import CvT, CvTForImageClassification
+from lucid.models.vision.cvt._weights import (
+    CvT13Weights,
+    CvT21Weights,
+    CvTW24Weights,
+)
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -189,7 +195,7 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
 # ---------------------------------------------------------------------------
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="cvt",
     model_type="cvt",
@@ -197,7 +203,10 @@ def cvt_w24(pretrained: bool = False, **overrides: object) -> CvT:
     default_config=_CFG_13,
 )
 def cvt_13_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: CvT13Weights | None = None,
+    **overrides: object,
 ) -> CvTForImageClassification:
     r"""CvT-13 image classifier (Wu et al., 2021).
 
@@ -233,11 +242,15 @@ def cvt_13_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(CvT13Weights, pretrained, weights)
     cfg = CvTConfig(**{**_CFG_13.__dict__, **overrides}) if overrides else _CFG_13
-    return CvTForImageClassification(cfg)
+    model = CvTForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cvt_13_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="cvt",
     model_type="cvt",
@@ -245,7 +258,10 @@ def cvt_13_cls(
     default_config=_CFG_21,
 )
 def cvt_21_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: CvT21Weights | None = None,
+    **overrides: object,
 ) -> CvTForImageClassification:
     r"""CvT-21 image classifier (Wu et al., 2021).
 
@@ -280,11 +296,15 @@ def cvt_21_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(CvT21Weights, pretrained, weights)
     cfg = CvTConfig(**{**_CFG_21.__dict__, **overrides}) if overrides else _CFG_21
-    return CvTForImageClassification(cfg)
+    model = CvTForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cvt_21_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]
     task="image-classification",
     family="cvt",
     model_type="cvt",
@@ -292,7 +312,10 @@ def cvt_21_cls(
     default_config=_CFG_W24,
 )
 def cvt_w24_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: CvTW24Weights | None = None,
+    **overrides: object,
 ) -> CvTForImageClassification:
     r"""CvT-W24 wide image classifier (Wu et al., 2021).
 
@@ -330,5 +353,9 @@ def cvt_w24_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(CvTW24Weights, pretrained, weights)
     cfg = CvTConfig(**{**_CFG_W24.__dict__, **overrides}) if overrides else _CFG_W24
-    return CvTForImageClassification(cfg)
+    model = CvTForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="cvt_w24_cls")
+    return model
