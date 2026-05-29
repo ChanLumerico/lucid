@@ -15,6 +15,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: DETR (COCO detection sweep — pilot)
+
+First object-detection model with full COCO-pretrained weights, opening
+the detection/segmentation weight sweep (classification sweep complete).
+`pretrained=True` now yields an inference-ready detector reproducing the
+paper's box AP, not just an ImageNet backbone.
+
+- **detr** — `detr_resnet50` / `detr_resnet101` ← Facebook DETR
+  (`facebookresearch/detr`, torch hub; Apache-2.0; COCO 2017, 91 classes,
+  box AP 42.0 / 43.5).  Reference-faithful rebuild of `_model.py` so the
+  official checkpoint loads strict + reproduces inference (parity:
+  logits 2.1e-5, boxes 8.3e-6):
+  - custom DETR transformer replacing `nn.Transformer` — reference-exact
+    submodule names, **no** final encoder norm, a final decoder norm, and
+    per-layer positional re-injection (encoder Q/K; decoder self Q/K =
+    `tgt + query_pos`, cross Q = `tgt + query_pos` / K = `memory + pos`);
+  - `_PositionEmbeddingSine` (normalize, scale 2π, temperature 1e4)
+    matching the reference to 8e-7;
+  - `_FrozenBatchNorm2d` backbone (eval-only, no `num_batches_tracked`);
+  - COCO config `num_classes=91`.
+  - Enums `DETRResNet50Weights` / `DETRResNet101Weights` on
+    `lucid.models.weights` (tag `COCO_2017`, `Detection` transforms preset).
+
+The detection conversion infrastructure (task-aware model cards, the
+`Detection` preset wiring, `ObjectDetectionOutput`) is reused unchanged.
+
+
 ### Added — Pretrained weights: GoogLeNet + EfficientFormer (reference-faithful rebuilds)
 
 Two families needed a topology rebuild to match their upstream

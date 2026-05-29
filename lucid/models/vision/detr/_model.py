@@ -20,52 +20,35 @@ DETR casts object detection as a **direct set prediction** problem:
 Architecture
 ------------
   Image (B, C, H, W)
-    ↓  ResNet-50 (conv1 → pool → layer1–layer4) — C5 (2048ch, stride 32)
+    ↓  ResNet (conv1 → pool → layer1–layer4) — C5 (2048ch, stride 32)
     ↓  1×1 Conv: 2048 → d_model  (default 256)
     ↓  Flatten: (B, d_model, H', W') → (H'·W', B, d_model)
-    ↓  + 2D sinusoidal positional encoding  (B, d_model, H', W') → flat
+    ↓  + 2D sinusoidal positional encoding re-injected at every layer
   Encoder: N_enc × (self-attention + FFN)
   Decoder: N_dec × (self-attention on queries + cross-attention to memory + FFN)
     ↓  (N_queries, B, d_model)
   Class head: Linear → (B, N, num_classes + 1)   softmax at inference
   Box head:   3-layer MLP → (B, N, 4)   sigmoid to enforce [0,1]
 
-Losses (training)
------------------
-  Requires ``targets`` — list of B dicts with:
-    ``"boxes"``  : (M_i, 4) xyxy, normalised to [0, 1] by image H/W.
-    ``"labels"`` : (M_i,)  integer foreground class ids.
-
-  Hungarian-matched set loss:
-    L = λ_cls · L_cls  +  λ_l1 · L_L1  +  λ_giou · L_GIoU
-    with λ_cls=1, λ_l1=5, λ_giou=2  (paper §A.4 / Table 10).
-
-  L_cls : cross-entropy on matched pair (background weight = 0.1 for
-          unmatched queries).
-  L_L1  : ℓ1 between predicted and GT cxcywh boxes (matched pairs only).
-  L_GIoU: GIoU loss between decoded and GT boxes (matched pairs only).
-
 Faithfulness notes
 ------------------
-* ResNet-50 C5 feature map (stride 32) with batch-norm.
+* ResNet C5 feature map (stride 32) with **frozen** batch-norm (eval-only
+  affine + running-stat math, no ``num_batches_tracked``).
 * d_model=256, n_head=8, 6 enc / 6 dec layers, dim_ffn=2048.
 * N=100 object queries.
-* Sinusoidal 2-D positional encoding identical to §A.4.
+* Sinusoidal 2-D positional encoding identical to the reference
+  ``PositionEmbeddingSine`` (num_pos_feats=d_model/2, temperature=10000,
+  normalize=True, scale=2π) — verified to ~1e-6.
+* The transformer (``_DETRTransformer``) mirrors the reference layer
+  layout verbatim: ``encoder.layers.{N}`` (no final encoder norm),
+  ``decoder.layers.{N}`` + a final ``decoder.norm`` LayerNorm.  Positional
+  encodings are re-injected at every layer (added to Q/K of encoder
+  self-attention; query positions added to Q/K of decoder self-attention
+  and to Q of decoder cross-attention, spatial positions added to the
+  memory K), exactly as the reference forward.  Post-norm
+  (normalize_before=False), ReLU activation.
 * Hungarian cost matrix: L_cls + 5·L_L1 + 2·L_GIoU (matched queries).
 * Background class weight 0.1 for unmatched queries.
-
-Known deviation
----------------
-The reference DETR re-injects positional encodings at *every* encoder
-self-attention (added to Q and K but not V) and *every* decoder
-cross-attention.  Our implementation adds the encoding once before
-``nn.Transformer`` runs, because ``nn.TransformerEncoderLayer`` /
-``nn.TransformerDecoderLayer`` in Lucid expose a single tensor input
-per layer (Q=K=V=src), making per-layer Q/K-only injection
-infeasible without rewriting those layer modules.  Mathematically
-this is a learned-bias-absorbable simplification; convergence may
-differ slightly from the canonical training schedule but the
-trained model is functionally equivalent.
 """
 
 from typing import ClassVar, cast
@@ -85,7 +68,50 @@ from lucid.models._utils._detection import (
 from lucid.models.vision.detr._config import DETRConfig
 
 # ---------------------------------------------------------------------------
-# ResNet-50 backbone (C5 only — same building blocks as Mask R-CNN)
+# Frozen BatchNorm (eval-only affine + running-stat math, no nbt buffer)
+# ---------------------------------------------------------------------------
+
+
+class _FrozenBatchNorm2d(nn.Module):
+    """BatchNorm2d with frozen affine params + running stats.
+
+    Holds exactly four persistent buffers — ``weight``, ``bias``,
+    ``running_mean``, ``running_var`` — with **no** ``num_batches_tracked``,
+    matching the reference DETR ``FrozenBatchNorm2d`` key-set.  The forward
+    applies the eval-time normalisation
+
+    .. math::
+
+        y = (x - \\mathrm{running\\_mean})
+            \\cdot \\mathrm{rsqrt}(\\mathrm{running\\_var} + \\varepsilon)
+            \\cdot \\mathrm{weight} + \\mathrm{bias}
+
+    with :math:`\\varepsilon = 10^{-5}`, regardless of ``train`` / ``eval``
+    mode (the statistics never update).
+    """
+
+    eps: ClassVar[float] = 1e-5
+
+    def __init__(self, num_features: int) -> None:
+        super().__init__()
+        self.num_features = num_features
+        self.register_buffer("weight", lucid.ones(num_features))
+        self.register_buffer("bias", lucid.zeros(num_features))
+        self.register_buffer("running_mean", lucid.zeros(num_features))
+        self.register_buffer("running_var", lucid.ones(num_features))
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
+        b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
+        rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
+        rv = cast(Tensor, self.running_var).reshape(1, -1, 1, 1)
+        scale = w * (rv + self.eps).rsqrt()
+        bias = b - rm * scale
+        return x * scale + bias
+
+
+# ---------------------------------------------------------------------------
+# ResNet backbone (C5 only — frozen BN, reference key layout)
 # ---------------------------------------------------------------------------
 
 
@@ -102,11 +128,11 @@ class _Bottleneck(nn.Module):
         super().__init__()
         out_ch = mid_ch * self.expansion
         self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(mid_ch)
+        self.bn1 = _FrozenBatchNorm2d(mid_ch)
         self.conv2 = nn.Conv2d(mid_ch, mid_ch, 3, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(mid_ch)
+        self.bn2 = _FrozenBatchNorm2d(mid_ch)
         self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(out_ch)
+        self.bn3 = _FrozenBatchNorm2d(out_ch)
         self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -127,7 +153,7 @@ def _make_layer(
     if stride != 1 or in_ch != out_ch:
         ds = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
-            nn.BatchNorm2d(out_ch),
+            _FrozenBatchNorm2d(out_ch),
         )
     blocks: list[nn.Module] = [_Bottleneck(in_ch, mid_ch, stride=stride, downsample=ds)]
     for _ in range(1, num_blocks):
@@ -135,13 +161,18 @@ def _make_layer(
     return nn.Sequential(*blocks), out_ch
 
 
-class _ResNet50C5(nn.Module):
-    """ResNet-50 backbone, returns C5 feature map (stride 32, 2048ch)."""
+class _ResNetC5(nn.Module):
+    """ResNet backbone, returns C5 feature map (stride 32, 2048ch).
+
+    Submodule names (``conv1`` / ``bn1`` / ``layer1``…``layer4``) mirror
+    the reference ResNet body so the converter map for the backbone is a
+    pure prefix strip (``backbone.0.body.<rest>`` → ``backbone.<rest>``).
+    """
 
     def __init__(self, in_channels: int, layers: tuple[int, int, int, int]) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1 = _FrozenBatchNorm2d(64)
         self.pool = nn.MaxPool2d(3, stride=2, padding=1)
         self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1)
         self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2)
@@ -156,6 +187,256 @@ class _ResNet50C5(nn.Module):
         x = cast(Tensor, self.layer2(x))
         x = cast(Tensor, self.layer3(x))
         return cast(Tensor, self.layer4(x))
+
+
+# ---------------------------------------------------------------------------
+# DETR-exact 2-D sinusoidal positional encoding (PositionEmbeddingSine)
+# ---------------------------------------------------------------------------
+
+
+class _PositionEmbeddingSine(nn.Module):
+    """Reference ``PositionEmbeddingSine`` for an unpadded feature map.
+
+    Builds the sinusoidal 2-D positional encoding the reference DETR feeds
+    into every attention layer.  Inference always runs on a single,
+    unpadded image, so the "not-mask" is all-ones and reduces to plain
+    row / column cumulative sums.
+
+    Parameters mirror the reference defaults: ``num_pos_feats = d_model/2``,
+    ``temperature = 10000``, ``normalize = True``, ``scale = 2π``.
+    """
+
+    def __init__(
+        self,
+        num_pos_feats: int,
+        temperature: float = 10000.0,
+        scale: float = 6.283185307179586,
+        eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.num_pos_feats = num_pos_feats
+        self.temperature = temperature
+        self.scale = scale
+        self.eps = eps
+
+    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
+        npf = self.num_pos_feats
+        ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
+        y_embed = ones.cumsum(dim=1)
+        x_embed = ones.cumsum(dim=2)
+        y_embed = y_embed / (y_embed[:, -1:, :] + self.eps) * self.scale
+        x_embed = x_embed / (x_embed[:, :, -1:] + self.eps) * self.scale
+
+        dim_t = lucid.arange(0, npf, dtype=lucid.float32, device=device)
+        dim_t = self.temperature ** (2.0 * lucid.floor(dim_t / 2.0) / npf)
+
+        pos_x = x_embed[:, :, :, None] / dim_t
+        pos_y = y_embed[:, :, :, None] / dim_t
+        pos_x = lucid.stack(
+            [lucid.sin(pos_x[:, :, :, 0::2]), lucid.cos(pos_x[:, :, :, 1::2])], dim=4
+        ).flatten(3)
+        pos_y = lucid.stack(
+            [lucid.sin(pos_y[:, :, :, 0::2]), lucid.cos(pos_y[:, :, :, 1::2])], dim=4
+        ).flatten(3)
+        pos = lucid.cat([pos_y, pos_x], dim=3).permute(0, 3, 1, 2)  # (1, d, H, W)
+        if batch > 1:
+            pos = pos.repeat(batch, 1, 1, 1)
+        return pos
+
+
+# ---------------------------------------------------------------------------
+# DETR transformer (reference layer layout + per-layer pos re-injection)
+# ---------------------------------------------------------------------------
+
+
+def _with_pos(tensor: Tensor, pos: Tensor | None) -> Tensor:
+    """Add positional embedding to a tensor (identity when ``pos`` is None)."""
+    return tensor if pos is None else tensor + pos
+
+
+class _DETREncoderLayer(nn.Module):
+    """One post-norm encoder layer with pos re-injection on Q/K.
+
+    Submodule names match the reference: ``self_attn`` (fused-``in_proj``
+    :class:`nn.MultiheadAttention`), ``linear1`` / ``linear2``, ``norm1`` /
+    ``norm2``.  Dropout is a no-op in eval mode.
+    """
+
+    def __init__(
+        self, d_model: int, n_head: int, dim_ff: int, dropout: float
+    ) -> None:
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)
+        self.linear1 = nn.Linear(d_model, dim_ff)
+        self.linear2 = nn.Linear(dim_ff, d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
+        q = _with_pos(src, pos)
+        k = q
+        src2 = self.self_attn(q, k, value=src, need_weights=False)[0]
+        src = cast(Tensor, self.norm1(src + cast(Tensor, self.dropout1(src2))))
+        src2 = cast(
+            Tensor,
+            self.linear2(
+                cast(Tensor, self.dropout(F.relu(cast(Tensor, self.linear1(src)))))
+            ),
+        )
+        src = cast(Tensor, self.norm2(src + cast(Tensor, self.dropout2(src2))))
+        return src
+
+
+class _DETRDecoderLayer(nn.Module):
+    """One post-norm decoder layer.
+
+    Submodule names match the reference: ``self_attn``, ``multihead_attn``
+    (both fused-``in_proj`` :class:`nn.MultiheadAttention`), ``linear1`` /
+    ``linear2``, ``norm1`` / ``norm2`` / ``norm3``.
+    """
+
+    def __init__(
+        self, d_model: int, n_head: int, dim_ff: int, dropout: float
+    ) -> None:
+        super().__init__()
+        self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)
+        self.multihead_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout)
+        self.linear1 = nn.Linear(d_model, dim_ff)
+        self.linear2 = nn.Linear(dim_ff, d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.norm3 = nn.LayerNorm(d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+
+    def forward(  # type: ignore[override]
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        pos: Tensor | None,
+        query_pos: Tensor | None,
+    ) -> Tensor:
+        q = _with_pos(tgt, query_pos)
+        k = q
+        tgt2 = self.self_attn(q, k, value=tgt, need_weights=False)[0]
+        tgt = cast(Tensor, self.norm1(tgt + cast(Tensor, self.dropout1(tgt2))))
+        tgt2 = self.multihead_attn(
+            _with_pos(tgt, query_pos),
+            _with_pos(memory, pos),
+            value=memory,
+            need_weights=False,
+        )[0]
+        tgt = cast(Tensor, self.norm2(tgt + cast(Tensor, self.dropout2(tgt2))))
+        tgt2 = cast(
+            Tensor,
+            self.linear2(
+                cast(Tensor, self.dropout(F.relu(cast(Tensor, self.linear1(tgt)))))
+            ),
+        )
+        tgt = cast(Tensor, self.norm3(tgt + cast(Tensor, self.dropout3(tgt2))))
+        return tgt
+
+
+class _DETREncoder(nn.Module):
+    """Stack of encoder layers — NO final norm (reference removes it)."""
+
+    def __init__(
+        self, d_model: int, n_head: int, dim_ff: int, dropout: float, depth: int
+    ) -> None:
+        super().__init__()
+        self.layers = nn.ModuleList(
+            [_DETREncoderLayer(d_model, n_head, dim_ff, dropout) for _ in range(depth)]
+        )
+
+    def forward(self, src: Tensor, pos: Tensor | None) -> Tensor:  # type: ignore[override]
+        output = src
+        for layer in self.layers:
+            output = cast(Tensor, layer(output, pos=pos))
+        return output
+
+
+class _DETRDecoder(nn.Module):
+    """Stack of decoder layers + a final ``norm`` (LayerNorm).
+
+    For inference only the last (norm-applied) decoder output matters, so
+    this returns the single final activation (no intermediate stack).
+    """
+
+    def __init__(
+        self, d_model: int, n_head: int, dim_ff: int, dropout: float, depth: int
+    ) -> None:
+        super().__init__()
+        self.layers = nn.ModuleList(
+            [_DETRDecoderLayer(d_model, n_head, dim_ff, dropout) for _ in range(depth)]
+        )
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(  # type: ignore[override]
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        pos: Tensor | None,
+        query_pos: Tensor | None,
+    ) -> Tensor:
+        output = tgt
+        for layer in self.layers:
+            output = cast(Tensor, layer(output, memory, pos=pos, query_pos=query_pos))
+        return cast(Tensor, self.norm(output))
+
+
+class _DETRTransformer(nn.Module):
+    """Reference DETR transformer: ``encoder`` + ``decoder``.
+
+    Forward takes the projected feature map ``(B, d, H, W)``, the spatial
+    positional encoding ``pos`` ``(B, d, H, W)`` and the learned query
+    embedding ``query_embed`` ``(N, d)``; it flattens, runs the encoder /
+    decoder with per-layer positional re-injection, and returns the final
+    decoder activation as ``(B, N, d)``.
+    """
+
+    def __init__(
+        self,
+        d_model: int,
+        n_head: int,
+        num_encoder_layers: int,
+        num_decoder_layers: int,
+        dim_feedforward: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+        self.d_model = d_model
+        self.encoder = _DETREncoder(
+            d_model, n_head, dim_feedforward, dropout, num_encoder_layers
+        )
+        self.decoder = _DETRDecoder(
+            d_model, n_head, dim_feedforward, dropout, num_decoder_layers
+        )
+
+    def forward(  # type: ignore[override]
+        self, src: Tensor, pos_embed: Tensor, query_embed: Tensor
+    ) -> Tensor:
+        B = int(src.shape[0])
+        c = int(src.shape[1])
+        h = int(src.shape[2])
+        w = int(src.shape[3])
+
+        # (B, c, H, W) → (H*W, B, c)
+        src_flat = src.reshape(B, c, h * w).permute(2, 0, 1)
+        pos_flat = pos_embed.reshape(B, c, h * w).permute(2, 0, 1)
+        # (N, c) → (N, B, c)
+        query_pos = query_embed.unsqueeze(1).repeat(1, B, 1)
+        tgt = lucid.zeros(query_pos.shape, device=src.device.type)
+
+        memory = cast(Tensor, self.encoder(src_flat, pos_flat))
+        hs = cast(
+            Tensor, self.decoder(tgt, memory, pos=pos_flat, query_pos=query_pos)
+        )  # (N, B, c)
+        return hs.permute(1, 0, 2)  # (B, N, c)
 
 
 # ---------------------------------------------------------------------------
@@ -270,16 +551,17 @@ class DETRForObjectDetection(PretrainedModel):
     ----------
     config : DETRConfig
         Stored copy of the config that built this model.
-    backbone : _ResNet50C5
-        ResNet trunk through stage 5, producing a stride-32 feature map.
+    backbone : _ResNetC5
+        ResNet trunk through stage 5 (frozen BN), producing a stride-32
+        feature map.
     input_proj : nn.Conv2d
         1x1 conv projecting backbone output to ``d_model``.
     query_embed : nn.Embedding
         Learned object queries of shape ``(num_queries, d_model)``.
-    transformer : nn.Transformer
-        ``num_encoder_layers``-layer encoder + ``num_decoder_layers``-layer
-        decoder with ``n_head`` attention heads and FFN width
-        ``dim_feedforward``.
+    transformer : _DETRTransformer
+        Reference DETR transformer (``encoder.layers.{N}`` with no final
+        encoder norm; ``decoder.layers.{N}`` + a final ``decoder.norm``),
+        with per-layer positional re-injection.
     class_embed : nn.Linear
         Per-query class head with output dim ``num_classes + 1`` (the
         extra "no-object" slot is essential for matching).
@@ -351,22 +633,25 @@ class DETRForObjectDetection(PretrainedModel):
         self._cfg = config
         d = config.d_model
 
-        # Backbone
-        self.backbone = _ResNet50C5(config.in_channels, config.backbone_layers)
+        # Backbone (frozen BN)
+        self.backbone = _ResNetC5(config.in_channels, config.backbone_layers)
         self.input_proj = nn.Conv2d(self.backbone.out_channels, d, 1)
 
         # Object queries
         self.query_embed = nn.Embedding(config.num_queries, d)
 
         # Transformer
-        self.transformer = nn.Transformer(
+        self.transformer = _DETRTransformer(
             d_model=d,
-            nhead=config.n_head,
+            n_head=config.n_head,
             num_encoder_layers=config.num_encoder_layers,
             num_decoder_layers=config.num_decoder_layers,
             dim_feedforward=config.dim_feedforward,
             dropout=config.dropout,
         )
+
+        # Positional encoding (reference PositionEmbeddingSine)
+        self._pos_embed = _PositionEmbeddingSine(num_pos_feats=d // 2)
 
         # Prediction heads
         self.class_embed = nn.Linear(d, config.num_classes + 1)
@@ -405,46 +690,22 @@ class DETRForObjectDetection(PretrainedModel):
 
         fH = int(feat.shape[2])
         fW = int(feat.shape[3])
-        d = int(feat.shape[1])
-
         device = feat.device.type
 
-        # 2. 2-D positional encoding → add to feature map
-        pos_enc = F.sinusoidal_embedding_2d(fH, fW, d, device=device)  # (H'W', d)
-        # Expand to (S, B, d) by repeating across batch
-        pos_t = pos_enc.unsqueeze(1).expand(-1, B, -1)  # (S, B, d)
+        # 2. 2-D positional encoding (B, d, H', W')
+        pos_embed = self._pos_embed.forward(B, fH, fW, device)
 
-        # Flatten feature: (B, d, H'W') → (H'W', B, d) for Transformer
-        src = feat.reshape(B, d, fH * fW).permute(2, 0, 1)  # (S, B, d)
-        src = src + pos_t
-
-        # 3. Object queries → (N, B, d)
+        # 3. Transformer — returns (B, N, d)
         queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
-        N = int(queries.shape[0])
-        tgt = lucid.zeros((N, B, d), device=device)  # (N, B, d) — queries start as zero
+        hs_bn = cast(Tensor, self.transformer(feat, pos_embed, queries))  # (B, N, d)
 
-        # 4. Transformer (src as memory, tgt as queries)
-        # nn.Transformer expects: src=(S, B, d), tgt=(T, B, d)
-        pos_queries = queries.unsqueeze(1).expand(-1, B, -1)  # (N, B, d)
-        hs: Tensor = cast(
-            Tensor,
-            self.transformer(
-                src=src,
-                tgt=tgt + pos_queries,  # add positional query embeddings to tgt
-            ),
-        )
-        # hs: (N, B, d) — decoder output
-
-        # Rearrange to (B, N, d)
-        hs_bn = hs.permute(1, 0, 2)  # (B, N, d)
-
-        # 5. Prediction heads
+        # 4. Prediction heads
         logits: Tensor = cast(Tensor, self.class_embed(hs_bn))  # (B, N, K+1)
         pred_boxes: Tensor = F.sigmoid(
             cast(Tensor, self.bbox_embed(hs_bn))
         )  # (B, N, 4)
 
-        # 6. Loss
+        # 5. Loss
         loss: Tensor | None = None
         if targets is not None:
             loss = self._set_loss(logits, pred_boxes, targets, (iH, iW))
@@ -469,7 +730,6 @@ class DETRForObjectDetection(PretrainedModel):
         """Hungarian-matched set loss across the batch."""
         B = int(logits.shape[0])
         N = int(logits.shape[1])
-        iH, iW = image_size
 
         cls_losses: list[Tensor] = []
         l1_losses: list[Tensor] = []

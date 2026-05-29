@@ -169,6 +169,12 @@ from lucid.models.vision.pvt._weights import (
 # 2014 — GoogLeNet / Inception v1 (Szegedy et al.)
 from lucid.models.vision.googlenet._weights import GoogLeNetWeights
 
+# 2020 — DETR object detection (Carion et al.) — COCO
+from lucid.models.vision.detr._weights import (
+    DETRResNet50Weights,
+    DETRResNet101Weights,
+)
+
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
 
@@ -303,6 +309,9 @@ __all__ = [
     "PVTv2B5Weights",
     # ── Vision (2014) GoogLeNet ───────────────────────────────────────
     "GoogLeNetWeights",
+    # ── Vision (2020) DETR (COCO object detection) ────────────────────
+    "DETRResNet50Weights",
+    "DETRResNet101Weights",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────
     "MobileNetV1Weights",
     # ── Vision (2022) EfficientFormer ─────────────────────────────────
