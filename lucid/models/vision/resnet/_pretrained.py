@@ -4,7 +4,15 @@ import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnet._config import ResNetConfig
 from lucid.models.vision.resnet._model import ResNet, ResNetForImageClassification
-from lucid.models.vision.resnet._weights import ResNet18Weights
+from lucid.models.vision.resnet._weights import (
+    ResNet18Weights,
+    ResNet34Weights,
+    ResNet50Weights,
+    ResNet101Weights,
+    ResNet152Weights,
+    WideResNet50Weights,
+    WideResNet101Weights,
+)
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -403,7 +411,7 @@ def resnet_18_cls(
     return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -411,7 +419,10 @@ def resnet_18_cls(
     default_config=_CFG_34,
 )
 def resnet_34_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNet34Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""ResNet-34 image classifier (backbone + GAP + linear head).
 
@@ -424,9 +435,14 @@ def resnet_34_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNet34Weights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : ResNet34Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -434,12 +450,15 @@ def resnet_34_cls(
     -------
     ResNetForImageClassification
         Classifier with the ResNet-34 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
-    CVPR 2016 (arXiv:1512.03385), Table 1.
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
+    converted from torchvision's ``ResNet34_Weights`` and hosted on the
+    Hugging Face Hub under ``lucid-dl/resnet-34``.
 
     Examples
     --------
@@ -451,11 +470,15 @@ def resnet_34_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNet34Weights, pretrained, weights)
     cfg = ResNetConfig(**{**_CFG_34.__dict__, **overrides}) if overrides else _CFG_34
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnet_34_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -463,7 +486,10 @@ def resnet_34_cls(
     default_config=_CFG_50,
 )
 def resnet_50_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNet50Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""ResNet-50 image classifier (backbone + GAP + linear head).
 
@@ -477,9 +503,14 @@ def resnet_50_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNet50Weights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : ResNet50Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.  Use
         ``num_classes=N`` to retarget the head (e.g. ``num_classes=10``
@@ -490,13 +521,17 @@ def resnet_50_cls(
     -------
     ResNetForImageClassification
         Classifier with the ResNet-50 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
     CVPR 2016 (arXiv:1512.03385), Table 1.  Final pre-classifier
     feature has 2048 channels (``hidden_sizes[3] * expansion``).
+    Pretrained weights are converted from torchvision's
+    ``ResNet50_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/resnet-50``.
 
     Examples
     --------
@@ -516,11 +551,15 @@ def resnet_50_cls(
     >>> model.config.num_classes
     10
     """
+    entry = weights_mod.resolve_weights(ResNet50Weights, pretrained, weights)
     cfg = ResNetConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnet_50_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -528,7 +567,10 @@ def resnet_50_cls(
     default_config=_CFG_101,
 )
 def resnet_101_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNet101Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""ResNet-101 image classifier (backbone + GAP + linear head).
 
@@ -541,9 +583,14 @@ def resnet_101_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNet101Weights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : ResNet101Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -551,12 +598,15 @@ def resnet_101_cls(
     -------
     ResNetForImageClassification
         Classifier with the ResNet-101 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
-    CVPR 2016 (arXiv:1512.03385), Table 1.
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
+    converted from torchvision's ``ResNet101_Weights`` and hosted on the
+    Hugging Face Hub under ``lucid-dl/resnet-101``.
 
     Examples
     --------
@@ -568,11 +618,15 @@ def resnet_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNet101Weights, pretrained, weights)
     cfg = ResNetConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnet_101_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnet_152_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -580,7 +634,10 @@ def resnet_101_cls(
     default_config=_CFG_152,
 )
 def resnet_152_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNet152Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""ResNet-152 image classifier (backbone + GAP + linear head).
 
@@ -594,9 +651,14 @@ def resnet_152_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNet152Weights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : ResNet152Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -604,12 +666,15 @@ def resnet_152_cls(
     -------
     ResNetForImageClassification
         Classifier with the ResNet-152 configuration applied (or with
-        ``overrides`` merged on top of it).
+        ``overrides`` merged on top of it), optionally initialised from
+        pretrained weights.
 
     Notes
     -----
     See He et al., "Deep Residual Learning for Image Recognition",
-    CVPR 2016 (arXiv:1512.03385), Table 1.
+    CVPR 2016 (arXiv:1512.03385), Table 1.  Pretrained weights are
+    converted from torchvision's ``ResNet152_Weights`` and hosted on the
+    Hugging Face Hub under ``lucid-dl/resnet-152``.
 
     Examples
     --------
@@ -621,8 +686,12 @@ def resnet_152_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNet152Weights, pretrained, weights)
     cfg = ResNetConfig(**{**_CFG_152.__dict__, **overrides}) if overrides else _CFG_152
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnet_152_cls")
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -687,7 +756,7 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     return ResNet(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: wide_resnet_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -695,7 +764,10 @@ def wide_resnet_50(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_WIDE50,
 )
 def wide_resnet_50_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: WideResNet50Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""Wide ResNet-50-2 image classifier (backbone + GAP + linear head).
 
@@ -707,9 +779,15 @@ def wide_resnet_50_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`WideResNet50Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : WideResNet50Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -717,7 +795,14 @@ def wide_resnet_50_cls(
     -------
     ResNetForImageClassification
         Classifier with the Wide ResNet-50-2 configuration applied (or
-        with ``overrides`` merged on top of it).
+        with ``overrides`` merged on top of it), optionally initialised
+        from pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``Wide_ResNet50_2_Weights`` and hosted on the Hugging Face Hub under
+    ``lucid-dl/wide-resnet-50-2``.
 
     Examples
     --------
@@ -729,12 +814,16 @@ def wide_resnet_50_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(WideResNet50Weights, pretrained, weights)
     cfg = (
         ResNetConfig(**{**_CFG_WIDE50.__dict__, **overrides})
         if overrides
         else _CFG_WIDE50
     )
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="wide_resnet_50_cls")
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -791,7 +880,7 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     return ResNet(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: wide_resnet_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnet",
     model_type="resnet",
@@ -799,7 +888,10 @@ def wide_resnet_101(pretrained: bool = False, **overrides: object) -> ResNet:
     default_config=_CFG_WIDE101,
 )
 def wide_resnet_101_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: WideResNet101Weights | None = None,
+    **overrides: object,
 ) -> ResNetForImageClassification:
     r"""Wide ResNet-101-2 image classifier (backbone + GAP + linear head).
 
@@ -811,9 +903,15 @@ def wide_resnet_101_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`WideResNet101Weights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : WideResNet101Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNetConfig`.
 
@@ -821,7 +919,14 @@ def wide_resnet_101_cls(
     -------
     ResNetForImageClassification
         Classifier with the Wide ResNet-101-2 configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``Wide_ResNet101_2_Weights`` and hosted on the Hugging Face Hub
+    under ``lucid-dl/wide-resnet-101-2``.
 
     Examples
     --------
@@ -833,12 +938,16 @@ def wide_resnet_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(WideResNet101Weights, pretrained, weights)
     cfg = (
         ResNetConfig(**{**_CFG_WIDE101.__dict__, **overrides})
         if overrides
         else _CFG_WIDE101
     )
-    return ResNetForImageClassification(cfg)
+    model = ResNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="wide_resnet_101_cls")
+    return model
 
 
 # ---------------------------------------------------------------------------

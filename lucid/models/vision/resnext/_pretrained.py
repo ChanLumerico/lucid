@@ -1,8 +1,14 @@
 """Registry factories for all ResNeXt variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnext._config import ResNeXtConfig
 from lucid.models.vision.resnext._model import ResNeXt, ResNeXtForImageClassification
+from lucid.models.vision.resnext._weights import (
+    ResNeXt50_32x4dWeights,
+    ResNeXt101_32x4dWeights,
+    ResNeXt101_32x8dWeights,
+)
 
 # ---------------------------------------------------------------------------
 # Canonical configs
@@ -190,7 +196,7 @@ def resnext_101_32x8d(pretrained: bool = False, **overrides: object) -> ResNeXt:
 # ---------------------------------------------------------------------------
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnext_50_32x4d_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnext",
     model_type="resnext",
@@ -198,29 +204,50 @@ def resnext_101_32x8d(pretrained: bool = False, **overrides: object) -> ResNeXt:
     default_config=_CFG_50_32x4d,
 )
 def resnext_50_32x4d_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeXt50_32x4dWeights | None = None,
+    **overrides: object,
 ) -> ResNeXtForImageClassification:
     r"""ResNeXt-50 (32x4d) image classifier (backbone + GAP + linear head).
 
     Builds a :class:`ResNeXtForImageClassification` with the
     paper-cited ResNeXt-50 (32x4d) topology and a
     :class:`~lucid.nn.Linear` classifier projecting 2048 →
-    ``config.num_classes``.  Approximately 25.0 M parameters; reaches
-    77.8% ImageNet top-1 accuracy (Xie et al., 2017, Table 5).
+    ``config.num_classes``.  Approximately 25.0 M parameters; the
+    distributed ``IMAGENET1K_V2`` checkpoint reaches 81.198% ImageNet-1k
+    top-1 with the improved training recipe.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`ResNeXt50_32x4dWeights.IMAGENET1K_V2`); a tag string
+        (e.g. ``"IMAGENET1K_V2"``) → that specific checkpoint.  Mutually
+        exclusive with ``weights`` (which wins if both are given).
+    weights : ResNeXt50_32x4dWeights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``ResNeXt50_32x4dWeights.IMAGENET1K_V2``.  Takes precedence over
+        ``pretrained``.
     **overrides
-        Keyword overrides forwarded into :class:`ResNeXtConfig`.
+        Keyword overrides forwarded into :class:`ResNeXtConfig`.  Note:
+        overriding ``num_classes`` away from the checkpoint's class
+        count makes pretrained loading fail the strict key/shape check.
 
     Returns
     -------
     ResNeXtForImageClassification
         Classifier with the ResNeXt-50 (32x4d) configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from torchvision's
+    ``ResNeXt50_32X4D_Weights.IMAGENET1K_V2`` and hosted on the Hugging
+    Face Hub under ``lucid-dl/resnext-50-32x4d``.  The V2 preset uses a
+    232 resize ahead of the 224 center crop.
 
     Examples
     --------
@@ -231,16 +258,26 @@ def resnext_50_32x4d_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 100)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = resnext_50_32x4d_cls(pretrained=True)
+    >>> from lucid.models.vision.resnext import ResNeXt50_32x4dWeights
+    >>> model = resnext_50_32x4d_cls(weights=ResNeXt50_32x4dWeights.IMAGENET1K_V2)
     """
+    entry = weights_mod.resolve_weights(ResNeXt50_32x4dWeights, pretrained, weights)
     cfg = (
         ResNeXtConfig(**{**_CFG_50_32x4d.__dict__, **overrides})
         if overrides
         else _CFG_50_32x4d
     )
-    return ResNeXtForImageClassification(cfg)
+    model = ResNeXtForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnext_50_32x4d_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnext_101_32x4d_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnext",
     model_type="resnext",
@@ -248,29 +285,50 @@ def resnext_50_32x4d_cls(
     default_config=_CFG_101_32x4d,
 )
 def resnext_101_32x4d_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeXt101_32x4dWeights | None = None,
+    **overrides: object,
 ) -> ResNeXtForImageClassification:
     r"""ResNeXt-101 (32x4d) image classifier (backbone + GAP + linear head).
 
     Builds a :class:`ResNeXtForImageClassification` with the
     paper-cited ResNeXt-101 (32x4d) topology and a
     :class:`~lucid.nn.Linear` classifier projecting 2048 →
-    ``config.num_classes``.  Approximately 44.2 M parameters; reaches
-    78.8% ImageNet top-1 accuracy (Xie et al., 2017, Table 5).
+    ``config.num_classes``.  Approximately 44.2 M parameters; the
+    distributed Gluon ``GLUON_IN1K`` checkpoint reaches 80.342%
+    ImageNet-1k top-1.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`ResNeXt101_32x4dWeights.GLUON_IN1K`); a tag string
+        (e.g. ``"GLUON_IN1K"``) → that specific checkpoint.  Mutually
+        exclusive with ``weights`` (which wins if both are given).
+    weights : ResNeXt101_32x4dWeights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``ResNeXt101_32x4dWeights.GLUON_IN1K``.  Takes precedence over
+        ``pretrained``.
     **overrides
-        Keyword overrides forwarded into :class:`ResNeXtConfig`.
+        Keyword overrides forwarded into :class:`ResNeXtConfig`.  Note:
+        overriding ``num_classes`` away from the checkpoint's class
+        count makes pretrained loading fail the strict key/shape check.
 
     Returns
     -------
     ResNeXtForImageClassification
         Classifier with the ResNeXt-101 (32x4d) configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
+
+    Notes
+    -----
+    Pretrained weights are converted from the timm Gluon checkpoint
+    ``resnext101_32x4d.gluon_in1k`` and hosted on the Hugging Face Hub
+    under ``lucid-dl/resnext-101-32x4d``.  The Gluon preset uses bicubic
+    interpolation with a 0.875 crop_pct (256 resize → 224 crop).
 
     Examples
     --------
@@ -281,16 +339,26 @@ def resnext_101_32x4d_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = resnext_101_32x4d_cls(pretrained=True)
+    >>> from lucid.models.vision.resnext import ResNeXt101_32x4dWeights
+    >>> model = resnext_101_32x4d_cls(weights=ResNeXt101_32x4dWeights.GLUON_IN1K)
     """
+    entry = weights_mod.resolve_weights(ResNeXt101_32x4dWeights, pretrained, weights)
     cfg = (
         ResNeXtConfig(**{**_CFG_101_32x4d.__dict__, **overrides})
         if overrides
         else _CFG_101_32x4d
     )
-    return ResNeXtForImageClassification(cfg)
+    model = ResNeXtForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnext_101_32x4d_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnext_101_32x8d_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnext",
     model_type="resnext",
@@ -298,37 +366,51 @@ def resnext_101_32x4d_cls(
     default_config=_CFG_101_32x8d,
 )
 def resnext_101_32x8d_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeXt101_32x8dWeights | None = None,
+    **overrides: object,
 ) -> ResNeXtForImageClassification:
     r"""ResNeXt-101 (32x8d) image classifier (backbone + GAP + linear head).
 
     Builds a :class:`ResNeXtForImageClassification` with the
     high-capacity ResNeXt-101 (32x8d) topology and a
     :class:`~lucid.nn.Linear` classifier projecting 2048 →
-    ``config.num_classes``.  Approximately 88.8 M parameters; reaches
-    79.3% ImageNet top-1 accuracy in standard reference-framework
-    reimplementations.
+    ``config.num_classes``.  Approximately 88.8 M parameters; the
+    distributed ``IMAGENET1K_V2`` checkpoint reaches 82.834%
+    ImageNet-1k top-1 with the improved training recipe.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`ResNeXt101_32x8dWeights.IMAGENET1K_V2`); a tag string
+        (e.g. ``"IMAGENET1K_V2"``) → that specific checkpoint.  Mutually
+        exclusive with ``weights`` (which wins if both are given).
+    weights : ResNeXt101_32x8dWeights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``ResNeXt101_32x8dWeights.IMAGENET1K_V2``.  Takes precedence over
+        ``pretrained``.
     **overrides
-        Keyword overrides forwarded into :class:`ResNeXtConfig`.
+        Keyword overrides forwarded into :class:`ResNeXtConfig`.  Note:
+        overriding ``num_classes`` away from the checkpoint's class
+        count makes pretrained loading fail the strict key/shape check.
 
     Returns
     -------
     ResNeXtForImageClassification
         Classifier with the ResNeXt-101 (32x8d) configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Xie et al., "Aggregated Residual Transformations for Deep
-    Neural Networks", CVPR 2017.  The ``32x8d`` variant is the standard
-    choice for the Instagram-pretrained ``ig_resnext_101_32x8d`` model
-    used in many transfer-learning benchmarks.
+    Neural Networks", CVPR 2017.  Pretrained weights are converted from
+    torchvision's ``ResNeXt101_32X8D_Weights.IMAGENET1K_V2`` and hosted
+    on the Hugging Face Hub under ``lucid-dl/resnext-101-32x8d``.  The V2
+    preset uses a 232 resize ahead of the 224 center crop.
 
     Examples
     --------
@@ -339,10 +421,20 @@ def resnext_101_32x8d_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = resnext_101_32x8d_cls(pretrained=True)
+    >>> from lucid.models.vision.resnext import ResNeXt101_32x8dWeights
+    >>> model = resnext_101_32x8d_cls(weights=ResNeXt101_32x8dWeights.IMAGENET1K_V2)
     """
+    entry = weights_mod.resolve_weights(ResNeXt101_32x8dWeights, pretrained, weights)
     cfg = (
         ResNeXtConfig(**{**_CFG_101_32x8d.__dict__, **overrides})
         if overrides
         else _CFG_101_32x8d
     )
-    return ResNeXtForImageClassification(cfg)
+    model = ResNeXtForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnext_101_32x8d_cls")
+    return model

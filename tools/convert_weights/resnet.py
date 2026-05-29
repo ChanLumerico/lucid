@@ -29,15 +29,52 @@ _RESNET_CITATION = (
     "}"
 )
 
+_WIDE_RESNET_CITATION = (
+    "@inproceedings{zagoruyko2016wide,\n"
+    "  title={Wide Residual Networks},\n"
+    "  author={Zagoruyko, Sergey and Komodakis, Nikos},\n"
+    "  booktitle={BMVC}, year={2016}\n"
+    "}"
+)
+
+_RESNET_PAPER_URL = (
+    "He et al., 2015 — *Deep Residual Learning for Image "
+    "Recognition* (arXiv:1512.03385)"
+)
+_WIDE_RESNET_PAPER_URL = (
+    "Zagoruyko & Komodakis, 2016 — *Wide Residual Networks* "
+    "(arXiv:1605.07146)"
+)
+
 # Lucid factory + torchvision (builder, weights-enum) per architecture.
 _RESNET_VARIANTS: dict[str, tuple[str, str, str]] = {
     # arch -> (lucid_cls_factory, repo_id, title)
     "resnet_18": ("resnet_18_cls", "lucid-dl/resnet-18", "ResNet-18"),
+    "resnet_34": ("resnet_34_cls", "lucid-dl/resnet-34", "ResNet-34"),
+    "resnet_50": ("resnet_50_cls", "lucid-dl/resnet-50", "ResNet-50"),
+    "resnet_101": ("resnet_101_cls", "lucid-dl/resnet-101", "ResNet-101"),
+    "resnet_152": ("resnet_152_cls", "lucid-dl/resnet-152", "ResNet-152"),
+    "wide_resnet_50": (
+        "wide_resnet_50_cls",
+        "lucid-dl/wide-resnet-50-2",
+        "Wide ResNet-50-2",
+    ),
+    "wide_resnet_101": (
+        "wide_resnet_101_cls",
+        "lucid-dl/wide-resnet-101-2",
+        "Wide ResNet-101-2",
+    ),
 }
 
 # torchvision builders keyed by arch.
 _TV_BUILDERS = {
     "resnet_18": (tvm.resnet18, tvm.ResNet18_Weights),
+    "resnet_34": (tvm.resnet34, tvm.ResNet34_Weights),
+    "resnet_50": (tvm.resnet50, tvm.ResNet50_Weights),
+    "resnet_101": (tvm.resnet101, tvm.ResNet101_Weights),
+    "resnet_152": (tvm.resnet152, tvm.ResNet152_Weights),
+    "wide_resnet_50": (tvm.wide_resnet50_2, tvm.Wide_ResNet50_2_Weights),
+    "wide_resnet_101": (tvm.wide_resnet101_2, tvm.Wide_ResNet101_2_Weights),
 }
 
 
@@ -106,6 +143,7 @@ class ResNetArch(Architecture):
             "metrics": dict(tv_meta.get("_metrics", {})),
         }
 
+        is_wide = self.arch.startswith("wide_")
         return ConversionSpec(
             model_name=factory_name,
             architecture=self.arch,
@@ -118,11 +156,11 @@ class ResNetArch(Architecture):
             num_classes=int(model.config.num_classes),
             config=config,
             preprocessing=preprocessing,
-            citation=_RESNET_CITATION,
+            citation=_WIDE_RESNET_CITATION if is_wide else _RESNET_CITATION,
             title=title,
-            paper_url="He et al., 2015 — *Deep Residual Learning for Image "
-            "Recognition* (arXiv:1512.03385)",
+            paper_url=_WIDE_RESNET_PAPER_URL if is_wide else _RESNET_PAPER_URL,
             categories=categories,
+            datasets=["imagenet-1k"],
             meta=meta,
         )
 
@@ -130,3 +168,33 @@ class ResNetArch(Architecture):
 @register_arch("resnet_18")
 def _build_resnet_18(tag: str) -> Architecture:
     return ResNetArch("resnet_18", tag)
+
+
+@register_arch("resnet_34")
+def _build_resnet_34(tag: str) -> Architecture:
+    return ResNetArch("resnet_34", tag)
+
+
+@register_arch("resnet_50")
+def _build_resnet_50(tag: str) -> Architecture:
+    return ResNetArch("resnet_50", tag)
+
+
+@register_arch("resnet_101")
+def _build_resnet_101(tag: str) -> Architecture:
+    return ResNetArch("resnet_101", tag)
+
+
+@register_arch("resnet_152")
+def _build_resnet_152(tag: str) -> Architecture:
+    return ResNetArch("resnet_152", tag)
+
+
+@register_arch("wide_resnet_50")
+def _build_wide_resnet_50(tag: str) -> Architecture:
+    return ResNetArch("wide_resnet_50", tag)
+
+
+@register_arch("wide_resnet_101")
+def _build_wide_resnet_101(tag: str) -> Architecture:
+    return ResNetArch("wide_resnet_101", tag)

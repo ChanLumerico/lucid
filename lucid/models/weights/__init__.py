@@ -33,15 +33,30 @@ member of it) also populates :func:`lucid.weights.list_pretrained`.
 # 2012 — AlexNet (Krizhevsky 2014 single-stream OWT after NIPS 2012)
 from lucid.models.vision.alexnet._weights import AlexNetWeights
 
-# 2015 — ResNet (He et al.)
-from lucid.models.vision.resnet._weights import ResNet18Weights
-
 # 2016 — DenseNet (Huang et al.)
 from lucid.models.vision.densenet._weights import (
     DenseNet121Weights,
     DenseNet161Weights,
     DenseNet169Weights,
     DenseNet201Weights,
+)
+
+# 2015 — ResNet (He et al.) — full variant set + Wide ResNet
+from lucid.models.vision.resnet._weights import (
+    ResNet18Weights,
+    ResNet34Weights,
+    ResNet50Weights,
+    ResNet101Weights,
+    ResNet152Weights,
+    WideResNet50Weights,
+    WideResNet101Weights,
+)
+
+# 2017 — ResNeXt (Xie et al.)
+from lucid.models.vision.resnext._weights import (
+    ResNeXt50_32x4dWeights,
+    ResNeXt101_32x4dWeights,
+    ResNeXt101_32x8dWeights,
 )
 
 # 2015 — Inception v3 (Szegedy et al.)
@@ -106,6 +121,16 @@ __all__ = [
     "AlexNetWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
+    "ResNet34Weights",
+    "ResNet50Weights",
+    "ResNet101Weights",
+    "ResNet152Weights",
+    "WideResNet50Weights",
+    "WideResNet101Weights",
+    # ── Vision (2017) ResNeXt ─────────────────────────────────────────
+    "ResNeXt50_32x4dWeights",
+    "ResNeXt101_32x4dWeights",
+    "ResNeXt101_32x8dWeights",
     # ── Vision (2015) Inception v3 ────────────────────────────────────
     "InceptionV3Weights",
     # ── Vision (2016) DenseNet ────────────────────────────────────────

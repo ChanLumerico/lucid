@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: ResNet (full set) + ResNeXt
+
+- **resnet** — ImageNet-1k weights for the 4 remaining canonical ResNets
+  + both Wide ResNets (resnet_18 already shipped): `resnet_34_cls`,
+  `resnet_50_cls`, `resnet_101_cls`, `resnet_152_cls`,
+  `wide_resnet_50_cls`, `wide_resnet_101_cls` ← torchvision
+  `*_Weights.IMAGENET1K_V1`.  Identity-ish key map (stem/head rename);
+  E2E verified incl. wide_resnet_101 (127M).
+- **resnext** — `resnext_50_32x4d_cls`, `resnext_101_32x8d_cls` ←
+  torchvision `*_Weights.IMAGENET1K_V2`; `resnext_101_32x4d_cls` ← timm
+  `resnext101_32x4d.gluon_in1k` (GLUON_IN1K).  Enums on
+  `lucid.models.weights`.
+
 ### Added — Pretrained weights (multi-agent batch: 6 families)
 
 - Pretrained ImageNet-1k weights for 8 variants across 6 vision families,

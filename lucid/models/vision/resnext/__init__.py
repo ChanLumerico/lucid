@@ -10,6 +10,11 @@ from lucid.models.vision.resnext._pretrained import (
     resnext_101_32x8d,
     resnext_101_32x8d_cls,
 )
+from lucid.models.vision.resnext._weights import (
+    ResNeXt50_32x4dWeights,
+    ResNeXt101_32x4dWeights,
+    ResNeXt101_32x8dWeights,
+)
 
 __all__ = [
     "ResNeXtConfig",
@@ -21,4 +26,7 @@ __all__ = [
     "resnext_101_32x4d_cls",
     "resnext_101_32x8d",
     "resnext_101_32x8d_cls",
+    "ResNeXt50_32x4dWeights",
+    "ResNeXt101_32x4dWeights",
+    "ResNeXt101_32x8dWeights",
 ]
