@@ -160,6 +160,7 @@ from lucid.models.vision.inception import (
 from lucid.models.vision.densenet import (
     DenseNetConfig, DenseNet, DenseNetForImageClassification,
     densenet_121, densenet_121_cls,
+    densenet_161, densenet_161_cls,
     densenet_169, densenet_169_cls,
     densenet_201, densenet_201_cls,
     densenet_264, densenet_264_cls,
@@ -460,7 +461,8 @@ __all__ = [
     "inception_v3", "inception_v3_cls",
     # ── Vision (2016) DenseNet ────────────────────────────────────────────────
     "DenseNetConfig", "DenseNet", "DenseNetForImageClassification",
-    "densenet_121", "densenet_121_cls", "densenet_169", "densenet_169_cls",
+    "densenet_121", "densenet_121_cls", "densenet_161", "densenet_161_cls",
+    "densenet_169", "densenet_169_cls",
     "densenet_201", "densenet_201_cls", "densenet_264", "densenet_264_cls",
     # ── Vision (2016) Inception-ResNet v2 ────────────────────────────────────
     "InceptionResNetConfig", "InceptionResNetV2", "InceptionResNetV2ForImageClassification",

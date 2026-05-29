@@ -36,6 +36,14 @@ from lucid.models.vision.alexnet._weights import AlexNetWeights
 # 2015 — ResNet (He et al.)
 from lucid.models.vision.resnet._weights import ResNet18Weights
 
+# 2016 — DenseNet (Huang et al.)
+from lucid.models.vision.densenet._weights import (
+    DenseNet121Weights,
+    DenseNet161Weights,
+    DenseNet169Weights,
+    DenseNet201Weights,
+)
+
 # 2019 — CSPNet (Wang et al.)
 from lucid.models.vision.cspnet._weights import (
     CSPDarknet53Weights,
@@ -74,6 +82,11 @@ __all__ = [
     "AlexNetWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
+    # ── Vision (2016) DenseNet ────────────────────────────────────────
+    "DenseNet121Weights",
+    "DenseNet161Weights",
+    "DenseNet169Weights",
+    "DenseNet201Weights",
     # ── Vision (2019) CSPNet ──────────────────────────────────────────
     "CSPResNet50Weights",
     "CSPResNeXt50Weights",

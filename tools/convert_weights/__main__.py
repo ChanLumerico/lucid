@@ -20,6 +20,7 @@ import tools.convert_weights.convnext  # noqa: F401
 import tools.convert_weights.crossvit  # noqa: F401
 import tools.convert_weights.cspnet  # noqa: F401
 import tools.convert_weights.cvt  # noqa: F401
+import tools.convert_weights.densenet  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 from tools.convert_weights._base import convert, get_arch, upload, write
 

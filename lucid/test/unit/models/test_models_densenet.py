@@ -132,8 +132,11 @@ class TestDenseNetClassifier(unittest.TestCase):
 
 class TestDenseNetRegistry(unittest.TestCase):
 
-    def test_8_variants_registered(self) -> None:
-        self.assertEqual(len(models.list_models(family="densenet")), 8)
+    def test_all_variants_registered(self) -> None:
+        # 5 sizes × {backbone, classifier} = 10 (121/161/169/201/264).
+        self.assertEqual(len(models.list_models(family="densenet")), 10)
+        for n in ("densenet_161", "densenet_161_cls"):
+            self.assertIn(n, models.list_models(family="densenet"))
 
     def test_auto_config(self) -> None:
         cfg = models.AutoConfig.from_pretrained("densenet_121")
@@ -170,6 +173,96 @@ class TestDenseNetSerialization(unittest.TestCase):
             m2.eval()
             diff = float((before - m2(x).logits).abs().max().item())
         self.assertAlmostEqual(diff, 0.0, places=6)
+
+
+class TestDenseNet161(unittest.TestCase):
+    """DenseNet-161 — the wide k=48 / 96-stem variant added in the sweep."""
+
+    def test_param_count(self) -> None:
+        from lucid.models import densenet_161_cls
+
+        n = densenet_161_cls().num_parameters() / 1e6
+        self.assertLess(abs(n - 28.68) / 28.68, 0.01)
+
+    def test_forward(self) -> None:
+        from lucid.models import densenet_161_cls
+
+        m = densenet_161_cls()
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_backbone_last_channels_2208(self) -> None:
+        from lucid.models import densenet_161
+
+        m = densenet_161()
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.last_hidden_state.shape[1], 2208)
+
+
+class TestDenseNetWeightsEnums(unittest.TestCase):
+    """Static contract of every per-variant ``<X>Weights`` enum."""
+
+    def test_default_aliases_imagenet1k_v1(self) -> None:
+        from lucid.models.weights import (
+            DenseNet121Weights,
+            DenseNet161Weights,
+            DenseNet169Weights,
+            DenseNet201Weights,
+        )
+
+        for cls in (
+            DenseNet121Weights,
+            DenseNet161Weights,
+            DenseNet169Weights,
+            DenseNet201Weights,
+        ):
+            self.assertIs(cls.DEFAULT, cls.IMAGENET1K_V1)
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.weights import DenseNet161Weights
+
+        e = DenseNet161Weights.IMAGENET1K_V1.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertEqual(len(e.sha256), 64)
+        self.assertIn("lucid-dl/densenet-161", e.url)
+
+    def test_meta_provenance(self) -> None:
+        from lucid.models.weights import DenseNet201Weights
+
+        meta = DenseNet201Weights.IMAGENET1K_V1.meta
+        self.assertEqual(
+            meta["source"], "torchvision/DenseNet201_Weights.IMAGENET1K_V1"
+        )
+        self.assertEqual(meta["num_params"], 20_013_928)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for name in (
+            "densenet_121_cls",
+            "densenet_161_cls",
+            "densenet_169_cls",
+            "densenet_201_cls",
+        ):
+            self.assertIn("IMAGENET1K_V1", list_pretrained(name))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestDenseNetPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA verify + load + forward."""
+
+    def test_densenet_121_default(self) -> None:
+        from lucid.models import densenet_121_cls
+
+        m = densenet_121_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
 
 
 if __name__ == "__main__":

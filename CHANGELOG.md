@@ -21,6 +21,32 @@ Closes the torchvision `ClassificationPresetTrain` parity gap in one phased PR:
 `TransformsPreset` framework, with reference-framework numerical parity
 verified across 180 parity tests.
 
+### Added — DenseNet pretrained weights + DenseNet-161
+
+- **`lucid.models.vision.densenet`** — pretrained ImageNet-1k weights for
+  all four canonical DenseNet variants (Huang et al., CVPR 2017),
+  converted from torchvision's ``DenseNet*_Weights.IMAGENET1K_V1`` and
+  hosted on ``lucid-dl/densenet-{121,161,169,201}``:
+  - `densenet_121_cls`  8.0M   74.43% top-1
+  - `densenet_161_cls`  28.7M  77.14%  ← **new variant** (k=48, 96-ch stem)
+  - `densenet_169_cls`  14.1M  75.60%
+  - `densenet_201_cls`  20.0M  76.90%
+  
+  ``densenet_161`` / ``densenet_161_cls`` are newly added — the wide
+  k=48 / 96-channel-stem variant from paper Table 1 that Lucid did not
+  previously register (the existing line was 121/169/201/264).
+  ``densenet_264`` keeps random-init only (no public checkpoint).
+  
+  Lucid's DenseNet mirrors torchvision's module layout exactly, so the
+  converter is a pure **identity key map** — no rewrites.  Numerical
+  parity vs torchvision: max abs logit diff ``3-7e-6``.  Load via:
+  ```python
+  from lucid.models import densenet_161_cls
+  from lucid.models.weights import DenseNet161Weights
+  m = densenet_161_cls(pretrained=True)
+  m = densenet_161_cls(weights=DenseNet161Weights.IMAGENET1K_V1)
+  ```
+
 ### Changed — AlexNet single-stream re-derivation
 
 - **`lucid.models.vision.alexnet`** — backbone re-implemented as the
