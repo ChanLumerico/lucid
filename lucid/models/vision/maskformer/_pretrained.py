@@ -1,8 +1,13 @@
 """Registry factories for MaskFormer variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 from lucid.models.vision.maskformer._model import MaskFormerForSemanticSegmentation
+from lucid.models.vision.maskformer._weights import (
+    MaskFormerResNet50Weights,
+    MaskFormerResNet101Weights,
+)
 
 _CFG_R50 = MaskFormerConfig(
     num_classes=150,
@@ -41,7 +46,7 @@ def _build(
     )
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: maskformer_resnet50 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="semantic-segmentation",
     family="maskformer",
     model_type="maskformer",
@@ -49,7 +54,9 @@ def _build(
     default_config=_CFG_R50,
 )
 def maskformer_resnet50(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: MaskFormerResNet50Weights | None = None,
     **overrides: object,
 ) -> MaskFormerForSemanticSegmentation:
     r"""MaskFormer with ResNet-50 backbone (Cheng et al., NeurIPS 2021).
@@ -64,8 +71,14 @@ def maskformer_resnet50(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`MaskFormerResNet50Weights.ADE20K`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : MaskFormerResNet50Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MaskFormerConfig`
         (``num_classes``, ``num_queries``, ``d_model``,
@@ -82,7 +95,9 @@ def maskformer_resnet50(
     See Cheng et al., "Per-Pixel Classification is Not All You Need for
     Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  The
     unification of semantic / instance / panoptic under mask
-    classification is the conceptual key idea.
+    classification is the conceptual key idea.  Pretrained weights are
+    converted from the ``facebook/maskformer-resnet50-ade`` checkpoint and
+    hosted under ``lucid-dl/maskformer-resnet-50``.
 
     Examples
     --------
@@ -92,12 +107,16 @@ def maskformer_resnet50(
     >>> x = lucid.randn(1, 3, 512, 512)
     >>> out = model(x)
     >>> out.logits.shape[1]
-    22
+    21
     """
-    return _build(_CFG_R50, overrides)
+    entry = weights_mod.resolve_weights(MaskFormerResNet50Weights, pretrained, weights)
+    model = _build(_CFG_R50, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="maskformer_resnet50")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: maskformer_resnet101 adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="semantic-segmentation",
     family="maskformer",
     model_type="maskformer",
@@ -105,7 +124,9 @@ def maskformer_resnet50(
     default_config=_CFG_R101,
 )
 def maskformer_resnet101(
-    pretrained: bool = False,
+    pretrained: bool | str = False,
+    *,
+    weights: MaskFormerResNet101Weights | None = None,
     **overrides: object,
 ) -> MaskFormerForSemanticSegmentation:
     r"""MaskFormer with ResNet-101 backbone (Cheng et al., NeurIPS 2021).
@@ -117,8 +138,14 @@ def maskformer_resnet101(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`MaskFormerResNet101Weights.ADE20K`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : MaskFormerResNet101Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MaskFormerConfig`.
 
@@ -133,7 +160,9 @@ def maskformer_resnet101(
     See Cheng et al., "Per-Pixel Classification is Not All You Need for
     Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  Switching
     backbones is the only change versus :func:`maskformer_resnet50`; all
-    transformer-head hyperparameters are shared.
+    transformer-head hyperparameters are shared.  Pretrained weights are
+    converted from the ``facebook/maskformer-resnet101-ade`` checkpoint
+    and hosted under ``lucid-dl/maskformer-resnet-101``.
 
     Examples
     --------
@@ -143,6 +172,10 @@ def maskformer_resnet101(
     >>> x = lucid.randn(1, 3, 512, 512)
     >>> out = model(x)
     >>> out.logits.shape[1]
-    151
+    150
     """
-    return _build(_CFG_R101, overrides)
+    entry = weights_mod.resolve_weights(MaskFormerResNet101Weights, pretrained, weights)
+    model = _build(_CFG_R101, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="maskformer_resnet101")
+    return model

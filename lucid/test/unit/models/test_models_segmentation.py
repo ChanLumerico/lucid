@@ -195,7 +195,9 @@ class TestMaskFormer:
         out = m(x)
         assert isinstance(out, SemanticSegmentationOutput)
         K = m.config.num_classes
-        assert tuple(out.logits.shape) == (_B, K + 1, _H, _W)
+        # Semantic output drops the no-object slot (reference post-processing):
+        # exactly num_classes channels, not num_classes + 1.
+        assert tuple(out.logits.shape) == (_B, K, _H, _W)
         assert out.loss is None
 
         out2 = m(x)
@@ -348,3 +350,84 @@ def test_fcn_pretrained_load() -> None:
     m.eval()
     out = m(lucid.randn(1, 3, 256, 256))
     assert out.logits.shape == (1, 21, 256, 256)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MaskFormer pretrained weights — static enum contract (no network)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_MASKFORMER_SHIPPED = (
+    (
+        "maskformer_resnet50",
+        "maskformer-resnet-50",
+        "facebook/maskformer-resnet50-ade",
+        41_307_863,
+        44.5,
+    ),
+    (
+        "maskformer_resnet101",
+        "maskformer-resnet-101",
+        "facebook/maskformer-resnet101-ade",
+        60_299_991,
+        45.5,
+    ),
+)
+
+
+def _maskformer_enums() -> tuple[type, ...]:
+    from lucid.models.vision.maskformer import (
+        MaskFormerResNet50Weights,
+        MaskFormerResNet101Weights,
+    )
+
+    return (MaskFormerResNet50Weights, MaskFormerResNet101Weights)
+
+
+def test_maskformer_weights_default_aliases() -> None:
+    for cls in _maskformer_enums():
+        assert cls.DEFAULT is cls.ADE20K
+
+
+def test_maskformer_weights_entry_fields() -> None:
+    for cls, (_fac, slug, src, nparams, miou) in zip(
+        _maskformer_enums(), _MASKFORMER_SHIPPED
+    ):
+        e = cls.ADE20K.entry
+        assert e.num_classes == 150
+        assert len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__"
+        assert f"lucid-dl/{slug}" in e.url
+        assert "/ADE20K/" in e.url
+        meta = cls.ADE20K.meta
+        assert meta["source"] == src
+        assert meta["license"] == "other"
+        assert meta["num_params"] == nparams
+        assert meta["metrics"]["ADE20K"]["mIoU"] == miou
+
+
+def test_maskformer_weights_segmentation_preset() -> None:
+    for cls in _maskformer_enums():
+        tf = cls.ADE20K.transforms()
+        d = tf.to_dict()
+        assert d["preprocessor_type"] == "Segmentation"
+        assert d["init_kwargs"]["crop_size"] == 512
+
+
+def test_maskformer_weights_registry_discoverable() -> None:
+    from lucid.weights import list_pretrained
+
+    for fac, *_ in _MASKFORMER_SHIPPED:
+        assert "ADE20K" in list_pretrained(fac)
+
+
+@pytest.mark.skipif(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") != "1",
+    reason="set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+def test_maskformer_pretrained_load() -> None:
+    import lucid.models as models
+
+    m = models.maskformer_resnet50(pretrained=True)
+    m.eval()
+    out = m(lucid.randn(1, 3, 256, 256))
+    # Semantic output: num_classes channels (no-object slot dropped).
+    assert out.logits.shape == (1, 150, 256, 256)

@@ -7,25 +7,38 @@ Key innovation
 MaskFormer reformulates semantic segmentation as **mask classification**:
 
 1. A CNN backbone + FPN pixel decoder extracts per-pixel embeddings.
-2. N learnable queries attend to pixel embeddings via a Transformer decoder.
+2. N learnable queries attend to the backbone's last feature map via a
+   DETR-style Transformer decoder.
 3. Two prediction heads per query:
    - Class head: Linear(d_model, K+1) — class distribution (K+1 for no-object).
-   - Mask head: dot product of query embedding with per-pixel embeddings →
-     binary mask logits (B, N, H/4, W/4).
+   - Mask head: a 3-layer MLP producing a per-query mask embedding, then a
+     dot product with the per-pixel embedding → binary mask logits
+     (B, N, H/4, W/4).
 4. Training: Hungarian matching (mask IoU + cross-entropy) + BCE mask loss +
-   CE class loss on matched pairs.
-5. Inference: weighted sum of class probs × mask probs, upsampled to (H, W).
+   class CE loss on matched pairs.
+5. Inference (semantic): drop the no-object slot, then
+   ``softmax(class)[..., :-1] ⊗ sigmoid(mask)`` summed over queries → per-pixel
+   class scores, upsampled to (H, W).
 
-Architecture
-------------
-  Image (B, C, H, W)
-    ↓  ResNet backbone → [C2(256), C3(512), C4(1024), C5(2048)]
-    ↓  FPN lateral convs → [P2, P3, P4, P5] all at fpn_out_channels
-    ↓  Pixel Decoder: sum/upsample to P2 resolution (H/4, W/4), project to d_model
-  Memory: (B, d_model, H/4, W/4) → flatten → (H/4·W/4, B, d_model)
-  Queries: N × d_model — fed as tgt to TransformerDecoder
-  Class head: (B, N, K+1) softmax at inference
-  Mask head: dot(query, pixel_embed) → (B, N, H/4, W/4) sigmoid at inference
+Reference-faithful layout
+-------------------------
+The submodule names mirror the reference framework's MaskFormer verbatim so
+the pretrained-weight converter is a near-identity key map:
+
+  * ``pixel_level_module.encoder`` — a HF-style ResNet
+    (``embedder.embedder`` stem + ``encoder.stages.{s}.layers.{l}``
+    bottlenecks; ``shortcut`` / ``layer.{0,1,2}`` each a
+    ``convolution`` + regular ``normalization`` BatchNorm).
+  * ``pixel_level_module.decoder`` — the FPN pixel decoder
+    (``fpn.stem`` + ``fpn.layers.{i}`` with ``proj`` / ``block`` conv-GN
+    pairs) + a final ``mask_projection`` 3x3 conv.
+  * ``transformer_module`` — ``queries_embedder`` (nn.Embedding),
+    ``input_projection`` (1x1 conv, C5 → d_model) and a 6-layer
+    ``decoder`` with separate ``q/k/v/o_proj`` attentions
+    (``self_attn`` + ``encoder_attn``), ``mlp.fc1`` / ``mlp.fc2`` and a
+    trailing ``decoder.layernorm``.
+  * ``class_predictor`` (Linear → K+1) and ``mask_embedder.{0,1,2}.0``
+    (3-layer MLP mask head).
 """
 
 from typing import ClassVar, cast
@@ -39,56 +52,74 @@ from lucid.models._output import SemanticSegmentationOutput
 from lucid.models.vision.maskformer._config import MaskFormerConfig
 
 # ---------------------------------------------------------------------------
-# ResNet backbone (C2–C5 feature maps)
+# ResNet backbone (HF-style key layout, regular BatchNorm)
 # ---------------------------------------------------------------------------
 
 
-class _BasicBlock(nn.Module):
-    """ResNet BasicBlock (used by ResNet-18 / -34): 3×3 → 3×3, expansion 1."""
+class _ConvNorm(nn.Module):
+    """``convolution`` + ``normalization`` (BatchNorm) with optional ReLU.
 
-    expansion: ClassVar[int] = 1
+    Mirrors the reference ResNet ``ResNetConvLayer`` key layout so the
+    converter is a pure prefix strip.  ``normalization`` is a regular
+    :class:`nn.BatchNorm2d` (trainable, eval at inference) — *not* a
+    frozen variant.
+    """
 
     def __init__(
         self,
         in_ch: int,
-        mid_ch: int,
+        out_ch: int,
+        kernel_size: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
-        dilation: int = 1,
+        padding: int = 0,
+        activation: bool = True,
     ) -> None:
         super().__init__()
-        out_ch = mid_ch * self.expansion
-        self.conv1 = nn.Conv2d(
+        self.convolution = nn.Conv2d(
             in_ch,
-            mid_ch,
-            3,
-            stride=stride,
-            padding=dilation,
-            dilation=dilation,
-            bias=False,
-        )
-        self.bn1 = nn.BatchNorm2d(mid_ch)
-        self.conv2 = nn.Conv2d(
-            mid_ch,
             out_ch,
-            3,
-            padding=dilation,
-            dilation=dilation,
+            kernel_size,
+            stride=stride,
+            padding=padding,
             bias=False,
         )
-        self.bn2 = nn.BatchNorm2d(out_ch)
-        self.downsample = downsample
+        self.normalization = nn.BatchNorm2d(out_ch)
+        self._act = activation
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        identity = x
-        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        out = cast(Tensor, self.bn2(cast(Tensor, self.conv2(out))))
-        if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
-        return F.relu(out + identity)
+        out: Tensor = cast(
+            Tensor, self.normalization(cast(Tensor, self.convolution(x)))
+        )
+        if self._act:
+            out = F.relu(out)
+        return out
 
 
-class _Bottleneck(nn.Module):
+class _ResNetEmbedder(nn.Module):
+    """Stem: a 7x7 stride-2 conv-BN-ReLU followed by a 3x3 stride-2 maxpool.
+
+    Key layout ``embedder.{convolution,normalization}`` mirrors the
+    reference ``ResNetEmbeddings.embedder``.
+    """
+
+    def __init__(self, in_channels: int) -> None:
+        super().__init__()
+        self.embedder = _ConvNorm(in_channels, 64, 7, stride=2, padding=3)
+        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.embedder(x))
+        return cast(Tensor, self.pool(x))
+
+
+class _ResNetBottleneck(nn.Module):
+    """Bottleneck block with stride on the 3x3 conv (v1.5 / reference layout).
+
+    Holds an optional ``shortcut`` (1x1 conv-BN downsample) and a 3-conv
+    ``layer`` stack (``layer.0`` 1x1, ``layer.1`` 3x3 stride, ``layer.2``
+    1x1).  The final ReLU is applied after the residual add.
+    """
+
     expansion: ClassVar[int] = 4
 
     def __init__(
@@ -96,153 +127,483 @@ class _Bottleneck(nn.Module):
         in_ch: int,
         mid_ch: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
-        dilation: int = 1,
+        downsample: bool = False,
     ) -> None:
         super().__init__()
         out_ch = mid_ch * self.expansion
-        self.conv1 = nn.Conv2d(in_ch, mid_ch, 1, bias=False)
-        self.bn1 = nn.BatchNorm2d(mid_ch)
-        self.conv2 = nn.Conv2d(
-            mid_ch,
-            mid_ch,
-            3,
-            stride=stride,
-            padding=dilation,
-            dilation=dilation,
-            bias=False,
+        self.shortcut: nn.Module | None
+        if downsample:
+            self.shortcut = _ConvNorm(in_ch, out_ch, 1, stride=stride, activation=False)
+        else:
+            self.shortcut = None
+        self.layer = nn.Sequential(
+            _ConvNorm(in_ch, mid_ch, 1),
+            _ConvNorm(mid_ch, mid_ch, 3, stride=stride, padding=1),
+            _ConvNorm(mid_ch, out_ch, 1, activation=False),
         )
-        self.bn2 = nn.BatchNorm2d(mid_ch)
-        self.conv3 = nn.Conv2d(mid_ch, out_ch, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(out_ch)
-        self.downsample = downsample
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        identity = x
-        out: Tensor = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        out = F.relu(cast(Tensor, self.bn2(cast(Tensor, self.conv2(out)))))
-        out = cast(Tensor, self.bn3(cast(Tensor, self.conv3(out))))
-        if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+        identity = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+        out: Tensor = cast(Tensor, self.layer(x))
         return F.relu(out + identity)
 
 
-def _make_layer(
-    in_ch: int,
-    mid_ch: int,
-    num_blocks: int,
-    stride: int = 1,
-    dilation: int = 1,
-    block: type[_BasicBlock] | type[_Bottleneck] = _Bottleneck,
-) -> tuple[nn.Sequential, int]:
-    out_ch = mid_ch * block.expansion
-    ds: nn.Module | None = None
-    if stride != 1 or in_ch != out_ch:
-        ds = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
-            nn.BatchNorm2d(out_ch),
-        )
-    blocks: list[nn.Module] = [
-        block(in_ch, mid_ch, stride=stride, downsample=ds, dilation=dilation)
-    ]
-    for _ in range(1, num_blocks):
-        blocks.append(block(out_ch, mid_ch, dilation=dilation))
-    return nn.Sequential(*blocks), out_ch
+class _ResNetStage(nn.Module):
+    """A stack of bottleneck ``layers``; the first carries the stride/downsample."""
+
+    def __init__(
+        self,
+        in_ch: int,
+        mid_ch: int,
+        num_blocks: int,
+        stride: int,
+    ) -> None:
+        super().__init__()
+        out_ch = mid_ch * _ResNetBottleneck.expansion
+        blocks: list[nn.Module] = [
+            _ResNetBottleneck(in_ch, mid_ch, stride=stride, downsample=True)
+        ]
+        for _ in range(1, num_blocks):
+            blocks.append(_ResNetBottleneck(out_ch, mid_ch))
+        self.layers = nn.Sequential(*blocks)
+        self.out_channels: int = out_ch
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(Tensor, self.layers(x))
+
+
+class _ResNetEncoderStages(nn.Module):
+    """The four bottleneck ``stages`` of a ResNet trunk."""
+
+    def __init__(self, layers: tuple[int, int, int, int]) -> None:
+        super().__init__()
+        # Reference ResNet: stage 0 keeps stride 1 (downsample for channel
+        # change only), stages 1-3 each halve resolution.
+        s0 = _ResNetStage(64, 64, layers[0], stride=1)
+        s1 = _ResNetStage(s0.out_channels, 128, layers[1], stride=2)
+        s2 = _ResNetStage(s1.out_channels, 256, layers[2], stride=2)
+        s3 = _ResNetStage(s2.out_channels, 512, layers[3], stride=2)
+        self.stages = nn.ModuleList([s0, s1, s2, s3])
+        self.out_channels: list[int] = [
+            s0.out_channels,
+            s1.out_channels,
+            s2.out_channels,
+            s3.out_channels,
+        ]
+
+    def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
+        feats: list[Tensor] = []
+        out = x
+        for stage in self.stages:
+            out = cast(Tensor, stage(out))
+            feats.append(out)
+        return feats
 
 
 class _ResNetBackbone(nn.Module):
-    """ResNet backbone returning [C2, C3, C4, C5] feature maps."""
+    """ResNet backbone returning ``[C2, C3, C4, C5]`` feature maps.
+
+    Key layout (``embedder.embedder`` + ``encoder.stages.{s}.layers.{l}``)
+    mirrors the reference ``ResNetBackbone`` so the converter is a pure
+    prefix strip.
+    """
 
     def __init__(
         self,
         in_channels: int,
         layers: tuple[int, int, int, int],
-        block_type: str = "bottleneck",
     ) -> None:
         super().__init__()
-        block: type[_BasicBlock] | type[_Bottleneck] = (
-            _BasicBlock if block_type == "basic" else _Bottleneck
-        )
-        self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.pool = nn.MaxPool2d(3, stride=2, padding=1)
-        self.layer1, c2 = _make_layer(64, 64, layers[0], stride=1, block=block)
-        self.layer2, c3 = _make_layer(c2, 128, layers[1], stride=2, block=block)
-        self.layer3, c4 = _make_layer(c3, 256, layers[2], stride=2, block=block)
-        self.layer4, c5 = _make_layer(c4, 512, layers[3], stride=2, block=block)
-        self.out_channels: list[int] = [c2, c3, c4, c5]
+        self.embedder = _ResNetEmbedder(in_channels)
+        self.encoder = _ResNetEncoderStages(layers)
+        self.out_channels: list[int] = self.encoder.out_channels
 
     def forward(self, x: Tensor) -> list[Tensor]:  # type: ignore[override]
-        x = F.relu(cast(Tensor, self.bn1(cast(Tensor, self.conv1(x)))))
-        x = cast(Tensor, self.pool(x))
-        c2: Tensor = cast(Tensor, self.layer1(x))
-        c3: Tensor = cast(Tensor, self.layer2(c2))
-        c4: Tensor = cast(Tensor, self.layer3(c3))
-        c5: Tensor = cast(Tensor, self.layer4(c4))
-        return [c2, c3, c4, c5]
+        x = cast(Tensor, self.embedder(x))
+        return self.encoder.forward(x)
 
 
 # ---------------------------------------------------------------------------
-# FPN Pixel Decoder
+# FPN Pixel Decoder (reference key layout: conv + GroupNorm)
 # ---------------------------------------------------------------------------
 
 
-class _FPNPixelDecoder(nn.Module):
-    """Feature Pyramid Network pixel decoder.
+class _FPNConvLayer(nn.Sequential):
+    """3x3 conv → GroupNorm(32) → ReLU; reference ``MaskFormerFPNConvLayer``.
 
-    Takes [C2, C3, C4, C5] from the backbone and produces a single
-    per-pixel embedding map at 1/4 resolution projected to d_model channels.
+    Subclasses :class:`nn.Sequential` so the persistent keys are ``0``
+    (conv) / ``1`` (GroupNorm) — matching the reference
+    ``add_module(str(i), ...)`` naming (ReLU has no parameters).
+    """
+
+    def __init__(self, in_ch: int, out_ch: int) -> None:
+        super().__init__(
+            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
+            nn.GroupNorm(32, out_ch),
+            nn.ReLU(inplace=True),
+        )
+
+
+class _FPNLayer(nn.Module):
+    """One FPN merge step: lateral ``proj`` + upsample-add + ``block``.
+
+    ``proj`` is a (1x1 conv, GroupNorm) Sequential matching the reference
+    ``proj.0`` / ``proj.1`` keys; ``block`` is a :class:`_FPNConvLayer`.
+    """
+
+    def __init__(self, in_features: int, lateral_features: int) -> None:
+        super().__init__()
+        self.proj = nn.Sequential(
+            nn.Conv2d(lateral_features, in_features, 1, padding=0, bias=False),
+            nn.GroupNorm(32, in_features),
+        )
+        self.block = _FPNConvLayer(in_features, in_features)
+
+    def forward(self, down: Tensor, left: Tensor) -> Tensor:  # type: ignore[override]
+        left = cast(Tensor, self.proj(left))
+        h = int(left.shape[2])
+        w = int(left.shape[3])
+        down = F.interpolate(down, size=(h, w), mode="nearest")
+        down = down + left
+        return cast(Tensor, self.block(down))
+
+
+class _FPNModel(nn.Module):
+    """Feature Pyramid Network: a ``stem`` + top-down ``layers``.
+
+    Returns the list of fused feature maps (low → high resolution); the
+    pixel decoder uses the last (highest-resolution) one.
     """
 
     def __init__(
         self,
-        in_channels: list[int],  # [c2, c3, c4, c5]
-        fpn_ch: int,
-        out_ch: int,
+        in_features: int,
+        lateral_widths: list[int],
+        feature_size: int,
     ) -> None:
         super().__init__()
-        # Lateral 1x1 convs for each scale
-        self.lat5 = nn.Conv2d(in_channels[3], fpn_ch, 1)
-        self.lat4 = nn.Conv2d(in_channels[2], fpn_ch, 1)
-        self.lat3 = nn.Conv2d(in_channels[1], fpn_ch, 1)
-        self.lat2 = nn.Conv2d(in_channels[0], fpn_ch, 1)
-        # 3x3 output convs
-        self.out5 = nn.Conv2d(fpn_ch, fpn_ch, 3, padding=1)
-        self.out4 = nn.Conv2d(fpn_ch, fpn_ch, 3, padding=1)
-        self.out3 = nn.Conv2d(fpn_ch, fpn_ch, 3, padding=1)
-        self.out2 = nn.Conv2d(fpn_ch, fpn_ch, 3, padding=1)
-        # Project to d_model for transformer
-        self.proj = nn.Conv2d(fpn_ch, out_ch, 1)
-        self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
+        self.stem = _FPNConvLayer(in_features, feature_size)
+        self.layers = nn.Sequential(
+            *[_FPNLayer(feature_size, lw) for lw in lateral_widths[::-1]]
+        )
+
+    def forward(self, features: list[Tensor]) -> list[Tensor]:  # type: ignore[override]
+        fpn_features: list[Tensor] = []
+        last_feature = features[-1]
+        other_features = features[:-1]
+        output: Tensor = cast(Tensor, self.stem(last_feature))
+        rev = other_features[::-1]
+        for i, layer in enumerate(self.layers):
+            output = cast(Tensor, layer(output, rev[i]))
+            fpn_features.append(output)
+        return fpn_features
+
+
+class _FPNPixelDecoder(nn.Module):
+    """Reference ``MaskFormerPixelDecoder``: FPN + a 3x3 ``mask_projection``.
+
+    Produces the per-pixel mask-feature map at 1/4 resolution and
+    ``mask_feature_size`` channels.
+    """
+
+    def __init__(
+        self,
+        in_features: int,  # C5 channels
+        lateral_widths: list[int],  # [c2, c3, c4]
+        feature_size: int,
+        mask_feature_size: int,
+    ) -> None:
+        super().__init__()
+        self.fpn = _FPNModel(in_features, lateral_widths, feature_size)
+        self.mask_projection = nn.Conv2d(feature_size, mask_feature_size, 3, padding=1)
 
     def forward(self, features: list[Tensor]) -> Tensor:  # type: ignore[override]
-        """
-        Args:
-            features: [C2, C3, C4, C5] from backbone.
+        fpn_features = self.fpn.forward(features)
+        return cast(Tensor, self.mask_projection(fpn_features[-1]))
 
-        Returns:
-            (B, out_ch, H/4, W/4) per-pixel embeddings.
-        """
-        c2, c3, c4, c5 = features
 
-        # Top-down FPN with per-level 3×3 smoothing (paper §3.2):
-        # each lateral is smoothed via its own out_* conv before merging.
-        p5: Tensor = cast(Tensor, self.out5(F.relu(cast(Tensor, self.lat5(c5)))))
-        p4: Tensor = cast(
-            Tensor,
-            self.out4(F.relu(cast(Tensor, self.lat4(c4))) + cast(Tensor, self.up(p5))),
+# ---------------------------------------------------------------------------
+# Sine 2-D positional encoding (reference MaskFormerSinePositionEmbedding)
+# ---------------------------------------------------------------------------
+
+
+class _SinePositionEmbedding(nn.Module):
+    """Normalised 2-D sinusoidal positional encoding (reference-exact).
+
+    Inference always runs on a single, unpadded image, so the mask is
+    all-ones and reduces to plain row / column cumulative sums.
+
+    Reference defaults: ``num_position_features = d_model/2``,
+    ``temperature = 10000``, ``normalize = True``, ``scale = 2π``.
+    """
+
+    def __init__(
+        self,
+        num_position_features: int,
+        temperature: float = 10000.0,
+        scale: float = 6.283185307179586,
+        eps: float = 1e-6,
+    ) -> None:
+        super().__init__()
+        self.num_position_features = num_position_features
+        self.temperature = temperature
+        self.scale = scale
+        self.eps = eps
+
+    def forward(self, batch: int, height: int, width: int, device: str) -> Tensor:  # type: ignore[override]
+        npf = self.num_position_features
+        ones = lucid.ones(1, height, width, dtype=lucid.float32, device=device)
+        y_embed = ones.cumsum(dim=1)
+        x_embed = ones.cumsum(dim=2)
+        y_embed = y_embed / (y_embed[:, -1:, :] + self.eps) * self.scale
+        x_embed = x_embed / (x_embed[:, :, -1:] + self.eps) * self.scale
+
+        dim_t = lucid.arange(0, npf, dtype=lucid.float32, device=device)
+        dim_t = self.temperature ** (2.0 * lucid.floor(dim_t / 2.0) / npf)
+
+        pos_x = x_embed[:, :, :, None] / dim_t
+        pos_y = y_embed[:, :, :, None] / dim_t
+        pos_x = lucid.stack(
+            [lucid.sin(pos_x[:, :, :, 0::2]), lucid.cos(pos_x[:, :, :, 1::2])], dim=4
+        ).flatten(3)
+        pos_y = lucid.stack(
+            [lucid.sin(pos_y[:, :, :, 0::2]), lucid.cos(pos_y[:, :, :, 1::2])], dim=4
+        ).flatten(3)
+        pos = lucid.cat([pos_y, pos_x], dim=3).permute(0, 3, 1, 2)  # (1, d, H, W)
+        if batch > 1:
+            pos = pos.repeat(batch, 1, 1, 1)
+        return pos
+
+
+# ---------------------------------------------------------------------------
+# DETR-style decoder with separate q/k/v/o projections (reference-exact)
+# ---------------------------------------------------------------------------
+
+
+def _with_pos(tensor: Tensor, pos: Tensor | None) -> Tensor:
+    """Add positional embedding to a tensor (identity when ``pos`` is None)."""
+    return tensor if pos is None else tensor + pos
+
+
+class _Attention(nn.Module):
+    """Multi-head attention with separate ``q/k/v/o_proj`` linears.
+
+    Operates on ``(B, L, d)`` sequences.  Position embeddings are added to
+    the *query* and *key* inputs (never the value) before projection, per
+    the reference MaskFormer DETR attention.
+    """
+
+    def __init__(self, d_model: int, n_head: int) -> None:
+        super().__init__()
+        self.n_head = n_head
+        self.head_dim = d_model // n_head
+        self.scaling = self.head_dim**-0.5
+        self.k_proj = nn.Linear(d_model, d_model)
+        self.v_proj = nn.Linear(d_model, d_model)
+        self.q_proj = nn.Linear(d_model, d_model)
+        self.o_proj = nn.Linear(d_model, d_model)
+
+    def _split(self, x: Tensor, B: int, L: int) -> Tensor:
+        # (B, L, d) → (B, n_head, L, head_dim)
+        return x.reshape(B, L, self.n_head, self.head_dim).permute(0, 2, 1, 3)
+
+    def forward(  # type: ignore[override]
+        self,
+        query_input: Tensor,  # (B, Lq, d) — query stream (+ query pos)
+        key_input: Tensor,  # (B, Lk, d) — key stream (+ key pos)
+        value_input: Tensor,  # (B, Lk, d) — value stream (no pos)
+    ) -> Tensor:
+        B = int(query_input.shape[0])
+        Lq = int(query_input.shape[1])
+        Lk = int(key_input.shape[1])
+
+        q = self._split(cast(Tensor, self.q_proj(query_input)), B, Lq)
+        k = self._split(cast(Tensor, self.k_proj(key_input)), B, Lk)
+        v = self._split(cast(Tensor, self.v_proj(value_input)), B, Lk)
+
+        # (B, h, Lq, hd) @ (B, h, hd, Lk) → (B, h, Lq, Lk)
+        attn = lucid.matmul(q * self.scaling, k.permute(0, 1, 3, 2))
+        attn = F.softmax(attn, dim=-1)
+        out = lucid.matmul(attn, v)  # (B, h, Lq, hd)
+        out = out.permute(0, 2, 1, 3).reshape(B, Lq, self.n_head * self.head_dim)
+        return cast(Tensor, self.o_proj(out))
+
+
+class _DecoderMLP(nn.Module):
+    """Feed-forward block (``fc1`` → ReLU → ``fc2``); reference ``MaskFormerDetrMLP``."""
+
+    def __init__(self, d_model: int, dim_ff: int) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(d_model, dim_ff)
+        self.fc2 = nn.Linear(dim_ff, d_model)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(Tensor, self.fc2(F.relu(cast(Tensor, self.fc1(x)))))
+
+
+class _DecoderLayer(nn.Module):
+    """One post-norm decoder layer (reference ``MaskFormerDetrDecoderLayer``).
+
+    Submodule names match the reference: ``self_attn`` + ``self_attn_layer_norm``,
+    ``encoder_attn`` + ``encoder_attn_layer_norm``, ``mlp`` + ``final_layer_norm``.
+    Self-attention adds the query positions to Q/K; cross-attention adds the
+    query positions to Q and the spatial positions to K.
+    """
+
+    def __init__(self, d_model: int, n_head: int, dim_ff: int) -> None:
+        super().__init__()
+        self.self_attn = _Attention(d_model, n_head)
+        self.self_attn_layer_norm = nn.LayerNorm(d_model)
+        self.encoder_attn = _Attention(d_model, n_head)
+        self.encoder_attn_layer_norm = nn.LayerNorm(d_model)
+        self.mlp = _DecoderMLP(d_model, dim_ff)
+        self.final_layer_norm = nn.LayerNorm(d_model)
+
+    def forward(  # type: ignore[override]
+        self,
+        hidden: Tensor,  # (B, N, d) query stream
+        memory: Tensor,  # (B, S, d) encoder features
+        spatial_pos: Tensor,  # (B, S, d) spatial position embeddings
+        query_pos: Tensor,  # (B, N, d) query position embeddings
+    ) -> Tensor:
+        # Self-attention (query pos added to Q + K).
+        residual = hidden
+        q_in = _with_pos(hidden, query_pos)
+        hidden = self.self_attn.forward(q_in, q_in, hidden)
+        hidden = residual + hidden
+        hidden = cast(Tensor, self.self_attn_layer_norm(hidden))
+
+        # Cross-attention (query pos to Q, spatial pos to K, plain memory V).
+        residual = hidden
+        hidden = self.encoder_attn.forward(
+            _with_pos(hidden, query_pos),
+            _with_pos(memory, spatial_pos),
+            memory,
         )
-        p3: Tensor = cast(
-            Tensor,
-            self.out3(F.relu(cast(Tensor, self.lat3(c3))) + cast(Tensor, self.up(p4))),
+        hidden = residual + hidden
+        hidden = cast(Tensor, self.encoder_attn_layer_norm(hidden))
+
+        # Feed-forward.
+        residual = hidden
+        hidden = cast(Tensor, self.mlp(hidden))
+        hidden = residual + hidden
+        hidden = cast(Tensor, self.final_layer_norm(hidden))
+        return hidden
+
+
+class _TransformerDecoder(nn.Module):
+    """Stack of decoder layers + a trailing ``layernorm`` (reference layout)."""
+
+    def __init__(self, d_model: int, n_head: int, dim_ff: int, depth: int) -> None:
+        super().__init__()
+        self.layers = nn.ModuleList(
+            [_DecoderLayer(d_model, n_head, dim_ff) for _ in range(depth)]
         )
-        p2: Tensor = cast(
-            Tensor,
-            self.out2(F.relu(cast(Tensor, self.lat2(c2))) + cast(Tensor, self.up(p3))),
+        self.layernorm = nn.LayerNorm(d_model)
+
+    def forward(  # type: ignore[override]
+        self,
+        hidden: Tensor,
+        memory: Tensor,
+        spatial_pos: Tensor,
+        query_pos: Tensor,
+    ) -> Tensor:
+        out = hidden
+        for layer in self.layers:
+            out = cast(Tensor, layer(out, memory, spatial_pos, query_pos))
+        return cast(Tensor, self.layernorm(out))
+
+
+class _TransformerModule(nn.Module):
+    """Reference ``MaskFormerTransformerModule``.
+
+    Holds ``queries_embedder`` (nn.Embedding), ``input_projection``
+    (1x1 conv C5 → d_model) and the DETR-style ``decoder``.
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        d_model: int,
+        n_head: int,
+        dim_ff: int,
+        depth: int,
+        num_queries: int,
+    ) -> None:
+        super().__init__()
+        self._pos_embed = _SinePositionEmbedding(num_position_features=d_model // 2)
+        self.queries_embedder = nn.Embedding(num_queries, d_model)
+        self.input_projection = nn.Conv2d(in_features, d_model, 1)
+        self.decoder = _TransformerDecoder(d_model, n_head, dim_ff, depth)
+
+    def forward(self, image_features: Tensor) -> Tensor:  # type: ignore[override]
+        feat: Tensor = cast(Tensor, self.input_projection(image_features))
+        B = int(feat.shape[0])
+        c = int(feat.shape[1])
+        h = int(feat.shape[2])
+        w = int(feat.shape[3])
+        device = feat.device.type
+
+        # Query positions: (N, d) → (B, N, d)
+        q_weight: Tensor = cast(Tensor, self.queries_embedder.weight)
+        query_pos = q_weight.unsqueeze(0).repeat(B, 1, 1)
+        hidden = lucid.zeros(query_pos.shape, device=device)
+
+        # Spatial positions + flattened memory: (B, S, d)
+        pos = self._pos_embed.forward(B, h, w, device)  # (B, d, h, w)
+        spatial_pos = pos.reshape(B, c, h * w).permute(0, 2, 1)
+        memory = feat.reshape(B, c, h * w).permute(0, 2, 1)
+
+        return self.decoder.forward(hidden, memory, spatial_pos, query_pos)
+
+
+class _PixelLevelModule(nn.Module):
+    """Reference ``MaskFormerPixelLevelModule``: ``encoder`` + FPN ``decoder``."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        layers: tuple[int, int, int, int],
+        feature_size: int,
+        mask_feature_size: int,
+    ) -> None:
+        super().__init__()
+        self.encoder = _ResNetBackbone(in_channels, layers)
+        ch = self.encoder.out_channels  # [c2, c3, c4, c5]
+        self.decoder = _FPNPixelDecoder(
+            in_features=ch[-1],
+            lateral_widths=ch[:-1],
+            feature_size=feature_size,
+            mask_feature_size=mask_feature_size,
         )
 
-        # Project to d_model
-        return cast(Tensor, self.proj(p2))  # (B, out_ch, H/4, W/4)
+    def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        features = self.encoder.forward(x)
+        pixel_embeddings = self.decoder.forward(features)
+        # (C5 raw backbone feature, per-pixel mask features)
+        return features[-1], pixel_embeddings
+
+
+class _MaskEmbedder(nn.Sequential):
+    """3-layer MLP mask head (reference ``MaskformerMLPPredictionHead``).
+
+    Subclasses :class:`nn.Sequential` so the per-layer keys are
+    ``{0,1,2}`` and each layer is itself a ``nn.Sequential`` of
+    ``Linear`` (``.0``) + activation (``.1``, no parameters), giving the
+    reference ``mask_embedder.{0,1,2}.0.{weight,bias}`` key layout.
+    Layers 0-1 use ReLU; the final layer is identity.
+    """
+
+    def __init__(
+        self, d_model: int, mask_feature_size: int, num_layers: int = 3
+    ) -> None:
+        in_dims = [d_model] + [d_model] * (num_layers - 1)
+        out_dims = [d_model] * (num_layers - 1) + [mask_feature_size]
+        blocks: list[nn.Module] = []
+        for i in range(num_layers):
+            act: nn.Module = nn.ReLU() if i < num_layers - 1 else nn.Identity()
+            blocks.append(nn.Sequential(nn.Linear(in_dims[i], out_dims[i]), act))
+        super().__init__(*blocks)
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +676,7 @@ def _hungarian_match_masks(
 
 
 class MaskFormerForSemanticSegmentation(PretrainedModel):
-    r"""MaskFormer semantic / panoptic segmentation model (Cheng et al., NeurIPS 2021).
+    r"""MaskFormer semantic-segmentation model (Cheng et al., NeurIPS 2021).
 
     Recasts semantic segmentation as **mask classification**: instead of
     per-pixel cross-entropy, the model predicts a fixed set of
@@ -333,11 +694,12 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
     with masked attention.
 
     Architecturally: a ResNet backbone -> FPN-style pixel decoder
-    produces a per-pixel embedding of dimension ``d_model``, and a
-    transformer decoder operates on :math:`N` query embeddings, attending
-    to the encoder memory; sibling heads then produce :math:`(N, K+1)`
-    class logits and :math:`(N, d)` mask embeddings.  Each query's binary
-    mask is recovered by a dot product with the pixel embedding.
+    produces a per-pixel embedding of dimension ``mask_feature_size``, and
+    a DETR-style transformer decoder operates on :math:`N` query
+    embeddings, cross-attending to the projected backbone ``C5`` feature
+    map; sibling heads then produce :math:`(N, K+1)` class logits and a
+    3-layer-MLP mask embedding.  Each query's binary mask is recovered by
+    a dot product with the pixel embedding.
 
     Parameters
     ----------
@@ -350,21 +712,17 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
     ----------
     config : MaskFormerConfig
         Stored copy of the config that built this model.
-    backbone : _ResNetBackbone
-        ResNet trunk producing multi-scale features ``C2-C5``.
-    pixel_decoder : _FPNPixelDecoder
-        FPN-style top-down decoder yielding a per-pixel embedding
-        :math:`(B, d, H/4, W/4)`.
-    query_embed : nn.Embedding
-        Learned segmentation queries ``(num_queries, d_model)``.
-    transformer_decoder : nn.TransformerDecoder
-        ``num_decoder_layers``-layer transformer decoder applied to the
-        queries with memory drawn from the backbone's final stage.
-    class_head : nn.Linear
+    pixel_level_module : _PixelLevelModule
+        ResNet ``encoder`` + FPN pixel ``decoder`` yielding the raw ``C5``
+        feature and a per-pixel embedding :math:`(B, d, H/4, W/4)`.
+    transformer_module : _TransformerModule
+        Learned queries + ``input_projection`` + a 6-layer DETR-style
+        decoder.
+    class_predictor : nn.Linear
         Per-query :math:`(K + 1)` classification head (``+1`` for the
         "no object" class).
-    mask_embed : nn.Linear
-        Per-query embedding producing the dot-product mask weights.
+    mask_embedder : _MaskEmbedder
+        Per-query 3-layer MLP producing the dot-product mask weights.
 
     Notes
     -----
@@ -372,19 +730,11 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
     Semantic Segmentation", NeurIPS 2021 (arXiv:2107.06278).  The total
     loss combines a CE term over query class predictions and a per-mask
     binary CE + dice term, summed only over the Hungarian-matched query
-    permutation :math:`\hat{\sigma}`:
+    permutation :math:`\hat{\sigma}`.
 
-    .. math::
-
-        \mathcal{L} = \sum_{i=1}^{N}
-            \bigl[\mathcal{L}_\mathrm{cls}\bigl(c_i, p_{\hat{\sigma}(i)}\bigr)
-            + \mathbb{1}_{c_i \ne \varnothing}\,
-              \mathcal{L}_\mathrm{mask}\bigl(m_i, \hat{m}_{\hat{\sigma}(i)}\bigr)
-            \bigr].
-
-    For semantic-segmentation inference the model collapses queries by
-    softmax-weighted summation into a standard :math:`(B, K + 1, H, W)`
-    logit map for direct argmax evaluation.
+    For semantic-segmentation inference the model drops the "no-object"
+    slot and collapses queries by softmax-weighted summation into a
+    standard :math:`(B, K, H, W)` logit map for direct argmax evaluation.
 
     Examples
     --------
@@ -393,8 +743,8 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
     >>> model = maskformer_resnet50()
     >>> x = lucid.randn(1, 3, 512, 512)
     >>> out = model(x)
-    >>> out.logits.shape   # (B, K + 1, H, W)
-    (1, 151, 512, 512)
+    >>> out.logits.shape   # (B, K, H, W)
+    (1, 150, 512, 512)
     """
 
     config_class: ClassVar[type[MaskFormerConfig]] = MaskFormerConfig
@@ -406,41 +756,28 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
         d = config.d_model
         K = config.num_classes
 
-        # 1. Backbone
-        self.backbone = _ResNetBackbone(
-            config.in_channels,
-            config.backbone_layers,
-            config.backbone_block,
+        # 1. Pixel-level module (ResNet encoder + FPN pixel decoder)
+        self.pixel_level_module = _PixelLevelModule(
+            in_channels=config.in_channels,
+            layers=config.backbone_layers,
+            feature_size=config.fpn_out_channels,
+            mask_feature_size=d,
         )
+        c5_channels = self.pixel_level_module.encoder.out_channels[-1]
 
-        # 2. Pixel decoder
-        self.pixel_decoder = _FPNPixelDecoder(
-            self.backbone.out_channels,
-            fpn_ch=config.fpn_out_channels,
-            out_ch=d,
-        )
-
-        # 3. Query embeddings
-        self.query_embed = nn.Embedding(config.num_queries, d)
-
-        # 4. Transformer decoder
-        dec_layer = nn.TransformerDecoderLayer(
+        # 2. Transformer module (queries + input projection + decoder)
+        self.transformer_module = _TransformerModule(
+            in_features=c5_channels,
             d_model=d,
-            nhead=config.n_head,
-            dim_feedforward=config.dim_feedforward,
-            dropout=config.dropout,
-        )
-        self.transformer_decoder = nn.TransformerDecoder(
-            dec_layer,
-            num_layers=config.num_decoder_layers,
+            n_head=config.n_head,
+            dim_ff=config.dim_feedforward,
+            depth=config.num_decoder_layers,
+            num_queries=config.num_queries,
         )
 
-        # 5. Prediction heads
-        self.class_head = nn.Linear(d, K + 1)
-        self.mask_embed = nn.Linear(d, d)
-
-        # 6. Per-pixel embedding projection (used in mask head dot product)
-        self.pixel_proj = nn.Conv2d(d, d, 1)
+        # 3. Prediction heads
+        self.class_predictor = nn.Linear(d, K + 1)
+        self.mask_embedder = _MaskEmbedder(d, d)
 
     def forward(  # type: ignore[override]
         self,
@@ -455,67 +792,55 @@ class MaskFormerForSemanticSegmentation(PretrainedModel):
 
         Returns:
             ``SemanticSegmentationOutput``:
-              ``logits``: (B, K+1, H, W) per-pixel class logits.
+              ``logits``: (B, K, H, W) per-pixel class logits (no-object
+                          slot dropped — matches the reference semantic
+                          post-processing).
               ``loss``:   training loss when targets provided.
         """
         B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
 
-        # 1. Backbone + pixel decoder → (B, d, H/4, W/4)
-        features: list[Tensor] = self.backbone.forward(x)
-        pixel_emb: Tensor = self.pixel_decoder.forward(features)
-        pixel_emb = cast(Tensor, self.pixel_proj(pixel_emb))
+        # 1. Pixel-level module → (C5 feature, per-pixel mask embedding)
+        image_features, pixel_embeddings = self.pixel_level_module.forward(x)
+        fH = int(pixel_embeddings.shape[2])
+        fW = int(pixel_embeddings.shape[3])
+        d = int(pixel_embeddings.shape[1])
 
-        fH = int(pixel_emb.shape[2])
-        fW = int(pixel_emb.shape[3])
-        d = int(pixel_emb.shape[1])
+        # 2. Transformer module → (B, N, d) query embeddings
+        hs: Tensor = self.transformer_module.forward(image_features)  # (B, N, d)
+        N = int(hs.shape[1])
 
-        # 2. Flatten pixel embeddings → (S, B, d) for transformer
-        # pixel_emb: (B, d, H, W) → (B, d, H*W) → (H*W, B, d)
-        mem: Tensor = pixel_emb.reshape(B, d, fH * fW).permute(2, 0, 1)
+        # 3. Class predictions: (B, N, K+1)
+        class_logits: Tensor = cast(Tensor, self.class_predictor(hs))
 
-        # 3. Object queries → (N, B, d)
-        N = self._cfg.num_queries
-        q_embed: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
-        tgt: Tensor = q_embed.unsqueeze(1).expand(-1, B, -1)  # (N, B, d)
-
-        # 4. Transformer decoder
-        hs: Tensor = self.transformer_decoder.forward(tgt, mem)  # (N, B, d)
-
-        # 5. Rearrange → (B, N, d)
-        hs_bn: Tensor = hs.permute(1, 0, 2)
-
-        # 6. Class predictions: (B, N, K+1)
-        class_logits: Tensor = cast(Tensor, self.class_head(hs_bn))
-
-        # 7. Mask predictions: (B, N, H/4, W/4)
-        mask_embed: Tensor = cast(Tensor, self.mask_embed(hs_bn))  # (B, N, d)
-        # pixel_emb: (B, d, H/4, W/4) → (B, d, H*W) → dot with (B, N, d)
-        pixel_flat: Tensor = pixel_emb.reshape(B, d, fH * fW)  # (B, d, S)
-        # (B, N, d) × (B, d, S) → (B, N, S)
-        mask_logits_flat: Tensor = lucid.matmul(mask_embed, pixel_flat)
+        # 4. Mask predictions: einsum("bqc,bchw->bqhw") via matmul
+        mask_embed: Tensor = cast(Tensor, self.mask_embedder(hs))  # (B, N, d)
+        pixel_flat: Tensor = pixel_embeddings.reshape(B, d, fH * fW)  # (B, d, S)
+        mask_logits_flat: Tensor = lucid.matmul(mask_embed, pixel_flat)  # (B, N, S)
         mask_logits: Tensor = mask_logits_flat.reshape(B, N, fH, fW)
 
-        # 8. Compute output seg logits (inference)
-        # class_probs: (B, N, K+1), mask_probs: (B, N, H/4, W/4)
-        class_probs: Tensor = F.softmax(class_logits, dim=-1)  # (B, N, K+1)
-        mask_probs: Tensor = F.sigmoid(mask_logits)  # (B, N, H/4, W/4)
-
+        # 5. Semantic post-processing (reference-exact):
+        #    masks_classes = softmax(class)[..., :-1]   (drop no-object)
+        #    masks_probs   = sigmoid(mask)
+        #    seg = einsum("bqc,bqhw->bchw")             (at feature resolution)
         K_plus_1 = self._cfg.num_classes + 1
-        # seg_logits[b,k,h,w] = sum_n class_probs[b,n,k] * mask_probs[b,n,h,w]
-        # Reshape for bmm: class_probs (B, K+1, N) × mask_probs (B, N, H*W)
-        class_probs_t: Tensor = class_probs.permute(0, 2, 1)  # (B, K+1, N)
-        mask_flat: Tensor = mask_probs.reshape(B, N, fH * fW)  # (B, N, S)
-        seg_flat: Tensor = lucid.matmul(class_probs_t, mask_flat)  # (B, K+1, S)
-        seg_logits_small: Tensor = seg_flat.reshape(B, K_plus_1, fH, fW)
+        class_probs: Tensor = F.softmax(class_logits, dim=-1)  # (B, N, K+1)
+        masks_classes: Tensor = class_probs[:, :, : K_plus_1 - 1]  # (B, N, K)
+        masks_probs: Tensor = F.sigmoid(mask_logits)  # (B, N, fH, fW)
 
-        # Upsample to input resolution
+        # seg[b,k,h,w] = sum_n masks_classes[b,n,k] * masks_probs[b,n,h,w]
+        masks_classes_t: Tensor = masks_classes.permute(0, 2, 1)  # (B, K, N)
+        masks_flat: Tensor = masks_probs.reshape(B, N, fH * fW)  # (B, N, S)
+        seg_flat: Tensor = lucid.matmul(masks_classes_t, masks_flat)  # (B, K, S)
+        seg_logits_small: Tensor = seg_flat.reshape(B, self._cfg.num_classes, fH, fW)
+
+        # 6. Upsample to input resolution (per the reference image processor)
         seg_logits: Tensor = F.interpolate(
             seg_logits_small, size=(iH, iW), mode="bilinear", align_corners=False
         )
 
-        # 9. Loss
+        # 7. Loss
         loss: Tensor | None = None
         if targets is not None:
             loss = self._compute_loss(class_logits, mask_logits, targets, (fH, fW))

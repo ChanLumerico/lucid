@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: MaskFormer (ADE20k semantic segmentation)
+
+Mask-classification transformer segmenter — extends the segmentation
+sweep beyond per-pixel FCN.
+
+- **maskformer** — `maskformer_resnet50` / `maskformer_resnet101` ← HF
+  `facebook/maskformer-resnet{50,101}-ade` (Cheng et al., 2021; ADE20k,
+  150 classes; 44.5 / 45.5 mIoU).  Full `_model.py` rebuild to HF's
+  module tree (parity 1.7e-5 on the semantic logits): HF-style ResNet
+  encoder + FPN pixel decoder (conv+GroupNorm, `mask_projection`),
+  DETR-style 6-layer transformer decoder with per-layer query/spatial
+  positional injection (cross-attention over the projected C5 feature),
+  a 3-layer mask MLP (`mask_embedder`), and reference-exact sine
+  position embedding.  Semantic output drops the no-object slot
+  (`softmax(class)[…,:-1] ⊗ sigmoid(mask)`, einsum at FPN resolution
+  then bilinear upsample) → `(B, 150, H, W)`.  Enums
+  `MaskFormerResNet50Weights` / `MaskFormerResNet101Weights` on
+  `lucid.models.weights` (tag `ADE20K`, `Segmentation` transforms).
+
 ### Added — Pretrained weights: FCN (semantic-segmentation pattern)
 
 First semantic-segmentation model with pretrained weights — extends the
