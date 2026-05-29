@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: PVTv2
+
+- **pvt** — `pvt_v2_b{0,2,3,4,5}_cls` ← timm `pvt_v2_b*.in1k`
+  (Wang et al., 2022; IN1K).  Clean identity-rename map; b0 parity
+  9.9e-4; E2E verified b0 + b5.  Presets 224 crop / 249 resize /
+  bicubic.  Enums on `lucid.models.weights`.  `pvt_v2_b1` deferred —
+  its Lucid config (`depths=(2,2,4,2)`) diverges from the paper/timm
+  `(2,2,2,2)` and needs a config fix before the checkpoint can load.
+
 ### Added — Pretrained weights: InceptionNeXt
 
 - **inception_next** — `inception_next_{tiny,small,base}_cls` ← timm

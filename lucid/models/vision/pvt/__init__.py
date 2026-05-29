@@ -18,6 +18,13 @@ from lucid.models.vision.pvt._pretrained import (
     pvt_v2_b5,
     pvt_v2_b5_cls,
 )
+from lucid.models.vision.pvt._weights import (
+    PVTv2B0Weights,
+    PVTv2B2Weights,
+    PVTv2B3Weights,
+    PVTv2B4Weights,
+    PVTv2B5Weights,
+)
 
 __all__ = [
     "PVTConfig",
@@ -39,4 +46,10 @@ __all__ = [
     # Backwards-compat aliases
     "pvt_tiny",
     "pvt_tiny_cls",
+    # Pretrained weight enums
+    "PVTv2B0Weights",
+    "PVTv2B2Weights",
+    "PVTv2B3Weights",
+    "PVTv2B4Weights",
+    "PVTv2B5Weights",
 ]

@@ -156,6 +156,15 @@ from lucid.models.vision.convnext._weights import (
     ConvNeXtXLargeWeights,
 )
 
+# 2022 — PVTv2 (Wang et al.)
+from lucid.models.vision.pvt._weights import (
+    PVTv2B0Weights,
+    PVTv2B2Weights,
+    PVTv2B3Weights,
+    PVTv2B4Weights,
+    PVTv2B5Weights,
+)
+
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
@@ -239,4 +248,10 @@ __all__ = [
     "ConvNeXtBaseWeights",
     "ConvNeXtLargeWeights",
     "ConvNeXtXLargeWeights",
+    # ── Vision (2022) PVTv2 ───────────────────────────────────────────
+    "PVTv2B0Weights",
+    "PVTv2B2Weights",
+    "PVTv2B3Weights",
+    "PVTv2B4Weights",
+    "PVTv2B5Weights",
 ]
