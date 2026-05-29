@@ -14,6 +14,7 @@ from lucid.models.vision.sknet._pretrained import (
     sk_resnext_50_32x4d,
     sk_resnext_50_32x4d_cls,
 )
+from lucid.models.vision.sknet._weights import SKResNet18Weights, SKResNet34Weights
 
 __all__ = [
     "SKNetConfig",
@@ -29,4 +30,6 @@ __all__ = [
     "sk_resnet_101_cls",
     "sk_resnext_50_32x4d",
     "sk_resnext_50_32x4d_cls",
+    "SKResNet18Weights",
+    "SKResNet34Weights",
 ]

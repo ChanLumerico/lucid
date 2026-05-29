@@ -7,12 +7,14 @@ from lucid.models.vision.xception._model import (
     XceptionOutput,
 )
 from lucid.models.vision.xception._pretrained import xception, xception_cls
+from lucid.models.vision.xception._weights import XceptionWeights
 
 __all__ = [
     "XceptionConfig",
     "Xception",
     "XceptionForImageClassification",
     "XceptionOutput",
+    "XceptionWeights",
     "xception",
     "xception_cls",
 ]

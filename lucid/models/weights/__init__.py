@@ -44,6 +44,30 @@ from lucid.models.vision.densenet._weights import (
     DenseNet201Weights,
 )
 
+# 2015 — Inception v3 (Szegedy et al.)
+from lucid.models.vision.inception._weights import InceptionV3Weights
+
+# 2016 — Inception-ResNet v2 (Szegedy et al.)
+from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
+
+# 2017 — Xception (Chollet)
+from lucid.models.vision.xception._weights import XceptionWeights
+
+# 2018 — MobileNetV2 (Sandler et al.)
+from lucid.models.vision.mobilenet_v2._weights import MobileNetV2Weights
+
+# 2019 — MobileNetV3 (Howard et al.)
+from lucid.models.vision.mobilenet_v3._weights import (
+    MobileNetV3LargeWeights,
+    MobileNetV3SmallWeights,
+)
+
+# 2019 — SKNet (Li et al.)
+from lucid.models.vision.sknet._weights import (
+    SKResNet18Weights,
+    SKResNet34Weights,
+)
+
 # 2019 — CSPNet (Wang et al.)
 from lucid.models.vision.cspnet._weights import (
     CSPDarknet53Weights,
@@ -82,11 +106,25 @@ __all__ = [
     "AlexNetWeights",
     # ── Vision (2015) ResNet ──────────────────────────────────────────
     "ResNet18Weights",
+    # ── Vision (2015) Inception v3 ────────────────────────────────────
+    "InceptionV3Weights",
     # ── Vision (2016) DenseNet ────────────────────────────────────────
     "DenseNet121Weights",
     "DenseNet161Weights",
     "DenseNet169Weights",
     "DenseNet201Weights",
+    # ── Vision (2016) Inception-ResNet v2 ─────────────────────────────
+    "InceptionResNetV2Weights",
+    # ── Vision (2017) Xception ────────────────────────────────────────
+    "XceptionWeights",
+    # ── Vision (2018) MobileNetV2 ─────────────────────────────────────
+    "MobileNetV2Weights",
+    # ── Vision (2019) MobileNetV3 ─────────────────────────────────────
+    "MobileNetV3LargeWeights",
+    "MobileNetV3SmallWeights",
+    # ── Vision (2019) SKNet ───────────────────────────────────────────
+    "SKResNet18Weights",
+    "SKResNet34Weights",
     # ── Vision (2019) CSPNet ──────────────────────────────────────────
     "CSPResNet50Weights",
     "CSPResNeXt50Weights",

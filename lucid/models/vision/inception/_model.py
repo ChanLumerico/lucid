@@ -26,6 +26,12 @@ from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, Feature
 from lucid.models._output import BaseModelOutput
 from lucid.models.vision.inception._config import InceptionConfig
 
+# BatchNorm epsilon used throughout Inception v3.  The canonical Inception
+# implementation pins this to 1e-3 (the reference Slim/TF graph and every
+# faithful port follow suit), so all BatchNorm2d layers in this module use
+# it for exact numerical parity with the published checkpoints.
+_BN_EPS = 1e-3
+
 # ---------------------------------------------------------------------------
 # Shared Conv-BN-ReLU helper
 # ---------------------------------------------------------------------------
@@ -52,7 +58,7 @@ class _ConvBnReLU(nn.Module):
             padding=padding,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.bn = nn.BatchNorm2d(out_channels, eps=_BN_EPS)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
@@ -141,19 +147,19 @@ class _InceptionC(nn.Module):
         # branch2: 1×1 → 1×7 → 7×1
         self.branch2_a = _ConvBnReLU(in_channels, c7, 1)
         self.branch2_b = nn.Conv2d(c7, c7, (1, 7), padding=(0, 3), bias=False)
-        self.branch2_b_bn = nn.BatchNorm2d(c7)
+        self.branch2_b_bn = nn.BatchNorm2d(c7, eps=_BN_EPS)
         self.branch2_c = nn.Conv2d(c7, 192, (7, 1), padding=(3, 0), bias=False)
-        self.branch2_c_bn = nn.BatchNorm2d(192)
+        self.branch2_c_bn = nn.BatchNorm2d(192, eps=_BN_EPS)
         # branch3: 1×1 → 7×1 → 1×7 → 7×1 → 1×7
         self.branch3_a = _ConvBnReLU(in_channels, c7, 1)
         self.branch3_b = nn.Conv2d(c7, c7, (7, 1), padding=(3, 0), bias=False)
-        self.branch3_b_bn = nn.BatchNorm2d(c7)
+        self.branch3_b_bn = nn.BatchNorm2d(c7, eps=_BN_EPS)
         self.branch3_c = nn.Conv2d(c7, c7, (1, 7), padding=(0, 3), bias=False)
-        self.branch3_c_bn = nn.BatchNorm2d(c7)
+        self.branch3_c_bn = nn.BatchNorm2d(c7, eps=_BN_EPS)
         self.branch3_d = nn.Conv2d(c7, c7, (7, 1), padding=(3, 0), bias=False)
-        self.branch3_d_bn = nn.BatchNorm2d(c7)
+        self.branch3_d_bn = nn.BatchNorm2d(c7, eps=_BN_EPS)
         self.branch3_e = nn.Conv2d(c7, 192, (1, 7), padding=(0, 3), bias=False)
-        self.branch3_e_bn = nn.BatchNorm2d(192)
+        self.branch3_e_bn = nn.BatchNorm2d(192, eps=_BN_EPS)
         # branch4: AvgPool → 1×1
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)
@@ -192,9 +198,9 @@ class _InceptionD(nn.Module):
         # branch2: 1×1 → 1×7 → 7×1 → 3×3 stride=2
         self.branch2_a = _ConvBnReLU(in_channels, 192, 1)
         self.branch2_b = nn.Conv2d(192, 192, (1, 7), padding=(0, 3), bias=False)
-        self.branch2_b_bn = nn.BatchNorm2d(192)
+        self.branch2_b_bn = nn.BatchNorm2d(192, eps=_BN_EPS)
         self.branch2_c = nn.Conv2d(192, 192, (7, 1), padding=(3, 0), bias=False)
-        self.branch2_c_bn = nn.BatchNorm2d(192)
+        self.branch2_c_bn = nn.BatchNorm2d(192, eps=_BN_EPS)
         self.branch2_d = _ConvBnReLU(192, 192, 3, stride=2)
         # branch3: MaxPool stride=2
         self.branch3 = nn.MaxPool2d(3, stride=2)
@@ -226,16 +232,16 @@ class _InceptionE(nn.Module):
         # branch2: 1×1(384) → [1×3(384), 3×1(384)] concat
         self.branch2_a = _ConvBnReLU(in_channels, 384, 1)
         self.branch2_b1 = nn.Conv2d(384, 384, (1, 3), padding=(0, 1), bias=False)
-        self.branch2_b1_bn = nn.BatchNorm2d(384)
+        self.branch2_b1_bn = nn.BatchNorm2d(384, eps=_BN_EPS)
         self.branch2_b2 = nn.Conv2d(384, 384, (3, 1), padding=(1, 0), bias=False)
-        self.branch2_b2_bn = nn.BatchNorm2d(384)
+        self.branch2_b2_bn = nn.BatchNorm2d(384, eps=_BN_EPS)
         # branch3: 1×1(448) → 3×3(384) → [1×3(384), 3×1(384)] concat
         self.branch3_a = _ConvBnReLU(in_channels, 448, 1)
         self.branch3_b = _ConvBnReLU(448, 384, 3, padding=1)
         self.branch3_c1 = nn.Conv2d(384, 384, (1, 3), padding=(0, 1), bias=False)
-        self.branch3_c1_bn = nn.BatchNorm2d(384)
+        self.branch3_c1_bn = nn.BatchNorm2d(384, eps=_BN_EPS)
         self.branch3_c2 = nn.Conv2d(384, 384, (3, 1), padding=(1, 0), bias=False)
-        self.branch3_c2_bn = nn.BatchNorm2d(384)
+        self.branch3_c2_bn = nn.BatchNorm2d(384, eps=_BN_EPS)
         # branch4: AvgPool → 1×1(192)
         self.branch4_pool = nn.AvgPool2d(3, stride=1, padding=1)
         self.branch4_conv = _ConvBnReLU(in_channels, 192, 1)

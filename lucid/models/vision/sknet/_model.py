@@ -213,11 +213,15 @@ class _SelectiveKernel(nn.Module):
 
 
 class _SelectiveKernelBasic(nn.Module):
-    """SK 3×3 → SK 3×3 basic block (expansion=1) for shallow SK-ResNets.
+    """SK 3×3 → plain 3×3 basic block (expansion=1) for shallow SK-ResNets.
 
-    Both 3×3 convolutions are replaced by SelectiveKernel units (two-branch
-    parallel 3×3 convolutions with channel attention), giving a full SK
-    treatment of the ResNet-18/34 basic block.
+    Mirrors the ``SelectiveKernelBasic`` block from the reference
+    ``skresnet18`` / ``skresnet34`` implementation: only the first
+    :math:`3 \times 3` convolution is a SelectiveKernel unit (two-branch
+    parallel 3×3 convolutions with channel attention); the second is a
+    plain conv → BN with the activation deferred until after the residual
+    add.  This keeps the parameter count and forward computation in
+    lock-step with the published checkpoints.
     """
 
     expansion: int = 1
@@ -246,13 +250,13 @@ class _SelectiveKernelBasic(nn.Module):
             rd_ratio=rd_ratio,
             rd_divisor=rd_divisor,
         )
-        self.conv2 = _SelectiveKernel(
+        self.conv2 = _ConvBnAct(
             width,
             planes * self.expansion,
-            groups=cardinality,
-            split_input=split_input,
-            rd_ratio=rd_ratio,
-            rd_divisor=rd_divisor,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            apply_act=False,
         )
         self.act = nn.ReLU(inplace=True)
         self.downsample = downsample

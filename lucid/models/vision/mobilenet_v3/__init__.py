@@ -11,6 +11,10 @@ from lucid.models.vision.mobilenet_v3._pretrained import (
     mobilenet_v3_small,
     mobilenet_v3_small_cls,
 )
+from lucid.models.vision.mobilenet_v3._weights import (
+    MobileNetV3LargeWeights,
+    MobileNetV3SmallWeights,
+)
 
 __all__ = [
     "MobileNetV3Config",
@@ -20,4 +24,6 @@ __all__ = [
     "mobilenet_v3_large_cls",
     "mobilenet_v3_small",
     "mobilenet_v3_small_cls",
+    "MobileNetV3LargeWeights",
+    "MobileNetV3SmallWeights",
 ]

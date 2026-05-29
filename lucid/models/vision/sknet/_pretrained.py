@@ -1,33 +1,40 @@
 """Registry factories for all SKNet variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.sknet._config import SKNetConfig
 from lucid.models.vision.sknet._model import SKNet, SKNetForImageClassification
+from lucid.models.vision.sknet._weights import SKResNet18Weights, SKResNet34Weights
 
 # ---------------------------------------------------------------------------
 # Canonical configs
 # ---------------------------------------------------------------------------
 
 # sk_resnet_18 / sk_resnet_34:
-#   basic block (expansion=1, two-SK design), cardinality=1, base_width=64,
-#   split_input=False (full-width branches), rd_ratio=0.6 (~3/5).
-#   sk_resnet_18: ~24.7M params; sk_resnet_34: ~46.9M params
-#   (within ~4% of the reference ~25.6M / ~45.9M targets).
+#   basic block (expansion=1); the first 3×3 conv per block is a
+#   SelectiveKernel unit (two parallel 3×3 branches + channel attention),
+#   the second is a plain 3×3 conv.  Matches the reference ``skresnet18`` /
+#   ``skresnet34`` recipe: ``split_input=True`` (each branch receives half
+#   the input channels), ``rd_ratio=1/8`` with ``rd_divisor=16`` for the
+#   attention bottleneck.  sk_resnet_18: ~11.96M params;
+#   sk_resnet_34: ~22.28M params.
 _CFG_SK18 = SKNetConfig(
     layers=(2, 2, 2, 2),
     block_type="basic",
     cardinality=1,
     base_width=64,
-    split_input=False,
-    rd_ratio=0.6,
+    split_input=True,
+    rd_ratio=1.0 / 8,
+    rd_divisor=16,
 )
 _CFG_SK34 = SKNetConfig(
     layers=(3, 4, 6, 3),
     block_type="basic",
     cardinality=1,
     base_width=64,
-    split_input=False,
-    rd_ratio=0.6,
+    split_input=True,
+    rd_ratio=1.0 / 8,
+    rd_divisor=16,
 )
 
 # sk_resnet_50 / sk_resnet_101:
@@ -329,7 +336,7 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
 # ---------------------------------------------------------------------------
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: sk_resnet_18_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="sknet",
     model_type="sknet",
@@ -337,21 +344,32 @@ def sk_resnext_50_32x4d(pretrained: bool = False, **overrides: object) -> SKNet:
     default_config=_CFG_SK18,
 )
 def sk_resnet_18_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SKResNet18Weights | None = None,
+    **overrides: object,
 ) -> SKNetForImageClassification:
     r"""SK-ResNet-18 image classifier (backbone + GAP + linear head).
 
     Builds an :class:`SKNetForImageClassification` with the
-    SK-ResNet-18 backbone (basic blocks stacked ``[2, 2, 2, 2]``,
-    two SK units per block) followed by global average pooling
-    and a linear projection to ``config.num_classes``.
-    Approximately 24.7M parameters.
+    SK-ResNet-18 backbone (basic blocks stacked ``[2, 2, 2, 2]``;
+    the first :math:`3 \times 3` of each block is a Selective Kernel
+    unit, the second a plain conv) followed by global average pooling
+    and a linear projection to ``config.num_classes``.  Approximately
+    11.96M parameters.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`SKResNet18Weights.RA_IN1K`); a
+        tag string (e.g. ``"RA_IN1K"``) → that specific checkpoint.
+        Mutually exclusive with ``weights`` (which wins if both are
+        given).
+    weights : SKResNet18Weights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``SKResNet18Weights.RA_IN1K``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -359,12 +377,15 @@ def sk_resnet_18_cls(
     -------
     SKNetForImageClassification
         Classifier with the SK-ResNet-18 configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Li et al., "Selective Kernel Networks", CVPR 2019
-    (arXiv:1903.06586).
+    (arXiv:1903.06586).  Pretrained weights are converted from
+    ``timm``'s ``skresnet18.ra_in1k`` and hosted on the Hugging Face
+    Hub under ``lucid-dl/sk-resnet-18``.
 
     Examples
     --------
@@ -375,12 +396,22 @@ def sk_resnet_18_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = sk_resnet_18_cls(pretrained=True)            # DEFAULT tag
+    >>> from lucid.models.vision.sknet import SKResNet18Weights
+    >>> model = sk_resnet_18_cls(weights=SKResNet18Weights.RA_IN1K)
     """
+    entry = weights_mod.resolve_weights(SKResNet18Weights, pretrained, weights)
     cfg = SKNetConfig(**{**_CFG_SK18.__dict__, **overrides}) if overrides else _CFG_SK18
-    return SKNetForImageClassification(cfg)
+    model = SKNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="sk_resnet_18_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: sk_resnet_34_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="sknet",
     model_type="sknet",
@@ -388,20 +419,29 @@ def sk_resnet_18_cls(
     default_config=_CFG_SK34,
 )
 def sk_resnet_34_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SKResNet34Weights | None = None,
+    **overrides: object,
 ) -> SKNetForImageClassification:
     r"""SK-ResNet-34 image classifier (backbone + GAP + linear head).
 
     Builds an :class:`SKNetForImageClassification` with the
-    SK-ResNet-34 backbone (basic blocks stacked ``[3, 4, 6, 3]``,
-    two SK units per block) followed by global average pooling
-    and a linear projection.  Approximately 46.9M parameters.
+    SK-ResNet-34 backbone (basic blocks stacked ``[3, 4, 6, 3]``;
+    the first :math:`3 \times 3` of each block is a Selective Kernel
+    unit, the second a plain conv) followed by global average pooling
+    and a linear projection.  Approximately 22.28M parameters.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`SKResNet34Weights.RA_IN1K`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : SKResNet34Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`SKNetConfig`.
 
@@ -409,12 +449,15 @@ def sk_resnet_34_cls(
     -------
     SKNetForImageClassification
         Classifier with the SK-ResNet-34 configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Li et al., "Selective Kernel Networks", CVPR 2019
-    (arXiv:1903.06586).
+    (arXiv:1903.06586).  Pretrained weights are converted from
+    ``timm``'s ``skresnet34.ra_in1k`` and hosted on the Hugging Face
+    Hub under ``lucid-dl/sk-resnet-34``.
 
     Examples
     --------
@@ -426,8 +469,12 @@ def sk_resnet_34_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(SKResNet34Weights, pretrained, weights)
     cfg = SKNetConfig(**{**_CFG_SK34.__dict__, **overrides}) if overrides else _CFG_SK34
-    return SKNetForImageClassification(cfg)
+    model = SKNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="sk_resnet_34_cls")
+    return model
 
 
 @register_model(

@@ -1,11 +1,13 @@
 """Registry factories for Inception-ResNet v2."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.inception_resnet._config import InceptionResNetConfig
 from lucid.models.vision.inception_resnet._model import (
     InceptionResNetV2,
     InceptionResNetV2ForImageClassification,
 )
+from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
 
 _CFG = InceptionResNetConfig()
 
@@ -68,7 +70,7 @@ def inception_resnet_v2(
     return InceptionResNetV2(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: inception_resnet_v2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="inception_resnet",
     model_type="inception_resnet",
@@ -76,7 +78,10 @@ def inception_resnet_v2(
     default_config=_CFG,
 )
 def inception_resnet_v2_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: InceptionResNetV2Weights | None = None,
+    **overrides: object,
 ) -> InceptionResNetV2ForImageClassification:
     r"""Inception-ResNet v2 image classifier (backbone + GAP + dropout + linear).
 
@@ -88,26 +93,40 @@ def inception_resnet_v2_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`InceptionResNetV2Weights.TF_IN1K`);
+        a tag string (e.g. ``"TF_IN1K"``) → that specific checkpoint.
+        Mutually exclusive with ``weights`` (which wins if both are
+        given).
+    weights : InceptionResNetV2Weights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``InceptionResNetV2Weights.TF_IN1K``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`InceptionResNetConfig`.
         Common picks: ``num_classes=N`` to retarget the head,
-        ``dropout=p`` to adjust regularisation.
+        ``dropout=p`` to adjust regularisation.  Note: overriding
+        ``num_classes`` away from the checkpoint's class count makes
+        pretrained loading fail the strict key/shape check — load with a
+        matching head, then call :meth:`reset_classifier`.
 
     Returns
     -------
     InceptionResNetV2ForImageClassification
         Classifier with the Inception-ResNet v2 configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Szegedy et al., "Inception-v4, Inception-ResNet and the Impact
     of Residual Connections on Learning", AAAI 2017, §3.3.  The
     classifier attribute is named ``classif`` (not ``classifier``) for
-    timm / TensorFlow-Slim state-dict compatibility.
+    timm / TensorFlow-Slim state-dict compatibility.  Pretrained weights
+    are converted from timm's ``inception_resnet_v2.tf_in1k`` checkpoint
+    and hosted on the Hugging Face Hub under
+    ``lucid-dl/inception-resnet-v2``.
 
     Examples
     --------
@@ -118,6 +137,16 @@ def inception_resnet_v2_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = inception_resnet_v2_cls(pretrained=True)        # DEFAULT tag
+    >>> from lucid.models.vision.inception_resnet import InceptionResNetV2Weights
+    >>> model = inception_resnet_v2_cls(weights=InceptionResNetV2Weights.TF_IN1K)
     """
+    entry = weights_mod.resolve_weights(InceptionResNetV2Weights, pretrained, weights)
     cfg = InceptionResNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
-    return InceptionResNetV2ForImageClassification(cfg)
+    model = InceptionResNetV2ForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="inception_resnet_v2_cls")
+    return model

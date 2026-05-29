@@ -1,10 +1,15 @@
 """Registry factories for MobileNet v3."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
 from lucid.models.vision.mobilenet_v3._model import (
     MobileNetV3,
     MobileNetV3ForImageClassification,
+)
+from lucid.models.vision.mobilenet_v3._weights import (
+    MobileNetV3LargeWeights,
+    MobileNetV3SmallWeights,
 )
 
 _CFG_LARGE = MobileNetV3Config(variant="large")
@@ -129,7 +134,7 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v3_large_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",
@@ -137,7 +142,10 @@ def mobilenet_v3_small(pretrained: bool = False, **overrides: object) -> MobileN
     default_config=_CFG_LARGE,
 )
 def mobilenet_v3_large_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: MobileNetV3LargeWeights | None = None,
+    **overrides: object,
 ) -> MobileNetV3ForImageClassification:
     r"""MobileNet-v3-Large image classifier with the redesigned head.
 
@@ -149,9 +157,15 @@ def mobilenet_v3_large_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`MobileNetV3LargeWeights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : MobileNetV3LargeWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV3Config`
         (typically ``num_classes`` to retarget the classifier).
@@ -160,12 +174,15 @@ def mobilenet_v3_large_cls(
     -------
     MobileNetV3ForImageClassification
         Classifier with the MobileNet-v3-Large configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Howard et al., "Searching for MobileNetV3", ICCV 2019
-    (arXiv:1905.02244), Table 1 and Table 3.
+    (arXiv:1905.02244), Table 1 and Table 3.  Pretrained weights are
+    converted from torchvision's ``MobileNet_V3_Large_Weights`` and
+    hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v3-large``.
 
     Examples
     --------
@@ -176,16 +193,26 @@ def mobilenet_v3_large_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = mobilenet_v3_large_cls(pretrained=True)
+    >>> from lucid.models.weights import MobileNetV3LargeWeights
+    >>> model = mobilenet_v3_large_cls(weights=MobileNetV3LargeWeights.IMAGENET1K_V1)
     """
+    entry = weights_mod.resolve_weights(MobileNetV3LargeWeights, pretrained, weights)
     cfg = (
         MobileNetV3Config(**{**_CFG_LARGE.__dict__, **overrides})
         if overrides
         else _CFG_LARGE
     )
-    return MobileNetV3ForImageClassification(cfg)
+    model = MobileNetV3ForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_large_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v3_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="mobilenet_v3",
     model_type="mobilenet_v3",
@@ -193,7 +220,10 @@ def mobilenet_v3_large_cls(
     default_config=_CFG_SMALL,
 )
 def mobilenet_v3_small_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: MobileNetV3SmallWeights | None = None,
+    **overrides: object,
 ) -> MobileNetV3ForImageClassification:
     r"""MobileNet-v3-Small image classifier with the redesigned head.
 
@@ -205,9 +235,15 @@ def mobilenet_v3_small_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`MobileNetV3SmallWeights.IMAGENET1K_V1`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : MobileNetV3SmallWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV3Config`.
 
@@ -215,12 +251,15 @@ def mobilenet_v3_small_cls(
     -------
     MobileNetV3ForImageClassification
         Classifier with the MobileNet-v3-Small configuration applied
-        (or with ``overrides`` merged on top of it).
+        (or with ``overrides`` merged on top of it), optionally
+        initialised from pretrained weights.
 
     Notes
     -----
     See Howard et al., "Searching for MobileNetV3", ICCV 2019
-    (arXiv:1905.02244), Table 2 and Table 3.
+    (arXiv:1905.02244), Table 2 and Table 3.  Pretrained weights are
+    converted from torchvision's ``MobileNet_V3_Small_Weights`` and
+    hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v3-small``.
 
     Examples
     --------
@@ -231,10 +270,20 @@ def mobilenet_v3_small_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (1, 1000)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = mobilenet_v3_small_cls(pretrained=True)
+    >>> from lucid.models.weights import MobileNetV3SmallWeights
+    >>> model = mobilenet_v3_small_cls(weights=MobileNetV3SmallWeights.IMAGENET1K_V1)
     """
+    entry = weights_mod.resolve_weights(MobileNetV3SmallWeights, pretrained, weights)
     cfg = (
         MobileNetV3Config(**{**_CFG_SMALL.__dict__, **overrides})
         if overrides
         else _CFG_SMALL
     )
-    return MobileNetV3ForImageClassification(cfg)
+    model = MobileNetV3ForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mobilenet_v3_small_cls")
+    return model

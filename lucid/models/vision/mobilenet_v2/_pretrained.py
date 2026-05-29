@@ -1,11 +1,13 @@
 """Registry factories for MobileNet v2."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet_v2._config import MobileNetV2Config
 from lucid.models.vision.mobilenet_v2._model import (
     MobileNetV2,
     MobileNetV2ForImageClassification,
 )
+from lucid.models.vision.mobilenet_v2._weights import MobileNetV2Weights
 
 _CFG_100 = MobileNetV2Config(width_mult=1.0)
 _CFG_075 = MobileNetV2Config(width_mult=0.75)
@@ -129,7 +131,7 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v2_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="mobilenet_v2",
     model_type="mobilenet_v2",
@@ -137,7 +139,10 @@ def mobilenet_v2_075(pretrained: bool = False, **overrides: object) -> MobileNet
     default_config=_CFG_100,
 )
 def mobilenet_v2_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: MobileNetV2Weights | None = None,
+    **overrides: object,
 ) -> MobileNetV2ForImageClassification:
     r"""MobileNet-v2 image classifier at width multiplier :math:`\alpha = 1.0`.
 
@@ -150,24 +155,37 @@ def mobilenet_v2_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`MobileNetV2Weights.IMAGENET1K_V1`); a tag string (e.g.
+        ``"IMAGENET1K_V1"``) → that specific checkpoint.  Mutually
+        exclusive with ``weights`` (which wins if both are given).
+    weights : MobileNetV2Weights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``MobileNetV2Weights.IMAGENET1K_V1``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV2Config`
         (typically ``num_classes`` to retarget the classifier).
+        Note: overriding ``num_classes`` away from the checkpoint's
+        class count makes pretrained loading fail the strict key/shape
+        check — load with a matching head, then call
+        :meth:`reset_classifier`.
 
     Returns
     -------
     MobileNetV2ForImageClassification
         Classifier with the MobileNet-v2 (:math:`\alpha = 1.0`)
         configuration applied (or with ``overrides`` merged on top
-        of it).
+        of it), optionally initialised from pretrained weights.
 
     Notes
     -----
     See Sandler et al., "MobileNetV2: Inverted Residuals and Linear
-    Bottlenecks", CVPR 2018 (arXiv:1801.04381), Table 4.
+    Bottlenecks", CVPR 2018 (arXiv:1801.04381), Table 4.  Pretrained
+    weights are converted from torchvision's ``MobileNet_V2_Weights``
+    and hosted on the Hugging Face Hub under ``lucid-dl/mobilenet-v2``.
 
     Examples
     --------
@@ -178,13 +196,23 @@ def mobilenet_v2_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = mobilenet_v2_cls(pretrained=True)            # DEFAULT tag
+    >>> from lucid.models.vision.mobilenet_v2 import MobileNetV2Weights
+    >>> model = mobilenet_v2_cls(weights=MobileNetV2Weights.IMAGENET1K_V1)
     """
+    entry = weights_mod.resolve_weights(MobileNetV2Weights, pretrained, weights)
     cfg = (
         MobileNetV2Config(**{**_CFG_100.__dict__, **overrides})
         if overrides
         else _CFG_100
     )
-    return MobileNetV2ForImageClassification(cfg)
+    model = MobileNetV2ForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mobilenet_v2_cls")
+    return model
 
 
 @register_model(

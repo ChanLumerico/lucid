@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights (multi-agent batch: 6 families)
+
+- Pretrained ImageNet-1k weights for 8 variants across 6 vision families,
+  recipe-authored + parity-verified by a multi-agent workflow and uploaded
+  to the `lucid-dl` HF org.  Each loads via `<factory>(pretrained=True)` /
+  `weights=<Enum>` (enums re-exported from `lucid.models.weights`):
+  - **inception** `inception_v3_cls` ← torchvision `Inception_V3_Weights.IMAGENET1K_V1`
+  - **inception_resnet** `inception_resnet_v2_cls` ← timm `inception_resnet_v2.tf_in1k` (TF_IN1K)
+  - **xception** `xception_cls` ← timm `legacy_xception.tf_in1k` (TF_IN1K; 299 crop / bicubic / 0.5 mean-std)
+  - **mobilenet_v2** `mobilenet_v2_cls` ← torchvision `MobileNet_V2_Weights.IMAGENET1K_V1`
+  - **mobilenet_v3** `mobilenet_v3_large_cls` / `mobilenet_v3_small_cls` ← torchvision `MobileNet_V3_*_Weights.IMAGENET1K_V1`
+  - **sknet** `sk_resnet_18_cls` / `sk_resnet_34_cls` ← timm `skresnet{18,34}.ra_in1k` (RA_IN1K)
+  
+  All verified end-to-end (download → SHA → load → forward); the workflow's
+  parity checks landed in the 1e-6 range vs the source models.  Minor
+  per-family model fixes were applied to reach exact parity (eps/bias/head
+  details).
+
 **Strong-augment suite — RandomErasing + AutoAugment family + Mixup/CutMix + RA-Sampler.**
 Closes the torchvision `ClassificationPresetTrain` parity gap in one phased PR:
 8 new public classes, 5 new functional ops, integrated into the G0

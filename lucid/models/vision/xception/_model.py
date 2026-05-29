@@ -331,10 +331,13 @@ def _xception_forward_features(model: nn.Module, x: Tensor) -> Tensor:
 def _build_xception_body(ic: int) -> dict[str, nn.Module]:
     """Return a dict of named sub-modules matching timm legacy_xception layout."""
     return {
-        # Stem (timm: conv1.weight, bn1.*, conv2.weight, bn2.*)
-        "conv1": nn.Conv2d(ic, 32, 3, stride=2, padding=1, bias=False),
+        # Stem (timm: conv1.weight, bn1.*, conv2.weight, bn2.*).
+        # Both stem convs are *valid* (padding=0) in the original design —
+        # the 299×299 input is reduced to 149×149 (conv1, s2) then
+        # 147×147 (conv2) — matching Inception-v3's stem schedule.
+        "conv1": nn.Conv2d(ic, 32, 3, stride=2, bias=False),
         "bn1": nn.BatchNorm2d(32),
-        "conv2": nn.Conv2d(32, 64, 3, padding=1, bias=False),
+        "conv2": nn.Conv2d(32, 64, 3, bias=False),
         "bn2": nn.BatchNorm2d(64),
         # Entry flow
         "block1": _make_entry_block(64, 128, activate_first=False),

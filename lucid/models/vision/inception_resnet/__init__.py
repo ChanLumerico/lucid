@@ -10,6 +10,7 @@ from lucid.models.vision.inception_resnet._pretrained import (
     inception_resnet_v2,
     inception_resnet_v2_cls,
 )
+from lucid.models.vision.inception_resnet._weights import InceptionResNetV2Weights
 
 __all__ = [
     "InceptionResNetConfig",
@@ -18,4 +19,5 @@ __all__ = [
     "InceptionResNetOutput",
     "inception_resnet_v2",
     "inception_resnet_v2_cls",
+    "InceptionResNetV2Weights",
 ]

@@ -19,6 +19,16 @@ from lucid.models._output import BaseModelOutput, ImageClassificationOutput
 from lucid.models._utils._common import make_divisible as _make_divisible
 from lucid.models.vision.mobilenet_v3._config import MobileNetV3Config
 
+# MobileNet v3 overrides the default batch-norm hyperparameters: the NAS
+# reference implementation trains every block's normalisation with
+# ``eps=0.001`` and ``momentum=0.01`` (a slower running-stat update than
+# the conventional 0.1).  The eps in particular is load-bearing for
+# inference — the published checkpoints fold their running statistics
+# against ``eps=0.001``, so a 1e-5 default shifts every activation and
+# breaks numerical parity with the source weights.
+_BN_EPS = 0.001
+_BN_MOMENTUM = 0.01
+
 # ---------------------------------------------------------------------------
 # Squeeze-and-Excitation block (Hard-sigmoid gating)
 # ---------------------------------------------------------------------------
@@ -65,7 +75,7 @@ class _InvertedResidual(nn.Module):
         if exp_ch != in_ch:
             layers += [
                 nn.Conv2d(in_ch, exp_ch, 1, bias=False),
-                nn.BatchNorm2d(exp_ch),
+                nn.BatchNorm2d(exp_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
                 act,
             ]
         pad = (kernel_size - 1) // 2
@@ -80,7 +90,7 @@ class _InvertedResidual(nn.Module):
                 groups=exp_ch,
                 bias=False,
             ),
-            nn.BatchNorm2d(exp_ch),
+            nn.BatchNorm2d(exp_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
             act2,
         ]
 
@@ -90,7 +100,7 @@ class _InvertedResidual(nn.Module):
 
         layers += [
             nn.Conv2d(exp_ch, out_ch, 1, bias=False),
-            nn.BatchNorm2d(out_ch),
+            nn.BatchNorm2d(out_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
         ]
         self.block = nn.Sequential(*layers)
 
@@ -168,7 +178,7 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
     stem_ch = _make_divisible(16 * w)
     layers: list[nn.Module] = [
         nn.Conv2d(cfg.in_channels, stem_ch, 3, stride=2, padding=1, bias=False),
-        nn.BatchNorm2d(stem_ch),
+        nn.BatchNorm2d(stem_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
         nn.Hardswish(),
     ]
 
@@ -186,7 +196,7 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
     )
     layers += [
         nn.Conv2d(last_block_ch, penultimate_ch, 1, bias=False),
-        nn.BatchNorm2d(penultimate_ch),
+        nn.BatchNorm2d(penultimate_ch, eps=_BN_EPS, momentum=_BN_MOMENTUM),
         nn.Hardswish(),
     ]
     # Large → 1280, Small → 1024 (paper Table 2 / torchvision)

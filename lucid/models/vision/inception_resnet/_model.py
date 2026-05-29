@@ -61,6 +61,9 @@ class _ConvBnReLU(nn.Module):
     """Conv2d → BatchNorm2d → ReLU.
 
     Named sub-modules ``.conv`` and ``.bn`` to match timm's ConvNormAct keys.
+    The BatchNorm ``eps`` is ``1e-3`` (the TensorFlow-Slim default that the
+    canonical Inception-ResNet v2 checkpoint was trained with) — not the
+    usual ``1e-5`` — so converted weights stay numerically faithful.
     """
 
     def __init__(
@@ -81,10 +84,44 @@ class _ConvBnReLU(nn.Module):
             padding=padding,
             bias=False,
         )
-        self.bn = nn.BatchNorm2d(out_channels)
+        self.bn = nn.BatchNorm2d(out_channels, eps=1e-3)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+
+
+# ---------------------------------------------------------------------------
+# AvgPool with count_include_pad=False (TF-Slim Inception semantics)
+# ---------------------------------------------------------------------------
+
+
+class _AvgPoolExclPad(nn.Module):
+    r"""3×3 stride-1 padded average pool that excludes padding cells.
+
+    The canonical TensorFlow-Slim / timm Inception-ResNet v2 averages
+    each ``3×3`` window over only its *real* (non-padded) members — i.e.
+    ``count_include_pad=False``.  Computed without relying on that flag:
+    a standard include-pad average gives ``sum / k^2``; multiplying by
+    ``k^2`` recovers the window sum, and dividing by the per-position
+    real-cell count (obtained by pooling a ones tensor the same way)
+    yields the exclude-pad mean exactly.
+    """
+
+    def __init__(
+        self,
+        kernel_size: int,
+        *,
+        stride: int = 1,
+        padding: int = 1,
+    ) -> None:
+        super().__init__()
+        self._pool = nn.AvgPool2d(kernel_size, stride=stride, padding=padding)
+        self._area = float(kernel_size * kernel_size)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        window_sum = cast(Tensor, self._pool(x)) * self._area
+        valid = cast(Tensor, self._pool(lucid.ones_like(x))) * self._area
+        return window_sum / valid
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +154,11 @@ class _Mixed5b(nn.Module):
             _ConvBnReLU(64, 96, 3, padding=1),
             _ConvBnReLU(96, 96, 3, padding=1),
         )
-        # branch3: AvgPool(3×3 s1 p1) → 1×1(64)
+        # branch3: AvgPool(3×3 s1 p1) → 1×1(64).  Excludes padding cells
+        # from the divisor to match the canonical timm / TF-Slim
+        # Inception-ResNet v2 (``count_include_pad=False``).
         self.branch3 = nn.Sequential(
-            nn.AvgPool2d(3, stride=1, padding=1),
+            _AvgPoolExclPad(3, stride=1, padding=1),
             _ConvBnReLU(192, 64, 1),
         )
 

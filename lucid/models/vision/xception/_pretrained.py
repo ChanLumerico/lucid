@@ -1,11 +1,13 @@
 """Registry factories for Xception."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.xception._config import XceptionConfig
 from lucid.models.vision.xception._model import (
     Xception,
     XceptionForImageClassification,
 )
+from lucid.models.vision.xception._weights import XceptionWeights
 
 _CFG = XceptionConfig()
 
@@ -67,7 +69,7 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     return Xception(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: xception_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="xception",
     model_type="xception",
@@ -75,7 +77,10 @@ def xception(pretrained: bool = False, **overrides: object) -> Xception:
     default_config=_CFG,
 )
 def xception_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: XceptionWeights | None = None,
+    **overrides: object,
 ) -> XceptionForImageClassification:
     r"""Xception image classifier (backbone + dropout + linear head).
 
@@ -89,9 +94,16 @@ def xception_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`XceptionWeights.TF_IN1K`); a tag
+        string (e.g. ``"TF_IN1K"``) → that specific checkpoint.
+        Mutually exclusive with ``weights`` (which wins if both are
+        given).
+    weights : XceptionWeights, optional, keyword-only
+        Explicit weights enum member, e.g.
+        ``XceptionWeights.TF_IN1K``.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`XceptionConfig`
         (typically ``num_classes`` to retarget the classifier).
@@ -100,12 +112,17 @@ def xception_cls(
     -------
     XceptionForImageClassification
         Classifier with the canonical Xception configuration
-        applied (or with ``overrides`` merged on top of it).
+        applied (or with ``overrides`` merged on top of it),
+        optionally initialised from pretrained weights.
 
     Notes
     -----
     See Chollet, "Xception: Deep Learning with Depthwise Separable
-    Convolutions", CVPR 2017 (arXiv:1610.02357), Table 5.
+    Convolutions", CVPR 2017 (arXiv:1610.02357), Table 5.  Pretrained
+    weights are converted from timm's ``legacy_xception.tf_in1k`` and
+    hosted on the Hugging Face Hub under ``lucid-dl/xception``.  The
+    eval preset is 299 crop / 333 resize / bicubic / mean=std=0.5 (not
+    ImageNet stats).
 
     Examples
     --------
@@ -116,6 +133,16 @@ def xception_cls(
     >>> out = model(x)
     >>> out.logits.shape
     (2, 10)
+
+    Load ImageNet-pretrained weights:
+
+    >>> model = xception_cls(pretrained=True)            # DEFAULT tag
+    >>> from lucid.models.vision.xception import XceptionWeights
+    >>> model = xception_cls(weights=XceptionWeights.TF_IN1K)
     """
+    entry = weights_mod.resolve_weights(XceptionWeights, pretrained, weights)
     cfg = XceptionConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
-    return XceptionForImageClassification(cfg)
+    model = XceptionForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="xception_cls")
+    return model
