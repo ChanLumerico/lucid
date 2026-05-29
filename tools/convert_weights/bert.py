@@ -12,9 +12,10 @@ Two checkpoint families are covered:
   miniatures are the Turc et al. 2019 "Well-Read Students" pre-distilled
   sizes; ``base`` / ``large`` are Devlin et al. 2018.
 * **Masked-LM heads** (``bert_base_mlm`` / ``bert_large_mlm``) — base encoder
-  + ``cls.predictions`` head.  Sourced from ``BertForPreTraining`` (so the
-  pooler weights, which Lucid keeps but ``BertForMaskedLM`` drops, come from
-  the real checkpoint).  Two upstream redundancies are dropped: the NSP head
+  + ``cls.predictions`` head.  Sourced from upstream ``BertForPreTraining`` (so
+  the pooler weights, which Lucid keeps but the upstream ``BertForMaskedLM``
+  drops, come from the real checkpoint).  Two upstream redundancies are dropped:
+  the NSP head
   (``cls.seq_relationship.*``) and the duplicate ``cls.predictions.decoder.bias``
   (a tied alias of ``cls.predictions.bias``, which Lucid stores once).
 """
@@ -79,12 +80,12 @@ def _jsonable(value: object) -> object:
     return value
 
 
-class BertArch(Architecture):
+class BERTArch(Architecture):
     """Identity-map converter for the BERT family (base + masked-LM)."""
 
     def __init__(self, arch: str, tag: str) -> None:
         if arch not in _VARIANTS:
-            raise KeyError(f"BertArch: unknown arch {arch!r}")
+            raise KeyError(f"BERTArch: unknown arch {arch!r}")
         self.arch = arch
         self.tag = tag
         factory, slug, title, hf_id, kind = _VARIANTS[arch]
@@ -133,7 +134,7 @@ class BertArch(Architecture):
         num_classes = cfg.vocab_size if self._kind == "mlm" else cfg.hidden_size
 
         preprocessing = {
-            "tokenizer_class": "BertTokenizer",
+            "tokenizer_class": "BERTTokenizer",
             "vocab_size": cfg.vocab_size,
             "do_lower_case": True,
             "max_length": cfg.max_position_embeddings,
@@ -165,7 +166,7 @@ class BertArch(Architecture):
 
 def _make(arch: str) -> Callable[[str], Architecture]:
     def _builder(tag: str) -> Architecture:
-        return BertArch(arch, tag)
+        return BERTArch(arch, tag)
 
     return _builder
 

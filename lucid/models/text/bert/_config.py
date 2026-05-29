@@ -1,7 +1,7 @@
 """BERT configuration (Devlin et al., 2018).
 
 Paper: "BERT: Pre-training of Deep Bidirectional Transformers for Language
-Understanding".  Field set mirrors the HuggingFace ``BertConfig`` so existing
+Understanding".  Field set mirrors the HuggingFace ``BERTConfig`` so existing
 tokenizers / checkpoints map 1-to-1 against Lucid weights.
 """
 
@@ -60,7 +60,7 @@ from lucid.models.text._config import LanguageModelConfig
     """,
 )
 @dataclass(frozen=True)
-class BertConfig(LanguageModelConfig):
+class BERTConfig(LanguageModelConfig):
     r"""Configuration dataclass for every BERT variant.
 
     Frozen dataclass inheriting all common text-model fields from
@@ -68,7 +68,7 @@ class BertConfig(LanguageModelConfig):
     ``attention_dropout``, ``layer_norm_eps``, ``initializer_range``,
     ``tie_word_embeddings``, ...) and adding the two knobs unique to the BERT
     family.  Field names and defaults mirror the reference-framework
-    ``BertConfig`` so existing tokenizers and checkpoints map one-to-one onto
+    ``BERTConfig`` so existing tokenizers and checkpoints map one-to-one onto
     Lucid weights.  Defaults match the original ``bert-base-uncased`` release
     (L=12, H=768, A=12, 30,522 WordPiece vocab) from Devlin et al., 2018.
 
@@ -105,7 +105,7 @@ class BertConfig(LanguageModelConfig):
         their own families.
     num_labels : int, default=2
         Number of output classes for downstream classification heads
-        (``BertForSequenceClassification`` / ``BertForTokenClassification``).
+        (``BERTForSequenceClassification`` / ``BERTForTokenClassification``).
     classifier_dropout : float or None, default=None
         Optional dropout probability inserted before the task-specific
         classifier.  When ``None``, the head falls back to ``hidden_dropout``.
@@ -128,11 +128,11 @@ class BertConfig(LanguageModelConfig):
 
     Examples
     --------
-    >>> from lucid.models.text.bert import BertConfig
-    >>> cfg = BertConfig()          # BERT-Base defaults
+    >>> from lucid.models.text.bert import BERTConfig
+    >>> cfg = BERTConfig()          # BERT-Base defaults
     >>> cfg.hidden_size, cfg.num_hidden_layers, cfg.num_attention_heads
     (768, 12, 12)
-    >>> large = BertConfig(
+    >>> large = BERTConfig(
     ...     hidden_size=1024,
     ...     num_hidden_layers=24,
     ...     num_attention_heads=16,

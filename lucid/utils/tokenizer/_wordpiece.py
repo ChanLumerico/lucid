@@ -24,7 +24,7 @@ Training
 Greedy frequency-based BPE-style training (matches HF
 ``WordPieceTrainer`` semantics; faster than the full log-likelihood
 training in the original paper).  Standard pre-tokenizer chain is
-:class:`BertNormalizer` + :class:`WhitespacePunctuationSplit` —
+:class:`BERTNormalizer` + :class:`WhitespacePunctuationSplit` —
 configure via the constructor if you need a different one.
 """
 
@@ -39,7 +39,7 @@ from lucid.utils.tokenizer._lookup_common import (
     _load_vocab_txt,
     _save_vocab_txt,
 )
-from lucid.utils.tokenizer._normalizers import BertNormalizer, Normalizer
+from lucid.utils.tokenizer._normalizers import BERTNormalizer, Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import (
     PreTokenizer,
     WhitespacePunctuationSplit,
@@ -122,7 +122,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         and bounds worst-case encode cost).
     normalizer : Normalizer, optional
         Pre-encode normalisation chain.  Default
-        :class:`~lucid.utils.tokenizer._normalizers.BertNormalizer`.
+        :class:`~lucid.utils.tokenizer._normalizers.BERTNormalizer`.
     pre_tokenizer : PreTokenizer, optional
         Chunk-splitter run before WordPiece.  Default
         :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespacePunctuationSplit`.
@@ -166,7 +166,7 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         self._unk_token = unk_token
         self._continuing_prefix = continuing_prefix
         self._max_chars_per_word = max_chars_per_word
-        self._normalizer = normalizer if normalizer is not None else BertNormalizer()
+        self._normalizer = normalizer if normalizer is not None else BERTNormalizer()
         self._pre_tokenizer = (
             pre_tokenizer if pre_tokenizer is not None else WhitespacePunctuationSplit()
         )
@@ -464,7 +464,7 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
             continuing_prefix,
             max_chars_per_word,
         )
-        self._normalizer = normalizer if normalizer is not None else BertNormalizer()
+        self._normalizer = normalizer if normalizer is not None else BERTNormalizer()
         self._pre_tokenizer = (
             pre_tokenizer if pre_tokenizer is not None else WhitespacePunctuationSplit()
         )

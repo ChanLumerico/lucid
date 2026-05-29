@@ -1,15 +1,28 @@
 """Registry factories for GPT-2 variants (Radford et al., 2019).
 
-Canonical sizes from the OpenAI release.  No pretrained weight URLs are
-wired in yet — follow-up PR.
+Canonical sizes from the OpenAI release.  All four trunks and their causal-LM
+heads ship WebText pretrained weights through :mod:`lucid.weights` (per-factory
+``*Weights`` enums + ``weights=`` / ``pretrained=``).  The
+``*_cls`` fine-tune head carries no canonical pretrained checkpoint.
 """
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt2._config import GPT2Config
 from lucid.models.text.gpt2._model import (
     GPT2ForSequenceClassification,
     GPT2LMHeadModel,
     GPT2Model,
+)
+from lucid.models.text.gpt2._weights import (
+    GPT2LargeLMWeights,
+    GPT2LargeWeights,
+    GPT2MediumLMWeights,
+    GPT2MediumWeights,
+    GPT2SmallLMWeights,
+    GPT2SmallWeights,
+    GPT2XLargeLMWeights,
+    GPT2XLargeWeights,
 )
 
 # OpenAI release table — Radford et al., 2019 §2.3 (the only published
@@ -42,14 +55,19 @@ def _apply(cfg: GPT2Config, overrides: dict[str, object]) -> GPT2Config:
 # ── Backbones ─────────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: gpt2_small adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2Model,
     default_config=_CFG_SMALL,
 )
-def gpt2_small(pretrained: bool = False, **overrides: object) -> GPT2Model:
+def gpt2_small(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2SmallWeights | None = None,
+    **overrides: object,
+) -> GPT2Model:
     r"""Construct a GPT-2 small (124M) decoder trunk.
 
     Smallest of the four canonical OpenAI variants from Radford, Wu, Child,
@@ -89,17 +107,26 @@ def gpt2_small(pretrained: bool = False, **overrides: object) -> GPT2Model:
     >>> out.last_hidden_state.shape   # (1, 4, 768)
     (1, 4, 768)
     """
-    return GPT2Model(_apply(_CFG_SMALL, overrides))
+    entry = weights_mod.resolve_weights(GPT2SmallWeights, pretrained, weights)
+    model = GPT2Model(_apply(_CFG_SMALL, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_small")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2Model,
     default_config=_CFG_MEDIUM,
 )
-def gpt2_medium(pretrained: bool = False, **overrides: object) -> GPT2Model:
+def gpt2_medium(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2MediumWeights | None = None,
+    **overrides: object,
+) -> GPT2Model:
     r"""Construct a GPT-2 medium (355M) decoder trunk.
 
     Second of the four canonical OpenAI variants: :math:`L=24` transformer
@@ -138,17 +165,26 @@ def gpt2_medium(pretrained: bool = False, **overrides: object) -> GPT2Model:
     >>> out.last_hidden_state.shape   # (1, 4, 1024)
     (1, 4, 1024)
     """
-    return GPT2Model(_apply(_CFG_MEDIUM, overrides))
+    entry = weights_mod.resolve_weights(GPT2MediumWeights, pretrained, weights)
+    model = GPT2Model(_apply(_CFG_MEDIUM, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_medium")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2Model,
     default_config=_CFG_LARGE,
 )
-def gpt2_large(pretrained: bool = False, **overrides: object) -> GPT2Model:
+def gpt2_large(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2LargeWeights | None = None,
+    **overrides: object,
+) -> GPT2Model:
     r"""Construct a GPT-2 large (774M) decoder trunk.
 
     Third of the four canonical OpenAI variants: :math:`L=36` transformer
@@ -186,17 +222,26 @@ def gpt2_large(pretrained: bool = False, **overrides: object) -> GPT2Model:
     >>> out.last_hidden_state.shape   # (1, 4, 1280)
     (1, 4, 1280)
     """
-    return GPT2Model(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(GPT2LargeWeights, pretrained, weights)
+    model = GPT2Model(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_large")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2Model,
     default_config=_CFG_XLARGE,
 )
-def gpt2_xlarge(pretrained: bool = False, **overrides: object) -> GPT2Model:
+def gpt2_xlarge(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2XLargeWeights | None = None,
+    **overrides: object,
+) -> GPT2Model:
     r"""Construct a GPT-2 XL (1.5B) decoder trunk.
 
     Largest of the four canonical OpenAI variants: :math:`L=48` transformer
@@ -233,20 +278,29 @@ def gpt2_xlarge(pretrained: bool = False, **overrides: object) -> GPT2Model:
     >>> out.last_hidden_state.shape   # (1, 4, 1600)
     (1, 4, 1600)
     """
-    return GPT2Model(_apply(_CFG_XLARGE, overrides))
+    entry = weights_mod.resolve_weights(GPT2XLargeWeights, pretrained, weights)
+    model = GPT2Model(_apply(_CFG_XLARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_xlarge")
+    return model
 
 
 # ── Causal-LM heads ───────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="causal-lm",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
     default_config=_CFG_SMALL,
 )
-def gpt2_small_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+def gpt2_small_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2SmallLMWeights | None = None,
+    **overrides: object,
+) -> GPT2LMHeadModel:
     r"""Construct a GPT-2 small (124M) model with the tied causal-LM head.
 
     Same trunk as :func:`gpt2_small` (L=12, H=768, A=12, ~124M parameters),
@@ -281,17 +335,26 @@ def gpt2_small_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadMo
     >>> out.logits.shape   # (1, 4, 50257)
     (1, 4, 50257)
     """
-    return GPT2LMHeadModel(_apply(_CFG_SMALL, overrides))
+    entry = weights_mod.resolve_weights(GPT2SmallLMWeights, pretrained, weights)
+    model = GPT2LMHeadModel(_apply(_CFG_SMALL, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_small_lm")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="causal-lm",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
     default_config=_CFG_MEDIUM,
 )
-def gpt2_medium_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+def gpt2_medium_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2MediumLMWeights | None = None,
+    **overrides: object,
+) -> GPT2LMHeadModel:
     r"""Construct a GPT-2 medium (355M) model with the tied causal-LM head.
 
     Same trunk as :func:`gpt2_medium` (L=24, H=1024, A=16, ~355M parameters),
@@ -325,17 +388,26 @@ def gpt2_medium_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadM
     >>> out.logits.shape   # (1, 4, 50257)
     (1, 4, 50257)
     """
-    return GPT2LMHeadModel(_apply(_CFG_MEDIUM, overrides))
+    entry = weights_mod.resolve_weights(GPT2MediumLMWeights, pretrained, weights)
+    model = GPT2LMHeadModel(_apply(_CFG_MEDIUM, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_medium_lm")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="causal-lm",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
     default_config=_CFG_LARGE,
 )
-def gpt2_large_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+def gpt2_large_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2LargeLMWeights | None = None,
+    **overrides: object,
+) -> GPT2LMHeadModel:
     r"""Construct a GPT-2 large (774M) model with the tied causal-LM head.
 
     Same trunk as :func:`gpt2_large` (L=36, H=1280, A=20, ~774M parameters),
@@ -369,17 +441,26 @@ def gpt2_large_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadMo
     >>> out.logits.shape   # (1, 4, 50257)
     (1, 4, 50257)
     """
-    return GPT2LMHeadModel(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(GPT2LargeLMWeights, pretrained, weights)
+    model = GPT2LMHeadModel(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_large_lm")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: factory adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="causal-lm",
     family="gpt2",
     model_type="gpt2",
     model_class=GPT2LMHeadModel,
     default_config=_CFG_XLARGE,
 )
-def gpt2_xlarge_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadModel:
+def gpt2_xlarge_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2XLargeLMWeights | None = None,
+    **overrides: object,
+) -> GPT2LMHeadModel:
     r"""Construct a GPT-2 XL (1.5B) model with the tied causal-LM head.
 
     Same trunk as :func:`gpt2_xlarge` (L=48, H=1600, A=25, ~1.5B parameters),
@@ -413,7 +494,11 @@ def gpt2_xlarge_lm(pretrained: bool = False, **overrides: object) -> GPT2LMHeadM
     >>> out.logits.shape   # (1, 4, 50257)
     (1, 4, 50257)
     """
-    return GPT2LMHeadModel(_apply(_CFG_XLARGE, overrides))
+    entry = weights_mod.resolve_weights(GPT2XLargeLMWeights, pretrained, weights)
+    model = GPT2LMHeadModel(_apply(_CFG_XLARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt2_xlarge_lm")
+    return model
 
 
 # ── Sequence-classification head ──────────────────────────────────────────────

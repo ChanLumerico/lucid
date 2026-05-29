@@ -1,6 +1,6 @@
 """RoFormer model (Su et al., 2021) — BERT with rotary position embedding.
 
-Architecturally identical to :class:`lucid.models.text.bert.BertModel` except
+Architecturally identical to :class:`lucid.models.text.bert.BERTModel` except
 that:
 
     * No additive position embedding (``position_embeddings`` is removed).
@@ -487,7 +487,7 @@ class RoFormerForSequenceClassification(PretrainedModel):
 
     Wraps :class:`RoFormerModel` with a dropout-regularised linear
     classifier operating on the pooled first-token embedding.  Pattern
-    mirrors :class:`BertForSequenceClassification`; use for GLUE-style
+    mirrors :class:`BERTForSequenceClassification`; use for GLUE-style
     fine-tunes when the RoPE-based relative position bias is preferred.
 
     Parameters
@@ -581,7 +581,7 @@ class RoFormerForTokenClassification(PretrainedModel, MaskedLMMixin):
 
     Wraps :class:`RoFormerModel` with a dropout-regularised linear
     classifier applied independently at every sequence position.  Pattern
-    mirrors :class:`BertForTokenClassification` — used for sequence-
+    mirrors :class:`BERTForTokenClassification` — used for sequence-
     labelling tasks (NER / POS / chunking) on RoPE-trained encoders.
 
     Parameters
@@ -792,7 +792,7 @@ class RoFormerForQuestionAnswering(PretrainedModel):
 
     Wraps :class:`RoFormerModel` with a single linear of output width 2,
     producing start- and end-position logits over each token in the input.
-    Identical contract to :class:`BertForQuestionAnswering`; the SQuAD
+    Identical contract to :class:`BERTForQuestionAnswering`; the SQuAD
     v1.1 / v2.0 fine-tuning recipe applied to a RoPE-trained encoder.
 
     Parameters

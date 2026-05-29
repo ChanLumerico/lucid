@@ -246,7 +246,7 @@ class PretrainedModel(nn.Module):
         ``__init__`` raises in that case.
     base_model_prefix : ClassVar[str]
         Optional name of the backbone attribute (e.g. ``"bert"`` on
-        ``BertForMaskedLM``).  Used by future state-dict remapping logic
+        ``BERTForMaskedLM``).  Used by future state-dict remapping logic
         when loading head-less checkpoints into head-bearing models.
     config : ModelConfig
         Instance attribute populated by ``__init__``.

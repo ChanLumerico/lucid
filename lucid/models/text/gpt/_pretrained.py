@@ -7,6 +7,7 @@ that needs a small variant should override config fields via
 ``create_model("gpt", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.gpt._config import GPTConfig
 from lucid.models.text.gpt._model import (
@@ -14,6 +15,7 @@ from lucid.models.text.gpt._model import (
     GPTLMHeadModel,
     GPTModel,
 )
+from lucid.models.text.gpt._weights import GPTLMWeights, GPTWeights
 
 _CFG_BASE = GPTConfig()  # Radford et al. defaults — the paper's only size
 
@@ -25,14 +27,19 @@ def _apply(cfg: GPTConfig, overrides: dict[str, object]) -> GPTConfig:
 # ── Backbone ──────────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: gpt adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="gpt",
     model_type="gpt",
     model_class=GPTModel,
     default_config=_CFG_BASE,
 )
-def gpt(pretrained: bool = False, **overrides: object) -> GPTModel:
+def gpt(
+    pretrained: bool | str = False,
+    *,
+    weights: GPTWeights | None = None,
+    **overrides: object,
+) -> GPTModel:
     r"""Construct a GPT-1 decoder-only Transformer trunk.
 
     The original generative pre-training transformer from Radford, Narasimhan,
@@ -84,20 +91,29 @@ def gpt(pretrained: bool = False, **overrides: object) -> GPTModel:
     >>> out.last_hidden_state.shape   # (B=1, T=4, H=768)
     (1, 4, 768)
     """
-    return GPTModel(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(GPTWeights, pretrained, weights)
+    model = GPTModel(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt")
+    return model
 
 
 # ── Causal-LM head (GenerationMixin host) ─────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: gpt_lm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="causal-lm",
     family="gpt",
     model_type="gpt",
     model_class=GPTLMHeadModel,
     default_config=_CFG_BASE,
 )
-def gpt_lm(pretrained: bool = False, **overrides: object) -> GPTLMHeadModel:
+def gpt_lm(
+    pretrained: bool | str = False,
+    *,
+    weights: GPTLMWeights | None = None,
+    **overrides: object,
+) -> GPTLMHeadModel:
     r"""Construct a GPT-1 model with the tied causal-LM head.
 
     Same trunk as :func:`gpt` (L=12, H=768, A=12, ~117M parameters), wrapped
@@ -145,7 +161,11 @@ def gpt_lm(pretrained: bool = False, **overrides: object) -> GPTLMHeadModel:
     >>> out.logits.shape   # (B=1, T=4, V=40478)
     (1, 4, 40478)
     """
-    return GPTLMHeadModel(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(GPTLMWeights, pretrained, weights)
+    model = GPTLMHeadModel(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="gpt_lm")
+    return model
 
 
 # ── Sequence-classification head ──────────────────────────────────────────────

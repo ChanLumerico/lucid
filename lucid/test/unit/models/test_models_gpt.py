@@ -231,3 +231,37 @@ class TestGPTDoubleHeadsModel:
         m = GPTDoubleHeadsModel(_tiny_config()).eval()
         with pytest.raises(ValueError, match=r"\(N, C, L\)"):
             m(lucid.tensor([[1, 2, 3]]).long(), lucid.tensor([[0]]).long())
+
+
+class TestGPTWeightsEnums:
+    """Static contract of the GPT-1 Weights enums — no network."""
+
+    _SHIPPED = (("GPTWeights", "gpt", 768), ("GPTLMWeights", "gpt-lm", 40_478))
+    _TAG = "BOOKCORPUS"
+
+    @staticmethod
+    def _enum(name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    def test_default_aliases(self) -> None:
+        for enum_name, *_rest in self._SHIPPED:
+            cls = self._enum(enum_name)
+            assert cls.DEFAULT is cls[self._TAG]
+
+    def test_entry_fields(self) -> None:
+        for enum_name, slug, num_classes in self._SHIPPED:
+            e = self._enum(enum_name)[self._TAG].entry
+            assert e.num_classes == num_classes
+            assert len(e.sha256) == 64
+            assert f"lucid-dl/{slug}" in e.url
+            assert e.meta["license"] == "mit"
+
+    def test_registered_for_factories(self) -> None:
+        from lucid.weights import weights_for
+
+        for enum_name, slug, _nc in self._SHIPPED:
+            resolved = weights_for(slug.replace("-", "_"))
+            assert resolved is not None
+            assert resolved.__name__ == enum_name

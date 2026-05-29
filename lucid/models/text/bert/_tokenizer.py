@@ -10,8 +10,8 @@ relies on:
 * ``[PAD]`` — padding
 * ``[MASK]`` — masked-LM placeholder
 
-Both :class:`BertTokenizer` (pure-Python) and
-:class:`BertTokenizerFast` (C++-backed) subclass the matching
+Both :class:`BERTTokenizer` (pure-Python) and
+:class:`BERTTokenizerFast` (C++-backed) subclass the matching
 algorithm classes in :mod:`lucid.utils.tokenizer._wordpiece` and
 register the five tokens above by default.  The defaults match
 ``bert-base-uncased`` so any HF ``vocab.txt`` checkpoint loads via
@@ -20,22 +20,22 @@ without modification.
 
 Two flavours, bit-identical encode output:
 
-* :class:`BertTokenizer` — the easy-to-debug reference path.
-* :class:`BertTokenizerFast` — the production path; the greedy
+* :class:`BERTTokenizer` — the easy-to-debug reference path.
+* :class:`BERTTokenizerFast` — the production path; the greedy
   longest-match loop runs in C++ via
   :class:`lucid._C.engine.utils.tokenizer.WordPiece`.
 
 Lower-casing
 ------------
 The default normalizer is :class:`~lucid.utils.tokenizer.normalizers.
-BertNormalizer` with ``lowercase=True``, matching the uncased BERT
+BERTNormalizer` with ``lowercase=True``, matching the uncased BERT
 family.  Set ``do_lower_case=False`` (or pass an explicit
 ``normalizer``) to load cased checkpoints such as
 ``bert-base-cased``.
 """
 
 from lucid.utils.tokenizer._base import SpecialTokens
-from lucid.utils.tokenizer._normalizers import BertNormalizer, Normalizer
+from lucid.utils.tokenizer._normalizers import BERTNormalizer, Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import (
     PreTokenizer,
     WhitespacePunctuationSplit,
@@ -54,7 +54,7 @@ def _bert_special_tokens() -> SpecialTokens:
     SpecialTokens
         Registry with ``unk=[UNK]``, ``pad=[PAD]``, ``cls=[CLS]``,
         ``sep=[SEP]``, ``mask=[MASK]``.  Used as the default for
-        both :class:`BertTokenizer` and :class:`BertTokenizerFast`
+        both :class:`BERTTokenizer` and :class:`BERTTokenizerFast`
         when the caller does not pass an explicit ``special_tokens``.
     """
     return SpecialTokens(
@@ -66,13 +66,13 @@ def _bert_special_tokens() -> SpecialTokens:
     )
 
 
-class BertTokenizer(WordPieceTokenizer):
+class BERTTokenizer(WordPieceTokenizer):
     r"""BERT tokenizer — pure-Python reference.
 
     A thin convenience subclass of
     :class:`~lucid.utils.tokenizer.WordPieceTokenizer` with BERT's
     canonical ``[UNK]/[CLS]/[SEP]/[PAD]/[MASK]`` registry, the
-    :class:`~lucid.utils.tokenizer.normalizers.BertNormalizer`
+    :class:`~lucid.utils.tokenizer.normalizers.BERTNormalizer`
     (lowercase + accent-strip + Chinese-char split + clean-text), and
     :class:`~lucid.utils.tokenizer.pre_tokenizers.WhitespacePunctuationSplit`
     pre-tokenizer baked in as defaults.
@@ -95,11 +95,11 @@ class BertTokenizer(WordPieceTokenizer):
         Words longer than this skip the longest-match loop and emit
         :attr:`unk_token` directly (mirrors BERT ``BasicTokenizer``).
     do_lower_case : bool, default ``True``
-        Forwarded to :class:`BertNormalizer`.  Set to ``False`` for
+        Forwarded to :class:`BERTNormalizer`.  Set to ``False`` for
         cased checkpoints (``bert-base-cased``, multilingual models).
         Ignored if ``normalizer`` is given explicitly.
     normalizer : Normalizer, optional
-        Override the default :class:`BertNormalizer`.
+        Override the default :class:`BERTNormalizer`.
     pre_tokenizer : PreTokenizer, optional
         Override the default :class:`WhitespacePunctuationSplit`.
     special_tokens : SpecialTokens, optional
@@ -109,8 +109,8 @@ class BertTokenizer(WordPieceTokenizer):
     --------
     Train a small BERT-style tokenizer from a corpus, then round-trip:
 
-    >>> from lucid.models.text.bert import BertTokenizer
-    >>> tok = BertTokenizer(vocab={})
+    >>> from lucid.models.text.bert import BERTTokenizer
+    >>> tok = BERTTokenizer(vocab={})
     >>> tok.train(["hello world", "hello bert"] * 8, vocab_size=60)
     >>> ids = tok.encode("Hello World", add_special_tokens=False)
     >>> # default do_lower_case=True → "Hello" and "hello" share ids.
@@ -119,7 +119,7 @@ class BertTokenizer(WordPieceTokenizer):
 
     See Also
     --------
-    BertTokenizerFast : C++-backed variant with identical output.
+    BERTTokenizerFast : C++-backed variant with identical output.
     """
 
     def __init__(
@@ -142,7 +142,7 @@ class BertTokenizer(WordPieceTokenizer):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BertNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(lowercase=do_lower_case)
             ),
             pre_tokenizer=(
                 pre_tokenizer
@@ -155,16 +155,16 @@ class BertTokenizer(WordPieceTokenizer):
         )
 
 
-class BertTokenizerFast(WordPieceTokenizerFast):
+class BERTTokenizerFast(WordPieceTokenizerFast):
     """BERT tokenizer — C++-backed.
 
-    Bit-identical to :class:`BertTokenizer`: same vocab format, same
+    Bit-identical to :class:`BERTTokenizer`: same vocab format, same
     special-token registry, same encode output.  The greedy
     longest-match loop runs in C++ via
     :class:`lucid._C.engine.utils.tokenizer.WordPiece`, typically
     20-30× faster than the pure-Python flavour on large corpora.
 
-    Constructor parameters mirror :class:`BertTokenizer` exactly —
+    Constructor parameters mirror :class:`BERTTokenizer` exactly —
     see that class for the full reference.
     """
 
@@ -188,7 +188,7 @@ class BertTokenizerFast(WordPieceTokenizerFast):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BertNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(lowercase=do_lower_case)
             ),
             pre_tokenizer=(
                 pre_tokenizer

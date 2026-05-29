@@ -2,20 +2,20 @@
 
 Eight checkpoints ship through the :mod:`lucid.weights` system, all
 converted from the upstream Hugging Face checkpoints (a pure identity
-parameter map — Lucid mirrors the ``BertModel`` naming one-for-one):
+parameter map — Lucid mirrors the ``BERTModel`` naming one-for-one):
 
-* **Base encoders** (:class:`BertTinyWeights` … :class:`BertLargeWeights`)
+* **Base encoders** (:class:`BERTTinyWeights` … :class:`BERTLargeWeights`)
   — the bare encoder trunk.  The four miniatures are the Turc et al. 2019
   "Well-Read Students" pre-distilled sizes; ``base`` / ``large`` are the
   original Devlin et al. 2018 ``bert-*-uncased`` checkpoints.
-* **Masked-LM heads** (:class:`BertBaseMLMWeights`,
-  :class:`BertLargeMLMWeights`) — encoder + the ``cls.predictions`` head
+* **Masked-LM heads** (:class:`BERTBaseMLMWeights`,
+  :class:`BERTLargeMLMWeights`) — encoder + the ``cls.predictions`` head
   used for the pre-training objective, re-tied to the input embedding.
 
 All checkpoints were pre-trained on the Wikipedia + BookCorpus corpus
 (uncased WordPiece, 30 522-token vocabulary).  Text models consume token
 ids directly, so the entries carry a no-op preprocessing transform; tokenize
-inputs with the matching :class:`lucid.models.text.bert.BertTokenizer`.
+inputs with the matching :class:`lucid.models.text.bert.BERTTokenizer`.
 """
 
 from lucid.utils.transforms import Compose
@@ -34,7 +34,7 @@ def _url(slug: str) -> str:
 
 
 @register_weights("bert_tiny")
-class BertTinyWeights(WeightsEnum):
+class BERTTinyWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_tiny`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -54,7 +54,7 @@ class BertTinyWeights(WeightsEnum):
 
 
 @register_weights("bert_mini")
-class BertMiniWeights(WeightsEnum):
+class BERTMiniWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_mini`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -74,7 +74,7 @@ class BertMiniWeights(WeightsEnum):
 
 
 @register_weights("bert_small")
-class BertSmallWeights(WeightsEnum):
+class BERTSmallWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_small`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -94,7 +94,7 @@ class BertSmallWeights(WeightsEnum):
 
 
 @register_weights("bert_medium")
-class BertMediumWeights(WeightsEnum):
+class BERTMediumWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_medium`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -114,7 +114,7 @@ class BertMediumWeights(WeightsEnum):
 
 
 @register_weights("bert_base")
-class BertBaseWeights(WeightsEnum):
+class BERTBaseWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_base`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -134,7 +134,7 @@ class BertBaseWeights(WeightsEnum):
 
 
 @register_weights("bert_large")
-class BertLargeWeights(WeightsEnum):
+class BERTLargeWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_large`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -154,7 +154,7 @@ class BertLargeWeights(WeightsEnum):
 
 
 @register_weights("bert_base_mlm")
-class BertBaseMLMWeights(WeightsEnum):
+class BERTBaseMLMWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_base_mlm`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(
@@ -174,7 +174,7 @@ class BertBaseMLMWeights(WeightsEnum):
 
 
 @register_weights("bert_large_mlm")
-class BertLargeMLMWeights(WeightsEnum):
+class BERTLargeMLMWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_large_mlm`."""
 
     WIKIPEDIA_BOOKSCORPUS = WeightEntry(

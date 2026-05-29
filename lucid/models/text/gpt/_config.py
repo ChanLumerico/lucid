@@ -2,7 +2,7 @@
 
 Paper: "Improving Language Understanding by Generative Pre-Training".  Single
 canonical size in the original paper (L=12, H=768, A=12, T=512); we expose a
-``GPTConfig`` parametrised the same way as ``BertConfig`` so downstream code
+``GPTConfig`` parametrised the same way as ``BERTConfig`` so downstream code
 can build smaller variants for tests / quick experiments without monkey-
 patching.
 
@@ -81,6 +81,9 @@ class GPTConfig(LanguageModelConfig):
     intermediate_size: int = 3_072
     max_position_embeddings: int = 512
     hidden_act: TextActivation = "gelu_new"
+    # GPT-1 uses LayerNorm eps 1e-5 (Radford et al., 2018; matches GPT-2),
+    # overriding the 1e-12 base default inherited from LanguageModelConfig.
+    layer_norm_eps: float = 1e-5
     pad_token_id: int | None = None  # GPT-1 has no pad token
 
     # Classification fine-tuning head — used by ``GPTForSequenceClassification``.

@@ -253,7 +253,7 @@ class MaskedLMMixin:
 
     Examples
     --------
-    >>> class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
+    >>> class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
     ...     def forward(self, input_ids, labels=None):
     ...         logits = self.head(self.bert(input_ids))
     ...         loss = self.compute_lm_loss(logits, labels) if labels else None

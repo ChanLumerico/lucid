@@ -272,7 +272,7 @@ def transformer_base_cls(
     encoder half is used in ``forward``.  The first source-side token's
     encoder hidden state is dropout-regularised and projected through a
     linear of output width ``config.num_labels``.  Pattern mirrors
-    :class:`BertForSequenceClassification` and is appropriate for
+    :class:`BERTForSequenceClassification` and is appropriate for
     GLUE-style fine-tunes on the encoder-only half of the Vaswani trunk.
 
     Parameters

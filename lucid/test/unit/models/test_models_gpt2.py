@@ -232,3 +232,54 @@ class TestGPT2DoubleHeadsModel:
         assert tuple(out.lm_logits.shape) == (1, 2, 4, _VOCAB)
         assert tuple(out.mc_logits.shape) == (1, 2)
         assert out.loss is not None
+
+
+# (enum_name, slug, num_classes, task) — eight shipped GPT-2 checkpoints:
+# four trunks (num_classes = hidden_size) and four causal-LM heads
+# (num_classes = vocab_size).  All WebText, byte-level BPE 50 257 vocab.
+_SHIPPED = (
+    ("GPT2SmallWeights", "gpt2-small", 768, "base"),
+    ("GPT2MediumWeights", "gpt2-medium", 1024, "base"),
+    ("GPT2LargeWeights", "gpt2-large", 1280, "base"),
+    ("GPT2XLargeWeights", "gpt2-xlarge", 1600, "base"),
+    ("GPT2SmallLMWeights", "gpt2-small-lm", 50_257, "lm"),
+    ("GPT2MediumLMWeights", "gpt2-medium-lm", 50_257, "lm"),
+    ("GPT2LargeLMWeights", "gpt2-large-lm", 50_257, "lm"),
+    ("GPT2XLargeLMWeights", "gpt2-xlarge-lm", 50_257, "lm"),
+)
+_TAG = "WEBTEXT"
+
+
+class TestGPT2WeightsEnums:
+    """Static contract of the per-variant Weights enums — no network."""
+
+    @staticmethod
+    def _enum(name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    def test_default_aliases(self) -> None:
+        for enum_name, *_rest in _SHIPPED:
+            cls = self._enum(enum_name)
+            assert cls.DEFAULT is cls[_TAG]
+
+    def test_entry_fields(self) -> None:
+        for enum_name, slug, num_classes, _task in _SHIPPED:
+            member = self._enum(enum_name)[_TAG]
+            e = member.entry
+            assert e.num_classes == num_classes
+            assert len(e.sha256) == 64
+            assert f"lucid-dl/{slug}" in e.url
+            assert f"/{_TAG}/" in e.url
+            assert member.meta["tag"] == _TAG
+            assert member.meta["license"] == "mit"
+
+    def test_registered_for_factories(self) -> None:
+        from lucid.weights import weights_for
+
+        for enum_name, slug, *_rest in _SHIPPED:
+            factory = slug.replace("-", "_")
+            resolved = weights_for(factory)
+            assert resolved is not None
+            assert resolved.__name__ == enum_name

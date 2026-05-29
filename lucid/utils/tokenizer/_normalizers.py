@@ -187,7 +187,7 @@ class Replace(Normalizer):
         return text.replace(self._pattern, self._replacement)
 
 
-class BertNormalizer(Normalizer):
+class BERTNormalizer(Normalizer):
     """Composite normalizer matching BERT's standard pipeline.
 
     Parameters

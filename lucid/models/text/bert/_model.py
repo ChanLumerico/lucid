@@ -1,6 +1,6 @@
 """BERT model (Devlin et al., 2018) — encoder-only Transformer.
 
-Module / parameter naming matches HuggingFace Transformers' ``BertModel`` so
+Module / parameter naming matches HuggingFace Transformers' ``BERTModel`` so
 state dicts can be ported with a flat key rename.  Top-level layout:
 
     bert.embeddings.{word, position, token_type}_embeddings
@@ -31,19 +31,19 @@ from lucid.models._output import (
     ModelOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
-from lucid.models.text.bert._config import BertConfig
+from lucid.models.text.bert._config import BERTConfig
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Embeddings
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertEmbeddings(nn.Module):
+class _BERTEmbeddings(nn.Module):
     """Word + position + token-type embedding sum, then LN + Dropout."""
 
     position_ids: Tensor
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.word_embeddings = nn.Embedding(
             config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id
@@ -89,14 +89,14 @@ class _BertEmbeddings(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertSelfAttention(nn.Module):
+class _BERTSelfAttention(nn.Module):
     """Multi-head self-attention with separate Q / K / V projections.
 
     HF stores Q/K/V as three independent ``Linear``s (not fused), which is the
     convention we mirror here so weight porting is a direct rename.
     """
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.num_heads = config.num_attention_heads
         self.head_dim = config.hidden_size // config.num_attention_heads
@@ -134,10 +134,10 @@ class _BertSelfAttention(nn.Module):
         return ctx
 
 
-class _BertSelfOutput(nn.Module):
+class _BERTSelfOutput(nn.Module):
     """Post-attention dense + LN + residual."""
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -150,12 +150,12 @@ class _BertSelfOutput(nn.Module):
         return cast(Tensor, self.LayerNorm(h + input_tensor))
 
 
-class _BertAttention(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTAttention(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         # HF names ``self`` for the projection block — keep the same key.
-        self.self = _BertSelfAttention(config)
-        self.output = _BertSelfOutput(config)
+        self.self = _BERTSelfAttention(config)
+        self.output = _BERTSelfOutput(config)
 
     def forward(  # type: ignore[override]
         self,
@@ -171,8 +171,8 @@ class _BertAttention(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertIntermediate(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTIntermediate(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         self._act_name = config.hidden_act
@@ -181,8 +181,8 @@ class _BertIntermediate(nn.Module):
         return text_activation(self._act_name, cast(Tensor, self.dense(x)))
 
 
-class _BertOutput(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTOutput(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -200,12 +200,12 @@ class _BertOutput(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertLayer(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTLayer(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
-        self.attention = _BertAttention(config)
-        self.intermediate = _BertIntermediate(config)
-        self.output = _BertOutput(config)
+        self.attention = _BERTAttention(config)
+        self.intermediate = _BERTIntermediate(config)
+        self.output = _BERTOutput(config)
 
     def forward(  # type: ignore[override]
         self,
@@ -217,11 +217,11 @@ class _BertLayer(nn.Module):
         return cast(Tensor, self.output(inter, attn_out))
 
 
-class _BertEncoder(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTEncoder(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.layer = nn.ModuleList(
-            [_BertLayer(config) for _ in range(config.num_hidden_layers)]
+            [_BERTLayer(config) for _ in range(config.num_hidden_layers)]
         )
 
     def forward(  # type: ignore[override]
@@ -239,8 +239,8 @@ class _BertEncoder(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertPooler(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTPooler(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
 
@@ -255,7 +255,7 @@ class _BertPooler(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class BertModel(PretrainedModel):
+class BERTModel(PretrainedModel):
     r"""Bare BERT encoder returning hidden states and pooled CLS embedding.
 
     Implements the bidirectional transformer encoder of Devlin et al., 2018.
@@ -266,13 +266,13 @@ class BertModel(PretrainedModel):
     sentence-level embedding used by classification heads.
 
     Use this class as the trunk when you want raw hidden states; the
-    task-specific subclasses (``BertFor*``) wrap it with appropriate heads.
+    task-specific subclasses (``BERTFor*``) wrap it with appropriate heads.
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         Hyperparameters controlling vocabulary, depth, width, head count, and
-        regularisation.  See :class:`BertConfig` for the full field list.
+        regularisation.  See :class:`BERTConfig` for the full field list.
 
     Attributes
     ----------
@@ -283,7 +283,7 @@ class BertModel(PretrainedModel):
         Stack of ``config.num_hidden_layers`` transformer encoder layers.
     pooler : nn.Module
         Dense + tanh projection of the ``[CLS]`` hidden state.
-    config_class : type[BertConfig]
+    config_class : type[BERTConfig]
         Class-level pointer used by the registry to instantiate a matching
         config from disk.
     base_model_prefix : str
@@ -316,10 +316,10 @@ class BertModel(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertModel
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128, num_attention_heads=2,
+    >>> from lucid.models.text.bert import BERTConfig, BERTModel
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128, num_attention_heads=2,
     ...                  intermediate_size=512)
-    >>> model = BertModel(cfg).eval()
+    >>> model = BERTModel(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])   # [CLS] hello world [SEP]
     >>> out = model(input_ids)
     >>> out.last_hidden_state.shape   # (B=1, T=4, H=128)
@@ -328,14 +328,14 @@ class BertModel(PretrainedModel):
     (1, 128)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.embeddings = _BertEmbeddings(config)
-        self.encoder = _BertEncoder(config)
-        self.pooler = _BertPooler(config)
+        self.embeddings = _BERTEmbeddings(config)
+        self.encoder = _BERTEncoder(config)
+        self.pooler = _BERTPooler(config)
 
     def get_input_embeddings(self) -> nn.Module:
         return self.embeddings.word_embeddings
@@ -343,7 +343,7 @@ class BertModel(PretrainedModel):
     def set_input_embeddings(self, value: nn.Module) -> None:
         if not isinstance(value, nn.Embedding):
             raise TypeError(
-                f"BertModel input embeddings must be nn.Embedding, got {type(value).__name__}"
+                f"BERTModel input embeddings must be nn.Embedding, got {type(value).__name__}"
             )
         self.embeddings.word_embeddings = value
 
@@ -368,12 +368,12 @@ class BertModel(PretrainedModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MLM head — used by BertForMaskedLM
+# MLM head — used by BERTForMaskedLM
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class _BertPredictionHeadTransform(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTPredictionHeadTransform(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
@@ -385,15 +385,15 @@ class _BertPredictionHeadTransform(nn.Module):
         return cast(Tensor, self.LayerNorm(x))
 
 
-class _BertLMPredictionHead(nn.Module):
+class _BERTLMPredictionHead(nn.Module):
     """Decoder linear (weight tied to input embeddings) + standalone bias."""
 
     bias: Tensor
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
-        self.transform = _BertPredictionHeadTransform(config)
-        # Decoder is created untied; ``BertForMaskedLM`` re-binds the weight to
+        self.transform = _BERTPredictionHeadTransform(config)
+        # Decoder is created untied; ``BERTForMaskedLM`` re-binds the weight to
         # the input embedding table when ``tie_word_embeddings`` is set.
         self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         # HF keeps the output bias as a standalone parameter on the head, not on
@@ -407,10 +407,10 @@ class _BertLMPredictionHead(nn.Module):
         return logits + self.bias
 
 
-class _BertOnlyMLMHead(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTOnlyMLMHead(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
-        self.predictions = _BertLMPredictionHead(config)
+        self.predictions = _BERTLMPredictionHead(config)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         return cast(Tensor, self.predictions(x))
@@ -421,7 +421,7 @@ class _BertOnlyMLMHead(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
+class BERTForMaskedLM(PretrainedModel, MaskedLMMixin):
     r"""BERT with a tied masked-language-modeling head.
 
     Implements the masked-LM half of the Devlin et al. (2018) pre-training
@@ -434,14 +434,14 @@ class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
         controls whether the decoder weight is bound to the input embedding
         matrix to halve the parameter count.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     cls : nn.Module
         Masked-LM prediction head with its own dense + LayerNorm transform
@@ -466,23 +466,23 @@ class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForMaskedLM
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForMaskedLM
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForMaskedLM(cfg).eval()
+    >>> model = BERTForMaskedLM(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 103, 102]])   # [CLS] hello [MASK] [SEP]
     >>> out = model(input_ids)
     >>> out.logits.shape   # (B=1, T=4, V=30522)
     (1, 4, 30522)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
-        self.cls = _BertOnlyMLMHead(config)
+        self.bert = BERTModel(config)
+        self.cls = _BERTOnlyMLMHead(config)
         if config.tie_word_embeddings:
             self._tie_decoder_to_input_embeddings()
 
@@ -517,7 +517,7 @@ class BertForMaskedLM(PretrainedModel, MaskedLMMixin):
         return MaskedLMOutput(logits=prediction_scores, loss=loss)
 
 
-class BertForSequenceClassification(PretrainedModel):
+class BERTForSequenceClassification(PretrainedModel):
     r"""BERT with a pooled-CLS linear classifier for sequence-level tasks.
 
     Wraps the bidirectional encoder with a dropout-regularised linear head
@@ -527,14 +527,14 @@ class BertForSequenceClassification(PretrainedModel):
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  ``config.num_labels`` sets the output
         dimension; ``config.classifier_dropout`` (falling back to
         ``hidden_dropout``) sets the dropout applied before the linear.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     dropout : nn.Dropout
         Dropout layer applied to the pooled ``[CLS]`` embedding.
@@ -556,22 +556,22 @@ class BertForSequenceClassification(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForSequenceClassification
-    >>> cfg = BertConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForSequenceClassification
+    >>> cfg = BERTConfig(num_labels=3, num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForSequenceClassification(cfg).eval()
+    >>> model = BERTForSequenceClassification(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 102]])
     >>> out = model(input_ids)
     >>> out.logits.shape   # (B=1, num_labels=3)
     (1, 3)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
+        self.bert = BERTModel(config)
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None
@@ -608,7 +608,7 @@ class BertForSequenceClassification(PretrainedModel):
         return MaskedLMOutput(logits=logits, loss=loss)
 
 
-class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
+class BERTForTokenClassification(PretrainedModel, MaskedLMMixin):
     r"""BERT with a per-token linear classifier for tagging tasks.
 
     Wraps the bidirectional encoder with a dropout-regularised linear head
@@ -618,14 +618,14 @@ class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  ``config.num_labels`` sets the per-position
         output dimension; ``config.classifier_dropout`` (falling back to
         ``hidden_dropout``) sets the dropout applied before the linear.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     dropout : nn.Dropout
         Dropout applied to the full sequence hidden states.
@@ -652,22 +652,22 @@ class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForTokenClassification
-    >>> cfg = BertConfig(num_labels=9, num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForTokenClassification
+    >>> cfg = BERTConfig(num_labels=9, num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForTokenClassification(cfg).eval()
+    >>> model = BERTForTokenClassification(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
     >>> out = model(input_ids)
     >>> out.logits.shape   # (B=1, T=4, num_labels=9)
     (1, 4, 9)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
+        self.bert = BERTModel(config)
         drop = (
             config.classifier_dropout
             if config.classifier_dropout is not None
@@ -701,7 +701,7 @@ class BertForTokenClassification(PretrainedModel, MaskedLMMixin):
         return MaskedLMOutput(logits=logits, loss=loss)
 
 
-class BertForQuestionAnswering(PretrainedModel):
+class BERTForQuestionAnswering(PretrainedModel):
     r"""BERT with a 2-way span head for extractive question answering.
 
     Wraps the bidirectional encoder with a single linear of output width 2,
@@ -712,13 +712,13 @@ class BertForQuestionAnswering(PretrainedModel):
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  The QA head is always 2-way; ``num_labels``
         is ignored here.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     qa_outputs : nn.Linear
         Final linear of shape ``(hidden_size, 2)`` mapping each token's
@@ -746,22 +746,22 @@ class BertForQuestionAnswering(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForQuestionAnswering
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForQuestionAnswering
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForQuestionAnswering(cfg).eval()
+    >>> model = BERTForQuestionAnswering(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 2040, 2003, 102, 1045, 2572, 102]])
     >>> out = model(input_ids)
     >>> out.logits.shape   # (B=1, T=7, 2)
     (1, 7, 2)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
+        self.bert = BERTModel(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
 
     def forward(  # type: ignore[override]
@@ -804,8 +804,8 @@ class BertForQuestionAnswering(PretrainedModel):
 
 
 @dataclass
-class BertForPreTrainingOutput(ModelOutput):
-    r"""Combined output for :class:`BertForPreTraining`.
+class BERTForPreTrainingOutput(ModelOutput):
+    r"""Combined output for :class:`BERTForPreTraining`.
 
     Aggregates the masked-LM logits, next-sentence-prediction logits, and
     optional per-objective and combined losses produced by the full BERT
@@ -838,10 +838,10 @@ class BertForPreTrainingOutput(ModelOutput):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForPreTraining
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForPreTraining
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForPreTraining(cfg).eval()
+    >>> model = BERTForPreTraining(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])
     >>> out = model(input_ids)
     >>> out.prediction_logits.shape, out.seq_relationship_logits.shape
@@ -855,8 +855,8 @@ class BertForPreTrainingOutput(ModelOutput):
     nsp_loss: Tensor | None = None
 
 
-class _BertOnlyNSPHead(nn.Module):
-    def __init__(self, config: BertConfig) -> None:
+class _BERTOnlyNSPHead(nn.Module):
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
@@ -864,12 +864,12 @@ class _BertOnlyNSPHead(nn.Module):
         return cast(Tensor, self.seq_relationship(pooled_output))
 
 
-class _BertPreTrainingHeads(nn.Module):
-    """MLM prediction head + NSP head — used by :class:`BertForPreTraining`."""
+class _BERTPreTrainingHeads(nn.Module):
+    """MLM prediction head + NSP head — used by :class:`BERTForPreTraining`."""
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__()
-        self.predictions = _BertLMPredictionHead(config)
+        self.predictions = _BERTLMPredictionHead(config)
         self.seq_relationship = nn.Linear(config.hidden_size, 2)
 
     def forward(  # type: ignore[override]
@@ -880,7 +880,7 @@ class _BertPreTrainingHeads(nn.Module):
         return prediction_scores, seq_relationship_score
 
 
-class BertForPreTraining(PretrainedModel, MaskedLMMixin):
+class BERTForPreTraining(PretrainedModel, MaskedLMMixin):
     r"""BERT with the original joint MLM + NSP pre-training objective.
 
     Combines the masked-language-modeling head (decoder weight tied to input
@@ -893,18 +893,18 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
     NSP target) to compute the corresponding losses; their sum is exposed as
     ``output.loss``.  Use this class only when reproducing the original
     pre-training recipe — newer encoder-only LMs typically drop NSP and use
-    :class:`BertForMaskedLM` directly.
+    :class:`BERTForMaskedLM` directly.
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
         controls whether the MLM decoder weight is tied to the input
         embedding matrix.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     cls : nn.Module
         Combined head holding both the MLM prediction projection
@@ -927,10 +927,10 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForPreTraining
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForPreTraining
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForPreTraining(cfg).eval()
+    >>> model = BERTForPreTraining(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 103, 102, 2088, 102]])
     >>> out = model(input_ids)
     >>> out.prediction_logits.shape    # MLM logits  (B=1, T=6, V=30522)
@@ -939,13 +939,13 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
     (1, 2)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
-        self.cls = _BertPreTrainingHeads(config)
+        self.bert = BERTModel(config)
+        self.cls = _BERTPreTrainingHeads(config)
         if config.tie_word_embeddings:
             self.cls.predictions.decoder.weight = (
                 self.bert.embeddings.word_embeddings.weight
@@ -958,7 +958,7 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
         token_type_ids: Tensor | None = None,
         labels: Tensor | None = None,
         next_sentence_label: Tensor | None = None,
-    ) -> BertForPreTrainingOutput:
+    ) -> BERTForPreTrainingOutput:
         outputs = cast(
             BaseModelOutputWithPooling,
             self.bert(
@@ -987,7 +987,7 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
         elif nsp_loss is not None:
             total_loss = nsp_loss
 
-        return BertForPreTrainingOutput(
+        return BERTForPreTrainingOutput(
             prediction_logits=prediction_scores,
             seq_relationship_logits=seq_relationship_score,
             loss=total_loss,
@@ -996,7 +996,7 @@ class BertForPreTraining(PretrainedModel, MaskedLMMixin):
         )
 
 
-class BertForNextSentencePrediction(PretrainedModel):
+class BERTForNextSentencePrediction(PretrainedModel):
     r"""BERT with the standalone next-sentence-prediction head.
 
     Wraps the bidirectional encoder with a single binary linear classifier
@@ -1005,17 +1005,17 @@ class BertForNextSentencePrediction(PretrainedModel):
     historical experiments or as a sanity check for sentence-pair coherence.
 
     NSP was abandoned by RoBERTa, ALBERT, and DeBERTa as offering no
-    downstream value, so prefer :class:`BertForMaskedLM` (MLM-only) or
-    :class:`BertForSequenceClassification` for new work.
+    downstream value, so prefer :class:`BERTForMaskedLM` (MLM-only) or
+    :class:`BERTForSequenceClassification` for new work.
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying bidirectional encoder trunk.
     cls : nn.Module
         NSP head — a single ``Linear(hidden_size, 2)`` over the pooled
@@ -1040,10 +1040,10 @@ class BertForNextSentencePrediction(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForNextSentencePrediction
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForNextSentencePrediction
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForNextSentencePrediction(cfg).eval()
+    >>> model = BERTForNextSentencePrediction(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 102, 2088, 102]])
     >>> token_type_ids = lucid.tensor([[0, 0, 0, 1, 1]])
     >>> out = model(input_ids, token_type_ids=token_type_ids)
@@ -1051,13 +1051,13 @@ class BertForNextSentencePrediction(PretrainedModel):
     (1, 2)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
-        self.cls = _BertOnlyNSPHead(config)
+        self.bert = BERTModel(config)
+        self.cls = _BERTOnlyNSPHead(config)
 
     def forward(  # type: ignore[override]
         self,
@@ -1083,30 +1083,30 @@ class BertForNextSentencePrediction(PretrainedModel):
         return MaskedLMOutput(logits=seq_relationship_score, loss=loss)
 
 
-class BertForCausalLM(PretrainedModel):
+class BERTForCausalLM(PretrainedModel):
     r"""BERT trunk repurposed as a left-to-right (causal) language model.
 
     Standard BERT attends bidirectionally; this wrapper injects a
     lower-triangular causal mask on top of the existing additive
     attention/padding mask so the same encoder weights behave as a decoder.
     The LM head is the same tied projection used by
-    :class:`BertForMaskedLM`.  Use this class when you want to apply
+    :class:`BERTForMaskedLM`.  Use this class when you want to apply
     pre-trained BERT weights to a generative or sequence-continuation task.
 
     Parameters
     ----------
-    config : BertConfig
+    config : BERTConfig
         BERT hyperparameters.  ``config.tie_word_embeddings`` (default True)
         ties the LM decoder weight to the input embedding matrix.
 
     Attributes
     ----------
-    bert : BertModel
+    bert : BERTModel
         Underlying transformer trunk; only ``embeddings`` and ``encoder`` are
         invoked in ``forward`` (the pooler is bypassed).
     cls : nn.Module
         Tied LM prediction head — same architecture as
-        :class:`BertForMaskedLM`.
+        :class:`BERTForMaskedLM`.
 
     Notes
     -----
@@ -1139,23 +1139,23 @@ class BertForCausalLM(PretrainedModel):
     Examples
     --------
     >>> import lucid
-    >>> from lucid.models.text.bert import BertConfig, BertForCausalLM
-    >>> cfg = BertConfig(num_hidden_layers=2, hidden_size=128,
+    >>> from lucid.models.text.bert import BERTConfig, BERTForCausalLM
+    >>> cfg = BERTConfig(num_hidden_layers=2, hidden_size=128,
     ...                  num_attention_heads=2, intermediate_size=512)
-    >>> model = BertForCausalLM(cfg).eval()
+    >>> model = BERTForCausalLM(cfg).eval()
     >>> input_ids = lucid.tensor([[101, 7592, 2088, 102]])
     >>> out = model(input_ids)
     >>> out.logits.shape   # (B=1, T=4, V=30522)
     (1, 4, 30522)
     """
 
-    config_class: ClassVar[type[BertConfig]] = BertConfig
+    config_class: ClassVar[type[BERTConfig]] = BERTConfig
     base_model_prefix: ClassVar[str] = "bert"
 
-    def __init__(self, config: BertConfig) -> None:
+    def __init__(self, config: BERTConfig) -> None:
         super().__init__(config)
-        self.bert = BertModel(config)
-        self.cls = _BertOnlyMLMHead(config)
+        self.bert = BERTModel(config)
+        self.cls = _BERTOnlyMLMHead(config)
         if config.tie_word_embeddings:
             self.cls.predictions.decoder.weight = (
                 self.bert.embeddings.word_embeddings.weight

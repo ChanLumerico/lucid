@@ -38,7 +38,7 @@ class HasModelType(Protocol):
     r"""Building-block protocol: class carries a ``model_type`` ClassVar.
 
     The simplest of the family-contract pieces.  Every concrete family
-    Config (``ResNetConfig``, ``BertConfig``, …) overrides this ClassVar
+    Config (``ResNetConfig``, ``BERTConfig``, …) overrides this ClassVar
     to a unique short identifier (``"resnet"``, ``"bert"``) used by the
     registry, ``config.json`` persistence, and ``AutoConfig`` dispatch.
 
@@ -214,9 +214,9 @@ class ModelConfigProtocol(HasModelType, HasFamilyMeta, Protocol):
     Every documented family Config satisfies the contract:
 
     >>> from lucid.models.vision.resnet import ResNetConfig
-    >>> from lucid.models.text.bert import BertConfig
+    >>> from lucid.models.text.bert import BERTConfig
     >>> from lucid.models._protocols import ModelConfigProtocol
-    >>> all(isinstance(c, ModelConfigProtocol) for c in (ResNetConfig, BertConfig))
+    >>> all(isinstance(c, ModelConfigProtocol) for c in (ResNetConfig, BERTConfig))
     True
 
     A duck-typed third-party Config with the right shape also
@@ -237,8 +237,8 @@ class ModelConfigProtocol(HasModelType, HasFamilyMeta, Protocol):
 @runtime_checkable
 class PretrainedModelProtocol(HasConfigClass, Protocol):
     r"""Composite structural contract for a family's *model* class —
-    either the backbone (``ResNet``, ``BertModel``) or a task wrapper
-    (``ResNetForImageClassification``, ``BertForMaskedLM``).
+    either the backbone (``ResNet``, ``BERTModel``) or a task wrapper
+    (``ResNetForImageClassification``, ``BERTForMaskedLM``).
 
     The protocol requires (i) the ``config_class`` pointer (from
     :class:`HasConfigClass`) and (ii) the two methods every
@@ -285,7 +285,7 @@ class PretrainedModelProtocol(HasConfigClass, Protocol):
 class BackboneProtocol(PretrainedModelProtocol, Protocol):
     r"""Refinement of :class:`PretrainedModelProtocol` for the family's
     *direct* (backbone) model — the class whose name does **not**
-    contain ``For<Task>`` (e.g. ``ResNet``, ``BertModel``, ``ViT``,
+    contain ``For<Task>`` (e.g. ``ResNet``, ``BERTModel``, ``ViT``,
     ``DDPMModel``).
 
     Currently identical in shape to the base protocol; the dedicated
@@ -317,7 +317,7 @@ class BackboneProtocol(PretrainedModelProtocol, Protocol):
 class TaskWrapperProtocol(PretrainedModelProtocol, Protocol):
     r"""Refinement of :class:`PretrainedModelProtocol` for ``*For<Task>``
     head classes (e.g. ``ResNetForImageClassification``,
-    ``BertForMaskedLM``).
+    ``BERTForMaskedLM``).
 
     Implementations are expected to return a task-specific ``*Output``
     dataclass from :meth:`forward` — :class:`ImageClassificationOutput`

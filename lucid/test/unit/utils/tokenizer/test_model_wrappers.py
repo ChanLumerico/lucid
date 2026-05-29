@@ -13,7 +13,7 @@ registry, normalizer settings).  These tests cover:
 
 import pytest
 
-from lucid.models.text.bert import BertTokenizer, BertTokenizerFast
+from lucid.models.text.bert import BERTTokenizer, BERTTokenizerFast
 from lucid.models.text.gpt import GPTTokenizer, GPTTokenizerFast
 from lucid.models.text.gpt2 import GPT2Tokenizer, GPT2TokenizerFast
 from lucid.models.text.roformer import (
@@ -32,9 +32,9 @@ CORPUS = [
 # ── BERT ────────────────────────────────────────────────────────────
 
 
-class TestBertTokenizer:
+class TestBERTTokenizer:
     def test_default_special_tokens(self) -> None:
-        for cls in (BertTokenizer, BertTokenizerFast):
+        for cls in (BERTTokenizer, BERTTokenizerFast):
             tok = cls(vocab={})
             st = tok.special_tokens
             assert st.unk == "[UNK]"
@@ -44,7 +44,7 @@ class TestBertTokenizer:
             assert st.mask == "[MASK]"
 
     def test_train_encode_decode(self) -> None:
-        for cls in (BertTokenizer, BertTokenizerFast):
+        for cls in (BERTTokenizer, BERTTokenizerFast):
             tok = cls(vocab={})
             tok.train(CORPUS, vocab_size=60)
             ids = tok.encode("the dog", add_special_tokens=False)
@@ -52,9 +52,9 @@ class TestBertTokenizer:
             assert len(ids) > 0
 
     def test_python_fast_parity(self) -> None:
-        slow = BertTokenizer(vocab={})
+        slow = BERTTokenizer(vocab={})
         slow.train(CORPUS, vocab_size=60)
-        fast = BertTokenizerFast(vocab=slow.get_vocab())
+        fast = BERTTokenizerFast(vocab=slow.get_vocab())
         for text in ["the dog", "the quick brown fox"]:
             assert slow.encode(text, add_special_tokens=False) == fast.encode(
                 text, add_special_tokens=False
@@ -62,8 +62,8 @@ class TestBertTokenizer:
 
     def test_lowercasing_default(self) -> None:
         """BERT default is uncased — encode("THE") should match
-        encode("the") because of the bundled BertNormalizer."""
-        tok = BertTokenizer(vocab={})
+        encode("the") because of the bundled BERTNormalizer."""
+        tok = BERTTokenizer(vocab={})
         tok.train(CORPUS, vocab_size=60)
         assert tok.encode("the dog", add_special_tokens=False) == tok.encode(
             "THE DOG", add_special_tokens=False

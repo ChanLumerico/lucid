@@ -417,7 +417,7 @@ class MaskedLMOutput(ModelOutput):
     Notes
     -----
     Returned by every ``{Family}ForMaskedLM`` registration —
-    ``BertForMaskedLM``, ``RoFormerForMaskedLM``, and future encoder LM
+    ``BERTForMaskedLM``, ``RoFormerForMaskedLM``, and future encoder LM
     heads.  Loss is computed via :meth:`MaskedLMMixin.compute_lm_loss`.
 
     Examples

@@ -467,7 +467,7 @@ class TransformerForSequenceClassification(PretrainedModel):
     ``forward``; the first source-side token's hidden state is
     dropout-regularised and projected through a linear of output width
     ``config.num_labels``.  Pattern mirrors
-    :class:`BertForSequenceClassification` — the decoder half of the trunk
+    :class:`BERTForSequenceClassification` — the decoder half of the trunk
     is unused so this head trains the same encoder weights efficiently for
     GLUE-style fine-tunes on the Vaswani backbone.
 

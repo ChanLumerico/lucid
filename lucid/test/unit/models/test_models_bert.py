@@ -8,12 +8,12 @@ import pytest
 
 import lucid
 from lucid.models import (
-    BertConfig,
-    BertForMaskedLM,
-    BertForQuestionAnswering,
-    BertForSequenceClassification,
-    BertForTokenClassification,
-    BertModel,
+    BERTConfig,
+    BERTForMaskedLM,
+    BERTForQuestionAnswering,
+    BERTForSequenceClassification,
+    BERTForTokenClassification,
+    BERTModel,
     create_model,
     is_model,
 )
@@ -30,7 +30,7 @@ _INTER = 64
 _MAX_POS = 32
 
 
-def _tiny_config(**overrides: object) -> BertConfig:
+def _tiny_config(**overrides: object) -> BERTConfig:
     base = {
         "vocab_size": _VOCAB,
         "hidden_size": _HIDDEN,
@@ -42,7 +42,7 @@ def _tiny_config(**overrides: object) -> BertConfig:
         "num_labels": 3,
     }
     base.update(overrides)
-    return BertConfig(**base)  # type: ignore[arg-type]
+    return BERTConfig(**base)  # type: ignore[arg-type]
 
 
 def _ids(B: int = 2, T: int = 8) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tensor]:
@@ -57,9 +57,9 @@ def _ids(B: int = 2, T: int = 8) -> tuple[lucid.Tensor, lucid.Tensor, lucid.Tens
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestBertConfig:
+class TestBERTConfig:
     def test_defaults_match_bert_base(self) -> None:
-        cfg = BertConfig()
+        cfg = BERTConfig()
         assert cfg.hidden_size == 768
         assert cfg.num_hidden_layers == 12
         assert cfg.num_attention_heads == 12
@@ -69,19 +69,19 @@ class TestBertConfig:
 
     def test_type_vocab_size_invariant(self) -> None:
         with pytest.raises(ValueError, match="type_vocab_size"):
-            BertConfig(type_vocab_size=0)
+            BERTConfig(type_vocab_size=0)
 
     def test_num_labels_invariant(self) -> None:
         with pytest.raises(ValueError, match="num_labels"):
-            BertConfig(num_labels=0)
+            BERTConfig(num_labels=0)
 
     def test_classifier_dropout_range(self) -> None:
         with pytest.raises(ValueError, match="classifier_dropout"):
-            BertConfig(classifier_dropout=1.5)
+            BERTConfig(classifier_dropout=1.5)
 
     def test_head_divisibility_inherited(self) -> None:
         with pytest.raises(ValueError, match="divisible"):
-            BertConfig(hidden_size=10, num_attention_heads=3)
+            BERTConfig(hidden_size=10, num_attention_heads=3)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,10 +89,10 @@ class TestBertConfig:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestBertModelForward:
+class TestBERTModelForward:
     def test_bare_encoder(self) -> None:
         cfg = _tiny_config()
-        m = BertModel(cfg).eval()
+        m = BERTModel(cfg).eval()
         ids, attn, tt = _ids(B=2, T=8)
         out = m(ids, attn, tt)
         assert tuple(out.last_hidden_state.shape) == (2, 8, _HIDDEN)
@@ -100,21 +100,21 @@ class TestBertModelForward:
 
     def test_attention_mask_optional(self) -> None:
         cfg = _tiny_config()
-        m = BertModel(cfg).eval()
+        m = BERTModel(cfg).eval()
         ids, _, _ = _ids(B=1, T=6)
         out = m(ids)  # no mask, no token_type_ids
         assert tuple(out.last_hidden_state.shape) == (1, 6, _HIDDEN)
 
     def test_input_embeddings_accessor(self) -> None:
-        m = BertModel(_tiny_config()).eval()
+        m = BERTModel(_tiny_config()).eval()
         emb = m.get_input_embeddings()
         assert emb is m.embeddings.word_embeddings
 
 
-class TestBertForMaskedLM:
+class TestBERTForMaskedLM:
     def test_logits_shape_and_loss(self) -> None:
         cfg = _tiny_config()
-        m = BertForMaskedLM(cfg).eval()
+        m = BERTForMaskedLM(cfg).eval()
         ids, attn, tt = _ids(B=2, T=8)
         labels = lucid.tensor([[3, -100, 5, -100, -100, -100, -100, -100]] * 2).long()
         out = m(ids, attn, tt, labels=labels)
@@ -123,24 +123,24 @@ class TestBertForMaskedLM:
         assert float(out.loss.item()) > 0.0
 
     def test_decoder_weight_is_tied(self) -> None:
-        m = BertForMaskedLM(_tiny_config()).eval()
+        m = BERTForMaskedLM(_tiny_config()).eval()
         assert (
             m.cls.predictions.decoder.weight is m.bert.embeddings.word_embeddings.weight
         )
 
     def test_untied_when_disabled(self) -> None:
         cfg = _tiny_config(tie_word_embeddings=False)
-        m = BertForMaskedLM(cfg).eval()
+        m = BERTForMaskedLM(cfg).eval()
         assert (
             m.cls.predictions.decoder.weight
             is not m.bert.embeddings.word_embeddings.weight
         )
 
 
-class TestBertForSequenceClassification:
+class TestBERTForSequenceClassification:
     def test_logits_and_loss(self) -> None:
         cfg = _tiny_config()
-        m = BertForSequenceClassification(cfg).eval()
+        m = BERTForSequenceClassification(cfg).eval()
         ids, attn, tt = _ids(B=2, T=8)
         labels = lucid.tensor([1, 2]).long()
         out = m(ids, attn, tt, labels=labels)
@@ -148,19 +148,19 @@ class TestBertForSequenceClassification:
         assert out.loss is not None
 
 
-class TestBertForTokenClassification:
+class TestBERTForTokenClassification:
     def test_logits_shape(self) -> None:
         cfg = _tiny_config()
-        m = BertForTokenClassification(cfg).eval()
+        m = BERTForTokenClassification(cfg).eval()
         ids, attn, tt = _ids(B=1, T=6)
         out = m(ids, attn, tt)
         assert tuple(out.logits.shape) == (1, 6, cfg.num_labels)
 
 
-class TestBertForQuestionAnswering:
+class TestBERTForQuestionAnswering:
     def test_logits_and_span_loss(self) -> None:
         cfg = _tiny_config()
-        m = BertForQuestionAnswering(cfg).eval()
+        m = BERTForQuestionAnswering(cfg).eval()
         ids, attn, tt = _ids(B=2, T=8)
         starts = lucid.tensor([1, 3]).long()
         ends = lucid.tensor([4, 5]).long()
@@ -174,7 +174,7 @@ class TestBertForQuestionAnswering:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class TestBertRegistry:
+class TestBERTRegistry:
     @pytest.mark.parametrize(
         "name",
         [
@@ -215,7 +215,7 @@ class TestBertRegistry:
             intermediate_size=_INTER,
             max_position_embeddings=_MAX_POS,
         )
-        assert isinstance(m, BertModel)
+        assert isinstance(m, BERTModel)
         ids, _, _ = _ids(B=1, T=4)
         out = m.eval()(ids)
         assert tuple(out.last_hidden_state.shape) == (1, 4, _HIDDEN)
@@ -227,16 +227,16 @@ class TestBertRegistry:
 
 
 from lucid.models import (
-    BertForCausalLM,
-    BertForNextSentencePrediction,
-    BertForPreTraining,
+    BERTForCausalLM,
+    BERTForNextSentencePrediction,
+    BERTForPreTraining,
 )
 
 
-class TestBertForPreTraining:
+class TestBERTForPreTraining:
     def test_combined_loss(self) -> None:
         cfg = _tiny_config()
-        m = BertForPreTraining(cfg).eval()
+        m = BERTForPreTraining(cfg).eval()
         ids, attn, tt = _ids(B=2, T=8)
         mlm_labels = lucid.tensor(
             [[3, -100, 5, -100, -100, -100, -100, -100]] * 2
@@ -252,7 +252,7 @@ class TestBertForPreTraining:
         )
 
     def test_mlm_only(self) -> None:
-        m = BertForPreTraining(_tiny_config()).eval()
+        m = BERTForPreTraining(_tiny_config()).eval()
         ids, attn, tt = _ids(B=1, T=6)
         out = m(ids, attn, tt, labels=ids)
         assert out.mlm_loss is not None
@@ -260,56 +260,56 @@ class TestBertForPreTraining:
         assert out.loss is not None  # = mlm_loss
 
     def test_tied_decoder(self) -> None:
-        m = BertForPreTraining(_tiny_config()).eval()
+        m = BERTForPreTraining(_tiny_config()).eval()
         assert (
             m.cls.predictions.decoder.weight is m.bert.embeddings.word_embeddings.weight
         )
 
 
-class TestBertForNextSentencePrediction:
+class TestBERTForNextSentencePrediction:
     def test_logits_and_loss(self) -> None:
-        m = BertForNextSentencePrediction(_tiny_config()).eval()
+        m = BERTForNextSentencePrediction(_tiny_config()).eval()
         ids, attn, tt = _ids(B=2, T=8)
         out = m(ids, attn, tt, labels=lucid.tensor([1, 0]).long())
         assert tuple(out.logits.shape) == (2, 2)
         assert out.loss is not None
 
 
-class TestBertForCausalLM:
+class TestBERTForCausalLM:
     def test_logits_and_shift_loss(self) -> None:
-        m = BertForCausalLM(_tiny_config()).eval()
+        m = BERTForCausalLM(_tiny_config()).eval()
         ids, attn, tt = _ids(B=1, T=8)
         out = m(ids, attn, tt, labels=ids)
         assert tuple(out.logits.shape) == (1, 8, _VOCAB)
         assert out.loss is not None
 
     def test_causal_mask_prevents_leak(self) -> None:
-        m = BertForCausalLM(_tiny_config()).eval()
+        m = BERTForCausalLM(_tiny_config()).eval()
         ids_a = lucid.tensor([[1, 2, 3, 4, 5, 6, 7, 8]]).long()
         ids_b = lucid.tensor([[1, 2, 3, 40, 50, 60, 70, 80]]).long()
         h_a = m(ids_a).logits
         h_b = m(ids_b).logits
         diff = float(((h_a[:, :3, :] - h_b[:, :3, :]) ** 2).sum().item())
-        assert diff < 1e-6, f"Causal mask leaks in BertForCausalLM: diff = {diff}"
+        assert diff < 1e-6, f"Causal mask leaks in BERTForCausalLM: diff = {diff}"
 
 
 # (factory, slug, hidden, num_params, task) — the eight shipped BERT
 # checkpoints: six base encoders (Turc miniatures + Devlin base/large) and two
 # masked-LM heads.  All Wikipedia + BookCorpus, uncased, 30 522-token vocab.
 _SHIPPED = (
-    ("BertTinyWeights", "bert-tiny", 128, 4_385_920, "base"),
-    ("BertMiniWeights", "bert-mini", 256, 11_171_328, "base"),
-    ("BertSmallWeights", "bert-small", 512, 28_763_648, "base"),
-    ("BertMediumWeights", "bert-medium", 512, 41_373_184, "base"),
-    ("BertBaseWeights", "bert-base", 768, 109_482_240, "base"),
-    ("BertLargeWeights", "bert-large", 1024, 335_141_888, "base"),
-    ("BertBaseMLMWeights", "bert-base-mlm", 30_522, 109_514_298, "mlm"),
-    ("BertLargeMLMWeights", "bert-large-mlm", 30_522, 335_174_586, "mlm"),
+    ("BERTTinyWeights", "bert-tiny", 128, 4_385_920, "base"),
+    ("BERTMiniWeights", "bert-mini", 256, 11_171_328, "base"),
+    ("BERTSmallWeights", "bert-small", 512, 28_763_648, "base"),
+    ("BERTMediumWeights", "bert-medium", 512, 41_373_184, "base"),
+    ("BERTBaseWeights", "bert-base", 768, 109_482_240, "base"),
+    ("BERTLargeWeights", "bert-large", 1024, 335_141_888, "base"),
+    ("BERTBaseMLMWeights", "bert-base-mlm", 30_522, 109_514_298, "mlm"),
+    ("BERTLargeMLMWeights", "bert-large-mlm", 30_522, 335_174_586, "mlm"),
 )
 _TAG = "WIKIPEDIA_BOOKSCORPUS"
 
 
-class TestBertWeightsEnums:
+class TestBERTWeightsEnums:
     """Static contract of the per-variant Weights enums — no network."""
 
     @staticmethod

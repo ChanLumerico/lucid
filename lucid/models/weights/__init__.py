@@ -245,14 +245,29 @@ from lucid.models.vision.maxvit._weights import (
 
 # 2018 — BERT (Devlin et al.) + Turc et al. 2019 miniatures (text)
 from lucid.models.text.bert._weights import (
-    BertTinyWeights,
-    BertMiniWeights,
-    BertSmallWeights,
-    BertMediumWeights,
-    BertBaseWeights,
-    BertLargeWeights,
-    BertBaseMLMWeights,
-    BertLargeMLMWeights,
+    BERTTinyWeights,
+    BERTMiniWeights,
+    BERTSmallWeights,
+    BERTMediumWeights,
+    BERTBaseWeights,
+    BERTLargeWeights,
+    BERTBaseMLMWeights,
+    BERTLargeMLMWeights,
+)
+
+# 2018 — GPT-1 (Radford et al.) — original decoder-only transformer (text)
+from lucid.models.text.gpt._weights import GPTWeights, GPTLMWeights
+
+# 2019 — GPT-2 (Radford et al.) — decoder-only transformer (text)
+from lucid.models.text.gpt2._weights import (
+    GPT2SmallWeights,
+    GPT2MediumWeights,
+    GPT2LargeWeights,
+    GPT2XLargeWeights,
+    GPT2SmallLMWeights,
+    GPT2MediumLMWeights,
+    GPT2LargeLMWeights,
+    GPT2XLargeLMWeights,
 )
 
 __all__ = [
@@ -392,12 +407,24 @@ __all__ = [
     "MaxViTBaseWeights",
     "MaxViTLargeWeights",
     # ── Text (2018) BERT (Devlin et al.) + Turc et al. 2019 miniatures ─
-    "BertTinyWeights",
-    "BertMiniWeights",
-    "BertSmallWeights",
-    "BertMediumWeights",
-    "BertBaseWeights",
-    "BertLargeWeights",
-    "BertBaseMLMWeights",
-    "BertLargeMLMWeights",
+    "BERTTinyWeights",
+    "BERTMiniWeights",
+    "BERTSmallWeights",
+    "BERTMediumWeights",
+    "BERTBaseWeights",
+    "BERTLargeWeights",
+    "BERTBaseMLMWeights",
+    "BERTLargeMLMWeights",
+    # ── Text (2018) GPT-1 (Radford et al.) ────────────────────────────
+    "GPTWeights",
+    "GPTLMWeights",
+    # ── Text (2019) GPT-2 (Radford et al.) ────────────────────────────
+    "GPT2SmallWeights",
+    "GPT2MediumWeights",
+    "GPT2LargeWeights",
+    "GPT2XLargeWeights",
+    "GPT2SmallLMWeights",
+    "GPT2MediumLMWeights",
+    "GPT2LargeLMWeights",
+    "GPT2XLargeLMWeights",
 ]

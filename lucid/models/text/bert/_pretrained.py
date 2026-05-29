@@ -13,45 +13,45 @@ initialised head.
 
 import lucid.weights as weights_mod
 from lucid.models._registry import register_model
-from lucid.models.text.bert._config import BertConfig
+from lucid.models.text.bert._config import BERTConfig
 from lucid.models.text.bert._model import (
-    BertForMaskedLM,
-    BertForQuestionAnswering,
-    BertForSequenceClassification,
-    BertForTokenClassification,
-    BertModel,
+    BERTForMaskedLM,
+    BERTForQuestionAnswering,
+    BERTForSequenceClassification,
+    BERTForTokenClassification,
+    BERTModel,
 )
 from lucid.models.text.bert._weights import (
-    BertBaseMLMWeights,
-    BertBaseWeights,
-    BertLargeMLMWeights,
-    BertLargeWeights,
-    BertMediumWeights,
-    BertMiniWeights,
-    BertSmallWeights,
-    BertTinyWeights,
+    BERTBaseMLMWeights,
+    BERTBaseWeights,
+    BERTLargeMLMWeights,
+    BERTLargeWeights,
+    BERTMediumWeights,
+    BERTMiniWeights,
+    BERTSmallWeights,
+    BERTTinyWeights,
 )
 
 # Devlin et al. 2018 + Turc et al. 2019 size table.
-_CFG_TINY = BertConfig(
+_CFG_TINY = BERTConfig(
     hidden_size=128, num_hidden_layers=2, num_attention_heads=2, intermediate_size=512
 )
-_CFG_MINI = BertConfig(
+_CFG_MINI = BERTConfig(
     hidden_size=256, num_hidden_layers=4, num_attention_heads=4, intermediate_size=1024
 )
-_CFG_SMALL = BertConfig(
+_CFG_SMALL = BERTConfig(
     hidden_size=512, num_hidden_layers=4, num_attention_heads=8, intermediate_size=2048
 )
-_CFG_MEDIUM = BertConfig(
+_CFG_MEDIUM = BERTConfig(
     hidden_size=512, num_hidden_layers=8, num_attention_heads=8, intermediate_size=2048
 )
-_CFG_BASE = BertConfig(
+_CFG_BASE = BERTConfig(
     hidden_size=768,
     num_hidden_layers=12,
     num_attention_heads=12,
     intermediate_size=3072,
 )
-_CFG_LARGE = BertConfig(
+_CFG_LARGE = BERTConfig(
     hidden_size=1024,
     num_hidden_layers=24,
     num_attention_heads=16,
@@ -59,10 +59,10 @@ _CFG_LARGE = BertConfig(
 )
 
 
-def _apply(cfg: BertConfig, overrides: dict[str, object]) -> BertConfig:
+def _apply(cfg: BERTConfig, overrides: dict[str, object]) -> BERTConfig:
     if not overrides:
         return cfg
-    return BertConfig(**{**cfg.__dict__, **overrides})
+    return BERTConfig(**{**cfg.__dict__, **overrides})
 
 
 # ── Backbones ─────────────────────────────────────────────────────────────────
@@ -72,15 +72,15 @@ def _apply(cfg: BertConfig, overrides: dict[str, object]) -> BertConfig:
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_TINY,
 )
 def bert_tiny(
     pretrained: bool | str = False,
     *,
-    weights: BertTinyWeights | None = None,
+    weights: BERTTinyWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Tiny encoder.
 
     Smallest of the four distillation-targeted variants from Turc, Chang,
@@ -96,13 +96,13 @@ def bert_tiny(
         Reserved for future weight registration.  No checkpoints are wired up
         yet, so the model is always returned with random initialisation.
     **overrides : object
-        Optional :class:`BertConfig` field overrides (e.g. ``vocab_size=...``,
-        ``num_labels=...``).  Forwarded into a fresh ``BertConfig`` whose
+        Optional :class:`BERTConfig` field overrides (e.g. ``vocab_size=...``,
+        ``num_labels=...``).  Forwarded into a fresh ``BERTConfig`` whose
         defaults match the Tiny size table above.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Tiny size and any overrides.
 
     Notes
@@ -120,8 +120,8 @@ def bert_tiny(
     >>> out.last_hidden_state.shape   # (1, 3, 128)
     (1, 3, 128)
     """
-    entry = weights_mod.resolve_weights(BertTinyWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_TINY, overrides))
+    entry = weights_mod.resolve_weights(BERTTinyWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_TINY, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_tiny")
     return model
@@ -131,15 +131,15 @@ def bert_tiny(
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_MINI,
 )
 def bert_mini(
     pretrained: bool | str = False,
     *,
-    weights: BertMiniWeights | None = None,
+    weights: BERTMiniWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Mini encoder.
 
     Second-smallest of the Turc et al., 2019 distillation sizes:
@@ -151,12 +151,12 @@ def bert_mini(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Mini size and any overrides.
 
     Notes
@@ -173,8 +173,8 @@ def bert_mini(
     >>> out.last_hidden_state.shape   # (1, 3, 256)
     (1, 3, 256)
     """
-    entry = weights_mod.resolve_weights(BertMiniWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_MINI, overrides))
+    entry = weights_mod.resolve_weights(BERTMiniWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_MINI, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_mini")
     return model
@@ -184,15 +184,15 @@ def bert_mini(
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_SMALL,
 )
 def bert_small(
     pretrained: bool | str = False,
     *,
-    weights: BertSmallWeights | None = None,
+    weights: BERTSmallWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Small encoder.
 
     Distillation-targeted variant from Turc et al., 2019: :math:`L=4` layers,
@@ -204,12 +204,12 @@ def bert_small(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Small size and any overrides.
 
     Notes
@@ -226,8 +226,8 @@ def bert_small(
     >>> out.last_hidden_state.shape   # (1, 3, 512)
     (1, 3, 512)
     """
-    entry = weights_mod.resolve_weights(BertSmallWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_SMALL, overrides))
+    entry = weights_mod.resolve_weights(BERTSmallWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_SMALL, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_small")
     return model
@@ -237,15 +237,15 @@ def bert_small(
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_MEDIUM,
 )
 def bert_medium(
     pretrained: bool | str = False,
     *,
-    weights: BertMediumWeights | None = None,
+    weights: BERTMediumWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Medium encoder.
 
     Largest of the Turc et al., 2019 distillation sizes: :math:`L=8` layers,
@@ -258,12 +258,12 @@ def bert_medium(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Medium size and any overrides.
 
     Notes
@@ -280,8 +280,8 @@ def bert_medium(
     >>> out.last_hidden_state.shape   # (1, 3, 512)
     (1, 3, 512)
     """
-    entry = weights_mod.resolve_weights(BertMediumWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_MEDIUM, overrides))
+    entry = weights_mod.resolve_weights(BERTMediumWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_MEDIUM, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_medium")
     return model
@@ -291,15 +291,15 @@ def bert_medium(
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_BASE,
 )
 def bert_base(
     pretrained: bool | str = False,
     *,
-    weights: BertBaseWeights | None = None,
+    weights: BERTBaseWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Base encoder.
 
     Canonical mid-size variant from Devlin et al., 2018 Table 1:
@@ -315,13 +315,13 @@ def bert_base(
         Reserved for future weight registration.  Returns a randomly
         initialised model today.
     **overrides : object
-        Optional :class:`BertConfig` field overrides (e.g. ``vocab_size=...``,
+        Optional :class:`BERTConfig` field overrides (e.g. ``vocab_size=...``,
         ``max_position_embeddings=...``) forwarded into the underlying
         config.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Base size and any overrides.
 
     Notes
@@ -340,8 +340,8 @@ def bert_base(
     >>> out.last_hidden_state.shape, out.pooler_output.shape
     ((1, 4, 768), (1, 768))
     """
-    entry = weights_mod.resolve_weights(BertBaseWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base")
     return model
@@ -351,15 +351,15 @@ def bert_base(
     task="base",
     family="bert",
     model_type="bert",
-    model_class=BertModel,
+    model_class=BERTModel,
     default_config=_CFG_LARGE,
 )
 def bert_large(
     pretrained: bool | str = False,
     *,
-    weights: BertLargeWeights | None = None,
+    weights: BERTLargeWeights | None = None,
     **overrides: object,
-) -> BertModel:
+) -> BERTModel:
     r"""Construct a BERT-Large encoder.
 
     Larger of the two original variants from Devlin et al., 2018 Table 1:
@@ -374,12 +374,12 @@ def bert_large(
         Reserved for future weight registration.  Returns a randomly
         initialised model today.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertModel
+    BERTModel
         Encoder trunk configured with the BERT-Large size and any overrides.
 
     Notes
@@ -398,8 +398,8 @@ def bert_large(
     >>> out.last_hidden_state.shape, out.pooler_output.shape
     ((1, 4, 1024), (1, 1024))
     """
-    entry = weights_mod.resolve_weights(BertLargeWeights, pretrained, weights)
-    model = BertModel(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(BERTLargeWeights, pretrained, weights)
+    model = BERTModel(_apply(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large")
     return model
@@ -412,15 +412,15 @@ def bert_large(
     task="masked-lm",
     family="bert",
     model_type="bert",
-    model_class=BertForMaskedLM,
+    model_class=BERTForMaskedLM,
     default_config=_CFG_BASE,
 )
 def bert_base_mlm(
     pretrained: bool | str = False,
     *,
-    weights: BertBaseMLMWeights | None = None,
+    weights: BERTBaseMLMWeights | None = None,
     **overrides: object,
-) -> BertForMaskedLM:
+) -> BERTForMaskedLM:
     r"""Construct a BERT-Base model with a tied masked-LM head.
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12, ~110M parameters),
@@ -434,12 +434,12 @@ def bert_base_mlm(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertForMaskedLM
+    BERTForMaskedLM
         BERT-Base wrapped with the tied MLM head.
 
     Notes
@@ -458,8 +458,8 @@ def bert_base_mlm(
     >>> out.logits.shape   # (1, 4, vocab_size=30522)
     (1, 4, 30522)
     """
-    entry = weights_mod.resolve_weights(BertBaseMLMWeights, pretrained, weights)
-    model = BertForMaskedLM(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseMLMWeights, pretrained, weights)
+    model = BERTForMaskedLM(_apply(_CFG_BASE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_base_mlm")
     return model
@@ -469,15 +469,15 @@ def bert_base_mlm(
     task="masked-lm",
     family="bert",
     model_type="bert",
-    model_class=BertForMaskedLM,
+    model_class=BERTForMaskedLM,
     default_config=_CFG_LARGE,
 )
 def bert_large_mlm(
     pretrained: bool | str = False,
     *,
-    weights: BertLargeMLMWeights | None = None,
+    weights: BERTLargeMLMWeights | None = None,
     **overrides: object,
-) -> BertForMaskedLM:
+) -> BERTForMaskedLM:
     r"""Construct a BERT-Large model with a tied masked-LM head.
 
     Same trunk as :func:`bert_large` (L=24, H=1024, A=16, ~340M parameters),
@@ -489,12 +489,12 @@ def bert_large_mlm(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.
 
     Returns
     -------
-    BertForMaskedLM
+    BERTForMaskedLM
         BERT-Large wrapped with the tied MLM head.
 
     Notes
@@ -513,8 +513,8 @@ def bert_large_mlm(
     >>> out.logits.shape   # (1, 4, 30522)
     (1, 4, 30522)
     """
-    entry = weights_mod.resolve_weights(BertLargeMLMWeights, pretrained, weights)
-    model = BertForMaskedLM(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(BERTLargeMLMWeights, pretrained, weights)
+    model = BERTForMaskedLM(_apply(_CFG_LARGE, overrides))
     if entry is not None:
         weights_mod.load_weight_entry(model, entry, name="bert_large_mlm")
     return model
@@ -527,12 +527,12 @@ def bert_large_mlm(
     task="sequence-classification",
     family="bert",
     model_type="bert",
-    model_class=BertForSequenceClassification,
+    model_class=BERTForSequenceClassification,
     default_config=_CFG_BASE,
 )
 def bert_base_cls(
     pretrained: bool = False, **overrides: object
-) -> BertForSequenceClassification:
+) -> BERTForSequenceClassification:
     r"""Construct a BERT-Base model with a sequence-classification head.
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12), augmented with a
@@ -545,13 +545,13 @@ def bert_base_cls(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
         classes (default 2).
 
     Returns
     -------
-    BertForSequenceClassification
+    BERTForSequenceClassification
         BERT-Base wrapped with the pooled classifier head.
 
     Notes
@@ -570,19 +570,19 @@ def bert_base_cls(
     >>> out.logits.shape   # (1, num_labels=3)
     (1, 3)
     """
-    return BertForSequenceClassification(_apply(_CFG_BASE, overrides))
+    return BERTForSequenceClassification(_apply(_CFG_BASE, overrides))
 
 
 @register_model(
     task="sequence-classification",
     family="bert",
     model_type="bert",
-    model_class=BertForSequenceClassification,
+    model_class=BERTForSequenceClassification,
     default_config=_CFG_LARGE,
 )
 def bert_large_cls(
     pretrained: bool = False, **overrides: object
-) -> BertForSequenceClassification:
+) -> BERTForSequenceClassification:
     r"""Construct a BERT-Large model with a sequence-classification head.
 
     Same trunk as :func:`bert_large` (L=24, H=1024, A=16, ~340M parameters),
@@ -595,13 +595,13 @@ def bert_large_cls(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
         classes (default 2).
 
     Returns
     -------
-    BertForSequenceClassification
+    BERTForSequenceClassification
         BERT-Large wrapped with the pooled classifier head.
 
     Notes
@@ -620,19 +620,19 @@ def bert_large_cls(
     >>> out.logits.shape   # (1, 2)
     (1, 2)
     """
-    return BertForSequenceClassification(_apply(_CFG_LARGE, overrides))
+    return BERTForSequenceClassification(_apply(_CFG_LARGE, overrides))
 
 
 @register_model(
     task="token-classification",
     family="bert",
     model_type="bert",
-    model_class=BertForTokenClassification,
+    model_class=BERTForTokenClassification,
     default_config=_CFG_BASE,
 )
 def bert_base_token_cls(
     pretrained: bool = False, **overrides: object
-) -> BertForTokenClassification:
+) -> BERTForTokenClassification:
     r"""Construct a BERT-Base model with a per-token classification head.
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12), augmented with a
@@ -645,12 +645,12 @@ def bert_base_token_cls(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the tag set size.
 
     Returns
     -------
-    BertForTokenClassification
+    BERTForTokenClassification
         BERT-Base wrapped with the per-token classifier head.
 
     Notes
@@ -669,19 +669,19 @@ def bert_base_token_cls(
     >>> out.logits.shape   # (1, T=4, num_labels=9)
     (1, 4, 9)
     """
-    return BertForTokenClassification(_apply(_CFG_BASE, overrides))
+    return BERTForTokenClassification(_apply(_CFG_BASE, overrides))
 
 
 @register_model(
     task="question-answering",
     family="bert",
     model_type="bert",
-    model_class=BertForQuestionAnswering,
+    model_class=BERTForQuestionAnswering,
     default_config=_CFG_BASE,
 )
 def bert_base_qa(
     pretrained: bool = False, **overrides: object
-) -> BertForQuestionAnswering:
+) -> BERTForQuestionAnswering:
     r"""Construct a BERT-Base model with an extractive-QA span head.
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12), augmented with a
@@ -693,12 +693,12 @@ def bert_base_qa(
     pretrained : bool, default=False
         Reserved for future weight registration; currently a no-op.
     **overrides : object
-        Optional :class:`BertConfig` field overrides forwarded into the
+        Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  ``num_labels`` is ignored by this head.
 
     Returns
     -------
-    BertForQuestionAnswering
+    BERTForQuestionAnswering
         BERT-Base wrapped with the span-prediction head.
 
     Notes
@@ -718,4 +718,4 @@ def bert_base_qa(
     >>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)
     (1, 6, 2)
     """
-    return BertForQuestionAnswering(_apply(_CFG_BASE, overrides))
+    return BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))

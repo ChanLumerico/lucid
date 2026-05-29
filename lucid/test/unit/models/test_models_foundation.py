@@ -418,38 +418,38 @@ class TestAutoModelTaskCoverage:
     def test_sequence_classification_dispatch(self) -> None:
         from lucid.models import (
             AutoModelForSequenceClassification,
-            BertForSequenceClassification,
+            BERTForSequenceClassification,
         )
         from lucid.models._registry import _registry_lookup
 
         entry = _registry_lookup(
             "bert_base_cls", task=AutoModelForSequenceClassification._task
         )
-        assert entry.model_class is BertForSequenceClassification
+        assert entry.model_class is BERTForSequenceClassification
 
     def test_token_classification_dispatch(self) -> None:
         from lucid.models import (
             AutoModelForTokenClassification,
-            BertForTokenClassification,
+            BERTForTokenClassification,
         )
         from lucid.models._registry import _registry_lookup
 
         entry = _registry_lookup(
             "bert_base_token_cls", task=AutoModelForTokenClassification._task
         )
-        assert entry.model_class is BertForTokenClassification
+        assert entry.model_class is BERTForTokenClassification
 
     def test_question_answering_dispatch(self) -> None:
         from lucid.models import (
             AutoModelForQuestionAnswering,
-            BertForQuestionAnswering,
+            BERTForQuestionAnswering,
         )
         from lucid.models._registry import _registry_lookup
 
         entry = _registry_lookup(
             "bert_base_qa", task=AutoModelForQuestionAnswering._task
         )
-        assert entry.model_class is BertForQuestionAnswering
+        assert entry.model_class is BERTForQuestionAnswering
 
     def test_seq2seq_lm_dispatch(self) -> None:
         from lucid.models import (

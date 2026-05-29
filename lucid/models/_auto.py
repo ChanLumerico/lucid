@@ -573,7 +573,7 @@ class AutoModelForMaskedLM(_BaseAutoClass):
     >>> from lucid.models import AutoModelForMaskedLM
     >>> model = AutoModelForMaskedLM.from_pretrained("bert_base_mlm")
     >>> type(model).__name__
-    'BertForMaskedLM'
+    'BERTForMaskedLM'
     """
 
     _task: ClassVar[str] = "masked-lm"
@@ -623,7 +623,7 @@ class AutoModelForSequenceClassification(_BaseAutoClass):
     >>> from lucid.models import AutoModelForSequenceClassification
     >>> model = AutoModelForSequenceClassification.from_pretrained("bert_base_cls")
     >>> type(model).__name__
-    'BertForSequenceClassification'
+    'BERTForSequenceClassification'
     """
 
     _task: ClassVar[str] = "sequence-classification"
@@ -647,7 +647,7 @@ class AutoModelForTokenClassification(_BaseAutoClass):
     >>> from lucid.models import AutoModelForTokenClassification
     >>> model = AutoModelForTokenClassification.from_pretrained("bert_base_token_cls")
     >>> type(model).__name__
-    'BertForTokenClassification'
+    'BERTForTokenClassification'
     """
 
     _task: ClassVar[str] = "token-classification"
@@ -670,7 +670,7 @@ class AutoModelForQuestionAnswering(_BaseAutoClass):
     >>> from lucid.models import AutoModelForQuestionAnswering
     >>> model = AutoModelForQuestionAnswering.from_pretrained("bert_base_qa")
     >>> type(model).__name__
-    'BertForQuestionAnswering'
+    'BERTForQuestionAnswering'
     """
 
     _task: ClassVar[str] = "question-answering"

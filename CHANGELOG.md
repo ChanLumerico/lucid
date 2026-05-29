@@ -15,6 +15,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-30
 
+### Added — Pretrained weights: GPT-1 + GPT-2 text families
+
+Decoder-only pretrained weights, all loadable + runnable out of the box.
+Conversion is an identity key map plus the **Conv1D→Linear weight
+transpose** (HF stores the attention/MLP projection weights as `(in, out)`;
+Lucid `nn.Linear` wants `(out, in)` — applied to every `c_attn` / `c_proj`
+/ `c_fc` weight; `c_proj` is square so only forward parity catches a missing
+transpose).  Forward parity vs the reference framework: GPT-1 1.3e-5,
+GPT-2 1.4e-4.
+
+- **gpt** (GPT-1, Radford et al. 2018) — `gpt` + `gpt_lm` ←
+  `openai-community/openai-gpt` (BookCorpus, 40 478 vocab).
+  - **Fix:** `GPTConfig.layer_norm_eps` corrected 1e-12 → **1e-5** (the
+    reference GPT-1 / GPT-2 value); the inherited 1e-12 broke parity at
+    5.3e-2 over the 12 post-LN blocks.
+- **gpt2** (Radford et al. 2019) — `gpt2_{small,medium,large,xlarge}` +
+  their `_lm` heads (8 factories) ← `gpt2` / `gpt2-medium` / `gpt2-large` /
+  `gpt2-xl` (WebText, byte-level BPE 50 257 vocab; `lm_head` tied to `wte`).
+
+### Changed — Acronym capitalization in the BERT family
+
+Renamed every `Bert*` identifier to `BERT*` (class names, config, tokenizer,
+weights enums, internal `_BERT*` helpers) to match the codebase's
+acronym-caps convention (`GPT2Model`, `ViTBase16Weights`, `CvT13Weights`).
+Lowercase forms are unchanged: factory names (`bert_base`), module paths,
+`model_type="bert"`, and Hub slugs (`lucid-dl/bert-base`).
+
 ### Added — Pretrained weights: BERT text family (Wikipedia + BookCorpus)
 
 First text-domain pretrained weights.  `pretrained=True` downloads the

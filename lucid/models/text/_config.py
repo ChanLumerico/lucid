@@ -2,7 +2,7 @@
 
 ``LanguageModelConfig`` sits between :class:`lucid.models._base.ModelConfig`
 (persistence + ``model_type`` registry hook) and the family-specific configs
-(``BertConfig``, ``GPT2Config``, ``RoFormerConfig``, …).  It collects the
+(``BERTConfig``, ``GPT2Config``, ``RoFormerConfig``, …).  It collects the
 fields that every text model needs so the family configs only have to add
 their unique knobs.
 

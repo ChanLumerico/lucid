@@ -31,7 +31,7 @@ Unigram     ``_unigram``     T5, LLaMA, Mistral, mBART      ⏳ planned
 
 Per-model wrappers live in each ``lucid.models.text.<family>``
 package's ``_tokenizer/`` directory and subclass the algorithm
-matching that family (e.g. ``BertTokenizer`` ←
+matching that family (e.g. ``BERTTokenizer`` ←
 :class:`WordPieceTokenizer`).
 """
 

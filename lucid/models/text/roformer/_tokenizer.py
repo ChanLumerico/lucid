@@ -12,7 +12,7 @@ Internally :class:`RoFormerTokenizer` /
 :class:`~lucid.utils.tokenizer.WordPieceTokenizer` /
 :class:`~lucid.utils.tokenizer.WordPieceTokenizerFast` with the
 canonical ``[UNK]/[CLS]/[SEP]/[PAD]/[MASK]`` registry plus
-:class:`~lucid.utils.tokenizer.normalizers.BertNormalizer` (lowercase
+:class:`~lucid.utils.tokenizer.normalizers.BERTNormalizer` (lowercase
 by default) and
 :class:`~lucid.utils.tokenizer.pre_tokenizers.WhitespacePunctuationSplit`.
 
@@ -21,7 +21,7 @@ unchanged.
 """
 
 from lucid.utils.tokenizer._base import SpecialTokens
-from lucid.utils.tokenizer._normalizers import BertNormalizer, Normalizer
+from lucid.utils.tokenizer._normalizers import BERTNormalizer, Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import (
     PreTokenizer,
     WhitespacePunctuationSplit,
@@ -54,7 +54,7 @@ def _roformer_special_tokens() -> SpecialTokens:
 class RoFormerTokenizer(WordPieceTokenizer):
     r"""RoFormer tokenizer — pure-Python reference.
 
-    Identical algorithm to :class:`~lucid.models.text.bert.BertTokenizer`
+    Identical algorithm to :class:`~lucid.models.text.bert.BERTTokenizer`
     (WordPiece longest-match with ``[UNK]/[CLS]/[SEP]/[PAD]/[MASK]``
     registered out of the box).  Kept as a separate class so every
     text-model family exposes a uniform
@@ -77,7 +77,7 @@ class RoFormerTokenizer(WordPieceTokenizer):
     See Also
     --------
     RoFormerTokenizerFast : C++-backed variant with identical output.
-    lucid.models.text.bert.BertTokenizer : Sibling wrapper sharing
+    lucid.models.text.bert.BERTTokenizer : Sibling wrapper sharing
         the same algorithm and defaults.
     """
 
@@ -101,7 +101,7 @@ class RoFormerTokenizer(WordPieceTokenizer):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BertNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(lowercase=do_lower_case)
             ),
             pre_tokenizer=(
                 pre_tokenizer
@@ -147,7 +147,7 @@ class RoFormerTokenizerFast(WordPieceTokenizerFast):
             normalizer=(
                 normalizer
                 if normalizer is not None
-                else BertNormalizer(lowercase=do_lower_case)
+                else BERTNormalizer(lowercase=do_lower_case)
             ),
             pre_tokenizer=(
                 pre_tokenizer
