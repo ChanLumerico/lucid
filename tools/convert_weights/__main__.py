@@ -25,14 +25,19 @@ import tools.convert_weights.efficientnet  # noqa: F401
 import tools.convert_weights.inception  # noqa: F401
 import tools.convert_weights.inception_next  # noqa: F401
 import tools.convert_weights.inception_resnet  # noqa: F401
+import tools.convert_weights.maxvit  # noqa: F401
+import tools.convert_weights.mobilenet  # noqa: F401
 import tools.convert_weights.mobilenet_v2  # noqa: F401
 import tools.convert_weights.mobilenet_v3  # noqa: F401
 import tools.convert_weights.pvt  # noqa: F401
+import tools.convert_weights.resnest  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 import tools.convert_weights.resnext  # noqa: F401
 import tools.convert_weights.senet  # noqa: F401
 import tools.convert_weights.sknet  # noqa: F401
+import tools.convert_weights.swin  # noqa: F401
 import tools.convert_weights.vgg  # noqa: F401
+import tools.convert_weights.vit  # noqa: F401
 import tools.convert_weights.xception  # noqa: F401
 from tools.convert_weights._base import convert, get_arch, upload, write
 

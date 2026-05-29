@@ -102,6 +102,11 @@ class ViTConfig(ModelConfig):
     attention_dropout : float, optional
         Dropout probability applied to the post-softmax attention weights
         inside every multi-head self-attention block.  Defaults to ``0.0``.
+    layer_norm_eps : float, optional
+        Epsilon added to the variance inside every :class:`nn.LayerNorm`
+        (the two per-block norms and the final pre-head norm).  The
+        original ViT formulation fixes this at ``1e-6``.  Defaults to
+        ``1e-6``.
 
     Attributes
     ----------
@@ -164,3 +169,4 @@ class ViTConfig(ModelConfig):
     mlp_ratio: float = 4.0
     dropout: float = 0.0
     attention_dropout: float = 0.0
+    layer_norm_eps: float = 1e-6

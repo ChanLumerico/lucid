@@ -51,6 +51,12 @@ from lucid.models.vision.vit._pretrained import (
     vit_huge_14,
     vit_huge_14_cls,
 )
+from lucid.models.vision.vit._weights import (
+    ViTBase16Weights,
+    ViTBase32Weights,
+    ViTLarge16Weights,
+    ViTLarge32Weights,
+)
 
 __all__ = [
     "ViTConfig",
@@ -66,4 +72,9 @@ __all__ = [
     "vit_large_32_cls",
     "vit_huge_14",
     "vit_huge_14_cls",
+    # Pretrained weight enums
+    "ViTBase16Weights",
+    "ViTBase32Weights",
+    "ViTLarge16Weights",
+    "ViTLarge32Weights",
 ]

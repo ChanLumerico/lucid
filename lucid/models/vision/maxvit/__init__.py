@@ -14,6 +14,12 @@ from lucid.models.vision.maxvit._pretrained import (
     maxvit_xlarge,
     maxvit_xlarge_cls,
 )
+from lucid.models.vision.maxvit._weights import (
+    MaxViTBaseWeights,
+    MaxViTLargeWeights,
+    MaxViTSmallWeights,
+    MaxViTTinyWeights,
+)
 
 __all__ = [
     "MaxViTConfig",
@@ -29,4 +35,9 @@ __all__ = [
     "maxvit_large_cls",
     "maxvit_xlarge",
     "maxvit_xlarge_cls",
+    # Pretrained weight enums
+    "MaxViTTinyWeights",
+    "MaxViTSmallWeights",
+    "MaxViTBaseWeights",
+    "MaxViTLargeWeights",
 ]

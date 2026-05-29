@@ -241,11 +241,12 @@ class _ViTBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         attention_dropout: float,
+        eps: float,
     ) -> None:
         super().__init__()
-        self.norm1 = nn.LayerNorm(dim)
+        self.norm1 = nn.LayerNorm(dim, eps=eps)
         self.attn = _Attention(dim, num_heads, attn_drop=attention_dropout)
-        self.norm2 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim, eps=eps)
         self.mlp = _MLP(dim, mlp_dim, dropout)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -283,12 +284,17 @@ def _build_trunk(cfg: ViTConfig) -> tuple[
     blocks = nn.ModuleList(
         [
             _ViTBlock(
-                cfg.dim, cfg.num_heads, mlp_dim, cfg.dropout, cfg.attention_dropout
+                cfg.dim,
+                cfg.num_heads,
+                mlp_dim,
+                cfg.dropout,
+                cfg.attention_dropout,
+                cfg.layer_norm_eps,
             )
             for _ in range(cfg.depth)
         ]
     )
-    norm = nn.LayerNorm(cfg.dim)
+    norm = nn.LayerNorm(cfg.dim, eps=cfg.layer_norm_eps)
 
     return patch_embed, cls_token, pos_embed, drop, blocks, norm, num_patches
 

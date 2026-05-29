@@ -197,10 +197,12 @@ class _RelPosBias(nn.Module):
         # the k-th entry in the flattened (n*n,) gather.
         row_flat: list[int] = []
         col_flat: list[int] = []
+        # Reference (timm RelPosBiasTf) indexes key-minus-query, so the
+        # relative offset is cj - ci (not ci - cj).
         for ci in coords:
             for cj in coords:
-                row_flat.append(ci[0] - cj[0] + (window_size - 1))
-                col_flat.append(ci[1] - cj[1] + (window_size - 1))
+                row_flat.append(cj[0] - ci[0] + (window_size - 1))
+                col_flat.append(cj[1] - ci[1] + (window_size - 1))
         self._n = n
         self._row_flat = row_flat
         self._col_flat = col_flat
@@ -292,7 +294,7 @@ class _MLP(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         x = cast(Tensor, self.fc1(x))
-        x = F.gelu(x)
+        x = F.gelu(x, approximate="tanh")
         return cast(Tensor, self.fc2(x))
 
 
@@ -411,9 +413,9 @@ class _MBConv(nn.Module):
             self.shortcut = _Shortcut(in_dim, out_dim, stride)
         # If same dim and stride=1, no shortcut attribute (identity skip)
 
-        self.pre_norm = nn.BatchNorm2d(in_dim)
+        self.pre_norm = nn.BatchNorm2d(in_dim, eps=1e-3)
         self.conv1_1x1 = nn.Conv2d(in_dim, mid, 1, bias=False)
-        self.norm1 = nn.BatchNorm2d(mid)
+        self.norm1 = nn.BatchNorm2d(mid, eps=1e-3)
         # DW conv with stride; when stride=2 timm uses Conv2dSame (TF-same padding),
         # so we store padding=0 and apply _tf_same_pad2d manually in forward.
         self._conv2_stride = stride
@@ -426,7 +428,7 @@ class _MBConv(nn.Module):
             groups=mid,
             bias=False,
         )
-        self.norm2 = nn.BatchNorm2d(mid)
+        self.norm2 = nn.BatchNorm2d(mid, eps=1e-3)
         self.se = _SE(mid)
         self.conv3_1x1 = nn.Conv2d(mid, out_dim, 1, bias=True)
 
@@ -440,11 +442,11 @@ class _MBConv(nn.Module):
         # Main path
         out = cast(Tensor, self.pre_norm(x))
         out = cast(Tensor, self.conv1_1x1(out))
-        out = F.gelu(cast(Tensor, self.norm1(out)))
+        out = F.gelu(cast(Tensor, self.norm1(out)), approximate="tanh")
         if self._conv2_stride > 1:
             out = _tf_same_pad2d(out, kernel_size=3, stride=self._conv2_stride)
         out = cast(Tensor, self.conv2_kxk(out))
-        out = F.gelu(cast(Tensor, self.norm2(out)))
+        out = F.gelu(cast(Tensor, self.norm2(out)), approximate="tanh")
         out = cast(Tensor, self.se(out))
         out = cast(Tensor, self.conv3_1x1(out))
         return shortcut + out
@@ -591,7 +593,7 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
 
     Stages: stages.N = _MaxViTStage with internal 'blocks' Sequential
     """
-    stem_out = cfg.dims[0]
+    stem_out = cfg.stem_width if cfg.stem_width is not None else cfg.dims[0]
 
     class _Stem(nn.Module):
         """Two-conv stem matching timm's stem.conv1 / stem.norm1 / stem.conv2."""
@@ -600,14 +602,14 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
             super().__init__()
             # padding=0: TF-same is applied manually in forward before conv1
             self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=0, bias=True)
-            self.norm1 = nn.BatchNorm2d(out_ch)
+            self.norm1 = nn.BatchNorm2d(out_ch, eps=1e-3)
             # conv2 is stride=1 so symmetric padding=1 matches TF-same exactly
             self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
 
         def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
             x = _tf_same_pad2d(x, kernel_size=3, stride=2)
             x = cast(Tensor, self.conv1(x))
-            x = F.gelu(cast(Tensor, self.norm1(x)))
+            x = F.gelu(cast(Tensor, self.norm1(x)), approximate="tanh")
             return cast(Tensor, self.conv2(x))
 
     stem: nn.Module = _Stem(cfg.in_channels, stem_out)
@@ -618,7 +620,7 @@ def _build_maxvit(cfg: MaxViTConfig) -> tuple[
         4  # stem stride=2, then each stage block0 stride=2 → 4 total after stage 0
     )
 
-    prev_dim = cfg.dims[0]
+    prev_dim = stem_out
     for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.dims)):
         num_heads = dim // _HEAD_DIM
         stages_list.append(

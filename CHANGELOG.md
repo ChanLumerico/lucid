@@ -15,6 +15,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Fixed — Reference-parity model corrections (ViT / MaxViT / MobileNetV1 / ResNeSt / Swin)
+
+Five families carried subtle forward-path divergences from their
+reference implementations that blocked pretrained-weight parity.  Each
+fix is a faithfulness correction (verified to bring the smallest variant
+to ~1e-5 logit parity), not a weight-fitting hack:
+
+- **vit** — `ViTConfig.layer_norm_eps` added (default `1e-6`, the
+  original ViT value) and threaded through both per-block norms and the
+  final pre-head norm; Lucid previously used the generic `1e-5`.
+  (`vit_base_32` parity 0.017 → 1.9e-5.)
+- **maxvit** — three corrections in `_model.py`: BatchNorm `eps=1e-3`
+  (was `1e-5`), GELU `approximate="tanh"`, and the relative-position
+  bias offset sign (`cj - ci`, key-minus-query).  (`maxvit_tiny` 5.43 →
+  3.8e-6.)
+- **mobilenet** (v1) — stem + depthwise/pointwise activations switched
+  from `ReLU` to `ReLU6` (all public checkpoints train with ReLU6).
+  (`mobilenet_v1` 28.0 → 1.0e-5.)
+- **resnest** — stage 1 no longer force-enables AVD pooling; AVD now
+  fires only on downsampling blocks (`stride > 1`), matching the
+  reference.  (`resnest_50` 4.39 → 1.8e-6.)
+- **swin** — `_SwinBlock` now disables the cyclic shift and its
+  attention mask when the window covers the whole feature map
+  (`window_size >= min(H, W)`, e.g. the 7×7 stage 3), matching the
+  reference.  (`swin_tiny` 0.53 → 3.3e-6.)
+
+### Added — Pretrained weights: ViT / MaxViT / MobileNetV1 / ResNeSt / Swin
+
+Enabled by the corrections above; all enums on `lucid.models.weights`:
+
+- **vit** — `vit_{base_16,base_32,large_16,large_32}_cls` ← torchvision
+  `ViT_*_Weights.IMAGENET1K_V1` (Dosovitskiy et al., 2020).
+- **maxvit** — `maxvit_{tiny,small,base,large}_cls` ← timm
+  `maxvit_*_tf_224.in1k` (Tu et al., 2022; IN1K).
+- **mobilenet** — `mobilenet_v1_cls` ← timm
+  `mobilenetv1_100.ra4_e3600_r224_in1k` (Howard et al., 2017).
+- **resnest** — `resnest_{50,101,200,269}_cls` ← timm
+  `resnest{50d,101e,200e,269e}.in1k` (Zhang et al., 2020; per-variant
+  eval resolution 224/256/320/416).
+- **swin** — `swin_{tiny,small,base}_cls` ← torchvision
+  `Swin_*_Weights.IMAGENET1K_V1`; `swin_large_cls` ← timm
+  `swin_large_patch4_window7_224.ms_in22k_ft_in1k` (Liu et al., 2021).
+
 ### Added — Pretrained weights: PVTv2
 
 - **pvt** — `pvt_v2_b{0,2,3,4,5}_cls` ← timm `pvt_v2_b*.in1k`

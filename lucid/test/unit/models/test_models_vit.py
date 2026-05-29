@@ -207,5 +207,83 @@ class TestViTSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
 
+_SHIPPED = (
+    ("vit_base_16_cls", "vit-base-16", "ViT_B_16_Weights", 86_567_656, 256),
+    ("vit_base_32_cls", "vit-base-32", "ViT_B_32_Weights", 88_224_232, 256),
+    ("vit_large_16_cls", "vit-large-16", "ViT_L_16_Weights", 304_326_632, 242),
+    ("vit_large_32_cls", "vit-large-32", "ViT_L_32_Weights", 306_535_400, 256),
+)
+
+
+class TestViTWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enums(self) -> tuple[type, ...]:
+        from lucid.models.vision.vit import (
+            ViTBase16Weights,
+            ViTBase32Weights,
+            ViTLarge16Weights,
+            ViTLarge32Weights,
+        )
+
+        return (
+            ViTBase16Weights,
+            ViTBase32Weights,
+            ViTLarge16Weights,
+            ViTLarge32Weights,
+        )
+
+    def test_default_aliases_imagenet1k_v1(self) -> None:
+        for cls in self._enums():
+            self.assertIs(cls.DEFAULT, cls.IMAGENET1K_V1)
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, src, nparams, _rs) in zip(self._enums(), _SHIPPED):
+            e = cls.IMAGENET1K_V1.entry
+            self.assertEqual(e.num_classes, 1000)
+            # sha256 is the upload placeholder until the conversion loop
+            # patches the real 64-char digest post-Hub-upload.
+            self.assertTrue(e.sha256 == "__PENDING_UPLOAD__" or len(e.sha256) == 64)
+            self.assertIn(f"lucid-dl/{slug}", e.url)
+            self.assertIn("/IMAGENET1K_V1/", e.url)
+            self.assertEqual(
+                cls.IMAGENET1K_V1.meta["source"],
+                f"torchvision/{src}.IMAGENET1K_V1",
+            )
+            self.assertEqual(cls.IMAGENET1K_V1.meta["license"], "bsd-3-clause")
+            self.assertEqual(cls.IMAGENET1K_V1.meta["num_params"], nparams)
+
+    def test_transforms_bilinear_224(self) -> None:
+        for cls, (_fac, _slug, _src, _np, resize) in zip(self._enums(), _SHIPPED):
+            tf = cls.IMAGENET1K_V1.transforms()
+            self.assertEqual(tf.crop_size, 224)
+            self.assertEqual(tf.resize_size, resize)
+            self.assertEqual(tf.interpolation, "bilinear")
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, *_ in _SHIPPED:
+            self.assertIn("IMAGENET1K_V1", list_pretrained(fac))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestViTPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_base_16_default(self) -> None:
+        m = models.vit_base_16_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_base_32_string_tag(self) -> None:
+        m = models.vit_base_32_cls(pretrained="IMAGENET1K_V1")
+        self.assertIsInstance(m, ViTForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

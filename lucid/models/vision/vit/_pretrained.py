@@ -1,8 +1,15 @@
 """Registry factories for ViT variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.vit._config import ViTConfig
 from lucid.models.vision.vit._model import ViT, ViTForImageClassification
+from lucid.models.vision.vit._weights import (
+    ViTBase16Weights,
+    ViTBase32Weights,
+    ViTLarge16Weights,
+    ViTLarge32Weights,
+)
 
 _CFG_B16 = ViTConfig(patch_size=16, dim=768, depth=12, num_heads=12)
 _CFG_B32 = ViTConfig(patch_size=32, dim=768, depth=12, num_heads=12)
@@ -266,7 +273,7 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vit_base_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -274,7 +281,10 @@ def vit_huge_14(pretrained: bool = False, **overrides: object) -> ViT:
     default_config=_CFG_B16,
 )
 def vit_base_16_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ViTBase16Weights | None = None,
+    **overrides: object,
 ) -> ViTForImageClassification:
     r"""ViT-Base/16 image classifier (Dosovitskiy et al., 2020).
 
@@ -286,9 +296,14 @@ def vit_base_16_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights for the trunk
-        (and fine-tuned head when available).  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ViTBase16Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ViTBase16Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Base/16 config.
         Commonly used: ``num_classes`` to switch label space,
@@ -304,7 +319,10 @@ def vit_base_16_cls(
     -----
     Standard ImageNet recipe: backbone returns the CLS token after the
     final LayerNorm, head applies a single affine map to produce class
-    logits.  See `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_.
+    logits.  Pretrained weights are converted from torchvision's
+    ``ViT_B_16_Weights.IMAGENET1K_V1`` (81.072% top-1) and hosted under
+    ``lucid-dl/vit-base-16``.  See
+    `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_.
 
     Examples
     --------
@@ -316,10 +334,14 @@ def vit_base_16_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c(_CFG_B16, overrides)
+    entry = weights_mod.resolve_weights(ViTBase16Weights, pretrained, weights)
+    model = _c(_CFG_B16, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vit_base_16_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vit_base_32_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -327,7 +349,10 @@ def vit_base_16_cls(
     default_config=_CFG_B32,
 )
 def vit_base_32_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ViTBase32Weights | None = None,
+    **overrides: object,
 ) -> ViTForImageClassification:
     r"""ViT-Base/32 image classifier (Dosovitskiy et al., 2020).
 
@@ -338,9 +363,14 @@ def vit_base_32_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ViTBase32Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ViTBase32Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Base/32 config.
 
@@ -351,7 +381,9 @@ def vit_base_32_cls(
 
     Notes
     -----
-    Reference: Dosovitskiy et al. (2020), Table 1.
+    Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are
+    converted from torchvision's ``ViT_B_32_Weights.IMAGENET1K_V1``
+    (75.912% top-1) and hosted under ``lucid-dl/vit-base-32``.
 
     Examples
     --------
@@ -362,10 +394,14 @@ def vit_base_32_cls(
     >>> model(x).logits.shape
     (1, 10)
     """
-    return _c(_CFG_B32, overrides)
+    entry = weights_mod.resolve_weights(ViTBase32Weights, pretrained, weights)
+    model = _c(_CFG_B32, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vit_base_32_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vit_large_16_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -373,7 +409,10 @@ def vit_base_32_cls(
     default_config=_CFG_L16,
 )
 def vit_large_16_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ViTLarge16Weights | None = None,
+    **overrides: object,
 ) -> ViTForImageClassification:
     r"""ViT-Large/16 image classifier (Dosovitskiy et al., 2020).
 
@@ -384,9 +423,14 @@ def vit_large_16_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ViTLarge16Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ViTLarge16Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Large/16 config.
 
@@ -397,9 +441,10 @@ def vit_large_16_cls(
 
     Notes
     -----
-    Reaches **85.30% top-1 on ImageNet-1k** at 384x384 fine-tune
-    resolution after ImageNet-21k pretraining (Dosovitskiy et al., 2020,
-    Table 5).
+    Reference: Dosovitskiy et al. (2020), Table 5.  Pretrained weights are
+    converted from torchvision's ``ViT_L_16_Weights.IMAGENET1K_V1``
+    (79.662% top-1, 242-pixel resize) and hosted under
+    ``lucid-dl/vit-large-16``.
 
     Examples
     --------
@@ -410,10 +455,14 @@ def vit_large_16_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L16, overrides)
+    entry = weights_mod.resolve_weights(ViTLarge16Weights, pretrained, weights)
+    model = _c(_CFG_L16, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vit_large_16_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: vit_large_32_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="vit",
     model_type="vit",
@@ -421,7 +470,10 @@ def vit_large_16_cls(
     default_config=_CFG_L32,
 )
 def vit_large_32_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ViTLarge32Weights | None = None,
+    **overrides: object,
 ) -> ViTForImageClassification:
     r"""ViT-Large/32 image classifier (Dosovitskiy et al., 2020).
 
@@ -432,9 +484,14 @@ def vit_large_32_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-21k pretrained weights when available.
-        Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ViTLarge32Weights.IMAGENET1K_V1`); a
+        tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ViTLarge32Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical ViT-Large/32 config.
 
@@ -445,7 +502,9 @@ def vit_large_32_cls(
 
     Notes
     -----
-    Reference: Dosovitskiy et al. (2020), Table 1.
+    Reference: Dosovitskiy et al. (2020), Table 1.  Pretrained weights are
+    converted from torchvision's ``ViT_L_32_Weights.IMAGENET1K_V1``
+    (76.972% top-1) and hosted under ``lucid-dl/vit-large-32``.
 
     Examples
     --------
@@ -456,7 +515,11 @@ def vit_large_32_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L32, overrides)
+    entry = weights_mod.resolve_weights(ViTLarge32Weights, pretrained, weights)
+    model = _c(_CFG_L32, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="vit_large_32_cls")
+    return model
 
 
 @register_model(

@@ -165,5 +165,64 @@ class TestMobileNetV1Serialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
 
+class TestMobileNetV1WeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enum(self) -> type:
+        from lucid.models.vision.mobilenet import MobileNetV1Weights
+
+        return MobileNetV1Weights
+
+    def test_default_alias(self) -> None:
+        cls = self._enum()
+        self.assertIs(cls.DEFAULT, cls.RA4_E3600_R224_IN1K)
+
+    def test_entry_fields(self) -> None:
+        cls = self._enum()
+        e = cls.RA4_E3600_R224_IN1K.entry
+        self.assertEqual(e.num_classes, 1000)
+        # Either the pre-upload placeholder or the final 64-char digest.
+        self.assertTrue(e.sha256 == "__PENDING_UPLOAD__" or len(e.sha256) == 64)
+        self.assertIn("lucid-dl/mobilenet-v1", e.url)
+        self.assertIn("/RA4_E3600_R224_IN1K/", e.url)
+        meta = cls.RA4_E3600_R224_IN1K.meta
+        self.assertEqual(meta["source"], "timm/mobilenetv1_100.ra4_e3600_r224_in1k")
+        self.assertEqual(meta["license"], "apache-2.0")
+        self.assertEqual(meta["num_params"], 4_231_976)
+        self.assertAlmostEqual(meta["metrics"]["ImageNet-1k"]["acc@1"], 75.4)
+
+    def test_transforms_bicubic_224(self) -> None:
+        cls = self._enum()
+        tf = cls.RA4_E3600_R224_IN1K.transforms()
+        self.assertEqual(tf.crop_size, 224)
+        self.assertEqual(tf.resize_size, 256)
+        self.assertEqual(tf.interpolation, "bicubic")
+        self.assertEqual(tuple(tf.mean), (0.5, 0.5, 0.5))
+        self.assertEqual(tuple(tf.std), (0.5, 0.5, 0.5))
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        self.assertIn("RA4_E3600_R224_IN1K", list_pretrained("mobilenet_v1_cls"))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestMobileNetV1PretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_default(self) -> None:
+        m = models.mobilenet_v1_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_string_tag(self) -> None:
+        m = models.mobilenet_v1_cls(pretrained="RA4_E3600_R224_IN1K")
+        self.assertIsInstance(m, MobileNetV1ForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

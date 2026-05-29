@@ -165,6 +165,41 @@ from lucid.models.vision.pvt._weights import (
     PVTv2B5Weights,
 )
 
+# 2017 — MobileNet v1 (Howard et al.)
+from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
+
+# 2020 — Vision Transformer (Dosovitskiy et al.)
+from lucid.models.vision.vit._weights import (
+    ViTBase16Weights,
+    ViTBase32Weights,
+    ViTLarge16Weights,
+    ViTLarge32Weights,
+)
+
+# 2020 — ResNeSt (Zhang et al.)
+from lucid.models.vision.resnest._weights import (
+    ResNeSt50Weights,
+    ResNeSt101Weights,
+    ResNeSt200Weights,
+    ResNeSt269Weights,
+)
+
+# 2021 — Swin Transformer (Liu et al.)
+from lucid.models.vision.swin._weights import (
+    SwinTinyWeights,
+    SwinSmallWeights,
+    SwinBaseWeights,
+    SwinLargeWeights,
+)
+
+# 2022 — MaxViT (Tu et al.)
+from lucid.models.vision.maxvit._weights import (
+    MaxViTTinyWeights,
+    MaxViTSmallWeights,
+    MaxViTBaseWeights,
+    MaxViTLargeWeights,
+)
+
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
@@ -254,4 +289,26 @@ __all__ = [
     "PVTv2B3Weights",
     "PVTv2B4Weights",
     "PVTv2B5Weights",
+    # ── Vision (2017) MobileNet v1 ────────────────────────────────────
+    "MobileNetV1Weights",
+    # ── Vision (2020) Vision Transformer ──────────────────────────────
+    "ViTBase16Weights",
+    "ViTBase32Weights",
+    "ViTLarge16Weights",
+    "ViTLarge32Weights",
+    # ── Vision (2020) ResNeSt ─────────────────────────────────────────
+    "ResNeSt50Weights",
+    "ResNeSt101Weights",
+    "ResNeSt200Weights",
+    "ResNeSt269Weights",
+    # ── Vision (2021) Swin Transformer ────────────────────────────────
+    "SwinTinyWeights",
+    "SwinSmallWeights",
+    "SwinBaseWeights",
+    "SwinLargeWeights",
+    # ── Vision (2022) MaxViT ──────────────────────────────────────────
+    "MaxViTTinyWeights",
+    "MaxViTSmallWeights",
+    "MaxViTBaseWeights",
+    "MaxViTLargeWeights",
 ]

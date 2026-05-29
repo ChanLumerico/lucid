@@ -82,6 +82,12 @@ class MaxViTConfig(ModelConfig):
     mlp_ratio : float, optional
         MLP expansion ratio inside the partition-attention blocks.
         Defaults to ``4.0``.
+    stem_width : int or None, optional
+        Output width of the convolutional stem.  The reference MaxViT
+        decouples this from ``dims[0]``: Tiny/Large keep ``stem_width ==
+        dims[0]`` while Small/Base use a narrower ``stem_width = 64`` and
+        let the first block's shortcut expand to ``dims[0]``.  ``None``
+        (the default) falls back to ``dims[0]``.
 
     Attributes
     ----------
@@ -126,6 +132,7 @@ class MaxViTConfig(ModelConfig):
     window_size: int = 7
     num_heads: int = 32
     mlp_ratio: float = 4.0
+    stem_width: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))

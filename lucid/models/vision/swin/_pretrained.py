@@ -1,10 +1,17 @@
 """Registry factories for Swin Transformer variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.swin._config import SwinConfig
 from lucid.models.vision.swin._model import (
     SwinTransformer,
     SwinTransformerForImageClassification,
+)
+from lucid.models.vision.swin._weights import (
+    SwinBaseWeights,
+    SwinLargeWeights,
+    SwinSmallWeights,
+    SwinTinyWeights,
 )
 
 _CFG_T = SwinConfig(embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
@@ -222,7 +229,7 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: swin_tiny_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -230,7 +237,10 @@ def swin_large(pretrained: bool = False, **overrides: object) -> SwinTransformer
     default_config=_CFG_T,
 )
 def swin_tiny_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SwinTinyWeights | None = None,
+    **overrides: object,
 ) -> SwinTransformerForImageClassification:
     r"""Swin-Tiny image classifier (Liu et al., 2021).
 
@@ -241,9 +251,14 @@ def swin_tiny_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`SwinTinyWeights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : SwinTinyWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical Swin-T config.
         Commonly used: ``num_classes`` to switch label space,
@@ -258,6 +273,9 @@ def swin_tiny_cls(
     Notes
     -----
     Swin-T reaches **81.3% top-1 on ImageNet-1k** (Liu et al., 2021).
+    Pretrained weights are converted from torchvision's
+    ``Swin_T_Weights.IMAGENET1K_V1`` and hosted under
+    ``lucid-dl/swin-tiny``.
 
     Examples
     --------
@@ -269,10 +287,14 @@ def swin_tiny_cls(
     >>> out.logits.shape
     (1, 1000)
     """
-    return _c(_CFG_T, overrides)
+    entry = weights_mod.resolve_weights(SwinTinyWeights, pretrained, weights)
+    model = _c(_CFG_T, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="swin_tiny_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: swin_small_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -280,7 +302,10 @@ def swin_tiny_cls(
     default_config=_CFG_S,
 )
 def swin_small_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SwinSmallWeights | None = None,
+    **overrides: object,
 ) -> SwinTransformerForImageClassification:
     r"""Swin-Small image classifier (Liu et al., 2021).
 
@@ -290,9 +315,14 @@ def swin_small_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`SwinSmallWeights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : SwinSmallWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical Swin-S config.
 
@@ -304,7 +334,9 @@ def swin_small_cls(
     Notes
     -----
     Swin-S reaches **83.0% top-1 on ImageNet-1k** (Liu et al., 2021,
-    Table 1).
+    Table 1).  Pretrained weights are converted from torchvision's
+    ``Swin_S_Weights.IMAGENET1K_V1`` and hosted under
+    ``lucid-dl/swin-small``.
 
     Examples
     --------
@@ -315,10 +347,14 @@ def swin_small_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_S, overrides)
+    entry = weights_mod.resolve_weights(SwinSmallWeights, pretrained, weights)
+    model = _c(_CFG_S, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="swin_small_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: swin_base_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -326,7 +362,10 @@ def swin_small_cls(
     default_config=_CFG_B,
 )
 def swin_base_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SwinBaseWeights | None = None,
+    **overrides: object,
 ) -> SwinTransformerForImageClassification:
     r"""Swin-Base image classifier (Liu et al., 2021).
 
@@ -337,9 +376,14 @@ def swin_base_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k or ImageNet-22k pretrained
-        weights when available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`SwinBaseWeights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : SwinBaseWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical Swin-B config.
 
@@ -352,7 +396,9 @@ def swin_base_cls(
     -----
     Swin-B reaches **83.5% top-1 on ImageNet-1k** (224x224) and
     **86.4% top-1** at 384x384 after ImageNet-22k pretraining (Liu
-    et al., 2021, Tables 1 and 2).
+    et al., 2021, Tables 1 and 2).  The shipped checkpoint is converted
+    from torchvision's ``Swin_B_Weights.IMAGENET1K_V1`` and hosted under
+    ``lucid-dl/swin-base``.
 
     Examples
     --------
@@ -363,10 +409,14 @@ def swin_base_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_B, overrides)
+    entry = weights_mod.resolve_weights(SwinBaseWeights, pretrained, weights)
+    model = _c(_CFG_B, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="swin_base_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: swin_large_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="swin",
     model_type="swin",
@@ -374,7 +424,10 @@ def swin_base_cls(
     default_config=_CFG_L,
 )
 def swin_large_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: SwinLargeWeights | None = None,
+    **overrides: object,
 ) -> SwinTransformerForImageClassification:
     r"""Swin-Large image classifier (Liu et al., 2021).
 
@@ -385,9 +438,15 @@ def swin_large_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-22k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`SwinLargeWeights.MS_IN22K_FT_IN1K`); a tag string →
+        that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : SwinLargeWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical Swin-L config.
 
@@ -400,7 +459,10 @@ def swin_large_cls(
     -----
     Swin-L reaches **87.3% top-1 on ImageNet-1k** at 384x384
     fine-tune resolution after ImageNet-22k pretraining (Liu
-    et al., 2021, Table 2).
+    et al., 2021, Table 2).  The shipped checkpoint is the 224x224
+    ImageNet-22k → ImageNet-1k finetune (86.3% top-1), converted from
+    timm's ``swin_large_patch4_window7_224.ms_in22k_ft_in1k`` and
+    hosted under ``lucid-dl/swin-large``.
 
     Examples
     --------
@@ -411,4 +473,8 @@ def swin_large_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L, overrides)
+    entry = weights_mod.resolve_weights(SwinLargeWeights, pretrained, weights)
+    model = _c(_CFG_L, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="swin_large_cls")
+    return model

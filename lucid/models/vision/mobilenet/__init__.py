@@ -15,6 +15,7 @@ from lucid.models.vision.mobilenet._pretrained import (
     mobilenet_v1_025,
     mobilenet_v1_025_cls,
 )
+from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
 
 __all__ = [
     "MobileNetV1Config",
@@ -28,4 +29,6 @@ __all__ = [
     "mobilenet_v1_050_cls",
     "mobilenet_v1_025",
     "mobilenet_v1_025_cls",
+    # Pretrained weight enums
+    "MobileNetV1Weights",
 ]

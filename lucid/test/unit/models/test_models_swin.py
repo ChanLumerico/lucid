@@ -172,5 +172,119 @@ class TestSwinSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
 
+# (factory, slug, tag, source, num_params, resize_size) — the three
+# torchvision IMAGENET1K_V1 variants plus the timm MS_IN22K_FT_IN1K Large.
+_SHIPPED = (
+    (
+        "swin_tiny_cls",
+        "swin-tiny",
+        "IMAGENET1K_V1",
+        "torchvision/Swin_T_Weights.IMAGENET1K_V1",
+        28_288_354,
+        232,
+    ),
+    (
+        "swin_small_cls",
+        "swin-small",
+        "IMAGENET1K_V1",
+        "torchvision/Swin_S_Weights.IMAGENET1K_V1",
+        49_606_258,
+        246,
+    ),
+    (
+        "swin_base_cls",
+        "swin-base",
+        "IMAGENET1K_V1",
+        "torchvision/Swin_B_Weights.IMAGENET1K_V1",
+        87_768_224,
+        238,
+    ),
+    (
+        "swin_large_cls",
+        "swin-large",
+        "MS_IN22K_FT_IN1K",
+        "timm/swin_large_patch4_window7_224.ms_in22k_ft_in1k",
+        196_532_476,
+        249,
+    ),
+)
+
+
+class TestSwinWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enums(self) -> tuple[type, ...]:
+        from lucid.models.vision.swin import (
+            SwinBaseWeights,
+            SwinLargeWeights,
+            SwinSmallWeights,
+            SwinTinyWeights,
+        )
+
+        return (
+            SwinTinyWeights,
+            SwinSmallWeights,
+            SwinBaseWeights,
+            SwinLargeWeights,
+        )
+
+    def test_default_aliases(self) -> None:
+        # Each enum's DEFAULT points at its single shipped tag member.
+        for cls, (_fac, _slug, tag, *_rest) in zip(self._enums(), _SHIPPED):
+            self.assertIs(cls.DEFAULT, cls[tag])
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, tag, src, nparams, _rs) in zip(self._enums(), _SHIPPED):
+            member = cls[tag]
+            e = member.entry
+            self.assertEqual(e.num_classes, 1000)
+            # Pre-upload the SHA is the ``__PENDING_UPLOAD__`` sentinel;
+            # the conversion main loop patches in the real 64-char digest
+            # once the Hub artifact lands.
+            self.assertTrue(e.sha256 == "__PENDING_UPLOAD__" or len(e.sha256) == 64)
+            self.assertIn(f"lucid-dl/{slug}", e.url)
+            self.assertIn(f"/{tag}/", e.url)
+            self.assertEqual(member.meta["tag"], tag)
+            self.assertEqual(member.meta["source"], src)
+            self.assertEqual(member.meta["license"], "mit")
+            self.assertEqual(member.meta["num_params"], nparams)
+            self.assertIn("ImageNet-1k", member.meta["metrics"])
+
+    def test_transforms_bicubic_224(self) -> None:
+        for cls, (_fac, _slug, tag, _src, _np, resize) in zip(self._enums(), _SHIPPED):
+            tf = cls[tag].transforms()
+            self.assertEqual(tf.crop_size, 224)
+            self.assertEqual(tf.resize_size, resize)
+            self.assertEqual(tf.interpolation, "bicubic")
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, _slug, tag, *_rest in _SHIPPED:
+            self.assertIn(tag, list_pretrained(fac))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestSwinPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_tiny_default(self) -> None:
+        m = models.swin_tiny_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_base_string_tag(self) -> None:
+        m = models.swin_base_cls(pretrained="IMAGENET1K_V1")
+        self.assertIsInstance(m, SwinTransformerForImageClassification)
+
+    def test_large_string_tag(self) -> None:
+        m = models.swin_large_cls(pretrained="MS_IN22K_FT_IN1K")
+        self.assertIsInstance(m, SwinTransformerForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

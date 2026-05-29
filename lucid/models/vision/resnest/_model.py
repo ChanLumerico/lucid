@@ -325,10 +325,10 @@ def _make_layer(
             groups=groups,
             avd=avd,
             avd_first=avd_first,
-            # AVD is applied at the first block of the *first stage* (where
-            # stride is 1 and downsample is None) per the paper, in addition
-            # to every block whose stride > 1.  ``is_first_stage`` is
-            # threaded down from the caller (layer1 passes True).
+            # AVD pooling fires only on blocks that actually downsample
+            # (stride > 1); stage 1 keeps stride 1 and therefore gets no AVD,
+            # matching the reference ResNeSt.  ``is_first`` stays available as
+            # a per-block override but no stage enables it by default.
             is_first=is_first_stage,
             dilation=dilation,
         )
@@ -439,7 +439,6 @@ def _build_resnest_body(config: ResNeStConfig) -> tuple[
         avd,
         avd_first,
         avg_down,
-        is_first_stage=True,
     )
     fi.append(FeatureInfo(stage=1, num_channels=widths[0] * 4, reduction=4))
     layer2, cur = _make_layer(

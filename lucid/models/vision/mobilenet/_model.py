@@ -36,16 +36,16 @@ from lucid.models.vision.mobilenet._config import MobileNetV1Config
 
 
 def _dw_pw(in_ch: int, out_ch: int, stride: int) -> nn.Sequential:
-    """Depthwise + pointwise block with BN and ReLU."""
+    """Depthwise + pointwise block with BN and ReLU6."""
     return nn.Sequential(
         # Depthwise
         nn.Conv2d(in_ch, in_ch, 3, stride=stride, padding=1, groups=in_ch, bias=False),
         nn.BatchNorm2d(in_ch),
-        nn.ReLU(inplace=True),
+        nn.ReLU6(inplace=True),
         # Pointwise
         nn.Conv2d(in_ch, out_ch, 1, bias=False),
         nn.BatchNorm2d(out_ch),
-        nn.ReLU(inplace=True),
+        nn.ReLU6(inplace=True),
     )
 
 
@@ -78,7 +78,7 @@ def _build_features(cfg: MobileNetV1Config) -> tuple[nn.Sequential, int]:
     layers: list[nn.Module] = [
         nn.Conv2d(cfg.in_channels, first_ch, 3, stride=2, padding=1, bias=False),
         nn.BatchNorm2d(first_ch),
-        nn.ReLU(inplace=True),
+        nn.ReLU6(inplace=True),
     ]
     in_ch = first_ch
     for out_c, stride in _DW_PW_SPECS:

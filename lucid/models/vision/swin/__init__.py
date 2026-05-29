@@ -15,6 +15,12 @@ from lucid.models.vision.swin._pretrained import (
     swin_large,
     swin_large_cls,
 )
+from lucid.models.vision.swin._weights import (
+    SwinBaseWeights,
+    SwinLargeWeights,
+    SwinSmallWeights,
+    SwinTinyWeights,
+)
 
 __all__ = [
     "SwinConfig",
@@ -28,4 +34,8 @@ __all__ = [
     "swin_base_cls",
     "swin_large",
     "swin_large_cls",
+    "SwinTinyWeights",
+    "SwinSmallWeights",
+    "SwinBaseWeights",
+    "SwinLargeWeights",
 ]

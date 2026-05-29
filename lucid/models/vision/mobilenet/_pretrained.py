@@ -1,11 +1,13 @@
 """Registry factories for MobileNet v1."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.mobilenet._config import MobileNetV1Config
 from lucid.models.vision.mobilenet._model import (
     MobileNetV1,
     MobileNetV1ForImageClassification,
 )
+from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
 
 _CFG_100 = MobileNetV1Config(width_mult=1.0)
 _CFG_075 = MobileNetV1Config(width_mult=0.75)
@@ -232,7 +234,7 @@ def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNet
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: mobilenet_v1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="mobilenet",
     model_type="mobilenet_v1",
@@ -240,7 +242,10 @@ def mobilenet_v1_025(pretrained: bool = False, **overrides: object) -> MobileNet
     default_config=_CFG_100,
 )
 def mobilenet_v1_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: MobileNetV1Weights | None = None,
+    **overrides: object,
 ) -> MobileNetV1ForImageClassification:
     r"""MobileNet-v1 image classifier at width multiplier :math:`\alpha = 1.0`.
 
@@ -253,9 +258,14 @@ def mobilenet_v1_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`MobileNetV1Weights.RA4_E3600_R224_IN1K`);
+        a tag string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : MobileNetV1Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`MobileNetV1Config`
         (typically ``num_classes`` to retarget the classifier).
@@ -271,7 +281,9 @@ def mobilenet_v1_cls(
     -----
     See Howard et al., "MobileNets: Efficient Convolutional Neural
     Networks for Mobile Vision Applications", arXiv:1704.04861, 2017,
-    Table 7.
+    Table 7.  Pretrained weights are converted from timm's
+    ``mobilenetv1_100.ra4_e3600_r224_in1k`` (75.4% top-1 at 224x224
+    under the RA4 recipe) and hosted under ``lucid-dl/mobilenet-v1``.
 
     Examples
     --------
@@ -283,7 +295,11 @@ def mobilenet_v1_cls(
     >>> out.logits.shape
     (2, 10)
     """
-    return _c(_CFG_100, overrides)
+    entry = weights_mod.resolve_weights(MobileNetV1Weights, pretrained, weights)
+    model = _c(_CFG_100, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="mobilenet_v1_cls")
+    return model
 
 
 @register_model(

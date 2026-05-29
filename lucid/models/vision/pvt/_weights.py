@@ -17,9 +17,7 @@ resize (``crop_pct = 0.9``) / bicubic interpolation / ImageNet stats.
 from lucid.utils.transforms import ImageClassification
 from lucid.weights import HUB_BASE, WeightEntry, WeightsEnum, register_weights
 
-_PRESET = ImageClassification(
-    crop_size=224, resize_size=249, interpolation="bicubic"
-)
+_PRESET = ImageClassification(crop_size=224, resize_size=249, interpolation="bicubic")
 
 
 @register_weights("pvt_v2_b0_cls")

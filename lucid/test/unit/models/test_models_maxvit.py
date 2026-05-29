@@ -131,5 +131,79 @@ class TestMaxViTSerialization(unittest.TestCase):
         self.assertAlmostEqual(diff, 0.0, places=6)
 
 
+_SHIPPED = (
+    ("maxvit_tiny_cls", "maxvit-tiny", "maxvit_tiny_tf_224.in1k", 30_916_528),
+    ("maxvit_small_cls", "maxvit-small", "maxvit_small_tf_224.in1k", 68_927_956),
+    ("maxvit_base_cls", "maxvit-base", "maxvit_base_tf_224.in1k", 119_467_708),
+    ("maxvit_large_cls", "maxvit-large", "maxvit_large_tf_224.in1k", 211_785_560),
+)
+
+
+class TestMaxViTWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enums(self) -> tuple[type, ...]:
+        from lucid.models.vision.maxvit import (
+            MaxViTTinyWeights,
+            MaxViTSmallWeights,
+            MaxViTBaseWeights,
+            MaxViTLargeWeights,
+        )
+
+        return (
+            MaxViTTinyWeights,
+            MaxViTSmallWeights,
+            MaxViTBaseWeights,
+            MaxViTLargeWeights,
+        )
+
+    def test_default_aliases_in1k(self) -> None:
+        for cls in self._enums():
+            self.assertIs(cls.DEFAULT, cls.IN1K)
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, src, nparams) in zip(self._enums(), _SHIPPED):
+            e = cls.IN1K.entry
+            self.assertEqual(e.num_classes, 1000)
+            # 64-char hex once uploaded; sentinel until the hub patch lands.
+            self.assertTrue(len(e.sha256) == 64 or e.sha256 == "__PENDING_UPLOAD__")
+            self.assertIn(f"lucid-dl/{slug}", e.url)
+            self.assertIn("/IN1K/", e.url)
+            self.assertEqual(cls.IN1K.meta["source"], f"timm/{src}")
+            self.assertEqual(cls.IN1K.meta["license"], "apache-2.0")
+            self.assertEqual(cls.IN1K.meta["num_params"], nparams)
+
+    def test_transforms_bicubic_224(self) -> None:
+        for cls in self._enums():
+            tf = cls.IN1K.transforms()
+            self.assertEqual(tf.crop_size, 224)
+            self.assertEqual(tf.resize_size, 235)
+            self.assertEqual(tf.interpolation, "bicubic")
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, *_ in _SHIPPED:
+            self.assertIn("IN1K", list_pretrained(fac))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestMaxViTPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_tiny_default(self) -> None:
+        m = models.maxvit_tiny_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_small_string_tag(self) -> None:
+        m = models.maxvit_small_cls(pretrained="IN1K")
+        self.assertIsInstance(m, MaxViTForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

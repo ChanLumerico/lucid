@@ -19,6 +19,12 @@ from lucid.models.vision.resnest._pretrained import (
     resnest_269,
     resnest_269_cls,
 )
+from lucid.models.vision.resnest._weights import (
+    ResNeSt50Weights,
+    ResNeSt101Weights,
+    ResNeSt200Weights,
+    ResNeSt269Weights,
+)
 
 __all__ = [
     "ResNeStConfig",
@@ -36,4 +42,9 @@ __all__ = [
     "resnest_200_cls",
     "resnest_269",
     "resnest_269_cls",
+    # Pretrained weight enums
+    "ResNeSt50Weights",
+    "ResNeSt101Weights",
+    "ResNeSt200Weights",
+    "ResNeSt269Weights",
 ]

@@ -118,5 +118,113 @@ class TestResNeStRegistry(unittest.TestCase):
         self.assertIsInstance(m, ResNeSt)
 
 
+# (factory, slug, timm-source, num_params, crop, resize, interpolation)
+_SHIPPED = (
+    (
+        "resnest_50_cls",
+        "resnest-50",
+        "resnest50d.in1k",
+        27_483_240,
+        224,
+        256,
+        "bilinear",
+    ),
+    (
+        "resnest_101_cls",
+        "resnest-101",
+        "resnest101e.in1k",
+        48_275_016,
+        256,
+        293,
+        "bilinear",
+    ),
+    (
+        "resnest_200_cls",
+        "resnest-200",
+        "resnest200e.in1k",
+        70_201_544,
+        320,
+        352,
+        "bicubic",
+    ),
+    (
+        "resnest_269_cls",
+        "resnest-269",
+        "resnest269e.in1k",
+        110_929_480,
+        416,
+        448,
+        "bicubic",
+    ),
+)
+
+
+class TestResNeStWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enums(self) -> tuple[type, ...]:
+        from lucid.models.vision.resnest import (
+            ResNeSt50Weights,
+            ResNeSt101Weights,
+            ResNeSt200Weights,
+            ResNeSt269Weights,
+        )
+
+        return (
+            ResNeSt50Weights,
+            ResNeSt101Weights,
+            ResNeSt200Weights,
+            ResNeSt269Weights,
+        )
+
+    def test_default_aliases_in1k(self) -> None:
+        for cls in self._enums():
+            self.assertIs(cls.DEFAULT, cls.IN1K)
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, src, nparams, *_pre) in zip(self._enums(), _SHIPPED):
+            e = cls.IN1K.entry
+            self.assertEqual(e.num_classes, 1000)
+            # sha256 is the upload placeholder until the conversion loop
+            # patches the real 64-char digest post-Hub-upload.
+            self.assertTrue(e.sha256 == "__PENDING_UPLOAD__" or len(e.sha256) == 64)
+            self.assertIn(f"lucid-dl/{slug}", e.url)
+            self.assertIn("/IN1K/", e.url)
+            self.assertEqual(cls.IN1K.meta["source"], f"timm/{src}")
+            self.assertEqual(cls.IN1K.meta["license"], "apache-2.0")
+            self.assertEqual(cls.IN1K.meta["num_params"], nparams)
+
+    def test_transforms_per_variant(self) -> None:
+        for cls, (*_head, crop, resize, interp) in zip(self._enums(), _SHIPPED):
+            tf = cls.IN1K.transforms()
+            self.assertEqual(tf.crop_size, crop)
+            self.assertEqual(tf.resize_size, resize)
+            self.assertEqual(tf.interpolation, interp)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, *_ in _SHIPPED:
+            self.assertIn("IN1K", list_pretrained(fac))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestResNeStPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_50_default(self) -> None:
+        m = models.resnest_50_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_101_string_tag(self) -> None:
+        m = models.resnest_101_cls(pretrained="IN1K")
+        self.assertIsInstance(m, ResNeStForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

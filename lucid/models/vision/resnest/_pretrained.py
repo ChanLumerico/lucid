@@ -1,10 +1,17 @@
 """Registry factories for ResNeSt."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.resnest._config import ResNeStConfig
 from lucid.models.vision.resnest._model import (
     ResNeSt,
     ResNeStForImageClassification,
+)
+from lucid.models.vision.resnest._weights import (
+    ResNeSt50Weights,
+    ResNeSt101Weights,
+    ResNeSt200Weights,
+    ResNeSt269Weights,
 )
 
 _CFG_14 = ResNeStConfig(layers=(1, 1, 1, 1), radix=2, stem_width=32)
@@ -420,7 +427,7 @@ def resnest_26_cls(
     return ResNeStForImageClassification(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnest_50_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -428,7 +435,10 @@ def resnest_26_cls(
     default_config=_CFG_50,
 )
 def resnest_50_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeSt50Weights | None = None,
+    **overrides: object,
 ) -> ResNeStForImageClassification:
     r"""ResNeSt-50 image classifier (backbone + GAP + linear head).
 
@@ -441,9 +451,14 @@ def resnest_50_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNeSt50Weights.IN1K`); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ResNeSt50Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`
         (typically ``num_classes`` to retarget the classifier).
@@ -457,7 +472,9 @@ def resnest_50_cls(
     Notes
     -----
     See Zhang et al., "ResNeSt: Split-Attention Networks", CVPR
-    Workshops 2022 (arXiv:2004.08955), Table 4.
+    Workshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are
+    converted from timm's ``resnest50d.in1k`` and hosted under
+    ``lucid-dl/resnest-50``.
 
     Examples
     --------
@@ -469,11 +486,15 @@ def resnest_50_cls(
     >>> out.logits.shape
     (2, 10)
     """
+    entry = weights_mod.resolve_weights(ResNeSt50Weights, pretrained, weights)
     cfg = ResNeStConfig(**{**_CFG_50.__dict__, **overrides}) if overrides else _CFG_50
-    return ResNeStForImageClassification(cfg)
+    model = ResNeStForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnest_50_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnest_101_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -481,7 +502,10 @@ def resnest_50_cls(
     default_config=_CFG_101,
 )
 def resnest_101_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeSt101Weights | None = None,
+    **overrides: object,
 ) -> ResNeStForImageClassification:
     r"""ResNeSt-101 image classifier (backbone + GAP + linear head).
 
@@ -493,9 +517,14 @@ def resnest_101_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNeSt101Weights.IN1K`); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ResNeSt101Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -508,7 +537,9 @@ def resnest_101_cls(
     Notes
     -----
     See Zhang et al., "ResNeSt: Split-Attention Networks", CVPR
-    Workshops 2022 (arXiv:2004.08955), Table 4.
+    Workshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are
+    converted from timm's ``resnest101e.in1k`` and hosted under
+    ``lucid-dl/resnest-101``.
 
     Examples
     --------
@@ -520,11 +551,15 @@ def resnest_101_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNeSt101Weights, pretrained, weights)
     cfg = ResNeStConfig(**{**_CFG_101.__dict__, **overrides}) if overrides else _CFG_101
-    return ResNeStForImageClassification(cfg)
+    model = ResNeStForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnest_101_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnest_200_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -532,7 +567,10 @@ def resnest_101_cls(
     default_config=_CFG_200,
 )
 def resnest_200_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeSt200Weights | None = None,
+    **overrides: object,
 ) -> ResNeStForImageClassification:
     r"""ResNeSt-200 image classifier (backbone + GAP + linear head).
 
@@ -544,9 +582,14 @@ def resnest_200_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNeSt200Weights.IN1K`); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ResNeSt200Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -559,7 +602,9 @@ def resnest_200_cls(
     Notes
     -----
     See Zhang et al., "ResNeSt: Split-Attention Networks", CVPR
-    Workshops 2022 (arXiv:2004.08955), Table 4.
+    Workshops 2022 (arXiv:2004.08955), Table 4.  Pretrained weights are
+    converted from timm's ``resnest200e.in1k`` and hosted under
+    ``lucid-dl/resnest-200``.
 
     Examples
     --------
@@ -571,11 +616,15 @@ def resnest_200_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNeSt200Weights, pretrained, weights)
     cfg = ResNeStConfig(**{**_CFG_200.__dict__, **overrides}) if overrides else _CFG_200
-    return ResNeStForImageClassification(cfg)
+    model = ResNeStForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnest_200_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: resnest_269_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="resnest",
     model_type="resnest",
@@ -583,7 +632,10 @@ def resnest_200_cls(
     default_config=_CFG_269,
 )
 def resnest_269_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: ResNeSt269Weights | None = None,
+    **overrides: object,
 ) -> ResNeStForImageClassification:
     r"""ResNeSt-269 image classifier (backbone + GAP + linear head).
 
@@ -596,9 +648,14 @@ def resnest_269_cls(
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`ResNeSt269Weights.IN1K`); a tag
+        string → that specific checkpoint.  Mutually exclusive with
+        ``weights`` (which wins if both are given).
+    weights : ResNeSt269Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`ResNeStConfig`.
 
@@ -612,7 +669,8 @@ def resnest_269_cls(
     -----
     See Zhang et al., "ResNeSt: Split-Attention Networks", CVPR
     Workshops 2022 (arXiv:2004.08955), Table 4.  Memory footprint
-    is substantial.
+    is substantial.  Pretrained weights are converted from timm's
+    ``resnest269e.in1k`` and hosted under ``lucid-dl/resnest-269``.
 
     Examples
     --------
@@ -624,5 +682,9 @@ def resnest_269_cls(
     >>> out.logits.shape
     (1, 1000)
     """
+    entry = weights_mod.resolve_weights(ResNeSt269Weights, pretrained, weights)
     cfg = ResNeStConfig(**{**_CFG_269.__dict__, **overrides}) if overrides else _CFG_269
-    return ResNeStForImageClassification(cfg)
+    model = ResNeStForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="resnest_269_cls")
+    return model

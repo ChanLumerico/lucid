@@ -219,11 +219,13 @@ class _SwinBlock(nn.Module):
         )
         self.drop_path = DropPath(drop_path_rate)
 
-    def _attn_mask(self, H: int, W: int, device: str = "cpu") -> Tensor | None:
-        if self.shift_size == 0:
+    def _attn_mask(
+        self, H: int, W: int, shift_size: int, device: str = "cpu"
+    ) -> Tensor | None:
+        if shift_size == 0:
             return None
         ws = self.ws
-        ss = self.shift_size
+        ss = shift_size
         img_mask = lucid.zeros(1, H, W, 1, device=device)
         slices_h = [slice(0, -ws), slice(-ws, -ss), slice(-ss, None)]
         slices_w = [slice(0, -ws), slice(-ws, -ss), slice(-ss, None)]
@@ -248,11 +250,15 @@ class _SwinBlock(nn.Module):
         shortcut = x
         x = cast(Tensor, self.norm1(x))
 
-        if self.shift_size > 0:
-            ss = self.shift_size
-            x = lucid.roll(x, [-ss, -ss], dims=[1, 2])  # type: ignore[list-item]
+        # When the whole feature map fits inside a single window, the
+        # reference Swin disables the cyclic shift (and its attention mask):
+        # there is nothing to shift across window boundaries.
+        eff_ss = 0 if self.ws >= min(H, W) else self.shift_size
 
-        mask = self._attn_mask(H, W, device=x.device.type)
+        if eff_ss > 0:
+            x = lucid.roll(x, [-eff_ss, -eff_ss], dims=[1, 2])  # type: ignore[list-item]
+
+        mask = self._attn_mask(H, W, eff_ss, device=x.device.type)
         windows, nH, nW = _window_partition(x, self.ws)
         windows = windows.reshape(-1, self.ws * self.ws, C)
 
@@ -260,9 +266,8 @@ class _SwinBlock(nn.Module):
         attn_out = attn_out.reshape(-1, self.ws, self.ws, C)
         x = _window_reverse(attn_out, self.ws, nH, nW)
 
-        if self.shift_size > 0:
-            ss = self.shift_size
-            x = lucid.roll(x, [ss, ss], dims=[1, 2])  # type: ignore[list-item]
+        if eff_ss > 0:
+            x = lucid.roll(x, [eff_ss, eff_ss], dims=[1, 2])  # type: ignore[list-item]
 
         x = shortcut + cast(Tensor, self.drop_path(x))
         x = x + cast(
