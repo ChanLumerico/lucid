@@ -166,8 +166,18 @@ from lucid.models.vision.pvt._weights import (
     PVTv2B5Weights,
 )
 
+# 2014 — GoogLeNet / Inception v1 (Szegedy et al.)
+from lucid.models.vision.googlenet._weights import GoogLeNetWeights
+
 # 2017 — MobileNet v1 (Howard et al.)
 from lucid.models.vision.mobilenet._weights import MobileNetV1Weights
+
+# 2022 — EfficientFormer (Li et al.)
+from lucid.models.vision.efficientformer._weights import (
+    EfficientFormerL1Weights,
+    EfficientFormerL3Weights,
+    EfficientFormerL7Weights,
+)
 
 # 2020 — Vision Transformer (Dosovitskiy et al.)
 from lucid.models.vision.vit._weights import (
@@ -291,8 +301,14 @@ __all__ = [
     "PVTv2B3Weights",
     "PVTv2B4Weights",
     "PVTv2B5Weights",
+    # ── Vision (2014) GoogLeNet ───────────────────────────────────────
+    "GoogLeNetWeights",
     # ── Vision (2017) MobileNet v1 ────────────────────────────────────
     "MobileNetV1Weights",
+    # ── Vision (2022) EfficientFormer ─────────────────────────────────
+    "EfficientFormerL1Weights",
+    "EfficientFormerL3Weights",
+    "EfficientFormerL7Weights",
     # ── Vision (2020) Vision Transformer ──────────────────────────────
     "ViTBase16Weights",
     "ViTBase32Weights",

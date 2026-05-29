@@ -7,20 +7,33 @@ Key ideas:
      token mixer. Replace global attention with cheap local pooling in early
      stages.
   2. All-4D processing in early stages (B,C,H,W) — no reshape overhead.
-  3. Stage 4 (last stage only): switch to standard MHA for global context.
-  4. Depthwise conv stem (2×stride-2) for efficient spatial downsampling.
+  3. Stage 4 (last stage only): switch to standard MHA for global context,
+     using a learned attention-bias table indexed by a relative-position
+     grid (LeViT-style).
+  4. Two stride-2 conv stem for efficient spatial downsampling.
+
+The module tree mirrors the reference EfficientFormer implementation
+verbatim so a near-identity weight remap loads the published checkpoints:
+
+  stem.{conv1,norm1,conv2,norm2}
+  stages.0.blocks.{0..}            (no downsample on stage 0)
+  stages.{1,2,3}.downsample.{conv,norm}
+  stages.{1,2,3}.blocks.{0..}
+  norm                             (channel-last LayerNorm)
+  head, head_dist                  (averaged at inference)
 
 Architecture (EfficientFormer-L1, image=224):
-  Stem   : Conv3×3(s=2) → Conv3×3(s=2) → (56×56, 48)
-  Stage 1: 3 × PoolBlock(48)            → Downsample → (28×28, 96)
-  Stage 2: 2 × PoolBlock(96)            → Downsample → (14×14, 224)
-  Stage 3: 6 × PoolBlock(224)           → Downsample → (7×7,   448)
-  Stage 4: 4 × AttnBlock(448)
-  Head   : mean pool spatial → LN → FC
+  Stem   : Conv3x3(s=2) -> Conv3x3(s=2) -> (56x56, 48)
+  Stage 1: 3 x MetaBlock2d(48)
+  Stage 2: downsample -> 2 x MetaBlock2d(96)   -> (28x28, 96)
+  Stage 3: downsample -> 6 x MetaBlock2d(224)  -> (14x14, 224)
+  Stage 4: downsample -> 3 x MetaBlock2d(448) + 1 x MetaBlock1d(448) -> (7x7)
+  Head   : Flat -> LN -> mean pool tokens -> (head + head_dist) / 2
 """
 
 from typing import ClassVar, cast
 
+import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
@@ -31,30 +44,73 @@ from lucid.models._utils._classification import DropPath, LayerScale
 from lucid.models.vision.efficientformer._config import EfficientFormerConfig
 
 # ---------------------------------------------------------------------------
-# Pooling token mixer (MetaFormer-style)
+# Stem: two stride-2 3x3 convolutions with BatchNorm + ReLU
 # ---------------------------------------------------------------------------
 
 
-class _PoolingBlock(nn.Module):
-    """AvgPool3×3 − identity (pool the context, subtract self to get context diff)."""
+class _Stem(nn.Module):
+    """Stem reducing the input by 4x: Conv-BN-ReLU x2."""
 
-    def __init__(self) -> None:
+    def __init__(self, in_chs: int, out_chs: int) -> None:
         super().__init__()
-        self.pool = nn.AvgPool2d(kernel_size=3, stride=1, padding=1)
+        self.conv1 = nn.Conv2d(in_chs, out_chs // 2, 3, stride=2, padding=1)
+        self.norm1 = nn.BatchNorm2d(out_chs // 2)
+        self.act1 = nn.ReLU()
+        self.conv2 = nn.Conv2d(out_chs // 2, out_chs, 3, stride=2, padding=1)
+        self.norm2 = nn.BatchNorm2d(out_chs)
+        self.act2 = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.pool(x)) - x
+        x = cast(Tensor, self.act1(cast(Tensor, self.norm1(cast(Tensor, self.conv1(x))))))
+        x = cast(Tensor, self.act2(cast(Tensor, self.norm2(cast(Tensor, self.conv2(x))))))
+        return x
 
 
 # ---------------------------------------------------------------------------
-# MLP (channel-last friendly)
+# Downsample between stages: strided conv + BatchNorm
 # ---------------------------------------------------------------------------
 
 
-class _MLP(nn.Module):
-    def __init__(self, dim: int, mlp_ratio: float) -> None:
+class _Downsample(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int) -> None:
         super().__init__()
-        hidden = int(dim * mlp_ratio)
+        self.conv = nn.Conv2d(in_dim, out_dim, 3, stride=2, padding=1)
+        self.norm = nn.BatchNorm2d(out_dim)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return cast(Tensor, self.norm(cast(Tensor, self.conv(x))))
+
+
+# ---------------------------------------------------------------------------
+# 1x1-conv MLP with BatchNorm (used by the 4-D pooling blocks)
+# ---------------------------------------------------------------------------
+
+
+class _ConvMlpWithNorm(nn.Module):
+    """MLP via 1x1 convolutions over (B, C, H, W) with BatchNorm + GELU."""
+
+    def __init__(self, dim: int, hidden: int) -> None:
+        super().__init__()
+        self.fc1 = nn.Conv2d(dim, hidden, 1)
+        self.norm1 = nn.BatchNorm2d(hidden)
+        self.fc2 = nn.Conv2d(hidden, dim, 1)
+        self.norm2 = nn.BatchNorm2d(dim)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.norm1(cast(Tensor, self.fc1(x))))
+        x = F.gelu(x)
+        x = cast(Tensor, self.norm2(cast(Tensor, self.fc2(x))))
+        return x
+
+
+# ---------------------------------------------------------------------------
+# Plain MLP (Linear-GELU-Linear) used by the 3-D attention blocks
+# ---------------------------------------------------------------------------
+
+
+class _Mlp(nn.Module):
+    def __init__(self, dim: int, hidden: int) -> None:
+        super().__init__()
         self.fc1 = nn.Linear(dim, hidden)
         self.fc2 = nn.Linear(hidden, dim)
 
@@ -63,101 +119,282 @@ class _MLP(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Stage 1-3 block: pooling-based (4D spatial tensors)
+# Pooling token mixer (parameter-free): AvgPool3x3 - identity
 # ---------------------------------------------------------------------------
 
 
-class _EfficientFormerPoolBlock(nn.Module):
+class _Pooling(nn.Module):
+    """AvgPool(pool_size, count_include_pad=False) - identity.
+
+    The token mixer averages over *valid* (non-padded) neighbours only.
+    The reference pooling sets ``count_include_pad=False`` so border
+    positions divide by the actual window overlap rather than the full
+    kernel area.  We realise this exactly by dividing the
+    pad-included average by the pad-included average of an all-ones map
+    (which equals ``valid_count / kernel_area`` at every position), then
+    subtracting the identity branch.
+    """
+
+    def __init__(self, pool_size: int) -> None:
+        super().__init__()
+        self.pool = nn.AvgPool2d(
+            kernel_size=pool_size,
+            stride=1,
+            padding=pool_size // 2,
+            count_include_pad=True,
+        )
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        num = cast(Tensor, self.pool(x))
+        den = cast(Tensor, self.pool(lucid.ones(x.shape, device=x.device.type)))
+        return num / den - x
+
+
+# ---------------------------------------------------------------------------
+# Attention token mixer with learned relative-position bias (LeViT-style)
+# ---------------------------------------------------------------------------
+
+
+class _Attention(nn.Module):
+    """Multi-head attention with a learned attention-bias table.
+
+    Mirrors the reference EfficientFormer attention: a single ``qkv``
+    projection whose key/query dimension is ``key_dim`` and whose value
+    dimension is ``attn_ratio * key_dim`` per head, plus a ``proj`` back
+    to ``dim``.  A per-head bias table of ``resolution ** 2`` entries is
+    gathered through a fixed relative-position index grid and added to the
+    pre-softmax scores.
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        key_dim: int,
+        num_heads: int,
+        attn_ratio: float,
+        resolution: int,
+    ) -> None:
+        super().__init__()
+        self.num_heads = num_heads
+        self.key_dim = key_dim
+        self.scale = key_dim**-0.5
+        self.val_dim = int(attn_ratio * key_dim)
+        self.val_attn_dim = self.val_dim * num_heads
+        key_attn_dim = key_dim * num_heads
+        self.resolution = resolution
+
+        self.qkv = nn.Linear(dim, key_attn_dim * 2 + self.val_attn_dim)
+        self.proj = nn.Linear(self.val_attn_dim, dim)
+
+        n = resolution * resolution
+        self.attention_biases = nn.Parameter(lucid.zeros(num_heads, n))
+        self._init_bias_idxs(resolution)
+
+    def _init_bias_idxs(self, resolution: int) -> None:
+        # Row-major (resolution x resolution) position grid; the relative
+        # index for a pair is |dy| * resolution + |dx|.  ``abs`` is computed
+        # through a float round-trip — integer ``abs`` is not available on
+        # the integer tensor path, and the indices are tiny so the cast is
+        # exact.
+        r = lucid.arange(resolution).to(lucid.int64)
+        n = resolution * resolution
+        ys = r.reshape(resolution, 1).expand(resolution, resolution).reshape(-1)
+        xs = r.reshape(1, resolution).expand(resolution, resolution).reshape(-1)
+        rel_y = (ys.reshape(n, 1) - ys.reshape(1, n)).to(lucid.float32).abs()
+        rel_x = (xs.reshape(n, 1) - xs.reshape(1, n)).to(lucid.float32).abs()
+        idx = (rel_y * resolution + rel_x).to(lucid.int64)  # (n, n)
+        self.register_buffer("attention_bias_idxs", idx, persistent=False)
+
+    def _bias(self) -> Tensor:
+        idx = cast(Tensor, self.attention_bias_idxs)
+        n = self.resolution * self.resolution
+        gathered = self.attention_biases[:, idx.reshape(-1)]  # (heads, n*n)
+        return gathered.reshape(self.num_heads, n, n)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        B, N, _ = x.shape
+        qkv = cast(Tensor, self.qkv(x))  # (B, N, key*2 + val) * heads
+        qkv = qkv.reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
+        q = qkv[:, :, :, : self.key_dim]
+        k = qkv[:, :, :, self.key_dim : 2 * self.key_dim]
+        v = qkv[:, :, :, 2 * self.key_dim :]
+
+        attn = (q @ k.permute(0, 1, 3, 2)) * self.scale  # (B, heads, N, N)
+        attn = attn + self._bias().reshape(1, self.num_heads, N, N)
+        attn = F.softmax(attn, dim=-1)
+
+        out = attn @ v  # (B, heads, N, val_dim)
+        out = out.permute(0, 2, 1, 3).reshape(B, N, self.val_attn_dim)
+        return cast(Tensor, self.proj(out))
+
+
+# ---------------------------------------------------------------------------
+# MetaBlock2d: 4-D pooling block (stages 1-3 + early blocks of last stage)
+# ---------------------------------------------------------------------------
+
+
+class _MetaBlock2d(nn.Module):
     """Pooling MetaFormer block operating in (B, C, H, W) layout."""
 
     def __init__(
         self,
         dim: int,
+        pool_size: int,
         mlp_ratio: float,
         drop_path_rate: float,
         layer_scale_init: float,
     ) -> None:
         super().__init__()
-        self.dwconv = nn.Conv2d(dim, dim, 3, padding=1, groups=dim)
-        self.bn = nn.BatchNorm2d(dim)
-        self.pool_mixer = _PoolingBlock()
-        self.norm = nn.LayerNorm(dim)
-        self.mlp = _MLP(dim, mlp_ratio)
+        self.token_mixer = _Pooling(pool_size)
         self.ls1 = LayerScale(dim, layer_scale_init)
+        self.drop_path1 = DropPath(drop_path_rate)
+        self.mlp = _ConvMlpWithNorm(dim, int(dim * mlp_ratio))
         self.ls2 = LayerScale(dim, layer_scale_init)
-        self.drop_path = DropPath(drop_path_rate)
+        self.drop_path2 = DropPath(drop_path_rate)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        # DWConv + BN (LePE-style local position encoding, no LayerScale).
-        shortcut = x
-        x = cast(Tensor, self.bn(cast(Tensor, self.dwconv(x))))
-        x = shortcut + x
-
-        # Pooling mixer (spatial) with LayerScale + DropPath.
         x = x + cast(
             Tensor,
-            self.drop_path(cast(Tensor, self.ls1(cast(Tensor, self.pool_mixer(x))))),
+            self.drop_path1(cast(Tensor, self.ls1(cast(Tensor, self.token_mixer(x))))),
         )
-
-        # MLP (channel-last) with LayerScale + DropPath. LayerScale applied
-        # in (B, C, H, W) layout after permute-back.
-        B, C, H, W = x.shape
-        x_cl = x.permute(0, 2, 3, 1)
-        x_cl = cast(Tensor, self.norm(x_cl))
-        x_cl = cast(Tensor, self.mlp(x_cl))
-        x_mlp = x_cl.permute(0, 3, 1, 2)
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls2(x_mlp))))
+        x = x + cast(
+            Tensor,
+            self.drop_path2(cast(Tensor, self.ls2(cast(Tensor, self.mlp(x))))),
+        )
         return x
 
 
 # ---------------------------------------------------------------------------
-# Stage 4 block: attention-based (sequence layout)
+# MetaBlock1d: 3-D attention block (last stage only)
 # ---------------------------------------------------------------------------
 
 
-class _EfficientFormerAttnBlock(nn.Module):
-    """Standard MHA transformer block for stage 4."""
+class _MetaBlock1d(nn.Module):
+    """Attention MetaFormer block operating in (B, N, C) layout."""
 
     def __init__(
         self,
         dim: int,
+        key_dim: int,
         num_heads: int,
+        attn_ratio: float,
+        resolution: int,
         mlp_ratio: float,
         drop_path_rate: float,
         layer_scale_init: float,
     ) -> None:
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
-        self.norm2 = nn.LayerNorm(dim)
-        self.mlp = _MLP(dim, mlp_ratio)
+        self.token_mixer = _Attention(dim, key_dim, num_heads, attn_ratio, resolution)
         self.ls1 = LayerScale(dim, layer_scale_init)
+        self.drop_path1 = DropPath(drop_path_rate)
+        self.norm2 = nn.LayerNorm(dim)
+        self.mlp = _Mlp(dim, int(dim * mlp_ratio))
         self.ls2 = LayerScale(dim, layer_scale_init)
-        self.drop_path = DropPath(drop_path_rate)
+        self.drop_path2 = DropPath(drop_path_rate)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        # x: (B, N, C)
-        n = cast(Tensor, self.norm1(x))
-        attn_out, _ = self.attn(n, n, n)
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls1(attn_out))))
-        m = cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))
-        x = x + cast(Tensor, self.drop_path(cast(Tensor, self.ls2(m))))
+        x = x + cast(
+            Tensor,
+            self.drop_path1(
+                cast(
+                    Tensor,
+                    self.ls1(cast(Tensor, self.token_mixer(cast(Tensor, self.norm1(x))))),
+                )
+            ),
+        )
+        x = x + cast(
+            Tensor,
+            self.drop_path2(
+                cast(Tensor, self.ls2(cast(Tensor, self.mlp(cast(Tensor, self.norm2(x))))))
+            ),
+        )
         return x
 
 
 # ---------------------------------------------------------------------------
-# Downsampling between stages
+# Flat: (B, C, H, W) -> (B, N, C) reshape (parameter-free placeholder block)
 # ---------------------------------------------------------------------------
 
 
-class _Downsample(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int) -> None:
-        super().__init__()
-        self.conv = nn.Conv2d(in_dim, out_dim, 3, stride=2, padding=1)
-        self.bn = nn.BatchNorm2d(out_dim)
+class _Flat(nn.Module):
+    """Flatten spatial dims and move channels last: (B,C,H,W) -> (B,H*W,C)."""
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        return cast(Tensor, self.bn(cast(Tensor, self.conv(x))))
+        return x.flatten(2).permute(0, 2, 1)
+
+
+# ---------------------------------------------------------------------------
+# Stage: optional downsample + a Sequence of (2d / Flat / 1d) blocks
+# ---------------------------------------------------------------------------
+
+
+class _Stage(nn.Module):
+    """One EfficientFormer stage: ``downsample`` (or identity) + ``blocks``.
+
+    The ``blocks`` index layout matches the reference implementation
+    exactly — including the parameter-free :class:`_Flat` placeholder that
+    transitions from 4-D pooling blocks to 3-D attention blocks — so the
+    published checkpoint loads with an identity key map.
+    """
+
+    def __init__(
+        self,
+        in_dim: int,
+        out_dim: int,
+        depth: int,
+        downsample: bool,
+        num_vit: int,
+        cfg: EfficientFormerConfig,
+        dp_rates: list[float],
+    ) -> None:
+        super().__init__()
+        if downsample:
+            self.downsample: nn.Module = _Downsample(in_dim, out_dim)
+            dim = out_dim
+        else:
+            self.downsample = nn.Identity()
+            dim = in_dim
+
+        blocks: list[nn.Module] = []
+        if num_vit and num_vit >= depth:
+            blocks.append(_Flat())
+
+        for block_idx in range(depth):
+            remain_idx = depth - block_idx - 1
+            if num_vit and num_vit > remain_idx:
+                blocks.append(
+                    _MetaBlock1d(
+                        dim,
+                        cfg.key_dim,
+                        cfg.num_heads,
+                        cfg.attn_ratio,
+                        cfg.resolution,
+                        cfg.mlp_ratios[-1],
+                        dp_rates[block_idx],
+                        cfg.layer_scale_init,
+                    )
+                )
+            else:
+                blocks.append(
+                    _MetaBlock2d(
+                        dim,
+                        cfg.pool_size,
+                        cfg.mlp_ratios[-1],
+                        dp_rates[block_idx],
+                        cfg.layer_scale_init,
+                    )
+                )
+                if num_vit and num_vit == remain_idx:
+                    blocks.append(_Flat())
+
+        self.blocks = nn.ModuleList(blocks)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        x = cast(Tensor, self.downsample(x))
+        for block in self.blocks:
+            x = cast(Tensor, block(x))
+        return x
 
 
 # ---------------------------------------------------------------------------
@@ -166,86 +403,65 @@ class _Downsample(nn.Module):
 
 
 def _build_efficientformer(cfg: EfficientFormerConfig) -> tuple[
-    nn.Sequential,  # stem
-    nn.ModuleList,  # stages (pool stages + attn stage)
-    nn.ModuleList,  # downsamplers (len = num_stages - 1)
-    nn.LayerNorm,  # head norm
+    _Stem,
+    nn.ModuleList,
+    nn.LayerNorm,
     list[FeatureInfo],
     int,
 ]:
-    # Stem: 2× Conv3×3 stride=2
-    stem = nn.Sequential(
-        nn.Conv2d(cfg.in_channels, cfg.embed_dims[0] // 2, 3, stride=2, padding=1),
-        nn.BatchNorm2d(cfg.embed_dims[0] // 2),
-        nn.ReLU(),
-        nn.Conv2d(cfg.embed_dims[0] // 2, cfg.embed_dims[0], 3, stride=2, padding=1),
-        nn.BatchNorm2d(cfg.embed_dims[0]),
-        nn.ReLU(),
-    )
+    stem = _Stem(cfg.in_channels, cfg.embed_dims[0])
 
     num_stages = len(cfg.depths)
     last_stage = num_stages - 1
 
-    stages: list[nn.Module] = []
-    downsamplers: list[nn.Module] = []
-    fi: list[FeatureInfo] = []
-    reduction = 4  # stem applies 4× downsampling
-
-    # Linear DropPath schedule across the whole trunk (paper §4.1).
-    total_blocks = sum(cfg.depths)
-    if total_blocks > 1 and cfg.drop_path_rate > 0.0:
-        dp_rates = [
-            cfg.drop_path_rate * i / (total_blocks - 1) for i in range(total_blocks)
-        ]
+    # Stage-wise linear stochastic-depth schedule (paper §4.1).
+    total = sum(cfg.depths)
+    if total > 1 and cfg.drop_path_rate > 0.0:
+        flat = [cfg.drop_path_rate * i / (total - 1) for i in range(total)]
     else:
-        dp_rates = [cfg.drop_path_rate] * total_blocks
+        flat = [cfg.drop_path_rate] * total
+
+    stages: list[nn.Module] = []
+    fi: list[FeatureInfo] = []
     cursor = 0
-
-    for i, (depth, dim, mlp_ratio) in enumerate(
-        zip(cfg.depths, cfg.embed_dims, cfg.mlp_ratios)
-    ):
-        if i < last_stage:
-            # Pooling-based blocks (4D)
-            stage = nn.Sequential(
-                *[
-                    _EfficientFormerPoolBlock(
-                        dim, mlp_ratio, dp_rates[cursor + j], cfg.layer_scale_init
-                    )
-                    for j in range(depth)
-                ]
-            )
-        else:
-            # Attention-based blocks (sequence) — num_heads auto
-            num_heads = max(1, dim // 32)
-            stage = nn.Sequential(
-                *[
-                    _EfficientFormerAttnBlock(
-                        dim,
-                        num_heads,
-                        mlp_ratio,
-                        dp_rates[cursor + j],
-                        cfg.layer_scale_init,
-                    )
-                    for j in range(depth)
-                ]
-            )
+    prev_dim = cfg.embed_dims[0]
+    for i, (depth, dim) in enumerate(zip(cfg.depths, cfg.embed_dims)):
+        dp_rates = flat[cursor : cursor + depth]
         cursor += depth
-        stages.append(stage)
-        fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=reduction))
-
-        if i < num_stages - 1:
-            downsamplers.append(_Downsample(dim, cfg.embed_dims[i + 1]))
-            reduction *= 2
+        stages.append(
+            _Stage(
+                prev_dim,
+                dim,
+                depth,
+                downsample=(i > 0),
+                num_vit=cfg.num_vit if i == last_stage else 0,
+                cfg=cfg,
+                dp_rates=dp_rates,
+            )
+        )
+        prev_dim = dim
+        fi.append(FeatureInfo(stage=i + 1, num_channels=dim, reduction=2 ** (i + 2)))
 
     head_norm = nn.LayerNorm(cfg.embed_dims[-1])
-    return (
-        stem,
-        nn.ModuleList(stages),
-        nn.ModuleList(downsamplers),
-        head_norm,
-        fi,
-        cfg.embed_dims[-1],
-    )
+    return stem, nn.ModuleList(stages), head_norm, fi, cfg.embed_dims[-1]
+
+
+def _forward_trunk(
+    stem: _Stem,
+    stages: nn.ModuleList,
+    head_norm: nn.LayerNorm,
+    x: Tensor,
+) -> Tensor:
+    """Run stem + stages, ending in channel-last (B, N, C), then LayerNorm."""
+    x = cast(Tensor, stem(x))
+    last = len(stages) - 1
+    for i, stage in enumerate(stages):
+        x = cast(Tensor, stage(x))
+        if i == last and x.ndim == 4:
+            # No attention block flattened the tensor (num_vit == 0): flatten now.
+            x = x.flatten(2).permute(0, 2, 1)
+    x = cast(Tensor, head_norm(x))  # (B, N, C)
+    return x
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +475,7 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
     EfficientFormer is a *mobile-grade* vision backbone designed so
     that its on-device latency, rather than its FLOP count, matches
     MobileNet on the same hardware while retaining transformer-level
-    accuracy.  The trunk has four stages preceded by a 2x stride-2
+    accuracy.  The trunk has four stages preceded by a two stride-2
     convolutional stem.  Stages 1-3 are MetaFormer-style *pooling*
     blocks operating in :math:`(B, C, H, W)` layout — no reshape, no
     self-attention:
@@ -269,13 +485,14 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
         \begin{aligned}
         x &\leftarrow x + \gamma_1 \odot \bigl(
             \mathrm{AvgPool}_{3 \times 3}(x) - x\bigr), \\
-        x &\leftarrow x + \gamma_2 \odot \mathrm{MLP}(x),
+        x &\leftarrow x + \gamma_2 \odot \mathrm{ConvMLP}(x),
         \end{aligned}
 
     with :math:`\gamma_1, \gamma_2` initialised to :math:`10^{-5}`
-    (CaiT-style layer scale).  Stage 4 is the only stage that pays the
-    cost of a reshape and runs standard multi-head self-attention on
-    the now-tiny token grid.
+    (CaiT-style layer scale).  The last stage switches its trailing
+    :math:`\texttt{num\_vit}` blocks to standard multi-head
+    self-attention with a learned relative-position bias on the
+    now-tiny token grid.
 
     :meth:`forward_features` returns the mean-pooled
     :math:`(B, \texttt{embed\_dims[-1]})` feature.
@@ -284,21 +501,20 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
     ----------
     config : EfficientFormerConfig
         Frozen dataclass specifying ``depths``, ``embed_dims``,
-        ``mlp_ratios``, ``drop_path_rate``, ``layer_scale_init``,
-        ``in_channels``, and ``num_classes``.  See
-        :class:`EfficientFormerConfig`.
+        ``mlp_ratios``, ``num_vit``, ``drop_path_rate``,
+        ``layer_scale_init``, ``in_channels``, and ``num_classes``.
+        See :class:`EfficientFormerConfig`.
 
     Attributes
     ----------
-    stem : nn.Sequential
+    stem : _Stem
         Two stride-2 :math:`3 \times 3` convolutions reducing the
         input by 4x.
     stages : nn.ModuleList
-        Four stages — three pooling stages and one attention stage.
-    downsamplers : nn.ModuleList
-        Three between-stage stride-2 convolutional downsamplers.
-    head_norm : nn.LayerNorm
-        Final LayerNorm applied to the channel-last pooled feature map.
+        Four stages — three pooling stages and one mixed
+        pooling/attention stage; stages 1-3 carry a downsample.
+    norm : nn.LayerNorm
+        Final LayerNorm applied to the channel-last token sequence.
     feature_info : list[FeatureInfo]
         Four-stage feature description with reductions
         :math:`(4, 8, 16, 32)`.
@@ -329,11 +545,10 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: EfficientFormerConfig) -> None:
         super().__init__(config)
-        stem, stages, downs, hn, fi, out_dim = _build_efficientformer(config)
+        stem, stages, hn, fi, out_dim = _build_efficientformer(config)
         self.stem = stem
         self.stages = stages
-        self.downsamplers = downs
-        self.head_norm = hn
+        self.norm = hn
         self._feature_info = fi
         self._out_dim = out_dim
 
@@ -342,29 +557,8 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
-        num_stages = len(self.stages)
-        last_stage = num_stages - 1
-
-        for i, stage in enumerate(self.stages):
-            if i < last_stage:
-                # Pool stages: (B, C, H, W)
-                x = cast(Tensor, stage(x))
-            else:
-                # Attention stage: flatten spatial → (B, N, C) → run → reshape back
-                B, C, H, W = x.shape
-                x_seq = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
-                x_seq = cast(Tensor, stage(x_seq))
-                x = x_seq.permute(0, 2, 1).reshape(B, C, H, W)
-
-            if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
-
-        # Global mean pool → (B, C)
-        B, C, H, W = x.shape
-        x_cl = x.permute(0, 2, 3, 1).reshape(B, H * W, C)  # (B, N, C)
-        x_cl = cast(Tensor, self.head_norm(x_cl))
-        return x_cl.mean(dim=1)
+        seq = _forward_trunk(self.stem, self.stages, self.norm, x)  # (B, N, C)
+        return seq.mean(dim=1)
 
     def forward(self, x: Tensor) -> BaseModelOutput:  # type: ignore[override]
         feat = self.forward_features(x)
@@ -372,23 +566,29 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
 
 
 # ---------------------------------------------------------------------------
-# EfficientFormer for image classification
+# EfficientFormer for image classification (distilled dual head)
 # ---------------------------------------------------------------------------
 
 
 class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadMixin):
-    r"""EfficientFormer with a linear classification head (Li et al., 2022).
+    r"""EfficientFormer with a distilled dual classification head (Li et al., 2022).
 
-    Wraps the same trunk as :class:`EfficientFormer` (stem + three
-    pooling stages + one attention stage) and adds a mean pool over
-    tokens, a final LayerNorm, and a single :class:`nn.Linear`
-    classification head:
+    Wraps the same trunk as :class:`EfficientFormer` and adds a final
+    LayerNorm, a mean pool over tokens, and *two* linear heads — the
+    classification head and the distillation head — whose logits are
+    averaged at inference:
 
     .. math::
 
-        \text{logits} = W_{\text{head}}\,
-            \mathrm{Mean}(\mathrm{LN}(z^{L}))
-            + b_{\text{head}}.
+        \text{logits} = \tfrac{1}{2}\bigl(
+            W_{\text{head}}\,z + b_{\text{head}}
+            + W_{\text{dist}}\,z + b_{\text{dist}}\bigr),
+        \qquad
+        z = \mathrm{Mean}(\mathrm{LN}(z^{L})).
+
+    The published EfficientFormer checkpoints were trained with hard
+    knowledge distillation (DeiT-style), so reproducing the reported
+    top-1 accuracy requires averaging both heads.
 
     Pass ``labels`` to :meth:`forward` to compute the cross-entropy
     loss in the same pass.
@@ -402,17 +602,17 @@ class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadM
 
     Attributes
     ----------
-    stem : nn.Sequential
+    stem : _Stem
         Two stride-2 convolutions.
     stages : nn.ModuleList
-        Three pooling stages + one attention stage.
-    downsamplers : nn.ModuleList
-        Three between-stage downsamplers.
-    head_norm : nn.LayerNorm
+        Three pooling stages + one mixed pooling/attention stage.
+    norm : nn.LayerNorm
         Final LayerNorm.
-    classifier : nn.Linear
-        Final linear projection of width
-        ``(num_classes, embed_dims[-1])``.
+    head : nn.Linear
+        Classification head ``(num_classes, embed_dims[-1])``.
+    head_dist : nn.Linear
+        Distillation head ``(num_classes, embed_dims[-1])``; averaged
+        with ``head`` at inference.
 
     Notes
     -----
@@ -442,39 +642,28 @@ class EfficientFormerForImageClassification(PretrainedModel, ClassificationHeadM
 
     def __init__(self, config: EfficientFormerConfig) -> None:
         super().__init__(config)
-        stem, stages, downs, hn, _, out_dim = _build_efficientformer(config)
+        stem, stages, hn, _, out_dim = _build_efficientformer(config)
         self.stem = stem
         self.stages = stages
-        self.downsamplers = downs
-        self.head_norm = hn
-        self._build_classifier(out_dim, config.num_classes)
+        self.norm = hn
+        self.head = nn.Linear(out_dim, config.num_classes)
+        self.head_dist = nn.Linear(out_dim, config.num_classes)
+
+    def reset_classifier(self, num_classes: int) -> None:
+        in_features = int(self.head.in_features)
+        self.head = nn.Linear(in_features, num_classes)
+        self.head_dist = nn.Linear(in_features, num_classes)
 
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
-        num_stages = len(self.stages)
-        last_stage = num_stages - 1
-
-        for i, stage in enumerate(self.stages):
-            if i < last_stage:
-                x = cast(Tensor, stage(x))
-            else:
-                B, C, H, W = x.shape
-                x_seq = x.flatten(2).permute(0, 2, 1)
-                x_seq = cast(Tensor, stage(x_seq))
-                x = x_seq.permute(0, 2, 1).reshape(B, C, H, W)
-
-            if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
-
-        B, C, H, W = x.shape
-        x_cl = x.permute(0, 2, 3, 1).reshape(B, H * W, C)
-        x_cl = cast(Tensor, self.head_norm(x_cl))
-        feat = x_cl.mean(dim=1)
-        logits = cast(Tensor, self.classifier(feat))
+        seq = _forward_trunk(self.stem, self.stages, self.norm, x)  # (B, N, C)
+        feat = seq.mean(dim=1)
+        logits = (
+            cast(Tensor, self.head(feat)) + cast(Tensor, self.head_dist(feat))
+        ) / 2.0
 
         loss: Tensor | None = None
         if labels is not None:

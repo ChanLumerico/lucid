@@ -80,5 +80,89 @@ class TestEfficientFormerRegistry(unittest.TestCase):
         self.assertIsInstance(m, EfficientFormer)
 
 
+_SHIPPED = (
+    (
+        "efficientformer_l1_cls",
+        "efficientformer-l1",
+        "efficientformer_l1.snap_dist_in1k",
+        12_289_928,
+    ),
+    (
+        "efficientformer_l3_cls",
+        "efficientformer-l3",
+        "efficientformer_l3.snap_dist_in1k",
+        31_406_000,
+    ),
+    (
+        "efficientformer_l7_cls",
+        "efficientformer-l7",
+        "efficientformer_l7.snap_dist_in1k",
+        82_229_328,
+    ),
+)
+
+
+class TestEfficientFormerWeightsEnums(unittest.TestCase):
+    """Static contract of the per-variant Weights enums — no network."""
+
+    def _enums(self) -> tuple[type, ...]:
+        from lucid.models.weights import (
+            EfficientFormerL1Weights,
+            EfficientFormerL3Weights,
+            EfficientFormerL7Weights,
+        )
+
+        return (
+            EfficientFormerL1Weights,
+            EfficientFormerL3Weights,
+            EfficientFormerL7Weights,
+        )
+
+    def test_default_aliases_snap_dist_in1k(self) -> None:
+        for cls in self._enums():
+            self.assertIs(cls.DEFAULT, cls.SNAP_DIST_IN1K)
+
+    def test_entry_fields(self) -> None:
+        for cls, (_fac, slug, src, nparams) in zip(self._enums(), _SHIPPED):
+            e = cls.SNAP_DIST_IN1K.entry
+            self.assertEqual(e.num_classes, 1000)
+            self.assertIn(f"lucid-dl/{slug}", e.url)
+            self.assertIn("/SNAP_DIST_IN1K/", e.url)
+            self.assertEqual(cls.SNAP_DIST_IN1K.meta["source"], f"timm/{src}")
+            self.assertEqual(cls.SNAP_DIST_IN1K.meta["license"], "apache-2.0")
+            self.assertEqual(cls.SNAP_DIST_IN1K.meta["num_params"], nparams)
+
+    def test_transforms_bicubic_224(self) -> None:
+        for cls in self._enums():
+            tf = cls.SNAP_DIST_IN1K.transforms()
+            self.assertEqual(tf.crop_size, 224)
+            self.assertEqual(tf.resize_size, 236)
+            self.assertEqual(tf.interpolation, "bicubic")
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        for fac, *_ in _SHIPPED:
+            self.assertIn("SNAP_DIST_IN1K", list_pretrained(fac))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestEfficientFormerPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA-verify + load into model."""
+
+    def test_l1_default(self) -> None:
+        m = models.efficientformer_l1_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
+
+    def test_l3_string_tag(self) -> None:
+        m = models.efficientformer_l3_cls(pretrained="SNAP_DIST_IN1K")
+        self.assertIsInstance(m, EfficientFormerForImageClassification)
+
+
 if __name__ == "__main__":
     unittest.main()

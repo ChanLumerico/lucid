@@ -13,6 +13,11 @@ from lucid.models.vision.efficientformer._pretrained import (
     efficientformer_l7,
     efficientformer_l7_cls,
 )
+from lucid.models.vision.efficientformer._weights import (
+    EfficientFormerL1Weights,
+    EfficientFormerL3Weights,
+    EfficientFormerL7Weights,
+)
 
 __all__ = [
     "EfficientFormerConfig",
@@ -24,4 +29,7 @@ __all__ = [
     "efficientformer_l3_cls",
     "efficientformer_l7",
     "efficientformer_l7_cls",
+    "EfficientFormerL1Weights",
+    "EfficientFormerL3Weights",
+    "EfficientFormerL7Weights",
 ]

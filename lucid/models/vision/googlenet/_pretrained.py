@@ -1,11 +1,13 @@
 """Registry factories for GoogLeNet."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
 from lucid.models.vision.googlenet._model import (
     GoogLeNet,
     GoogLeNetForImageClassification,
 )
+from lucid.models.vision.googlenet._weights import GoogLeNetWeights
 
 _CFG = GoogLeNetConfig()
 _CFG_NO_AUX = GoogLeNetConfig(aux_logits=False)
@@ -66,7 +68,7 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     return GoogLeNet(cfg)
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: googlenet_cls adds a typed weights= kwarg (GoogLeNetWeights); the ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="googlenet",
     model_type="googlenet",
@@ -74,7 +76,10 @@ def googlenet(pretrained: bool = False, **overrides: object) -> GoogLeNet:
     default_config=_CFG,
 )
 def googlenet_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: GoogLeNetWeights | None = None,
+    **overrides: object,
 ) -> GoogLeNetForImageClassification:
     r"""GoogLeNet (Inception v1) image classifier with auxiliary heads.
 
@@ -83,15 +88,19 @@ def googlenet_cls(
     + global-average-pool + dropout (``p=0.4``) + linear projection to
     ``config.num_classes``, plus two auxiliary classifiers attached at
     Inception 4a and 4d (enabled by default via ``aux_logits=True``).
-    Approximately 13 M parameters total when auxiliary heads are
-    included, ≈6.8 M without.  Achieves a top-5 ImageNet-1k validation
-    error of 6.67%.
+    Approximately 13.0 M parameters total when auxiliary heads are
+    included.  Reaches **69.778% top-1 on ImageNet-1k**.
 
     Parameters
     ----------
-    pretrained : bool, optional, default=False
-        Reserved for future pretrained-weight loading.  Currently
-        ignored.
+    pretrained : bool or str, optional, default=False
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag (:attr:`GoogLeNetWeights.IMAGENET1K_V1`);
+        a tag string → that specific checkpoint.  Mutually exclusive
+        with ``weights`` (which wins if both are given).
+    weights : GoogLeNetWeights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides
         Keyword overrides forwarded into :class:`GoogLeNetConfig`.  Use
         ``aux_logits=False`` to disable auxiliary classifiers for
@@ -112,6 +121,9 @@ def googlenet_cls(
     vanishing gradients in this 22-layer network without the benefit of
     residual connections; they contribute to the loss with weight
     :math:`0.3` each during training and are discarded at inference.
+    Pretrained weights are converted from torchvision's
+    ``GoogLeNet_Weights.IMAGENET1K_V1`` and hosted under
+    ``lucid-dl/googlenet``.
 
     Examples
     --------
@@ -123,5 +135,9 @@ def googlenet_cls(
     >>> out.logits.shape
     (2, 1000)
     """
+    entry = weights_mod.resolve_weights(GoogLeNetWeights, pretrained, weights)
     cfg = GoogLeNetConfig(**{**_CFG.__dict__, **overrides}) if overrides else _CFG
-    return GoogLeNetForImageClassification(cfg)
+    model = GoogLeNetForImageClassification(cfg)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="googlenet_cls")
+    return model

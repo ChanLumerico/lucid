@@ -15,6 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-29
 
+### Added — Pretrained weights: GoogLeNet + EfficientFormer (reference-faithful rebuilds)
+
+Two families needed a topology rebuild to match their upstream
+checkpoints; both now ship pretrained weights (enums on
+`lucid.models.weights`, parity ~6e-6):
+
+- **googlenet** — `googlenet_cls` ← torchvision
+  `GoogLeNet_Weights.IMAGENET1K_V1` (Szegedy et al., 2014).  Rebuilt to
+  the batch-normalised reference: every conv is now a `Conv→BN(eps
+  1e-3)→ReLU` block, the "5×5" branch uses the reference's 3×3 conv,
+  the stem/inter-stage pools use ceil-mode sizing (a stateless
+  `_CeilMaxPool2d` shim emulates `ceil_mode`, which the engine pool
+  ignores), `maxpool4` is kernel-2, and the classifier owns the two
+  auxiliary heads so the checkpoint key-set matches.
+- **efficientformer** — `efficientformer_l{1,3,7}_cls` ← timm
+  `efficientformer_l*.snap_dist_in1k` (Li et al., 2022; SNAP_DIST_IN1K).
+  Full rebuild to timm's module tree: `_Stem`, per-stage
+  `downsample`+`blocks`, 4D `_MetaBlock2d` (pooling token-mixer +
+  conv-MLP) with a parameter-free `_Flat` marker at the 4D→3D
+  transition, 3D `_MetaBlock1d` (LeViT-style attention with a learned
+  `attention_biases` table), and a distilled dual head averaged at
+  inference.
+
 ### Fixed — Reference-parity model corrections (ViT / MaxViT / MobileNetV1 / ResNeSt / Swin)
 
 Five families carried subtle forward-path divergences from their

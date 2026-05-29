@@ -45,16 +45,18 @@ class TestGoogLeNetConfig(unittest.TestCase):
 class TestGoogLeNetParamCounts(unittest.TestCase):
 
     def test_backbone_params(self) -> None:
-        self.assertEqual(googlenet().num_parameters(), 5_973_552)
+        # Batch-normalised reference topology (Conv→BN→ReLU primitives).
+        self.assertEqual(googlenet().num_parameters(), 5_599_904)
 
     def test_classifier_params(self) -> None:
-        # Paper-exact: 13,378,280 (backbone + head + 2 aux classifiers)
-        self.assertEqual(googlenet_cls().num_parameters(), 13_378_280)
+        # Reference checkpoint: 13,004,888 (backbone + head + 2 aux heads).
+        self.assertEqual(googlenet_cls().num_parameters(), 13_004_888)
 
     def test_no_aux_fewer_params(self) -> None:
         m = GoogLeNetForImageClassification(GoogLeNetConfig(aux_logits=False))
-        # Without aux: backbone + head only
-        self.assertLess(m.num_parameters(), 13_378_280)
+        # Without aux: backbone + head only (the reference 6.6M count).
+        self.assertEqual(m.num_parameters(), 6_624_904)
+        self.assertLess(m.num_parameters(), 13_004_888)
 
 
 class TestGoogLeNetBackbone(unittest.TestCase):
@@ -182,6 +184,55 @@ class TestGoogLeNetSerialization(unittest.TestCase):
             m2.eval()
             diff = float((before - m2(x).logits).abs().max().item())
         self.assertAlmostEqual(diff, 0.0, places=6)
+
+
+class TestGoogLeNetWeightsEnums(unittest.TestCase):
+    """Static contract of the ``GoogLeNetWeights`` enum."""
+
+    def test_default_aliases_imagenet1k_v1(self) -> None:
+        from lucid.models.weights import GoogLeNetWeights
+
+        self.assertIs(GoogLeNetWeights.DEFAULT, GoogLeNetWeights.IMAGENET1K_V1)
+
+    def test_entry_fields(self) -> None:
+        from lucid.models.weights import GoogLeNetWeights
+
+        e = GoogLeNetWeights.IMAGENET1K_V1.entry
+        self.assertEqual(e.num_classes, 1000)
+        self.assertIn("lucid-dl/googlenet", e.url)
+        self.assertIn("IMAGENET1K_V1", e.url)
+
+    def test_meta_provenance(self) -> None:
+        from lucid.models.weights import GoogLeNetWeights
+
+        meta = GoogLeNetWeights.IMAGENET1K_V1.meta
+        self.assertEqual(
+            meta["source"], "torchvision/GoogLeNet_Weights.IMAGENET1K_V1"
+        )
+        self.assertEqual(meta["num_params"], 13_004_888)
+        self.assertEqual(meta["license"], "bsd-3-clause")
+        self.assertAlmostEqual(meta["metrics"]["ImageNet-1k"]["acc@1"], 69.778)
+
+    def test_registry_discoverable(self) -> None:
+        from lucid.weights import list_pretrained
+
+        self.assertIn("IMAGENET1K_V1", list_pretrained("googlenet_cls"))
+
+
+@unittest.skipUnless(
+    __import__("os").environ.get("LUCID_TEST_NETWORK") == "1",
+    "set LUCID_TEST_NETWORK=1 to exercise the Hugging Face Hub download",
+)
+class TestGoogLeNetPretrainedLoad(unittest.TestCase):
+    """End-to-end: download + SHA verify + load + forward."""
+
+    def test_googlenet_default(self) -> None:
+        from lucid.models import googlenet_cls
+
+        m = googlenet_cls(pretrained=True)
+        m.eval()
+        out = m(lucid.randn(1, 3, 224, 224))
+        self.assertEqual(out.logits.shape, (1, 1000))
 
 
 if __name__ == "__main__":

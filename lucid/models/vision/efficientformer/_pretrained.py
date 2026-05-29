@@ -1,10 +1,16 @@
 """Registry factories for EfficientFormer variants."""
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.vision.efficientformer._config import EfficientFormerConfig
 from lucid.models.vision.efficientformer._model import (
     EfficientFormer,
     EfficientFormerForImageClassification,
+)
+from lucid.models.vision.efficientformer._weights import (
+    EfficientFormerL1Weights,
+    EfficientFormerL3Weights,
+    EfficientFormerL7Weights,
 )
 
 # Paper §4.1 / appendix: linear stochastic-depth schedule with max rate
@@ -13,6 +19,7 @@ _CFG_L1 = EfficientFormerConfig(
     depths=(3, 2, 6, 4),
     embed_dims=(48, 96, 224, 448),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    num_vit=1,
     drop_path_rate=0.0,
 )
 
@@ -20,6 +27,7 @@ _CFG_L3 = EfficientFormerConfig(
     depths=(4, 4, 12, 6),
     embed_dims=(64, 128, 320, 512),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    num_vit=4,
     drop_path_rate=0.1,
 )
 
@@ -27,6 +35,7 @@ _CFG_L7 = EfficientFormerConfig(
     depths=(6, 6, 18, 8),
     embed_dims=(96, 192, 384, 768),
     mlp_ratios=(4.0, 4.0, 4.0, 4.0),
+    num_vit=8,
     drop_path_rate=0.2,
 )
 
@@ -198,7 +207,7 @@ def efficientformer_l7(
 # ── Classifiers ───────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l1_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -206,20 +215,29 @@ def efficientformer_l7(
     default_config=_CFG_L1,
 )
 def efficientformer_l1_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientFormerL1Weights | None = None,
+    **overrides: object,
 ) -> EfficientFormerForImageClassification:
     r"""EfficientFormer-L1 image classifier (Li et al., 2022).
 
-    Combines the :func:`efficientformer_l1` backbone with a mean pool
-    + LayerNorm + single :class:`nn.Linear` classification head.
-    Default output is ``num_classes=1000`` (ImageNet-1k).  ~12.3M
-    parameters.
+    Combines the :func:`efficientformer_l1` backbone with a final
+    LayerNorm, a mean pool over tokens, and a distilled dual head
+    (``head`` + ``head_dist``) averaged at inference.  Default output is
+    ``num_classes=1000`` (ImageNet-1k).  ~12.3M parameters.
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientFormerL1Weights.SNAP_DIST_IN1K`); a tag string
+        → that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : EfficientFormerL1Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical L1 config.
 
@@ -232,7 +250,10 @@ def efficientformer_l1_cls(
     Notes
     -----
     EfficientFormer-L1 reaches **79.2% top-1 on ImageNet-1k** at
-    MobileNetV2-class latency (Li et al., 2022, Table 4).
+    MobileNetV2-class latency (Li et al., 2022, Table 4).  Pretrained
+    weights are converted from timm's
+    ``efficientformer_l1.snap_dist_in1k`` and hosted under
+    ``lucid-dl/efficientformer-l1``.
 
     Examples
     --------
@@ -243,10 +264,14 @@ def efficientformer_l1_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L1, overrides)
+    entry = weights_mod.resolve_weights(EfficientFormerL1Weights, pretrained, weights)
+    model = _c(_CFG_L1, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientformer_l1_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l3_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -254,19 +279,29 @@ def efficientformer_l1_cls(
     default_config=_CFG_L3,
 )
 def efficientformer_l3_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientFormerL3Weights | None = None,
+    **overrides: object,
 ) -> EfficientFormerForImageClassification:
     r"""EfficientFormer-L3 image classifier (Li et al., 2022).
 
     Combines the :func:`efficientformer_l3` backbone (``depths=
-    (4, 4, 12, 6)``, ``embed_dims=(64, 128, 320, 512)``) with a mean
-    pool + LayerNorm + linear classification head.  ~30.9M parameters.
+    (4, 4, 12, 6)``, ``embed_dims=(64, 128, 320, 512)``) with a final
+    LayerNorm, mean pool, and a distilled dual head (``head`` +
+    ``head_dist``) averaged at inference.  ~31.4M parameters.
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientFormerL3Weights.SNAP_DIST_IN1K`); a tag string
+        → that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : EfficientFormerL3Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical L3 config.
 
@@ -278,7 +313,9 @@ def efficientformer_l3_cls(
     Notes
     -----
     EfficientFormer-L3 reaches **82.4% top-1 on ImageNet-1k** (Li
-    et al., 2022, Table 4).
+    et al., 2022, Table 4).  Pretrained weights are converted from
+    timm's ``efficientformer_l3.snap_dist_in1k`` and hosted under
+    ``lucid-dl/efficientformer-l3``.
 
     Examples
     --------
@@ -289,10 +326,14 @@ def efficientformer_l3_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L3, overrides)
+    entry = weights_mod.resolve_weights(EfficientFormerL3Weights, pretrained, weights)
+    model = _c(_CFG_L3, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientformer_l3_cls")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: efficientformer_l7_cls adds typed weights= kwarg (per-model WeightsEnum); ModelFactory protocol predates the v3.1 weights system and still names only pretrained + **overrides.
     task="image-classification",
     family="efficientformer",
     model_type="efficientformer",
@@ -300,20 +341,30 @@ def efficientformer_l3_cls(
     default_config=_CFG_L7,
 )
 def efficientformer_l7_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: EfficientFormerL7Weights | None = None,
+    **overrides: object,
 ) -> EfficientFormerForImageClassification:
     r"""EfficientFormer-L7 image classifier (Li et al., 2022).
 
     Combines the :func:`efficientformer_l7` backbone (``depths=
-    (6, 6, 18, 8)``, ``embed_dims=(96, 192, 384, 768)``) with a mean
-    pool + LayerNorm + linear classification head.  ~81.5M parameters
-    — the largest EfficientFormer variant.
+    (6, 6, 18, 8)``, ``embed_dims=(96, 192, 384, 768)``) with a final
+    LayerNorm, mean pool, and a distilled dual head (``head`` +
+    ``head_dist``) averaged at inference.  ~82.2M parameters — the
+    largest EfficientFormer variant.
 
     Parameters
     ----------
-    pretrained : bool, optional
-        If ``True``, loads ImageNet-1k pretrained weights when
-        available.  Defaults to ``False``.
+    pretrained : bool or str, optional
+        Pretrained-weight selector.  ``False`` → random init; ``True``
+        → the ``DEFAULT`` tag
+        (:attr:`EfficientFormerL7Weights.SNAP_DIST_IN1K`); a tag string
+        → that specific checkpoint.  Mutually exclusive with ``weights``
+        (which wins if both are given).
+    weights : EfficientFormerL7Weights, optional, keyword-only
+        Explicit weights enum member.  Takes precedence over
+        ``pretrained``.
     **overrides : object
         Keyword overrides on top of the canonical L7 config.
 
@@ -326,6 +377,9 @@ def efficientformer_l7_cls(
     -----
     EfficientFormer-L7 reaches **83.3% top-1 on ImageNet-1k** (Li
     et al., 2022, Table 4) — the headline result of the paper.
+    Pretrained weights are converted from timm's
+    ``efficientformer_l7.snap_dist_in1k`` and hosted under
+    ``lucid-dl/efficientformer-l7``.
 
     Examples
     --------
@@ -336,4 +390,8 @@ def efficientformer_l7_cls(
     >>> model(x).logits.shape
     (1, 1000)
     """
-    return _c(_CFG_L7, overrides)
+    entry = weights_mod.resolve_weights(EfficientFormerL7Weights, pretrained, weights)
+    model = _c(_CFG_L7, overrides)
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="efficientformer_l7_cls")
+    return model

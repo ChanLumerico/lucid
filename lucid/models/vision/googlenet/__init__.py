@@ -7,6 +7,7 @@ from lucid.models.vision.googlenet._model import (
     GoogLeNetOutput,
 )
 from lucid.models.vision.googlenet._pretrained import googlenet, googlenet_cls
+from lucid.models.vision.googlenet._weights import GoogLeNetWeights
 
 __all__ = [
     "GoogLeNetConfig",
@@ -15,4 +16,5 @@ __all__ = [
     "GoogLeNetOutput",
     "googlenet",
     "googlenet_cls",
+    "GoogLeNetWeights",
 ]

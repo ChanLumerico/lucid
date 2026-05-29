@@ -6,21 +6,32 @@ Architecture overview:
     Stem   : Conv7×7-s2 → MaxPool3×3-s2 → Conv1×1 → Conv3×3 → MaxPool3×3-s2
     Stage 3: Inception(3a) → Inception(3b) → MaxPool3×3-s2
     Stage 4: Inception(4a)[→aux1] → (4b) → (4c) → (4d)[→aux2] → (4e)
-             → MaxPool3×3-s2
+             → MaxPool2×2-s2
     Stage 5: Inception(5a) → Inception(5b)
     Head   : AdaptiveAvgPool(1×1) → Dropout(0.4) → FC(1024, num_classes)
 
 Each Inception module is a four-branch parallel block:
     branch1 : 1×1 conv
     branch2 : 1×1 conv → 3×3 conv
-    branch3 : 1×1 conv → 5×5 conv
+    branch3 : 1×1 conv → 3×3 conv
     branch4 : 3×3 max pool → 1×1 conv
     → channel-wise concat
 
-The two auxiliary classifiers (training only) attach at Inception 4a and 4d:
-    AvgPool5×5-s3 → Conv1×1(128) → FC(1024) → Dropout(0.7) → FC(num_classes)
+This implementation mirrors the canonical batch-normalised reference
+implementation: every convolution is wrapped in a
+:class:`_BasicConv2d` (Conv → BatchNorm → ReLU), the third Inception
+branch uses a :math:`3\times3` convolution rather than the
+paper's :math:`5\times5`, and every max-pool uses ``ceil_mode=True``.
+This makes the architecture state-dict-compatible with the widely
+distributed ImageNet-1k checkpoint.
+
+The two auxiliary classifiers (training only) attach at Inception 4a
+and 4d:
+    AdaptiveAvgPool(4×4) → Conv1×1(128) → FC(1024) → Dropout(0.7)
+    → FC(num_classes)
 """
 
+import math
 from dataclasses import dataclass
 from typing import ClassVar, cast
 
@@ -31,6 +42,90 @@ from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._mixins import BackboneMixin, ClassificationHeadMixin, FeatureInfo
 from lucid.models.vision.googlenet._config import GoogLeNetConfig
+
+# Large finite stand-in for ``-inf`` used to pad the extra ceil-mode
+# window so it never wins a max against real activations.
+_NEG_FILL = -1e30
+
+
+# ---------------------------------------------------------------------------
+# Ceil-mode max pool (stateless)
+# ---------------------------------------------------------------------------
+
+
+class _CeilMaxPool2d(nn.Module):
+    r"""Max pool with ``ceil_mode=True`` semantics.
+
+    The compute engine's :func:`~lucid.nn.functional.max_pool2d` only
+    implements floor-mode output sizing.  GoogLeNet's reference
+    implementation pools with ceiling-mode sizing, which yields one extra
+    output row/column whenever the final window overhangs the (padded)
+    input edge.  This module reproduces that behaviour by padding the
+    bottom / right with a large negative fill so a floor-mode pool emits
+    the ceil-mode output size and identical values (the negative fill can
+    never win a max against real activations).
+
+    Carries no parameters, so it is invisible to ``state_dict`` and does
+    not affect weight loading.
+    """
+
+    def __init__(self, kernel_size: int, stride: int, padding: int = 0) -> None:
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.padding = padding
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        k, s, p = self.kernel_size, self.stride, self.padding
+        _, _, h, w = x.shape
+
+        def _ceil_out(length: int) -> int:
+            return math.ceil((length + 2 * p - k) / s) + 1
+
+        oh, ow = _ceil_out(int(h)), _ceil_out(int(w))
+        need_h = max((oh - 1) * s + k - (int(h) + 2 * p), 0)
+        need_w = max((ow - 1) * s + k - (int(w) + 2 * p), 0)
+        if need_h or need_w:
+            x = F.pad(x, (0, need_w, 0, need_h), mode="constant", value=_NEG_FILL)
+        return F.max_pool2d(x, k, stride=s, padding=p)
+
+    def extra_repr(self) -> str:
+        return (
+            f"kernel_size={self.kernel_size}, stride={self.stride}, "
+            f"padding={self.padding}, ceil_mode=True"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Basic Conv → BatchNorm → ReLU block
+# ---------------------------------------------------------------------------
+
+
+class _BasicConv2d(nn.Module):
+    """Conv (no bias) → BatchNorm → ReLU, the GoogLeNet conv primitive."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+    ) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=False,
+        )
+        self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
+
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        return F.relu(cast(Tensor, self.bn(cast(Tensor, self.conv(x)))))
+
 
 # ---------------------------------------------------------------------------
 # Inception module
@@ -51,30 +146,22 @@ class _InceptionModule(nn.Module):
         out_pool_proj: int,
     ) -> None:
         super().__init__()
-        # Branch 1: 1×1
-        self.branch1 = nn.Sequential(
-            nn.Conv2d(in_channels, out_1x1, 1),
-            nn.ReLU(inplace=True),
-        )
+        # Branch 1: 1×1 (named directly, not wrapped in a Sequential)
+        self.branch1 = _BasicConv2d(in_channels, out_1x1, kernel_size=1)
         # Branch 2: 1×1 → 3×3
         self.branch2 = nn.Sequential(
-            nn.Conv2d(in_channels, out_3x3_reduce, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_3x3_reduce, out_3x3, 3, padding=1),
-            nn.ReLU(inplace=True),
+            _BasicConv2d(in_channels, out_3x3_reduce, kernel_size=1),
+            _BasicConv2d(out_3x3_reduce, out_3x3, kernel_size=3, padding=1),
         )
-        # Branch 3: 1×1 → 5×5
+        # Branch 3: 1×1 → 3×3 (the reference 5×5-branch deviation)
         self.branch3 = nn.Sequential(
-            nn.Conv2d(in_channels, out_5x5_reduce, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_5x5_reduce, out_5x5, 5, padding=2),
-            nn.ReLU(inplace=True),
+            _BasicConv2d(in_channels, out_5x5_reduce, kernel_size=1),
+            _BasicConv2d(out_5x5_reduce, out_5x5, kernel_size=3, padding=1),
         )
         # Branch 4: 3×3 max pool → 1×1
         self.branch4 = nn.Sequential(
-            nn.MaxPool2d(3, stride=1, padding=1),
-            nn.Conv2d(in_channels, out_pool_proj, 1),
-            nn.ReLU(inplace=True),
+            _CeilMaxPool2d(3, stride=1, padding=1),
+            _BasicConv2d(in_channels, out_pool_proj, kernel_size=1),
         )
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
@@ -95,17 +182,17 @@ class _AuxClassifier(nn.Module):
 
     def __init__(self, in_channels: int, num_classes: int, dropout: float) -> None:
         super().__init__()
-        self.avgpool = nn.AdaptiveAvgPool2d((4, 4))
-        self.conv = nn.Conv2d(in_channels, 128, 1)
+        self.conv = _BasicConv2d(in_channels, 128, kernel_size=1)
         self.fc1 = nn.Linear(128 * 4 * 4, 1024)
-        self.drop = nn.Dropout(p=dropout)
         self.fc2 = nn.Linear(1024, num_classes)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
-        x = cast(Tensor, self.avgpool(x))
-        x = F.relu(cast(Tensor, self.conv(x)))
+        x = F.adaptive_avg_pool2d(x, (4, 4))
+        x = cast(Tensor, self.conv(x))
         x = x.flatten(1)
-        x = cast(Tensor, self.drop(F.relu(cast(Tensor, self.fc1(x)))))
+        x = F.relu(cast(Tensor, self.fc1(x)))
+        x = cast(Tensor, self.dropout(x))
         return cast(Tensor, self.fc2(x))
 
 
@@ -175,27 +262,8 @@ class GoogLeNetOutput:
     loss: Tensor | None = None
 
 
-# ---------------------------------------------------------------------------
-# Shared stem builder
-# ---------------------------------------------------------------------------
-
-
-def _build_stem(in_channels: int) -> nn.Sequential:
-    return nn.Sequential(
-        nn.Conv2d(in_channels, 64, 7, stride=2, padding=3),
-        nn.ReLU(inplace=True),
-        nn.MaxPool2d(3, stride=2, padding=1),
-        nn.Conv2d(64, 64, 1),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(64, 192, 3, padding=1),
-        nn.ReLU(inplace=True),
-        nn.MaxPool2d(3, stride=2, padding=1),
-    )
-
-
-# Inception module specs: (out_1x1, out_3x3r, out_3x3, out_5x5r, out_5x5, out_pool)
+# Inception module specs: (in_ch, 1x1, 3x3r, 3x3, 5x5r, 5x5, pool)
 _INCEPTION_SPECS: list[tuple[int, int, int, int, int, int, int]] = [
-    # in_ch, 1x1, 3x3r, 3x3, 5x5r, 5x5, pool
     (192, 64, 96, 128, 16, 32, 32),  # 3a → 256
     (256, 128, 128, 192, 32, 96, 64),  # 3b → 480
     # after maxpool(3×3 s2)
@@ -230,9 +298,10 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     :class:`_InceptionModule` blocks grouped into three stages
     (Inception 3a-3b → MaxPool → 4a-4e → MaxPool → 5a-5b) and a final
     :class:`~lucid.nn.AdaptiveAvgPool2d` to a :math:`1\times1` spatial
-    map.  The two auxiliary classifiers attached at Inception 4a and
-    4d in the original paper are part of the classifier variant only,
-    not the backbone.
+    map.  Every convolution is batch-normalised, matching the canonical
+    distributed ImageNet checkpoint.  The two auxiliary classifiers
+    attached at Inception 4a and 4d in the original paper are part of
+    the classifier variant only, not the backbone.
 
     Parameters
     ----------
@@ -245,8 +314,10 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     ----------
     config : GoogLeNetConfig
         Stored copy of the config that built this model.
-    stem : nn.Sequential
+    conv1, conv2, conv3 : _BasicConv2d
         The pre-Inception conv stack.
+    maxpool1, maxpool2 : _CeilMaxPool2d
+        Stem :math:`3\times3` stride-2 ceil-mode max-pools.
     inception3a, inception3b : _InceptionModule
         First Inception stage, producing a :math:`28\times28` spatial
         map with 256 and 480 channels respectively.
@@ -256,8 +327,9 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
     inception5a, inception5b : _InceptionModule
         Third Inception stage at :math:`7\times7` resolution, producing
         the final 1024-channel feature map.
-    maxpool3, maxpool4 : nn.MaxPool2d
-        :math:`3\times3` stride-2 max-pools between Inception stages.
+    maxpool3, maxpool4 : _CeilMaxPool2d
+        Ceil-mode max-pools between Inception stages
+        (:math:`3\times3` stride-2 and :math:`2\times2` stride-2).
     avgpool : nn.AdaptiveAvgPool2d
         Final global average pool collapsing the :math:`7\times7`
         feature map to :math:`1\times1`.
@@ -274,7 +346,7 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 
         y = \mathrm{concat}\bigl(
             f_{1\times1}(x),\; f_{3\times3}(g_{1\times1}(x)),\;
-            f_{5\times5}(h_{1\times1}(x)),\;
+            f_{3\times3}(h_{1\times1}(x)),\;
             p_{1\times1}(\mathrm{pool}(x))
         \bigr).
 
@@ -302,19 +374,25 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: GoogLeNetConfig) -> None:
         super().__init__(config)
-        self.stem = _build_stem(config.in_channels)
+        self.conv1 = _BasicConv2d(
+            config.in_channels, 64, kernel_size=7, stride=2, padding=3
+        )
+        self.maxpool1 = _CeilMaxPool2d(3, stride=2)
+        self.conv2 = _BasicConv2d(64, 64, kernel_size=1)
+        self.conv3 = _BasicConv2d(64, 192, kernel_size=3, padding=1)
+        self.maxpool2 = _CeilMaxPool2d(3, stride=2)
 
         specs = _INCEPTION_SPECS
         self.inception3a = _make_inception(specs[0])
         self.inception3b = _make_inception(specs[1])
-        self.maxpool3 = nn.MaxPool2d(3, stride=2, padding=1)
+        self.maxpool3 = _CeilMaxPool2d(3, stride=2)
 
         self.inception4a = _make_inception(specs[2])
         self.inception4b = _make_inception(specs[3])
         self.inception4c = _make_inception(specs[4])
         self.inception4d = _make_inception(specs[5])
         self.inception4e = _make_inception(specs[6])
-        self.maxpool4 = nn.MaxPool2d(3, stride=2, padding=1)
+        self.maxpool4 = _CeilMaxPool2d(2, stride=2)
 
         self.inception5a = _make_inception(specs[7])
         self.inception5b = _make_inception(specs[8])
@@ -331,7 +409,11 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = cast(Tensor, self.conv1(x))
+        x = cast(Tensor, self.maxpool1(x))
+        x = cast(Tensor, self.conv2(x))
+        x = cast(Tensor, self.conv3(x))
+        x = cast(Tensor, self.maxpool2(x))
         x = cast(Tensor, self.inception3a(x))
         x = cast(Tensor, self.inception3b(x))
         x = cast(Tensor, self.maxpool3(x))
@@ -378,7 +460,8 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
     ----------
     config : GoogLeNetConfig
         Stored copy of the config that built this model.
-    stem, inception3a, ..., inception5b, maxpool3, maxpool4
+    conv1, conv2, conv3, maxpool1, maxpool2, inception3a, ...,
+    inception5b, maxpool3, maxpool4
         Same backbone components as on :class:`GoogLeNet`.
     avgpool : nn.AdaptiveAvgPool2d
         Final global average pool to :math:`1\times1`.
@@ -438,26 +521,28 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
 
     def __init__(self, config: GoogLeNetConfig) -> None:
         super().__init__(config)
-        self.stem = _build_stem(config.in_channels)
+        self.conv1 = _BasicConv2d(
+            config.in_channels, 64, kernel_size=7, stride=2, padding=3
+        )
+        self.maxpool1 = _CeilMaxPool2d(3, stride=2)
+        self.conv2 = _BasicConv2d(64, 64, kernel_size=1)
+        self.conv3 = _BasicConv2d(64, 192, kernel_size=3, padding=1)
+        self.maxpool2 = _CeilMaxPool2d(3, stride=2)
 
         specs = _INCEPTION_SPECS
         self.inception3a = _make_inception(specs[0])
         self.inception3b = _make_inception(specs[1])
-        self.maxpool3 = nn.MaxPool2d(3, stride=2, padding=1)
+        self.maxpool3 = _CeilMaxPool2d(3, stride=2)
 
         self.inception4a = _make_inception(specs[2])
         self.inception4b = _make_inception(specs[3])
         self.inception4c = _make_inception(specs[4])
         self.inception4d = _make_inception(specs[5])
         self.inception4e = _make_inception(specs[6])
-        self.maxpool4 = nn.MaxPool2d(3, stride=2, padding=1)
+        self.maxpool4 = _CeilMaxPool2d(2, stride=2)
 
         self.inception5a = _make_inception(specs[7])
         self.inception5b = _make_inception(specs[8])
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.drop = nn.Dropout(p=config.dropout)
-        self._build_classifier(1024, config.num_classes)
 
         # Auxiliary classifiers (attached at 4a → 512ch, 4d → 528ch)
         if config.aux_logits:
@@ -471,6 +556,10 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
             self.aux1 = nn.Identity()
             self.aux2 = nn.Identity()
 
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.drop = nn.Dropout(p=config.dropout)
+        self._build_classifier(1024, config.num_classes)
+
     def forward(  # type: ignore[override]
         self,
         x: Tensor,
@@ -480,7 +569,11 @@ class GoogLeNetForImageClassification(PretrainedModel, ClassificationHeadMixin):
         assert isinstance(cfg, GoogLeNetConfig)
         use_aux = cfg.aux_logits and self.training
 
-        x = cast(Tensor, self.stem(x))
+        x = cast(Tensor, self.conv1(x))
+        x = cast(Tensor, self.maxpool1(x))
+        x = cast(Tensor, self.conv2(x))
+        x = cast(Tensor, self.conv3(x))
+        x = cast(Tensor, self.maxpool2(x))
         x = cast(Tensor, self.inception3a(x))
         x = cast(Tensor, self.inception3b(x))
         x = cast(Tensor, self.maxpool3(x))

@@ -79,6 +79,29 @@ class EfficientFormerConfig(ModelConfig):
     mlp_ratios : tuple of float, optional
         Per-stage MLP expansion ratio.  Defaults to
         ``(4.0, 4.0, 4.0, 4.0)``.
+    num_vit : int, optional
+        Number of trailing blocks in the *last* stage that run 3-D
+        multi-head self-attention (the remainder run the 4-D pooling
+        token mixer).  Defaults to ``1`` (EfficientFormer-L1); L3 uses
+        ``4`` and L7 uses ``8``.
+    pool_size : int, optional
+        Spatial extent of the average-pool token mixer in the 4-D
+        pooling blocks.  Defaults to ``3``.
+    key_dim : int, optional
+        Per-head query/key dimension in the attention token mixer.
+        Defaults to ``32`` (fixed across all paper variants).
+    num_heads : int, optional
+        Number of attention heads in the attention token mixer.
+        Defaults to ``8`` (fixed across all paper variants).
+    attn_ratio : float, optional
+        Value/key dimension ratio in the attention token mixer; the
+        per-head value dimension is ``attn_ratio * key_dim``.  Defaults
+        to ``4.0``.
+    resolution : int, optional
+        Side length of the (square) token grid feeding the attention
+        stage; the learned attention-bias table has
+        ``resolution ** 2`` entries per head.  Defaults to ``7``
+        (a ``7 x 7`` grid at the default ``224`` input).
     drop_path_rate : float, optional
         Maximum stochastic-depth rate; linearly scheduled across all
         blocks of the trunk.  The paper uses ``0.0`` for L1, ``0.1``
@@ -126,6 +149,14 @@ class EfficientFormerConfig(ModelConfig):
     depths: tuple[int, ...] = (3, 2, 6, 4)
     embed_dims: tuple[int, ...] = (48, 96, 224, 448)
     mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0)
+    # Last-stage attention layout / hyperparameters (fixed across L1/L3/L7
+    # except num_vit, which is 1 / 4 / 8 respectively):
+    num_vit: int = 1
+    pool_size: int = 3
+    key_dim: int = 32
+    num_heads: int = 8
+    attn_ratio: float = 4.0
+    resolution: int = 7
     # Regularization knobs (paper §4.1):
     #   drop_path_rate    — max stochastic depth rate (linear schedule across trunk).
     #                       Paper uses 0.0 for L1, 0.1 for L3, 0.2 for L7.
