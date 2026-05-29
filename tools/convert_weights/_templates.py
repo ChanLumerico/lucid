@@ -105,7 +105,17 @@ def render_model_card(spec: "ConversionSpec") -> str:
     if not dataset_names and isinstance(metrics, dict) and metrics:
         dataset_names = [str(next(iter(metrics))).lower().replace(" ", "-")]
 
-    enum_name = "".join(p.capitalize() for p in spec.architecture.split("_")) + "Weights"
+    # The enum class name has irregular casing (SEResNet / ResNeXt / ViT /
+    # PVTv2 / MaxViT …) that cannot be derived from the factory string, so
+    # resolve the *actual* registered class instead of guessing.
+    from lucid.weights import weights_for
+
+    _enum = weights_for(spec.model_name)
+    enum_name = (
+        _enum.__name__
+        if _enum is not None
+        else "".join(p.capitalize() for p in spec.architecture.split("_")) + "Weights"
+    )
     paper_line = (
         f"\n> {spec.paper_url}\n" if spec.paper_url else ""
     )
@@ -144,7 +154,7 @@ converted to Lucid-native safetensors.
 
 ```python
 import lucid.models as models
-from lucid.models.vision.resnet import {enum_name}
+from lucid.models.weights import {enum_name}
 
 # default tag
 model = models.{spec.model_name}(pretrained=True)
