@@ -199,8 +199,26 @@ def grid_sample(
     >>> y.shape
     (1, 3, 32, 32)
     """
+    mode_map = {"bilinear": 0, "nearest": 1}
+    # The engine kernel supports zeros (0) and border (1); it has no true
+    # reflection padding, so reflection falls back to the nearest supported
+    # behaviour (border / clamp-to-edge) rather than silently zero-filling.
+    pad_map = {"zeros": 0, "border": 1, "reflection": 1}
+    if mode not in mode_map:
+        raise ValueError(
+            f"grid_sample: unsupported mode {mode!r}; expected 'bilinear' or 'nearest'"
+        )
+    if padding_mode not in pad_map:
+        raise ValueError(
+            f"grid_sample: unsupported padding_mode {padding_mode!r}; "
+            "expected 'zeros', 'border', or 'reflection'"
+        )
     ac = align_corners if align_corners is not None else False
-    return _wrap(_C_engine.nn.grid_sample(_unwrap(x), _unwrap(grid), ac))
+    return _wrap(
+        _C_engine.nn.grid_sample(
+            _unwrap(x), _unwrap(grid), mode_map[mode], pad_map[padding_mode], ac
+        )
+    )
 
 
 def affine_grid(

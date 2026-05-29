@@ -198,7 +198,13 @@ class _nn_namespace:
     @staticmethod
     def unfold(x: TensorImpl, kernel: list[int], stride: list[int], pad: list[int], dilation: list[int]) -> TensorImpl: ...
     @staticmethod
-    def grid_sample(x: TensorImpl, grid: TensorImpl, align_corners: bool) -> TensorImpl: ...
+    def grid_sample(
+        x: TensorImpl,
+        grid: TensorImpl,
+        mode: int = ...,
+        padding_mode: int = ...,
+        align_corners: bool = ...,
+    ) -> TensorImpl: ...
     @staticmethod
     def affine_grid(theta: TensorImpl, N: int, H: int, W: int, align_corners: bool) -> TensorImpl: ...
     @staticmethod

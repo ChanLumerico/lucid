@@ -215,3 +215,48 @@ class TestFractionalPool:
         out.sum().backward()
         assert x.grad is not None
         assert tuple(x.grad.shape) == (1, 1, 4, 4, 4)
+
+
+class TestGridSample:
+    """Regression guard — the Python wrapper once dropped mode/padding_mode
+    and passed align_corners into the mode slot, silently turning every
+    ``mode="bilinear"`` call into nearest-neighbour sampling."""
+
+    def test_bilinear_actually_interpolates(self) -> None:
+        # 2x2 ramp [[0,1],[2,3]]; sampling the exact centre must average all
+        # four corners (1.5), NOT snap to a single pixel (the old bug → 0.0).
+        feat = lucid.tensor([[[[0.0, 1.0], [2.0, 3.0]]]])
+        grid = lucid.tensor([[[[0.0, 0.0]]]])  # (gx, gy) = centre
+        out = F.grid_sample(
+            feat, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+        ).item()
+        assert abs(out - 1.5) < 1e-6
+
+    def test_bilinear_quarter_point(self) -> None:
+        feat = lucid.tensor([[[[0.0, 1.0], [2.0, 3.0]]]])
+        # row=0.25, col=0.75 → align_corners=True normalised (gx, gy)=(0.5, -0.5)
+        grid = lucid.tensor([[[[0.5, -0.5]]]])
+        out = F.grid_sample(
+            feat, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+        ).item()
+        exp = 0.75 * (0.25 * 0 + 0.75 * 1) + 0.25 * (0.25 * 2 + 0.75 * 3)
+        assert abs(out - exp) < 1e-6
+
+    def test_nearest_still_snaps(self) -> None:
+        feat = lucid.tensor([[[[0.0, 1.0], [2.0, 3.0]]]])
+        grid = lucid.tensor([[[[0.5, -0.5]]]])
+        out = F.grid_sample(
+            feat, grid, mode="nearest", padding_mode="zeros", align_corners=True
+        ).item()
+        # nearest of (row 0.25, col 0.75) → pixel (0, 1) = 1.0
+        assert out == 1.0
+
+    def test_unknown_mode_raises(self) -> None:
+        feat = lucid.tensor([[[[0.0, 1.0], [2.0, 3.0]]]])
+        grid = lucid.tensor([[[[0.0, 0.0]]]])
+        try:
+            F.grid_sample(feat, grid, mode="cubic")
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("expected ValueError for unknown mode")
