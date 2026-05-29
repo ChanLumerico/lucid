@@ -15,6 +15,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-30
 
+### Added — Pretrained weights: RoFormer (Chinese, CLUECorpusSmall)
+
+- **roformer** (Su et al. 2021) — `roformer` + `roformer_mlm` ←
+  `junnyu/roformer_chinese_base` (Chinese WordPiece, 50 000 vocab).
+  Forward parity vs the reference framework ≤6.4e-6.
+
+### Changed — RoFormer interleaved RoPE + opt-in `apply_rotary_emb(interleaved=)`
+
+RoFormer is the *original* rotary-position-embedding paper and uses the
+**interleaved** pairing `(x_{2i}, x_{2i+1})`, whereas Lucid's shared RoPE
+uses the half-split LLaMA pairing `(x_i, x_{i+d/2})`.  Loading the upstream
+checkpoint into the half-split path produced garbage (last_hidden_state
+diverged by 1.62).  Fix:
+
+- `nn.functional.apply_rotary_emb` gains an opt-in keyword-only
+  `interleaved: bool = False`; the default path is byte-identical to the
+  prior half-split behaviour (`_rotate_half`, `cat([freqs, freqs])`) — a
+  regression guard confirms `apply_rotary_emb(...)` ≡ `_rotate_half` at
+  0.0 diff, and the negative control (half-split on RoFormer weights) gives
+  1.82.  RoFormer uses a family-local interleaved cos/sin table
+  (each frequency repeated twice), byte-identical to the upstream table.
+- The converter drops HF's fixed sinusoidal RoPE buffer
+  (`*embed_positions.weight`) + the tied duplicate `decoder.bias`, and
+  injects the untrained pooler from init (it is absent upstream and affects
+  only `pooler_output`).
+
 ### Added — Pretrained weights: GPT-1 + GPT-2 text families
 
 Decoder-only pretrained weights, all loadable + runnable out of the box.

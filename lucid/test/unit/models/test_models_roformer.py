@@ -219,3 +219,38 @@ class TestRoFormerExtras:
         )
         assert tuple(out.logits.shape) == (1, 6, 2)
         assert out.loss is not None
+
+
+class TestRoFormerWeightsEnums:
+    """Static contract of the RoFormer Weights enums — no network."""
+
+    _SHIPPED = (
+        ("RoFormerWeights", "roformer-chinese-base", 768),
+        ("RoFormerMLMWeights", "roformer-chinese-base-mlm", 50_000),
+    )
+    _TAG = "CLUECORPUSSMALL"
+
+    @staticmethod
+    def _enum(name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    def test_default_aliases(self) -> None:
+        for enum_name, *_rest in self._SHIPPED:
+            cls = self._enum(enum_name)
+            assert cls.DEFAULT is cls[self._TAG]
+
+    def test_entry_fields(self) -> None:
+        for enum_name, slug, num_classes in self._SHIPPED:
+            e = self._enum(enum_name)[self._TAG].entry
+            assert e.num_classes == num_classes
+            assert len(e.sha256) == 64
+            assert f"lucid-dl/{slug}" in e.url
+            assert e.meta["license"] == "apache-2.0"
+
+    def test_registered_for_factories(self) -> None:
+        from lucid.weights import weights_for
+
+        assert weights_for("roformer").__name__ == "RoFormerWeights"
+        assert weights_for("roformer_mlm").__name__ == "RoFormerMLMWeights"

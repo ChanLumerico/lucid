@@ -44,6 +44,7 @@ import tools.convert_weights.pvt  # noqa: F401
 import tools.convert_weights.resnest  # noqa: F401
 import tools.convert_weights.resnet  # noqa: F401
 import tools.convert_weights.resnext  # noqa: F401
+import tools.convert_weights.roformer  # noqa: F401
 import tools.convert_weights.senet  # noqa: F401
 import tools.convert_weights.sknet  # noqa: F401
 import tools.convert_weights.swin  # noqa: F401

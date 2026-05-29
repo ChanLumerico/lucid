@@ -258,6 +258,9 @@ from lucid.models.text.bert._weights import (
 # 2018 — GPT-1 (Radford et al.) — original decoder-only transformer (text)
 from lucid.models.text.gpt._weights import GPTWeights, GPTLMWeights
 
+# 2021 — RoFormer (Su et al.) — rotary-position-embedding encoder (text)
+from lucid.models.text.roformer._weights import RoFormerWeights, RoFormerMLMWeights
+
 # 2019 — GPT-2 (Radford et al.) — decoder-only transformer (text)
 from lucid.models.text.gpt2._weights import (
     GPT2SmallWeights,
@@ -418,6 +421,9 @@ __all__ = [
     # ── Text (2018) GPT-1 (Radford et al.) ────────────────────────────
     "GPTWeights",
     "GPTLMWeights",
+    # ── Text (2021) RoFormer (Su et al.) ──────────────────────────────
+    "RoFormerWeights",
+    "RoFormerMLMWeights",
     # ── Text (2019) GPT-2 (Radford et al.) ────────────────────────────
     "GPT2SmallWeights",
     "GPT2MediumWeights",

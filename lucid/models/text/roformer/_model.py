@@ -25,9 +25,73 @@ from lucid.models._output import (
     MaskedLMOutput,
 )
 from lucid.models._utils._text import extended_attention_mask, text_activation
-from lucid.nn import RotaryEmbedding
 from lucid.nn.functional import apply_rotary_emb
+from lucid.nn.module import Module
 from lucid.models.text.roformer._config import RoFormerConfig
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Rotary tables — *interleaved* (original RoPE) layout, matching the RoFormer
+# reference checkpoints.  Distinct from the shared LLaMA-style
+# :class:`lucid.nn.RotaryEmbedding` (half-split layout): here each frequency
+# is repeated twice so cos / sin line up with the consecutive feature pairs
+# ``(x_{2i}, x_{2i+1})`` that ``apply_rotary_emb(..., interleaved=True)`` rotates.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class _RoFormerRotaryEmbedding(Module):
+    """Precompute interleaved-layout ``(cos, sin)`` tables for RoPE.
+
+    Each table has shape ``(max_position_embeddings, head_dim)`` and repeats
+    every frequency twice along the last dimension:
+
+        cos[p] = [cos(p·θ_0), cos(p·θ_0), cos(p·θ_1), cos(p·θ_1), ...]
+        sin[p] = [sin(p·θ_0), sin(p·θ_0), sin(p·θ_1), sin(p·θ_1), ...]
+
+    with θ_i = base^(-2 i / head_dim).  This is the layout consumed by
+    :func:`lucid.nn.functional.apply_rotary_emb` with ``interleaved=True``.
+    """
+
+    cos_cached: Tensor
+    sin_cached: Tensor
+
+    def __init__(
+        self,
+        head_dim: int,
+        max_position_embeddings: int,
+        base: float = 10_000.0,
+    ) -> None:
+        super().__init__()
+        if head_dim % 2 != 0:
+            raise ValueError(
+                f"_RoFormerRotaryEmbedding requires an even head_dim, got {head_dim}"
+            )
+        self.head_dim = head_dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+
+        half = head_dim // 2
+        cos_rows: list[list[float]] = []
+        sin_rows: list[list[float]] = []
+        for p in range(max_position_embeddings):
+            cos_row: list[float] = [0.0] * head_dim
+            sin_row: list[float] = [0.0] * head_dim
+            for i in range(half):
+                theta = p / (base ** (2.0 * i / head_dim))
+                c = math.cos(theta)
+                s = math.sin(theta)
+                cos_row[2 * i] = c
+                cos_row[2 * i + 1] = c
+                sin_row[2 * i] = s
+                sin_row[2 * i + 1] = s
+            cos_rows.append(cos_row)
+            sin_rows.append(sin_row)
+
+        self.register_buffer("cos_cached", lucid.tensor(cos_rows), persistent=False)
+        self.register_buffer("sin_cached", lucid.tensor(sin_rows), persistent=False)
+
+    def forward(self) -> tuple[Tensor, Tensor]:  # type: ignore[override]
+        return self.cos_cached, self.sin_cached
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Embeddings — *no* position embedding (RoPE handles position implicitly)
@@ -98,7 +162,8 @@ class _RoFormerSelfAttention(nn.Module):
         v = self._shape(cast(Tensor, self.value(hidden)), B, T)
 
         # Rotate Q / K by the absolute position phase (values stay un-rotated).
-        q, k = apply_rotary_emb(q, k, cos, sin)
+        # RoFormer uses the original interleaved RoPE pairing (x_2i, x_2i+1).
+        q, k = apply_rotary_emb(q, k, cos, sin, interleaved=True)
 
         scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
         if attention_mask is not None:
@@ -248,10 +313,13 @@ class RoFormerModel(PretrainedModel):
     embeddings : nn.Module
         Token + token-type embedding block followed by LayerNorm and
         dropout.  Notably *no* learned position embedding.
-    rotary : nn.RotaryEmbedding
-        Pre-computed ``(cos, sin)`` tables of shape
+    rotary : Module
+        Pre-computed interleaved-layout ``(cos, sin)`` tables of shape
         ``(max_position_embeddings, head_dim)``, sliced to the actual
-        sequence length at each ``forward``.
+        sequence length at each ``forward``.  Uses the original RoPE
+        pairing ``(x_2i, x_2i+1)`` (each frequency repeated twice) rather
+        than the shared half-split layout, matching the RoFormer reference
+        checkpoints.
     encoder : nn.Module
         Stack of ``config.num_hidden_layers`` rotary-attention transformer
         layers.
@@ -300,7 +368,7 @@ class RoFormerModel(PretrainedModel):
         head_dim = config.hidden_size // config.num_attention_heads
         self._max_pos = config.max_position_embeddings
         self.embeddings = _RoFormerEmbeddings(config)
-        self.rotary = RotaryEmbedding(
+        self.rotary = _RoFormerRotaryEmbedding(
             head_dim=head_dim,
             max_position_embeddings=config.max_position_embeddings,
             base=config.rotary_base,

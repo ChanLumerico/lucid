@@ -7,6 +7,7 @@ small variant should override config fields via
 ``create_model("roformer", hidden_size=..., num_hidden_layers=..., ...)``.
 """
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.text.roformer._config import RoFormerConfig
 from lucid.models.text.roformer._model import (
@@ -15,6 +16,7 @@ from lucid.models.text.roformer._model import (
     RoFormerForTokenClassification,
     RoFormerModel,
 )
+from lucid.models.text.roformer._weights import RoFormerMLMWeights, RoFormerWeights
 
 _CFG_BASE = RoFormerConfig()  # paper default — the only published size
 
@@ -26,14 +28,19 @@ def _apply(cfg: RoFormerConfig, overrides: dict[str, object]) -> RoFormerConfig:
 # ── Backbone ──────────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: roformer adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="roformer",
     model_type="roformer",
     model_class=RoFormerModel,
     default_config=_CFG_BASE,
 )
-def roformer(pretrained: bool = False, **overrides: object) -> RoFormerModel:
+def roformer(
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerWeights | None = None,
+    **overrides: object,
+) -> RoFormerModel:
     r"""Construct a RoFormer encoder trunk.
 
     Canonical RoFormer architecture from Su, Lu, Pan, Murtadha, Wen, and
@@ -85,20 +92,29 @@ def roformer(pretrained: bool = False, **overrides: object) -> RoFormerModel:
     >>> out.last_hidden_state.shape, out.pooler_output.shape
     ((1, 4, 768), (1, 768))
     """
-    return RoFormerModel(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
+    model = RoFormerModel(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="roformer")
+    return model
 
 
 # ── Task heads ────────────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: roformer_mlm adds a typed weights= kwarg (per-model WeightsEnum); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="masked-lm",
     family="roformer",
     model_type="roformer",
     model_class=RoFormerForMaskedLM,
     default_config=_CFG_BASE,
 )
-def roformer_mlm(pretrained: bool = False, **overrides: object) -> RoFormerForMaskedLM:
+def roformer_mlm(
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerMLMWeights | None = None,
+    **overrides: object,
+) -> RoFormerForMaskedLM:
     r"""Construct a RoFormer model with a tied masked-LM head.
 
     Same trunk as :func:`roformer` (L=12, H=768, A=12), augmented with the
@@ -136,7 +152,11 @@ def roformer_mlm(pretrained: bool = False, **overrides: object) -> RoFormerForMa
     >>> out.logits.shape   # (1, 4, vocab=50000)
     (1, 4, 50000)
     """
-    return RoFormerForMaskedLM(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(RoFormerMLMWeights, pretrained, weights)
+    model = RoFormerForMaskedLM(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="roformer_mlm")
+    return model
 
 
 @register_model(

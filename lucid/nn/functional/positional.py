@@ -218,7 +218,7 @@ def _rotate_half(x: Tensor) -> Tensor:
 
     For ``x = [x_0, ..., x_{d-1}]`` returns
     ``[-x_{d/2}, ..., -x_{d-1}, x_0, ..., x_{d/2-1}]``.  This is the "half-
-    rotation" form used by HuggingFace / Meta LLaMA — pairs ``x_i`` with
+    rotation" form used by the LLaMA / GPT-NeoX family — pairs ``x_i`` with
     ``x_{i + d/2}`` rather than ``x_{2i}`` with ``x_{2i+1}``, matching the
     layout precomputed in :class:`lucid.nn.RotaryEmbedding`'s cos / sin tables.
     """
@@ -228,12 +228,32 @@ def _rotate_half(x: Tensor) -> Tensor:
     return lucid.cat([-x2, x1], dim=-1)
 
 
+def _rotate_interleaved(x: Tensor) -> Tensor:
+    """Rotate adjacent feature pairs ``(x_{2i}, x_{2i+1}) -> (-x_{2i+1}, x_{2i})``.
+
+    For ``x = [x_0, x_1, x_2, x_3, ...]`` returns
+    ``[-x_1, x_0, -x_3, x_2, ...]``.  This is the *original* RoPE pairing of
+    Su et al. (2021) — consecutive features form each rotation plane, as
+    opposed to the half-split pairing of :func:`_rotate_half`.  It is the
+    convention used by the RoFormer reference checkpoints, where the cos /
+    sin tables repeat each frequency twice (``[θ_0, θ_0, θ_1, θ_1, ...]``).
+    """
+    even = x[..., 0::2]
+    odd = x[..., 1::2]
+    # Interleave (-odd, even) back into the original layout via stack + reshape.
+    stacked = lucid.stack([-odd, even], dim=-1)
+    new_shape = tuple(int(s) for s in x.shape)
+    return stacked.reshape(*new_shape)
+
+
 def apply_rotary_emb(
     q: Tensor,
     k: Tensor,
     cos: Tensor,
     sin: Tensor,
     position_ids: Tensor | None = None,
+    *,
+    interleaved: bool = False,
 ) -> tuple[Tensor, Tensor]:
     r"""Apply Rotary Position Embedding (RoPE) to query and key tensors.
 
@@ -264,6 +284,16 @@ def apply_rotary_emb(
         of the tables are used — appropriate for left-to-right
         tokenisation.  Pass custom IDs for sequence packing, KV caching,
         or sliding-window attention.
+    interleaved : bool, optional
+        Selects the feature-pairing convention (default ``False``).  When
+        ``False`` the half-split pairing :math:`(x_i, x_{i+d/2})` of the
+        LLaMA / GPT-NeoX family is used and the ``cos`` / ``sin`` tables
+        are expected in the half-split layout
+        (``cos = [c_0, ..., c_{d/2-1}, c_0, ..., c_{d/2-1}]``).  When
+        ``True`` the *original* RoPE pairing :math:`(x_{2i}, x_{2i+1})` of
+        Su et al. (2021) is used and the tables are expected to repeat each
+        frequency twice (``cos = [c_0, c_0, c_1, c_1, ...]``).  RoFormer
+        reference checkpoints require ``interleaved=True``.
 
     Returns
     -------
@@ -282,11 +312,13 @@ def apply_rotary_emb(
                         \sin\theta_{p,i} &  \cos\theta_{p,i} \end{pmatrix}
         \begin{pmatrix} x_i \\ x_{i+d/2} \end{pmatrix}
 
-    Lucid uses the "half-rotation" pairing
-    :math:`(x_i, x_{i+d/2})` — the HuggingFace / LLaMA layout — rather
-    than the original paper's interleaved pairing :math:`(x_{2i}, x_{2i+1})`.
+    By default Lucid uses the "half-rotation" pairing
+    :math:`(x_i, x_{i+d/2})` — the LLaMA / GPT-NeoX layout — rather than
+    the original paper's interleaved pairing :math:`(x_{2i}, x_{2i+1})`.
     The two are equivalent up to a permutation of dimensions, and the
-    half-rotation form is friendlier to contiguous matmul kernels.
+    half-rotation form is friendlier to contiguous matmul kernels.  Set
+    ``interleaved=True`` to opt into the original paired layout required by
+    RoFormer reference checkpoints.
 
     Inside attention the rotated dot product satisfies
     :math:`q_m'^\top k_n' = q_m^\top R(m-n) \, k_n`, so it depends only on
@@ -317,6 +349,7 @@ def apply_rotary_emb(
         cos_emb = cos_emb.unsqueeze(0)
         sin_emb = sin_emb.unsqueeze(0)
 
-    q_rot = q * cos_emb + _rotate_half(q) * sin_emb
-    k_rot = k * cos_emb + _rotate_half(k) * sin_emb
+    rotate = _rotate_interleaved if interleaved else _rotate_half
+    q_rot = q * cos_emb + rotate(q) * sin_emb
+    k_rot = k * cos_emb + rotate(k) * sin_emb
     return q_rot, k_rot
