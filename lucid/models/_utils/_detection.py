@@ -543,6 +543,7 @@ def roi_align(
     boxes: list[Tensor],
     output_size: int | tuple[int, int],
     spatial_scale: float = 1.0,
+    sampling_ratio: int = -1,
     aligned: bool = True,
 ) -> Tensor:
     """RoI Align — bilinear sub-pixel sampling into fixed-size crops.
@@ -592,35 +593,61 @@ def roi_align(
             x2 = x2 - 0.5
             y2 = y2 - 0.5
 
-        # Build (N, out_h, out_w, 2) sampling grid using Python loops
-        grid_data: list[list[list[list[float]]]] = []
+        # Per-box sub-bin sampling.  Each output bin is split into
+        # ``ry x rx`` sample points (fixed = ``sampling_ratio`` when > 0,
+        # else adaptive ``ceil(roi_side / out_side)`` per box like the
+        # reference), bilinearly sampled and averaged — matching the
+        # reference RoIAlign exactly (sampling_ratio semantics included).
         for n in range(N):
             rx1 = float(x1[n].item())
             rx2 = float(x2[n].item())
             ry1 = float(y1[n].item())
             ry2 = float(y2[n].item())
+            roi_w = rx2 - rx1
+            roi_h = ry2 - ry1
+            bw = roi_w / out_w
+            bh = roi_h / out_h
 
-            # Sample centres: out_w points in [rx1, rx2], out_h in [ry1, ry2]
-            xs = [rx1 + (rx2 - rx1) * (i + 0.5) / out_w for i in range(out_w)]
-            ys = [ry1 + (ry2 - ry1) * (j + 0.5) / out_h for j in range(out_h)]
+            if sampling_ratio > 0:
+                ry = rx = sampling_ratio
+            else:
+                ry = max(1, math.ceil(roi_h / out_h))
+                rx = max(1, math.ceil(roi_w / out_w))
 
-            # Normalise to [-1, 1] (grid_sample convention)
-            norm_xs = [xi / (feat_W - 1) * 2.0 - 1.0 for xi in xs]
-            norm_ys = [yi / (feat_H - 1) * 2.0 - 1.0 for yi in ys]
+            # Sub-bin sample centres (out_h*ry rows, out_w*rx cols).
+            xs = [
+                rx1 + j * bw + (ix + 0.5) * bw / rx
+                for j in range(out_w)
+                for ix in range(rx)
+            ]
+            ys = [
+                ry1 + i * bh + (iy + 0.5) * bh / ry
+                for i in range(out_h)
+                for iy in range(ry)
+            ]
+            # Clamp sample coords to [0, side-1] before sampling — this
+            # reproduces the reference RoIAlign's boundary rule (coords ≤0
+            # snap to 0, coords ≥side-1 snap to the last pixel) exactly,
+            # whereas grid_sample's zero-padding would bleed toward 0 at the
+            # edge.  (Proposals are image-clipped upstream, so the
+            # far-out-of-bounds → 0 case does not arise in practice.)
+            cxs = [min(max(xi, 0.0), float(feat_W - 1)) for xi in xs]
+            cys = [min(max(yi, 0.0), float(feat_H - 1)) for yi in ys]
+            norm_xs = [xi / (feat_W - 1) * 2.0 - 1.0 for xi in cxs]
+            norm_ys = [yi / (feat_H - 1) * 2.0 - 1.0 for yi in cys]
 
-            row: list[list[list[float]]] = []
-            for j in range(out_h):
-                col: list[list[float]] = [
-                    [norm_xs[i], norm_ys[j]] for i in range(out_w)
-                ]
-                row.append(col)
-            grid_data.append(row)
-
-        grid = lucid.tensor(grid_data, device=feat.device.type)  # (N, H, W, 2)
-
-        feat_n = feat.expand(N, -1, -1, -1)
-        sampled = F.grid_sample(feat_n, grid, mode="bilinear", align_corners=True)
-        results.append(sampled)
+            grid_rows: list[list[list[float]]] = [
+                [[nx, ny] for nx in norm_xs] for ny in norm_ys
+            ]
+            grid = lucid.tensor(
+                [grid_rows], device=feat.device.type
+            )  # (1, out_h*ry, out_w*rx, 2)
+            dense = F.grid_sample(
+                feat, grid, mode="bilinear", align_corners=True
+            )  # (1, C, out_h*ry, out_w*rx)
+            # Average the ry x rx sub-samples per bin → (1, C, out_h, out_w).
+            pooled = dense.reshape(1, C, out_h, ry, out_w, rx).mean(dim=(3, 5))
+            results.append(pooled)
 
     if not results:
         return lucid.zeros((0, C, out_h, out_w), device=input.device.type)

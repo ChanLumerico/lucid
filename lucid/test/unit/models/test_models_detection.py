@@ -406,3 +406,49 @@ class TestDetectionRegistry:
 
         m = M.create_model("detr_resnet50")
         assert m is not None
+
+
+class TestRoIAlign:
+    """RoIAlign correctness — sub-bin sampling_ratio averaging + boundary
+    clamp must match the reference op (regression guard for the
+    grid_sample bilinear fix this builds on)."""
+
+    def test_constant_feature_constant_output(self) -> None:
+        import lucid
+        from lucid.models._utils._detection import roi_align
+
+        feat = lucid.ones(1, 4, 16, 16) * 3.0
+        boxes = [lucid.tensor([[2.0, 3.0, 11.0, 13.0], [0.0, 0.0, 15.0, 15.0]])]
+        for ratio in (1, 2, -1):
+            out = roi_align(
+                feat, boxes, output_size=7, spatial_scale=1.0, sampling_ratio=ratio
+            )
+            assert tuple(out.shape) == (2, 4, 7, 7)
+            # A constant feature must sample to that constant everywhere.
+            assert abs(float(out.max().item()) - 3.0) < 1e-5
+            assert abs(float(out.min().item()) - 3.0) < 1e-5
+
+    def test_linear_ramp_ratio_invariant(self) -> None:
+        import lucid
+        from lucid.models._utils._detection import roi_align
+
+        # On a linear (horizontal) ramp, averaging symmetric sub-bin samples
+        # equals the single centre sample, so RoIAlign is sampling_ratio-
+        # invariant — a correctness property of bilinear sub-bin averaging.
+        ramp = lucid.tensor([[[[float(c) for c in range(8)] for _ in range(8)]]])
+        boxes = [lucid.tensor([[0.0, 0.0, 7.0, 7.0]])]
+        r1 = float(roi_align(ramp, boxes, 1, sampling_ratio=1).item())
+        r4 = float(roi_align(ramp, boxes, 1, sampling_ratio=4).item())
+        assert abs(r1 - r4) < 1e-5
+
+    def test_subbin_averaging_runs_for_2d_grid(self) -> None:
+        import lucid
+        from lucid.models._utils._detection import roi_align
+
+        # Exercise the (out_h*ry, out_w*rx) sub-bin reshape/mean path on a
+        # multi-bin output with ratio>1 — shape + finiteness guard.
+        feat = lucid.randn(1, 2, 20, 20)
+        boxes = [lucid.tensor([[1.0, 2.0, 17.0, 18.0]])]
+        out = roi_align(feat, boxes, output_size=(5, 5), sampling_ratio=2)
+        assert tuple(out.shape) == (1, 2, 5, 5)
+        assert bool(lucid.isfinite(out).all().item())
