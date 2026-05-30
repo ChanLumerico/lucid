@@ -57,11 +57,14 @@ target_link_libraries(lucid_test PRIVATE
     lucid_ops
     lucid_autograd
     lucid_random
+    lucid_compile                  # compile::Tracer — OpScope hooks referenced by ops
     Python3::Python                # pybind11 C API symbols (set_error etc.)
     "${LUCID_MLX_LIBRARY}"         # MLX symbols used by GpuBackend
     "-framework Accelerate"        # BLAS / LAPACK / vDSP / vForce
     "-framework Metal"             # Metal API (MetalAllocator, MetalKernelRunner)
     "-framework Foundation"        # NSString etc. (required by Metal on macOS)
+    "-framework MetalPerformanceShaders"        # MPSGraph deps (via lucid_compile)
+    "-framework MetalPerformanceShadersGraph"   # MPSGraph kernels (via lucid_compile)
 )
 
 # Include paths: helpers/, engine root, project root, and pybind11/Python headers
