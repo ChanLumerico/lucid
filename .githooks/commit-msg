@@ -3,7 +3,7 @@
 #
 # Two checks:
 #   1. Commit-convention format (BLOCKING) — validates <type>(<scope>): <subject>
-#      against CONTRIBUTING.md §6 via tools/check_commit_msg.py.
+#      against CONTRIBUTING.md (Commit style) via tools/check_commit_msg.py.
 #   2. CHANGELOG hygiene (warn only) — a user-facing commit (feat/fix/perf/
 #      refactor/revert/remove/deprecate/security) that doesn't touch CHANGELOG.md.
 #

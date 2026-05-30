@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate commit message(s) against the Lucid commit convention.
 
-The convention (see CONTRIBUTING.md §6):
+The convention (see CONTRIBUTING.md (Commit style)):
 
     <type>(<scope>): <subject>
 
@@ -191,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     if failed:
         print(
             f"\n  {failed} commit(s) violate the Lucid commit convention "
-            "(CONTRIBUTING.md §6).\n"
+            "(CONTRIBUTING.md (Commit style)).\n"
             "  Format: <type>(<scope>): <subject>\n"
             f"  Types:  {', '.join(ALLOWED_TYPES)}\n"
             "  Bypass a single local commit (discouraged): "
