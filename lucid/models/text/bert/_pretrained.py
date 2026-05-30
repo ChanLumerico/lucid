@@ -5,13 +5,18 @@ Sizes follow Devlin et al. (base / large) and Turc et al. 2019
 (tiny / mini / small / medium).  All six base encoders and the two
 masked-LM heads ship Wikipedia + BookCorpus pretrained weights through
 :mod:`lucid.weights` (per-factory ``*Weights`` enums + ``weights=`` /
-``pretrained=``, mirroring the ResNet wiring).  The fine-tune heads
-(``*_cls`` / ``*_token_cls`` / ``*_qa``) carry no canonical *task* (GLUE /
-SQuAD / NER) checkpoint, so their ``pretrained=`` selector loads the
-matching pretrained **encoder** trunk (``bert_base`` / ``bert_large``)
-into the ``.bert`` submodule and leaves the task head randomly
-initialised — the standard fine-tuning starting point (mirrors the
-reference ``AutoModelForX.from_pretrained(<encoder>)`` behaviour).
+``pretrained=``, mirroring the ResNet wiring).
+
+The downstream-task heads follow a "best available canonical weights" rule:
+
+* **QA** (``bert_base_qa`` / ``bert_large_qa``) and **NER**
+  (``bert_base_token_cls``) ship *full fine-tuned* checkpoints on canonical
+  benchmarks — SQuAD v1.1 (``csarron`` base / official Google large-wwm) and
+  CoNLL-2003 (``dslim`` cased) — so ``pretrained=True`` is inference-ready.
+* **Sequence classification** (``*_cls``) has no clean canonical+permissive
+  GLUE checkpoint, so ``pretrained=`` loads the pretrained **encoder** into
+  the ``.bert`` submodule and leaves the classifier random (the standard
+  fine-tuning start, mirroring ``AutoModelForX.from_pretrained(<encoder>)``).
 """
 
 import lucid.weights as weights_mod
@@ -26,8 +31,11 @@ from lucid.models.text.bert._model import (
 )
 from lucid.models.text.bert._weights import (
     BERTBaseMLMWeights,
+    BERTBaseNERWeights,
+    BERTBaseQAWeights,
     BERTBaseWeights,
     BERTLargeMLMWeights,
+    BERTLargeQAWeights,
     BERTLargeWeights,
     BERTMediumWeights,
     BERTMiniWeights,
@@ -59,6 +67,17 @@ _CFG_LARGE = BERTConfig(
     num_hidden_layers=24,
     num_attention_heads=16,
     intermediate_size=4096,
+)
+
+# dslim/bert-base-NER is a *cased* BERT-Base (vocab 28 996) with a 9-way BIO
+# tag head — the only field deltas from _CFG_BASE are vocab_size + num_labels.
+_CFG_NER_CONLL = BERTConfig(
+    hidden_size=768,
+    num_hidden_layers=12,
+    num_attention_heads=12,
+    intermediate_size=3072,
+    vocab_size=28_996,
+    num_labels=9,
 )
 
 
@@ -670,39 +689,38 @@ def bert_large_cls(
 def bert_base_token_cls(
     pretrained: bool | str = False,
     *,
-    weights: BERTBaseWeights | None = None,
+    weights: BERTBaseNERWeights | None = None,
     **overrides: object,
 ) -> BERTForTokenClassification:
-    r"""Construct a BERT-Base model with a per-token classification head.
+    r"""Construct a BERT-Base per-token classification model (CoNLL-2003 NER).
 
-    Same trunk as :func:`bert_base` (L=12, H=768, A=12), augmented with a
-    per-position linear classifier of output width ``config.num_labels``.
-    The canonical fine-tuning recipe for sequence-labelling tasks: named-
-    entity recognition (CoNLL-2003), part-of-speech tagging, chunking.
+    A per-position linear classifier over the encoder sequence output, for
+    sequence-labelling tasks: named-entity recognition, POS tagging, chunking.
 
     Parameters
     ----------
     pretrained : bool or str, default=False
-        Encoder-weight selector.  ``False`` → fully random init; ``True``
-        → loads the pretrained :func:`bert_base` encoder
-        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk; a tag
-        string selects a specific encoder checkpoint.  **The per-token
-        classifier head is always randomly initialised** (fine-tuning
-        starting point — no NER/POS-fine-tuned head ships).
-    weights : BERTBaseWeights, optional, keyword-only
-        Explicit encoder-weights enum member; takes precedence over
-        ``pretrained``.
+        Weight selector.  ``False`` → random init (uncased ``_CFG_BASE``,
+        ``num_labels=2``); ``True`` → the CoNLL-2003 NER checkpoint
+        (:attr:`BERTBaseNERWeights.CONLL2003`, from ``dslim/bert-base-NER``)
+        — an inference-ready 9-way BIO tagger (O, B/I-PER, B/I-ORG, B/I-LOC,
+        B/I-MISC; test F1 ≈ 91.3).  **This is a cased BERT-Base** (vocab
+        28 996); when ``pretrained`` is requested the model is built with the
+        matching cased config, so tokenize with the cased
+        :class:`BERTTokenizer` (``do_lower_case=False``).
+    weights : BERTBaseNERWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
-        Optional :class:`BERTConfig` field overrides forwarded into the
-        underlying config.  Pass ``num_labels=N`` to set the tag set size.
-        Overrides that change the encoder shape are incompatible with
-        loading pretrained encoder weights.
+        Optional :class:`BERTConfig` field overrides.  When given, they
+        override the (random-init) ``_CFG_BASE`` and disable pretrained
+        loading's cased-config switch — pass your own ``vocab_size`` /
+        ``num_labels`` for custom fine-tuning.
 
     Returns
     -------
     BERTForTokenClassification
-        BERT-Base wrapped with the per-token classifier head (encoder
-        pretrained when requested; head random).
+        BERT-Base wrapped with the per-token classifier head (fully
+        fine-tuned on CoNLL-2003 when ``pretrained`` is requested).
 
     Notes
     -----
@@ -714,16 +732,22 @@ def bert_base_token_cls(
     --------
     >>> import lucid
     >>> from lucid.models.text.bert import bert_base_token_cls
-    >>> model = bert_base_token_cls(num_labels=9).eval()   # e.g. CoNLL-2003 BIO tag set
+    >>> model = bert_base_token_cls(pretrained=True).eval()   # CoNLL-2003 NER (9 tags)
     >>> input_ids = lucid.tensor([[101, 2198, 7592, 102]])
     >>> out = model(input_ids)
     >>> out.logits.shape   # (1, T=4, num_labels=9)
     (1, 4, 9)
     """
-    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
-    model = BERTForTokenClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseNERWeights, pretrained, weights)
+    # The canonical CoNLL checkpoint is cased (vocab 28 996, 9 BIO labels);
+    # build the matching config when loading it (unless overrides intervene).
+    if entry is not None and not overrides:
+        cfg = _CFG_NER_CONLL
+    else:
+        cfg = _apply(_CFG_BASE, overrides)
+    model = BERTForTokenClassification(cfg)
     if entry is not None:
-        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+        weights_mod.load_weight_entry(model, entry, name="bert_base_token_cls")
     return model
 
 
@@ -737,38 +761,36 @@ def bert_base_token_cls(
 def bert_base_qa(
     pretrained: bool | str = False,
     *,
-    weights: BERTBaseWeights | None = None,
+    weights: BERTBaseQAWeights | None = None,
     **overrides: object,
 ) -> BERTForQuestionAnswering:
-    r"""Construct a BERT-Base model with an extractive-QA span head.
+    r"""Construct a BERT-Base extractive-QA model (SQuAD v1.1).
 
     Same trunk as :func:`bert_base` (L=12, H=768, A=12), augmented with a
     2-way linear head producing start- and end-position logits over each
-    input token.  The canonical fine-tuning recipe for SQuAD v1.1 and v2.0.
+    input token.
 
     Parameters
     ----------
     pretrained : bool or str, default=False
-        Encoder-weight selector.  ``False`` → fully random init; ``True``
-        → loads the pretrained :func:`bert_base` encoder
-        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk; a tag
-        string selects a specific encoder checkpoint.  **The span-prediction
-        head is always randomly initialised** (fine-tuning starting point —
-        no SQuAD-fine-tuned head ships).
-    weights : BERTBaseWeights, optional, keyword-only
-        Explicit encoder-weights enum member; takes precedence over
-        ``pretrained``.
+        Weight selector.  ``False`` → random init; ``True`` → the SQuAD v1.1
+        fine-tuned checkpoint (:attr:`BERTBaseQAWeights.SQUAD_V1`, from
+        ``csarron/bert-base-uncased-squad-v1``) — an inference-ready
+        extractive-QA model (EM ≈ 80.9 / F1 ≈ 88.1).  Tokenize with the
+        uncased :class:`BERTTokenizer`.
+    weights : BERTBaseQAWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  ``num_labels`` is ignored by this head.
-        Overrides that change the encoder shape are incompatible with
-        loading pretrained encoder weights.
+        Overrides that change the encoder shape are incompatible with the
+        pretrained checkpoint.
 
     Returns
     -------
     BERTForQuestionAnswering
-        BERT-Base wrapped with the span-prediction head (encoder pretrained
-        when requested; head random).
+        BERT-Base wrapped with the span-prediction head (fully fine-tuned
+        on SQuAD when ``pretrained`` is requested).
 
     Notes
     -----
@@ -787,8 +809,74 @@ def bert_base_qa(
     >>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)
     (1, 6, 2)
     """
-    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    entry = weights_mod.resolve_weights(BERTBaseQAWeights, pretrained, weights)
     model = BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))
     if entry is not None:
-        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+        weights_mod.load_weight_entry(model, entry, name="bert_base_qa")
+    return model
+
+
+@register_model(  # type: ignore[arg-type]  # reason: bert_large_qa adds a typed weights= kwarg (BERTLargeQAWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
+    task="question-answering",
+    family="bert",
+    model_type="bert",
+    model_class=BERTForQuestionAnswering,
+    default_config=_CFG_LARGE,
+)
+def bert_large_qa(
+    pretrained: bool | str = False,
+    *,
+    weights: BERTLargeQAWeights | None = None,
+    **overrides: object,
+) -> BERTForQuestionAnswering:
+    r"""Construct a BERT-Large extractive-QA model (whole-word-masking, SQuAD v1.1).
+
+    Same trunk as :func:`bert_large` (L=24, H=1024, A=16, ~335M parameters),
+    augmented with a 2-way span head.
+
+    Parameters
+    ----------
+    pretrained : bool or str, default=False
+        Weight selector.  ``False`` → random init; ``True`` → the official
+        Google whole-word-masking SQuAD v1.1 checkpoint
+        (:attr:`BERTLargeQAWeights.SQUAD_V1`, from
+        ``google-bert/bert-large-uncased-whole-word-masking-finetuned-squad``)
+        — an inference-ready extractive-QA model (EM ≈ 86.9 / F1 ≈ 93.2),
+        the strongest BERT SQuAD result.  Tokenize with the uncased
+        :class:`BERTTokenizer`.
+    weights : BERTLargeQAWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
+    **overrides : object
+        Optional :class:`BERTConfig` field overrides forwarded into the
+        underlying config.  ``num_labels`` is ignored by this head.
+        Overrides that change the encoder shape are incompatible with the
+        pretrained checkpoint.
+
+    Returns
+    -------
+    BERTForQuestionAnswering
+        BERT-Large wrapped with the span-prediction head (fully fine-tuned
+        on SQuAD when ``pretrained`` is requested).
+
+    Notes
+    -----
+    Reference: Devlin, Chang, Lee, and Toutanova, *"BERT: Pre-training of
+    Deep Bidirectional Transformers for Language Understanding"*, NAACL 2019
+    (arXiv:1810.04805) §4.2.  Whole-word masking is the pre-training tweak
+    from the BERT repository's later release.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> from lucid.models.text.bert import bert_large_qa
+    >>> model = bert_large_qa().eval()
+    >>> input_ids = lucid.tensor([[101, 2040, 102, 1045, 2572, 102]])
+    >>> out = model(input_ids)
+    >>> out.logits.shape   # (1, T=6, 2)
+    (1, 6, 2)
+    """
+    entry = weights_mod.resolve_weights(BERTLargeQAWeights, pretrained, weights)
+    model = BERTForQuestionAnswering(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="bert_large_qa")
     return model

@@ -22,6 +22,7 @@ from lucid.models.text.bert._pretrained import (
     bert_large,
     bert_large_cls,
     bert_large_mlm,
+    bert_large_qa,
     bert_medium,
     bert_mini,
     bert_small,
@@ -51,6 +52,7 @@ __all__ = [
     "bert_large_cls",
     "bert_base_token_cls",
     "bert_base_qa",
+    "bert_large_qa",
     "BERTTokenizer",
     "BERTTokenizerFast",
 ]

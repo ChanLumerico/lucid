@@ -13,7 +13,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.5.0 unreleased] — 2026-05-30
+## [3.5.0 unreleased] — 2026-05-31
+
+### Added — Pretrained weights: BERT fine-tuned task heads (SQuAD + CoNLL NER)
+
+Three *full* fine-tuned BERT checkpoints on canonical NLP benchmarks ship via
+:mod:`lucid.weights`, so the QA / NER factories are now inference-ready with
+``pretrained=True`` (parity vs the reference framework ≤ 2.3e-5 on logits):
+
+- **bert_base_qa** ← ``csarron/bert-base-uncased-squad-v1`` (MIT, SQuAD v1.1;
+  EM ≈ 80.9 / F1 ≈ 88.1).  `BERTBaseQAWeights.SQUAD_V1`.
+- **bert_large_qa** *(new factory)* ← the official Google
+  ``bert-large-uncased-whole-word-masking-finetuned-squad`` (Apache-2.0;
+  EM ≈ 86.9 / F1 ≈ 93.2 — the strongest BERT SQuAD result).
+  `BERTLargeQAWeights.SQUAD_V1`.
+- **bert_base_token_cls** ← ``dslim/bert-base-NER`` (MIT, CoNLL-2003; F1 ≈ 91.3).
+  This is a **cased** BERT-Base (vocab 28 996, 9-way BIO head), so
+  ``pretrained=True`` builds the matching cased config — tokenize with the
+  cased :class:`BERTTokenizer`.  `BERTBaseNERWeights.CONLL2003`.
+
+Converter (``tools/convert_weights/bert.py``) gains ``qa`` / ``token_cls``
+kinds: the head + encoder come from the task model, and the pooler (dropped by
+HF's ``add_pooling_layer=False`` but present in the checkpoint file) is
+recovered via ``AutoModel`` so Lucid's ``BERTModel`` pooler slot fills with the
+checkpoint's own weights.  GLUE/SST-2 is intentionally not shipped — no clean
+canonical + permissively-licensed BERT checkpoint exists.
+
+### Changed — Text task-head factories: best-available canonical weights
+
+QA (``bert_base_qa`` / ``bert_large_qa``) and NER (``bert_base_token_cls``)
+``pretrained=`` now loads the *full fine-tuned* task model above (was: encoder
++ random head).  Sequence-classification (``*_cls``) keeps the encoder-into-
+``.bert`` behaviour below (no canonical GLUE checkpoint).
 
 ### Changed — Text task-head factories load the pretrained encoder (head random)
 

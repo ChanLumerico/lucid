@@ -268,9 +268,7 @@ class TestRoFormerEncoderPretrainedTransfer:
         "head_cls",
         [RoFormerForSequenceClassification, RoFormerForTokenClassification],
     )
-    def test_encoder_state_loads_into_roformer_submodule(
-        self, head_cls: type
-    ) -> None:
+    def test_encoder_state_loads_into_roformer_submodule(self, head_cls: type) -> None:
         cfg = _tiny_config()
         enc = RoFormerModel(cfg)
         head = head_cls(cfg)
@@ -278,9 +276,7 @@ class TestRoFormerEncoderPretrainedTransfer:
         assert not list(getattr(result, "missing_keys", []) or [])
         assert not list(getattr(result, "unexpected_keys", []) or [])
 
-    @pytest.mark.parametrize(
-        "factory_name", ["roformer_cls", "roformer_token_cls"]
-    )
+    @pytest.mark.parametrize("factory_name", ["roformer_cls", "roformer_token_cls"])
     def test_factory_exposes_weights_kwarg(self, factory_name: str) -> None:
         import importlib
         import inspect

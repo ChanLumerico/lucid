@@ -80,7 +80,7 @@ from lucid.models.text.bert import (
     bert_tiny, bert_mini, bert_small, bert_medium, bert_base, bert_large,
     bert_base_mlm, bert_large_mlm,
     bert_base_cls, bert_large_cls,
-    bert_base_token_cls, bert_base_qa,
+    bert_base_token_cls, bert_base_qa, bert_large_qa,
 )
 # 2018 — GPT-1 (Radford et al.)
 from lucid.models.text.gpt import (
@@ -619,7 +619,7 @@ __all__ = [
     "bert_tiny", "bert_mini", "bert_small", "bert_medium", "bert_base", "bert_large",
     "bert_base_mlm", "bert_large_mlm",
     "bert_base_cls", "bert_large_cls",
-    "bert_base_token_cls", "bert_base_qa",
+    "bert_base_token_cls", "bert_base_qa", "bert_large_qa",
     # ── Text (2018) GPT-1 ─────────────────────────────────────────────────────
     "GPTConfig", "GPTModel", "GPTLMHeadModel",
     "GPTDoubleHeadsModel", "GPTDoubleHeadsOutput",

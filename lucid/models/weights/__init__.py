@@ -253,6 +253,9 @@ from lucid.models.text.bert._weights import (
     BERTLargeWeights,
     BERTBaseMLMWeights,
     BERTLargeMLMWeights,
+    BERTBaseQAWeights,
+    BERTLargeQAWeights,
+    BERTBaseNERWeights,
 )
 
 # 2018 — GPT-1 (Radford et al.) — original decoder-only transformer (text)
@@ -418,6 +421,9 @@ __all__ = [
     "BERTLargeWeights",
     "BERTBaseMLMWeights",
     "BERTLargeMLMWeights",
+    "BERTBaseQAWeights",
+    "BERTLargeQAWeights",
+    "BERTBaseNERWeights",
     # ── Text (2018) GPT-1 (Radford et al.) ────────────────────────────
     "GPTWeights",
     "GPTLMWeights",

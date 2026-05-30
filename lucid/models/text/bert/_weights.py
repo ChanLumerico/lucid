@@ -33,6 +33,10 @@ def _url(slug: str) -> str:
     return f"{HUB_BASE}/{slug}/resolve/main/{_TAG}/model.safetensors"
 
 
+def _url_tag(slug: str, tag: str) -> str:
+    return f"{HUB_BASE}/{slug}/resolve/main/{tag}/model.safetensors"
+
+
 @register_weights("bert_tiny")
 class BERTTinyWeights(WeightsEnum):
     r"""Pretrained weight tags for :func:`lucid.models.bert_tiny`."""
@@ -191,3 +195,85 @@ class BERTLargeMLMWeights(WeightsEnum):
         },
     )
     DEFAULT = WIKIPEDIA_BOOKSCORPUS
+
+
+# ── Fine-tuned task heads (canonical downstream-benchmark checkpoints) ─────────
+#
+# These are *full* fine-tuned models (encoder + task head), unlike the encoder
+# tags above.  `pretrained=True` on the matching factory loads an inference-ready
+# checkpoint.  The pooler is the checkpoint's own (untrained during fine-tuning,
+# unused by the QA / token-cls head, kept so the Lucid ``BERTModel`` slot fills).
+
+_SQUAD_TAG = "SQUAD_V1"
+_CONLL_TAG = "CONLL2003"
+
+
+@register_weights("bert_base_qa")
+class BERTBaseQAWeights(WeightsEnum):
+    r"""Fine-tuned SQuAD v1.1 weights for :func:`lucid.models.bert_base_qa`."""
+
+    SQUAD_V1 = WeightEntry(
+        url=_url_tag("bert-base-squad", _SQUAD_TAG),
+        sha256="00c936fe41ec21b9a8868c036e4866836ae17905362f0e9dcbf1d989d2b7728e",
+        num_classes=2,
+        transforms=_NOOP,
+        meta={
+            "tag": _SQUAD_TAG,
+            "source": "transformers/csarron/bert-base-uncased-squad-v1",
+            "license": "mit",
+            "num_params": 108_893_186,
+            "metrics": {"squad": {"f1": 88.1, "exact_match": 80.9}},
+        },
+    )
+    DEFAULT = SQUAD_V1
+
+
+@register_weights("bert_large_qa")
+class BERTLargeQAWeights(WeightsEnum):
+    r"""Fine-tuned SQuAD v1.1 weights for :func:`lucid.models.bert_large_qa`.
+
+    The official Google whole-word-masking BERT-Large SQuAD checkpoint.
+    """
+
+    SQUAD_V1 = WeightEntry(
+        url=_url_tag("bert-large-squad", _SQUAD_TAG),
+        sha256="8f4b8d0abfff79465413ff2f99738fac29c42d4eca483bec571938f564dfc011",
+        num_classes=2,
+        transforms=_NOOP,
+        meta={
+            "tag": _SQUAD_TAG,
+            "source": (
+                "transformers/google-bert/"
+                "bert-large-uncased-whole-word-masking-finetuned-squad"
+            ),
+            "license": "apache-2.0",
+            "num_params": 335_143_938,
+            "metrics": {"squad": {"f1": 93.2, "exact_match": 86.9}},
+        },
+    )
+    DEFAULT = SQUAD_V1
+
+
+@register_weights("bert_base_token_cls")
+class BERTBaseNERWeights(WeightsEnum):
+    r"""Fine-tuned CoNLL-2003 NER weights for :func:`lucid.models.bert_base_token_cls`.
+
+    ``dslim/bert-base-NER`` — a **cased** BERT-Base (vocab 28 996) with a
+    9-way BIO tag head (O, B/I-PER, B/I-ORG, B/I-LOC, B/I-MISC).  Tokenize
+    with the cased :class:`BERTTokenizer` (``do_lower_case=False``).
+    """
+
+    CONLL2003 = WeightEntry(
+        url=_url_tag("bert-base-ner", _CONLL_TAG),
+        sha256="9c40b1e767a636302bb5aa2cb1a9ef659bfc3804c468d10de0117962ca50b329",
+        num_classes=9,
+        transforms=_NOOP,
+        meta={
+            "tag": _CONLL_TAG,
+            "source": "transformers/dslim/bert-base-NER",
+            "license": "mit",
+            "num_params": 107_726_601,
+            "metrics": {"conll2003": {"f1": 91.3}},
+        },
+    )
+    DEFAULT = CONLL2003

@@ -68,6 +68,45 @@ _VARIANTS: dict[str, tuple[str, str, str, str, str]] = {
         "bert_large_mlm", "bert-large-mlm", "BERT-Large (Masked-LM)",
         "google-bert/bert-large-uncased", "mlm",
     ),
+    "bert_base_qa": (
+        "bert_base_qa", "bert-base-squad", "BERT-Base (SQuAD v1.1)",
+        "csarron/bert-base-uncased-squad-v1", "qa",
+    ),
+    "bert_large_qa": (
+        "bert_large_qa", "bert-large-squad", "BERT-Large WWM (SQuAD v1.1)",
+        "google-bert/bert-large-uncased-whole-word-masking-finetuned-squad", "qa",
+    ),
+    "bert_base_token_cls": (
+        "bert_base_token_cls", "bert-base-ner", "BERT-Base (CoNLL-2003 NER)",
+        "dslim/bert-base-NER", "token_cls",
+    ),
+}
+
+# Per-task provenance for the fine-tuned heads (license / datasets / metrics /
+# tokenizer-casing).  These are *full* fine-tuned checkpoints, unlike the
+# encoder + MLM tags.
+_TASK_INFO: dict[str, dict[str, object]] = {
+    "bert_base_qa": {
+        "task": "question-answering",
+        "license": "mit",
+        "datasets": ["squad"],
+        "metrics": {"squad": {"exact_match": 80.9, "f1": 88.1}},
+        "do_lower_case": True,
+    },
+    "bert_large_qa": {
+        "task": "question-answering",
+        "license": "apache-2.0",
+        "datasets": ["squad"],
+        "metrics": {"squad": {"exact_match": 86.9, "f1": 93.2}},
+        "do_lower_case": True,
+    },
+    "bert_base_token_cls": {
+        "task": "token-classification",
+        "license": "mit",
+        "datasets": ["conll2003"],
+        "metrics": {"conll2003": {"f1": 91.3}},
+        "do_lower_case": False,
+    },
 }
 
 
@@ -95,20 +134,53 @@ class BERTArch(Architecture):
         self._hf_id = hf_id
         self._kind = kind
 
+        import lucid.models as models
+
         if kind == "mlm":
             from transformers import BertForPreTraining
 
             self._src = BertForPreTraining.from_pretrained(hf_id).eval()
+            self._model: Module = getattr(models, factory)()
+        elif kind in ("qa", "token_cls"):
+            from transformers import (
+                AutoModel,
+                BertForQuestionAnswering,
+                BertForTokenClassification,
+            )
+
+            head_cls = (
+                BertForQuestionAnswering
+                if kind == "qa"
+                else BertForTokenClassification
+            )
+            # Fine-tuned head + encoder come from the task model; the pooler
+            # (dropped by add_pooling_layer=False, but present in the file) is
+            # recovered via AutoModel so Lucid's BERTModel pooler slot fills.
+            self._src = head_cls.from_pretrained(hf_id).eval()
+            self._trunk = AutoModel.from_pretrained(hf_id).eval()
+            if kind == "token_cls":
+                vocab = int(self._src.config.vocab_size)
+                labels = int(self._src.config.num_labels)
+                self._model = getattr(models, factory)(
+                    vocab_size=vocab, num_labels=labels
+                )
+            else:
+                self._model = getattr(models, factory)()
         else:
             from transformers import AutoModel
 
             self._src = AutoModel.from_pretrained(hf_id).eval()
-
-        import lucid.models as models
-
-        self._model: Module = getattr(models, factory)()
+            self._model = getattr(models, factory)()
 
     def source_state_dict(self) -> dict[str, object]:
+        if self._kind in ("qa", "token_cls"):
+            # Head model: bert.* (no pooler) + task head (qa_outputs/classifier).
+            combined = dict(self._src.state_dict())
+            # Recover the checkpoint's own pooler from the AutoModel trunk.
+            for k, v in self._trunk.state_dict().items():
+                if k.startswith("pooler."):
+                    combined[f"bert.{k}"] = v
+            return {k: v.detach().cpu().numpy() for k, v in combined.items()}
         return {
             k: v.detach().cpu().numpy() for k, v in self._src.state_dict().items()
         }
@@ -130,19 +202,41 @@ class BERTArch(Architecture):
     def spec(self) -> ConversionSpec:
         cfg = self._model.config
         config = {k: _jsonable(v) for k, v in dataclasses.asdict(cfg).items()}
-        task = "masked-lm" if self._kind == "mlm" else "base"
-        num_classes = cfg.vocab_size if self._kind == "mlm" else cfg.hidden_size
+
+        info = _TASK_INFO.get(self.arch)
+        if info is not None:
+            task = str(info["task"])
+            license_id = str(info["license"])
+            datasets = list(info["datasets"])  # type: ignore[arg-type]
+            metrics = info["metrics"]
+            do_lower_case = bool(info["do_lower_case"])
+            # QA span head = 2; token-cls = num_labels.
+            num_classes = 2 if self._kind == "qa" else int(cfg.num_labels)
+        elif self._kind == "mlm":
+            task = "masked-lm"
+            license_id = "apache-2.0"
+            datasets = ["wikipedia", "bookcorpus"]
+            metrics = {}
+            do_lower_case = True
+            num_classes = cfg.vocab_size
+        else:
+            task = "base"
+            license_id = "apache-2.0"
+            datasets = ["wikipedia", "bookcorpus"]
+            metrics = {}
+            do_lower_case = True
+            num_classes = cfg.hidden_size
 
         preprocessing = {
             "tokenizer_class": "BERTTokenizer",
             "vocab_size": cfg.vocab_size,
-            "do_lower_case": True,
+            "do_lower_case": do_lower_case,
             "max_length": cfg.max_position_embeddings,
         }
         meta: dict[str, object] = {
-            "num_params": int(sum(p.numel() for p in self._src.parameters())),
+            "num_params": int(sum(p.numel() for p in self._model.parameters())),
             "recipe": f"HuggingFace/{self._hf_id}",
-            "metrics": {},
+            "metrics": metrics,
         }
         return ConversionSpec(
             model_name=self._factory,
@@ -152,14 +246,14 @@ class BERTArch(Architecture):
             task=task,
             model_type="bert",
             source=f"transformers/{self._hf_id}",
-            license="apache-2.0",
+            license=license_id,
             num_classes=num_classes,
             config=config,
             preprocessing=preprocessing,
             citation=_CITATION,
             title=self._title,
             paper_url=_PAPER_URL,
-            datasets=["wikipedia", "bookcorpus"],
+            datasets=datasets,
             meta=meta,
         )
 

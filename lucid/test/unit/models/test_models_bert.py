@@ -170,16 +170,19 @@ class TestBERTForQuestionAnswering:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Task heads load the pretrained encoder into their .bert submodule (head random)
+# Sequence-classification head loads the pretrained encoder into .bert (random
+# head); QA / token-cls heads ship *full* fine-tuned checkpoints (TestBERTTaskWeights)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 class TestBERTEncoderPretrainedTransfer:
-    """The ``*_cls`` / ``*_token_cls`` / ``*_qa`` factories load the pretrained
-    encoder into ``model.bert`` and leave the task head random.  These verify
-    the encoder checkpoint's key layout is identical to the head's ``.bert``
+    """``bert_*_cls`` loads the pretrained encoder into ``model.bert`` and leaves
+    the classifier random (no canonical GLUE checkpoint).  These verify the
+    encoder checkpoint's key layout is identical to the head's ``.bert``
     submodule — i.e. ``load_weight_entry(model.bert, entry)`` succeeds with
-    ``strict=True`` at full scale — without any network access.
+    ``strict=True`` at full scale — without any network access.  (QA / NER no
+    longer use this path; they load full fine-tuned models — see
+    :class:`TestBERTTaskWeights`.)
     """
 
     @pytest.mark.parametrize(
@@ -190,9 +193,7 @@ class TestBERTEncoderPretrainedTransfer:
             BERTForQuestionAnswering,
         ],
     )
-    def test_encoder_state_loads_into_bert_submodule(
-        self, head_cls: type
-    ) -> None:
+    def test_encoder_state_loads_into_bert_submodule(self, head_cls: type) -> None:
         cfg = _tiny_config()
         enc = BERTModel(cfg)
         head = head_cls(cfg)
@@ -244,6 +245,92 @@ class TestBERTEncoderPretrainedTransfer:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Fine-tuned task checkpoints — SQuAD (base + official large WWM) + CoNLL NER
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestBERTTaskWeights:
+    """The QA + NER factories ship *full* fine-tuned checkpoints on canonical
+    benchmarks.  Network-free: enum/registry shape + the NER cased-config switch.
+    """
+
+    def _enum(self, name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    @pytest.mark.parametrize(
+        ("enum_name", "tag", "slug", "num_classes", "license_id"),
+        [
+            ("BERTBaseQAWeights", "SQUAD_V1", "bert-base-squad", 2, "mit"),
+            ("BERTLargeQAWeights", "SQUAD_V1", "bert-large-squad", 2, "apache-2.0"),
+            ("BERTBaseNERWeights", "CONLL2003", "bert-base-ner", 9, "mit"),
+        ],
+    )
+    def test_entry_fields(
+        self,
+        enum_name: str,
+        tag: str,
+        slug: str,
+        num_classes: int,
+        license_id: str,
+    ) -> None:
+        cls = self._enum(enum_name)
+        assert cls.DEFAULT is cls[tag]
+        e = cls[tag].entry
+        assert e.num_classes == num_classes
+        assert len(e.sha256) == 64 and set(e.sha256) != {"0"}
+        assert f"lucid-dl/{slug}" in e.url
+        assert f"/{tag}/" in e.url
+        assert e.meta["license"] == license_id
+
+    @pytest.mark.parametrize(
+        ("factory", "enum_name"),
+        [
+            ("bert_base_qa", "BERTBaseQAWeights"),
+            ("bert_large_qa", "BERTLargeQAWeights"),
+            ("bert_base_token_cls", "BERTBaseNERWeights"),
+        ],
+    )
+    def test_registered_for_factories(self, factory: str, enum_name: str) -> None:
+        from lucid.weights import weights_for
+
+        resolved = weights_for(factory)
+        assert resolved is not None
+        assert resolved.__name__ == enum_name
+
+    def test_bert_large_qa_registered(self) -> None:
+        assert is_model("bert_large_qa")
+
+    def test_ner_random_init_is_uncased_base(self) -> None:
+        # No weights/pretrained → plain uncased _CFG_BASE (vocab 30522, 2 labels).
+        m = create_model(
+            "bert_base_token_cls",
+            pretrained=False,
+            vocab_size=_VOCAB,
+            hidden_size=_HIDDEN,
+            num_hidden_layers=_LAYERS,
+            num_attention_heads=_HEADS,
+            intermediate_size=_INTER,
+            max_position_embeddings=_MAX_POS,
+        )
+        assert isinstance(m, BERTForTokenClassification)
+        assert m.config.vocab_size == _VOCAB
+
+    def test_ner_cased_config_shape_matches_checkpoint(self) -> None:
+        # The CoNLL checkpoint is cased (vocab 28 996, 9 BIO labels); the factory
+        # builds that exact shape for pretrained loads.
+        from lucid.models.text.bert._pretrained import _CFG_NER_CONLL
+
+        assert _CFG_NER_CONLL.vocab_size == 28_996
+        assert _CFG_NER_CONLL.num_labels == 9
+        m = BERTForTokenClassification(_CFG_NER_CONLL)
+        emb = m.bert.embeddings.word_embeddings.weight
+        assert tuple(emb.shape) == (28_996, 768)
+        assert tuple(m.classifier.weight.shape) == (9, 768)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Registry — factory dispatch
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -272,6 +359,7 @@ class TestBERTRegistry:
             "bert_large_cls",
             "bert_base_token_cls",
             "bert_base_qa",
+            "bert_large_qa",
         ],
     )
     def test_task_heads_registered(self, name: str) -> None:
