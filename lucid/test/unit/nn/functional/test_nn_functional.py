@@ -22,6 +22,29 @@ class TestActivationsF:
         # exp of log_softmax should sum to 1.
         assert abs(np.exp(out).sum() - 1.0) < 1e-6
 
+    def test_log_softmax_stable_at_large_logits(self) -> None:
+        # Regression: log_softmax must route through the engine's max-subtracting
+        # kernel, not the naive log(softmax(x)) — the latter underflows to
+        # log(0) = -inf once a non-max logit's softmax rounds to 0.
+        x = lucid.tensor([[1000.0, 995.0, -1000.0]])
+        out = F.log_softmax(x, dim=1).numpy()
+        assert np.isfinite(out).all()
+        # closed form: row max is 1000, so the top entry ≈ -log(1 + e^-5 + e^-2000)
+        np.testing.assert_allclose(out[0, 0], -math.log1p(math.exp(-5.0)), atol=1e-3)
+
+    def test_cross_entropy_stable_at_large_logits(self) -> None:
+        # Regression: cross_entropy (log_softmax + NLL) stays finite in both the
+        # forward loss and the gradient even when logits are far outside [-88, 88].
+        rng = np.random.default_rng(0)
+        xn = (rng.standard_normal((8, 10)).astype("float32")) * 200.0
+        x = lucid.tensor(xn)
+        x.requires_grad = True
+        y = lucid.tensor(rng.integers(0, 10, size=(8,)).astype("int64")).long()
+        loss = F.cross_entropy(x, y)
+        loss.backward()
+        assert np.isfinite(float(loss.item()))
+        assert np.isfinite(x.grad.numpy()).all()
+
     def test_gelu(self) -> None:
         # gelu(0) = 0.
         assert abs(F.gelu(lucid.tensor([0.0])).item()) < 1e-6

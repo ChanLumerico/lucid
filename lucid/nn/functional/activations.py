@@ -633,8 +633,12 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
     Tensor([[-2.4076, -1.4076, -0.4076]])
     """
     axis = dim if dim is not None else -1
-    sm = _C_engine.softmax(_unwrap(x), axis)
-    return _wrap(_C_engine.log(sm))
+    # Route through the engine's dedicated log_softmax kernel, which computes
+    # ``(x - m) - log(sum(exp(x - m)))`` with the max-subtraction stabilisation.
+    # The naive ``log(softmax(x))`` form underflows: at large logits the
+    # non-max softmax probabilities round to 0, so ``log(0) = -inf`` (the engine
+    # softmax itself is stable, but the subsequent ``log`` is not).
+    return _wrap(_C_engine.log_softmax(_unwrap(x), axis))
 
 
 def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:

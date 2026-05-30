@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-31
 
+### Fixed — Numerically stable `F.log_softmax` (and `cross_entropy`)
+
+`F.log_softmax` computed the naive `log(softmax(x))` — even though its own
+docstring promised the max-subtracting `x - log(sum(exp(x)))` form and the C++
+engine already has a stable `log_softmax` kernel. At large logits the non-max
+softmax probabilities round to 0, so the subsequent `log(0) = -inf` produced
+`-inf`/`nan` log-probs, loss, and gradients (broke past `|logit| ≈ 90`). The
+Python wrapper now routes through the engine's `log_softmax_op`
+(`x - m - log(sum(exp(x - m)))`); `cross_entropy` (= `log_softmax` + NLL)
+inherits the fix. Forward output is identical to the naive form at normal logits
+(matches the numpy reference) but stays finite to `|logit| = 1000+`; verified
+finite loss + gradients where it previously NaN'd. `F.softmax` was already stable
+(routed straight to the engine kernel). Surfaced while training a from-scratch
+ResNet-50 on CIFAR-10 whose logits drifted into the unstable range. New
+regression tests in `test_nn_functional.py`.
+
 ### Added — Pretrained weights: DDPM (CIFAR-10 + LSUN-Church)
 
 The first **generative** pretrained weights — the official ``google/ddpm-*``
