@@ -56,8 +56,8 @@ PREFIX_MAP: dict[str, str] = {
     "refactor": "changed",
     "revert": "changed",
     "remove": "removed",
-    "deprec": "deprecated",
-    "sec": "security",
+    "deprecate": "deprecated",
+    "security": "security",
     "docs": "documentation",
     "test": "tooling",
     "chore": "tooling",
@@ -74,8 +74,8 @@ USER_FACING_PREFIXES = {
     "refactor",
     "revert",
     "remove",
-    "deprec",
-    "sec",
+    "deprecate",
+    "security",
 }
 
 # `check` only looks at commits since the most recent version section.

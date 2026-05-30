@@ -450,9 +450,48 @@ Standard sections from Keep a Changelog (`Added`, `Changed`, `Deprecated`, `Remo
 - **Performance** — measured speed or memory wins (include numbers)
 - **Tooling** — dev-only changes that don't affect runtime (CI, lints, scaffolding)
 
-### Commit style
+### Commit style — enforced
 
-There is no enforced commit message format, but each commit should be scoped to a single logical change. Phase-level work lands as a series of focused commits, not one giant squash.
+Commit subjects follow **Conventional Commits**, and the convention is
+**enforced**: a malformed subject is rejected at commit time (the `commit-msg`
+git hook) and in CI (`.github/workflows/commit-convention.yml`). The validator
+is `tools/check_commit_msg.py`. Activate the hooks once with
+`./tools/install_hooks.sh`. Each commit should still be scoped to a single
+logical change — phase-level work lands as a series of focused commits, not one
+giant squash.
+
+**Format:** `<type>(<scope>): <subject>`
+
+**Rules (hard-blocked):**
+
+- **`type`** — one of (lower-case): `feat` `fix` `perf` `refactor` `revert`
+  `remove` `deprecate` `security` `docs` `style` `test` `build` `ci` `chore`
+  `release`. (Note the full names `deprecate` / `security`.)
+- **`scope`** — *optional*; a lower-case **dotted source path** mirroring the
+  tree (`models.text.bert`, `nn.functional`, `compile`, `gpu`, `weights`,
+  `utils.transforms`, `tools`, …). Comma-separated multi-scope allowed. Must
+  match `[a-z0-9._,-]+`.
+- **`!`** — *optional* breaking-change marker: `type(scope)!: …` (or a
+  `BREAKING CHANGE:` footer).
+- **`subject`** — non-empty, **no trailing period**, header **≤ 100 chars**
+  (≤ 72 recommended → warning).
+- Merge / `Revert "…"` / `fixup!` / `squash!` commits are exempt.
+- Bypass one local commit (discouraged): `LUCID_SKIP_COMMIT_CONVENTION=1 git
+  commit …` or `--no-verify` — CI still checks it.
+
+The first eight types (`feat` … `security`) are *user-facing* and feed the
+CHANGELOG pipeline (see *Adding a changelog entry* above): the `commit-msg` hook
+warns if such a commit doesn't touch `CHANGELOG.md`, and the `post-commit` hook
+auto-folds an entry via `tools/changelog.py`.
+
+Examples:
+
+```
+feat(models.text.bert): add SQuAD v1.1 fine-tuned weights
+fix(nn.functional.grid_sample): honor mode / padding_mode
+perf(gpu)!: fuse layernorm kernel (breaking buffer layout)
+ci: enforce strict commit convention
+```
 
 ---
 

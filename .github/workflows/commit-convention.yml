@@ -1,0 +1,49 @@
+name: Commit Convention
+
+# Enforces the Lucid commit convention (CONTRIBUTING.md §6) as a CI safety net
+# behind the local commit-msg hook. Runs on every push to main (which ci.yml
+# does NOT gate) and on every pull request. Pure-stdlib check — no engine build,
+# so it runs fast on a Linux runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: commit-convention-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate commit subjects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so the revision range resolves
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Validate commit messages
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+          fi
+          # First push to a branch reports an all-zero "before" SHA — fall back
+          # to validating just the tip commit in that case.
+          if [ -z "${BASE}" ] || [ "${BASE}" = "0000000000000000000000000000000000000000" ]; then
+            echo "No usable base SHA — validating HEAD only."
+            python3 tools/check_commit_msg.py
+          else
+            echo "Validating ${BASE}..${HEAD}"
+            python3 tools/check_commit_msg.py --range "${BASE}..${HEAD}"
+          fi
