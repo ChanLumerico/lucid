@@ -1,6 +1,6 @@
 name: Commit Convention
 
-# Enforces the Lucid commit convention (CONTRIBUTING.md §6) as a CI safety net
+# Enforces the Lucid commit convention (CONTRIBUTING.md, Commit style) as a CI safety net
 # behind the local commit-msg hook. Runs on every push to main (which ci.yml
 # does NOT gate) and on every pull request. Pure-stdlib check — no engine build,
 # so it runs fast on a Linux runner.
