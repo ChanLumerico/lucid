@@ -15,6 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-30
 
+### Changed — Text task-head factories load the pretrained encoder (head random)
+
+The eight downstream task-head factories now honour `pretrained=` / `weights=`
+by loading the matching pretrained **encoder** trunk into their encoder
+submodule and leaving the task head randomly initialised — the standard
+fine-tuning starting point, mirroring the reference
+`AutoModelForX.from_pretrained(<encoder>)` behaviour.  No new checkpoints are
+uploaded: each head reuses its family's existing encoder checkpoint.
+
+- **bert** — `bert_base_cls`, `bert_large_cls`, `bert_base_token_cls`,
+  `bert_base_qa` load `bert_base` / `bert_large` encoder weights into
+  `model.bert` (`strict=True`; classifier / `qa_outputs` head stays random).
+- **gpt** / **gpt2** — `gpt_cls`, `gpt2_small_cls` load the `gpt` /
+  `gpt2_small` decoder trunk into `model.transformer`.
+- **roformer** — `roformer_cls`, `roformer_token_cls` load the `roformer`
+  encoder into `model.roformer`.
+- Each factory gains a keyword-only `weights=<EncoderWeightsEnum>` argument and
+  `pretrained: bool | str`; `pretrained=False` is unchanged (fully random).
+  The full task (GLUE / SQuAD / NER) checkpoints are intentionally **not**
+  shipped — they are dataset-specific, not architecture-canonical.  The
+  `transformer`-family heads keep random init (no pretrained encoder exists).
+
 ### Added — Pretrained weights: RoFormer (Chinese, CLUECorpusSmall)
 
 - **roformer** (Su et al. 2021) — `roformer` + `roformer_mlm` ←

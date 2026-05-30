@@ -170,6 +170,80 @@ class TestBERTForQuestionAnswering:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Task heads load the pretrained encoder into their .bert submodule (head random)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestBERTEncoderPretrainedTransfer:
+    """The ``*_cls`` / ``*_token_cls`` / ``*_qa`` factories load the pretrained
+    encoder into ``model.bert`` and leave the task head random.  These verify
+    the encoder checkpoint's key layout is identical to the head's ``.bert``
+    submodule — i.e. ``load_weight_entry(model.bert, entry)`` succeeds with
+    ``strict=True`` at full scale — without any network access.
+    """
+
+    @pytest.mark.parametrize(
+        "head_cls",
+        [
+            BERTForSequenceClassification,
+            BERTForTokenClassification,
+            BERTForQuestionAnswering,
+        ],
+    )
+    def test_encoder_state_loads_into_bert_submodule(
+        self, head_cls: type
+    ) -> None:
+        cfg = _tiny_config()
+        enc = BERTModel(cfg)
+        head = head_cls(cfg)
+        result = head.bert.load_state_dict(enc.state_dict(), strict=True)
+        assert not list(getattr(result, "missing_keys", []) or [])
+        assert not list(getattr(result, "unexpected_keys", []) or [])
+
+    def test_transfer_copies_encoder_values_and_leaves_head_random(self) -> None:
+        cfg = _tiny_config()
+        enc = BERTModel(cfg)
+        head = BERTForSequenceClassification(cfg)
+        # snapshot the head's random init as a scalar checksum (Tensors have no
+        # .copy(); the encoder load must not touch the classifier).
+        head_checksum_before = float(head.classifier.weight.abs().sum().item())
+        head.bert.load_state_dict(enc.state_dict(), strict=True)
+        # an encoder param now equals the source ...
+        key = "embeddings.word_embeddings.weight"
+        a = head.bert.state_dict()[key]
+        b = enc.state_dict()[key]
+        assert float((a - b).abs().sum().item()) == 0.0
+        # ... and the classifier head is untouched (still its random init).
+        head_checksum_after = float(head.classifier.weight.abs().sum().item())
+        assert head_checksum_after == head_checksum_before
+
+    def test_cls_factory_pretrained_false_no_download(self) -> None:
+        m = create_model(
+            "bert_base_cls",
+            pretrained=False,
+            vocab_size=_VOCAB,
+            hidden_size=_HIDDEN,
+            num_hidden_layers=_LAYERS,
+            num_attention_heads=_HEADS,
+            intermediate_size=_INTER,
+            max_position_embeddings=_MAX_POS,
+        )
+        assert isinstance(m, BERTForSequenceClassification)
+
+    @pytest.mark.parametrize(
+        "factory_name",
+        ["bert_base_cls", "bert_large_cls", "bert_base_token_cls", "bert_base_qa"],
+    )
+    def test_factory_exposes_weights_kwarg(self, factory_name: str) -> None:
+        import importlib
+        import inspect
+
+        mod = importlib.import_module("lucid.models.text.bert._pretrained")
+        fn = getattr(mod, factory_name)
+        assert "weights" in inspect.signature(fn).parameters
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Registry — factory dispatch
 # ─────────────────────────────────────────────────────────────────────────────
 

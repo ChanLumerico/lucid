@@ -504,7 +504,7 @@ def gpt2_xlarge_lm(
 # ── Sequence-classification head ──────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: gpt2_small_cls adds a typed weights= kwarg (the encoder GPT2SmallWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="sequence-classification",
     family="gpt2",
     model_type="gpt2",
@@ -512,7 +512,10 @@ def gpt2_xlarge_lm(
     default_config=_CFG_SMALL,
 )
 def gpt2_small_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: GPT2SmallWeights | None = None,
+    **overrides: object,
 ) -> GPT2ForSequenceClassification:
     r"""Construct a GPT-2 small (124M) model with a sequence-classification head.
 
@@ -524,17 +527,27 @@ def gpt2_small_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`gpt2_small` decoder trunk
+        (:attr:`GPT2SmallWeights.DEFAULT`) into the ``.transformer``
+        submodule; a tag string selects a specific encoder checkpoint.
+        **The classifier head is always randomly initialised** (fine-tuning
+        starting point — no GLUE-fine-tuned head ships).
+    weights : GPT2SmallWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`GPT2Config` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
-        classes (default 2).
+        classes (default 2).  Overrides that change the trunk shape are
+        incompatible with loading pretrained encoder weights.
 
     Returns
     -------
     GPT2ForSequenceClassification
-        GPT-2 small trunk wrapped with the last-token classifier head.
+        GPT-2 small trunk wrapped with the last-token classifier head
+        (encoder pretrained when requested; head random).
 
     Notes
     -----
@@ -551,4 +564,8 @@ def gpt2_small_cls(
     >>> out.logits.shape   # (1, num_labels=3)
     (1, 3)
     """
-    return GPT2ForSequenceClassification(_apply(_CFG_SMALL, overrides))
+    entry = weights_mod.resolve_weights(GPT2SmallWeights, pretrained, weights)
+    model = GPT2ForSequenceClassification(_apply(_CFG_SMALL, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.transformer, entry, name="gpt2_small")
+    return model

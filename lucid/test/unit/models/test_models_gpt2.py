@@ -283,3 +283,27 @@ class TestGPT2WeightsEnums:
             resolved = weights_for(factory)
             assert resolved is not None
             assert resolved.__name__ == enum_name
+
+
+class TestGPT2EncoderPretrainedTransfer:
+    """``gpt2_small_cls`` loads the pretrained ``gpt2_small`` trunk into
+    ``model.transformer`` (classifier head random).  Verify the encoder
+    checkpoint's key layout is identical to the ``.transformer`` submodule —
+    so ``load_weight_entry(model.transformer, entry)`` succeeds with
+    ``strict=True`` at full scale — without network access.
+    """
+
+    def test_encoder_state_loads_into_transformer_submodule(self) -> None:
+        cfg = _tiny_config()
+        enc = GPT2Model(cfg)
+        head = GPT2ForSequenceClassification(cfg)
+        result = head.transformer.load_state_dict(enc.state_dict(), strict=True)
+        assert not list(getattr(result, "missing_keys", []) or [])
+        assert not list(getattr(result, "unexpected_keys", []) or [])
+
+    def test_factory_exposes_weights_kwarg(self) -> None:
+        import importlib
+        import inspect
+
+        mod = importlib.import_module("lucid.models.text.gpt2._pretrained")
+        assert "weights" in inspect.signature(mod.gpt2_small_cls).parameters

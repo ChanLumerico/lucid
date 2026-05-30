@@ -6,9 +6,12 @@ Sizes follow Devlin et al. (base / large) and Turc et al. 2019
 masked-LM heads ship Wikipedia + BookCorpus pretrained weights through
 :mod:`lucid.weights` (per-factory ``*Weights`` enums + ``weights=`` /
 ``pretrained=``, mirroring the ResNet wiring).  The fine-tune heads
-(``*_cls`` / ``*_token_cls`` / ``*_qa``) carry no canonical pretrained
-checkpoint — they expose downstream-task topology with a randomly
-initialised head.
+(``*_cls`` / ``*_token_cls`` / ``*_qa``) carry no canonical *task* (GLUE /
+SQuAD / NER) checkpoint, so their ``pretrained=`` selector loads the
+matching pretrained **encoder** trunk (``bert_base`` / ``bert_large``)
+into the ``.bert`` submodule and leaves the task head randomly
+initialised — the standard fine-tuning starting point (mirrors the
+reference ``AutoModelForX.from_pretrained(<encoder>)`` behaviour).
 """
 
 import lucid.weights as weights_mod
@@ -523,7 +526,7 @@ def bert_large_mlm(
 # ── Sequence / token / QA classification heads ────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_base_cls adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="sequence-classification",
     family="bert",
     model_type="bert",
@@ -531,7 +534,10 @@ def bert_large_mlm(
     default_config=_CFG_BASE,
 )
 def bert_base_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
 ) -> BERTForSequenceClassification:
     r"""Construct a BERT-Base model with a sequence-classification head.
 
@@ -542,17 +548,28 @@ def bert_base_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk; a tag
+        string selects a specific encoder checkpoint.  **The classification
+        head is always randomly initialised** — this is the standard
+        fine-tuning starting point (no GLUE-fine-tuned head ships), so
+        train on a downstream task before inference.
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
-        classes (default 2).
+        classes (default 2).  Overrides that change the encoder shape are
+        incompatible with loading pretrained encoder weights.
 
     Returns
     -------
     BERTForSequenceClassification
-        BERT-Base wrapped with the pooled classifier head.
+        BERT-Base wrapped with the pooled classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -570,10 +587,14 @@ def bert_base_cls(
     >>> out.logits.shape   # (1, num_labels=3)
     (1, 3)
     """
-    return BERTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_large_cls adds a typed weights= kwarg (the encoder BERTLargeWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="sequence-classification",
     family="bert",
     model_type="bert",
@@ -581,7 +602,10 @@ def bert_base_cls(
     default_config=_CFG_LARGE,
 )
 def bert_large_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: BERTLargeWeights | None = None,
+    **overrides: object,
 ) -> BERTForSequenceClassification:
     r"""Construct a BERT-Large model with a sequence-classification head.
 
@@ -592,17 +616,26 @@ def bert_large_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`bert_large` encoder
+        (:attr:`BERTLargeWeights.DEFAULT`) into the ``.bert`` trunk; a tag
+        string selects a specific encoder checkpoint.  **The classification
+        head is always randomly initialised** (fine-tuning starting point).
+    weights : BERTLargeWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
-        classes (default 2).
+        classes (default 2).  Overrides that change the encoder shape are
+        incompatible with loading pretrained encoder weights.
 
     Returns
     -------
     BERTForSequenceClassification
-        BERT-Large wrapped with the pooled classifier head.
+        BERT-Large wrapped with the pooled classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -620,10 +653,14 @@ def bert_large_cls(
     >>> out.logits.shape   # (1, 2)
     (1, 2)
     """
-    return BERTForSequenceClassification(_apply(_CFG_LARGE, overrides))
+    entry = weights_mod.resolve_weights(BERTLargeWeights, pretrained, weights)
+    model = BERTForSequenceClassification(_apply(_CFG_LARGE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_large")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_base_token_cls adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="token-classification",
     family="bert",
     model_type="bert",
@@ -631,7 +668,10 @@ def bert_large_cls(
     default_config=_CFG_BASE,
 )
 def bert_base_token_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
 ) -> BERTForTokenClassification:
     r"""Construct a BERT-Base model with a per-token classification head.
 
@@ -642,16 +682,27 @@ def bert_base_token_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk; a tag
+        string selects a specific encoder checkpoint.  **The per-token
+        classifier head is always randomly initialised** (fine-tuning
+        starting point — no NER/POS-fine-tuned head ships).
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the tag set size.
+        Overrides that change the encoder shape are incompatible with
+        loading pretrained encoder weights.
 
     Returns
     -------
     BERTForTokenClassification
-        BERT-Base wrapped with the per-token classifier head.
+        BERT-Base wrapped with the per-token classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -669,10 +720,14 @@ def bert_base_token_cls(
     >>> out.logits.shape   # (1, T=4, num_labels=9)
     (1, 4, 9)
     """
-    return BERTForTokenClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForTokenClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: bert_base_qa adds a typed weights= kwarg (the encoder BERTBaseWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="question-answering",
     family="bert",
     model_type="bert",
@@ -680,7 +735,10 @@ def bert_base_token_cls(
     default_config=_CFG_BASE,
 )
 def bert_base_qa(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: BERTBaseWeights | None = None,
+    **overrides: object,
 ) -> BERTForQuestionAnswering:
     r"""Construct a BERT-Base model with an extractive-QA span head.
 
@@ -690,16 +748,27 @@ def bert_base_qa(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`bert_base` encoder
+        (:attr:`BERTBaseWeights.DEFAULT`) into the ``.bert`` trunk; a tag
+        string selects a specific encoder checkpoint.  **The span-prediction
+        head is always randomly initialised** (fine-tuning starting point —
+        no SQuAD-fine-tuned head ships).
+    weights : BERTBaseWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`BERTConfig` field overrides forwarded into the
         underlying config.  ``num_labels`` is ignored by this head.
+        Overrides that change the encoder shape are incompatible with
+        loading pretrained encoder weights.
 
     Returns
     -------
     BERTForQuestionAnswering
-        BERT-Base wrapped with the span-prediction head.
+        BERT-Base wrapped with the span-prediction head (encoder pretrained
+        when requested; head random).
 
     Notes
     -----
@@ -718,4 +787,8 @@ def bert_base_qa(
     >>> out.logits.shape   # (1, T=6, 2) — last dim is (start, end)
     (1, 6, 2)
     """
-    return BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(BERTBaseWeights, pretrained, weights)
+    model = BERTForQuestionAnswering(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.bert, entry, name="bert_base")
+    return model

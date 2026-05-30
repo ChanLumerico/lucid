@@ -171,7 +171,7 @@ def gpt_lm(
 # ── Sequence-classification head ──────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: gpt_cls adds a typed weights= kwarg (the encoder GPTWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="sequence-classification",
     family="gpt",
     model_type="gpt",
@@ -179,7 +179,10 @@ def gpt_lm(
     default_config=_CFG_BASE,
 )
 def gpt_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: GPTWeights | None = None,
+    **overrides: object,
 ) -> GPTForSequenceClassification:
     r"""Construct a GPT-1 model with a last-token sequence-classification head.
 
@@ -191,17 +194,27 @@ def gpt_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`gpt` decoder trunk
+        (:attr:`GPTWeights.DEFAULT`) into the ``.transformer`` submodule;
+        a tag string selects a specific encoder checkpoint.  **The
+        classifier head is always randomly initialised** (fine-tuning
+        starting point — no GLUE-fine-tuned head ships).
+    weights : GPTWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`GPTConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
-        output classes (default 2).
+        output classes (default 2).  Overrides that change the trunk shape
+        are incompatible with loading pretrained encoder weights.
 
     Returns
     -------
     GPTForSequenceClassification
-        GPT-1 trunk wrapped with the last-token classifier head.
+        GPT-1 trunk wrapped with the last-token classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -226,4 +239,8 @@ def gpt_cls(
     >>> out.logits.shape   # (B=1, num_labels=3)
     (1, 3)
     """
-    return GPTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(GPTWeights, pretrained, weights)
+    model = GPTForSequenceClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.transformer, entry, name="gpt")
+    return model

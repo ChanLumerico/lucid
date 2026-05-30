@@ -159,7 +159,7 @@ def roformer_mlm(
     return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: roformer_cls adds a typed weights= kwarg (the encoder RoFormerWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="sequence-classification",
     family="roformer",
     model_type="roformer",
@@ -167,7 +167,10 @@ def roformer_mlm(
     default_config=_CFG_BASE,
 )
 def roformer_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerWeights | None = None,
+    **overrides: object,
 ) -> RoFormerForSequenceClassification:
     r"""Construct a RoFormer model with a sequence-classification head.
 
@@ -178,17 +181,27 @@ def roformer_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`roformer` encoder
+        (:attr:`RoFormerWeights.DEFAULT`) into the ``.roformer`` trunk; a
+        tag string selects a specific encoder checkpoint.  **The classifier
+        head is always randomly initialised** (fine-tuning starting point —
+        no fine-tuned head ships).
+    weights : RoFormerWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`RoFormerConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the number of
-        classes (default 2).
+        classes (default 2).  Overrides that change the encoder shape are
+        incompatible with loading pretrained encoder weights.
 
     Returns
     -------
     RoFormerForSequenceClassification
-        RoFormer trunk wrapped with the pooled classifier head.
+        RoFormer trunk wrapped with the pooled classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -205,10 +218,14 @@ def roformer_cls(
     >>> out.logits.shape   # (1, num_labels=3)
     (1, 3)
     """
-    return RoFormerForSequenceClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
+    model = RoFormerForSequenceClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: roformer_token_cls adds a typed weights= kwarg (the encoder RoFormerWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="token-classification",
     family="roformer",
     model_type="roformer",
@@ -216,7 +233,10 @@ def roformer_cls(
     default_config=_CFG_BASE,
 )
 def roformer_token_cls(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: RoFormerWeights | None = None,
+    **overrides: object,
 ) -> RoFormerForTokenClassification:
     r"""Construct a RoFormer model with a per-token classification head.
 
@@ -227,16 +247,27 @@ def roformer_token_cls(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Encoder-weight selector.  ``False`` → fully random init; ``True``
+        → loads the pretrained :func:`roformer` encoder
+        (:attr:`RoFormerWeights.DEFAULT`) into the ``.roformer`` trunk; a
+        tag string selects a specific encoder checkpoint.  **The per-token
+        classifier head is always randomly initialised** (fine-tuning
+        starting point — no NER/POS-fine-tuned head ships).
+    weights : RoFormerWeights, optional, keyword-only
+        Explicit encoder-weights enum member; takes precedence over
+        ``pretrained``.
     **overrides : object
         Optional :class:`RoFormerConfig` field overrides forwarded into the
         underlying config.  Pass ``num_labels=N`` to set the tag set size.
+        Overrides that change the encoder shape are incompatible with
+        loading pretrained encoder weights.
 
     Returns
     -------
     RoFormerForTokenClassification
-        RoFormer trunk wrapped with the per-token classifier head.
+        RoFormer trunk wrapped with the per-token classifier head (encoder
+        pretrained when requested; head random).
 
     Notes
     -----
@@ -253,4 +284,8 @@ def roformer_token_cls(
     >>> out.logits.shape   # (1, T=4, num_labels=9)
     (1, 4, 9)
     """
-    return RoFormerForTokenClassification(_apply(_CFG_BASE, overrides))
+    entry = weights_mod.resolve_weights(RoFormerWeights, pretrained, weights)
+    model = RoFormerForTokenClassification(_apply(_CFG_BASE, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model.roformer, entry, name="roformer")
+    return model
