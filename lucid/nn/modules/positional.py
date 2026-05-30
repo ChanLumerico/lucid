@@ -320,6 +320,7 @@ class TimestepEmbedding(Module):
         out_dim: int,
         *,
         base: float = 10_000.0,
+        flip_sin_to_cos: bool = True,
     ) -> None:
         super().__init__()
         if in_dim % 2 != 0:
@@ -327,6 +328,9 @@ class TimestepEmbedding(Module):
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.base = base
+        # ``True`` → ``[cos, sin]`` (Lucid default); ``False`` → ``[sin, cos]``
+        # (original DDPM / Ho 2020 + diffusers ``flip_sin_to_cos=False``).
+        self.flip_sin_to_cos = flip_sin_to_cos
 
         # 2-layer MLP — Linear → SiLU → Linear (Ho et al. uses Swish).
         # SiLU lives in lucid.nn.modules.activation; import lazily to dodge
@@ -358,7 +362,10 @@ class TimestepEmbedding(Module):
         while inv_freq.ndim < t.ndim:
             inv_freq = inv_freq.unsqueeze(0)
         ang = t * inv_freq
-        emb = lucid.cat([lucid.cos(ang), lucid.sin(ang)], dim=-1)
+        if self.flip_sin_to_cos:
+            emb = lucid.cat([lucid.cos(ang), lucid.sin(ang)], dim=-1)
+        else:
+            emb = lucid.cat([lucid.sin(ang), lucid.cos(ang)], dim=-1)
         return emb
 
     def forward(self, timesteps: Tensor) -> Tensor:  # type: ignore[override]

@@ -177,6 +177,22 @@ class TestTimestepEmbedding:
             diff = float(((out[i] - out[0]) ** 2).sum().item())
             assert diff > 1e-6, f"row {i} equals row 0"
 
+    def test_flip_sin_to_cos_swaps_sinusoid_halves(self) -> None:
+        """``flip_sin_to_cos`` controls the raw sinusoid ordering: ``True``
+        (default) → ``[cos, sin]``; ``False`` (DDPM / Ho 2020) → ``[sin, cos]``.
+        The two halves must be swapped between the two settings."""
+        cos_first = nn.TimestepEmbedding(in_dim=8, out_dim=8)
+        sin_first = nn.TimestepEmbedding(in_dim=8, out_dim=8, flip_sin_to_cos=False)
+        t = lucid.tensor([5, 250]).long()
+        a = sin_first._sinusoidal(t).numpy()  # [sin, cos]
+        b = cos_first._sinusoidal(t).numpy()  # [cos, sin]
+        half = 4
+        import numpy as np
+
+        # sin_first's first half == cos_first's second half, and vice-versa.
+        assert float(np.abs(a[:, :half] - b[:, half:]).max()) < 1e-6
+        assert float(np.abs(a[:, half:] - b[:, :half]).max()) < 1e-6
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DDPM scheduler

@@ -276,6 +276,12 @@ from lucid.models.text.gpt2._weights import (
     GPT2XLargeLMWeights,
 )
 
+# 2020 — DDPM (Ho et al.) — denoising diffusion (generative)
+from lucid.models.generative.ddpm._weights import (
+    DDPMCifarWeights,
+    DDPMChurchWeights,
+)
+
 __all__ = [
     # ── Vision (2012) AlexNet ─────────────────────────────────────────
     "AlexNetWeights",
@@ -439,4 +445,7 @@ __all__ = [
     "GPT2MediumLMWeights",
     "GPT2LargeLMWeights",
     "GPT2XLargeLMWeights",
+    # ── Generative (2020) DDPM (Ho et al.) ────────────────────────────
+    "DDPMCifarWeights",
+    "DDPMChurchWeights",
 ]

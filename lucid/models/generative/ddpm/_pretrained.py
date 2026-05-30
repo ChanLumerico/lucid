@@ -12,9 +12,14 @@ dropout differ.  Smaller test configs go through
 ``create_model("ddpm_cifar", base_channels=..., channel_mult=...)``.
 """
 
+import lucid.weights as weights_mod
 from lucid.models._registry import register_model
 from lucid.models.generative.ddpm._config import DDPMConfig
 from lucid.models.generative.ddpm._model import DDPMForImageGeneration, DDPMModel
+from lucid.models.generative.ddpm._weights import (
+    DDPMChurchWeights,
+    DDPMCifarWeights,
+)
 
 # Ho 2020 Table 9 — CIFAR-10.
 _CFG_CIFAR = DDPMConfig(
@@ -71,14 +76,19 @@ def _apply(cfg: DDPMConfig, overrides: dict[str, object]) -> DDPMConfig:
 # ── Bare U-Net trunks ─────────────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: ddpm_cifar adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="ddpm",
     model_type="ddpm",
     model_class=DDPMModel,
     default_config=_CFG_CIFAR,
 )
-def ddpm_cifar(pretrained: bool = False, **overrides: object) -> DDPMModel:
+def ddpm_cifar(
+    pretrained: bool | str = False,
+    *,
+    weights: DDPMCifarWeights | None = None,
+    **overrides: object,
+) -> DDPMModel:
     r"""Construct a DDPM U-Net trunk for the CIFAR-10 setup.
 
     Paper-faithful CIFAR-10 configuration from Ho, Jain, and Abbeel, 2020
@@ -90,17 +100,24 @@ def ddpm_cifar(pretrained: bool = False, **overrides: object) -> DDPMModel:
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Weight selector.  ``False`` → random init; ``True`` → the official
+        ``google/ddpm-cifar10-32`` checkpoint
+        (:attr:`DDPMCifarWeights.CIFAR10`) — the trained noise predictor
+        :math:`\epsilon_\theta(x_t, t)`.
+    weights : DDPMCifarWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides (e.g. ``dropout=...``,
         ``num_train_timesteps=...``) forwarded into the underlying config.
+        Overrides that change the U-Net shape are incompatible with the
+        pretrained checkpoint.
 
     Returns
     -------
     DDPMModel
-        Bare U-Net trunk configured with the CIFAR-10 setup and any
-        overrides.
+        Bare U-Net trunk configured with the CIFAR-10 setup (pretrained
+        when requested).
 
     Notes
     -----
@@ -118,17 +135,26 @@ def ddpm_cifar(pretrained: bool = False, **overrides: object) -> DDPMModel:
     >>> out.sample.shape   # (1, 3, 32, 32) — predicted noise
     (1, 3, 32, 32)
     """
-    return DDPMModel(_apply(_CFG_CIFAR, overrides))
+    entry = weights_mod.resolve_weights(DDPMCifarWeights, pretrained, weights)
+    model = DDPMModel(_apply(_CFG_CIFAR, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="ddpm_cifar")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: ddpm_lsun adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="base",
     family="ddpm",
     model_type="ddpm",
     model_class=DDPMModel,
     default_config=_CFG_LSUN,
 )
-def ddpm_lsun(pretrained: bool = False, **overrides: object) -> DDPMModel:
+def ddpm_lsun(
+    pretrained: bool | str = False,
+    *,
+    weights: DDPMChurchWeights | None = None,
+    **overrides: object,
+) -> DDPMModel:
     r"""Construct a DDPM U-Net trunk for the LSUN / CelebA-HQ 256x256 setup.
 
     Paper-faithful 256x256 configuration from Ho, Jain, and Abbeel, 2020
@@ -140,17 +166,22 @@ def ddpm_lsun(pretrained: bool = False, **overrides: object) -> DDPMModel:
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Weight selector.  ``False`` → random init; ``True`` → the official
+        ``google/ddpm-church-256`` LSUN-Church checkpoint
+        (:attr:`DDPMChurchWeights.LSUN_CHURCH`).
+    weights : DDPMChurchWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides forwarded into the
-        underlying config.
+        underlying config.  Overrides that change the U-Net shape are
+        incompatible with the pretrained checkpoint.
 
     Returns
     -------
     DDPMModel
-        Bare U-Net trunk configured with the LSUN / CelebA-HQ setup and
-        any overrides.
+        Bare U-Net trunk configured with the LSUN / CelebA-HQ setup
+        (pretrained when requested).
 
     Notes
     -----
@@ -168,7 +199,11 @@ def ddpm_lsun(pretrained: bool = False, **overrides: object) -> DDPMModel:
     >>> out.sample.shape   # (1, 3, 256, 256)
     (1, 3, 256, 256)
     """
-    return DDPMModel(_apply(_CFG_LSUN, overrides))
+    entry = weights_mod.resolve_weights(DDPMChurchWeights, pretrained, weights)
+    model = DDPMModel(_apply(_CFG_LSUN, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="ddpm_lsun")
+    return model
 
 
 @register_model(
@@ -225,7 +260,7 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
 # ── Image-generation heads ───────────────────────────────────────────────────
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: ddpm_cifar_gen adds a typed weights= kwarg (DDPMCifarWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="image-generation",
     family="ddpm",
     model_type="ddpm",
@@ -233,7 +268,10 @@ def ddpm_imagenet64(pretrained: bool = False, **overrides: object) -> DDPMModel:
     default_config=_CFG_CIFAR,
 )
 def ddpm_cifar_gen(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: DDPMCifarWeights | None = None,
+    **overrides: object,
 ) -> DDPMForImageGeneration:
     r"""Construct a DDPM CIFAR-10 model with training loss and ``.generate()``.
 
@@ -243,8 +281,13 @@ def ddpm_cifar_gen(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Weight selector.  ``False`` → random init; ``True`` → the official
+        ``google/ddpm-cifar10-32`` checkpoint
+        (:attr:`DDPMCifarWeights.CIFAR10`), giving an inference-ready
+        sampler — ``model.generate(...)`` draws CIFAR-10-like images.
+    weights : DDPMCifarWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides forwarded into the
         underlying config.
@@ -252,7 +295,8 @@ def ddpm_cifar_gen(
     Returns
     -------
     DDPMForImageGeneration
-        CIFAR-10 DDPM wrapped with the noise-prediction loss head.
+        CIFAR-10 DDPM wrapped with the noise-prediction loss head
+        (pretrained when requested).
 
     Notes
     -----
@@ -270,10 +314,14 @@ def ddpm_cifar_gen(
     >>> out.sample.shape   # (1, 3, 32, 32)
     (1, 3, 32, 32)
     """
-    return DDPMForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    entry = weights_mod.resolve_weights(DDPMCifarWeights, pretrained, weights)
+    model = DDPMForImageGeneration(_apply(_CFG_CIFAR, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="ddpm_cifar")
+    return model
 
 
-@register_model(
+@register_model(  # type: ignore[arg-type]  # reason: ddpm_lsun_gen adds a typed weights= kwarg (DDPMChurchWeights); the ModelFactory protocol predates the weights system and names only pretrained + **overrides.
     task="image-generation",
     family="ddpm",
     model_type="ddpm",
@@ -281,7 +329,10 @@ def ddpm_cifar_gen(
     default_config=_CFG_LSUN,
 )
 def ddpm_lsun_gen(
-    pretrained: bool = False, **overrides: object
+    pretrained: bool | str = False,
+    *,
+    weights: DDPMChurchWeights | None = None,
+    **overrides: object,
 ) -> DDPMForImageGeneration:
     r"""Construct a DDPM LSUN / CelebA-HQ model with training loss and ``.generate()``.
 
@@ -291,8 +342,13 @@ def ddpm_lsun_gen(
 
     Parameters
     ----------
-    pretrained : bool, default=False
-        Reserved for future weight registration; currently a no-op.
+    pretrained : bool or str, default=False
+        Weight selector.  ``False`` → random init; ``True`` → the official
+        ``google/ddpm-church-256`` checkpoint
+        (:attr:`DDPMChurchWeights.LSUN_CHURCH`), giving an inference-ready
+        sampler — ``model.generate(...)`` draws LSUN-Church-like images.
+    weights : DDPMChurchWeights, optional, keyword-only
+        Explicit weights enum member; takes precedence over ``pretrained``.
     **overrides : object
         Optional :class:`DDPMConfig` field overrides forwarded into the
         underlying config.
@@ -300,7 +356,8 @@ def ddpm_lsun_gen(
     Returns
     -------
     DDPMForImageGeneration
-        LSUN / CelebA-HQ DDPM wrapped with the noise-prediction loss head.
+        LSUN / CelebA-HQ DDPM wrapped with the noise-prediction loss head
+        (pretrained when requested).
 
     Notes
     -----
@@ -318,7 +375,11 @@ def ddpm_lsun_gen(
     >>> out.sample.shape   # (1, 3, 256, 256)
     (1, 3, 256, 256)
     """
-    return DDPMForImageGeneration(_apply(_CFG_LSUN, overrides))
+    entry = weights_mod.resolve_weights(DDPMChurchWeights, pretrained, weights)
+    model = DDPMForImageGeneration(_apply(_CFG_LSUN, overrides))
+    if entry is not None:
+        weights_mod.load_weight_entry(model, entry, name="ddpm_lsun")
+    return model
 
 
 @register_model(

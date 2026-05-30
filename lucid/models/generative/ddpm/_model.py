@@ -65,10 +65,12 @@ class _ResBlock(nn.Module):
         g_in = min(groups, in_channels) if in_channels % groups != 0 else groups
         g_out = min(groups, out_channels) if out_channels % groups != 0 else groups
 
-        self.norm1 = nn.GroupNorm(g_in, in_channels)
+        # eps=1e-6 is the canonical DDPM GroupNorm epsilon (Ho 2020 TF code +
+        # diffusers ``norm_eps``); required for checkpoint parity.
+        self.norm1 = nn.GroupNorm(g_in, in_channels, eps=1e-6)
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
         self.time_proj = nn.Linear(time_emb_dim, out_channels)
-        self.norm2 = nn.GroupNorm(g_out, out_channels)
+        self.norm2 = nn.GroupNorm(g_out, out_channels, eps=1e-6)
         self.dropout = nn.Dropout(p=dropout)
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, padding=1)
 
@@ -109,7 +111,7 @@ class _AttentionBlock(nn.Module):
                 f"channels ({channels}) must be divisible by num_heads ({num_heads})"
             )
         g = min(groups, channels) if channels % groups != 0 else groups
-        self.norm = nn.GroupNorm(g, channels)
+        self.norm = nn.GroupNorm(g, channels, eps=1e-6)
         self.qkv = nn.Conv2d(channels, channels * 3, 1)
         self.proj = nn.Conv2d(channels, channels, 1)
         self.num_heads = num_heads
@@ -135,13 +137,20 @@ class _AttentionBlock(nn.Module):
 
 
 class _Downsample(nn.Module):
-    """Stride-2 3×3 conv."""
+    """Stride-2 3×3 conv with asymmetric (0,1,0,1) padding (Ho 2020 / diffusers).
+
+    The canonical DDPM downsample pads only the right/bottom edges before a
+    ``padding=0`` stride-2 conv (equivalent to TF ``SAME`` on even inputs),
+    rather than a symmetric ``padding=1`` — required for checkpoint parity.
+    """
 
     def __init__(self, channels: int) -> None:
         super().__init__()
-        self.op = nn.Conv2d(channels, channels, 3, stride=2, padding=1)
+        self.op = nn.Conv2d(channels, channels, 3, stride=2, padding=0)
 
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
+        # F.pad order is (W_left, W_right, H_top, H_bottom).
+        x = F.pad(x, (0, 1, 0, 1))
         return cast(Tensor, self.op(x))
 
 
@@ -257,7 +266,11 @@ class DDPMUNet(nn.Module):
         base = config.base_channels
         time_dim = base * 4
 
-        self.time_mlp = nn.TimestepEmbedding(in_dim=base, out_dim=time_dim)
+        # Ho 2020 / diffusers DDPM use the [sin, cos] ordering (flip_sin_to_cos
+        # = False); required for checkpoint parity.
+        self.time_mlp = nn.TimestepEmbedding(
+            in_dim=base, out_dim=time_dim, flip_sin_to_cos=False
+        )
 
         self.conv_in = nn.Conv2d(config.in_channels, base, 3, padding=1)
 
@@ -370,7 +383,7 @@ class DDPMUNet(nn.Module):
             if ch % config.resnet_groups != 0
             else config.resnet_groups
         )
-        self.norm_out = nn.GroupNorm(g_out, ch)
+        self.norm_out = nn.GroupNorm(g_out, ch, eps=1e-6)
         self.conv_out = nn.Conv2d(ch, config.out_channels_effective, 3, padding=1)
 
         # Pre-computed "blocks per stage" for forward dispatch.

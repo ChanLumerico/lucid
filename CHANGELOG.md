@@ -15,6 +15,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.5.0 unreleased] — 2026-05-31
 
+### Added — Pretrained weights: DDPM (CIFAR-10 + LSUN-Church)
+
+The first **generative** pretrained weights — the official ``google/ddpm-*``
+diffusers checkpoints (Apache-2.0), converted into Lucid's ``DDPMUNet``.
+``pretrained=True`` is an *inference-ready generator* (the ``_gen`` wrapper
+samples images via ancestral DDPM); denoising-step parity vs the reference
+``UNet2DModel`` is ≤ 6.6e-4 (CIFAR-10 4.8e-6):
+
+- **ddpm_cifar** / **ddpm_cifar_gen** ← ``google/ddpm-cifar10-32`` (32×32).
+  `DDPMCifarWeights.CIFAR10`.
+- **ddpm_lsun** / **ddpm_lsun_gen** ← ``google/ddpm-church-256`` (256×256).
+  `DDPMChurchWeights.LSUN_CHURCH`.
+
+New converter ``tools/convert_weights/ddpm.py`` maps the diffusers
+``UNet2DModel`` to Lucid: stage-grouped ``down_blocks[i].resnets[j]`` →
+flat ``down_res[k]``; split ``to_q``/``to_k``/``to_v``/``to_out.0`` (Linear) →
+fused ``qkv``/``proj`` (Conv2d 1×1).  ``ddpm_imagenet64`` keeps no weights (its
+config is Improved-DDPM, not the original; no matching checkpoint).  NCSN / VAE
+are not shipped — no canonical permissively-licensed checkpoint exists.
+
+### Changed — DDPM model: canonical Ho-2020 conventions (parity fixes)
+
+Loading the official checkpoints exposed three deviations from the canonical
+DDPM U-Net (all now fixed; random-init behaviour is unchanged in shape):
+
+- **Time embedding** uses the ``[sin, cos]`` ordering (Ho 2020 / diffusers
+  ``flip_sin_to_cos=False``); Lucid previously emitted ``[cos, sin]``.
+- **Downsample** uses asymmetric ``(0,1,0,1)`` padding + a ``padding=0``
+  stride-2 conv (TF ``SAME`` on even inputs), not a symmetric ``padding=1``.
+- **GroupNorm** ``eps`` is ``1e-6`` (was ``1e-5``).
+
+### Changed — `nn.TimestepEmbedding` gains `flip_sin_to_cos`
+
+New keyword-only ``flip_sin_to_cos: bool = True`` selects the raw sinusoid
+ordering: ``True`` (default, unchanged) → ``[cos, sin]``; ``False`` →
+``[sin, cos]`` (original DDPM).  Backward-compatible — existing callers are
+unaffected.
+
 ### Added — Pretrained weights: BERT fine-tuned task heads (SQuAD + CoNLL NER)
 
 Three *full* fine-tuned BERT checkpoints on canonical NLP benchmarks ship via

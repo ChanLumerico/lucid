@@ -259,3 +259,71 @@ class TestDDPMRegistry:
             "ddpm_cifar_gen", task=AutoModelForImageGeneration._task
         )
         assert entry.model_class is DDPMForImageGeneration
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pretrained weights — official google/ddpm-* (Apache-2.0) checkpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDDPMWeights:
+    """``ddpm_cifar`` / ``ddpm_lsun`` (+ their ``_gen`` wrappers) ship the
+    official ``google/ddpm-*`` UNet checkpoints; ``pretrained=True`` is an
+    inference-ready generator.  Network-free: enum/registry + the parity-
+    critical model conventions (sin-first time embed, asymmetric downsample,
+    GroupNorm eps 1e-6).
+    """
+
+    def _enum(self, name: str) -> type:
+        import lucid.models.weights as weights_ns
+
+        return getattr(weights_ns, name)
+
+    @pytest.mark.parametrize(
+        ("enum_name", "tag", "slug"),
+        [
+            ("DDPMCifarWeights", "CIFAR10", "ddpm-cifar10"),
+            ("DDPMChurchWeights", "LSUN_CHURCH", "ddpm-church"),
+        ],
+    )
+    def test_entry_fields(self, enum_name: str, tag: str, slug: str) -> None:
+        cls = self._enum(enum_name)
+        assert cls.DEFAULT is cls[tag]
+        e = cls[tag].entry
+        assert e.num_classes == 3
+        assert len(e.sha256) == 64 and set(e.sha256) != {"0"}
+        assert f"lucid-dl/{slug}" in e.url and f"/{tag}/" in e.url
+        assert e.meta["license"] == "apache-2.0"
+
+    @pytest.mark.parametrize(
+        ("factory", "enum_name"),
+        [
+            ("ddpm_cifar", "DDPMCifarWeights"),
+            ("ddpm_cifar_gen", "DDPMCifarWeights"),
+            ("ddpm_lsun", "DDPMChurchWeights"),
+            ("ddpm_lsun_gen", "DDPMChurchWeights"),
+        ],
+    )
+    def test_registered_for_factories(self, factory: str, enum_name: str) -> None:
+        from lucid.weights import weights_for
+
+        resolved = weights_for(factory)
+        assert resolved is not None
+        assert resolved.__name__ == enum_name
+
+    def test_model_uses_ddpm_canonical_conventions(self) -> None:
+        # sin-first time embedding + eps 1e-6 GroupNorm + asymmetric downsample
+        # are required for checkpoint parity.
+        m = create_model(
+            "ddpm_cifar",
+            sample_size=16,
+            base_channels=16,
+            channel_mult=(1, 2),
+            num_res_blocks=1,
+            attention_resolutions=(8,),
+            resnet_groups=8,
+        )
+        assert m.unet.time_mlp.flip_sin_to_cos is False
+        assert abs(m.unet.down_res[0].norm1.eps - 1e-6) < 1e-12
+        # asymmetric downsample: padding-0 conv (the (0,1,0,1) pad is in forward)
+        assert m.unet.down_sample[0].op.padding == (0, 0)
