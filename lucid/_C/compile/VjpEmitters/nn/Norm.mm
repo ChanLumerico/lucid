@@ -362,84 +362,66 @@ public:
         // axes_non_C = all axes except 1, computed once.
         NSMutableArray<NSNumber*>* non_C =
             [NSMutableArray arrayWithCapacity:rank - 1];
-        double N = 1.0;
         for (std::size_t i = 0; i < rank; ++i) {
             if (i == 1) continue;
             [non_C addObject:[NSNumber numberWithLongLong:(long long)i]];
-            N *= (double)x_shape[i];
         }
+        // gamma broadcast to the per-channel keepdim shape (1, C, 1, …).
         std::vector<std::int64_t> affine(rank, 1);
         affine[1] = C;
         NSArray<NSNumber*>* affine_ns = shape_to_ns(affine);
         MPSGraphTensor* gamma_b =
             [graph reshapeTensor:gamma withShape:affine_ns name:nil];
 
-        MPSDataType dt = x.dataType;
-        MPSGraphTensor* eps_t = [graph constantWithScalar:eps dataType:dt];
-        // Recompute batch stats.  All keepdim=true via the axes:
+        // PERF (see obsidian/perf/perf-rootcause-speed-mem-deepdive): emit
+        // MPSGraph's DEDICATED normalization-gradient kernels instead of the
+        // ~18-node hand-expanded closed form.  The hand-rolled per-channel
+        // reductions interleaved with broadcasts dominated the compiled
+        // backward — BN cost ~3.9× the reference's (compiled whole-model
+        // backward 269 vs 144 ms; stripping BN made compiled beat the
+        // reference).  These three fused kernels are the exact ops the eager
+        // backend already ships (backend/gpu/mps/MpsKernels.mm) and the analog
+        // of what Conv2dVjp does with convolution2DData/WeightsGradient.
+        // batch_mean / batch_var are keepdim per-channel (1, C, 1, …); the grad
+        // op adds eps to var internally, so the RAW variance is passed.
         MPSGraphTensor* mean =
             [graph meanOfTensor:x axes:non_C name:nil];
-        MPSGraphTensor* x_centered =
-            [graph subtractionWithPrimaryTensor:x secondaryTensor:mean name:nil];
         MPSGraphTensor* var =
             [graph varianceOfTensor:x axes:non_C name:nil];
-        MPSGraphTensor* var_eps =
-            [graph additionWithPrimaryTensor:var secondaryTensor:eps_t name:nil];
-        MPSGraphTensor* rstd =
-            [graph reciprocalSquareRootWithTensor:var_eps name:nil];
-        MPSGraphTensor* x_hat =
-            [graph multiplicationWithPrimaryTensor:x_centered
-                                    secondaryTensor:rstd name:nil];
 
-        // g_hat = grad * gamma_b
-        MPSGraphTensor* g_hat =
-            [graph multiplicationWithPrimaryTensor:grad
-                                    secondaryTensor:gamma_b name:nil];
-        // sum1, sum2 — keepdim=true via the non-C axes
-        MPSGraphTensor* sum1 =
-            [graph reductionSumWithTensor:g_hat axes:non_C name:nil];
-        MPSGraphTensor* gh_xh =
-            [graph multiplicationWithPrimaryTensor:g_hat
-                                    secondaryTensor:x_hat name:nil];
-        MPSGraphTensor* sum2 =
-            [graph reductionSumWithTensor:gh_xh axes:non_C name:nil];
-
-        // dx = rstd * (g_hat - (sum1 + x_hat * sum2) / N)
-        MPSGraphTensor* inv_N =
-            [graph constantWithScalar:(1.0 / N) dataType:dt];
-        MPSGraphTensor* xh_sum2 =
-            [graph multiplicationWithPrimaryTensor:x_hat
-                                    secondaryTensor:sum2 name:nil];
-        MPSGraphTensor* sum_total =
-            [graph additionWithPrimaryTensor:sum1 secondaryTensor:xh_sum2 name:nil];
-        MPSGraphTensor* avg_term =
-            [graph multiplicationWithPrimaryTensor:sum_total
-                                    secondaryTensor:inv_N name:nil];
-        MPSGraphTensor* diff =
-            [graph subtractionWithPrimaryTensor:g_hat
-                              secondaryTensor:avg_term name:nil];
+        MPSGraphTensor* dgamma_t =
+            [graph normalizationGammaGradientWithIncomingGradientTensor:grad
+                                                          sourceTensor:x
+                                                            meanTensor:mean
+                                                        varianceTensor:var
+                                                         reductionAxes:non_C
+                                                               epsilon:(float)eps
+                                                                  name:nil];
+        MPSGraphTensor* dbeta_t =
+            [graph normalizationBetaGradientWithIncomingGradientTensor:grad
+                                                         sourceTensor:x
+                                                        reductionAxes:non_C
+                                                                 name:nil];
         MPSGraphTensor* dx =
-            [graph multiplicationWithPrimaryTensor:rstd
-                                    secondaryTensor:diff
-                                               name:@"bn_train_vjp_dx"];
+            [graph normalizationGradientWithIncomingGradientTensor:grad
+                                                      sourceTensor:x
+                                                        meanTensor:mean
+                                                    varianceTensor:var
+                                                       gammaTensor:gamma_b
+                                               gammaGradientTensor:dgamma_t
+                                                betaGradientTensor:dbeta_t
+                                                     reductionAxes:non_C
+                                                           epsilon:(float)eps
+                                                              name:@"bn_train_vjp_dx"];
         bctx.accumulate_grad(x_id, from_tensor(dx));
 
-        // dgamma = sum_non_C(grad * x_hat) → (C,)
-        MPSGraphTensor* g_xh_full =
-            [graph multiplicationWithPrimaryTensor:grad
-                                    secondaryTensor:x_hat name:nil];
-        MPSGraphTensor* dg_keep =
-            [graph reductionSumWithTensor:g_xh_full axes:non_C name:nil];
+        // dgamma / dbeta come out per-channel keepdim (1, C, 1, …) → (C,).
         NSArray<NSNumber*>* c_shape = @[ [NSNumber numberWithLongLong:C] ];
         MPSGraphTensor* dgamma =
-            [graph reshapeTensor:dg_keep withShape:c_shape name:@"bn_train_vjp_dgamma"];
+            [graph reshapeTensor:dgamma_t withShape:c_shape name:@"bn_train_vjp_dgamma"];
         bctx.accumulate_grad(g_id, from_tensor(dgamma));
-
-        // dbeta = sum_non_C(grad) → (C,)
-        MPSGraphTensor* db_keep =
-            [graph reductionSumWithTensor:grad axes:non_C name:nil];
         MPSGraphTensor* dbeta =
-            [graph reshapeTensor:db_keep withShape:c_shape name:@"bn_train_vjp_dbeta"];
+            [graph reshapeTensor:dbeta_t withShape:c_shape name:@"bn_train_vjp_dbeta"];
         bctx.accumulate_grad(b_id, from_tensor(dbeta));
         return true;
     }
