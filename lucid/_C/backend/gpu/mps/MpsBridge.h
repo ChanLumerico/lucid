@@ -4,7 +4,8 @@
 // even though the underlying implementation is Obj-C++ — all Obj-C types
 // (`id<MTLBuffer>`, `id<MTLDevice>`, `id<MTLCommandQueue>`) are erased to
 // `void*` at this boundary.  Casts back to Obj-C happen via `__bridge` in
-// MpsBridge.mm and MpsKernels.mm.
+// MpsBridge.mm.  Sole consumer is the `lucid.compile` MPSGraph emitter
+// (`compile/MpsBuilder.mm`, `compile/CompiledExecutable.mm`).
 //
 // Lifetime model:
 //   • Process-wide singleton MTLDevice + MTLCommandQueue, lazily created on
@@ -62,19 +63,6 @@ void* shared_mtl_device();
 // Thread-safe.
 void* shared_mtl_queue();
 
-// Report whether the MPSGraph bridge is usable on this host.
-//
-// Returns ``true`` iff Metal Performance Shaders Graph initialised
-// successfully (i.e. the device + queue are valid and the framework
-// loaded).  When ``false``, every :func:`should_dispatch_*` heuristic
-// in :doc:`MpsDispatch` must short-circuit and the MLX path runs.
-//
-// Returns
-// -------
-// bool
-//     ``true`` iff MPSGraph is available.
-bool bridge_available();
-
 // Non-owning view of an MLX-array's underlying ``MTLBuffer``.
 //
 // Returned by :func:`array_to_buffer` after the array has been
@@ -126,7 +114,7 @@ struct BufferView {
 //
 // Notes
 // -----
-// Used by every MPS kernel in :doc:`MpsKernels` to obtain Obj-C
+// Used by the ``lucid.compile`` MPSGraph emitter to obtain Obj-C
 // ``MTLBuffer`` handles for ``MPSGraphTensorData`` construction
 // without copying.
 BufferView array_to_buffer(const ::mlx::core::array& arr);

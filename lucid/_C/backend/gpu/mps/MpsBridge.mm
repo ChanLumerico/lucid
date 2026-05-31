@@ -49,11 +49,6 @@ void* shared_mtl_queue() {
     return (__bridge void*)g_queue;
 }
 
-bool bridge_available() {
-    init_bridge_once();
-    return g_bridge_ok.load(std::memory_order_acquire);
-}
-
 BufferView array_to_buffer(const ::mlx::core::array& arr) {
     // Force materialisation + wait for completion.  We need the kernel that
     // produced `arr` to finish before MPSGraph reads the buffer — MLX's
@@ -69,7 +64,7 @@ BufferView array_to_buffer(const ::mlx::core::array& arr) {
     // buffer is in a permuted layout (e.g. NHWC physical for an NCHW
     // logical shape).  Feeding such a buffer to MPSGraph as-is shuffles
     // elements silently and gives wrong results.  Force a contiguous
-    // materialisation here so every kernel in MpsKernels.mm gets a
+    // materialisation here so the MPSGraph executable gets a
     // buffer whose physical layout matches its logical shape.
     //
     // This is a no-op (single MLX flag check) when arr is already

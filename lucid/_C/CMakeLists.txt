@@ -133,14 +133,11 @@ lucid_object_library(
     backend/gpu/MlxBridge.cpp
     backend/gpu/MetalAllocator.mm
     backend/gpu/MetalKernelRunner.mm
-    backend/gpu/mps/MpsBridge.mm
-    backend/gpu/mps/MpsDispatch.cpp
-    backend/gpu/mps/MpsKernels.mm)
+    backend/gpu/mps/MpsBridge.mm)
 set_source_files_properties(
     backend/gpu/MetalAllocator.mm
     backend/gpu/MetalKernelRunner.mm
     backend/gpu/mps/MpsBridge.mm
-    backend/gpu/mps/MpsKernels.mm
     PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 
 lucid_object_library(lucid_backend_init backend/BackendInit.cpp)

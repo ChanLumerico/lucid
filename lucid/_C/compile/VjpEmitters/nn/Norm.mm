@@ -379,9 +379,8 @@ public:
         // reductions interleaved with broadcasts dominated the compiled
         // backward — BN cost ~3.9× the reference's (compiled whole-model
         // backward 269 vs 144 ms; stripping BN made compiled beat the
-        // reference).  These three fused kernels are the exact ops the eager
-        // backend already ships (backend/gpu/mps/MpsKernels.mm) and the analog
-        // of what Conv2dVjp does with convolution2DData/WeightsGradient.
+        // reference).  These three fused kernels are the analog of what
+        // Conv2dVjp does with convolution2DData/WeightsGradient.
         // batch_mean / batch_var are keepdim per-channel (1, C, 1, …); the grad
         // op adds eps to var internally, so the RAW variance is passed.
         MPSGraphTensor* mean =

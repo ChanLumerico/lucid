@@ -57,8 +57,7 @@
 //                          ``linalg_norm``, ``linalg_det``, ``linalg_pinv``,
 //                          ``linalg_solve_triangular``, ``linalg_lu_solve``,
 //                          ``linalg_householder_product``.
-//   • Normalisation     — LayerNorm + BatchNorm (forward / backward) with
-//                          optional MPSGraph dispatch.
+//   • Normalisation     — LayerNorm + BatchNorm (forward / backward), MLX.
 //   • Convolutions      — Conv1d/2d/3d forward + backward (NHWC permutation).
 //   • Loss              — ``mse_loss``, ``huber_loss``, ``bce_loss``,
 //                          ``bce_with_logits_loss``, ``cross_entropy_backward``,
@@ -88,8 +87,6 @@
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
 #include "MlxBridge.h"
-#include "mps/MpsDispatch.h"
-#include "mps/MpsKernels.h"
 
 namespace lucid {
 namespace backend {
@@ -470,36 +467,17 @@ public:
     // --------
     // :meth:`silu_backward`.
     Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
-            return gpu::mps::silu_metal_forward(a, shape, dt);
-        }
         return mlx_unary(a, shape, dt,
                          [](auto& x) { return ::mlx::core::multiply(x, ::mlx::core::sigmoid(x)); });
     }
 
-    // SiLU / Swish backward.
-    //
-    // Dispatches to :func:`gpu::mps::silu_backward` when policy allows
-    // (universal dispatch — see :func:`should_dispatch_silu_backward`);
-    // otherwise computes the gradient as a single fused MLX expression.
+    // SiLU / Swish backward.  Single fused MLX expression.
     //
     // Math
     // ----
     // $\partial y/\partial x = \sigma(x) \, (1 + x \, (1 - \sigma(x)))$.
     Storage
     silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_silu_metal(numel, dt)) {
-            return gpu::mps::silu_metal_backward(a, grad, shape, dt);
-        }
-        if (gpu::mps::should_dispatch_silu_backward(numel, dt)) {
-            return gpu::mps::silu_backward(a, grad, shape, dt);
-        }
         // dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Same formula as the
         // legacy storage-primitive composition in SiluBackward::grad_formula;
         // expressed as one MLX expression so the lazy graph keeps it fused.
@@ -523,32 +501,12 @@ public:
     //
     // Notes
     // -----
-    // Dispatches to :func:`gpu::mps::gelu_forward` when the per-op
-    // policy allows; otherwise expands to the 7-op MLX composition
-    // (kept bit-for-bit identical for parity).
+    // 7-op MLX composition (tanh approximation).
     //
     // See Also
     // --------
     // :meth:`gelu_backward`, :meth:`gelu_exact`.
     Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override {
-        // 3.4 Phase 2 pilot: dispatch to MPSGraph when policy allows.  MLX
-        // path stays bit-for-bit identical below.  Per-op shortlist:
-        // obsidian/perf/perf-mpsgraph-shortlist-2026-05.md.
-        //
-        // 2026-05-25: custom Metal compute kernel is the primary fast path
-        // — the MPSGraph 9-op composite produces no measurable speedup
-        // vs MLX, but a single-pass MSL kernel does (matches the
-        // reference framework's MPS path).
-        // See perf-baseline-rebench-2026-05-25.md.
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
-            return gpu::mps::gelu_metal_forward(a, shape, dt);
-        }
-        if (gpu::mps::should_dispatch_gelu(numel, dt)) {
-            return gpu::mps::gelu_forward(a, shape, dt);
-        }
         return mlx_unary(a, shape, dt, [dt](auto& x) {
             const double k0 = std::sqrt(2.0 / M_PI);
             ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
@@ -567,22 +525,9 @@ public:
     //
     // Math
     // ----
-    // $y = 0.5 \, x \, (1 + \operatorname{erf}(x / \sqrt{2}))$.
-    //
-    // Notes
-    // -----
-    // Dispatches to :func:`gpu::mps::gelu_exact_forward` when policy
-    // allows; otherwise composes via ``mlx::core::erf``.
+    // $y = 0.5 \, x \, (1 + \operatorname{erf}(x / \sqrt{2}))$.  Composed via
+    // ``mlx::core::erf``.
     Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_gelu_exact_metal(numel, dt)) {
-            return gpu::mps::gelu_exact_metal_forward(a, shape, dt);
-        }
-        if (gpu::mps::should_dispatch_gelu_exact(numel, dt)) {
-            return gpu::mps::gelu_exact_forward(a, shape, dt);
-        }
         // y = 0.5 * x * (1 + erf(x / sqrt(2)))
         return mlx_unary(a, shape, dt, [dt](auto& x) {
             ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
@@ -598,12 +543,6 @@ public:
                                 const Storage& grad,
                                 const Shape& shape,
                                 Dtype dt) override {
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_gelu_exact(numel, dt)) {
-            return gpu::mps::gelu_exact_backward(a, grad, shape, dt);
-        }
         // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
         return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
             ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
@@ -623,15 +562,6 @@ public:
 
     Storage
     gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        std::int64_t numel = 1;
-        for (std::int64_t d : shape)
-            numel *= d;
-        if (gpu::mps::should_dispatch_gelu_metal(numel, dt)) {
-            return gpu::mps::gelu_metal_backward(a, grad, shape, dt);
-        }
-        if (gpu::mps::should_dispatch_gelu(numel, dt)) {
-            return gpu::mps::gelu_backward(a, grad, shape, dt);
-        }
         return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
             constexpr double kC1 = 0.7978845608028654;
             constexpr double kC2 = 0.044715;
@@ -956,10 +886,7 @@ public:
     }
 
     // Softmax backward, given the saved forward output ``z``.
-    //
-    // Dispatches to :func:`gpu::mps::softmax_backward` for large
-    // reduction axes (≥1024 by default); otherwise composes
-    // ``z * (grad - sum(z * grad, axis))`` via MLX.
+    // Composes ``z * (grad - sum(z * grad, axis))`` via MLX.
     //
     // Math
     // ----
@@ -971,17 +898,6 @@ public:
                              Dtype dt) override {
         const auto& z_gpu = std::get<GpuStorage>(z);
         const auto& g_gpu = std::get<GpuStorage>(grad_out);
-        if (z_gpu.arr) {
-            Shape z_shape;
-            z_shape.reserve(z_gpu.arr->ndim());
-            for (auto d : z_gpu.arr->shape())
-                z_shape.push_back(d);
-            int ax = axis < 0 ? axis + static_cast<int>(z_shape.size()) : axis;
-            std::int64_t axis_size = ax < (int)z_shape.size() ? z_shape[ax] : 0;
-            if (gpu::mps::should_dispatch_softmax_backward(axis_size, dt)) {
-                return gpu::mps::softmax_backward(z, grad_out, ax, z_shape, dt);
-            }
-        }
         (void)shape_param;
         auto gz = ::mlx::core::multiply(*g_gpu.arr, *z_gpu.arr);
         auto sum_gz = ::mlx::core::sum(gz, std::vector<int>{axis}, true);
@@ -1862,12 +1778,8 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(rstd), dt)}};
     }
 
-    // LayerNorm backward.
-    //
-    // Dispatches to :func:`gpu::mps::layer_norm_backward` for large
-    // ``normalized_size`` (see :func:`should_dispatch_layer_norm_backward`);
-    // otherwise composes the gradient as a single MLX expression
-    // using the saved mean / rstd.
+    // LayerNorm backward.  Composes the gradient as a single MLX
+    // expression using the saved mean / rstd.
     //
     // Returns
     // -------
@@ -1884,13 +1796,9 @@ public:
                                              const Shape& gamma_shape,
                                              const Shape& beta_shape,
                                              Dtype dt) override {
-        if (gpu::mps::should_dispatch_layer_norm_backward(
-                static_cast<std::int64_t>(outer), static_cast<std::int64_t>(normalized_size), dt)) {
-            auto out = gpu::mps::layer_norm_backward(x, gamma, saved_mean, saved_rstd, grad, outer,
-                                                     normalized_size, x_shape, gamma_shape,
-                                                     beta_shape, dt);
-            return {std::move(out.dx), std::move(out.dgamma), std::move(out.dbeta)};
-        }
+        (void)x_shape;
+        (void)gamma_shape;
+        (void)beta_shape;
         const auto& gx = std::get<GpuStorage>(x);
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gm = std::get<GpuStorage>(saved_mean);
@@ -1951,10 +1859,7 @@ public:
     //
     // Notes
     // -----
-    // For very large activations (ImageNet-scale) dispatches to
-    // :func:`gpu::mps::batch_norm_train_forward` per
-    // :func:`should_dispatch_batch_norm_train`; otherwise hand-rolled
-    // MLX reductions over channel axes.
+    // Hand-rolled MLX reductions over channel axes.
     std::vector<Storage> batch_norm_forward(const Storage& x,
                                             const Storage& gamma,
                                             const Storage& beta,
@@ -1966,39 +1871,6 @@ public:
                                             const Shape& x_shape_param,
                                             Dtype dt) override {
         const auto& gx = std::get<GpuStorage>(x);
-        // Dispatch to MPSGraph only for very large activations.  Get the
-        // actual shape from the storage rather than the unused-int signature.
-        if (gx.arr) {
-            Shape x_shape;
-            x_shape.reserve(gx.arr->ndim());
-            for (auto d : gx.arr->shape())
-                x_shape.push_back(d);
-            std::int64_t numel = 1;
-            for (auto d : x_shape)
-                numel *= d;
-            // Custom Metal (2-pass reduce + normalize) is the primary
-            // fast path; gate on per-channel reduction size.
-            std::int64_t per_channel = 1;
-            if (x_shape.size() >= 1)
-                per_channel *= x_shape[0];  // N
-            for (int i = 0; i < ndim; ++i) {
-                per_channel *= x_shape[2 + i];  // H, W, …
-            }
-            if (gpu::mps::should_dispatch_bn_train_metal(per_channel, dt)) {
-                auto out = gpu::mps::bn_train_metal_forward(x, gamma, beta, channels, ndim, eps,
-                                                            x_shape, dt);
-                return {std::move(out.y), std::move(out.mean), std::move(out.rstd),
-                        Storage{GpuStorage{}}};
-            }
-            if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
-                auto out = gpu::mps::batch_norm_train_forward(x, gamma, beta, channels, ndim, eps,
-                                                              x_shape, dt);
-                // 4th slot empty Storage — MPSGraph backward computes
-                // xnorm internally, no need to expose it (Phase A.4).
-                return {std::move(out.y), std::move(out.mean), std::move(out.rstd),
-                        Storage{GpuStorage{}}};
-            }
-        }
         (void)x_shape_param;
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gb = std::get<GpuStorage>(beta);
@@ -2063,9 +1935,7 @@ public:
     // Returns
     // -------
     // std::vector<Storage>
-    //     ``{dx, dgamma, dbeta}``.  Dispatches to MPSGraph on large
-    //     activations; falls back to a MLX composite for ResNet-scale
-    //     shapes where MLX already matches reference parity.
+    //     ``{dx, dgamma, dbeta}``.  MLX composite over channel axes.
     std::vector<Storage> batch_norm_backward(const Storage& x,
                                              const Storage& gamma,
                                              const Storage& saved_mean,
@@ -2080,20 +1950,6 @@ public:
                                              Dtype dt,
                                              double eps) override {
         const auto& gx = std::get<GpuStorage>(x);
-        if (gx.arr) {
-            Shape x_shape;
-            x_shape.reserve(gx.arr->ndim());
-            for (auto d : gx.arr->shape())
-                x_shape.push_back(d);
-            std::int64_t numel = 1;
-            for (auto d : x_shape)
-                numel *= d;
-            if (gpu::mps::should_dispatch_batch_norm_train(numel, dt)) {
-                auto out = gpu::mps::batch_norm_train_backward(
-                    x, gamma, saved_mean, saved_rstd, grad, channels, ndim, x_shape, dt, eps);
-                return {std::move(out.dx), std::move(out.dgamma), std::move(out.dbeta)};
-            }
-        }
         (void)x_shape_param;
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gm = std::get<GpuStorage>(saved_mean);
@@ -2105,8 +1961,7 @@ public:
 
         // 3.4+ Phase A.4: prefer the forward-saved xnorm to skip the
         // ``centered = x - mean`` + ``xnorm = centered * rstd`` recomputation.
-        // Falls back to the recompute path when saved_xnorm is an empty
-        // Storage (e.g. MPSGraph dispatch which doesn't expose xnorm).
+        // Falls back to the recompute path when saved_xnorm is an empty Storage.
         ::mlx::core::array xnorm = [&]() -> ::mlx::core::array {
             if (const auto* xn = std::get_if<GpuStorage>(&saved_xnorm)) {
                 if (xn->arr)
@@ -2135,9 +1990,7 @@ public:
         //       (dbeta sum + dgamma sum + mean_g + mean_g_xn).
         //
         // Result: ~3 fewer MLX ops per BN backward call.  On ResNet-18
-        // with 20 BatchNorm2d layers and channels-first shapes ≤ 2M numel
-        // (below the MPSGraph dispatch threshold), this is the only
-        // backend path that runs — so the savings compound.  Targets the
+        // with 20 BatchNorm2d layers the savings compound.  Targets the
         // +1.31 ms BN bwd microbench gap vs the reference framework.
         auto grad_xnorm = ::mlx::core::multiply(*ggrad.arr, xnorm);
         auto sum_grad_kept = ::mlx::core::sum(*ggrad.arr, axes, true);
@@ -4041,15 +3894,6 @@ public:
         std::size_t M_total = 1;
         for (auto d : indices_shape)
             M_total *= static_cast<std::size_t>(d);
-        // MPSGraph ScatterModeAdd is ~14-28× faster than the MLX path
-        // on GPT-style inputs (M_total × D ≥ 1M); gated to keep tiny
-        // embedding tables on the MLX path where dispatch overhead would
-        // dominate.
-        if (gpu::mps::should_dispatch_embedding_backward(static_cast<std::int64_t>(M_total), D,
-                                                         dt)) {
-            return gpu::mps::embedding_backward(
-                grad_out, indices, N, D, static_cast<std::int64_t>(M_total), padding_idx, dt);
-        }
         const auto mlx_dt = gpu::to_mlx_dtype(dt);
         const auto& gg = std::get<GpuStorage>(grad_out);
         const auto& gi = std::get<GpuStorage>(indices);
