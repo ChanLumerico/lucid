@@ -814,6 +814,18 @@ class CompiledModule:
         from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
+        from lucid.compile._bn_runstats import model_has_tracking_bn
+
+        # 3.5 BatchNorm running-stats: this is the forward-only compile path
+        # (no backward, hence no write-back hook).  In training mode a
+        # running-stats-tracking BN must advance its EMA every call, which the
+        # eager kernel now skips under a tracer — so fall back to eager to keep
+        # the stats correct (use make_step for compiled training).  In eval mode
+        # BN dispatches the distinct ``batch_norm_eval`` op (no running-stats
+        # update), so it compiles normally; track_running_stats=False BN keeps no
+        # stats and is likewise unaffected.
+        if self._model.training and model_has_tracking_bn(self._model):
+            return None
 
         if kwargs:
             # The MPSGraph builder is positional-only.  Compose kwargs

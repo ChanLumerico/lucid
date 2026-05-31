@@ -323,7 +323,13 @@ public:
     std::string_view op_name() const override { return name_; }
     bool emit(BackwardContext& bctx, const OpNode& node,
               const std::vector<void*>& grad_outs) override {
-        if (node.inputs.size() != 3 || grad_outs.empty() || grad_outs[0] == nullptr)
+        // 3.5 compile: training BN may be a 3-input node (batch-stats only) or a
+        // 5-input node (also carries running_mean/running_var as inputs[3]/[4]
+        // for the running-stats EMA outputs).  The backward is identical for
+        // both — x/gamma/beta stay inputs[0..2], the running-stat inputs carry
+        // no gradient, and grad_outs[1]/[2] (for new_rm/new_rv) are never read.
+        if ((node.inputs.size() != 3 && node.inputs.size() != 5) || grad_outs.empty() ||
+            grad_outs[0] == nullptr)
             return false;
         TensorId x_id = node.inputs[0];
         TensorId g_id = node.inputs[1];

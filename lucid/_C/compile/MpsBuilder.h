@@ -126,7 +126,8 @@ compile_trace_with_backward(const TraceGraph& graph,
                             TensorId loss_id,
                             const std::vector<TensorId>& param_ids,
                             std::string* error_msg = nullptr,
-                            bool dynamic_batch = false);
+                            bool dynamic_batch = false,
+                            const std::vector<TensorId>& extra_output_ids = {});
 
 // ── Fused training step compile (Phase 1.7) ─────────────────────────
 
@@ -400,9 +401,14 @@ public:
                                       const std::vector<TensorId>& explicit_outputs = {});
 
     // Forward + backward.  See :func:`compile_trace_with_backward`.
-    CompiledExecutable* compile_trace_with_backward(TensorId loss_id,
-                                                    const std::vector<TensorId>& param_ids,
-                                                    bool dynamic_batch = false);
+    // ``extra_output_ids`` are trace ids of explicit non-gradient outputs
+    // (e.g. BN running-stat EMA new_rm/new_rv) that the executable must also
+    // produce + return after [loss, *grads], so the runtime can write them back.
+    CompiledExecutable* compile_trace_with_backward(
+        TensorId loss_id,
+        const std::vector<TensorId>& param_ids,
+        bool dynamic_batch = false,
+        const std::vector<TensorId>& extra_output_ids = {});
 
     // Forward + bwd + hardcoded SGD/Adam.  See
     // :func:`compile_fused_training_step`.

@@ -29,7 +29,7 @@ Acceptance:
 """
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast
 
 from lucid._C import engine as _C_engine
@@ -67,6 +67,14 @@ class _StepEntry:
     n_hits: int = 0
     compile_ms: float = 0.0
     last_run_ms: float = 0.0
+    # 3.5 BatchNorm running-stats write-back.  Fused-momentum BN traces as a
+    # 5-input/3-output node whose 2 extra outputs are the EMA-updated
+    # running_mean / running_var.  They are surfaced as extra executable
+    # outputs (trailing [loss, *grads]) and, after each run, copy_'d back into
+    # these live module buffers so ``model.eval()`` reads fresh stats instead
+    # of the frozen trace-time value.  Empty when the model has no such BN.
+    bn_stat_buffers: list[Tensor] = field(default_factory=list)
+    bn_stat_out_count: int = 0
 
 
 def make_step(
@@ -133,6 +141,7 @@ def make_step(
     from lucid._tensor.tensor import Tensor
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
+    from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
     from lucid.compile._fallback import EagerFallbackSet
     from lucid.compile._signature import signature_of
 
@@ -198,6 +207,22 @@ def make_step(
         ext = tracer.external_feeds
         loss_id = graph.ops[-1].outputs[0].id
 
+        # 3.5 BatchNorm running-stats. A cumulative-MA BN (track_running_stats=
+        # True + momentum=None) can't be lowered into the graph (its update reads
+        # num_batches_tracked as a host scalar) → eager-fallback the whole step.
+        # A track_running_stats=False BN keeps no buffers and compiles unchanged
+        # (3-input node, nothing to write back). A fused-momentum BN traces as a
+        # 5-input/3-output node; surface its EMA outputs (new_rm/new_rv) and
+        # write them into the live module buffers after each run, else the
+        # running stats freeze at their trace-time value and eval() reads stale
+        # stats. The cumulative-vs-stateless distinction is invisible in the
+        # trace IR, so the model is the discriminator (see _bn_runstats).
+        if model_has_cumulative_bn(model):
+            return None
+        _bn_targets = bn_writeback_targets(graph, ext)
+        bn_stat_out_ids: list[int] = [out_id for _, out_id, _ in _bn_targets]
+        bn_stat_buffers: list[Tensor] = [_wrap(impl) for _, _, impl in _bn_targets]
+
         # param_ids: match each Parameter (by TensorImpl identity)
         # against ext.  Re-fetched on every compile in case the inner
         # model mutated (e.g. .to() moved params).
@@ -215,7 +240,7 @@ def make_step(
 
         try:
             exe = _C_engine.compile.compile_trace_with_backward(
-                graph, ext, loss_id, param_ids, dynamic
+                graph, ext, loss_id, param_ids, dynamic, extra_output_ids=bn_stat_out_ids
             )
         except RuntimeError:
             # compile_trace_with_backward surfaces a RuntimeError when
@@ -248,6 +273,8 @@ def make_step(
             input_source=tuple(input_source),
             graph_json=trace_to_json(graph),
             compile_ms=(time.perf_counter() - t0) * 1000.0,
+            bn_stat_buffers=bn_stat_buffers,
+            bn_stat_out_count=len(bn_stat_out_ids),
         )
 
     def _run(
@@ -271,6 +298,19 @@ def make_step(
         outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
         entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
         entry.n_hits += 1
+        # 3.5 BatchNorm running-stats write-back: the BN EMA outputs trail
+        # [loss, *grads] (one pair per fused-momentum BN).  copy_ each into its
+        # live module buffer so eval() reads fresh stats.  The count assert
+        # guards against a C++/Python output-slice drift.
+        n_loss_grad = 1 + len(params)
+        if len(outs) != n_loss_grad + entry.bn_stat_out_count:
+            raise RuntimeError(
+                f"make_step: run_executable returned {len(outs)} outputs, "
+                f"expected {n_loss_grad + entry.bn_stat_out_count} "
+                f"(1 loss + {len(params)} grads + {entry.bn_stat_out_count} BN stats)"
+            )
+        for _i, _buf in enumerate(entry.bn_stat_buffers):
+            _buf.copy_(_wrap(cast(TensorImpl, outs[n_loss_grad + _i])))
         # outs = [loss_impl, grad_param_0_impl, …]
         loss_impl = cast(TensorImpl, outs[0])
         grad_impls = [cast(TensorImpl, g) for g in outs[1 : 1 + len(params)]]

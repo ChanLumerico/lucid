@@ -101,6 +101,7 @@ def compiled_step(
     from lucid._dispatch import _unwrap, _wrap
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
+    from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
 
     params = list(model.parameters())
     if not params:
@@ -143,7 +144,27 @@ def compiled_step(
             )
         param_ids.append(found)
 
-    exe = _C_engine.compile.compile_trace_with_backward(g, ext, loss_id, param_ids)
+    # 3.5 BatchNorm running-stats. compiled_step has no eager fallback (it raises
+    # on any uncompilable trace), so a cumulative-MA BN (momentum=None) is a hard
+    # error. A track_running_stats=False BN keeps no buffers and compiles
+    # unchanged. A fused-momentum BN traces 5-input; surface its EMA outputs as
+    # extra executable outputs and copy_ them into the live module buffers after
+    # the run, else the running stats freeze at trace time and eval() reads stale
+    # stats (the eager EMA is skipped under a tracer).
+    if model_has_cumulative_bn(model):
+        raise RuntimeError(
+            "compiled_step: BatchNorm with momentum=None (cumulative moving "
+            "average) can't have its running-stats lowered into the compiled "
+            "graph, and compiled_step has no eager fallback. Use "
+            "lucid.compile.make_step or a momentum-based BatchNorm."
+        )
+    bn_targets = bn_writeback_targets(g, ext)
+    bn_stat_out_ids = [out_id for _, out_id, _ in bn_targets]
+    bn_stat_buffers = [_wrap(impl) for _, _, impl in bn_targets]
+
+    exe = _C_engine.compile.compile_trace_with_backward(
+        g, ext, loss_id, param_ids, extra_output_ids=bn_stat_out_ids
+    )
     if exe is None:
         raise RuntimeError(
             "compiled_step: compile_trace_with_backward returned None — "
@@ -153,18 +174,23 @@ def compiled_step(
     feed_impls = [ext[tid] for tid in exe.input_ids]
     outs = _C_engine.compile.run_executable(exe, feed_impls)
 
-    # First output is the loss; the rest are per-parameter gradients
-    # (in the same order we passed param_ids).
-    if len(outs) != 1 + len(params):
+    # Output order is [loss, *grads, *bn_running_stats].
+    n_loss_grad = 1 + len(params)
+    if len(outs) != n_loss_grad + len(bn_stat_out_ids):
         raise RuntimeError(
             f"compiled_step: executable produced {len(outs)} outputs but expected "
-            f"{1 + len(params)} (loss + {len(params)} grads)"
+            f"{n_loss_grad + len(bn_stat_out_ids)} (loss + {len(params)} grads + "
+            f"{len(bn_stat_out_ids)} BN running-stats)"
         )
     loss_compiled = _wrap(outs[0])
 
     # Direct grad assignment — the eager optimizer reads ``param.grad``
     # the same way as after ``loss.backward()``.
-    for param, grad_impl in zip(params, outs[1:]):
+    for param, grad_impl in zip(params, outs[1:n_loss_grad]):
         param.grad = _wrap(grad_impl)
+
+    # Write BN running stats back into the live module buffers.
+    for _i, _buf in enumerate(bn_stat_buffers):
+        _buf.copy_(_wrap(outs[n_loss_grad + _i]))
 
     return loss_compiled

@@ -486,6 +486,7 @@ class _FusedStep:
         from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
+        from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
 
         copt = self._copt
         # The compile_optimizer subclass allocates its state buffers in
@@ -772,6 +773,31 @@ class _FusedStep:
                     output_target_ids.append(_sout)
                     dropout_state_target_pairs.append((_sin, _sout))
 
+        # 3.5 BatchNorm running-stats (Path A swap-buffer write-back). A
+        # cumulative-MA BN (track_running_stats=True + momentum=None) can't be
+        # lowered into the graph (its update reads num_batches_tracked as a host
+        # scalar) and fused_step has no eager fallback → raise. A
+        # track_running_stats=False BN keeps no buffers (3-input, nothing to
+        # write back) → compiles unchanged. A fused-momentum BN traces 5-input;
+        # pair each running-stat FEED (inputs[3]/[4]) with its EMA OUTPUT
+        # (outputs[1]/[2]) and route as PLAIN output-feed targets (Path A — NOT
+        # variable_pairs; running stats are read-only within the forward, so the
+        # cheaper swap-buffer write-back suffices). Model is the discriminator
+        # (the trace IR can't tell cumulative-MA from track_running_stats=False).
+        if model_has_cumulative_bn(self._model):
+            raise NotImplementedError(
+                "fused_step: BatchNorm with momentum=None (cumulative moving "
+                "average) can't have its running-stats update lowered into the "
+                "compiled graph, and fused_step has no eager fallback. Use "
+                "lucid.compile.make_step (which falls back to eager for it) or a "
+                "momentum-based BatchNorm (the default, momentum=0.1)."
+            )
+        bn_stat_target_pairs: list[tuple[int, int]] = [
+            (feed_id, out_id) for feed_id, out_id, _ in bn_writeback_targets(graph, ext)
+        ]
+        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
+            output_target_ids.append(_bn_new_id)  # LAST in output_target_ids
+
         # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
         # variables variant) is now functional after the source-graph
         # retention fix in CompiledExecutable.mm — previously the
@@ -912,6 +938,21 @@ class _FusedStep:
         # through the fused step.
         from lucid._tensor.tensor import Tensor as _TensorT  # noqa: PLC0415
 
+        # 3.5 BatchNorm: the running-stat FEEDS (rm/rv) must resolve to the LIVE
+        # module buffer — the read half of the per-step read-modify-write — not
+        # get frozen as a pinned constant.  Their write-back TARGET (below) wraps
+        # the same impl, so run_executable_inplace's swap lands in the buffer the
+        # next step reads.
+        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
+            _bn_impl = ext.get(_bn_feed_id)
+            if _bn_impl is not None and id(_bn_impl) not in impl_to_resolver:
+                _bn_live = _TensorT(_bn_impl, requires_grad=False)
+
+                def _bn_stat_resolver(t: Tensor = _bn_live) -> Tensor:
+                    return t
+
+                impl_to_resolver[id(_bn_impl)] = _bn_stat_resolver
+
         resolvers: list[Callable[[], Tensor]] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
@@ -940,8 +981,23 @@ class _FusedStep:
         # buffer write-back lands in the same Python-side tensor
         # (harmless overhead since we never read it; the actual RNG
         # advancement happens inside the variable's internal storage).
+        # ``self._output_targets`` MUST be assembled in the SAME order as
+        # ``output_target_ids`` above — run_executable_inplace pairs them
+        # positionally and shape-checks each slot.  The canonical order is
+        # [opt outputs, found_inf, dropout state, BN running-stats]:
+        #   • opt outputs           — output_target_ids 733-740
+        #   • found_inf (scaler)    — output_target_ids 749-753  (BEFORE dropout)
+        #   • dropout state         — output_target_ids 766-773
+        #   • BN running-stats      — appended LAST just above
+        # (Prior to 3.5 found_inf was appended here AFTER dropout, a latent
+        # order mismatch that only bit when scaler AND dropout were both present
+        # — the zip-assert below now guards it.)
         self._output_targets = list(copt._outputs_to_targets(opt_outputs))
         from lucid._tensor.tensor import Tensor as _TensorT_for_state
+
+        # GradScaler found_inf holder (matches output_target_ids order).
+        if scaler_enabled and self._found_inf_target is not None:
+            self._output_targets.append(self._found_inf_target)
 
         for _state_in_tid, _state_out_tid in dropout_state_target_pairs:
             _impl = ext.get(_state_in_tid)
@@ -952,12 +1008,16 @@ class _FusedStep:
                 )
             self._output_targets.append(_TensorT_for_state(_impl, requires_grad=False))
 
-        # GradScaler: append the found_inf holder so the executable
-        # writes the F32 0-D inf-flag into a buffer we can read after
-        # the step.  Order matters — this matches the
-        # ``output_target_ids.append(found_inf_tid)`` above.
-        if scaler_enabled and self._found_inf_target is not None:
-            self._output_targets.append(self._found_inf_target)
+        # BN running-stats write-back targets — the LIVE module buffers (same
+        # impl as the rm/rv feeds), so the swap lands where eval() reads.
+        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
+            _bn_impl = ext.get(_bn_feed_id)
+            if _bn_impl is None:
+                raise RuntimeError(
+                    f"fused_step: BN running-stat feed id {_bn_feed_id} "
+                    "not in external_feeds"
+                )
+            self._output_targets.append(_TensorT_for_state(_bn_impl, requires_grad=False))
 
         if len(self._output_targets) != len(output_target_ids):
             raise RuntimeError(
@@ -965,6 +1025,25 @@ class _FusedStep:
                 f"({len(self._output_targets)}) doesn't match "
                 f"output_target_ids count ({len(output_target_ids)})"
             )
+
+        # Per-slot shape guard: output_target_ids and _output_targets are paired
+        # positionally by run_executable_inplace, so any misordering (e.g. a
+        # found_inf/dropout/BN swap) would silently write the wrong buffer.
+        # Shape alone discriminates the tiers (opt params/state are multi-dim,
+        # found_inf is 0-D, dropout state is int32[7], BN running-stats are
+        # (C,)); the C++ run_executable_inplace per-slot check backstops dtype.
+        _id_to_shape: dict[int, tuple[int, ...]] = {}
+        for _n in graph.ops:
+            for _m in _n.outputs:
+                _id_to_shape[int(_m.id)] = tuple(_m.shape)
+        for _slot, (_oid, _tgt) in enumerate(zip(output_target_ids, self._output_targets)):
+            _exp = _id_to_shape.get(int(_oid))
+            if _exp is not None and tuple(_tgt.shape) != _exp:
+                raise RuntimeError(
+                    f"fused_step: output target slot {_slot} (id {_oid}) shape "
+                    f"{tuple(_tgt.shape)} != trace meta {_exp} — "
+                    "output_target_ids / _output_targets ordering drift"
+                )
         self._exe = exe
         # Phase 1.10 per-call overhead reduction: pre-unwrap the
         # opt-output target TensorImpls.  These are stable across calls

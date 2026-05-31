@@ -23,6 +23,7 @@
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
 #include "../backend/IBackend.h"
+#include "../compile/Tracer.h"
 #include "../core/AmpPolicy.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
@@ -113,6 +114,10 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                       x_eff->shape()};
     // 3.5 Phase 1.2: report eps for the compile-path BN-train emitter.
     scope.set_attr("eps", eps);
+    // 3.5: report momentum so the compile-path BN-train emitter can build the
+    // running-stats EMA (new_rm / new_rv) as graph outputs and write them back
+    // each compiled run — the eager in-place EMA below is skipped under trace.
+    scope.set_attr("momentum", momentum);
 
     // batch_norm_forward returns [y, mean, rstd].
     auto forward =
@@ -148,6 +153,15 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
     // folding it in here drops that to zero.  Variance is recovered
     // from rstd via ``var = 1/rstd² - eps`` — a few cheap elementwise
     // ops on a (C,) tensor.
+    // 3.5 compile: under a Tracer the running-stats EMA must become graph
+    // outputs (so the cached MPSGraph executable writes the buffers every run)
+    // instead of the eager in-place mutation below — otherwise the buffers
+    // freeze at their trace-time value and eval() reads stale stats.  These
+    // hold the cloned new-stat impls so the post-wire_autograd on_op_io calls
+    // can register them as the BN op's 2 extra trace outputs.
+    const bool tracing = (::lucid::compile::current_tracer() != nullptr);
+    TensorImplPtr new_rm_t;
+    TensorImplPtr new_rv_t;
     if (running_mean) {
         int n_total = B;
         for (int i = 0; i < N; ++i)
@@ -186,28 +200,62 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         Storage bv_scaled = be.mul_scalar(var, stat_shape, buf_dt, m * unbiased_factor);
         Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
 
-        running_mean->mutable_storage() = std::move(new_rm);
-        running_var->mutable_storage() = std::move(new_rv);
+        if (tracing) {
+            // Compile trace: leave the live buffers UNTOUCHED — the compiled
+            // executable owns the per-run write-back (edits in _fused_step.py /
+            // _step.py register new_rm/new_rv as output-feed targets).  Clone
+            // the computed new stats into distinct requires_grad=false impls so
+            // the on_op_io calls after wire_autograd can register them as the
+            // op's 2 extra outputs.  The cloned VALUES are unused by the graph
+            // (the emitter recomputes the EMA in-graph); only their identity /
+            // shape / dtype / device matter.
+            Storage rm_copy = be.clone(new_rm, stat_shape, buf_dt);
+            Storage rv_copy = be.clone(new_rv, stat_shape, buf_dt);
+            new_rm_t = std::make_shared<TensorImpl>(std::move(rm_copy), stat_shape, buf_dt,
+                                                    x_eff->device(), false);
+            new_rv_t = std::make_shared<TensorImpl>(std::move(rv_copy), stat_shape, buf_dt,
+                                                    x_eff->device(), false);
+        } else {
+            running_mean->mutable_storage() = std::move(new_rm);
+            running_var->mutable_storage() = std::move(new_rv);
 
-        if (x_eff->device() == Device::GPU) {
-            std::vector<mlx::core::array> arrs;
-            arrs.reserve(2);
-            if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
-                if (gs->arr)
-                    arrs.push_back(*gs->arr);
+            if (x_eff->device() == Device::GPU) {
+                std::vector<mlx::core::array> arrs;
+                arrs.reserve(2);
+                if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
+                    if (gs->arr)
+                        arrs.push_back(*gs->arr);
+                }
+                if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
+                    if (gs->arr)
+                        arrs.push_back(*gs->arr);
+                }
+                if (!arrs.empty())
+                    mlx::core::async_eval(arrs);
             }
-            if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
-                if (gs->arr)
-                    arrs.push_back(*gs->arr);
-            }
-            if (!arrs.empty())
-                mlx::core::async_eval(arrs);
         }
     }
 
     // saved_inputs_[0..2] hold {x, gamma, beta} at eff_dt.
     kernel::NaryKernel<BatchNormNdBackward<N>, 3>::wire_autograd(std::move(bwd),
                                                                  {x_eff, gamma_eff, beta_eff}, out);
+
+    // 3.5 compile: promote the traced BN node from 3-in/1-out to 5-in/3-out so
+    // the running-stats EMA rides the compiled executable.  wire_autograd has
+    // already recorded inputs={x,gamma,beta} + outputs[0]=y; these calls extend
+    // it.  Each on_op_io MUST carry the FULL 5-input list because Tracer clears
+    // node.inputs on every call (Tracer.cpp:89) — the running_mean/running_var
+    // impls become external feeds (graph inputs), and new_rm_t/new_rv_t each get
+    // a fresh appended output id (Tracer multi-output append path).
+    if (tracing && new_rm_t && new_rv_t) {
+        if (auto* trc = ::lucid::compile::current_tracer()) {
+            const std::vector<TensorImplPtr> bn_inputs{x_eff, gamma_eff, beta_eff, running_mean,
+                                                       running_var};
+            trc->on_op_io(bn_inputs, out);       // alias: refresh outputs[0]=y, rebuild 5 inputs
+            trc->on_op_io(bn_inputs, new_rm_t);  // append outputs[1] = new_rm
+            trc->on_op_io(bn_inputs, new_rv_t);  // append outputs[2] = new_rv
+        }
+    }
     return out;
 }
 

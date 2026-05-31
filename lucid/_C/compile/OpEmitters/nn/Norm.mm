@@ -37,6 +37,17 @@ inline double eps_attr(const OpNode& node) {
     return p ? *p : -1.0;
 }
 
+// Momentum for the BN-train running-stats EMA.  Returns -1.0 when the attr is
+// absent so the 5-input emit path bails to eager rather than silently freezing
+// the buffers (a 5-input node always carries it — see BatchNorm.cpp set_attr).
+inline double momentum_attr(const OpNode& node) {
+    auto it = node.attrs.find("momentum");
+    if (it == node.attrs.end())
+        return -1.0;
+    const auto* p = std::get_if<double>(&it->second);
+    return p ? *p : -1.0;
+}
+
 // Build [rank-K, rank-K+1, …, rank-1] as the trailing-K axes list.
 inline NSArray<NSNumber*>* trailing_axes(NSUInteger rank, NSUInteger K) {
     NSMutableArray<NSNumber*>* axes = [NSMutableArray arrayWithCapacity:K];
@@ -202,7 +213,11 @@ public:
     explicit BatchNormTrainEmitter(std::string_view n) : name_(n) {}
     std::string_view op_name() const override { return name_; }
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.size() != 3)
+        // 3.5 compile: 3-input = batch-stats only; 5-input = training BN that
+        // also carries running_mean/running_var (inputs[3]/[4]) and emits the
+        // running-stats EMA as 2 extra outputs (new_rm/new_rv).
+        const std::size_t nin = node.inputs.size();
+        if (nin != 3 && nin != 5)
             return false;
         for (TensorId id : node.inputs)
             if (id < 0)
@@ -276,6 +291,73 @@ public:
                                    epsilon:static_cast<float>(eps)
                                       name:@"batch_norm"];
         ctx.bind(node.outputs[0].id, (__bridge void*)(y));
+
+        // 3.5 compile: a 5-input training BN node carries running_mean
+        // (inputs[3]) + running_var (inputs[4]) and declares 2 extra outputs.
+        // Emit the EMA in-graph so the executable write-back advances the
+        // buffers EVERY compiled run — otherwise the running stats freeze at
+        // their trace-time value and eval() reads stale stats.  Matches the
+        // eager formula (BatchNorm.cpp): the y-normalization keeps the biased
+        // population variance, while the running-var blend applies the Bessel
+        // n/(n-1) correction.  ``var`` here is varianceOfTensor = biased var.
+        if (nin == 5 && node.outputs.size() >= 3) {
+            MPSGraphTensor* rm_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[3]);
+            MPSGraphTensor* rv_t = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[4]);
+            if (rm_t == nil || rv_t == nil)
+                return false;
+            const double m = momentum_attr(node);
+            if (m < 0.0)
+                return false;
+
+            // n = product of every axis except the channel dim (1); use the
+            // trace-recorded out_shape (x_t.shape may be empty after a conv).
+            double n = 1.0;
+            for (NSUInteger i = 0; i < rank; ++i)
+                if (i != 1)
+                    n *= static_cast<double>(out_shape[i]);
+            const double bessel = (n > 1.0) ? n / (n - 1.0) : 1.0;
+
+            // mean/var are keepdim (1,C,1,...); reshape to (C,) to match buffers.
+            NSArray<NSNumber*>* c_shape =
+                @[ [NSNumber numberWithLongLong:static_cast<long long>(out_shape[1])] ];
+            MPSGraphTensor* mean_C = [graph reshapeTensor:mean withShape:c_shape name:nil];
+            MPSGraphTensor* var_C = [graph reshapeTensor:var withShape:c_shape name:nil];
+            // Defensive dtype reconcile — a no-op today (x is F32 under AMP via
+            // the BN ForceFP32 cast, so mean/var already match the buffer dtype).
+            if (mean_C.dataType != rm_t.dataType)
+                mean_C = [graph castTensor:mean_C toType:rm_t.dataType name:@"bn_meanC_cast"];
+            if (var_C.dataType != rv_t.dataType)
+                var_C = [graph castTensor:var_C toType:rv_t.dataType name:@"bn_varC_cast"];
+
+            MPSGraphTensor* one_m_rm = [graph constantWithScalar:(1.0 - m) dataType:rm_t.dataType];
+            MPSGraphTensor* m_rm = [graph constantWithScalar:m dataType:rm_t.dataType];
+            MPSGraphTensor* one_m_rv = [graph constantWithScalar:(1.0 - m) dataType:rv_t.dataType];
+            MPSGraphTensor* m_bessel =
+                [graph constantWithScalar:(m * bessel) dataType:rv_t.dataType];
+
+            // new_rm = (1-m)*running_mean + m*batch_mean
+            MPSGraphTensor* new_rm = [graph
+                additionWithPrimaryTensor:[graph multiplicationWithPrimaryTensor:rm_t
+                                                                 secondaryTensor:one_m_rm
+                                                                            name:nil]
+                          secondaryTensor:[graph multiplicationWithPrimaryTensor:mean_C
+                                                                 secondaryTensor:m_rm
+                                                                            name:nil]
+                                     name:@"bn_new_rm"];
+            // new_rv = (1-m)*running_var + (m*n/(n-1))*batch_var
+            MPSGraphTensor* new_rv = [graph
+                additionWithPrimaryTensor:[graph multiplicationWithPrimaryTensor:rv_t
+                                                                 secondaryTensor:one_m_rv
+                                                                            name:nil]
+                          secondaryTensor:[graph multiplicationWithPrimaryTensor:var_C
+                                                                 secondaryTensor:m_bessel
+                                                                            name:nil]
+                                     name:@"bn_new_rv"];
+            if (ctx.is_consumed(node.outputs[1].id))
+                ctx.bind(node.outputs[1].id, (__bridge void*)new_rm);
+            if (ctx.is_consumed(node.outputs[2].id))
+                ctx.bind(node.outputs[2].id, (__bridge void*)new_rv);
+        }
         return true;
     }
 

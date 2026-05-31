@@ -485,7 +485,8 @@ CompiledExecutable* MpsBuilder::compile_trace(
 CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
-        bool dynamic_batch) {
+        bool dynamic_batch,
+        const std::vector<TensorId>& extra_output_ids) {
     auto& graph = graph_;
     const auto& external_feeds = external_feeds_;
     auto* error_msg = error_msg_;
@@ -561,11 +562,30 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
     }
 
     // Phase 1.6: ``dynamic_batch`` opts the leading dim of every
-    // non-parameter feed into a symbolic placeholder (-1).  Parameter
-    // shapes (weights, biases, running stats) stay fixed because
+    // non-parameter, non-structural feed into a symbolic placeholder
+    // (-1).  Parameter shapes (weights, biases) stay fixed because
     // their first dim is structural (out_channels, etc.) and not a
     // batch axis.
     std::unordered_set<TensorId> param_id_set(param_ids.begin(), param_ids.end());
+
+    // 3.5: BatchNorm running-stat feeds (the (C,) running_mean / running_var
+    // fed into a 5-input BN-train node) are ALSO structural — their dim 0 is
+    // the channel count, not batch — and they are buffers, not params, so they
+    // are not in param_id_set.  Collect them so the dynamic-batch rewrite below
+    // does NOT symbolise their channel axis to -1.
+    std::unordered_set<TensorId> static_feed_ids;
+    if (dynamic_batch) {
+        for (const auto& node : graph.ops) {
+            if ((node.name == "batch_norm" || node.name == "batch_norm1d" ||
+                 node.name == "batch_norm3d") &&
+                node.inputs.size() >= 5) {
+                if (node.inputs[3] >= 0)
+                    static_feed_ids.insert(node.inputs[3]);
+                if (node.inputs[4] >= 0)
+                    static_feed_ids.insert(node.inputs[4]);
+            }
+        }
+    }
 
     @autoreleasepool {
         MPSGraph* graph_obj = [[MPSGraph alloc] init];
@@ -595,7 +615,8 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
             const Shape feed_shape = impl->shape();
             const Dtype feed_dtype = impl->dtype();
             const bool is_user_input =
-                (param_id_set.find(tid) == param_id_set.end());
+                (param_id_set.find(tid) == param_id_set.end()) &&
+                (static_feed_ids.find(tid) == static_feed_ids.end());
             NSArray<NSNumber*>* ns_shape;
             if (dynamic_batch && is_user_input && !feed_shape.empty()) {
                 NSMutableArray<NSNumber*>* dyn =
@@ -635,6 +656,11 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
                     if (iid >= 0)
                         trace_consumed.insert(iid);
             trace_consumed.insert(loss_id);
+            // 3.5: explicit non-gradient outputs (e.g. BN running-stat EMA) are
+            // consumed too, so their multi-output emitter binds outputs[1]/[2].
+            for (TensorId tid : extra_output_ids)
+                if (tid >= 0)
+                    trace_consumed.insert(tid);
             ctx.set_consumed_inputs(trace_consumed);
         }
 
@@ -740,6 +766,34 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         for (MPSGraphTensor* g_t : grad_tensors)
             [target_arr addObject:g_t];
 
+        // 3.5: explicit extra outputs (BN running-stat EMA) come AFTER the grads
+        // in target order, so the runtime returns [loss, *grads, *extra].  Their
+        // shape/dtype meta is read from the trace IR (the emitter bound their
+        // MPSGraph tensors above; resolve them now).
+        std::vector<Shape> extra_shapes;
+        std::vector<Dtype> extra_dtypes;
+        extra_shapes.reserve(extra_output_ids.size());
+        extra_dtypes.reserve(extra_output_ids.size());
+        if (!extra_output_ids.empty()) {
+            std::unordered_map<TensorId, std::pair<Shape, Dtype>> id_to_meta;
+            for (const auto& node : graph.ops)
+                for (const auto& meta : node.outputs)
+                    id_to_meta[meta.id] = {meta.shape, meta.dtype};
+            for (TensorId tid : extra_output_ids) {
+                void* tv = ctx.resolve(tid);
+                if (tv == nullptr)
+                    return fail("compile_trace_with_backward: extra output id " +
+                                std::to_string(tid) + " has no MPSGraph binding");
+                auto it = id_to_meta.find(tid);
+                if (it == id_to_meta.end())
+                    return fail("compile_trace_with_backward: extra output id " +
+                                std::to_string(tid) + " not in trace");
+                [target_arr addObject:(__bridge MPSGraphTensor*)tv];
+                extra_shapes.push_back(it->second.first);
+                extra_dtypes.push_back(it->second.second);
+            }
+        }
+
         // Build feed dict.
         NSMutableDictionary<MPSGraphTensor*, MPSGraphShapedType*>* feed_dict =
             [NSMutableDictionary dictionaryWithCapacity:feed_tensors.size()];
@@ -766,10 +820,14 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         // id space.  Convention: grad_id_for_param[i] = graph.next_id + 1 + i
         // (offset by 1 to leave room for any future loss-id alias).
         std::vector<TensorId> grad_output_ids;
-        grad_output_ids.reserve(param_ids.size());
+        grad_output_ids.reserve(param_ids.size() + extra_output_ids.size());
         TensorId next_grad_id = graph.next_id + 1;
         for (std::size_t i = 0; i < param_ids.size(); ++i)
             grad_output_ids.push_back(next_grad_id + static_cast<TensorId>(i));
+        // 3.5: explicit extra outputs reuse their trace ids and trail the grads
+        // in the runtime's target order ([loss, *grads, *extra]).
+        for (TensorId tid : extra_output_ids)
+            grad_output_ids.push_back(tid);
 
         // Assemble the per-output meta vectors in target order: loss first,
         // then grads in param_ids order.
@@ -797,6 +855,11 @@ CompiledExecutable* MpsBuilder::compile_trace_with_backward(
         for (std::size_t i = 0; i < grad_shapes.size(); ++i) {
             output_shapes.push_back(std::move(grad_shapes[i]));
             output_dtypes.push_back(grad_dtypes[i]);
+        }
+        // 3.5: extra-output meta trails loss + grads, matching target_arr order.
+        for (std::size_t i = 0; i < extra_shapes.size(); ++i) {
+            output_shapes.push_back(std::move(extra_shapes[i]));
+            output_dtypes.push_back(extra_dtypes[i]);
         }
 
         auto* exe = new CompiledExecutable();
@@ -2127,9 +2190,10 @@ CompiledExecutable* compile_trace_with_backward(
         TensorId loss_id,
         const std::vector<TensorId>& param_ids,
         std::string* error_msg,
-        bool dynamic_batch) {
+        bool dynamic_batch,
+        const std::vector<TensorId>& extra_output_ids) {
     return MpsBuilder(graph, external_feeds, error_msg)
-        .compile_trace_with_backward(loss_id, param_ids, dynamic_batch);
+        .compile_trace_with_backward(loss_id, param_ids, dynamic_batch, extra_output_ids);
 }
 
 CompiledExecutable* compile_fused_training_step(

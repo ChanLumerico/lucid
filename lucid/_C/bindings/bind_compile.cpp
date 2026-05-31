@@ -450,7 +450,8 @@ void register_compile(py::module_& m) {
         "compile_trace_with_backward",
         [](const lucid::compile::TraceGraph& graph, const py::dict& external_feeds_py,
            lucid::compile::TensorId loss_id, const std::vector<lucid::compile::TensorId>& param_ids,
-           bool dynamic_batch) -> py::object {
+           bool dynamic_batch,
+           const std::vector<lucid::compile::TensorId>& extra_output_ids) -> py::object {
             std::unordered_map<lucid::compile::TensorId, lucid::TensorImplPtr> feeds;
             feeds.reserve(external_feeds_py.size());
             for (auto item : external_feeds_py) {
@@ -460,7 +461,7 @@ void register_compile(py::module_& m) {
             }
             std::string err;
             lucid::compile::CompiledExecutable* exe = lucid::compile::compile_trace_with_backward(
-                graph, feeds, loss_id, param_ids, &err, dynamic_batch);
+                graph, feeds, loss_id, param_ids, &err, dynamic_batch, extra_output_ids);
             if (exe == nullptr) {
                 if (!err.empty())
                     throw std::runtime_error(err);
@@ -470,12 +471,16 @@ void register_compile(py::module_& m) {
         },
         py::arg("graph"), py::arg("external_feeds"), py::arg("loss_id"), py::arg("param_ids"),
         py::arg("dynamic_batch") = false,
+        py::arg("extra_output_ids") = std::vector<lucid::compile::TensorId>{},
         "Lower a TraceGraph + (loss_id, param_ids) into a single MPSGraph "
         "executable that computes the forward (loss) and the auto-derived "
         "gradients of loss w.r.t. each parameter.  Returns None on any "
         "unsupported op (eager fallback).  Output of run_executable: "
-        "[loss_tensor, grad_for_param_ids[0], grad_for_param_ids[1], ...].  "
-        "With ``dynamic_batch=True`` (Phase 1.6) the leading dim of every "
+        "[loss_tensor, grad_for_param_ids[0], grad_for_param_ids[1], ..., "
+        "extra_output_ids[0], extra_output_ids[1], ...] — ``extra_output_ids`` "
+        "are explicit non-gradient trace outputs (e.g. BatchNorm running-stat "
+        "EMA new_rm/new_rv) the caller writes back into stateful buffers each "
+        "run.  With ``dynamic_batch=True`` (Phase 1.6) the leading dim of every "
         "non-parameter feed becomes a symbolic placeholder (-1), so one "
         "executable handles variable batch size.");
 
