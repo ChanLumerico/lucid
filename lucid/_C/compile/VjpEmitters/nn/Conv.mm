@@ -144,12 +144,87 @@ public:
         bctx.accumulate_grad(x_id, from_tensor(dX));
 
         // dW = convolution2D_weightsGradient(grad, x, original_w_shape, desc)
-        MPSGraphTensor* dW =
-            [g convolution2DWeightsGradientWithIncomingGradientTensor:grad_k
-                                                       sourceTensor:x
-                                                        outputShape:w.shape
-                                       forwardConvolutionDescriptor:desc
-                                                              name:@"conv2d_vjp_dw"];
+        //
+        // PERF: MPSGraph's GROUPED convolution2DWeightsGradient(groups=C) is
+        // catastrophically slow for a DEPTHWISE conv — ~9x the reference at 7x7,
+        // and it degrades with kernel size (3x3 ~1.9x, 7x7 ~9x: 17.3ms vs 1.9ms
+        // at C=96 56x56 BS=32).  Apple ships a DEDICATED, purpose-built kernel —
+        // depthwiseConvolution2DWeightsGradient (MPSGraphDepthwiseConvolution2D
+        // OpDescriptor) — that is a DISTINCT path from the grouped one.  Route the
+        // true depthwise case (groups>1, weight (C,1,kH,kW), stride==1, dilation==1)
+        // through it; everything else (strided / dilated / genuinely grouped
+        // C_in/groups>1) falls back to the grouped kernel unchanged.  forward + dX
+        // stay on their existing paths (only dW was pathological).
+        std::vector<std::int64_t> w_shape_dw = shape_of_mps(w);
+        const bool is_depthwise =
+            (groups > 1) && (w_shape_dw.size() == 4) &&
+            (w_shape_dw[0] == groups) && (w_shape_dw[1] == 1) &&
+            ((*S)[0] == 1) && ((*S)[1] == 1) &&
+            ((*D)[0] == 1) && ((*D)[1] == 1);
+        MPSGraphTensor* dW = nil;
+        if (is_depthwise) {
+            // Apple's dedicated depthwise weight-grad kernel uses a leading-pad-0
+            // tap alignment and IGNORES the descriptor padding (verified by a
+            // padding sweep that left the output unchanged) — so a "same" conv's
+            // dW comes out spatially shifted by (+pad,+pad).  Restore the symmetric
+            // alignment WITHOUT relying on the descriptor: PRE-PAD x by `pad` on all
+            // four sides, then the kernel's only consistent reading of (x_pad size
+            // H+2p, grad size H, K=2p+1 taps) is the VALID correlation
+            //   dW[kh,kw] = sum grad[oh,ow] * x_pad[oh+kh, ow+kw]
+            //             = sum grad * x[oh+kh-pad, ow+kw-pad]
+            // which is exactly the symmetric-conv weight gradient.  p is per-layer
+            // so this is kernel-size-general.
+            const long pT = (long)(*P)[0], pL = (long)(*P)[1];
+            MPSGraphTensor* x_dw = x;
+            if (pT > 0 || pL > 0) {
+                NSArray<NSNumber*>* lo = @[ @0, @0, @(pT), @(pL) ];
+                NSArray<NSNumber*>* hi = @[ @0, @0, @(pT), @(pL) ];
+                x_dw = [g padTensor:x
+                    withPaddingMode:MPSGraphPaddingModeConstant
+                        leftPadding:lo
+                       rightPadding:hi
+                      constantValue:0.0
+                               name:@"conv2d_vjp_dw_prepad"];
+            }
+            MPSGraphDepthwiseConvolution2DOpDescriptor* dwd =
+                [MPSGraphDepthwiseConvolution2DOpDescriptor
+                    descriptorWithStrideInX:1
+                                  strideInY:1
+                            dilationRateInX:1
+                            dilationRateInY:1
+                                paddingLeft:0
+                               paddingRight:0
+                                 paddingTop:0
+                              paddingBottom:0
+                               paddingStyle:MPSGraphPaddingStyleExplicit
+                                 dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                              weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+            if (dwd != nil) {
+                // Depthwise weight layout: 'O' = channel-multiplier (=1), 'I' =
+                // channel (=C).  So the op's weight shape is (1, C, kH, kW); that
+                // is a FREE reshape of lucid's (C, 1, kH, kW) (only a size-1 axis
+                // is swapped, so the row-major bytes are identical).
+                std::vector<std::int64_t> dw_out = {
+                    1, w_shape_dw[0], w_shape_dw[2], w_shape_dw[3]};
+                MPSGraphTensor* dW_dw =
+                    [g depthwiseConvolution2DWeightsGradientWithIncomingGradientTensor:grad_k
+                                                                         sourceTensor:x_dw
+                                                                          outputShape:shape_to_ns(dw_out)
+                                                                           descriptor:dwd
+                                                                                 name:@"conv2d_vjp_dw_depthwise"];
+                if (dW_dw != nil)
+                    dW = [g reshapeTensor:dW_dw
+                                withShape:w.shape
+                                     name:@"conv2d_vjp_dw_reshape"];
+            }
+        }
+        if (dW == nil) {
+            dW = [g convolution2DWeightsGradientWithIncomingGradientTensor:grad_k
+                                                             sourceTensor:x
+                                                              outputShape:w.shape
+                                             forwardConvolutionDescriptor:desc
+                                                                    name:@"conv2d_vjp_dw"];
+        }
         if (unscale != nil)
             dW = [g multiplicationWithPrimaryTensor:dW
                                     secondaryTensor:unscale
