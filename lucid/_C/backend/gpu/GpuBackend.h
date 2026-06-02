@@ -479,19 +479,18 @@ public:
     // ----
     // $\partial y/\partial x = \sigma(x) \, (1 + x \, (1 - \sigma(x)))$.
     Storage
-    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        // dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy.  Same formula as the
-        // legacy storage-primitive composition in SiluBackward::grad_formula;
-        // expressed as one MLX expression so the lazy graph keeps it fused.
-        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
-            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
-            auto sx = ::mlx::core::sigmoid(x);
-            auto one_m_sx = ::mlx::core::subtract(one, sx);
-            auto x_omsx = ::mlx::core::multiply(x, one_m_sx);
-            auto one_p = ::mlx::core::add(one, x_omsx);
-            auto dx = ::mlx::core::multiply(sx, one_p);
-            return ::mlx::core::multiply(dx, g);
-        });
+    silu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+        // dL/dx = σ(x) * (1 + x*(1 - σ(x))) * dL/dy — fused into one kernel.
+        return mlx_binary_fused(
+            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                ::mlx::core::array one(1.0, x.dtype());
+                auto sx = ::mlx::core::sigmoid(x);
+                auto one_m_sx = ::mlx::core::subtract(one, sx);
+                auto x_omsx = ::mlx::core::multiply(x, one_m_sx);
+                auto one_p = ::mlx::core::add(one, x_omsx);
+                auto dx = ::mlx::core::multiply(sx, one_p);
+                return ::mlx::core::multiply(dx, g);
+            });
     }
 
     // GELU forward (tanh approximation).
@@ -546,49 +545,51 @@ public:
                                 const Storage& grad,
                                 const Shape& shape,
                                 Dtype dt) override {
-        // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
-        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
-            ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array neg_half(-0.5, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array inv_sqrt2(0.7071067811865476, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array inv_sqrt2pi(0.3989422804014327, gpu::to_mlx_dtype(dt));
-            auto z = ::mlx::core::multiply(x, inv_sqrt2);
-            auto cdf = ::mlx::core::multiply(half, ::mlx::core::add(one, ::mlx::core::erf(z)));
-            auto x2 = ::mlx::core::multiply(x, x);
-            auto pdf = ::mlx::core::multiply(inv_sqrt2pi,
-                                             ::mlx::core::exp(::mlx::core::multiply(neg_half, x2)));
-            auto dx = ::mlx::core::add(cdf, ::mlx::core::multiply(x, pdf));
-            return ::mlx::core::multiply(dx, g);
-        });
+        // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π) — fused.
+        return mlx_binary_fused(
+            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                auto d = x.dtype();
+                ::mlx::core::array half(0.5, d);
+                ::mlx::core::array one(1.0, d);
+                ::mlx::core::array neg_half(-0.5, d);
+                ::mlx::core::array inv_sqrt2(0.7071067811865476, d);
+                ::mlx::core::array inv_sqrt2pi(0.3989422804014327, d);
+                auto z = ::mlx::core::multiply(x, inv_sqrt2);
+                auto cdf = ::mlx::core::multiply(half, ::mlx::core::add(one, ::mlx::core::erf(z)));
+                auto x2 = ::mlx::core::multiply(x, x);
+                auto pdf = ::mlx::core::multiply(
+                    inv_sqrt2pi, ::mlx::core::exp(::mlx::core::multiply(neg_half, x2)));
+                auto dx = ::mlx::core::add(cdf, ::mlx::core::multiply(x, pdf));
+                return ::mlx::core::multiply(dx, g);
+            });
     }
 
     Storage
-    gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
-            constexpr double kC1 = 0.7978845608028654;
-            constexpr double kC2 = 0.044715;
-            ::mlx::core::array c1(kC1, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array c2(kC2, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array three(3.0, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array half(0.5, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
-            auto x2 = ::mlx::core::multiply(x, x);
-            auto x3 = ::mlx::core::multiply(x2, x);
-            auto inner =
-                ::mlx::core::multiply(c1, ::mlx::core::add(x, ::mlx::core::multiply(c2, x3)));
-            auto t = ::mlx::core::tanh(inner);
-            auto dinner = ::mlx::core::multiply(
-                c1,
-                ::mlx::core::add(one, ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
-            auto t2 = ::mlx::core::multiply(t, t);
-            auto term1 = ::mlx::core::multiply(half, ::mlx::core::add(one, t));
-            auto term2 = ::mlx::core::multiply(
-                half, ::mlx::core::multiply(
-                          x, ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
-            auto dx = ::mlx::core::add(term1, term2);
-            return ::mlx::core::multiply(dx, g);
-        });
+    gelu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+        return mlx_binary_fused(
+            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                auto d = x.dtype();
+                ::mlx::core::array c1(0.7978845608028654, d);  // sqrt(2/pi)
+                ::mlx::core::array c2(0.044715, d);
+                ::mlx::core::array three(3.0, d);
+                ::mlx::core::array half(0.5, d);
+                ::mlx::core::array one(1.0, d);
+                auto x2 = ::mlx::core::multiply(x, x);
+                auto x3 = ::mlx::core::multiply(x2, x);
+                auto inner =
+                    ::mlx::core::multiply(c1, ::mlx::core::add(x, ::mlx::core::multiply(c2, x3)));
+                auto t = ::mlx::core::tanh(inner);
+                auto dinner = ::mlx::core::multiply(
+                    c1, ::mlx::core::add(
+                            one, ::mlx::core::multiply(three, ::mlx::core::multiply(c2, x2))));
+                auto t2 = ::mlx::core::multiply(t, t);
+                auto term1 = ::mlx::core::multiply(half, ::mlx::core::add(one, t));
+                auto term2 = ::mlx::core::multiply(
+                    half, ::mlx::core::multiply(
+                              x, ::mlx::core::multiply(::mlx::core::subtract(one, t2), dinner)));
+                auto dx = ::mlx::core::add(term1, term2);
+                return ::mlx::core::multiply(dx, g);
+            });
     }
 
     Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
@@ -657,19 +658,21 @@ public:
     }
 
     Storage
-    selu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
-            constexpr double kS = 1.0507009873554805;
-            constexpr double kA = 1.6732632423543772;
-            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array s_arr(kS, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array sa_arr(kS * kA, gpu::to_mlx_dtype(dt));
-            auto pos_mask = ::mlx::core::greater_equal(x, zero);
-            auto pos_branch = ::mlx::core::broadcast_to(s_arr, x.shape());
-            auto neg_branch = ::mlx::core::multiply(sa_arr, ::mlx::core::exp(x));
-            auto deriv = ::mlx::core::where(pos_mask, pos_branch, neg_branch);
-            return ::mlx::core::multiply(deriv, g);
-        });
+    selu_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+        return mlx_binary_fused(
+            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                constexpr double kS = 1.0507009873554805;
+                constexpr double kA = 1.6732632423543772;
+                auto d = x.dtype();
+                ::mlx::core::array zero(0.0, d);
+                ::mlx::core::array s_arr(kS, d);
+                ::mlx::core::array sa_arr(kS * kA, d);
+                auto pos_mask = ::mlx::core::greater_equal(x, zero);
+                auto pos_branch = ::mlx::core::broadcast_to(s_arr, x.shape());
+                auto neg_branch = ::mlx::core::multiply(sa_arr, ::mlx::core::exp(x));
+                auto deriv = ::mlx::core::where(pos_mask, pos_branch, neg_branch);
+                return ::mlx::core::multiply(deriv, g);
+            });
     }
 
     Storage mish(const Storage& a, const Shape&, Dtype dt) override {
@@ -683,20 +686,21 @@ public:
     }
 
     Storage
-    mish_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        return mlx_binary(a, grad, shape, dt, [dt](auto& x, auto& g) {
-            ::mlx::core::array zero(0.0, gpu::to_mlx_dtype(dt));
-            ::mlx::core::array one(1.0, gpu::to_mlx_dtype(dt));
-            auto pos = ::mlx::core::maximum(x, zero);
-            auto neg_abs = ::mlx::core::negative(::mlx::core::abs(x));
-            auto sp = ::mlx::core::add(pos, ::mlx::core::log1p(::mlx::core::exp(neg_abs)));
-            auto t = ::mlx::core::tanh(sp);
-            auto sig = ::mlx::core::sigmoid(x);
-            auto one_minus_t2 = ::mlx::core::subtract(one, ::mlx::core::square(t));
-            auto deriv = ::mlx::core::add(
-                t, ::mlx::core::multiply(x, ::mlx::core::multiply(one_minus_t2, sig)));
-            return ::mlx::core::multiply(deriv, g);
-        });
+    mish_backward(const Storage& a, const Storage& grad, const Shape&, Dtype dt) override {
+        return mlx_binary_fused(
+            a, grad, dt, [](const ::mlx::core::array& x, const ::mlx::core::array& g) {
+                ::mlx::core::array zero(0.0, x.dtype());
+                ::mlx::core::array one(1.0, x.dtype());
+                auto pos = ::mlx::core::maximum(x, zero);
+                auto neg_abs = ::mlx::core::negative(::mlx::core::abs(x));
+                auto sp = ::mlx::core::add(pos, ::mlx::core::log1p(::mlx::core::exp(neg_abs)));
+                auto t = ::mlx::core::tanh(sp);
+                auto sig = ::mlx::core::sigmoid(x);
+                auto one_minus_t2 = ::mlx::core::subtract(one, ::mlx::core::square(t));
+                auto deriv = ::mlx::core::add(
+                    t, ::mlx::core::multiply(x, ::mlx::core::multiply(one_minus_t2, sig)));
+                return ::mlx::core::multiply(deriv, g);
+            });
     }
 
     Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
