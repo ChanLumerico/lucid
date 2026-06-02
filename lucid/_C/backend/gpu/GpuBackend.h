@@ -4116,34 +4116,41 @@ public:
             flat_win.push_back(O[i]);
         flat_win.push_back(K_total);
         auto wins_flat = ::mlx::core::reshape(wins, flat_win);
-        // Manual vectorized argmax over the K_total window axis.
-        // ``mlx::core::argmax`` is ~95x slower than ``max`` for this shape
-        // (tiny reduction axis, millions of groups: measured 168 vs 1.8 ms at
-        // 64ch@112 BS8) and is only realised lazily in the BACKWARD pass — so
-        // it silently dominated MaxPool's backward.  Reproduce argmax's
-        // first-max index via max + strict-greater select (identical tie-break,
-        // verified bit-exact), which is elementwise and ~95x faster.
+        // Window-argmax (saved for the backward), chosen by window size K_total.
+        // ``mlx::core::argmax`` is pathological for a TINY reduction axis with
+        // MANY groups (regular pools: K_total=4/9, millions of windows — measured
+        // 168 vs 1.8 ms for max @64ch@112 BS8), but FAST for a LARGE axis with
+        // FEW groups (adaptive/global pools: K_total=3136, ~3.4 ms). The manual
+        // max+strict-greater select is the inverse: O(K_total) ops, great for
+        // small windows (bit-exact first-max tie-break) but ~924 ms at K_total=
+        // 3136. So pick per K_total. (Both give argmax's first-max index.)
         const int amax_axis = 2 + N;
-        ::mlx::core::Shape am_shape;
-        am_shape.push_back(B);
-        am_shape.push_back(C);
-        for (int i = 0; i < N; ++i)
-            am_shape.push_back(O[i]);
-        auto take_k = [&](int k) -> ::mlx::core::array {
-            ::mlx::core::Shape lo(2 + N + 1, 0), hi = wins_flat.shape();
-            lo[amax_axis] = k;
-            hi[amax_axis] = k + 1;
-            return ::mlx::core::reshape(::mlx::core::slice(wins_flat, lo, hi), am_shape);
-        };
-        auto best = take_k(0);
-        auto argmax = ::mlx::core::zeros(am_shape, ::mlx::core::int32);
-        for (int k = 1; k < K_total; ++k) {
-            auto ek = take_k(k);
-            auto cond = ::mlx::core::greater(ek, best);
-            argmax = ::mlx::core::where(
-                cond, ::mlx::core::array(static_cast<std::int32_t>(k), ::mlx::core::int32),
-                argmax);
-            best = ::mlx::core::maximum(best, ek);
+        ::mlx::core::array argmax = ::mlx::core::array(0);
+        if (K_total <= 16) {
+            ::mlx::core::Shape am_shape;
+            am_shape.push_back(B);
+            am_shape.push_back(C);
+            for (int i = 0; i < N; ++i)
+                am_shape.push_back(O[i]);
+            auto take_k = [&](int k) -> ::mlx::core::array {
+                ::mlx::core::Shape lo(2 + N + 1, 0), hi = wins_flat.shape();
+                lo[amax_axis] = k;
+                hi[amax_axis] = k + 1;
+                return ::mlx::core::reshape(::mlx::core::slice(wins_flat, lo, hi), am_shape);
+            };
+            auto best = take_k(0);
+            argmax = ::mlx::core::zeros(am_shape, ::mlx::core::int32);
+            for (int k = 1; k < K_total; ++k) {
+                auto ek = take_k(k);
+                auto cond = ::mlx::core::greater(ek, best);
+                argmax = ::mlx::core::where(
+                    cond, ::mlx::core::array(static_cast<std::int32_t>(k), ::mlx::core::int32),
+                    argmax);
+                best = ::mlx::core::maximum(best, ek);
+            }
+        } else {
+            argmax = ::mlx::core::astype(::mlx::core::argmax(wins_flat, amax_axis, false),
+                                         ::mlx::core::int32);
         }
         return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
                 Storage{gpu::wrap_mlx_array(std::move(argmax), Dtype::I32)}};
