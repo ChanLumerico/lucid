@@ -107,22 +107,53 @@ public:
             make_conv2d_desc((*S)[1], (*S)[0], (*D)[1], (*D)[0], (*P)[1], (*P)[0], groups);
         if (desc == nil) return false;
 
+        // PERF: MPSGraph's depthwise/grouped (groups>1) convolution2D
+        // gradient kernels fall onto a ~14×-slower path when their
+        // incomingGradient is the DIRECT output of a transpose — exactly
+        // ConvNeXt's NHWC-LayerNorm block, where the channels-last permute's
+        // VJP feeds a transposed grad straight into the depthwise weights/
+        // data gradient (291 ms vs 20 ms / block at C=96, 56×56, BS=32;
+        // regular groups==1 convs are unaffected, ~44 ms).  Inserting any
+        // NON-FOLDABLE elementwise op between the transpose and the gradient
+        // kernel restores the fast path; a ``*1.0`` / ``+0.0`` launder is
+        // constant-folded away by MPSGraph, so scale the grad by 2 (survives
+        // folding) and unscale the linear gradient outputs by 0.5.
+        // groups==1 leaves the grad untouched (zero regression for regular
+        // convs / ResNet / VGG).
+        MPSGraphTensor* grad_k = grad;
+        MPSGraphTensor* unscale = nil;
+        if (groups > 1) {
+            MPSGraphTensor* two = [g constantWithScalar:2.0 dataType:grad.dataType];
+            grad_k = [g multiplicationWithPrimaryTensor:grad
+                                        secondaryTensor:two
+                                                   name:@"conv2d_vjp_dw_launder"];
+            unscale = [g constantWithScalar:0.5 dataType:grad.dataType];
+        }
+
         // dX = convolution2D_dataGradient(grad, w, original_x_shape, desc)
         MPSGraphTensor* dX =
-            [g convolution2DDataGradientWithIncomingGradientTensor:grad
+            [g convolution2DDataGradientWithIncomingGradientTensor:grad_k
                                                     weightsTensor:w
                                                       outputShape:x.shape
                                        forwardConvolutionDescriptor:desc
                                                              name:@"conv2d_vjp_dx"];
+        if (unscale != nil)
+            dX = [g multiplicationWithPrimaryTensor:dX
+                                    secondaryTensor:unscale
+                                               name:@"conv2d_vjp_dx_unscale"];
         bctx.accumulate_grad(x_id, from_tensor(dX));
 
         // dW = convolution2D_weightsGradient(grad, x, original_w_shape, desc)
         MPSGraphTensor* dW =
-            [g convolution2DWeightsGradientWithIncomingGradientTensor:grad
+            [g convolution2DWeightsGradientWithIncomingGradientTensor:grad_k
                                                        sourceTensor:x
                                                         outputShape:w.shape
                                        forwardConvolutionDescriptor:desc
                                                               name:@"conv2d_vjp_dw"];
+        if (unscale != nil)
+            dW = [g multiplicationWithPrimaryTensor:dW
+                                    secondaryTensor:unscale
+                                               name:@"conv2d_vjp_dw_unscale"];
         bctx.accumulate_grad(w_id, from_tensor(dW));
 
         // dB = sum(grad, axes=(0, 2, 3)) → (C_out,).  Only if bias was real.
