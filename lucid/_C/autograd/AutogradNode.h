@@ -89,10 +89,22 @@ class TensorImpl;
 //     Set in lockstep with :attr:`saved_inputs_` so that
 //     :meth:`Node::apply_for_graph` can call into ``grad_fn``-bearing
 //     ops when ``create_graph=True``.
-// saved_impl_output_ : std::shared_ptr<TensorImpl>
-//     Strong reference to the forward output :class:`TensorImpl`, set
+// saved_impl_output_ : std::weak_ptr<TensorImpl>
+//     **Weak** reference to the forward output :class:`TensorImpl`, set
 //     only for ops whose graph-mode backward needs the output value
-//     (e.g. :class:`SigmoidBackward`).
+//     (e.g. :class:`SigmoidBackward`).  Deliberately weak: a strong ref
+//     here would form a ``Node -> output -> grad_fn -> same Node`` cycle
+//     (the output already owns this node via ``grad_fn``), and since the
+//     cycle is broken only by ``backward()`` clearing ``grad_fn``, an
+//     inference / forward-only loop that never calls backward would
+//     retain every per-call graph and eventually OOM.  Holding it weakly
+//     keeps the autograd reference graph a pure backward-pointing DAG, so
+//     dropping the output cascades the whole graph free.  ``create_graph``
+//     backward re-fetches the live, ``grad_fn``-bearing output via
+//     ``lock()`` (the output is still alive, pinned by the consumer's
+//     :attr:`saved_impl_inputs_` or by the user); if it was already
+//     dropped, the reader reconstructs a data-only leaf from
+//     :attr:`saved_output_`.
 //
 // Notes
 // -----
@@ -178,8 +190,9 @@ public:
     //
     // Resets all entries of :attr:`saved_inputs_`, clears
     // :attr:`saved_output_`, empties the :attr:`input_tensors_` weak
-    // array, and releases the strong :class:`TensorImpl` references
-    // in :attr:`saved_impl_inputs_` and :attr:`saved_impl_output_`.
+    // array, releases the strong :class:`TensorImpl` references in
+    // :attr:`saved_impl_inputs_`, and clears the weak
+    // :attr:`saved_impl_output_` handle.
     //
     // Notes
     // -----
@@ -205,7 +218,7 @@ public:
     std::array<Storage, N_IN> saved_inputs_;
     Storage saved_output_;
     std::array<std::shared_ptr<TensorImpl>, N_IN> saved_impl_inputs_;
-    std::shared_ptr<TensorImpl> saved_impl_output_;
+    std::weak_ptr<TensorImpl> saved_impl_output_;
 };
 
 }  // namespace lucid

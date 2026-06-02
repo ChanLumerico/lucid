@@ -408,7 +408,19 @@ std::vector<TensorImplPtr> UnaryKernel<Derived>::apply_for_graph(const TensorImp
                                  std::string(Derived::schema_v1.name) + "'.");
     }
 
-    auto dx = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a, this->saved_impl_output_);
+    // saved_impl_output_ is a WEAK ref (it breaks the node -> output -> grad_fn
+    // self-cycle that would otherwise retain the whole graph in inference and
+    // OOM).  For create_graph double-backward the live, grad_fn-bearing output is
+    // still alive (pinned by the consumer's saved_impl_inputs_ or by the user), so
+    // lock() returns it unchanged; if it was already dropped, reconstruct a
+    // data-only leaf from the saved output Storage so the first-order term of the
+    // formula is still exact.
+    TensorImplPtr out_impl = this->saved_impl_output_.lock();
+    if (!out_impl && storage_nbytes(this->saved_output_) > 0) {
+        out_impl = std::make_shared<TensorImpl>(this->saved_output_, this->out_shape_,
+                                                this->dtype_, this->device_, false);
+    }
+    auto dx = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a, out_impl);
 
     // Reduce back to input shape if needed (same as apply()).
     if (dx->shape() == this->input_shapes_[0])
