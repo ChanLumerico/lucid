@@ -20,7 +20,7 @@ Surface
   / ``train`` / ``eval``).
 * :func:`compile_optimizer` — wraps the *update* step of an optimizer
   into a single cached executable (8 optimizers supported; see
-  :mod:`lucid.compile._optim`).  Forward + backward stay eager.
+  :mod:`lucid.compile._optim.compiler`).  Forward + backward stay eager.
 * :func:`fused_step` — single executable covering forward + loss +
   backward (via MPSGraph autodiff) + optimizer update via the
   ghost-grad placeholder mechanism.
@@ -60,12 +60,12 @@ if TYPE_CHECKING:
     # ``__getattr__`` to keep the heavy ``lucid.nn`` / ``lucid.autograd``
     # imports out of package init.
     from lucid._C.engine.compile import Tracer
-    from lucid.compile._compiled_module import CompiledModule
-    from lucid.compile._diagnose import DiagnosisReport, OpInfo, diagnose
-    from lucid.compile._function import compiled_step
-    from lucid.compile._fused_step import fused_step
-    from lucid.compile._optim import compile_optimizer
-    from lucid.compile._step import make_step
+    from lucid.compile._entry.module import CompiledModule
+    from lucid.compile._debug.diagnose import DiagnosisReport, OpInfo, diagnose
+    from lucid.compile._entry.function import compiled_step
+    from lucid.compile._entry.fused_step import fused_step
+    from lucid.compile._optim.compiler import compile_optimizer
+    from lucid.compile._entry.step import make_step
     from lucid.nn.module import Module
 
 __all__ = [
@@ -288,35 +288,35 @@ def __getattr__(name: str) -> object:
     # init (the tracer scaffold above must stay importable before
     # nn/autograd have built their own surfaces).
     if name == "compiled_step":
-        from lucid.compile._function import compiled_step
+        from lucid.compile._entry.function import compiled_step
 
         return compiled_step
     if name == "CompiledModule":
-        from lucid.compile._compiled_module import CompiledModule
+        from lucid.compile._entry.module import CompiledModule
 
         return CompiledModule
     if name == "make_step":
-        from lucid.compile._step import make_step
+        from lucid.compile._entry.step import make_step
 
         return make_step
     if name == "compile_optimizer":
-        from lucid.compile._optim import compile_optimizer
+        from lucid.compile._optim.compiler import compile_optimizer
 
         return compile_optimizer
     if name == "fused_step":
-        from lucid.compile._fused_step import fused_step
+        from lucid.compile._entry.fused_step import fused_step
 
         return fused_step
     if name == "diagnose":
-        from lucid.compile._diagnose import diagnose
+        from lucid.compile._debug.diagnose import diagnose
 
         return diagnose
     if name == "DiagnosisReport":
-        from lucid.compile._diagnose import DiagnosisReport
+        from lucid.compile._debug.diagnose import DiagnosisReport
 
         return DiagnosisReport
     if name == "OpInfo":
-        from lucid.compile._diagnose import OpInfo
+        from lucid.compile._debug.diagnose import OpInfo
 
         return OpInfo
     raise AttributeError(f"module 'lucid.compile' has no attribute {name!r}")
@@ -373,7 +373,7 @@ def _tracing() -> Iterator[Tracer]:
         # temp-dir JSON file for offline inspection (Phase 1.2 builder
         # + parity tooling will consume the same format).  No-op when
         # the env var is unset.
-        from lucid.compile._trace_dump import dump_to_path_if_debug_enabled
+        from lucid.compile._debug.trace_dump import dump_to_path_if_debug_enabled
 
         dump_to_path_if_debug_enabled(tracer.graph)
 
@@ -448,7 +448,7 @@ def compile(target: object, *, dynamic: bool = False) -> object:
     # ``target`` is the callable that comes back via the returned
     # decorator.  Detect by ``target`` being missing on the call site;
     # the module ``__call__`` below short-circuits the explicit form.
-    from lucid.compile._compiled_module import CompiledModule as _CM
+    from lucid.compile._entry.module import CompiledModule as _CM
 
     if isinstance(target, _Module):
         return _CM(target, dynamic=dynamic)

@@ -1,5 +1,5 @@
 """
-lucid.compile._compiled_module — Phase 1.4 CompiledModule.
+lucid.compile._entry.module — Phase 1.4 CompiledModule.
 
 Wraps a regular :class:`nn.Module` so that subsequent calls with the
 same input signature reuse a single :class:`MPSGraphExecutable` rather
@@ -48,8 +48,8 @@ class _ExecutableLike(Protocol):
 
 from lucid._C import engine as _C_engine
 
-from lucid.compile._fallback import EagerFallbackSet, run_eager
-from lucid.compile._signature import CacheKey, signature_of
+from lucid.compile._core.fallback import EagerFallbackSet, run_eager
+from lucid.compile._core.signature import CacheKey, signature_of
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 
@@ -666,7 +666,7 @@ class CompiledModule:
         key = id(loss_fn)
         step_callable = self._step_callables.get(key)
         if step_callable is None:
-            from lucid.compile._step import make_step
+            from lucid.compile._entry.step import make_step
 
             step_callable = make_step(self._model, loss_fn, dynamic=self._dynamic)
             self._step_callables[key] = step_callable
@@ -700,7 +700,7 @@ class CompiledModule:
         See Also
         --------
         cache_info : structural snapshot of every cached signature.
-        lucid.compile._trace_dump.trace_to_json : the underlying
+        lucid.compile._debug.trace_dump.trace_to_json : the underlying
             serialiser called per cache entry.
         """
 
@@ -753,7 +753,7 @@ class CompiledModule:
         try:
             fp = self._param_fp_cache
             if fp is None:
-                from lucid.compile._signature import _param_fingerprint
+                from lucid.compile._core.signature import _param_fingerprint
 
                 fp = _param_fingerprint(self._model)
                 object.__setattr__(self, "_param_fp_cache", fp)
@@ -814,7 +814,7 @@ class CompiledModule:
         from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
-        from lucid.compile._bn_runstats import model_has_tracking_bn
+        from lucid.compile._core.bn_runstats import model_has_tracking_bn
 
         # 3.5 BatchNorm running-stats: this is the forward-only compile path
         # (no backward, hence no write-back hook).  In training mode a
@@ -903,7 +903,7 @@ class CompiledModule:
             slot = positional_impls.get(id(impl))
             input_source.append(slot)
 
-        from lucid.compile._trace_dump import trace_to_json
+        from lucid.compile._debug.trace_dump import trace_to_json
 
         entry = _CacheEntry(
             exe=exe,

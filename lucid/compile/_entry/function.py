@@ -1,5 +1,5 @@
 """
-lucid.compile._function — single-step compile+run helper for Phase 1.3.
+lucid.compile._entry.function — single-step compile+run helper for Phase 1.3.
 
 The Plan's `CompiledStepFunction(autograd.Function)` design routes the
 compiled fwd+bwd through Lucid's autograd graph so a ``loss.backward()``
@@ -81,7 +81,7 @@ def compiled_step(
     --------
     >>> import lucid, lucid.nn as nn, lucid.nn.functional as F
     >>> import lucid.optim as optim
-    >>> from lucid.compile._function import compiled_step
+    >>> from lucid.compile._entry.function import compiled_step
     >>> model = nn.Linear(8, 4).to('metal')
     >>> opt = optim.SGD(model.parameters(), lr=0.1)
     >>> for batch in batches:                       # doctest: +SKIP
@@ -101,7 +101,10 @@ def compiled_step(
     from lucid._dispatch import _unwrap, _wrap
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
-    from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
+    from lucid.compile._core.bn_runstats import (
+        bn_writeback_targets,
+        model_has_cumulative_bn,
+    )
 
     params = list(model.parameters())
     if not params:

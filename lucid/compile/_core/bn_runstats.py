@@ -44,7 +44,10 @@ def model_has_cumulative_bn(model: Module) -> bool:
     without importing every norm class.
     """
     for m in model.modules():
-        if getattr(m, "track_running_stats", False) and getattr(m, "momentum", 0.1) is None:
+        if (
+            getattr(m, "track_running_stats", False)
+            and getattr(m, "momentum", 0.1) is None
+        ):
             return True
     return False
 

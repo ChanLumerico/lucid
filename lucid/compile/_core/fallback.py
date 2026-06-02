@@ -1,5 +1,5 @@
 """
-lucid.compile._fallback — Phase 1.4 eager-escape helpers.
+lucid.compile._core.fallback — Phase 1.4 eager-escape helpers.
 
 When :class:`CompiledModule` cannot compile a given signature (a
 forward that touches an op with no emitter, or that breaks an
@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Callable, cast
 from lucid._tensor.tensor import Tensor
 
 if TYPE_CHECKING:
-    from lucid.compile._signature import CacheKey
+    from lucid.compile._core.signature import CacheKey
     from lucid.nn.module import Module
 
 __all__ = ["run_eager", "EagerFallbackSet"]
@@ -73,7 +73,7 @@ class EagerFallbackSet:
 
     Examples
     --------
-    >>> from lucid.compile._fallback import EagerFallbackSet
+    >>> from lucid.compile._core.fallback import EagerFallbackSet
     >>> blacklist = EagerFallbackSet()
     >>> blacklist.add(key)
     >>> if key in blacklist:                 # fast-path skip

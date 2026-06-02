@@ -86,7 +86,7 @@ def trace_to_dict(graph: TraceGraph) -> dict[str, object]:
     Examples
     --------
     >>> from lucid.compile import _tracing
-    >>> from lucid.compile._trace_dump import trace_to_dict
+    >>> from lucid.compile._debug.trace_dump import trace_to_dict
     >>> with _tracing() as tracer:                # doctest: +SKIP
     ...     out = model(x)
     >>> payload = trace_to_dict(tracer.graph)
@@ -125,7 +125,7 @@ def trace_to_json(graph: TraceGraph, *, indent: int = 2) -> str:
     Examples
     --------
     >>> from lucid.compile import _tracing
-    >>> from lucid.compile._trace_dump import trace_to_json
+    >>> from lucid.compile._debug.trace_dump import trace_to_json
     >>> with _tracing() as tracer:                # doctest: +SKIP
     ...     out = model(x)
     >>> print(trace_to_json(tracer.graph)[:120])
@@ -136,7 +136,7 @@ def trace_to_json(graph: TraceGraph, *, indent: int = 2) -> str:
     See Also
     --------
     trace_to_dict : the underlying dict-builder.
-    lucid.compile._compiled_module.CompiledModule.graph_dump : per-key
+    lucid.compile._entry.module.CompiledModule.graph_dump : per-key
         wrapper that calls this for each cache entry.
     """
     return json.dumps(trace_to_dict(graph), indent=indent)

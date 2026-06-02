@@ -1,5 +1,5 @@
 """
-lucid.compile._signature — Phase 1.4 CacheKey.
+lucid.compile._core.signature — Phase 1.4 CacheKey.
 
 A :class:`CacheKey` is the hashable identity of a compiled executable
 under the user-facing :class:`CompiledModule`.  Two calls land on the
@@ -65,7 +65,7 @@ class TensorSig:
     Examples
     --------
     >>> import lucid
-    >>> from lucid.compile._signature import TensorSig
+    >>> from lucid.compile._core.signature import TensorSig
     >>> sig = TensorSig.of(lucid.randn(4, 8))
     >>> sig.shape, sig.dtype, sig.device
     ((4, 8), 'float32', 'cpu')
@@ -148,7 +148,7 @@ class CacheKey:
 
     Examples
     --------
-    >>> from lucid.compile._signature import signature_of
+    >>> from lucid.compile._core.signature import signature_of
     >>> key = signature_of(model, (x,), {}, dynamic=False)
     >>> key in compiled._cache               # is this signature compiled yet?
 
@@ -281,7 +281,7 @@ def signature_of(
     --------
     CacheKey : returned hashable type.
     TensorSig.of : per-tensor descriptor used to build ``args``.
-    lucid.compile._compiled_module.CompiledModule : the caller.
+    lucid.compile._entry.module.CompiledModule : the caller.
     """
 
     arg_sigs = tuple(_arg_sig(a, dynamic_batch=dynamic) for a in args)

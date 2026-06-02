@@ -137,7 +137,7 @@ def dropout(
         # eager via the plain ``dropout`` op there instead — the
         # ``CompiledModule`` cache will register the signature as
         # eager-only and subsequent calls skip the recompile attempt.
-        from lucid.compile._fused_step import _is_fused_step_tracing
+        from lucid.compile._entry.fused_step import _is_fused_step_tracing
 
         if _is_fused_step_tracing():
             # Compile path: thread an explicit Philox state buffer so

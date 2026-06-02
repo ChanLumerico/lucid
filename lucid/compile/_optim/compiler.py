@@ -1,5 +1,5 @@
 """
-lucid.compile._optim — compiled optimizer wrappers (in-place output path).
+lucid.compile._optim.compiler — compiled optimizer wrappers (in-place output path).
 
 Wraps an eager :class:`lucid.optim.Optimizer` so ``step()`` becomes a
 single MPSGraph executable that fuses the per-parameter update math AND
@@ -39,7 +39,7 @@ from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
 from lucid._dtype import dtype as _dtype_cls
 from lucid._tensor.tensor import Tensor
-from lucid.compile._optim_spec import _hp
+from lucid.compile._optim.spec import _hp
 
 if TYPE_CHECKING:
     from lucid.optim.optimizer import Optimizer
@@ -790,7 +790,7 @@ class _CompiledSGD(_CompiledStepBase):
             instance.
         """
         from lucid.optim.sgd import SGD
-        from lucid.compile._optim_spec import OptimizerSpec
+        from lucid.compile._optim.spec import OptimizerSpec
 
         if not isinstance(opt, SGD):
             raise TypeError(f"_CompiledSGD: expected SGD, got {type(opt).__name__}")
@@ -928,7 +928,7 @@ class _CompiledAdam(_CompiledStepBase):
         """
         from lucid.optim.adam import Adam
 
-        from lucid.compile._optim_spec import OptimizerSpec
+        from lucid.compile._optim.spec import OptimizerSpec
 
         if not isinstance(opt, Adam):
             raise TypeError(f"_CompiledAdam: expected Adam, got {type(opt).__name__}")
@@ -1097,7 +1097,7 @@ class _CompiledAdamW(_CompiledAdam):
         :meth:`_CompiledStepBase.__init__`.
         """
         from lucid.optim.adam import AdamW
-        from lucid.compile._optim_spec import OptimizerSpec
+        from lucid.compile._optim.spec import OptimizerSpec
 
         if not isinstance(opt, AdamW):
             raise TypeError(f"_CompiledAdamW: expected AdamW, got {type(opt).__name__}")

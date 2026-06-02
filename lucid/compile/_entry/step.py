@@ -1,5 +1,5 @@
 """
-lucid.compile._step — Phase 1.5 step 5.1.
+lucid.compile._entry.step — Phase 1.5 step 5.1.
 
 ``make_step(model, loss_fn)`` returns a callable that traces +
 compiles ``model(x); loss_fn(out, target)`` into a single
@@ -134,16 +134,19 @@ def make_step(
     lucid.compile.compile : module-level compile entrypoint.
     lucid.compile.compile_optimizer : even tighter form that fuses
         the optimizer update into the same MPSGraph executable.
-    lucid.compile._compiled_module.CompiledModule.step : per-instance
+    lucid.compile._entry.module.CompiledModule.step : per-instance
         cached version of the same dispatch.
     """
     from lucid._dispatch import _unwrap, _wrap
     from lucid._tensor.tensor import Tensor
     from lucid.autograd._grad_mode import no_grad
     from lucid.compile import _tracing
-    from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
-    from lucid.compile._fallback import EagerFallbackSet
-    from lucid.compile._signature import signature_of
+    from lucid.compile._core.bn_runstats import (
+        bn_writeback_targets,
+        model_has_cumulative_bn,
+    )
+    from lucid.compile._core.fallback import EagerFallbackSet
+    from lucid.compile._core.signature import signature_of
 
     # Phase 1.6 dynamic-batch: gated behind ``LUCID_COMPILE_DYNAMIC=1``
     # alongside the matching surface in :class:`CompiledModule`.  Until
@@ -240,7 +243,12 @@ def make_step(
 
         try:
             exe = _C_engine.compile.compile_trace_with_backward(
-                graph, ext, loss_id, param_ids, dynamic, extra_output_ids=bn_stat_out_ids
+                graph,
+                ext,
+                loss_id,
+                param_ids,
+                dynamic,
+                extra_output_ids=bn_stat_out_ids,
             )
         except RuntimeError:
             # compile_trace_with_backward surfaces a RuntimeError when
@@ -265,7 +273,7 @@ def make_step(
                 return None
             input_source.append(positional_impls.get(id(impl)))
 
-        from lucid.compile._trace_dump import trace_to_json
+        from lucid.compile._debug.trace_dump import trace_to_json
 
         return _StepEntry(
             exe=exe,

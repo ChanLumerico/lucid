@@ -1,5 +1,5 @@
 """
-lucid.compile._diagnose — manual-VJP coverage diagnostics.
+lucid.compile._debug.diagnose — manual-VJP coverage diagnostics.
 
 Provides :func:`diagnose` which traces a callable, classifies every op
 in the captured graph against the manual-VJP registry, and returns a

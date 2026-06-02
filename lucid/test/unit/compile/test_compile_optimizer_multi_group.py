@@ -96,7 +96,7 @@ def test_multi_group_sgd_parity() -> None:
 
 def test_multi_group_returns_wrapper() -> None:
     """Sanity: compile_optimizer on multi-group returns the wrapper, not the single-group class."""
-    from lucid.compile._optim import _MultiGroupCompiledOptimizer
+    from lucid.compile._optim.compiler import _MultiGroupCompiledOptimizer
 
     lucid.manual_seed(0)
     model = _BackboneHead().to(COMPILE_DEVICE)

@@ -1,5 +1,5 @@
 """
-lucid.compile._fused_step — Phase 1.8 generic fused training step.
+lucid.compile._entry.fused_step — Phase 1.8 generic fused training step.
 
 ``fused_step(model, loss_fn, optimizer)`` returns a callable that runs
 the entire training step (forward + loss + auto-derived gradients +
@@ -10,7 +10,7 @@ happen in-place via ``run_executable_inplace``.
 Architecture
 ------------
 The optimizer update math lives in the corresponding
-:mod:`lucid.compile._optim` subclass's ``_trace_update`` method
+:mod:`lucid.compile._optim.compiler` subclass's ``_trace_update`` method
 (``_CompiledSGD``, ``_CompiledAdam``, ..., ``_CompiledNAdam``).  At
 ``fused_step`` construction time:
 
@@ -238,7 +238,7 @@ def _zeros_like(t: Tensor) -> Tensor:
 class _FusedStep:
     r"""Driver behind :func:`fused_step` — one executable, whole training step.
 
-    Composes :mod:`lucid.compile._optim` (which already knows how to
+    Composes :mod:`lucid.compile._optim.compiler` (which already knows how to
     trace each optimizer's update arithmetic and identify the in-
     place output targets) with a trace of the model's forward pass +
     loss function.  The result is one :class:`MPSGraphExecutable`
@@ -347,7 +347,7 @@ class _FusedStep:
             If ``optimizer`` exposes no trainable parameters (every
             param_group is empty).
         """
-        from lucid.compile._optim import compile_optimizer
+        from lucid.compile._optim.compiler import compile_optimizer
 
         self._model = model
         self._loss_fn = loss_fn
@@ -486,7 +486,10 @@ class _FusedStep:
         from lucid._tensor.tensor import Tensor
         from lucid.autograd._grad_mode import no_grad
         from lucid.compile import _tracing
-        from lucid.compile._bn_runstats import bn_writeback_targets, model_has_cumulative_bn
+        from lucid.compile._core.bn_runstats import (
+            bn_writeback_targets,
+            model_has_cumulative_bn,
+        )
 
         copt = self._copt
         # The compile_optimizer subclass allocates its state buffers in
@@ -1017,7 +1020,9 @@ class _FusedStep:
                     f"fused_step: BN running-stat feed id {_bn_feed_id} "
                     "not in external_feeds"
                 )
-            self._output_targets.append(_TensorT_for_state(_bn_impl, requires_grad=False))
+            self._output_targets.append(
+                _TensorT_for_state(_bn_impl, requires_grad=False)
+            )
 
         if len(self._output_targets) != len(output_target_ids):
             raise RuntimeError(
@@ -1036,7 +1041,9 @@ class _FusedStep:
         for _n in graph.ops:
             for _m in _n.outputs:
                 _id_to_shape[int(_m.id)] = tuple(_m.shape)
-        for _slot, (_oid, _tgt) in enumerate(zip(output_target_ids, self._output_targets)):
+        for _slot, (_oid, _tgt) in enumerate(
+            zip(output_target_ids, self._output_targets)
+        ):
             _exp = _id_to_shape.get(int(_oid))
             if _exp is not None and tuple(_tgt.shape) != _exp:
                 raise RuntimeError(
