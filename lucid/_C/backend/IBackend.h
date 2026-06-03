@@ -1978,6 +1978,56 @@ public:
         return {};
     }
 
+    // On-device random fills, seeded by ``key_seed`` (pulled from the framework
+    // Generator so results are reproducible from the global seed).  Same
+    // motivation as :func:`bernoulli_mask` — avoid the per-element CPU loop +
+    // host->device upload in ``random_*_storage`` (Helpers.cpp), which makes
+    // weight init and any GPU-tensor RNG slow (e.g. randn(4096,4096) ~228 ms,
+    // bert_base() init ~850 ms).  Default: not implemented (CPU keeps its
+    // per-element fill); the GPU backend overrides via ``mlx::core::random``.
+    virtual Storage
+    random_uniform(const Shape& shape, double lo, double hi, Dtype dt, std::uint64_t key_seed) {
+        (void)shape;
+        (void)lo;
+        (void)hi;
+        (void)dt;
+        (void)key_seed;
+        ErrorBuilder("IBackend::random_uniform").not_implemented("not implemented on this backend");
+        return {};
+    }
+
+    virtual Storage
+    random_normal(const Shape& shape, double mean, double std, Dtype dt, std::uint64_t key_seed) {
+        (void)shape;
+        (void)mean;
+        (void)std;
+        (void)dt;
+        (void)key_seed;
+        ErrorBuilder("IBackend::random_normal").not_implemented("not implemented on this backend");
+        return {};
+    }
+
+    virtual Storage
+    random_bernoulli(const Shape& shape, double p, Dtype dt, std::uint64_t key_seed) {
+        (void)shape;
+        (void)p;
+        (void)dt;
+        (void)key_seed;
+        ErrorBuilder("IBackend::random_bernoulli").not_implemented("not implemented on this backend");
+        return {};
+    }
+
+    virtual Storage random_randint(
+        const Shape& shape, std::int64_t low, std::int64_t high, Dtype dt, std::uint64_t key_seed) {
+        (void)shape;
+        (void)low;
+        (void)high;
+        (void)dt;
+        (void)key_seed;
+        ErrorBuilder("IBackend::random_randint").not_implemented("not implemented on this backend");
+        return {};
+    }
+
     // Compiles and launches a user-provided Metal Shading Language (MSL) kernel.
     // Default implementation throws not_implemented; only GpuBackend overrides this.
     // grid and threads follow Metal's threadgroups / threadsPerThreadgroup convention.

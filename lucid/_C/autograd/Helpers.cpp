@@ -411,8 +411,24 @@ Storage sigmoid_storage(const Storage& s, std::size_t numel, Dtype dt, Device de
 }
 
 // -------------------------------------------------------------------------
-// Random tensor generation — all produced on CPU then transferred to device.
+// Random tensor generation.  CPU device: produced on CPU then transferred.
+// GPU device: filled on-device via the backend's mlx::core::random path,
+// seeded by one draw from the Generator below (so results stay reproducible
+// from the global seed) — avoids the per-element CPU loop + host->device upload.
 // -------------------------------------------------------------------------
+
+namespace {
+// Pull a 64-bit PRNG key seed from the framework Generator (one counter
+// advance, under its lock).  Used to seed on-device MLX RNG so GPU random stays
+// reproducible from the global seed.  The exact values differ from the CPU
+// per-element stream by design.
+std::uint64_t gpu_random_key_seed(Generator& gen) {
+    std::lock_guard<std::mutex> lock(gen.mutex());
+    std::uint32_t k[4];
+    gen.next_uint32x4(k);
+    return (static_cast<std::uint64_t>(k[0]) << 32) | static_cast<std::uint64_t>(k[1]);
+}
+}  // namespace
 
 // Generate a Bernoulli mask with explicit shape.  Samples are drawn on CPU
 // using the Generator's uniform float stream, then transferred to the target
@@ -428,14 +444,8 @@ Storage bernoulli_mask_storage_shape(
     // Generator by one draw to seed the MLX key, so masks stay reproducible from
     // the global seed (the exact values differ from the CPU stream by design).
     if (device == Device::GPU) {
-        std::uint64_t key_seed;
-        {
-            std::lock_guard<std::mutex> lock(gen.mutex());
-            std::uint32_t k[4];
-            gen.next_uint32x4(k);
-            key_seed = (static_cast<std::uint64_t>(k[0]) << 32) | static_cast<std::uint64_t>(k[1]);
-        }
-        return backend::Dispatcher::for_device(device).bernoulli_mask(keep_prob, shape, dt, key_seed);
+        return backend::Dispatcher::for_device(device).bernoulli_mask(keep_prob, shape, dt,
+                                                                      gpu_random_key_seed(gen));
     }
     std::size_t numel = 1;
     for (auto d : shape)
@@ -570,6 +580,10 @@ CpuStorage allocate_for_random(const Shape& shape, Dtype dt) {
 
 Storage random_uniform_storage(
     const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
+    if (device == Device::GPU) {
+        return backend::Dispatcher::for_device(device).random_uniform(shape, lo, hi, dt,
+                                                                      gpu_random_key_seed(gen));
+    }
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -587,6 +601,10 @@ Storage random_uniform_storage(
 
 Storage random_normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
+    if (device == Device::GPU) {
+        return backend::Dispatcher::for_device(device).random_normal(shape, mean, std, dt,
+                                                                     gpu_random_key_seed(gen));
+    }
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -606,6 +624,10 @@ Storage
 random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
     if (p < 0.0 || p > 1.0)
         ErrorBuilder("random_bernoulli").fail("p must be in [0, 1]");
+    if (device == Device::GPU) {
+        return backend::Dispatcher::for_device(device).random_bernoulli(shape, p, dt,
+                                                                        gpu_random_key_seed(gen));
+    }
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {
@@ -638,6 +660,10 @@ Storage random_randint_storage(const Shape& shape,
                                Generator& gen) {
     if (high <= low)
         ErrorBuilder("random_randint").fail("high must be > low");
+    if (device == Device::GPU) {
+        return backend::Dispatcher::for_device(device).random_randint(shape, low, high, dt,
+                                                                      gpu_random_key_seed(gen));
+    }
     auto cpu = allocate_for_random(shape, dt);
     const std::size_t n = shape_numel(shape);
     switch (dt) {

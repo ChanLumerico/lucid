@@ -203,6 +203,45 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::astype(mask, gpu::to_mlx_dtype(dt)), dt)};
     }
 
+    // On-device random fills via mlx::core::random (see :func:`IBackend`).  Each
+    // builds a PRNG key from ``key_seed`` and fills in one kernel, replacing the
+    // per-element CPU loop + host->device upload of the ``random_*_storage``
+    // helpers (Helpers.cpp).
+    Storage random_uniform(
+        const Shape& shape, double lo, double hi, Dtype dt, std::uint64_t key_seed) override {
+        auto key = ::mlx::core::random::key(key_seed);
+        auto arr = ::mlx::core::random::uniform(static_cast<float>(lo), static_cast<float>(hi),
+                                                gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt), key);
+        return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
+    }
+
+    Storage random_normal(
+        const Shape& shape, double mean, double std, Dtype dt, std::uint64_t key_seed) override {
+        auto key = ::mlx::core::random::key(key_seed);
+        auto arr = ::mlx::core::random::normal(gpu::to_mlx_shape(shape), gpu::to_mlx_dtype(dt),
+                                               static_cast<float>(mean), static_cast<float>(std),
+                                               key);
+        return Storage{gpu::wrap_mlx_array(std::move(arr), dt)};
+    }
+
+    Storage
+    random_bernoulli(const Shape& shape, double p, Dtype dt, std::uint64_t key_seed) override {
+        auto key = ::mlx::core::random::key(key_seed);
+        auto arr = ::mlx::core::random::bernoulli(
+            ::mlx::core::array(static_cast<float>(p)), gpu::to_mlx_shape(shape), key);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::astype(arr, gpu::to_mlx_dtype(dt)), dt)};
+    }
+
+    Storage random_randint(const Shape& shape, std::int64_t low, std::int64_t high, Dtype dt,
+                           std::uint64_t key_seed) override {
+        auto key = ::mlx::core::random::key(key_seed);
+        // MLX draws int32 in [low, high); cast to the requested integer dtype.
+        auto arr = ::mlx::core::random::randint(::mlx::core::array(static_cast<int>(low)),
+                                                ::mlx::core::array(static_cast<int>(high)),
+                                                gpu::to_mlx_shape(shape), ::mlx::core::int32, key);
+        return Storage{gpu::wrap_mlx_array(::mlx::core::astype(arr, gpu::to_mlx_dtype(dt)), dt)};
+    }
+
     // Deep-copy a tensor into a fresh contiguous MLX array.
     //
     // Calls ``mlx::core::contiguous`` to materialise the source array
