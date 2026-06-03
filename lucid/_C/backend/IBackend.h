@@ -1958,6 +1958,26 @@ public:
         return {};
     }
 
+    // Draw a {0,1} Bernoulli keep-mask at rate ``keep_prob`` directly on-device,
+    // deterministically seeded by ``key_seed`` (pulled from the framework
+    // Generator so the mask is reproducible from the global seed).  Returned as
+    // ``dt``-typed {0,1} values; the inverted-dropout ``1/keep_prob`` scaling is
+    // applied by the caller.  Default: not implemented — the CPU path uses the
+    // per-element Generator loop in ``bernoulli_mask_storage_shape``.  The GPU
+    // backend overrides this to skip that scalar CPU loop + host->device upload,
+    // which otherwise dominates Dropout cost (~19 ms for a single (32,128,768)
+    // mask vs <1 ms on-device).
+    virtual Storage
+    bernoulli_mask(double keep_prob, const Shape& shape, Dtype dt, std::uint64_t key_seed) {
+        (void)keep_prob;
+        (void)shape;
+        (void)dt;
+        (void)key_seed;
+        ErrorBuilder("IBackend::bernoulli_mask")
+            .not_implemented("on-device bernoulli_mask not implemented on this backend");
+        return {};
+    }
+
     // Compiles and launches a user-provided Metal Shading Language (MSL) kernel.
     // Default implementation throws not_implemented; only GpuBackend overrides this.
     // grid and threads follow Metal's threadgroups / threadsPerThreadgroup convention.

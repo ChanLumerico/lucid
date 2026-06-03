@@ -422,6 +422,21 @@ Storage bernoulli_mask_storage_shape(
     if (keep_prob < 0.0 || keep_prob > 1.0) {
         ErrorBuilder("bernoulli_mask").fail("keep_prob must be in [0, 1]");
     }
+    // GPU: draw the whole mask on-device via MLX RNG instead of the per-element
+    // CPU Philox loop + host->device upload below (which dominated Dropout's
+    // cost — ~19 ms for a single (32,128,768) mask).  We advance the framework
+    // Generator by one draw to seed the MLX key, so masks stay reproducible from
+    // the global seed (the exact values differ from the CPU stream by design).
+    if (device == Device::GPU) {
+        std::uint64_t key_seed;
+        {
+            std::lock_guard<std::mutex> lock(gen.mutex());
+            std::uint32_t k[4];
+            gen.next_uint32x4(k);
+            key_seed = (static_cast<std::uint64_t>(k[0]) << 32) | static_cast<std::uint64_t>(k[1]);
+        }
+        return backend::Dispatcher::for_device(device).bernoulli_mask(keep_prob, shape, dt, key_seed);
+    }
     std::size_t numel = 1;
     for (auto d : shape)
         numel *= static_cast<std::size_t>(d);
