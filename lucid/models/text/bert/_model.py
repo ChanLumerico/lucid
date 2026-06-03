@@ -121,15 +121,21 @@ class _BERTSelfAttention(nn.Module):
         k = self._shape(cast(Tensor, self.key(hidden)), B, T)
         v = self._shape(cast(Tensor, self.value(hidden)), B, T)
 
-        # (B, H, T, T)
-        scores: Tensor = q @ k.permute(0, 1, 3, 2) / self.scale
-        if attention_mask is not None:
-            scores = scores + attention_mask
-        probs = F.softmax(scores, dim=-1)
-        probs = cast(Tensor, self.dropout(probs))
+        # Fused scaled-dot-product attention: one kernel that skips
+        # materializing the (B, H, T, T) scores tensor.  ``attention_mask`` is
+        # the standard additive mask (0 keep / -inf drop).  Q/K/V stay separate
+        # so weight porting is a direct rename, and this is bit-exact with the
+        # earlier manual ``softmax(q kᵀ / scale + mask) v`` path.
+        ctx: Tensor = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            attn_mask=attention_mask,
+            dropout_p=self.dropout.p if self.training else 0.0,
+            scale=1.0 / self.scale,
+        )
 
         # (B, H, T, D) → (B, T, H*D)
-        ctx: Tensor = probs @ v
         ctx = ctx.permute(0, 2, 1, 3).reshape(B, T, self.num_heads * self.head_dim)
         return ctx
 
